@@ -23,6 +23,6 @@ type Payment struct {
 	ReceivedByID uint `gorm:"not null" json:"received_by_id" binding:"required"`
 	ReceivedBy   User `gorm:"foreignKey:ReceivedByID" json:"received_by"`
 
-	//ReturnID *uint   `json:"return_id"`
-	//Return   *Return `gorm:"foreignKey:ReturnID" json:"return"`
+	ReturnID *uint        `json:"return_id"`
+	Return   *SalesReturn `gorm:"foreignKey:ReturnID;constraint:OnDelete:SET NULL;" json:"return"`
 }

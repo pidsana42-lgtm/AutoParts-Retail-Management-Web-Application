@@ -9,8 +9,8 @@ type SaleOrderItem struct {
     OrderID uint      `gorm:"not null" json:"order_id" binding:"required"`
     Order   SaleOrder `gorm:"foreignKey:OrderID" json:"order"`
 
-	//ProductID uint    `gorm:"not null" json:"product_id" binding:"required"`
-	//Product   Product `gorm:"foreignKey:ProductID" json:"product"`
+	ProductID uint    `gorm:"not null" json:"product_id" binding:"required"`
+	Product   Product `gorm:"foreignKey:ProductID" json:"product"`
 
     // User ส่งมา
     PartNumber  string  `gorm:"type:varchar(100);not null" json:"part_number" binding:"required"`
