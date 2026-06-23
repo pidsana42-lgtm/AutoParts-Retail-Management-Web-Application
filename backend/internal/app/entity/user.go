@@ -24,4 +24,8 @@ type User struct {
     // Admin กำหนดให้
     RoleID uint `gorm:"not null" json:"role_id"`
     Role   Role `gorm:"foreignKey:RoleID" json:"role"`
+
+    // Toto WMS
+    StockMovements []StockMovement `gorm:"foreignKey:UserID" json:"stock_movements"`
+    CheckStocks []CheckStock `gorm:"foreignKey:UserID" json:"check_stocks"`
 }

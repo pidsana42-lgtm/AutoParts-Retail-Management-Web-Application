@@ -58,24 +58,6 @@ func SetupDatabase() {
 	if err := db.AutoMigrate(
 		//ลูกเต๋า
 		&entity.Role{},
-		&entity.Category{},
-		&entity.SubCategory{},
-		&entity.Grade{},
-		&entity.Shelf{},
-		&entity.Zone{},
-		&entity.Brand{},
-		&entity.Models{},
-		&entity.Unit{},
-		&entity.Product{},
-		&entity.Inventory{},	
-		&entity.StockAlert{},
-		&entity.CheckStock{},
-		
-		
-		
-		
-		
-
 		// &entity.User{},       // ปลดคอมเมนต์เมื่อสร้าง Entity เหล่านี้เสร็จ
 		// &entity.AutoPart{},
 		&entity.User{},
@@ -88,6 +70,22 @@ func SetupDatabase() {
 		&entity.SaleOrder{},
 		&entity.SaleOrderItem{},
 		&entity.StoreConfig{},
+
+
+		// โตโต้ WMS
+		&entity.Category{},
+		&entity.SubCategory{},
+		&entity.Grade{},
+		&entity.Shelf{},
+		&entity.Zone{},
+		&entity.Brand{},
+		&entity.Models{},
+		&entity.Unit{},
+		&entity.Product{},
+		&entity.Inventory{},	
+		&entity.StockAlert{},
+		&entity.CheckStock{},
+		&entity.StockMovement{},
 	); err != nil {
 		log.Fatalf("failed to migrate schema: %v", err)
 	}
