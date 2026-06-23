@@ -17,4 +17,5 @@ type Supplier struct {
 	CheckStocks []CheckStock `gorm:"foreignKey:SupplierID" json:"check_stocks"`
 	Inventories []Inventory `gorm:"foreignKey:SupplierID" json:"inventories"`
 	Bill []Bill `gorm:"foreignKey:SupplierID" json:"bill,omitempty"`
+	PurchaseOrders 	  []PO 	 `gorm:"foreignKey:SupplierID" json:"purchase_orders,omitempty"`
 }

@@ -4,7 +4,8 @@ import "gorm.io/gorm"
 
 type PO_items struct {
 	gorm.Model
-	PO_id     						uint 		`gorm:"column:po_id;not null" json:"po_id"`
+	POID    						uint 		`gorm:"column:po_id;not null" json:"po_id"`
+	PO        						*PO  		`gorm:"foreignKey:POID" json:"po,omitempty"`
 	ProductID 						uint 		`gorm:"column:product_id;not null" json:"product_id"`
 	Product_name_snapshot			string 		`gorm:"type:varchar(255);not null" json:"product_name_snapshot"`
 	Supply_product_code_snapshot 	string		`gorm:"type:varchar(100);not null" json:"product_name_code_snapshot"`
@@ -15,8 +16,8 @@ type PO_items struct {
 	PreOrderItemID   				*uint 		`json:"pre_order_item_id"`
 
 	// ใส่ * เพราะว่า ID เป็น Pointer มีโอกาสเป็น NULL
-	// Alert            				*Alert        	`gorm:"foreignKey:AlertID" json:"alert,omitempty"`
-	// PreOrderItem     				*PreOrderItem 	`gorm:"foreignKey:PreOrderItemID" json:"pre_order_item,omitempty"`
+	Alert            				*StockAlert        	`gorm:"foreignKey:AlertID" json:"alert,omitempty"`
+	PreOrderItem     				*PreOrderItem 		`gorm:"foreignKey:PreOrderItemID" json:"pre_order_item,omitempty"`
 }
 
 func (PO_items) TableName() string {

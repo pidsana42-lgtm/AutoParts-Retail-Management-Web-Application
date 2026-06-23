@@ -104,6 +104,11 @@ func SetupDatabase() {
 		&entity.StockAlert{},
 		&entity.CheckStock{},
 		&entity.StockMovement{},
+		// Dashboard & Purchase Orders System
+		&entity.DailySummary{},
+		&entity.PO_Type{},
+		&entity.PO_items{},
+		&entity.ReceiveEvidenceExcel{},
 	); err != nil {
 		log.Fatalf("failed to migrate schema: %v", err)
 	}
