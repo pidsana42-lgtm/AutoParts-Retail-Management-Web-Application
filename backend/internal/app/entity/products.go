@@ -34,4 +34,5 @@ type Product struct {
 	StockAlerts []StockAlert `gorm:"foreignKey:ProductID" json:"stock_alerts"`
 	Inventories []Inventory `gorm:"foreignKey:ProductID" json:"inventories"`
 	CheckStocks []CheckStock `gorm:"foreignKey:ProductID" json:"check_stocks"`
+	BillItems []BillItem `gorm:"foreignKey:ProductID" json:"bill_items"`
 }
