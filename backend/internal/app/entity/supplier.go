@@ -11,4 +11,5 @@ type Supplier struct {
 	EmailSale         string `gorm:"type:varchar(100);not null;uniqueindex" json:"email_sale" binding:"required"`
 	BankAccountNumber string `gorm:"type:varchar(50);not null;" json:"bank_account_number" binding:"required"`
 	ShortSupplierName string `gorm:"type:varchar(50);not null;" json:"short_supplier_name" binding:"required"`
+	Bill []Bill `gorm:"foreignKey:SupplierID" json:"bill,omitempty"`
 }

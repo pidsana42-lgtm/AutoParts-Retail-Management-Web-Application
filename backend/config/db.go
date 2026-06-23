@@ -67,14 +67,19 @@ func SetupDatabase() {
 		&entity.Models{},
 		&entity.Unit{},
 		&entity.Product{},
-		&entity.Inventory{},	
+		&entity.Inventory{},
 		&entity.StockAlert{},
 		&entity.CheckStock{},
-		
-		
-		
-		
-		
+
+		// Bill & Related Tables
+		&entity.Bill{},
+		&entity.BillImage{},
+		&entity.BillItem{},
+		&entity.PreOrder{},
+		&entity.PreOrderItem{},
+		&entity.SalesReturn{},
+		&entity.SalesReturnItem{},
+		&entity.PO{},
 
 		// &entity.User{},       // ปลดคอมเมนต์เมื่อสร้าง Entity เหล่านี้เสร็จ
 		// &entity.AutoPart{},
