@@ -30,4 +30,5 @@ type Bill struct {
 	EvidenceFileURL    string     `gorm:"type:text" json:"evidence_file_url"`
 	EvidenceUploadedAt time.Time  `json:"evidence_uploaded_at"`
 	BillItems          []BillItem `gorm:"foreignKey:BillID" json:"bill_items,omitempty"`
+	ReceiveEvidenceExcels []ReceiveEvidenceExcel `gorm:"foreignKey:POID" json:"receive_evidence_excels,omitempty"`
 }
