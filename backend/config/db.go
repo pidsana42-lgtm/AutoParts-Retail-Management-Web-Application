@@ -80,6 +80,11 @@ func SetupDatabase() {
 		&entity.SalesReturn{},
 		&entity.SalesReturnItem{},
 		&entity.PO{},
+		&entity.CustomerClaim{},
+		&entity.CustomerClaimItem{},
+		&entity.SupplierClaim{},
+		&entity.SupplierClaimItem{},
+		
 
 		// &entity.User{},       // ปลดคอมเมนต์เมื่อสร้าง Entity เหล่านี้เสร็จ
 		// &entity.AutoPart{},
