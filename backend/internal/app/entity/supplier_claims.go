@@ -11,7 +11,7 @@ type SupplierClaim struct {
 	CreatedBy uint `gorm:"not null" json:"created_by"`
 	CreatedByUser *User `gorm:"foreignKey:CreatedBy" json:"created_by_user,omitempty"`
 	PurchaseOrderID uint `gorm:"not null" json:"purchase_order_id"`
-	PurchaseOrder *PurchaseOrder `gorm:"foreignKey:PurchaseOrderID" json:"purchase_order,omitempty"`
+	PurchaseOrder *PO `gorm:"foreignKey:PurchaseOrderID" json:"purchase_order,omitempty"`
 	SupplierID uint `gorm:"not null" json:"supplier_id"`
 	Supplier *Supplier `gorm:"foreignKey:SupplierID" json:"supplier,omitempty"`
 }
