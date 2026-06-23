@@ -53,7 +53,7 @@ func SetupDatabase() {
 	db.Exec("SET session_replication_role = 'replica';")
 
 	// 2. Migrate ตารางทั้งหมดในครั้งเดียว
-	// เมื่อคุณมี Entity อื่นๆ ของระบบร้านอะไหล่ (เช่น AutoPart, Order, Employee) สามารถเอามาใส่เพิ่มตรงนี้ได้เลย
+	// เมื่อคุณมี Entity อื่นๆ ของระบบร้านอะไหล่ (เช่น AutoPart, Order, User) สามารถเอามาใส่เพิ่มตรงนี้ได้เลย
 	if err := db.AutoMigrate(
 		&entity.Role{},
 		// &entity.User{},       // ปลดคอมเมนต์เมื่อสร้าง Entity เหล่านี้เสร็จ
