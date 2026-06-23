@@ -27,7 +27,7 @@ type Bill struct {
 	VerifiedByUser     *User          `gorm:"foreignKey:VerifiedBy" json:"verified_by_user,omitempty"`
 	OCRText            string         `gorm:"type:text" json:"ocr_text"`
 	POID               uint           `gorm:"not null;index" json:"po_id"`
-	PO                 *PurchaseOrder `gorm:"foreignKey:POID" json:"po,omitempty"`
+	PO                 *PO 			  `gorm:"foreignKey:POID" json:"po,omitempty"`
 	EvidenceFileURL    string         `gorm:"type:text" json:"evidence_file_url"`
 	EvidenceUploadedAt time.Time      `json:"evidence_uploaded_at"`
 	BillItems          []BillItem     `gorm:"foreignKey:BillID" json:"bill_items,omitempty"`

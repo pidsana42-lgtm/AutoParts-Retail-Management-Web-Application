@@ -15,8 +15,8 @@ type PO_items struct {
 	PreOrderItemID   				*uint 		`json:"pre_order_item_id"`
 
 	// ใส่ * เพราะว่า ID เป็น Pointer มีโอกาสเป็น NULL
-	// Alert            				*Alert        	`gorm:"foreignKey:AlertID" json:"alert,omitempty"`
-	// PreOrderItem     				*PreOrderItem 	`gorm:"foreignKey:PreOrderItemID" json:"pre_order_item,omitempty"`
+	Alert            				*StockAlert        	`gorm:"foreignKey:AlertID" json:"alert,omitempty"`
+	PreOrderItem     				*PreOrderItem 		`gorm:"foreignKey:PreOrderItemID" json:"pre_order_item,omitempty"`
 }
 
 func (PO_items) TableName() string {
