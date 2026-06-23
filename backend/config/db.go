@@ -56,9 +56,6 @@ func SetupDatabase() {
 	// 2. Migrate ตารางทั้งหมดในครั้งเดียว
 	// เมื่อคุณมี Entity อื่นๆ ของระบบร้านอะไหล่ (เช่น AutoPart, Order, User) สามารถเอามาใส่เพิ่มตรงนี้ได้เลย
 	if err := db.AutoMigrate(
-		//ลูกเต๋า
-		&entity.Role{},
-
 
 		// Bill & Related Tables
 		&entity.Bill{},
@@ -68,16 +65,13 @@ func SetupDatabase() {
 		&entity.PreOrderItem{},
 		&entity.SalesReturn{},
 		&entity.SalesReturnItem{},
-		&entity.PO{},
 		&entity.CustomerClaim{},
 		&entity.CustomerClaimItem{},
 		&entity.SupplierClaim{},
 		&entity.SupplierClaimItem{},
 		
-
-
-		// &entity.User{},       // ปลดคอมเมนต์เมื่อสร้าง Entity เหล่านี้เสร็จ
-		// &entity.AutoPart{},
+		// pos
+		&entity.Role{},
 		&entity.User{},
 		&entity.Supplier{},
 		&entity.Customer{},
@@ -88,7 +82,6 @@ func SetupDatabase() {
 		&entity.SaleOrder{},
 		&entity.SaleOrderItem{},
 		&entity.StoreConfig{},
-
 
 		// โตโต้ WMS
 		&entity.Category{},
@@ -104,7 +97,9 @@ func SetupDatabase() {
 		&entity.StockAlert{},
 		&entity.CheckStock{},
 		&entity.StockMovement{},
+
 		// Dashboard & Purchase Orders System
+		&entity.PO{},
 		&entity.DailySummary{},
 		&entity.PO_Type{},
 		&entity.PO_items{},
