@@ -32,6 +32,8 @@ type PO struct {
 	Supplier   		 Supplier 	`gorm:"foreignKey:SupplierID" json:"supplier,omitempty"`
 	PO_type_id 		 uint    	`json:"po_type_id"`
 	PO_Type    		 PO_Type 	`gorm:"foreignKey:PO_type_id" json:"po_type,omitempty"`
+	PO_Items     	 []PO_items `gorm:"foreignKey:POID" json:"po_items,omitempty"`
+	ReceiveEvidenceExcels []ReceiveEvidenceExcel `gorm:"foreignKey:POID" json:"receive_evidence_excels,omitempty"`
 }
 
 func (PO) TableName() string {

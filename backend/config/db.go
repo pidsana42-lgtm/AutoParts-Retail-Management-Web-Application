@@ -70,12 +70,6 @@ func SetupDatabase() {
 		&entity.Inventory{},	
 		&entity.StockAlert{},
 		&entity.CheckStock{},
-		
-		
-		
-		
-		
-
 		// &entity.User{},       // ปลดคอมเมนต์เมื่อสร้าง Entity เหล่านี้เสร็จ
 		// &entity.AutoPart{},
 		&entity.User{},
@@ -88,6 +82,12 @@ func SetupDatabase() {
 		&entity.SaleOrder{},
 		&entity.SaleOrderItem{},
 		&entity.StoreConfig{},
+		// Dashboard & Purchase Orders System
+		&entity.DailySummary{},
+		&entity.PO_Type{},
+		&entity.PO{},
+		&entity.PO_items{},
+		&entity.ReceiveEvidenceExcel{},
 	); err != nil {
 		log.Fatalf("failed to migrate schema: %v", err)
 	}

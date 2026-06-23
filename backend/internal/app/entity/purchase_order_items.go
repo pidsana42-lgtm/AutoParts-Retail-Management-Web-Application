@@ -4,7 +4,8 @@ import "gorm.io/gorm"
 
 type PO_items struct {
 	gorm.Model
-	PO_id     						uint 		`gorm:"column:po_id;not null" json:"po_id"`
+	POID    						uint 		`gorm:"column:po_id;not null" json:"po_id"`
+	PO        						*PO  		`gorm:"foreignKey:POID" json:"po,omitempty"`
 	ProductID 						uint 		`gorm:"column:product_id;not null" json:"product_id"`
 	Product_name_snapshot			string 		`gorm:"type:varchar(255);not null" json:"product_name_snapshot"`
 	Supply_product_code_snapshot 	string		`gorm:"type:varchar(100);not null" json:"product_name_code_snapshot"`
