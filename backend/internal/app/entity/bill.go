@@ -31,4 +31,7 @@ type Bill struct {
 	EvidenceUploadedAt time.Time  `json:"evidence_uploaded_at"`
 	BillItems          []BillItem `gorm:"foreignKey:BillID" json:"bill_items,omitempty"`
 	ReceiveEvidenceExcels []ReceiveEvidenceExcel `gorm:"foreignKey:POID" json:"receive_evidence_excels,omitempty"`
+
+	// Toto WMS
+	StockMovements []StockMovement `gorm:"foreignKey:BillID" json:"stock_movements,omitempty"`
 }
