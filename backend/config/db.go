@@ -58,6 +58,19 @@ func SetupDatabase() {
 	if err := db.AutoMigrate(
 		//ลูกเต๋า
 		&entity.Role{},
+
+
+		// Bill & Related Tables
+		&entity.Bill{},
+		&entity.BillImage{},
+		&entity.BillItem{},
+		&entity.PreOrder{},
+		&entity.PreOrderItem{},
+		&entity.SalesReturn{},
+		&entity.SalesReturnItem{},
+		&entity.PO{},
+
+
 		// &entity.User{},       // ปลดคอมเมนต์เมื่อสร้าง Entity เหล่านี้เสร็จ
 		// &entity.AutoPart{},
 		&entity.User{},
