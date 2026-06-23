@@ -1,8 +1,11 @@
 package entity
 
-import "gorm.io/gorm"
+import (
+	"backend/internal/app/enum"
+	"gorm.io/gorm"
+)
 
 type Role struct {
-	gorm.Model
-	Name string `gorm:"unique;not null" json:"name"`
+    gorm.Model
+    RoleName enum.RoleType `gorm:"type:varchar(100);not null;unique" json:"role_name" binding:"required"`
 }

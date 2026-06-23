@@ -1,7 +1,8 @@
 package config
 
 import (
-	"backend/internal/app/entity" // ตรวจสอบให้มั่นใจว่าใช้โมดูลชื่อ "backend" ตรงกับ go.mod
+	"backend/config/seed"
+	"backend/internal/app/entity"
 
 	"fmt"
 	"log"
@@ -55,6 +56,7 @@ func SetupDatabase() {
 	// 2. Migrate ตารางทั้งหมดในครั้งเดียว
 	// เมื่อคุณมี Entity อื่นๆ ของระบบร้านอะไหล่ (เช่น AutoPart, Order, User) สามารถเอามาใส่เพิ่มตรงนี้ได้เลย
 	if err := db.AutoMigrate(
+		//ลูกเต๋า
 		&entity.Role{},
 		&entity.Category{},
 		&entity.SubCategory{},
@@ -76,12 +78,24 @@ func SetupDatabase() {
 
 		// &entity.User{},       // ปลดคอมเมนต์เมื่อสร้าง Entity เหล่านี้เสร็จ
 		// &entity.AutoPart{},
+		&entity.User{},
+		&entity.Supplier{},
+		&entity.Customer{},
+		&entity.Bank{},
+		&entity.Payment{},
+		&entity.PaymentMethod{},
+		&entity.PaymentRepayment{},
+		&entity.SaleOrder{},
+		&entity.SaleOrderItem{},
+		&entity.StoreConfig{},
 	); err != nil {
 		log.Fatalf("failed to migrate schema: %v", err)
 	}
 
-	// 3. ⚠️ สำคัญ: เปิดการตรวจสอบ Foreign Key กลับคืนสู่สถานะปกติ
+	// 3. สำคัญ: เปิดการตรวจสอบ Foreign Key กลับคืนสู่สถานะปกติ
 	db.Exec("SET session_replication_role = 'origin';")
+
+	seed.Role(db)
 
 	log.Println("Database migration complete! Server Ready.")
 }
