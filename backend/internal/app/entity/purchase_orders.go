@@ -29,7 +29,7 @@ type PO struct {
 	Approved_at 	 *time.Time `json:"approved_at"`
 
 	SupplierID 		 uint 		`json:"supplier_id"`
-	// Supplier   			Supplier 		`gorm:"foreignKey:SupplierID" json:"supplier,omitempty"`
+	Supplier   		 Supplier 	`gorm:"foreignKey:SupplierID" json:"supplier,omitempty"`
 	PO_type_id 		 uint    	`json:"po_type_id"`
 	PO_Type    		 PO_Type 	`gorm:"foreignKey:PO_type_id" json:"po_type,omitempty"`
 }
