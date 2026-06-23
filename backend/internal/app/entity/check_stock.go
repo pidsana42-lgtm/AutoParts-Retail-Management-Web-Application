@@ -11,6 +11,9 @@ type CheckStock struct {
 	Adjustment_DateTime string `json:"adjustment_datetime"`
 
 	ProductID uint `json:"product_id"`
-
 	Product *Product `gorm:"foreignKey:ProductID" json:"product"`
+	SupplierID uint `json:"supplier_id"`
+	Supplier *Supplier `gorm:"foreignKey:SupplierID" json:"supplier"`
+	UserID uint `json:"user_id"`
+	User *User `gorm:"foreignKey:UserID" json:"user"`
 }
