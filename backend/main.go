@@ -1,44 +1,42 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
-	
 	"backend/config"
-	//"backend/internal/middleware"
-	//"backend/internal/route"
+	"github.com/gin-gonic/gin"
+	"os"
 )
 
-const PORT = "8080"
-
 func main() {
-	// ต่อ DB + migrate + seed
+	// 1. จัดการเรื่องฐานข้อมูลให้เรียบร้อย (ต่อ DB -> สร้างตาราง -> ยัดข้อมูล Seed)
 	config.ConnectDB()
 	config.SetupDatabase()
+
+	// 2. ตั้งค่าการรัน Gin Engine
 	gin.SetMode(gin.ReleaseMode)
-	// สร้าง router
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
-	//r.Use(middleware.CORSMiddleware())
+
+	// 3. เปิดโฟลเดอร์สำหรับฝากรูปภาพอะไหล่หรือสลิปเงิน
 	r.Static("/uploads", "./uploads")
 
+	// 4. ตั้งค่าด่าน OPTIONS สำหรับรองรับ CORS ตอนดึง API ข้ามไปหา Frontend
 	r.OPTIONS("/*path", func(c *gin.Context) {
-	c.Status(204)
-	
+		c.Status(204)
 	})
-	
 
-	// ให้ routes จัดการ URL ทั้งหมด
-	//routes.SetupRoutes(r)
-	// test endpoint
+	// ถ้าจะใช้งาน Route ให้เอาคอมเมนต์บรรทัดข้างล่างนี้ออก
+	// route.SetupRoutes(r)
+
+	// 5. Test Endpoint สำหรับเช็คสถานะเซิร์ฟเวอร์
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "pong"})
 	})
 
-	r.Run(":" + PORT)
-	
-	
+	// 6. ดึง Port จาก .env ถ้าไม่มีให้ใช้พอร์ต 8080 เป็นค่าเริ่มต้น
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
 
-	
-	// r.Run("localhost:" + PORT)
-
+	r.Run(":" + port)
 }
