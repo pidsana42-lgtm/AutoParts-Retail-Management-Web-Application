@@ -41,4 +41,7 @@ type SaleOrder struct {
 	// ความสัมพันธ์ 1 Order มีได้หลายอัน
     Items    []SaleOrderItem `gorm:"foreignKey:OrderID" json:"items"`
     Payments []Payment       `gorm:"foreignKey:OrderID" json:"payments"`
+
+    // Toto WMS
+    StockMovements []StockMovement `gorm:"foreignKey:SaleOrderID" json:"stock_movements"`
 }
