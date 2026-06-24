@@ -27,13 +27,3 @@ type StoreConfigRequest struct {
 	MaxExtraDiscountRate float64 `json:"max_extra_discount_rate" `
 	SupervisedPin        string  `json:"supervised_pin"`
 }
-
-func ToStoreConfigRequest(config entity.StoreConfig) StoreConfigRequest {
-	return StoreConfigRequest{
-		MaxCredit:            config.MaxCredit,
-		MaxOverdueDays:       config.MaxOverdueDays,
-		MaxItemDiscountRate:  config.MaxItemDiscountRate,
-		MaxExtraDiscountRate: config.MaxExtraDiscountRate,
-		SupervisedPin:        config.SupervisedPin,
-	}
-}
