@@ -8,10 +8,8 @@ import (
 
 func Shelf(db *gorm.DB) error {
 	shelves := []entity.Shelf{
-		{Shelf_Name: "A1"},
-		{Shelf_Name: "A2"},
-		{Shelf_Name: "B1"},
-		{Shelf_Name: "B2"},
+		{Shelf_Name: "A1",ZoneID: 1},
+		
 	}
 
 	for _, shelf := range shelves {
