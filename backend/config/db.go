@@ -114,6 +114,7 @@ func SetupDatabase() {
 	// Looktao
 	seed.Role(db)
 	seed.CustomerType(db)
+	seed.Customer(db)
 	
 	// Toto WMS
 	seed.Zone(db)

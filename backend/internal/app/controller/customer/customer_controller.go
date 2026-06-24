@@ -25,11 +25,20 @@ func (ctrl *CustomerController) RegisterCustomer(c *gin.Context) {
 	
 	idCardImagePath := ""
 
-	// 3. ส่งต่อข้อความ Path รูปและ DTO ให้ชั้น Service สั่งงานต่อ
 	if err := ctrl.svc.RegisterNewCustomer(req, idCardImagePath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"message": "ลงทะเบียนสมาชิกใหม่สำเร็จเรียบร้อยแล้วค่ะ"})
+}
+
+func (ctrl *CustomerController) GetAllCustomers(c *gin.Context) {
+	customers, err := ctrl.svc.GetAllCustomers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, customers)
 }

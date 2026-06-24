@@ -10,11 +10,12 @@ import (
 
 func SetupCustomerRoutes(r *gin.Engine, db *gorm.DB) {
 	customerRepo := customerRepo.NewCustomerRepository(db)
-	customerSvc := customerSvc.NewCustomerService(customerRepo)
+	customerSvc := customerSvc.NewCustomerService(customerRepo, db)
 	customerCtrl := customerCtrl.NewCustomerController(customerSvc)
 
 	customerGroup := r.Group("/api/customers")
 	{
 		customerGroup.POST("/register", customerCtrl.RegisterCustomer)
+		customerGroup.GET("", customerCtrl.GetAllCustomers)
 	}
 }
