@@ -12,9 +12,17 @@ func Brand(db *gorm.DB) error {
 	}
 
 	for _, brand := range brands {
-		if err := db.Create(&brand).Error; err != nil {
-			return fmt.Errorf("failed to create brand: %w", err)
-		}
-	}
+		var result entity.Brand
+		 err := db.Where("brand_name = ?", brand.Brand_Name).
+            FirstOrCreate(&result, brand).Error
+        if err == nil  {
+            db.Model(&result).Updates(brand)
+        }
+
+        if err != nil {
+            return fmt.Errorf("failed to seed brand %s: %w", brand.Brand_Name, err)
+        }
+    }
+	
 	return nil
 }

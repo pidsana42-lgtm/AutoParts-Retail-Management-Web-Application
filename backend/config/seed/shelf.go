@@ -13,8 +13,14 @@ func Shelf(db *gorm.DB) error {
 	}
 
 	for _, shelf := range shelves {
-		if err := db.Create(&shelf).Error; err != nil {
-			return fmt.Errorf("failed to create shelf: %w", err)
+		var result entity.Shelf
+		err := db.Where("shelf_name = ? AND zone_id = ?", shelf.Shelf_Name, shelf.ZoneID).
+			FirstOrCreate(&result, shelf).Error
+		if err == nil {
+			db.Model(&result).Updates(shelf)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to seed shelf %s: %w", shelf.Shelf_Name, err)
 		}
 	}
 	return nil
