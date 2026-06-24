@@ -114,5 +114,12 @@ func SetupDatabase() {
 	seed.Role(db)
 	seed.Product(db)
 
+	// Toto WMS
+	seed.Category(db)
+	seed.Grade(db)
+	seed.Shelf(db)
+	seed.Brand(db)
+	seed.Unit(db)
+
 	log.Println("Database migration complete! Server Ready.")
 }
