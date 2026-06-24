@@ -11,6 +11,15 @@ type RegisterCustomerRequest struct {
 	ShippingAddress      string `json:"shipping_address" binding:"required"`
 }
 
+type CustomerResponse struct {
+	ID                   uint   `json:"id"`
+	CustomerName         string `json:"customer_name"`
+	PhoneNumber          string `json:"phone_number"`
+	IdCardNumberCustomer string `json:"id_card_number_customer"`
+	DisplayAddress       string `json:"display_address"`     // ทำฟิลด์สรุปที่อยู่ส่งไปให้หน้าบ้านใช้ง่ายๆ
+	CustomerTypeLabel    string `json:"customer_type_label"` // เอาชื่อภาษาไทย เช่น "ลูกค้าอู่" ตรงๆ เลย
+}
+
 // idCardImagePath ตอนrequestมันมาเป็นภาพไฟล์ดิบ
 func ToCustomerEntity(req RegisterCustomerRequest, idCardImagePath string, defaultCreditLimit float64) *entity.Customer {
 	return &entity.Customer{
@@ -29,4 +38,27 @@ func ToCustomerEntity(req RegisterCustomerRequest, idCardImagePath string, defau
 		CurrentDebtAmount:    0.00,
 		IsDiscountEnabled:    true,
 	}
+}
+
+func ToCustomerListResponse(customers []entity.Customer) []CustomerResponse {
+	var list []CustomerResponse
+	
+	for _, c := range customers {
+		// สรุปที่อยู่ 
+		address := c.ShippingAddress
+		if address == "" {
+			address = c.RegisteredAddress
+		}
+
+		list = append(list, CustomerResponse{
+			ID:                   c.ID,
+			CustomerName:         c.CustomerName,
+			PhoneNumber:          c.PhoneNumber,
+			IdCardNumberCustomer: c.IdCardNumberCustomer,
+			DisplayAddress:       address,
+			CustomerTypeLabel:    c.CustomerType.TypeLabel, // ดึงชื่อภาษาไทยมาจากตารางประเภทลูกค้าที่เรา Preload ไว้
+		})
+	}
+	
+	return list
 }
