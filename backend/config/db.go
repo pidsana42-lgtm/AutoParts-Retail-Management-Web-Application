@@ -61,6 +61,7 @@ func SetupDatabase() {
 		&entity.Bill{},
 		&entity.BillImage{},
 		&entity.BillItem{},
+		&entity.BillImportJob{},
 		&entity.PreOrder{},
 		&entity.PreOrderItem{},
 		&entity.SalesReturn{},
@@ -69,7 +70,7 @@ func SetupDatabase() {
 		&entity.CustomerClaimItem{},
 		&entity.SupplierClaim{},
 		&entity.SupplierClaimItem{},
-		
+
 		// pos
 		&entity.Role{},
 		&entity.User{},
@@ -93,7 +94,7 @@ func SetupDatabase() {
 		&entity.Models{},
 		&entity.Unit{},
 		&entity.Product{},
-		&entity.Inventory{},	
+		&entity.Inventory{},
 		&entity.StockAlert{},
 		&entity.CheckStock{},
 		&entity.StockMovement{},
@@ -112,6 +113,9 @@ func SetupDatabase() {
 	db.Exec("SET session_replication_role = 'origin';")
 
 	seed.Role(db)
+	if err := seed.User(db); err != nil {
+		log.Printf("Warning: failed to seed default user: %v", err)
+	}
 
 	log.Println("Database migration complete! Server Ready.")
 }
