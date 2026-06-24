@@ -2,6 +2,7 @@ package main
 
 import (
 	"backend/config"
+	"backend/internal/app/route"
 	"github.com/gin-gonic/gin"
 	"os"
 )
@@ -24,8 +25,8 @@ func main() {
 		c.Status(204)
 	})
 
-	// ถ้าจะใช้งาน Route ให้เอาคอมเมนต์บรรทัดข้างล่างนี้ออก
-	// route.SetupRoutes(r)
+	// Setup routes
+	route.SetupRoutes(r)
 
 	// 5. Test Endpoint สำหรับเช็คสถานะเซิร์ฟเวอร์
 	r.GET("/ping", func(c *gin.Context) {
