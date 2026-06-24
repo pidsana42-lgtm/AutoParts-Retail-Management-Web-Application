@@ -4,7 +4,7 @@ import "backend/internal/app/entity"
 
 type RegisterCustomerRequest struct {
 	CustomerName         string `json:"customer_name" binding:"required"`
-	CustomerType         string `json:"customer_type" binding:"required"`
+	CustomerTypeID       uint   `json:"customer_type_id" binding:"required"`
 	PhoneNumber          string `json:"phone_number" binding:"required"`
 	IdCardNumberCustomer string `json:"id_card_number_customer" binding:"required"`
 	RegisteredAddress    string `json:"registered_address" binding:"required"`
@@ -15,7 +15,7 @@ type RegisterCustomerRequest struct {
 func ToCustomerEntity(req RegisterCustomerRequest, idCardImagePath string, defaultCreditLimit float64) *entity.Customer {
 	return &entity.Customer{
 		CustomerName:         req.CustomerName,
-		CustomerType:         req.CustomerType,
+		CustomerTypeID:       req.CustomerTypeID,
 		CreditLimit:          defaultCreditLimit, //ใช้ค่าจากนโยบายร้านที่ Service ส่งมาให้
 		PhoneNumber:          req.PhoneNumber,
 		IdCardNumberCustomer: req.IdCardNumberCustomer,
