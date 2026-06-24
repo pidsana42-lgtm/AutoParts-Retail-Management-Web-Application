@@ -11,6 +11,7 @@ import (
 type CustomerService interface {
 	RegisterNewCustomer(customer customerDto.RegisterCustomerRequest, idCardImagePath string) error
 	GetAllCustomers() ([]customerDto.CustomerResponse, error)
+	GetCustomerByID(id uint) (customerDto.CustomerDetailResponse, error) 
 }
 
 type customerService struct {
@@ -44,9 +45,19 @@ func (s *customerService) RegisterNewCustomer(req customerDto.RegisterCustomerRe
 }
 
 func (s *customerService) GetAllCustomers() ([]customerDto.CustomerResponse, error) {
-	customers, err := s.repo.GetallCustomers()
+	customers, err := s.repo.GetAllCustomers() 
 	if err != nil {
 		return nil, err
 	}
 	return customerDto.ToCustomerListResponse(customers), nil
+}
+
+func (s *customerService) GetCustomerByID(id uint) (customerDto.CustomerDetailResponse, error) {
+	customer, err := s.repo.GetCustomerByID(id)
+	if err != nil {
+		return customerDto.CustomerDetailResponse{}, err 
+	}
+
+	// เติม * ไว้หน้า customer เพื่อแปลงร่างจาก *entity.Customer เป็น entity.Customer ธรรมดา
+	return customerDto.ToCustomerDetailResponse(*customer), nil
 }
