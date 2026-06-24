@@ -8,6 +8,7 @@ import (
 // 1. กำหนด Interface สำหรับ PreOrder Repository
 type PreOrderRepository interface {
 	CreatePreOrder(preOrder *entity.PreOrder) error
+	CreatePreOrderItem(item *entity.PreOrderItem) error
 	GetPreOrderByID(id uint) (*entity.PreOrder, error)
 	ListPreOrders() ([]entity.PreOrder, error)
 	UpdatePreOrder(preOrder *entity.PreOrder) error
@@ -27,6 +28,10 @@ func NewPreOrderRepository(db *gorm.DB) PreOrderRepository {
 // 4. Implement Method: สร้างข้อมูล Pre-Order ใหม่
 func (r *preOrderRepository) CreatePreOrder(preOrder *entity.PreOrder) error {
 	return r.db.Create(preOrder).Error
+}
+
+func (r *preOrderRepository) CreatePreOrderItem(item *entity.PreOrderItem) error {
+	return r.db.Create(item).Error
 }
 
 // 5. Implement Method: ดึงข้อมูล Pre-Order ตาม ID

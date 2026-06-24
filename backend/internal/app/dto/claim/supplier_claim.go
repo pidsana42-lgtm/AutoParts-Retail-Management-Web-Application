@@ -65,3 +65,16 @@ func ToSupplierClaimResponseDTO(m *entity.SupplierClaim) SupplierClaimResponseDT
 		UpdatedAt:       m.UpdatedAt,
 	}
 }
+
+func (d *UpdateSupplierClaimDTO) ToEntity(existing entity.SupplierClaim) entity.SupplierClaim {
+	if d.Note != "" {
+		existing.Note = d.Note
+	}
+	if d.Status != "" {
+		existing.Status = d.Status
+	}
+	if d.ApprovedBy != 0 {
+		existing.ApprovedBy = d.ApprovedBy
+	}
+	return existing
+}

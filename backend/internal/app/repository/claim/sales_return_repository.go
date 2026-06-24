@@ -8,6 +8,7 @@ import (
 // 1. กำหนด Interface สำหรับ SalesReturn Repository
 type SalesReturnRepository interface {
 	CreateSalesReturn(returnItem *entity.SalesReturn) error
+	CreateSalesReturnItem(item *entity.SalesReturnItem) error
 	GetSalesReturnByID(id uint) (*entity.SalesReturn, error)
 	ListSalesReturns() ([]entity.SalesReturn, error)
 	UpdateSalesReturn(returnItem *entity.SalesReturn) error
@@ -27,6 +28,10 @@ func NewSalesReturnRepository(db *gorm.DB) SalesReturnRepository {
 // 4. Implement Method: สร้างข้อมูลการเคลมของลูกค้าใหม่
 func (r *salesReturnRepository) CreateSalesReturn(returnItem *entity.SalesReturn) error {
 	return r.db.Create(returnItem).Error
+}
+
+func (r *salesReturnRepository) CreateSalesReturnItem(item *entity.SalesReturnItem) error {
+	return r.db.Create(item).Error
 }
 
 // 5. Implement Method: ดึงข้อมูลการเคลมของลูกค้าตาม ID

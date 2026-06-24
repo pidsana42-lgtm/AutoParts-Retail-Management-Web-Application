@@ -5,52 +5,91 @@ import (
 	"gorm.io/gorm"
 )
 
-// 1. กำหนด Interface สำหรับ Bill Repository
+// BillRepository interface สำหรับเป็นประตูผ่านไปฐานข้อมูลของระบบ Bill ทุกตาราง
 type BillRepository interface {
 	CreateBill(bill *entity.Bill) error
 	GetBillByID(id uint) (*entity.Bill, error)
 	ListBills() ([]entity.Bill, error)
-	// สามารถเพิ่ม Method อื่นๆ ตามที่ต้องใช้ได้ เช่น Update, Delete, Search
+	CreateBillImage(img *entity.BillImage) error
+	CreateBillImportJob(job *entity.BillImportJob) error
+	GetBillImportJobByID(id uint) (*entity.BillImportJob, error)
+	SaveBillImportJob(job *entity.BillImportJob) error
+	CreateBillItem(item *entity.BillItem) error
+	ConfirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob) error
 }
 
-// 2. สร้าง Struct สำหรับ Implment Interface
 type billRepository struct {
 	db *gorm.DB
 }
 
-// 3. ฟังก์ชันสำหรับสร้าง Repository Instance
 func NewBillRepository(db *gorm.DB) BillRepository {
 	return &billRepository{db: db}
 }
 
-// 4. Implement Method: สร้างบิลใหม่
 func (r *billRepository) CreateBill(bill *entity.Bill) error {
 	return r.db.Create(bill).Error
 }
 
-// 5. Implement Method: ดึงข้อมูลบิลตาม ID (พร้อมกับดึงข้อมูลที่เชื่อมโยงกันมาด้วย)
 func (r *billRepository) GetBillByID(id uint) (*entity.Bill, error) {
 	var bill entity.Bill
-	// ใช้ Preload เพื่อดึงข้อมูลจากตารางที่เกี่ยวข้องกันมาด้วย
 	err := r.db.Preload("BillItems").
 		Preload("BillImage").
 		Preload("VerifiedByUser").
 		Preload("PO").
 		First(&bill, id).Error
-		
 	if err != nil {
 		return nil, err
 	}
 	return &bill, nil
 }
 
-// 6. Implement Method: ดึงรายการบิลทั้งหมด
 func (r *billRepository) ListBills() ([]entity.Bill, error) {
 	var bills []entity.Bill
 	err := r.db.Preload("BillImage").
 		Preload("VerifiedByUser").
 		Preload("PO").
 		Find(&bills).Error
-		
 	return bills, err
+}
+
+func (r *billRepository) CreateBillImage(img *entity.BillImage) error {
+	return r.db.Create(img).Error
+}
+
+func (r *billRepository) CreateBillImportJob(job *entity.BillImportJob) error {
+	return r.db.Create(job).Error
+}
+
+func (r *billRepository) GetBillImportJobByID(id uint) (*entity.BillImportJob, error) {
+	var job entity.BillImportJob
+	err := r.db.First(&job, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &job, nil
+}
+
+func (r *billRepository) SaveBillImportJob(job *entity.BillImportJob) error {
+	return r.db.Save(job).Error
+}
+
+func (r *billRepository) CreateBillItem(item *entity.BillItem) error {
+	return r.db.Create(item).Error
+}
+
+func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(bill).Error; err != nil {
+			return err
+		}
+
+		for i := range items {
+			items[i].BillID = bill.ID
+			if err := tx.Create(&items[i]).Error; err != nil {
+				return err
+			}
+		}
+
+		return tx.Save(job).Error
+	})
 }

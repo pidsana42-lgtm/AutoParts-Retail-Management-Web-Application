@@ -8,6 +8,7 @@ import (
 // 1. กำหนด Interface สำหรับ SupplierClaim Repository
 type SupplierClaimRepository interface {
 	CreateSupplierClaim(claim *entity.SupplierClaim) error
+	CreateSupplierClaimItem(item *entity.SupplierClaimItem) error
 	GetSupplierClaimByID(id uint) (*entity.SupplierClaim, error)
 	ListSupplierClaims() ([]entity.SupplierClaim, error)
 	UpdateSupplierClaim(claim *entity.SupplierClaim) error
@@ -27,6 +28,10 @@ func NewSupplierClaimRepository(db *gorm.DB) SupplierClaimRepository {
 // 4. Implement Method: สร้างข้อมูลการเคลมซัพพลายเออร์ใหม่
 func (r *supplierClaimRepository) CreateSupplierClaim(claim *entity.SupplierClaim) error {
 	return r.db.Create(claim).Error
+}
+
+func (r *supplierClaimRepository) CreateSupplierClaimItem(item *entity.SupplierClaimItem) error {
+	return r.db.Create(item).Error
 }
 
 // 5. Implement Method: ดึงข้อมูลการเคลมซัพพลายเออร์ตาม ID
