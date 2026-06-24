@@ -111,8 +111,17 @@ func SetupDatabase() {
 	// 3. สำคัญ: เปิดการตรวจสอบ Foreign Key กลับคืนสู่สถานะปกติ
 	db.Exec("SET session_replication_role = 'origin';")
 
+	// Looktao
 	seed.Role(db)
 	seed.CustomerType(db)
+	
+	// Toto WMS
+	seed.Zone(db)
+	seed.Brand(db)
+	seed.Unit(db)
+	seed.Category(db)
+	seed.Grade(db)
+	seed.Shelf(db)
 	seed.Product(db)
 
 	log.Println("Database migration complete! Server Ready.")
