@@ -112,6 +112,7 @@ func SetupDatabase() {
 	db.Exec("SET session_replication_role = 'origin';")
 
 	seed.Role(db)
+	seed.CustomerType(db)
 	seed.Product(db)
 
 	log.Println("Database migration complete! Server Ready.")
