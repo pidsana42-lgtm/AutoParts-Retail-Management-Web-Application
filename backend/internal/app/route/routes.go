@@ -19,7 +19,7 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	//ของทุกคนก็เพิ่มเอาในนี้เลย comment ระบบตัวเองไว้ด้วยนะ ใน main มันจะได้ไ่ม่เยอะ
 
 	//import bill routes
-	import_bill.RegisterBillRoutes(r, db)
+	import_bill.SetupBillRoutes(r, db)
 
 	//claim routes
 	claim.SetupClaimRoutes(r, db)

@@ -117,6 +117,17 @@ func SetupDatabase() {
 		log.Printf("Warning: failed to seed default user: %v", err)
 	}
 	seed.Product(db)
+	
+	// Toto WMS
+	seed.Zone(db)
+	seed.Brand(db)
+	seed.Unit(db)
+	seed.Category(db)
+	seed.Grade(db)
+	seed.Shelf(db)
+	
 
+
+	seed.Product(db)
 	log.Println("Database migration complete! Server Ready.")
 }
