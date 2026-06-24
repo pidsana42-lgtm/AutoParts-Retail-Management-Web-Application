@@ -112,14 +112,17 @@ func SetupDatabase() {
 	db.Exec("SET session_replication_role = 'origin';")
 
 	seed.Role(db)
-	seed.Product(db)
-
+	
 	// Toto WMS
+	seed.Zone(db)
+	seed.Brand(db)
+	seed.Unit(db)
 	seed.Category(db)
 	seed.Grade(db)
 	seed.Shelf(db)
-	seed.Brand(db)
-	seed.Unit(db)
+	
 
+
+	seed.Product(db)
 	log.Println("Database migration complete! Server Ready.")
 }
