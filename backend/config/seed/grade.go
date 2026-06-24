@@ -14,8 +14,14 @@ func Grade(db *gorm.DB) error {
 	}
 
 	for _, grade := range grades {
-		if err := db.Create(&grade).Error; err != nil {
-			return fmt.Errorf("failed to create grade: %w", err)
+		var result entity.Grade
+		err := db.Where("grade_name = ?", grade.Grade_Name).
+			FirstOrCreate(&result, grade).Error
+		if err == nil {
+			db.Model(&result).Updates(grade)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to seed grade %s: %w", grade.Grade_Name, err)
 		}
 	}
 	return nil

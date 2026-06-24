@@ -13,8 +13,14 @@ func Category(db *gorm.DB) error {
 	}
 
 	for _, category := range categories {
-		if err := db.Create(&category).Error; err != nil {
-			return fmt.Errorf("failed to create category: %w", err)
+		var result entity.Category
+		err := db.Where("category_name = ?", category.Category_Name).
+			FirstOrCreate(&result, category).Error
+		if err == nil {
+			db.Model(&result).Updates(category)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to seed category %s: %w", category.Category_Name, err)
 		}
 	}
 	return nil
