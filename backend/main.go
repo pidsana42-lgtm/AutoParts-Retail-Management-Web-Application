@@ -25,8 +25,9 @@ func main() {
 		c.Status(204)
 	})
 
-	// Setup routes
-	route.SetupRoutes(r)
+
+	// ไปใช้ routes.go setup function เพื่อจัดการ Route ทั้งหมด
+	route.SetupAllRoutes(r, config.DB())
 
 	// 5. Test Endpoint สำหรับเช็คสถานะเซิร์ฟเวอร์
 	r.GET("/ping", func(c *gin.Context) {

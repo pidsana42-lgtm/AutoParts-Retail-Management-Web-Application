@@ -116,6 +116,7 @@ func SetupDatabase() {
 	if err := seed.User(db); err != nil {
 		log.Printf("Warning: failed to seed default user: %v", err)
 	}
+	seed.Product(db)
 
 	log.Println("Database migration complete! Server Ready.")
 }
