@@ -66,19 +66,27 @@ func Product(db *gorm.DB) error {
     }
 
     for _, r := range products {
-        var result entity.Product
+        var existing entity.Product
 
-        err := db.Where("product_code = ?", r.Product_Code).
-            FirstOrCreate(&result, r).Error
+        result := db.Where("product_code = ?", r.Product_Code).First(&existing)
 
-        if err == nil  {
-            db.Model(&result).Updates(r)
-        }
+        switch result.Error {
+        case gorm.ErrRecordNotFound:
+            if err := db.Create(&r).Error; err != nil {
+                return fmt.Errorf("failed to create product %s: %w", r.Product_Name, err)
+            }
+            fmt.Printf("Created: %s\n", r.Product_Name)
 
-        if err != nil {
-            return fmt.Errorf("failed to seed product %s: %w", r.Product_Name, err)
+        case nil:
+            r.ID = existing.ID
+            if err := db.Model(&existing).Updates(r).Error; err != nil {
+                return fmt.Errorf("failed to update product %s: %w", r.Product_Name, err)
+            }
+            fmt.Printf("Updated: %s\n", r.Product_Name)
+
+        default:
+            return fmt.Errorf("failed to query product %s: %w", r.Product_Name, result.Error)
         }
     }
-
     return nil
 }
