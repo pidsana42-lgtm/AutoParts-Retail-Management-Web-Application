@@ -69,9 +69,8 @@ func Product(db *gorm.DB) error {
         var result entity.Product
 
         err := db.Where("product_code = ?", r.Product_Code).
-            FirstOrCreate(&result, entity.Product{Product_Code: r.Product_Code}).Error
-
-        if err == nil && result.CreatedAt.Equal(result.UpdatedAt) {
+            FirstOrCreate(&result, r).Error
+        if err == nil  {
             db.Model(&result).Updates(r)
         }
 
