@@ -1,4 +1,5 @@
 import type { LoginRequest, LoginResponse } from "../../../interface/login/login_interface";
+
 export async function loginUser(credentials: LoginRequest): Promise<LoginResponse> {
   const apiUrl = import.meta.env.VITE_API_URL
 

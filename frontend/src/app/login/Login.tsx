@@ -1,12 +1,11 @@
 import React, { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { UserIcon, Lock, Eye, EyeOff } from 'lucide-react';
-
 import loginImage from "../../assets/Autoparts-login.jpeg";
-
-// นำเข้า Component ต่างๆ ที่คุณสร้างไว้
 import Heading from '../../components/elements/heading';
 import Input from '../../components/elements/input';
 import Button from '../../components/elements/button';
+import { loginUser } from '../../service/http/login/login_service';
 
 const Login: React.FC = () => {
   // สร้าง State สำหรับเปิด/ปิดการมองเห็นรหัสผ่าน
@@ -14,13 +13,28 @@ const Login: React.FC = () => {
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
 
-  // ฟังก์ชันจัดการตอนกดปุ่มส่งฟอร์ม (Submit)
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    console.log('ข้อมูลเข้าสู่ระบบ:', { username, password });
-    // จัดการส่งข้อมูล API ต่อตรงนี้
+  const navigate = useNavigate();
 
+  // ฟังก์ชันจัดการตอนกดปุ่มส่งฟอร์ม (Submit)
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     
+    if (!username || !password) {
+      alert('กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน');
+      return;
+    }
+
+    try {
+      const response = await loginUser({ username, password });
+      
+      if (response && response.token) {
+        localStorage.setItem('accessToken', response.token);
+        navigate('/dashboard'); 
+      }
+    } catch (error) {
+      console.error('Login failed:', error);
+      alert('เข้าสู่ระบบไม่สำเร็จ: กรุณาตรวจสอบชื่อผู้ใช้หรือรหัสผ่าน');
+    }
   };
 
   return (
