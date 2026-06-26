@@ -17,10 +17,10 @@ const Heading: React.FC<HeadingProps> = ({
   // ตั้งค่า
   const baseStyle = "font-heading text-gray-900";
   const styles: Record<HeadingLevel, string> = {
-    h1: "text-4xl md:text-5xl font-extrabold tracking-tight mb-6",
-    h2: "text-3xl md:text-4xl font-bold tracking-tight mb-5",
-    h3: "text-2xl md:text-3xl font-semibold mb-4",
-    h4: "text-xl md:text-2xl font-semibold mb-3",
+    h1: "text-4xl md:text-5xl font-bold tracking-tight mb-6",
+    h2: "text-3xl md:text-4xl font-semibold tracking-tight mb-5",
+    h3: "text-2xl md:text-3xl font-medium mb-4",
+    h4: "text-xl md:text-2xl font-medium mb-3",
     h5: "text-lg md:text-xl font-medium mb-2",
     h6: "text-base md:text-lg font-medium mb-2",
   };
