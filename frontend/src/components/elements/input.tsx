@@ -15,7 +15,7 @@ const InputField: React.FC<InputFieldProps> = ({
 }) => {
   return (
     <div className="w-full mb-5">
-      // Label อยู่ด้านบนเสมอ
+
       {label && (
         <label 
           htmlFor={id} 
@@ -26,8 +26,7 @@ const InputField: React.FC<InputFieldProps> = ({
           {label}
         </label>
       )}
-      
-      // Input Field
+
       <input
         type={type}
         id={id}
@@ -38,8 +37,7 @@ const InputField: React.FC<InputFieldProps> = ({
           } ${className}`}
         {...props}
       />
-      
-      // แจ้งเตือนเมื่อกรอกผิด
+
       {error && (
         <p className="mt-1.5 text-xs font-medium text-red-600">{error}</p>
       )}
