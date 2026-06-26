@@ -12,6 +12,7 @@ func Role(db *gorm.DB) error {
 	roles := []entity.Role{
 		{RoleName: enum.RoleOwner},
 		{RoleName: enum.RoleEmployee},
+		{RoleName: enum.RoleAdmin},
 	}
 
 	for _, r := range roles {

@@ -1,6 +1,7 @@
 package route
 
 import (
+	"backend/internal/app/route/auth"
 	"backend/internal/app/route/claim"
 	"backend/internal/app/route/customer"
 	"backend/internal/app/route/import_bill"
@@ -12,6 +13,9 @@ import (
 )
 
 func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
+
+	//auth routes
+	auth.SetupAuthRoutes(r, db)
 
 	//pos and customer routes
 	customer.SetupCustomerRoutes(r, db)

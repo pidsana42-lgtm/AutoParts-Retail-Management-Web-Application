@@ -1,0 +1,13 @@
+package auth
+
+// หน้าบ้านส่งมาตอนจะล็อกอิน
+type LoginRequest struct {
+    Username string `json:"username" binding:"required"`
+    Password string `json:"password" binding:"required"`
+}
+
+// หลังบ้านตอบกลับไปเมื่อล็อกอินสำเร็จ
+type LoginResponse struct {
+    Token string `json:"token"`
+    Role  string `json:"role"`
+}
