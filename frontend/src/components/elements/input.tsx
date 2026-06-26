@@ -1,52 +1,92 @@
-import React from 'react';
+import { type InputHTMLAttributes, type ReactNode, forwardRef, useId } from "react";
 
-interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  helperText?: string;
+  leftIcon?: ReactNode;
+  rightIcon?: ReactNode;
+  containerClassName?: string;
 }
 
-const InputField: React.FC<InputFieldProps> = ({
-  label,
-  id,
-  type = 'text',
-  error,
-  className = '',
-  ...props
-}) => {
-  return (
-    <div className="w-full mb-5">
-      {/* Label อยู่ด้านบนเสมอ */}
-      {label && (
-        <label 
-          htmlFor={id} 
-          className={`block mb-1.5 text-xs font-semibold uppercase tracking-wider ${
-            error ? 'text-red-600' : 'text-gray-700'
-          }`}
-        >
-          {label}
-        </label>
-      )}
-      
-      {/* Input Field */}
-      <input
-        type={type}
-        id={id}
-        // ปรับ Default ให้เป็นพื้นหลังสีเทา (bg-gray-100) และไม่มีขอบ (border-transparent) 
-        // เมื่อคลิก (focus) จะเปลี่ยนเป็นสีขาวและมีขอบ/เงาสีแดงตามดีไซน์
-        className={`block w-full p-3 text-sm rounded border transition-colors outline-none
-          ${error 
-            ? 'bg-red-50 border-red-500 text-red-900 focus:border-red-600 focus:ring-1 focus:ring-red-600 placeholder-red-300' 
-            : 'bg-gray-100 border-transparent text-gray-900 focus:bg-white focus:border-[#B70011] focus:ring-1 focus:ring-[#B70011]'
-          } ${className}`}
-        {...props}
-      />
-      
-      {/* แจ้งเตือนเมื่อกรอกผิด */}
-      {error && (
-        <p className="mt-1.5 text-xs font-medium text-red-600">{error}</p>
-      )}
-    </div>
-  );
-};
+const Input = forwardRef<HTMLInputElement, InputProps>(
+  (
+    {
+      label,
+      error,
+      helperText,
+      leftIcon,
+      rightIcon,
+      containerClassName = "",
+      className = "",
+      id,
+      required,
+      ...rest
+    },
+    ref
+  ) => {
+    const generatedId = useId();
+    const inputId = id ?? generatedId;
 
-export default InputField;
+    return (
+      <div className={["flex flex-col gap-1.5", containerClassName].join(" ")}>
+        {label && (
+          <label
+            htmlFor={inputId}
+            className="text-sm font-medium text-slate-700"
+          >
+            {label}
+            {required && <span className="ml-0.5 text-red-500">*</span>}
+          </label>
+        )}
+
+        <div className="relative flex items-center">
+          {leftIcon && (
+            <span className="pointer-events-none absolute left-3 flex items-center text-slate-400">
+              {leftIcon}
+            </span>
+          )}
+
+          <input
+            ref={ref}
+            id={inputId}
+            required={required}
+            aria-invalid={!!error}
+            aria-describedby={error ? `${inputId}-error` : undefined}
+            className={[
+              "h-10 w-full rounded-none bg-gray-100 px-3 text-sm text-slate-800",
+              "placeholder:text-slate-400",
+              "transition-colors duration-150 ease-out",
+              error
+                ? "border border-red-400 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-200"
+                : "border-none focus:outline-none focus:ring-0",
+              "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
+              leftIcon ? "pl-12" : "",
+              rightIcon ? "pr-9" : "",
+              className,
+            ].join(" ")}
+            {...rest}
+          />
+
+          {rightIcon && (
+            <span className="absolute right-3 flex items-center text-slate-400">
+              {rightIcon}
+            </span>
+          )}
+        </div>
+
+        {error ? (
+          <p id={`${inputId}-error`} className="text-xs text-red-500">
+            {error}
+          </p>
+        ) : helperText ? (
+          <p className="text-xs text-slate-400">{helperText}</p>
+        ) : null}
+      </div>
+    );
+  }
+);
+
+Input.displayName = "Input";
+
+export default Input;

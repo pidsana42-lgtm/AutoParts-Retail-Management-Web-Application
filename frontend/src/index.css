@@ -1,15 +1,19 @@
 @font-face {
   font-family: "TH Sarabun New";
   src: url("/fonts/THSarabunNew.ttf") format("truetype");
-  font-weight: 400; /* น้ำหนักปกติ */
+  font-weight: 400; /* ตัวปกติ */
   font-style: normal;
+
+  size-adjust: 140%;
 }
 
 @font-face {
   font-family: "TH Sarabun New";
   src: url("/fonts/THSarabunNew-Bold.ttf") format("truetype");
-  font-weight: 400; /* น้ำหนักปกติ */
+  font-weight: 700; /* ตัวหนา */
   font-style: normal;
+
+  size-adjust: 140%;
 }
 
 @import "tailwindcss";
@@ -18,8 +22,8 @@
    ใน v4 เราจะมาเขียนในนี้ด้วย @theme แทนครับ เช่น: */
 
 @theme {
-  --font-sans: "Inter", "TH Sarabun New", sans-serif;
-  --font-heading: "Inter", "TH Sarabun New", sans-serif;
+  --font-sans: "Kanit", "Inter", "TH Sarabun New", sans-serif;
+  --font-heading: "Kanit", "Inter", "TH Sarabun New", sans-serif;
 }
 
 @layer base {
