@@ -61,6 +61,7 @@ func SetupDatabase() {
 		&entity.Bill{},
 		&entity.BillImage{},
 		&entity.BillItem{},
+		&entity.BillImportJob{},
 		&entity.PreOrder{},
 		&entity.PreOrderItem{},
 		&entity.SalesReturn{},
@@ -69,7 +70,7 @@ func SetupDatabase() {
 		&entity.CustomerClaimItem{},
 		&entity.SupplierClaim{},
 		&entity.SupplierClaimItem{},
-		
+
 		// pos
 		&entity.Role{},
 		&entity.User{},
@@ -93,7 +94,7 @@ func SetupDatabase() {
 		&entity.Models{},
 		&entity.Unit{},
 		&entity.Product{},
-		&entity.Inventory{},	
+		&entity.Inventory{},
 		&entity.StockAlert{},
 		&entity.CheckStock{},
 		&entity.StockMovement{},
@@ -113,6 +114,10 @@ func SetupDatabase() {
 
 	// Looktao
 	seed.Role(db)
+	if err := seed.User(db); err != nil {
+		log.Printf("Warning: failed to seed default user: %v", err)
+	}
+	seed.Product(db)
 	seed.CustomerType(db)
 	seed.PaymentMethod(db)
 	seed.StoreConfig(db)
