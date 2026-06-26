@@ -2,11 +2,21 @@ package entity
 
 import "gorm.io/gorm"
 
+//เพิ่ม ตาราง CustomerType เพื่อเก็บประเภทของลูกค้า เช่น "GENERAL", "PARTNER" และส่วนลดตั้งต้นของกลุ่มลูกค้านั้น ๆ
+type CustomerType struct {
+	gorm.Model
+	TypeName        string  `gorm:"type:varchar(50);not null;unique"` // เช่น "GENERAL", "PARTNER"
+	TypeLabel       string  `gorm:"type:varchar(100);not null"`       // ชื่อแสดงผลภาษาไทย เช่น "สมาชิกทั่วไป", "อู่ซ่อมรถพันธมิตร"
+}
+
 type Customer struct {
 	gorm.Model
 	// User ส่งมา
 	CustomerName string  `gorm:"type:varchar(100);not null" json:"customer_name" binding:"required"`
-	CustomerType string  `gorm:"type:varchar(50);not null" json:"customer_type" binding:"required"`
+
+	CustomerTypeID uint         `json:"customer_type_id"`
+	CustomerType   CustomerType `gorm:"foreignKey:CustomerTypeID" json:"customer_type"` 
+
 	CreditLimit  float64 `gorm:"type:decimal(15,2);not null" json:"credit_limit" binding:"required"`
 
 	// Optional

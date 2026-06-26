@@ -112,11 +112,13 @@ func SetupDatabase() {
 	// 3. สำคัญ: เปิดการตรวจสอบ Foreign Key กลับคืนสู่สถานะปกติ
 	db.Exec("SET session_replication_role = 'origin';")
 
+	// Looktao
 	seed.Role(db)
 	if err := seed.User(db); err != nil {
 		log.Printf("Warning: failed to seed default user: %v", err)
 	}
 	seed.Product(db)
+	seed.CustomerType(db)
 	
 	// Toto WMS
 	seed.Zone(db)
@@ -125,9 +127,7 @@ func SetupDatabase() {
 	seed.Category(db)
 	seed.Grade(db)
 	seed.Shelf(db)
-	
-
-
 	seed.Product(db)
+
 	log.Println("Database migration complete! Server Ready.")
 }

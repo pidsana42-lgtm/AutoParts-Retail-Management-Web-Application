@@ -102,7 +102,7 @@ def main():
         
     try:
         import torch
-        from transformers import AutoProcessor, AutoModelForConditionalGeneration
+        from transformers import AutoProcessor, AutoModelForCausalLM
         import requests
         from io import BytesIO
         
@@ -119,7 +119,7 @@ def main():
         # Load model and processor
         # Since Gemma 4 is very new, we set trust_remote_code=True
         processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True, token=os.getenv("HF_TOKEN"))
-        model = AutoModelForConditionalGeneration.from_pretrained(
+        model = AutoModelForCausalLM.from_pretrained(
             model_id,
             torch_dtype=torch.float16 if device.type != "cpu" else torch.float32,
             trust_remote_code=True,
