@@ -4,6 +4,9 @@ import (
 	poCtrl "backend/internal/app/controller/purchase_orders"
 	poRepo "backend/internal/app/repository/purchase_orders"
 	poSvc "backend/internal/app/service/purchase_orders" 
+
+	"backend/internal/app/enum"
+	"backend/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -21,6 +24,10 @@ func SetupPORoutes(r *gin.Engine, db *gorm.DB) {
 	poController := poCtrl.NewPOController(poService)
 
 	posGroup := r.Group("/api/po")
+	posGroup.Use(
+		middleware.AuthMiddleware(),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleAdmin)),
+	)
 	{
 		posGroup.POST("/new-purchase-orders", poController.CreatePO)
 	}

@@ -4,6 +4,9 @@ import (
 	customerCtrl "backend/internal/app/controller/customer"
 	customerRepo "backend/internal/app/repository/customer"
 	customerSvc "backend/internal/app/service/customer"
+
+	"backend/internal/app/enum"
+	"backend/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -14,6 +17,10 @@ func SetupCustomerRoutes(r *gin.Engine, db *gorm.DB) {
 	customerCtrl := customerCtrl.NewCustomerController(customerSvc)
 
 	customerGroup := r.Group("/api/customers")
+	customerGroup.Use(
+		middleware.AuthMiddleware(),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleAdmin)),
+	)
 	{
 		customerGroup.POST("/register", customerCtrl.RegisterCustomer)
 		customerGroup.GET("", customerCtrl.GetAllCustomers)
