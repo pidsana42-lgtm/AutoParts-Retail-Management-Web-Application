@@ -7,6 +7,8 @@ import (
 
 type POSProductRepository interface {
 	SearchProducts(search string) ([]entity.Product, error)
+	GetProductByID(id uint) (*entity.Product, error)
+	UpdateProductWithTx(tx *gorm.DB, product *entity.Product) error
 }
 
 type posProductRepository struct {
@@ -29,4 +31,17 @@ func (r *posProductRepository) SearchProducts(search string) ([]entity.Product, 
 
 	err := query.Find(&products).Error
 	return products, err
+}
+
+func (r *posProductRepository) GetProductByID(id uint) (*entity.Product, error) {
+	var product entity.Product
+	
+	if err := r.db.Preload("Unit").First(&product, id).Error; err != nil {
+		return nil, err
+	}
+	return &product, nil
+}
+
+func (r *posProductRepository) UpdateProductWithTx(tx *gorm.DB, product *entity.Product) error {
+	return tx.Save(product).Error
 }

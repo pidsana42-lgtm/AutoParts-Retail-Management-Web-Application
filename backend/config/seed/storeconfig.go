@@ -1,30 +1,30 @@
 package seed
 
 import (
-	"backend/internal/app/entity"
-	"fmt"
-	"gorm.io/gorm"
+    "backend/internal/app/entity"
+    "fmt"
+    "gorm.io/gorm"
 )
 
 func StoreConfig(db *gorm.DB) error {
-	storeConfigs := []entity.StoreConfig{
-		{
-			MaxCredit:            50000.00,
-			MaxOverdueDays:       90,
-			MaxItemDiscountRate:  2.00,
-			MaxExtraDiscountRate: 2.00,
-			SupervisedPin:        "1234", // พินตั้งต้นสำหรับเทส
-		},
-	}
+    var result entity.StoreConfig
+    
+    // ใช้ Where ค้นหา ID = 1
+    // ถ้าไม่เจอ (Attrs จะทำงาน): มันจะเอาข้อมูลใน map (รวมถึง id: 1) ไปทำการ INSERT ให้ทันที
+    err := db.Where("id = ?", 1).
+        Attrs(map[string]interface{}{
+            "id":                      1,
+            "max_credit":              50000.00,
+            "max_overdue_days":        90,
+            "max_item_discount_rate":  2.00,
+            "max_extra_discount_rate": 2.00,
+            "supervised_pin":          "1234",
+        }).
+        FirstOrCreate(&result).Error // ส่งแค่ &result เข้าไปเพื่อรับค่ากลับมาพอครับ
 
-	for _, c := range storeConfigs {
-		var result entity.StoreConfig
-		err := db.Where("id = ?", 1).
-		FirstOrCreate(&result, &c).Error
+    if err != nil {
+        return fmt.Errorf("failed to seed store config: %w", err)
+    }
 
-	if err != nil {
-		return fmt.Errorf("failed to seed store config: %w", err)
-	}
-	}
-	return nil
+    return nil
 }
