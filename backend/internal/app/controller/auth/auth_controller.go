@@ -4,7 +4,7 @@ import (
     authDTO "backend/internal/app/dto/auth"
     authSVC "backend/internal/app/service/auth"
     "net/http"
-
+	"encoding/base64"
     "github.com/gin-gonic/gin"
 )
 
@@ -22,6 +22,14 @@ func (c *AuthController) Login(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน"})
 		return
 	}
+
+	decodedPassword, err := base64.StdEncoding.DecodeString(loginRequest.Password)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรหัสผ่านที่ส่งมาไม่ถูกต้อง"})
+		return
+	}
+	
+	loginRequest.Password = string(decodedPassword)
 
 	res, err := c.authService.Login(&loginRequest)
 	if err != nil {
