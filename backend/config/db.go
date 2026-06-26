@@ -1,7 +1,7 @@
 package config
 
 import (
-	"backend/config/seed"
+	"backend/seed"
 	"backend/internal/app/entity"
 
 	"fmt"

@@ -5,4 +5,5 @@ type RoleType string
 const (
 	RoleOwner    RoleType = "Owner"
 	RoleEmployee RoleType = "Employee"
+	RoleAdmin    RoleType = "Admin"
 )
