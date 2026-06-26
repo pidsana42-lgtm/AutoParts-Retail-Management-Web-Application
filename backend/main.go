@@ -4,6 +4,7 @@ import (
 	"backend/config"
 	"backend/internal/app/route"
 	"github.com/gin-gonic/gin"
+	"backend/internal/middleware"
 	"os"
 )
 
@@ -16,6 +17,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
+	r.Use(middleware.CORSMiddleware())
 
 	// 3. เปิดโฟลเดอร์สำหรับฝากรูปภาพอะไหล่หรือสลิปเงิน
 	r.Static("/uploads", "./uploads")
@@ -24,7 +26,6 @@ func main() {
 	r.OPTIONS("/*path", func(c *gin.Context) {
 		c.Status(204)
 	})
-
 
 	// ไปใช้ routes.go setup function เพื่อจัดการ Route ทั้งหมด
 	route.SetupAllRoutes(r, config.DB())
