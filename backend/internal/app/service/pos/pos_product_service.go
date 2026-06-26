@@ -2,7 +2,7 @@ package pos
 
 import (
 	"backend/internal/app/dto/pos"        
-	posRepo "backend/internal/app/repository/pos" 
+	productRepo "backend/internal/app/repository/pos" 
 )
 
 type POSProductService interface {
@@ -10,10 +10,10 @@ type POSProductService interface {
 }
 
 type posProductService struct {
-	repo posRepo.POSProductRepository 
+	repo productRepo.POSProductRepository 
 }
 
-func NewPOSProductService(repo posRepo.POSProductRepository) POSProductService {
+func NewPOSProductService(repo productRepo.POSProductRepository) POSProductService {
 	return &posProductService{repo: repo}
 }
 
