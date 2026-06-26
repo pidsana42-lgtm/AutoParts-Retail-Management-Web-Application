@@ -1,14 +1,17 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './login/Login';
-import Dashboard from './owner/dashboard/dashboard';
+import Dashboard from './owner/dashboard/dashboard'; 
 
-const AppRouter = () => {
+function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<Login />} />
-      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/login" element={<Login />} />
+
+      <Route path="/owner/dashboard" element={<Dashboard />} />
+
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
-};
+}
 
 export default AppRouter;

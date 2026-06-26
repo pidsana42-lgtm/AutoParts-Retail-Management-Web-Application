@@ -1,39 +1,51 @@
-import React, { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { UserIcon, Lock, Eye, EyeOff } from 'lucide-react';
+import React, { useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import { UserIcon, Lock, Eye, EyeOff } from "lucide-react";
 import loginImage from "../../assets/Autoparts-login.jpeg";
-import Heading from '../../components/elements/heading';
-import Input from '../../components/elements/input';
-import Button from '../../components/elements/button';
-import { loginUser } from '../../service/http/login/login_service';
+import Heading from "../../components/elements/heading";
+import Input from "../../components/elements/input";
+import Button from "../../components/elements/button";
+import { useAuth } from "../../contexts/AuthContexts";
 
 const Login: React.FC = () => {
   // สร้าง State สำหรับเปิด/ปิดการมองเห็นรหัสผ่าน
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [username, setUsername] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
+  const [username, setUsername] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
 
   const navigate = useNavigate();
 
-  // ฟังก์ชันจัดการตอนกดปุ่มส่งฟอร์ม (Submit)
+  const { login } = useAuth();
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
+
     if (!username || !password) {
-      alert('กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน');
+      alert("กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน");
       return;
     }
 
     try {
-      const response = await loginUser({ username, password });
-      
-      if (response && response.token) {
-        localStorage.setItem('accessToken', response.token);
-        navigate('/dashboard'); 
+      await login({ username, password });
+
+      const userRole = localStorage.getItem("role");
+
+      const currentRole = userRole?.toUpperCase();
+
+      if (currentRole === "OWNER" || currentRole === "ADMIN") {
+        navigate("/owner/dashboard");
+      } else if (currentRole === "EMPLOYEE" || currentRole === "STAFF") {
+        navigate("/employee/pos");
+      } else {
+        alert("คุณไม่มีสิทธิ์เข้าใช้งานในหน้านี้");
+        navigate("/login");
       }
-    } catch (error) {
-      console.error('Login failed:', error);
-      alert('เข้าสู่ระบบไม่สำเร็จ: กรุณาตรวจสอบชื่อผู้ใช้หรือรหัสผ่าน');
+    } catch (error: any) {
+      console.error("Login failed:", error);
+      alert(
+        error.message ||
+          "เข้าสู่ระบบไม่สำเร็จ: กรุณาตรวจสอบชื่อผู้ใช้หรือรหัสผ่าน",
+      );
     }
   };
 
@@ -58,9 +70,25 @@ const Login: React.FC = () => {
           <div className="flex items-center gap-3 text-xl font-bold tracking-widest">
             {/* ไอคอนมุมซ้ายบน ใช้โค้ดสี #B70011 ตามที่คุณต้องการ */}
             <div className="flex-none flex h-10 w-10 items-center justify-center rounded bg-[#B70011] text-white">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                />
               </svg>
             </div>
             PARTSPRO
@@ -91,7 +119,7 @@ const Login: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             
             {/* เปลี่ยนมาใช้ InputField Component */}
-            <Input 
+            <Input
               id="username"
               label="ชื่อผู้ใช้งาน"
               placeholder="ตัวอย่าง: CPE0789"
@@ -104,7 +132,7 @@ const Login: React.FC = () => {
 
             {/* ช่องรหัสผ่าน (ใช้ InputField + วางไอคอนเปิด-ปิดตาทับ) */}
             <div className="relative">
-              <Input 
+              <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 label="รหัสผ่าน"
@@ -115,17 +143,17 @@ const Login: React.FC = () => {
                 className="bg-gray-100 border-none pr-10 h-14"
                 required
                 rightIcon={
-                <div 
-                  className="flex cursor-pointer items-center transition-colors"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {/* เปลี่ยนมาใช้ Component จาก lucide-react แทน */}
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                  )}
-                </div>
+                  <div
+                    className="flex cursor-pointer items-center transition-colors"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {/* เปลี่ยนมาใช้ Component จาก lucide-react แทน */}
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    ) : (
+                      <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    )}
+                  </div>
                 }
               />
             </div>
@@ -150,10 +178,10 @@ const Login: React.FC = () => {
             </div>
 
             {/* เปลี่ยนมาใช้ Button Component */}
-            <Button 
-              type="submit" 
-              variant="primary" 
-              size='md'
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
               className="w-full border-none"
             >
               เข้าสู่ระบบ <span className="ml-2">→</span>
