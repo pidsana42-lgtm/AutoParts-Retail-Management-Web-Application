@@ -1,10 +1,10 @@
-import Login from './app/login/Login';
+import AppRouter from "./app/app_router"
 
 function App() {
   return (
-    <>
-      <Login />
-    </>
+    <div className="App">
+      <AppRouter />
+    </div>
   )
 }
 
