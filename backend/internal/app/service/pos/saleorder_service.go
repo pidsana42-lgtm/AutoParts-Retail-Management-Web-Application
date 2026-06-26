@@ -129,6 +129,7 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest) error {
 
 		// 4.7 สร้าง SaleOrderItem และเพิ่มเข้า Slice ของรายการสินค้าก่อนบันทึกลง DB
 		orderItems = append(orderItems, entity.SaleOrderItem{
+			OrderNumber:     orderNumber,            // เลขที่บิล (เพื่อให้ FK กับ SaleOrder)
 			ProductID:       itemReq.ProductID,      // รหัสสินค้า
 			PartNumber:      product.Part_Number,    // เลขพาร์ทสินค้า (ดึงจาก DB)
 			ProductName:     product.Product_Name,   // ชื่อสินค้า (snapshot ณ วันขาย)
