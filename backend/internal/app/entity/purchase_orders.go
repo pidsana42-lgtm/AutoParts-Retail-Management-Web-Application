@@ -2,37 +2,30 @@ package entity
 
 import (
 	"time"
-
 	"gorm.io/gorm"
-)
-
-type POStatus string
-
-const (
-	StatusDraft    POStatus = "DRAFT"
-	StatusPending  POStatus = "PENDING"
-	StatusApproved POStatus = "APPROVED"
-	StatusRejected POStatus = "REJECTED"
+	"backend/internal/app/enum"
 )
 
 type PO struct {
 	gorm.Model
 	PO_number        string     `gorm:"type:varchar(100);uniqueIndex;not null" json:"po_number"`
-	Status           POStatus   `gorm:"type:varchar(50);default:'DRAFT';not null" json:"status"`
+	Status           enum.POStatus   `gorm:"type:varchar(50);default:'DRAFT';not null" json:"status"`
+	Total_amount     float64         `gorm:"type:decimal(10,2);not null;default:0" json:"total_amount"`
 	Expires_at       *time.Time `json:"expires_at"`
 	Pdf_url          string     `gorm:"type:text" json:"pdf_url"`
 	Pdf_generated_at *time.Time `json:"pdf_generated_at"`
 	Notes            *string    `gorm:"type:text" json:"notes"`
 
 	Created_by  	 uint       `json:"created_by"`
+	Creator     	 User       `gorm:"foreignKey:Created_by" json:"creator"`
 	Approved_by 	 *uint      `json:"approved_by"`
 	Approved_at 	 *time.Time `json:"approved_at"`
 
 	SupplierID 		 uint 		`json:"supplier_id"`
 	Supplier   		 Supplier 	`gorm:"foreignKey:SupplierID" json:"supplier,omitempty"`
 	PO_type_id 		 uint    	`json:"po_type_id"`
-	PO_Type    		 PO_Type 	`gorm:"foreignKey:PO_type_id" json:"po_type,omitempty"`
-	PO_Items     	 []PO_items `gorm:"foreignKey:POID" json:"po_items,omitempty"`
+	PO_Type    		 POType 	`gorm:"foreignKey:PO_type_id" json:"po_type,omitempty"`
+	PO_Items     	 []POItems `gorm:"foreignKey:POID" json:"po_items,omitempty"`
 	ReceiveEvidenceExcels []ReceiveEvidenceExcel `gorm:"foreignKey:POID" json:"receive_evidence_excels,omitempty"`
 }
 
