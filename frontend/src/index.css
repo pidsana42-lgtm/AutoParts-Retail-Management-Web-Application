@@ -21,3 +21,9 @@
   --font-sans: "Inter", "TH Sarabun New", sans-serif;
   --font-heading: "Inter", "TH Sarabun New", sans-serif;
 }
+
+@layer base {
+  body {
+    @apply font-sans;
+  }
+}
