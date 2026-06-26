@@ -25,6 +25,7 @@ func main() {
 		c.Status(204)
 	})
 
+
 	// ไปใช้ routes.go setup function เพื่อจัดการ Route ทั้งหมด
 	route.SetupAllRoutes(r, config.DB())
 
