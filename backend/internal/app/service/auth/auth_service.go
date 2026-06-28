@@ -60,5 +60,8 @@ func (s *authService) Login(req *authDTO.LoginRequest) (*authDTO.LoginResponse, 
     return &authDTO.LoginResponse{
         Token: tokenString,
         Role:  string(user.Role.RoleName),
+        FirstName: user.FirstName,
+        LastName: user.LastName,
+        Username: user.Username,
     }, nil
-}
+}               

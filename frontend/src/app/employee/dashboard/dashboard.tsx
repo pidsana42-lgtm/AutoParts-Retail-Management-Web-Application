@@ -12,18 +12,13 @@ const Dashboard: React.FC = () => {
         </button>
       </header>
 
-      {/* 2. การ์ดแสดงผลสถิติ (Stats Cards) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <StatCard title="ยอดขายวันนี้" value="฿ 24,500" />
-        <StatCard title="รายการสินค้าคงเหลือ" value="1,240 รายการ" />
-        <StatCard title="สินค้าที่ต้องสั่งเพิ่ม" value="12 รายการ" />
-      </div>
+      
 
       {/* 3. ตาราง/พื้นที่แสดงผลข้อมูลกราฟ */}
       <div className="bg-white p-6 rounded shadow-sm border border-gray-100">
         <h3 className="font-bold text-gray-800 mb-4">รายการขายล่าสุด</h3>
         <div className="h-64 bg-gray-50 flex items-center justify-center border-2 border-dashed border-gray-200 text-gray-400 text-sm rounded">
-          [ กราฟวิเคราะห์การขาย หรือ ตารางรายการล่าสุดจะอยู่ตรงนี้ ]
+        
         </div>
       </div>
     </div>
