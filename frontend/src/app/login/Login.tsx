@@ -6,6 +6,7 @@ import Heading from "../../components/elements/heading";
 import Input from "../../components/elements/input";
 import Button from "../../components/elements/button";
 import { useAuth } from "../../contexts/AuthContexts";
+import { getMenuByRole } from "../../config/menu"; 
 
 const Login: React.FC = () => {
   // สร้าง State สำหรับเปิด/ปิดการมองเห็นรหัสผ่าน
@@ -26,20 +27,20 @@ const Login: React.FC = () => {
     }
 
     try {
-      await login({ username, password });
+  await login({ username, password }); 
 
-      const userRole = localStorage.getItem("role");
+  const userRole = localStorage.getItem("role") || "";
 
-      const currentRole = userRole?.toUpperCase();
+  const userMenus = getMenuByRole(userRole);
 
-      if (currentRole === "OWNER" || currentRole === "ADMIN") {
-        navigate("/owner/dashboard");
-      } else if (currentRole === "EMPLOYEE" || currentRole === "STAFF") {
-        navigate("/employee/pos");
-      } else {
-        alert("คุณไม่มีสิทธิ์เข้าใช้งานในหน้านี้");
-        navigate("/login");
-      }
+  if (userMenus && userMenus.length > 0) {
+    const firstPath = userMenus[0].path; // จะได้เป็น /owner/dashboard หรือ /employee/dashboard
+    
+    navigate(firstPath, { replace: true });
+  } else {
+    alert("คุณไม่มีสิทธิ์เข้าใช้งานในหน้านี้");
+    navigate("/login", { replace: true });
+  }
     } catch (error: any) {
       console.error("Login failed:", error);
       alert(
@@ -153,7 +154,7 @@ const Login: React.FC = () => {
                     ) : (
                       <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
                     )}
-                  </div>
+                </div>
                 }
               />
             </div>

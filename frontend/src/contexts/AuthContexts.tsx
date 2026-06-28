@@ -8,6 +8,8 @@ interface User {
   id: string;
   name: string;
   username: string;
+  first_name: string;
+  last_name: string;
 }
 
 // 1. เพิ่มตัวแปร role เข้ามาในแผนผังประเภทข้อมูล (Type) ส่วนกลาง
@@ -64,22 +66,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // LOGIN (พาร์ทสำคัญที่เพิ่มการจัดการสิทธิ์)
   // --------------------------
   const login = async (credentials: LoginRequest): Promise<User> => {
-    // ยิงไปหา Go หลังบ้านผ่านไฟล์ Service ของโบว์
-    const data = await loginUser(credentials);
+    // ยิงไปหา Go หลังบ้านดึงข้อมูลชุดใหม่
+    const data = await loginUser(credentials) as any; 
 
     if (!data.token) throw new Error("เซิร์ฟเวอร์ไม่ได้ส่ง token มา");
 
-    //  บันทึกทุกอย่างลง LocalStorage ด้วยชื่อคีย์มาตรฐานเดียวกัน
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    localStorage.setItem("role", data.role); //  บันทึกคำว่า "OWNER" หรือ "EMPLOYEE" ลงเครื่อง
+    // 1. ประกอบร่างวัตถุ User ตัวใหม่ ดึงข้อมูลจากฐานข้อมูลของ Go โดยตรง
+    const userObj = {
+      id: data.user?.id || "", 
+      name: `${data.first_name} ${data.last_name}`, 
+      username: data.username,
+      first_name: data.first_name,
+      last_name: data.last_name
+    };
 
-    setUser(data.user);
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("user", JSON.stringify(userObj)); // 💾 บันทึกก้อนที่มีชื่อไทยแล้วลงเครื่อง
+    localStorage.setItem("role", data.role); 
+
+    setUser(userObj);
     setToken(data.token);
-    setRole(data.role); //  อัปเดตสิทธิ์เข้าไปในระบบส่วนกลาง
+    setRole(data.role); 
     setIsAuthenticated(true);
 
-    return data.user;
+    return userObj as any;
   };
 
   // --------------------------

@@ -82,6 +82,17 @@ func User(db *gorm.DB) error {
             BankAccountNumber: "123-4-56789-2",
             RoleID:            roleAdmin.ID,
         },
+        {
+            FirstName:         "เนตรนภัทร",
+            LastName:          "ชำนินอก",
+            IdCardNumberUser:  "1100000000004",
+            Username:          "manager2",
+            Password:          adminPasswordHashed,
+            StoreConfigID:     storeConfig.ID,
+            BankID:            bank.ID,
+            BankAccountNumber: "123-4-56789-3",
+            RoleID:            roleAdmin.ID,
+        },
     }
 
     // 6. วนลูปบันทึกข้อมูลแบบปลอดภัย
