@@ -49,7 +49,6 @@ func User(db *gorm.DB) error {
     // 5. ลิสต์ข้อมูลจำลองผู้ใช้ (ผูก StoreConfigID เป็น 1 ตามที่ดึงมาตะกี้)
     usersToSeed := []entity.User{
         {
-            Model:             gorm.Model{ID: 1}, // แอดมินหลัก ID 1
             FirstName:         "Owner",
             LastName:          "System",
             IdCardNumberUser:  "1100000000001",
