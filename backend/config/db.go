@@ -94,8 +94,11 @@ func SetupDatabase() {
 		&entity.Models{},
 		&entity.Unit{},
 		&entity.Product{},
+		&entity.ProductImage{},
+		&entity.ProductImageEm{},
 		&entity.Inventory{},
 		&entity.StockAlert{},
+		&entity.CheckStockSchedule{},
 		&entity.CheckStock{},
 		&entity.StockMovement{},
 
@@ -117,7 +120,6 @@ func SetupDatabase() {
 	if err := seed.User(db); err != nil {
 		log.Printf("Warning: failed to seed default user: %v", err)
 	}
-	seed.Product(db)
 	seed.CustomerType(db)
 	seed.PaymentMethod(db)
 	seed.StoreConfig(db)

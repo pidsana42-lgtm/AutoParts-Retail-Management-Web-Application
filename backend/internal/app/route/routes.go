@@ -7,6 +7,7 @@ import (
 	"backend/internal/app/route/pos"
 	"backend/internal/app/route/pre_order"
 	"backend/internal/app/route/purchase_orders"
+	"backend/internal/app/route/wms"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -30,4 +31,11 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 
 	// purchase orders routes
 	purchaseorders.SetupPORoutes(r, db)
+
+	// wms routes
+	wms.SetupProductRoutes(r, db)
+	wms.SetupCheckStockScheduleRoutes(r, db)
+	wms.SetupCheckStockRoutes(r, db)
+	wms.SetupStockMovementRoutes(r, db)
+	wms.SetupSupplierRoutes(r, db)
 }
