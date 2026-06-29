@@ -1,4 +1,86 @@
-import type  { ReactNode } from "react";
+import { cva } from "class-variance-authority";
+import { cn } from "../../utils/component";
+import { type HTMLAttributes, type TdHTMLAttributes, type ThHTMLAttributes, type ReactNode } from "react";
+
+const tableRowVariants = cva("border-b border-slate-100 last:border-0", {
+  variants: {
+    clickable: {
+      true:  "cursor-pointer transition-colors hover:bg-slate-50",
+      false: "",
+    },
+  },
+  defaultVariants: { clickable: false },
+});
+
+const tableCellVariants = cva("px-4 py-3", {
+  variants: {
+    align: {
+      left:   "text-left",
+      center: "text-center",
+      right:  "text-right",
+    },
+  },
+  defaultVariants: { align: "left" },
+});
+
+export function Table({ className, children, ...props }: HTMLAttributes<HTMLTableElement>) {
+  return (
+    <div className="overflow-x-auto">
+      <table className={cn("w-full min-w-max text-sm", className)} {...props}>
+        {children}
+      </table>
+    </div>
+  );
+}
+
+export function TableHeader({ className, children, ...props }: HTMLAttributes<HTMLTableSectionElement>) {
+  return (
+    <thead className={cn("border-b border-slate-200 bg-slate-50", className)} {...props}>
+      {children}
+    </thead>
+  );
+}
+
+export function TableBody({ className, children, ...props }: HTMLAttributes<HTMLTableSectionElement>) {
+  return (
+    <tbody className={cn(className)} {...props}>
+      {children}
+    </tbody>
+  );
+}
+
+export function TableRow({
+  className,
+  onClick,
+  children,
+  ...props
+}: HTMLAttributes<HTMLTableRowElement>) {
+  return (
+    <tr
+      onClick={onClick}
+      className={cn(tableRowVariants({ clickable: !!onClick }), className)}
+      {...props}
+    >
+      {children}
+    </tr>
+  );
+}
+
+export function TableHead({ className, children, ...props }: ThHTMLAttributes<HTMLTableCellElement>) {
+  return (
+    <th className={cn("px-4 py-3 font-medium text-slate-500 text-left", className)} {...props}>
+      {children}
+    </th>
+  );
+}
+
+export function TableCell({ className, children, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
+  return (
+    <td className={cn(tableCellVariants(), "text-slate-700", className)} {...props}>
+      {children}
+    </td>
+  );
+}
 
 export interface TableColumn<T> {
   key: string;
@@ -8,7 +90,7 @@ export interface TableColumn<T> {
   render?: (row: T, rowIndex: number) => ReactNode;
 }
 
-interface TableProps<T> {
+interface GenericTableProps<T> {
   columns: TableColumn<T>[];
   data: T[];
   rowKey: (row: T, rowIndex: number) => string | number;
@@ -18,23 +100,17 @@ interface TableProps<T> {
   className?: string;
 }
 
-const alignClass: Record<"left" | "center" | "right", string> = {
-  left: "text-left",
-  center: "text-center",
-  right: "text-right",
-};
-
-export default function Table<T>({
+export function GenericTable<T>({
   columns,
   data,
   rowKey,
   isLoading = false,
   emptyText = "ไม่พบข้อมูล",
   onRowClick,
-  className = "",
-}: TableProps<T>) {
+  className,
+}: GenericTableProps<T>) {
   return (
-    <div className={["overflow-x-auto rounded-none border border-slate-200", className].join(" ")}>
+    <div className={cn("overflow-x-auto rounded-sm border border-slate-200", className)}>
       <table className="w-full min-w-max text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50">
@@ -42,10 +118,7 @@ export default function Table<T>({
               <th
                 key={col.key}
                 style={{ width: col.width }}
-                className={[
-                  "px-4 py-3 font-medium text-slate-500",
-                  alignClass[col.align ?? "left"],
-                ].join(" ")}
+                className={cn("px-4 py-3 font-medium text-slate-500", tableCellVariants({ align: col.align }))}
               >
                 {col.header}
               </th>
@@ -65,10 +138,7 @@ export default function Table<T>({
             ))
           ) : data.length === 0 ? (
             <tr>
-              <td
-                colSpan={columns.length}
-                className="px-4 py-10 text-center text-slate-400"
-              >
+              <td colSpan={columns.length} className="px-4 py-10 text-center text-slate-400">
                 {emptyText}
               </td>
             </tr>
@@ -77,20 +147,12 @@ export default function Table<T>({
               <tr
                 key={rowKey(row, rowIndex)}
                 onClick={() => onRowClick?.(row)}
-                className={[
-                  "border-b border-slate-100 last:border-0",
-                  onRowClick
-                    ? "cursor-pointer transition-colors hover:bg-slate-50"
-                    : "",
-                ].join(" ")}
+                className={tableRowVariants({ clickable: !!onRowClick })}
               >
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={[
-                      "px-4 py-3 text-slate-700",
-                      alignClass[col.align ?? "left"],
-                    ].join(" ")}
+                    className={cn("text-slate-700", tableCellVariants({ align: col.align }))}
                   >
                     {col.render
                       ? col.render(row, rowIndex)
@@ -105,3 +167,5 @@ export default function Table<T>({
     </div>
   );
 }
+
+export default GenericTable;

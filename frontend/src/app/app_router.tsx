@@ -8,6 +8,7 @@ import { getMenuByRole } from '../config/menu';
 import { useAuth } from '../contexts/AuthContexts'; 
 import StoreConfig from './owner/storeconfig/storeconfig'; 
 import EmployeeDashboard from './employee/dashboard/dashboard';
+import PurchaseOrders from './owner/purchase_orders/purchase_orders';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -47,6 +48,7 @@ export default function AppRouter(): React.JSX.Element {
 
         <Route path="/owner/storeconfig" element={<StoreConfig />} />
         <Route path="/employee/pos" element={<Pos />} />
+        <Route path="/owner/orders" element={<PurchaseOrders />} />
         
         {/* แดชบอร์ดของฝั่งพนักงาน */}
         <Route path="/employee/dashboard" element={
