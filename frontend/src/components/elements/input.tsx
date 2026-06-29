@@ -58,8 +58,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               "placeholder:text-slate-400",
               "transition-colors duration-150 ease-out",
               error
-                ? "border border-red-400 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-200"
-                : "border-none focus:outline-none focus:ring-0",
+                ? "border border-red-400 focus:outline-none focus:border-red-500"
+                : "border-none focus:outline-none",
               "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
               leftIcon ? "pl-12" : "",
               rightIcon ? "pr-9" : "",
@@ -76,7 +76,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         </div>
 
         {error ? (
-          <p id={`${inputId}-error`} className="text-xs text-red-500">
+          <p id={`${inputId}-error`} className="text-xs text-red-500 text-center">
             {error}
           </p>
         ) : helperText ? (
