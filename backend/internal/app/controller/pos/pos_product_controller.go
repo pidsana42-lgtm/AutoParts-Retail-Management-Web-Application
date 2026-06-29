@@ -15,7 +15,7 @@ func NewPOSProductController(svc posSvc.POSProductService) *POSProductController
 }
 
 func (ctrl *POSProductController) SearchProducts(c *gin.Context) {
-	search := c.Query("search")
+	search := c.Query("q")
 
 	products, err := ctrl.svc.SearchPOSProducts(search)
 	if err != nil {

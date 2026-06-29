@@ -113,25 +113,25 @@ func SetupDatabase() {
 	db.Exec("SET session_replication_role = 'origin';")
 
 	// Looktao
-	seed.Role(db)
-	if err := seed.User(db); err != nil {
-		log.Printf("Warning: failed to seed default user: %v", err)
-	}
-	seed.Product(db)
-	seed.CustomerType(db)
-	seed.PaymentMethod(db)
-	seed.StoreConfig(db)
-	seed.Customer(db)
-	
-	
+    seed.Role(db)
+    seed.CustomerType(db)
+    seed.PaymentMethod(db)
+    seed.StoreConfig(db)
+    
 	// Toto WMS
-	seed.Zone(db)
-	seed.Brand(db)
-	seed.Unit(db)
-	seed.Category(db)
-	seed.Grade(db)
-	seed.Shelf(db)
-	seed.Product(db)
 
-	log.Println("Database migration complete! Server Ready.")
+	seed.Zone(db)
+    seed.Unit(db)
+    seed.Category(db)
+    seed.Grade(db)
+    seed.Shelf(db)
+    seed.Brand(db) 
+    seed.Models(db) 
+    if err := seed.User(db); err != nil {
+        log.Printf("Warning: failed to seed default user: %v", err)
+    }
+    seed.Customer(db)
+    seed.Product(db)
+
+    log.Println("Database migration complete! Server Ready.")
 }
