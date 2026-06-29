@@ -31,9 +31,13 @@
 ## 2. รายละเอียดไฟล์และโค้ดหลัก
 
 ### A. FastAPI Server (`backend/model/server.py`)
-ทำหน้าที่สร้าง Web API บนพอร์ต `8000` โดยโหลดโมเดล Gemma-4 ไว้ทันทีตอนเปิดเครื่อง (Hot Start) มี Endpoint สำคัญ 2 จุด:
-1.  `POST /api/extract-invoice` : รับพาธของไฟล์รูปภาพบนเครื่องเซิร์ฟเวอร์ จากนั้นเปิดไฟล์และส่งเข้าโมเดล
-2.  `POST /api/extract-invoice/upload` : รองรับการอัปโหลดไฟล์ในรูปแบบ Multipart Form Data (กรณีที่ระบบอื่นหรือหน้าบ้านต้องการเรียกใช้งานตรง)
+ทำหน้าที่สร้าง Web API บนพอร์ต `8000` โดยโหลดโมเดล Gemma-4 ไว้ทันทีตอนเปิดเครื่อง (Hot Start) และ **เชื่อมต่อโดยตรงกับ PostgreSQL Database** (อ่านการตั้งค่าจากไฟล์ `.env`):
+*   มีระบบเชื่อมฐานข้อมูลด้วย SQLAlchemy แบบดิบ (Raw SQL)
+*   **เมื่อ Go Backend เรียกใช้งาน:** จะส่ง `job_id` มาด้วย FastAPI จะทำการ `UPDATE` สถานะและข้อมูลผลลัพธ์ลงตาราง `bill_import_jobs` ในฐานข้อมูลทันทีที่วิเคราะห์เสร็จ
+*   **เมื่อเทสจากภายนอก (เช่น Swagger UI):** ไม่จำเป็นต้องส่ง `job_id` ตัว FastAPI จะทำการ `INSERT` ข้อมูลเป็นรายการใหม่ลงตาราง `bill_import_jobs` ให้โดยอัตโนมัติ
+*   มี Endpoint หลัก:
+    1.  `POST /api/extract-invoice` : รับพาธของไฟล์รูปภาพบนเครื่องเซิร์ฟเวอร์ พร้อม `job_id` (ถ้ามี)
+    2.  `POST /api/extract-invoice/upload` : รองรับการอัปโหลดไฟล์ตรง พร้อม `job_id` (ถ้ามี)
 
 ### B. Go Integration Service (`backend/internal/app/service/import_data/import_bill_service.go`)
 ในเมธอด `processOCRInBackground` จะปรับเปลี่ยนวิธีการดึงผลลัพธ์:
@@ -45,27 +49,43 @@
 
 ## 3. ขั้นตอนการติดตั้งและรันใช้งาน
 
-### ขั้นตอนที่ 1: ติดตั้งไลบรารีของ Python
-เปิด Terminal แล้วเข้าไปที่โฟลเดอร์ Python `model`:
-```bash
-cd backend/model
-pip install -r requirements.txt
-```
+### ขั้นตอนที่ 1: ติดตั้งไลบรารีของ Python (Dependencies)
+เปิด Terminal และรันคำสั่งติดตั้งไลบรารีที่จำเป็นทั้งหมด (รวมถึงตัวเชื่อมต่อฐานข้อมูล `psycopg2-binary`):
+
+*   **หากอยู่ที่โฟลเดอร์ root ของโปรเจกต์:**
+    ```bash
+    pip install -r backend/model/requirements.txt
+    ```
+*   **หากอยู่ที่โฟลเดอร์ `backend/model`:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
 ### ขั้นตอนที่ 2: ตั้งค่าไฟล์ `.env`
-ตรวจสอบว่ามีข้อมูลเชื่อมต่อฐานข้อมูลและ Token ของ Hugging Face ในไฟล์ `.env` เรียบร้อยแล้ว (โดยเฉพาะ `HF_TOKEN` สำหรับดึงโมเดล Gemma)
+ตรวจสอบไฟล์ `backend/.env` ว่ามีข้อมูลการเชื่อมต่อฐานข้อมูลถูกต้อง เช่น:
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=1234
+DB_NAME=Autopartsdb
+```
 
-### ขั้นตอนที่ 3: สตาร์ทระบบ
+### ขั้นตอนที่ 3: เริ่มต้นสตาร์ทระบบ
 
-1.  **เปิดใช้งาน FastAPI Service:**
-    ```bash
-    # จากโฟลเดอร์ backend
-    python model/server.py
-    ```
-    *(เซิร์ฟเวอร์จะเปิดที่ `http://localhost:8000` และตรวจสุขภาพระบบได้ที่ `http://localhost:8000/health`)*
+1.  **เปิดใช้งาน FastAPI Service (พอร์ต 8000):**
+    *   **หากรันจากโฟลเดอร์ `backend`:**
+        ```bash
+        python model/server.py
+        ```
+    *   **หากรันจากโฟลเดอร์ `backend/model`:**
+        ```bash
+        python server.py
+        ```
+    *(ปล่อยหน้าต่าง Terminal นี้ไว้ ห้ามปิดเด็ดขาดเพื่อเปิดให้เซิร์ฟเวอร์รันอยู่)*
 
-2.  **เปิดใช้งาน Go Backend:**
-    เปิด Terminal อีกหน้าต่างหนึ่งในโฟลเดอร์ `backend` แล้วรัน:
+2.  **เปิดใช้งาน Go Backend (พอร์ต 8080):**
+    เปิด Terminal อีกหน้าต่างหนึ่ง เข้าไปที่โฟลเดอร์ `backend` แล้วรัน:
     ```bash
     go run main.go
     ```
@@ -110,27 +130,29 @@ FastAPI มีหน้าเว็บสำหรับทดสอบ API ใ�
     ```
 
 ### วิธีที่ 3: ทดสอบการทำงานร่วมกันแบบ End-to-End (ผ่าน Go Backend)
-เป็นการทดสอบว่าระบบ Go ติดต่อเขียนฐานข้อมูลและเรียกใช้ FastAPI สำเร็จหรือไม่:
+เป็นการทดสอบจำลองภาพการทำงานที่ติดต่อข้อมูลกับฐานข้อมูลและการควบคุมความปลอดภัยผ่าน Go API:
+
 1.  ให้แน่ใจว่าทั้ง **Go Backend (พอร์ต 8080)** และ **FastAPI (พอร์ต 8000)** รันอยู่คู่กัน
-2.  ทำการสร้าง Job วิเคราะห์บิลผ่าน API ของ Go:
+2.  **ดึงข้อมูล JWT Token สำหรับล็อกอิน:**
+    เนื่องจากทางเดิน API ของ Go มีระบบ Auth ป้องกันอยู่ และหลังบ้านคาดหวังรหัสผ่านที่เป็น Base64 (รหัสผ่าน `owner123` ในรูปแบบ Base64 คือ `b3duZXIxMjM=`) ให้รันคำสั่งบรรทัดเดียวนี้เพื่อรับ Token:
     ```bash
-    curl -X POST "http://localhost:8080/api/import-data/bill-import-jobs" \
-         -H "Content-Type: application/json" \
-         -d '{"file_url": "uploads/your_bill.jpg", "file_type": "invoice", "created_by": 1}'
+    curl -X POST "http://localhost:8080/api/auth/login" -H "Content-Type: application/json" -d '{"username": "owner", "password": "b3duZXIxMjM="}'
     ```
-    *(หมายเหตุ: ต้องแนบ Token หรือปิด Middleware Auth ชั่วคราวสำหรับการทดสอบภายนอก)*
-3.  ตรวจสอบสถานะ Job และ JSON ดราฟต์ที่ได้จากฐานข้อมูล:
+    คัดลอกคีย์ข้อความยาว ๆ ในช่อง `"token"` ที่ได้กลับมา เพื่อนำไปใช้ในขั้นตอนถัดไป
+3.  **ทำการสร้าง Job วิเคราะห์บิล:**
+    ส่งคำขอสร้าง Job โดยแนบ Token ใน Header (สับเปลี่ยน `<ใส่_JWT_Token_ที่นี่>` ด้วย Token จริงที่ได้ในข้อ 2):
     ```bash
-    curl -X GET "http://localhost:8080/api/import-data/bill-import-jobs/1"
+    curl -X POST "http://localhost:8080/api/import-data/bill-import-jobs" -H "Content-Type: application/json" -H "Authorization: Bearer <ใส่_JWT_Token_ที่นี่>" -d '{"file_url": "uploads/your_bill.jpg", "file_type": "invoice", "created_by": 1}'
     ```
-    จะเห็นข้อมูลบิลที่ประมวลผลเสร็จแล้วพร้อมในคอลัมน์ `draft_json`
-4.  กดอนุมัติ (Confirm) เพื่อแปลงข้อมูลบิลลงตารางหลักจริง:
+4.  **ตรวจสอบสถานะ Job และ JSON ดราฟต์:**
+    เช็คว่าระบบบันทึกผลการแปลงภาพบิลสำเร็จหรือไม่:
     ```bash
-    curl -X POST "http://localhost:8080/api/import-data/bill-import-jobs/1/confirm" \
-         -H "Content-Type: application/json" \
-         -d '{
-               "bill": { ...ข้อมูลบิล... },
-               "items": [ ...รายการอะไหล่... ]
-             }'
+    curl -X GET "http://localhost:8080/api/import-data/bill-import-jobs/1" -H "Authorization: Bearer <ใส่_JWT_Token_ที่นี่>"
+    ```
+    จะพบข้อมูลบิลที่แปลเสร็จแล้วบันทึกในตารางฐานข้อมูลในคอลัมน์ `draft_json`
+5.  **กดยืนยัน (Confirm) บันทึกบิลลงตารางหลัก:**
+    ส่งข้อมูลผลลัพธ์บิลเพื่อเขียนลงตาราง `bills` และ `bill_items` ในฐานข้อมูลจริง (คำสั่งแบบบรรทัดเดียวป้องกัน Error ใน zsh):
+    ```bash
+    curl -X POST "http://localhost:8080/api/import-data/bill-import-jobs/1/confirm" -H "Content-Type: application/json" -H "Authorization: Bearer <ใส่_JWT_Token_ที่นี่>" -d '{"bill": {"total_amount": 15450.00, "bill_no": "INV-9923841", "due_date": "2026-07-24T00:00:00Z", "transport_by": "Kerry Express Logistics", "supplier_id": 1, "subtotal": 14439.25, "bill_image_id": 1, "discount_total": 500.00, "credit_term": "30 Days", "vat_amount": 1010.75, "grand_total": 15450.00, "payment_status": "unpaid", "po_id": 1}, "items": [{"bill_id": 1, "item_sequence": 1, "company_product_code": "SPK-001", "company_product_name": "Spark Plug Premium Bosch", "order_quantity": 10, "unit": "PCS", "conversion_factor": 1.0, "price_per_unit": 350.00, "discount_amount": 0.0, "net_amount": 3500.00, "is_freebie": false, "product_id": 1}]}'
     ```
 
