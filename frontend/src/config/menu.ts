@@ -18,7 +18,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   { 
     icon: LayoutDashboard, 
     label: "แดชบอร์ด", 
-    path: "/owner/dashboard", 
+    path: "/owner/dashboard/", 
     roles: ["OWNER", "ADMIN"] 
   },
   
@@ -40,9 +40,9 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   { 
     icon: Settings, 
     label: "การตั้งค่า", 
-    path: "/owner/settings", 
+    path: "/owner/storeconfig", 
     roles: ["OWNER", "ADMIN"],
-    subPath: "/owner/settings/discounts",
+    subPath: "/owner/storeconfig",
     subLabel: "จัดการสิทธิ์ส่วนลดลูกค้าอู่"
   },
 ];

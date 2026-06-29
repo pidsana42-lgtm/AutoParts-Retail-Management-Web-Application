@@ -6,6 +6,8 @@ import Dashboard from './owner/dashboard/dashboard';
 import Pos from './employee/pos/pos'; 
 import { getMenuByRole } from '../config/menu'; 
 import { useAuth } from '../contexts/AuthContexts'; 
+import StoreConfig from './owner/storeconfig/storeconfig'; 
+import EmployeeDashboard from './employee/dashboard/dashboard';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -43,12 +45,12 @@ export default function AppRouter(): React.JSX.Element {
           isAdminOrOwner ? <Dashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
-        {/* เข้าใช้งานได้ตามสิทธิ์ที่ตั้งไว้ในเมนู */}
+        <Route path="/owner/storeconfig" element={<StoreConfig />} />
         <Route path="/employee/pos" element={<Pos />} />
         
-        {/* แดชบอร์ดของฝั่งพนักงาน (ถ้าไม่ใช่พนักงาน/สตาฟ ให้ดีดกลับไปหน้าแรกของตัวเอง) */}
+        {/* แดชบอร์ดของฝั่งพนักงาน */}
         <Route path="/employee/dashboard" element={
-          !isAdminOrOwner ? <div>Employee Dashboard</div> : <Navigate to={firstMenuPath} replace />
+          !isAdminOrOwner ? <EmployeeDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
       </Route>
