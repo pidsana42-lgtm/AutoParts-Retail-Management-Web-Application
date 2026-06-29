@@ -159,7 +159,10 @@ func (s *importBillService) processOCRInBackground(jobID uint, fileURL string) {
 
 	// 1. Try sending Request to FastAPI Server first
 	fastAPIURL := "http://localhost:8000/api/extract-invoice"
-	payload := map[string]string{"file_path": localPath}
+	payload := map[string]interface{}{
+		"file_path": localPath,
+		"job_id":    jobID,
+	}
 	jsonPayload, errPayload := json.Marshal(payload)
 	if errPayload == nil {
 		client := http.Client{

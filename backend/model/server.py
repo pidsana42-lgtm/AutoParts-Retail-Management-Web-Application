@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel
 import requests
 from io import BytesIO
+from sqlalchemy import create_engine, text
 
 # Parse environment variables manually (matching main.py)
 def load_env():
@@ -29,10 +30,91 @@ load_env()
 MOCK_MODE = os.getenv("MOCK_LLM", "false").lower() == "true"
 HF_TOKEN = os.getenv("HF_TOKEN", "")
 
-# Global variables for model and processor
+# Global variables for model, processor, and database engine
 model = None
 processor = None
 device = None
+engine = None
+
+def init_db():
+    global engine
+    db_host = os.getenv("DB_HOST", "localhost")
+    db_port = os.getenv("DB_PORT", "5432")
+    db_user = os.getenv("DB_USER", "postgres")
+    db_password = os.getenv("DB_PASSWORD", "1234")
+    db_name = os.getenv("DB_NAME", "Autopartsdb")
+    
+    url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    try:
+        print(f"Connecting to database at {db_host}:{db_port}/{db_name}...")
+        engine = create_engine(url)
+        # Test connection
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        print("Database connected successfully!")
+    except Exception as e:
+        print(f"Database connection failed: {e}")
+        engine = None
+
+def save_result_to_db(file_path, result, job_id=None):
+    if engine is None:
+        print("Database connection not available. Skipping DB save.")
+        return None
+        
+    draft_json_str = json.dumps(result, ensure_ascii=False)
+    ocr_text = result.get("ocr_text", "")
+    error_msg = result.get("error", None)
+    status = "failed" if error_msg else "processed"
+    
+    try:
+        with engine.begin() as conn:
+            if job_id:
+                # Update existing job record from Go backend
+                query = text("""
+                    UPDATE bill_import_jobs 
+                    SET status = :status, 
+                        draft_json = :draft_json, 
+                        raw_model_output = :raw_model_output, 
+                        error_message = :error_message,
+                        updated_at = NOW()
+                    WHERE id = :job_id
+                """)
+                conn.execute(query, {
+                    "status": status,
+                    "draft_json": draft_json_str,
+                    "raw_model_output": ocr_text,
+                    "error_message": error_msg,
+                    "job_id": job_id
+                })
+                print(f"DB Update: Successfully updated Job ID {job_id}")
+                return job_id
+            else:
+                # Insert a brand new job record (e.g. testing directly from FastAPI Swagger UI)
+                query = text("""
+                    INSERT INTO bill_import_jobs (
+                        file_url, file_type, status, draft_json, 
+                        raw_model_output, error_message, created_by, 
+                        created_at, updated_at
+                    ) VALUES (
+                        :file_url, 'invoice', :status, :draft_json, 
+                        :raw_model_output, :error_message, 1, 
+                        NOW(), NOW()
+                    ) RETURNING id
+                """)
+                res = conn.execute(query, {
+                    "file_url": file_path,
+                    "status": status,
+                    "draft_json": draft_json_str,
+                    "raw_model_output": ocr_text,
+                    "error_message": error_msg
+                })
+                new_id = res.fetchone()[0]
+                print(f"DB Insert: Successfully created new Job ID {new_id}")
+                return new_id
+    except Exception as e:
+        print(f"DB Error while saving: {e}")
+        traceback.print_exc()
+        return None
 
 def extract_mock_data(image_path_or_url):
     """
@@ -101,9 +183,12 @@ def extract_mock_data(image_path_or_url):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Load model once if not in Mock Mode
+    # Startup: Load DB and Load model once if not in Mock Mode
     global model, processor, device
     print(f"Starting OCR Service (Mock Mode: {MOCK_MODE})")
+    
+    # Initialize DB connection
+    init_db()
     
     if not MOCK_MODE:
         try:
@@ -145,6 +230,7 @@ app = FastAPI(
 
 class ExtractRequest(BaseModel):
     file_path: str
+    job_id: int = None
 
 def perform_ocr(img, image_name_for_mock="image.jpg"):
     if MOCK_MODE or model is None:
@@ -222,9 +308,10 @@ Return ONLY the raw JSON object representation. Do not include any formatting li
 @app.post("/api/extract-invoice")
 def extract_invoice_from_path(request: ExtractRequest):
     """
-    Extracts invoice information from a local file path or web URL.
+    Extracts invoice information from a local file path or web URL, and saves to database.
     """
     image_path = request.file_path
+    job_id = request.job_id
     
     # Try opening the image from URL or local path
     try:
@@ -241,38 +328,66 @@ def extract_invoice_from_path(request: ExtractRequest):
                     resolved_path = parent_path
             
             if not os.path.exists(resolved_path):
+                error_response = {"error": f"File not found: {image_path}"}
+                save_result_to_db(image_path, error_response, job_id)
                 raise HTTPException(status_code=400, detail=f"File not found: {image_path}")
                 
             img = Image.open(resolved_path)
             
         result = perform_ocr(img, image_name_for_mock=image_path)
+        
+        # Save results directly to PostgreSQL Database
+        saved_id = save_result_to_db(image_path, result, job_id)
+        if saved_id:
+            result["db_job_id"] = saved_id
+            
         return result
         
     except HTTPException as he:
         raise he
     except Exception as e:
+        error_response = {"error": f"Failed to process image: {str(e)}"}
+        save_result_to_db(image_path, error_response, job_id)
         raise HTTPException(status_code=500, detail=f"Failed to process image: {str(e)}")
 
 @app.post("/api/extract-invoice/upload")
-async def extract_invoice_from_upload(file: UploadFile = File(...)):
+async def extract_invoice_from_upload(file: UploadFile = File(...), job_id: int = Query(None)):
     """
-    Extracts invoice information from an uploaded multipart image file.
+    Extracts invoice information from an uploaded multipart image file, and saves to database.
     """
     try:
         contents = await file.read()
         img = Image.open(BytesIO(contents))
         result = perform_ocr(img, image_name_for_mock=file.filename)
+        
+        # Save results to Database
+        saved_id = save_result_to_db(file.filename, result, job_id)
+        if saved_id:
+            result["db_job_id"] = saved_id
+            
         return result
     except Exception as e:
+        error_response = {"error": f"Failed to process uploaded file: {str(e)}"}
+        save_result_to_db(file.filename, error_response, job_id)
         raise HTTPException(status_code=500, detail=f"Failed to process uploaded file: {str(e)}")
 
 @app.get("/health")
 def health_check():
+    db_ok = False
+    if engine:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            db_ok = True
+        except Exception:
+            db_ok = False
+            
     return {
         "status": "healthy",
         "mock_mode": MOCK_MODE,
         "model_loaded": model is not None,
-        "device": str(device) if device else "none"
+        "device": str(device) if device else "none",
+        "database_connected": db_ok
     }
 
 if __name__ == "__main__":
