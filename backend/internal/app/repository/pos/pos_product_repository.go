@@ -21,12 +21,12 @@ func NewPOSProductRepository(db *gorm.DB) POSProductRepository {
 
 func (r *posProductRepository) SearchProducts(search string) ([]entity.Product, error) {
 	var products []entity.Product
-	
-	query := r.db.Where("is_active = ?", true)
+
+	query := r.db.Preload("Grade").Preload("Brand.Models").Where("is_active = ?", true)
 
 	if search != "" {
 		likeSearch := "%" + search + "%"
-		query = query.Where("product_code LIKE ? OR barcode = ? OR product_name ILIKE ?", likeSearch, search, likeSearch)
+		query = query.Where("product_code LIKE ? OR barcode = ? OR product_name ILIKE ? OR part_number LIKE ?", likeSearch, search, likeSearch, likeSearch)
 	}
 
 	err := query.Find(&products).Error
@@ -35,7 +35,7 @@ func (r *posProductRepository) SearchProducts(search string) ([]entity.Product, 
 
 func (r *posProductRepository) GetProductByID(id uint) (*entity.Product, error) {
 	var product entity.Product
-	
+
 	if err := r.db.Preload("Unit").First(&product, id).Error; err != nil {
 		return nil, err
 	}

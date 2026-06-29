@@ -17,14 +17,12 @@ export default function MainLayout({
   };
 
   return (
-    <div className="flex bg-[#f8f9fa] h-screen overflow-hidden font-sans select-none">
+    <div className="flex bg-white h-screen overflow-hidden font-sans select-none">
       <Sidebar collapsed={collapsed} onToggle={handleToggleSidebar} />
       <div className="flex-1 flex flex-col h-full min-w-0">
         <Navbar />
 
-        <main className="flex-1 p-6 overflow-y-auto bg-[#F3F4F6]">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto bg-gray-50"> {children}</main>
       </div>
     </div>
   );
