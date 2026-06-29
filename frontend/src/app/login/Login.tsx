@@ -9,43 +9,59 @@ import { useAuth } from "../../contexts/AuthContexts";
 import { getMenuByRole } from "../../config/menu"; 
 
 const Login: React.FC = () => {
-  // สร้าง State สำหรับเปิด/ปิดการมองเห็นรหัสผ่าน
+  // State สำหรับเปิด/ปิดการมองเห็นรหัสผ่าน
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  
+  // State สำหรับเก็บข้อมูลฟอร์ม
   const [username, setUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
 
-  const navigate = useNavigate();
+  // State สำหรับเก็บข้อความ Error
+  const [usernameError, setUsernameError] = useState<string>("");
+  const [passwordError, setPasswordError] = useState<string>("");
 
+  const navigate = useNavigate();
   const { login } = useAuth();
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    let isValid = true;
 
-    if (!username || !password) {
-      alert("กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน");
-      return;
+    // เคลียร์ Error ก่อนเช็คใหม่
+    setUsernameError("");
+    setPasswordError("");
+
+    // Validate ฟอร์ม
+    if (!username) {
+      setUsernameError("กรุณากรอกชื่อผู้ใช้งาน");
+      isValid = false;
+    }
+    
+    if (!password) {
+      setPasswordError("กรุณากรอกรหัสผ่าน");
+      isValid = false;
     }
 
+    if (!isValid) return; // ถ้าข้อมูลไม่ครบ ให้หยุดการทำงาน
+
     try {
-  await login({ username, password }); 
+      await login({ username, password }); 
 
-  const userRole = localStorage.getItem("role") || "";
+      const userRole = localStorage.getItem("role") || "";
+      const userMenus = getMenuByRole(userRole);
 
-  const userMenus = getMenuByRole(userRole);
-
-  if (userMenus && userMenus.length > 0) {
-    const firstPath = userMenus[0].path; // จะได้เป็น /owner/dashboard หรือ /employee/dashboard
-    
-    navigate(firstPath, { replace: true });
-  } else {
-    alert("คุณไม่มีสิทธิ์เข้าใช้งานในหน้านี้");
-    navigate("/login", { replace: true });
-  }
+      if (userMenus && userMenus.length > 0) {
+        const firstPath = userMenus[0].path; // จะได้เป็น /owner/dashboard หรือ /employee/dashboard
+        navigate(firstPath, { replace: true });
+      } else {
+        alert("คุณไม่มีสิทธิ์เข้าใช้งานในหน้านี้");
+        navigate("/login", { replace: true });
+      }
     } catch (error: any) {
       console.error("Login failed:", error);
       alert(
         error.message ||
-          "เข้าสู่ระบบไม่สำเร็จ: กรุณาตรวจสอบชื่อผู้ใช้หรือรหัสผ่าน",
+        "เข้าสู่ระบบไม่สำเร็จ: กรุณาตรวจสอบชื่อผู้ใช้หรือรหัสผ่าน"
       );
     }
   };
@@ -54,7 +70,7 @@ const Login: React.FC = () => {
     <div className="flex min-h-screen w-full font-sans">
       
       {/* ด้านซ้าย: รูปภาพพื้นหลัง และ ข้อความแนะนำระบบ */}
-      <div className="relative hidden w-1/2 flex-col justify-center bg-zinc-900 p-12 text-white lg:flex">
+      <div className="relative hidden w-2/3 flex-col justify-center bg-zinc-900 p-12 text-white lg:flex">
         
         {/* เลเยอร์รูปภาพและ Overlay */}
         <div className="absolute inset-0 z-0">
@@ -69,7 +85,7 @@ const Login: React.FC = () => {
         {/* ส่วนบน: โลโก้ */}
         <div className="absolute left-12 top-12 z-10">
           <div className="flex items-center gap-3 text-xl font-bold tracking-widest">
-            {/* ไอคอนมุมซ้ายบน ใช้โค้ดสี #B70011 ตามที่คุณต้องการ */}
+            {/* ไอคอนมุมซ้ายบน ใช้โค้ดสี #B70011 */}
             <div className="flex-none flex h-10 w-10 items-center justify-center rounded bg-[#B70011] text-white">
               <svg
                 className="h-5 w-5"
@@ -96,13 +112,13 @@ const Login: React.FC = () => {
           </div>
         </div>
 
-        {/* ส่วนกลาง: ข้อความอธิบายระบบ (เปลี่ยนมาใช้ Heading Component) */}
+        {/* ส่วนกลาง: ข้อความอธิบายระบบ */}
         <div className="relative z-10">
-          <Heading level="h1" className="text-white! mb-4 leading-tight">
+          <Heading level="h1" className="text-white! mb-4 leading-tight tracking-wider">
             ระบบบริหารจัดการ<br />ร้านขายปลีกอะไหล่ยนต์
           </Heading>
-          <div className="mt-6 h-1 w-24 bg-[#B70011]"></div>
-          <Heading level='h6' className='text-white mt-6'>
+          <div className="mt-6 h-1 max-w-32 bg-[#B70011]"></div>
+          <Heading level='h6' className='text-white mt-6 max-w-170'>
             เพิ่มความรวดเร็วในการจัดการสินค้าของคุณ ด้วยระบบรายงานภาพรวมที่ทำงานตลอด 24 ชม.
             การนำเข้าข้อมูลรายการสินค้าผ่านระบบที่มี AI ระบบจัดการสต๊อกสินค้าที่ยืดหยุ่น ระบบงานขาย
             และการวิเคราะห์ข้อมูลที่เต็มประสิทธิภาพ ออกแบบมาเพื่อธุรกิจร้านอะไหล่รถยนต์โดยเฉพาะ
@@ -113,25 +129,27 @@ const Login: React.FC = () => {
       {/* ด้านขวา: ฟอร์มเข้าสู่ระบบ (Login Form) */}
       <div className="flex w-full items-center justify-center bg-white px-8 sm:px-16 lg:w-1/2">
         <div className="w-full max-w-md">
-          {/* เปลี่ยนมาใช้ Heading Component */}
-          <Heading level="h1" className="mb-2!">ยินดีต้อนรับเข้าสู่ระบบ</Heading>
+          <Heading level="h2" weight='light' className="mb-2!">ยินดีต้อนรับเข้าสู่ระบบ</Heading>
           <Heading level="h5" className="mb-10">มาเริ่มงานกันเลยไหม?</Heading>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form noValidate onSubmit={handleSubmit} className="space-y-4">
             
-            {/* เปลี่ยนมาใช้ InputField Component */}
             <Input
               id="username"
               label="ชื่อผู้ใช้งาน"
               placeholder="ตัวอย่าง: CPE0789"
               leftIcon={<UserIcon className="h-5 w-5"/>}
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                if (e.target.value) setUsernameError(""); // เคลียร์ Error เมื่อพิมพ์
+              }}
+              error={usernameError} 
               className="bg-gray-100 pl-12 border-none py-4 h-14 focus:ring-0 focus:ring-offset-0"
               required
             />
 
-            {/* ช่องรหัสผ่าน (ใช้ InputField + วางไอคอนเปิด-ปิดตาทับ) */}
+            {/* ช่องรหัสผ่าน */}
             <div className="relative">
               <Input
                 id="password"
@@ -140,7 +158,11 @@ const Login: React.FC = () => {
                 placeholder="••••••••"
                 leftIcon={<Lock className="h-5 w-5"/>}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (e.target.value) setPasswordError(""); // เคลียร์ Error เมื่อพิมพ์
+                }}
+                error={passwordError}
                 className="bg-gray-100 border-none pr-10 h-14"
                 required
                 rightIcon={
@@ -148,13 +170,12 @@ const Login: React.FC = () => {
                     className="flex cursor-pointer items-center transition-colors"
                     onClick={() => setShowPassword(!showPassword)}
                   >
-                    {/* เปลี่ยนมาใช้ Component จาก lucide-react แทน */}
                     {showPassword ? (
                       <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
                     ) : (
                       <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
                     )}
-                </div>
+                  </div>
                 }
               />
             </div>
@@ -178,7 +199,6 @@ const Login: React.FC = () => {
               </div>
             </div>
 
-            {/* เปลี่ยนมาใช้ Button Component */}
             <Button
               type="submit"
               variant="primary"
