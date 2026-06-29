@@ -8,6 +8,7 @@ import { getMenuByRole } from '../config/menu';
 import { useAuth } from '../contexts/AuthContexts'; 
 import StoreConfig from './owner/storeconfig/storeconfig'; 
 import EmployeeDashboard from './employee/dashboard/dashboard';
+import ImportBill from './owner/import-bills/import_bill';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -46,6 +47,9 @@ export default function AppRouter(): React.JSX.Element {
         } />
 
         <Route path="/owner/storeconfig" element={<StoreConfig />} />
+        {/* -------- เพิ่ม Route สำหรับหน้านำเข้าบิลตรงนี้ครับ -------- */}
+        <Route path="/owner/import-bills" element={<ImportBill />} />
+        {/* -------------------------------------------------- */}
         <Route path="/employee/pos" element={<Pos />} />
         
         {/* แดชบอร์ดของฝั่งพนักงาน */}
