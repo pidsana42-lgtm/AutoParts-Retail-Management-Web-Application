@@ -5,6 +5,7 @@ import loginImage from "../../assets/Autoparts-login.jpeg";
 import Heading from '../../components/elements/heading';
 import Input from '../../components/elements/input';
 import Button from '../../components/elements/button';
+import Modal from '../../components/elements/modal';
 import { loginUser } from '../../service/http/login/login_service';
 
 const Login: React.FC = () => {
@@ -12,28 +13,47 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [error, setError] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const navigate = useNavigate();
 
-  // ฟังก์ชันจัดการตอนกดปุ่มส่งฟอร์ม (Submit)
+    // ฟังก์ชันจัดการตอนกดปุ่มส่งฟอร์ม (Submit)
+  const [usernameError, setUsernameError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    if (!username || !password) {
-      alert('กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน');
-      return;
+    let hasError = false;
+
+    // ตรวจสอบทีละช่อง
+    if (!username) {
+      setUsernameError("โปรดกรอกฟิลด์นี้");
+      hasError = true;
+    } else {
+      setUsernameError("");
     }
+
+    if (!password) {
+      setPasswordError("โปรดกรอกฟิลด์นี้");
+      hasError = true;
+    } else {
+      setPasswordError("");
+    }
+
+    if (hasError) return; // ถ้ามีช่องไหนว่าง ให้หยุดการทำงาน
 
     try {
       const response = await loginUser({ username, password });
-      
       if (response && response.token) {
         localStorage.setItem('accessToken', response.token);
         navigate('/dashboard'); 
       }
     } catch (error) {
-      console.error('Login failed:', error);
-      alert('เข้าสู่ระบบไม่สำเร็จ: กรุณาตรวจสอบชื่อผู้ใช้หรือรหัสผ่าน');
+      setErrorMessage("เข้าสู่ระบบไม่สำเร็จ: กรุณาตรวจสอบชื่อผู้ใช้หรือรหัสผ่าน");
+      setIsModalOpen(true);
     }
   };
 
@@ -41,7 +61,7 @@ const Login: React.FC = () => {
     <div className="flex min-h-screen w-full font-sans">
       
       {/* ด้านซ้าย: รูปภาพพื้นหลัง และ ข้อความแนะนำระบบ */}
-      <div className="relative hidden w-1/2 flex-col justify-center bg-zinc-900 p-12 text-white lg:flex">
+      <div className="relative hidden w-2/3 flex-col justify-center bg-zinc-900 p-12 text-white lg:flex">
         
         {/* เลเยอร์รูปภาพและ Overlay */}
         <div className="absolute inset-0 z-0">
@@ -69,11 +89,11 @@ const Login: React.FC = () => {
 
         {/* ส่วนกลาง: ข้อความอธิบายระบบ (เปลี่ยนมาใช้ Heading Component) */}
         <div className="relative z-10">
-          <Heading level="h1" className="text-white! mb-4 leading-tight">
+          <Heading level="h1" className="text-white! mb-4 leading-tight tracking-wider">
             ระบบบริหารจัดการ<br />ร้านขายปลีกอะไหล่ยนต์
           </Heading>
-          <div className="mt-6 h-1 w-24 bg-[#B70011]"></div>
-          <Heading level='h6' className='text-white mt-6'>
+          <div className="mt-6 h-1 max-w-32 bg-[#B70011]"></div>
+          <Heading level='h6' className='text-white mt-6 max-w-170'>
             เพิ่มความรวดเร็วในการจัดการสินค้าของคุณ ด้วยระบบรายงานภาพรวมที่ทำงานตลอด 24 ชม.
             การนำเข้าข้อมูลรายการสินค้าผ่านระบบที่มี AI ระบบจัดการสต๊อกสินค้าที่ยืดหยุ่น ระบบงานขาย
             และการวิเคราะห์ข้อมูลที่เต็มประสิทธิภาพ ออกแบบมาเพื่อธุรกิจร้านอะไหล่รถยนต์โดยเฉพาะ
@@ -85,10 +105,10 @@ const Login: React.FC = () => {
       <div className="flex w-full items-center justify-center bg-white px-8 sm:px-16 lg:w-1/2">
         <div className="w-full max-w-md">
           {/* เปลี่ยนมาใช้ Heading Component */}
-          <Heading level="h1" className="mb-2!">ยินดีต้อนรับเข้าสู่ระบบ</Heading>
+          <Heading level="h2" weight='light' className="mb-2!">ยินดีต้อนรับเข้าสู่ระบบ</Heading>
           <Heading level="h5" className="mb-10">มาเริ่มงานกันเลยไหม?</Heading>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form noValidate onSubmit={handleSubmit} className="space-y-4">
             
             {/* เปลี่ยนมาใช้ InputField Component */}
             <Input 
@@ -97,7 +117,11 @@ const Login: React.FC = () => {
               placeholder="ตัวอย่าง: CPE0789"
               leftIcon={<UserIcon className="h-5 w-5"/>}
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                if (e.target.value) setUsernameError("");
+              }}
+              error={usernameError} // ส่ง error เข้าไปที่ Component
               className="bg-gray-100 pl-12 border-none py-4 h-14 focus:ring-0 focus:ring-offset-0"
               required
             />
@@ -111,7 +135,11 @@ const Login: React.FC = () => {
                 placeholder="••••••••"
                 leftIcon={<Lock className="h-5 w-5"/>}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (e.target.value) setPasswordError("");
+                }}
+                error={passwordError}
                 className="bg-gray-100 border-none pr-10 h-14"
                 required
                 rightIcon={

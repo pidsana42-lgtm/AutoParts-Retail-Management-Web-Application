@@ -35,12 +35,11 @@ const Button: React.FC<ButtonProps> = ({
     const variantClasses: Record<NonNullable<ButtonProps['variant']>, string> = {
         primary: [
             "bg-gradient-to-r from-red-600 via-red-800 to-red-950 text-white",
-            "hover:from-red-700 hover:via-red-900 hover:to-red-950", 
-            "focus:ring-red-500"
+            "hover:from-red-700 hover:via-red-900 hover:to-red-950"
         ].join(" "),
-        secondary: "bg-black-200 text-white hover:bg-black-300 focus:ring-black-500",
-        danger: "bg-red-700 text-white hover:bg-red-800 focus:ring-red-600",
-        outline: "border-2 border-red-600 text-red-600 hover:bg-red-50 focus:ring-red-500",
+        secondary: "bg-black-200 text-white hover:bg-black-300",
+        danger: "bg-red-700 text-white hover:bg-red-800",
+        outline: "border-2 border-red-600 text-red-600 hover:bg-red-50",
     };
 
     // Spinner
