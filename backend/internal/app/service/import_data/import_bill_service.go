@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -145,32 +147,65 @@ func (s *importBillService) processOCRInBackground(jobID uint, fileURL string) {
 
 	log.Printf("[OCR] Starting job %d for file %s (resolved: %s)\n", jobID, fileURL, localPath)
 
-	cmd := exec.Command("python3", "model/main.py", localPath)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-
 	job, errFind := s.repo.GetBillImportJobByID(jobID)
 	if errFind != nil {
 		log.Printf("[OCR] Error finding job %d in database: %v\n", jobID, errFind)
 		return
 	}
 
-	if err != nil {
-		log.Printf("[OCR] Job %d failed: %v, stderr: %s\n", jobID, err, stderr.String())
-		job.Status = "failed"
-		job.ErrorMessage = fmt.Sprintf("Python execution error: %v\nStderr: %s", err, stderr.String())
-		if errSave := s.repo.SaveBillImportJob(job); errSave != nil {
-			log.Printf("[OCR] Error saving job %d status: %v\n", jobID, errSave)
+	var rawJSON string
+	var ocrText string
+	var isFastAPISuccess bool
+
+	// 1. Try sending Request to FastAPI Server first
+	fastAPIURL := "http://localhost:8000/api/extract-invoice"
+	payload := map[string]string{"file_path": localPath}
+	jsonPayload, errPayload := json.Marshal(payload)
+	if errPayload == nil {
+		client := http.Client{
+			Timeout: 60 * time.Second,
 		}
-		return
+		log.Printf("[OCR] Attempting FastAPI OCR processing for job %d...\n", jobID)
+		resp, errReq := client.Post(fastAPIURL, "application/json", bytes.NewBuffer(jsonPayload))
+		if errReq == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				bodyBytes, errRead := io.ReadAll(resp.Body)
+				if errRead == nil {
+					rawJSON = string(bodyBytes)
+					isFastAPISuccess = true
+					log.Printf("[OCR] Successfully processed job %d via FastAPI\n", jobID)
+				}
+			} else {
+				log.Printf("[OCR] FastAPI returned non-OK status: %d\n", resp.StatusCode)
+			}
+		} else {
+			log.Printf("[OCR] Failed to connect to FastAPI: %v\n", errReq)
+		}
 	}
 
-	rawJSON := stdout.String()
+	// 2. Fallback to CLI Python script execution if FastAPI failed
+	if !isFastAPISuccess {
+		log.Printf("[OCR] Falling back to CLI execution for job %d\n", jobID)
+		cmd := exec.Command("python3", "model/main.py", localPath)
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+
+		err := cmd.Run()
+		if err != nil {
+			log.Printf("[OCR] Job %d failed (both FastAPI & CLI): %v, stderr: %s\n", jobID, err, stderr.String())
+			job.Status = "failed"
+			job.ErrorMessage = fmt.Sprintf("FastAPI request failed and CLI Python execution error: %v\nStderr: %s", err, stderr.String())
+			if errSave := s.repo.SaveBillImportJob(job); errSave != nil {
+				log.Printf("[OCR] Error saving job %d status: %v\n", jobID, errSave)
+			}
+			return
+		}
+		rawJSON = stdout.String()
+	}
+
 	var extracted map[string]interface{}
-	var ocrText string
 	if errJSON := json.Unmarshal([]byte(rawJSON), &extracted); errJSON == nil {
 		if text, ok := extracted["ocr_text"].(string); ok {
 			ocrText = text
