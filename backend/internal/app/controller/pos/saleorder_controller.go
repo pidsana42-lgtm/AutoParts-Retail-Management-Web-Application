@@ -1,10 +1,12 @@
 package pos
 
 import (
+	customerDto "backend/internal/app/dto/customer" // ✨ 1. เพิ่ม Import แพ็กเกจดีทีโอของลูกค้า
 	"backend/internal/app/dto/pos"
 	posService "backend/internal/app/service/pos"
-	"net/http"
 	"fmt"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,11 +19,10 @@ func NewSaleController(svc posService.SaleService) *SaleController {
 	return &SaleController{svc: svc}
 }
 
-// CreateOrderHandler รับก้อน JSON ตะกร้าสินค้าจากปุ่ม "ยืนยันการขาย"
-func (c *SaleController) CreateOrderHandler(ctx *gin.Context) {
+// 🎯 ปรับแก้จาก (c *SaleController) เป็น (ctrl *SaleController) ให้เหมือนกันทั้งไฟล์
+func (ctrl *SaleController) CreateOrderHandler(ctx *gin.Context) {
 	var req pos.CreateSaleOrderRequest
 
-	// 1. แกะกล่องข้อมูล (Bind JSON) ตรวจสอบความถูกต้องตามแบบ DTO แล้วเก็บไว้ในตัวแปร req
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
@@ -31,8 +32,7 @@ func (c *SaleController) CreateOrderHandler(ctx *gin.Context) {
 		return
 	}
 
-	// 2. ส่งข้อมูลดิบทั้งหมดเข้าลูปประมวลผลชั้น Service (คำนวณเงิน, เช็ค StoreConfig, หักสต็อก, บันทึกหนี้)
-	if err := c.svc.CreatePOSOrder(&req); err != nil {
+	if err := ctrl.svc.CreatePOSOrder(&req); err != nil {
 		fmt.Println("บันทึกออเดอร์พังเพราะสาเหตุนี้:", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
@@ -40,9 +40,38 @@ func (c *SaleController) CreateOrderHandler(ctx *gin.Context) {
 		})
 		return
 	}
-	
+
 	ctx.JSON(http.StatusOK, gin.H{
 		"status":  "success",
 		"message": "บันทึกใบสั่งซื้อและอัปเดตสต็อกเรียบร้อยแล้ว",
 	})
+}
+
+// ─── 🎯 GET /pos/customer-types ───
+func (ctrl *SaleController) GetCustomerTypes(c *gin.Context) {
+	customerTypes, err := ctrl.svc.GetCustomerTypes()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// ✅ เรียกผ่านแพ็กเกจที่เราอ้างชื่อย่อ (Alias) ไว้ในกลุ่ม Import ด้านบน
+	c.JSON(http.StatusOK, customerDto.ToCustomerTypeListResponse(customerTypes))
+}
+
+// ─── 🎯 GET /pos/customer-discount ───
+func (ctrl *SaleController) SearchCustomerDiscount(c *gin.Context) {
+	searchQuery := c.Query("search")
+	if searchQuery == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุชื่อหรือเบอร์โทรศัพท์ที่ต้องการค้นหา"})
+		return
+	}
+
+	customers, err := ctrl.svc.SearchCustomers(searchQuery)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "เกิดข้อผิดพลาดในการค้นหาข้อมูล: " + err.Error()})
+		return
+	}
+	
+	c.JSON(http.StatusOK, customers)
 }

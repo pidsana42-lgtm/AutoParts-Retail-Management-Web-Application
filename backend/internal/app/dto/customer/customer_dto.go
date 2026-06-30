@@ -32,12 +32,18 @@ func ToCustomerEntity(req RegisterCustomerRequest, idCardImagePath string, defau
 }
 
 type CustomerResponse struct {
-	ID                   uint   `json:"id"`
-	CustomerName         string `json:"customer_name"`
-	PhoneNumber          string `json:"phone_number"`
-	IdCardNumberCustomer string `json:"id_card_number_customer"`
-	DisplayAddress       string `json:"display_address"`     // ทำฟิลด์สรุปที่อยู่ส่งไปให้หน้าบ้านใช้ง่ายๆ
-	CustomerTypeLabel    string `json:"customer_type_label"` // เอาชื่อภาษาไทย เช่น "ลูกค้าอู่" ตรงๆ เลย
+    ID                   uint                 `json:"id"`
+    CustomerName         string               `json:"customer_name"`
+    PhoneNumber          string               `json:"phone_number"`
+    IdCardNumberCustomer string               `json:"id_card_number_customer"`
+    DisplayAddress       string               `json:"display_address"`
+    CustomerTypeLabel    string               `json:"customer_type_label"` // ค้างไว้เพื่อให้ระบบเดิมทำงานได้
+    
+    CurrentDebtAmount    float64              `json:"current_debt_amount"`
+    MaxCreditLimit       float64              `json:"max_credit_limit"` // ดึงมาจาก CreditLimit ในคลัง
+    IsDiscountEnabled    bool                 `json:"is_discount_enabled"`
+    StandardDiscountRate float64              `json:"standard_discount_rate"`
+    CustomerType         CustomerTypeResponse `json:"customer_type"` // สลักฝังข้อมูลออบเจกต์ข้ามตาราง
 }
 
 func ToCustomerListResponse(customers []entity.Customer) []CustomerResponse {
@@ -57,6 +63,15 @@ func ToCustomerListResponse(customers []entity.Customer) []CustomerResponse {
 			IdCardNumberCustomer: c.IdCardNumberCustomer,
 			DisplayAddress:       address,
 			CustomerTypeLabel:    c.CustomerType.TypeLabel, // ดึงชื่อภาษาไทยมาจากตารางประเภทลูกค้าที่เรา Preload ไว้
+			CurrentDebtAmount:    c.CurrentDebtAmount,
+			MaxCreditLimit:       c.CreditLimit,
+			IsDiscountEnabled:    c.IsDiscountEnabled,
+			StandardDiscountRate: c.StandardDiscountRate,
+			CustomerType: CustomerTypeResponse{
+                ID:        c.CustomerType.ID,
+                TypeName:  c.CustomerType.TypeName,
+                TypeLabel: c.CustomerType.TypeLabel,
+            },
 		})
 	}
 
@@ -97,4 +112,24 @@ func ToCustomerDetailResponse(c entity.Customer) CustomerDetailResponse {
         CurrentDebtAmount:    c.CurrentDebtAmount,
         IsDiscountEnabled:    c.IsDiscountEnabled,
     }
+}
+
+type CustomerTypeResponse struct {
+    ID        uint   `json:"id"`
+    TypeName  string `json:"type_name"`  // เช่น GENERAL, GARAGE, WHOLESALE
+    TypeLabel string `json:"type_label"` // เช่น ลูกค้าทั่วไป, ลูกค้าอู่ซ่อมรถ
+}
+
+func ToCustomerTypeListResponse(customerTypes []entity.CustomerType) []CustomerTypeResponse {
+    var list []CustomerTypeResponse
+
+    for _, ct := range customerTypes {
+        list = append(list, CustomerTypeResponse{
+            ID:        ct.ID,
+            TypeName:  ct.TypeName,
+            TypeLabel: ct.TypeLabel,
+        })
+    }
+
+    return list
 }
