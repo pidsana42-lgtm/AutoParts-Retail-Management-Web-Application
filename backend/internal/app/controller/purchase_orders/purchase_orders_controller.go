@@ -98,3 +98,30 @@ func (ctrl *PurchaseOrderController) UpdateStatus(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "purchase order status updated successfully"})
 }
+
+func (ctrl *PurchaseOrderController) ListPOs(c *gin.Context) {
+	// ใช้ ShouldBindQuery เพื่อรับค่าจาก URL (?page=1&limit=10&status=PENDING)
+	var query poDto.ListPOQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid query parameters"})
+		return
+	}
+
+	// กำหนดค่าเริ่มต้นถ้า Frontend ไม่ได้ส่งมา
+	if query.Page <= 0 {
+		query.Page = 1
+	}
+	if query.Limit <= 0 {
+		query.Limit = 10
+	}
+
+	// ส่ง query ไปให้ Service จัดการดึงข้อมูลจาก Database
+	res, err := ctrl.poService.ListPOs(c.Request.Context(), query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// ส่งกลับในรูปแบบ { "data": [...], "total": 124 }
+	c.JSON(http.StatusOK, res)
+}

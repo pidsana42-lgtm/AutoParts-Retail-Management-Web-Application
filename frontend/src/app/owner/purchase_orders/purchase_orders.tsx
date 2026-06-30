@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ShoppingBasket, CircleCheck, Pencil,
   Eye, Printer, Trash2,
@@ -20,51 +20,28 @@ import {
 } from "../../../components/elements/table";
 
 import { cn } from "../../../utils/component";
+import { useNavigate } from "react-router-dom";
 
-// ─── Mock Data ──────────
-const mockPurchaseOrders = [
-  {
-    id: "PO-2026-00127", createdAt: "27/03/2569",
-    supplier: "AutoParts Global Co.", supplierCode: "VND-8821",
-    creator: "เขมจิรา", totalItems: 12, totalQty: 450,
-    totalPrice: "12,500.00", status: "pending",
-  },
-  {
-    id: "PO-2026-00126", createdAt: "25/03/2569",
-    supplier: "Precision Logistics", supplierCode: "VND-9901",
-    creator: "พนิดา", totalItems: 5, totalQty: 120,
-    totalPrice: "10,500.00", status: "approved",
-  },
-  {
-    id: "PO-2026-00125", createdAt: "12/03/2569",
-    supplier: "Engine Solutions", supplierCode: "VND-4452",
-    creator: "พนิดา", totalItems: 22, totalQty: 1050,
-    totalPrice: "30,090.00", status: "approved",
-  },
-  {
-    id: "PO-2026-00124", createdAt: "28/02/2569",
-    supplier: "Thai Pistons Corp", supplierCode: "VND-1102",
-    creator: "เขมจิรา", totalItems: 2, totalQty: 50,
-    totalPrice: "1,200.00", status: "rejected",
-  },
-];
-
-// ─── Status Badge Helper ───────────
+import type { POResponse } from "../../../interface/purchase_orders/po_interface";
+import { formatDate } from "../../../utils/formatdate";
+import { poService } from "../../../service/http/purchase_orders/po_service";
 
 function StatusBadge({ status }: { status: string }) {
-  if (status === "pending")
+  // ทำให้เป็นตัวพิมพ์เล็กทั้งหมดเพื่อลดปัญหา Case Sensitive
+  const currentStatus = status?.toLowerCase(); 
+  if (currentStatus === "pending" || currentStatus === "draft")
     return <Badge variant="outline" className="text-gray-800 border-gray-400">รออนุมัติ</Badge>;
-  if (status === "approved")
+  if (currentStatus === "approved")
     return <Badge variant="success" dot>อนุมัติแล้ว</Badge>;
-  if (status === "rejected")
+  if (currentStatus === "rejected")
     return <Badge variant="destructive">ไม่อนุมัติ</Badge>;
-  return null;
+  return <Badge variant="outline">{status}</Badge>;
 }
 
-// ─── Action Buttons Helper ────
-
 function ActionButtons({ status }: { status: string }) {
-  if (status === "pending") {
+  const currentStatus = status?.toLowerCase();
+
+  if (currentStatus === "pending" || currentStatus === "draft") {
     return (
       <div className="flex items-center justify-center gap-3">
         <button className="text-emerald-600 hover:text-emerald-700 p-1.5 rounded transition cursor-pointer">
@@ -82,7 +59,7 @@ function ActionButtons({ status }: { status: string }) {
       <button className="text-gray-500 hover:text-gray-700 transition cursor-pointer">
         <Eye className="w-4 h-4" />
       </button>
-      {status === "approved" ? (
+      {currentStatus === "approved" ? (
         <button className="text-gray-500 hover:text-gray-700 transition cursor-pointer">
           <Printer className="w-4 h-4" />
         </button>
@@ -97,18 +74,62 @@ function ActionButtons({ status }: { status: string }) {
 
 // ─── Page ──────────
 const PurchaseOrders: React.FC = () => {
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [searchId,     setSearchId]     = useState("");
-  const [dateFilter,   setDateFilter]   = useState("");
+  const navigate = useNavigate();
 
-  // ─── Filter Logic ───────────────────────────────────────────────────────────
-  const filteredOrders = mockPurchaseOrders.filter((po) => {
-    const matchId     = po.id.toLowerCase().includes(searchId.toLowerCase());
-    const matchStatus = statusFilter === "all" || po.status === statusFilter;
-    // dateFilter เทียบแบบ string เพราะ mockData เป็น "DD/MM/YYYY"
-    const matchDate   = !dateFilter || po.createdAt === dateFilter;
-    return matchId && matchStatus && matchDate;
-  });
+  // 1. States สำหรับเก็บข้อมูลจาก API
+  const [orders, setOrders] = useState<POResponse[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // 2. States สำหรับ Filter
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [searchId, setSearchId] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
+
+  // 3. States สำหรับ Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  useEffect(() => {
+    const fetchPurchaseOrders = async () => {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        const response = await poService.getPurchaseOrders({
+          page: currentPage,
+          limit: itemsPerPage,
+          status: statusFilter,
+          search: searchId,
+          date: dateFilter,
+        });
+
+        setOrders(response.data || []);
+        setTotalItems(response.total || 0);
+        
+      } catch (err: any) {
+        const errorMessage = err.response?.data?.message || err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ";
+        setError(errorMessage);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const delayDebounceFn = setTimeout(() => {
+      fetchPurchaseOrders();
+    }, searchId ? 400 : 0);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [currentPage, itemsPerPage, statusFilter, searchId, dateFilter]);
+
+  // รีเซ็ตหน้ากลับเป็นหน้า 1 เมื่อมีการค้นหาใหม่
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, searchId, dateFilter]);
+
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
 
   return (
     <div className="p-8 space-y-6 bg-gray-50 min-h-screen font-sans">
@@ -118,7 +139,7 @@ const PurchaseOrders: React.FC = () => {
         <Heading level="h2" weight="semibold" className="m-0 text-gray-800">
           จัดการใบสั่งซื้อ
         </Heading>
-        <Button leftIcon={<ShoppingBasket className="h-5 w-5" />} size="md">
+        <Button leftIcon={<ShoppingBasket className="h-5 w-5" />} size="md" onClick={() => navigate("/owner/new-orders")}>
           สร้างใบสั่งซื้อใหม่
         </Button>
       </div>
@@ -135,7 +156,7 @@ const PurchaseOrders: React.FC = () => {
             <div className="grid grid-cols-3 gap-4 items-end">
               <Input
                 label="หมายเลขใบสั่งซื้อ"
-                placeholder="PO-2024-XXXX"
+                placeholder="PO-XXXX..."
                 value={searchId}
                 onChange={(e) => setSearchId(e.target.value)}
               />
@@ -144,13 +165,19 @@ const PurchaseOrders: React.FC = () => {
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 options={[
-                  { label: "ทั้งหมด",     value: "all"      },
-                  { label: "รออนุมัติ",   value: "pending"  },
-                  { label: "อนุมัติแล้ว", value: "approved" },
-                  { label: "ไม่อนุมัติ",  value: "rejected" },
+                  { label: "ทั้งหมด",     value: "all" },
+                  { label: "ฉบับร่าง", value: "DRAFT" },
+                  { label: "รออนุมัติ", value: "PENDING"  },
+                  { label: "อนุมัติแล้ว", value: "APPROVED" },
+                  { label: "ไม่อนุมัติ",  value: "REJECTED" },
                 ]}
               />
-              <Input type="date" label="วันที่สั่งซื้อ"/>
+              <Input
+                type="date"
+                label="วันที่สั่งซื้อ"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+              />
             </div>
           </CardContent>
         </Card>
@@ -160,12 +187,9 @@ const PurchaseOrders: React.FC = () => {
           <div>
             <p className="text-sm text-gray-400 font-light">ใบสั่งซื้อทั้งหมดของเดือนนี้</p>
             <p className="text-4xl font-bold mt-2 flex items-baseline gap-2">
-              42 <span className="text-lg font-normal text-gray-300">ใบสั่งซื้อ</span>
+              {totalItems} <span className="text-lg font-normal text-gray-300">ใบสั่งซื้อ</span>
             </p>
           </div>
-          <p className="text-emerald-400 text-sm mt-4 flex items-center gap-1 font-light">
-            <span className="text-base">↗</span> 12% เพิ่มขึ้นจากเดือนที่แล้ว
-          </p>
           <div className="absolute right-4 bottom-4 opacity-5 pointer-events-none">
             <ShoppingBasket className="w-24 h-24" />
           </div>
@@ -173,23 +197,7 @@ const PurchaseOrders: React.FC = () => {
 
       </div>
 
-      {/* 3. Summary Cards */}
-      <div className="grid grid-cols-3 gap-6">
-        <Card className="border-l-[5px] border-l-black flex flex-col justify-center h-24 p-5">
-          <p className="text-sm text-gray-500 font-medium">รออนุมัติ</p>
-          <p className="text-2xl font-bold mt-1 text-gray-900">฿ 12,500.00</p>
-        </Card>
-        <Card className="border-l-[5px] border-l-emerald-500 flex flex-col justify-center h-24 p-5">
-          <p className="text-sm text-gray-500 font-medium">อนุมัติแล้ว (MTD)</p>
-          <p className="text-2xl font-bold mt-1 text-gray-900">฿ 40,590.00</p>
-        </Card>
-        <Card className="border-l-[5px] border-l-red-500 flex flex-col justify-center h-24 p-5">
-          <p className="text-sm text-gray-500 font-medium">ไม่อนุมัติ (MTD)</p>
-          <p className="text-2xl font-bold mt-1 text-gray-900">฿ 1,200.00</p>
-        </Card>
-      </div>
-
-      {/* 4. Table */}
+      {/* 3. Table */}
       <Card className="overflow-hidden" noPadding>
         <Table>
           <TableHeader className="bg-gray-100 text-gray-600">
@@ -207,79 +215,138 @@ const PurchaseOrders: React.FC = () => {
           </TableHeader>
 
           <TableBody className="text-gray-700">
-            {mockPurchaseOrders.map((po) => (
-              <TableRow key={po.id} className="hover:bg-gray-50/70">
-                <TableCell className="pl-6 font-semibold text-gray-900">
-                  {po.id}
-                </TableCell>
-                <TableCell className="text-gray-500">{po.createdAt}</TableCell>
-                <TableCell>
-                  <div className="font-medium text-gray-900">{po.supplier}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">{po.supplierCode}</div>
-                </TableCell>
-                <TableCell className="text-gray-600">{po.creator}</TableCell>
-                <TableCell className="text-center font-medium">{po.totalItems}</TableCell>
-                <TableCell className="text-center font-medium">{po.totalQty}</TableCell>
-                <TableCell className="text-right pr-6 font-medium text-gray-900">
-                  ฿{po.totalPrice}
-                </TableCell>
-                <TableCell className="text-center">
-                  <StatusBadge status={po.status} />
-                </TableCell>
-                <TableCell className="text-center">
-                  <ActionButtons status={po.status} />
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-12 text-gray-500">
+                  กำลังโหลดข้อมูล...
                 </TableCell>
               </TableRow>
-            ))}
+            ) : error ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-12 text-red-500 font-medium">
+                  {error}
+                </TableCell>
+              </TableRow>
+            ) : orders.length > 0 ? (
+              orders.map((po) => {
+                // คำนวณจำนวนรายการและจำนวนชิ้นจาก array po_items
+                const totalItemTypes = po.po_items?.length || 0;
+                const totalQuantity = po.po_items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+
+                return (
+                  <TableRow key={po.id} className="hover:bg-gray-50/70">
+                    <TableCell className="pl-6 font-semibold text-gray-900">
+                      {po.order_number}
+                    </TableCell>
+                    <TableCell className="text-gray-500">{formatDate(po.created_at)}</TableCell>
+                    <TableCell>
+                      <div className="font-medium text-gray-900">{po.supplier?.supplier_name || "ไม่ระบุ"}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{po.supplier?.short_supplier_name || "-"}</div>
+                    </TableCell>
+                    <TableCell className="text-gray-600">
+                      {po.creator?.first_name || "ไม่ระบุ"}
+                    </TableCell>
+                    <TableCell className="text-center font-medium">{totalItemTypes}</TableCell>
+                    <TableCell className="text-center font-medium">{totalQuantity}</TableCell>
+                    <TableCell className="text-right pr-6 font-medium text-gray-900">
+                      ฿{Number(po.total_amount).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <StatusBadge status={po.status} />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <ActionButtons status={po.status} />
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            ) : (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-12 text-gray-500">
+                  ไม่พบข้อมูลใบสั่งซื้อ
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
 
-        {/* 5. Pagination */}
-        <div className="bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-          <span>แสดง 4 จาก 124 ใบสั่งซื้อ</span>
+        {/* 4. Pagination */}
+        {!isLoading && !error && totalItems > 0 && (
+          <div className="bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+            <div className="flex items-center gap-4">
+              <span>
+                แสดง {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} ถึง {Math.min(currentPage * itemsPerPage, totalItems)} จาก {totalItems} ใบสั่งซื้อ
+              </span>
+              <div className="flex items-center gap-2">
+                <span>รายการต่อหน้า:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  className="border border-gray-200 rounded px-2 py-1 text-gray-600 bg-white hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200 cursor-pointer"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
 
-          <div className="flex items-center gap-1">
-            <button
-              disabled
-              aria-label="หน้าแรก"
-              className="p-1.5 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-30"
-            >
-              <ChevronsLeft className="w-4 h-4" />
-            </button>
-            <button
-              disabled
-              aria-label="หน้าก่อนหน้า"
-              className="p-1.5 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-30"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            {[1, 2, 3].map((page) => (
+            <div className="flex items-center gap-1">
               <button
-                key={page}
-                aria-label={`หน้า ${page}`}
-                aria-current={page === 1 ? "page" : undefined}
-                className={cn(
-                  "px-3 py-1.5 rounded font-medium transition-colors",
-                  page === 1
-                    ? "bg-[#d61c24] text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                )}
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(1)}
+                aria-label="หน้าแรก"
+                className="p-1.5 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
               >
-                {page}
+                <ChevronsLeft className="w-4 h-4" />
               </button>
-            ))}
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((prev) => prev - 1)}
+                aria-label="หน้าก่อนหน้า"
+                className="p-1.5 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
 
-            <button aria-label="หน้าถัดไป" className="p-1.5 rounded text-gray-500 hover:bg-gray-100">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <button aria-label="หน้าสุดท้าย" className="p-1.5 rounded text-gray-500 hover:bg-gray-100">
-              <ChevronsRight className="w-4 h-4" />
-            </button>
+              {pageNumbers.map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  aria-label={`หน้า ${page}`}
+                  aria-current={currentPage === page ? "page" : undefined}
+                  className={cn(
+                    "px-3 py-1.5 rounded font-medium transition-colors cursor-pointer",
+                    currentPage === page
+                      ? "bg-[#d61c24] text-white"
+                      : "text-gray-600 hover:bg-gray-100"
+                  )}
+                >
+                  {page}
+                </button>
+              ))}
+
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((prev) => prev + 1)}
+                aria-label="หน้าถัดไป"
+                className="p-1.5 rounded text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                aria-label="หน้าสุดท้าย"
+                className="p-1.5 rounded text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </Card>
-
     </div>
   );
 };

@@ -15,6 +15,7 @@ type PurchaseOrderService interface {
 	CreatePO(ctx context.Context, req *poDto.CreatePurchaseOrderRequest, creatorID uint) (*poDto.PurchaseOrderResponse, error)
 	GetPOByID(ctx context.Context, id uint) (*poDto.PurchaseOrderResponse, error)
 	UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus) error
+	ListPOs(ctx context.Context, query poDto.ListPOQuery) (*poDto.ListPOResponse, error)
 }
 
 // purchaseOrderService ตัว Struct หลักที่จะทำงานจริง (Implement Interface ด้านบน)
@@ -159,4 +160,60 @@ func (s *purchaseOrderService) GetPOByID(
 
 func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus) error {
 	return nil
+}
+
+func (s *purchaseOrderService) ListPOs(ctx context.Context, query poDto.ListPOQuery) (*poDto.ListPOResponse, error) {
+    // เรียกผ่าน Repo แทน
+    po, total, err := s.poRepository.FindAll(ctx, query)
+    if err != nil {
+        return nil, err
+    }
+
+    // ทำการ Map ข้อมูลจาก entity (po) ไปเป็น dto (data)
+    var data []poDto.PurchaseOrderResponse
+    for _, p := range po {
+        var itemResponses []poDto.POItemResponse
+		for _, item := range p.PO_Items {
+			itemResponses = append(itemResponses, poDto.POItemResponse{
+				ID:                        item.ID,
+				ProductID:                 item.ProductID,
+				ProductNameSnapshot:       item.Product_name_snapshot,
+				SupplyProductCodeSnapshot: item.Supply_product_code_snapshot,
+				Quantity:                  int(item.Quantity),
+				Unit:                      item.Unit,
+				UnitPrice:                 item.UnitPrice,
+				SubTotal:                  item.SubTotal,
+				// เพิ่มฟิลด์อื่นๆ ถ้า DTO ของคุณมี
+			})
+		}
+
+		supplierName := ""
+		if p.Supplier.ID != 0 {
+			supplierName = p.Supplier.SupplierName
+		}
+
+		creatorName := ""
+		if p.Creator.ID != 0 {
+			creatorName = p.Creator.FirstName
+		}
+
+		// 2. จัดการข้อมูล PO หลัก
+		data = append(data, poDto.PurchaseOrderResponse{
+			ID:           p.ID,
+			OrderNumber:  p.PO_number,
+			SupplierID:   p.SupplierID,
+			SupplierName: supplierName,
+			POTypeID:     p.PO_type_id,
+			TotalAmount:  p.Total_amount,
+			Status:       poEnum.POStatus(p.Status),
+			CreatorID:    p.Created_by,
+			CreatorName:  creatorName,
+			POItems:      itemResponses, 
+		})
+    }
+
+    return &poDto.ListPOResponse{
+        Data:  data,
+        Total: total,
+    }, nil
 }
