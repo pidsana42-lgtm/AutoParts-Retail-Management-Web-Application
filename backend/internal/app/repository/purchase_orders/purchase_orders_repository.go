@@ -4,12 +4,13 @@ import (
 	"context"
 	"gorm.io/gorm"
 	poEntity "backend/internal/app/entity"
+	poDto "backend/internal/app/dto/purchase_orders"
 )
 
 // PurchaseOrderRepository คุมตาราง purchase_orders และ po_items
 type PurchaseOrderRepository interface {
 	Save(ctx context.Context, po *poEntity.PO) error
-	FindByID(ctx context.Context, id uint) (*poEntity.PO, error)
+	FindAll(ctx context.Context, query poDto.ListPOQuery) ([]poEntity.PO, int64, error)
 }
 
 // ProductRepository คุมตาราง products (เอาไว้ให้ Service ไปหาข้อมูลมาทำ Snapshot)
@@ -58,12 +59,12 @@ func NewProductRepository(db *gorm.DB) ProductRepository {
 }
 
 // User Repo
-// type userRepository struct {
-// 	db *gorm.DB
-// }
-// func NewUserRepository(db *gorm.DB) UserRepository {
-// 	return &userRepository{db: db}
-// }
+type userRepository struct {
+	db *gorm.DB
+}
+func NewUserRepository(db *gorm.DB) UserRepository {
+	return &userRepository{db: db}
+}
 
 // Save บันทึกใบสั่งซื้อพร้อมไอเทมลูกทั้งหมดลง Database (มีระบบ Transaction ป้องกันข้อมูลพัง)
 func (r *purchaseOrderRepository) Save(ctx context.Context, po *poEntity.PO) error {
@@ -76,14 +77,53 @@ func (r *purchaseOrderRepository) Save(ctx context.Context, po *poEntity.PO) err
 }
 
 // FindByID ดึงข้อมูลใบสั่งซื้อ 1 ใบ พร้อม Preload รายการสินค้า (POItems) ติดมาด้วย
-func (r *purchaseOrderRepository) FindByID(ctx context.Context, id uint) (*poEntity.PO, error) {
-	var po poEntity.PO
+func (r *userRepository) FindByID(ctx context.Context, id uint) (*poEntity.User, error) {
+    var user poEntity.User
+    
+    err := r.db.WithContext(ctx).First(&user, id).Error
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    return &user, nil
+}
 
-	err := r.db.WithContext(ctx).Preload("PO_Items").First(&po, id).Error
-		
-	if err != nil {
-		return nil, err
+func (r *purchaseOrderRepository) FindAll(ctx context.Context, query poDto.ListPOQuery) ([]poEntity.PO, int64, error) {
+	var pos []poEntity.PO
+	var total int64
+
+	// เริ่มต้น Query จาก Model PO
+	dbQuery := r.db.WithContext(ctx).Model(&poEntity.PO{})
+
+	// 1. ใส่ Logic การ Filter
+	if query.Status != "" {
+		dbQuery = dbQuery.Where("status = ?", query.Status)
+	}
+	if query.Search != "" {
+		// ใช้ LIKE เพื่อค้นหา po_number
+		dbQuery = dbQuery.Where("po_number LIKE ?", "%"+query.Search+"%")
+	}
+	if query.Date != "" {
+		// ค้นหาตามวันที่ (ถ้าใช้ MySQL)
+		dbQuery = dbQuery.Where("DATE(created_at) = ?", query.Date)
 	}
 
-	return &po, nil
+	// 2. นับจำนวนทั้งหมดก่อน (Count ต้องทำก่อนการ Limit/Offset)
+	if err := dbQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 3. ดึงข้อมูลแบบ Pagination
+	offset := (query.Page - 1) * query.Limit
+	err := dbQuery.
+		Preload("Creator").     // ดึงข้อมูล User ผู้สร้าง
+		Preload("Supplier").    // ดึงข้อมูล Supplier
+		Preload("PO_Items").    // ดึงข้อมูลรายการสินค้า
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(query.Limit).
+		Find(&pos).Error
+
+	return pos, total, err
 }
