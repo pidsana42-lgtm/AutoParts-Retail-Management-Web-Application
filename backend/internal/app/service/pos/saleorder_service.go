@@ -100,21 +100,24 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest) error {
 			itemDiscountAmount = (itemReq.UnitPrice * itemDiscountPercent / 100) * float64(itemReq.Qty)
 
 		} else if itemReq.DiscountType == "amount" {
-			// กรณี: ส่วนลดแบบจำนวนเงิน (เช่น ลด 50 บาท)
-			itemDiscountAmount = itemReq.DiscountValue // เก็บเงินส่วนลดที่กรอกมา
-			// แปลงเงินบาทกลับเป็น % เพื่อเอาไปตรวจเช็คกับ StoreConfig (MaxItemDiscountRate)
-			if itemReq.Qty > 0 && itemReq.UnitPrice > 0 {
-				// สูตร: (ส่วนลดรวม / ราคารวมก่อนลด) × 100
-				// ลด 30 บาท ราคาชิ้นละ 100 จำนวน 3 ชิ้น → % = (30/(100×3))×100 = 10%
-				itemDiscountPercent = (itemDiscountAmount / (itemReq.UnitPrice * float64(itemReq.Qty))) * 100
-			}
-			// ตรวจว่าส่วนลดที่แปลงเป็น % แล้วเกินกำหนดไหม
-			if itemDiscountPercent > config.MaxItemDiscountRate {
-				tx.Rollback()
-				return fmt.Errorf("สินค้า %s ให้ส่วนลดคิดเป็น %.2f%% เกินกำหนดสูงสุดของร้าน (สูงสุด %.2f%%)", product.Product_Name, itemDiscountPercent, config.MaxItemDiscountRate)
-			}
-		}
+            // กรณี: ส่วนลดแบบจำนวนเงิน (ค่าที่ส่งมาจากหน้าบ้านคือส่วนลดต่อชิ้น)
+            discountPerUnit := itemReq.DiscountValue
+            
+            // คำนวณส่วนลดรวมของบรรทัดนี้จริง ๆ: ส่วนลดต่อชิ้น × จำนวนชิ้น
+            itemDiscountAmount = discountPerUnit * float64(itemReq.Qty)
 
+            // แปลงเงินบาทต่อชิ้นกลับเป็น % โดยเทียบกับราคาเต็มต่อชิ้นตรง ๆ (แม่นยำที่สุด)
+            if itemReq.UnitPrice > 0 {
+                // สูตร: (ส่วนลดต่อชิ้น / ราคาเต็มต่อชิ้น) × 100
+                itemDiscountPercent = (discountPerUnit / itemReq.UnitPrice) * 100
+            }
+
+            // ตรวจว่าส่วนลดที่แปลงเป็น % แล้วเกินกำหนดไหม
+            if itemDiscountPercent > config.MaxItemDiscountRate {
+                tx.Rollback()
+                return fmt.Errorf("สินค้า %s ให้ส่วนลดคิดเป็น %.2f%% เกินกำหนดสูงสุดของร้าน (สูงสุด %.2f%%)", product.Product_Name, itemDiscountPercent, config.MaxItemDiscountRate)
+            }
+        }
 		// 4.5 คำนวณราคาสุทธิต่อชิ้นและยอดรวม
 		// ราคาต่อชิ้นหลังหักส่วนลด: ราคาเต็ม - (ส่วนลดรวมบรรทัด / จำนวนชิ้น)
 		// ตัวอย่าง: ราคา 100 ลดไป 30 บาท (3 ชิ้น) → finalUnitPrice = 100 - (30/3) = 90 บาท/ชิ้น
@@ -154,38 +157,50 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest) error {
 	}
 
 	// 5. คำนวณส่วนลดท้ายบิลรวม (Bill Discount)
-	var billDiscountAmount float64  // ส่วนลดท้ายบิลคิดเป็น "บาท"
-	var billDiscountPercent float64 // ส่วนลดท้ายบิลคิดเป็น "%"
+    var billDiscountAmount float64  // ส่วนลดท้ายบิลคิดเป็น "บาท"
+    var billDiscountPercent float64 // ส่วนลดท้ายบิลคิดเป็น "%"
 
-	if req.BillDiscountType == "percentage" {
-		// กรณี: ส่วนลดท้ายบิลแบบเปอร์เซ็นต์
-		// ตรวจว่าเกิน MaxExtraDiscountRate ที่ร้านกำหนดไหม
-		if req.BillDiscountValue > config.MaxExtraDiscountRate {
-			tx.Rollback()
-			return fmt.Errorf("ส่วนลดท้ายบิล %.2f%% เกินกำหนดสูงสุดของร้าน (สูงสุด %.2f%%)", req.BillDiscountValue, config.MaxExtraDiscountRate)
-		}
-		billDiscountPercent = req.BillDiscountValue // เก็บ % ส่วนลดท้ายบิล
+    if req.BillDiscountType == "percentage" {
+        if req.BillDiscountValue > config.MaxExtraDiscountRate {
+            tx.Rollback()
+            return fmt.Errorf("ส่วนลดท้ายบิล %.2f%% เกินกำหนดสูงสุดของร้าน (สูงสุด %.2f%%)", req.BillDiscountValue, config.MaxExtraDiscountRate)
+        }
+        billDiscountPercent = req.BillDiscountValue
+        billDiscountAmount = (subtotalAmount - totalDiscountItems) * billDiscountPercent / 100
 
-		// คำนวณเงินส่วนลดท้ายบิล: คิดจากยอดสุทธิหลังหักส่วนลดรายชิ้นแล้ว
-		// สูตร: (subtotalAmount - totalDiscountItems) × % / 100
-		// ตัวอย่าง: ยอดหลังลดชิ้น = 1000 บาท ลดท้ายบิล 5% → ลดเพิ่ม 50 บาท
-		billDiscountAmount = (subtotalAmount - totalDiscountItems) * billDiscountPercent / 100
+    } else if req.BillDiscountType == "amount" {
+        billDiscountAmount = req.BillDiscountValue
+        if subtotalAmount > 0 {
+            billDiscountPercent = (billDiscountAmount / (subtotalAmount - totalDiscountItems)) * 100
+        }
+        if billDiscountPercent > config.MaxExtraDiscountRate {
+            tx.Rollback()
+            return fmt.Errorf("ส่วนลดท้ายบิลคิดเป็น %.2f%% เกินกำหนดสูงสุดของร้าน (สูงสุด %.2f%%)", billDiscountPercent, config.MaxExtraDiscountRate)
+        }
+    }
 
-	} else if req.BillDiscountType == "amount" {
-		// กรณี: ส่วนลดท้ายบิลแบบจำนวนเงิน
-		billDiscountAmount = req.BillDiscountValue // เก็บเงินส่วนลดที่กรอกมา
+    if subtotalAmount > 0 {
+        // 1. คำนวณหาผลรวมของส่วนลดทุกประเภทในบิลนี้ (ลดรายชิ้นสะสม + ลดท้ายบิล)
+        combinedTotalDiscount := totalDiscountItems + billDiscountAmount
 
-		// แปลงเป็น % เพื่อเปรียบเทียบกับ MaxExtraDiscountRate
-		if subtotalAmount > 0 {
-			// สูตร: (ส่วนลดท้ายบิล / ยอดหลังลดรายชิ้น) × 100
-			billDiscountPercent = (billDiscountAmount / (subtotalAmount - totalDiscountItems)) * 100
-		}
-		// ตรวจว่าส่วนลดที่แปลงเป็น % เกินกำหนดหรือไม่
-		if billDiscountPercent > config.MaxExtraDiscountRate {
-			tx.Rollback()
-			return fmt.Errorf("ส่วนลดท้ายบิลคิดเป็น %.2f%% เกินกำหนดสูงสุดของร้าน (สูงสุด %.2f%%)", billDiscountPercent, config.MaxExtraDiscountRate)
-		}
-	}
+        // 2. แปลงผลรวมส่วนลดทั้งหมดกลับมาเป็นเปอร์เซ็นต์เมื่อเทียบกับ "ราคารวมราคาเต็มก่อนลด"
+        // สูตร: (ส่วนลดทั้งหมด / ยอดรวมราคาเต็ม) × 100
+        actualTotalDiscountRate := (combinedTotalDiscount / subtotalAmount) * 100
+
+        // 3. ตั้งเกณฑ์เพดานรวม (สมมติใช้สิทธิ์ตามตัวเลขสูงสุดใน storeconfig)
+        // เพื่อความยืดหยุ่น จะใช้ config.MaxItemDiscountRate (เช่น 2%) มาเป็นเกณฑ์สูงสุดของทั้งบิล
+        allowedGlobalMaxRate := config.MaxItemDiscountRate
+
+        // 4. ถ้าเปอร์เซ็นต์รวมส่วนลดจริงดันสูงกว่ากฎเหล็กของอู่ -> สั่ง Rollback ทันที!
+        if actualTotalDiscountRate > allowedGlobalMaxRate {
+            tx.Rollback()
+            return fmt.Errorf(
+                "ไม่สามารถอนุมัติบิลได้! ส่วนลดรายชิ้นรวมกับส่วนลดท้ายบิลคิดเป็น %.2f%% ซึ่งเกินเกณฑ์เพดานรวมสูงสุดของร้านที่ยอมให้ลดได้ (สูงสุด %.2f%% ของมูลค่าบิล)", 
+                actualTotalDiscountRate, 
+                allowedGlobalMaxRate,
+            )
+        }
+    }
 
 	// 6. คำนวณยอดสุทธิทั้งบิล
 	// สูตร: (ราคาเต็มรวม - ส่วนลดรายชิ้นรวม) - ส่วนลดท้ายบิล = ยอดที่ลูกค้าต้องจ่ายจริง
