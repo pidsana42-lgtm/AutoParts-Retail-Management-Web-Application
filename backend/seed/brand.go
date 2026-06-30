@@ -8,7 +8,7 @@ import (
 
 func Brand(db *gorm.DB) error {
 	brands := []entity.Brand{
-		{Brand_Name: "TOYOTA"},
+		{Brand_Name: "Toyota"},
 	}
 
 	for _, brand := range brands {

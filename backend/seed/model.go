@@ -10,7 +10,7 @@ func Models(db *gorm.DB) error {
 	// 1. ดึงข้อมูลแบรนด์ที่มีในระบบขึ้นมาเพื่อเอา ID มาผูกความสัมพันธ์ (Relation)
 	var brandToyota entity.Brand
 	
-	if err := db.Where("brand_name = ?", "TOYOTA").First(&brandToyota).Error; err != nil {
+	if err := db.Where("brand_name = ?", "Toyota").First(&brandToyota).Error; err != nil {
 		return fmt.Errorf("ไม่พบแบรนด์ TOYOTA ในระบบ กรุณารัน Seed แบรนด์ก่อน: %w", err)
 	}
 

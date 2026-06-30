@@ -9,13 +9,16 @@ import {
   Minus,
   Search,
 } from "lucide-react";
-import apiClient from "../../../service/http/apiClient";
 import Button from "../../../components/elements/button";
+import {
+  posApiService,
+  calculateValidatedDiscount,
+} from "../../../service/http/pos/pos_service";
 import type {
   SaleOrderItemRequest,
   CreateSaleOrderRequest,
 } from "../../../interface/pos/pos_interface";
-import type { POSProductResponse } from "../../../interface/pos/product_interface";
+import type { StoreConfigInterface } from "../../../interface/pos/store_config_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
 
 export default function PosPage(): React.JSX.Element {
@@ -29,7 +32,6 @@ export default function PosPage(): React.JSX.Element {
   });
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchCustomerQuery, setSearchCustomerQuery] = useState<string>("");
-
   const [customer, setCustomer] = useState<CustomerDiscountResponse | null>(
     null,
   );
@@ -40,6 +42,19 @@ export default function PosPage(): React.JSX.Element {
   >("none");
   const [paymentMethodId, setPaymentMethodId] = useState<number>(1); // 1=เงินสด, 2=QR, 3=เงินเชื่อ
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [storeConfig, setStoreConfig] = useState<StoreConfigInterface | null>(
+    null,
+  );
+
+  // ดึงค่าคอนฟิกร้านค้ามาจากหลังบ้านผ่าน Service ตอนเปิดหน้าจอ
+  React.useEffect(() => {
+    posApiService
+      .getStoreConfig()
+      .then((data) => setStoreConfig(data))
+      .catch((error) =>
+        console.error("ไม่สามารถดึงข้อมูลตั้งค่าร้านค้าได้:", error),
+      );
+  }, []);
 
   React.useEffect(() => {
     localStorage.setItem("pos_cart", JSON.stringify(cart));
@@ -50,10 +65,8 @@ export default function PosPage(): React.JSX.Element {
     e.preventDefault();
     if (!searchCustomerQuery) return;
     try {
-      const response = await apiClient.get<CustomerDiscountResponse>(
-        `/pos/customer-discount?search=${searchCustomerQuery}`,
-      );
-      const customerData = response.data;
+      const customerData =
+        await posApiService.searchCustomerDiscount(searchCustomerQuery);
       setCustomer(customerData);
 
       if (customerData.is_discount_enabled) {
@@ -77,10 +90,7 @@ export default function PosPage(): React.JSX.Element {
     if (!searchQuery) return;
 
     try {
-      const response = await apiClient.get<POSProductResponse[]>(
-        `/pos/products?q=${searchQuery}`,
-      );
-      const products = response.data;
+      const products = await posApiService.searchProducts(searchQuery);
 
       if (!products || products.length === 0) {
         alert("ไม่พบสินค้าชิ้นนี้ในสต๊อกระบบ");
@@ -110,7 +120,6 @@ export default function PosPage(): React.JSX.Element {
             qty: 1,
             unit_price: product.sale_price,
 
-            // ส่งฟีลด์เสริมไปดักใช้แรนเดอร์ที่หน้าจอด้วย
             grade_name: product.grade_name,
             brand_name: product.brand_name,
             model_name: product.model_name,
@@ -139,6 +148,113 @@ export default function PosPage(): React.JSX.Element {
 
   const handleRemoveItem = (index: number) => {
     setCart(cart.filter((_, i) => i !== index));
+  };
+
+  // ─── ฟังก์ชันตรวจสอบและบันทึกส่วนลดท้ายบิล (ล็อกโควตารวมไม่ให้เกินเกณฑ์ร้าน) ───
+  const handleBillDiscountChange = (valueStr: string) => {
+    const inputValue = parseFloat(valueStr) || 0;
+    if (inputValue < 0) return;
+
+    // 1. ดึงเปอร์เซ็นต์เพดานรวมของร้านค้าจาก Store Config (Default 2.00%)
+    const maxGlobalRate = storeConfig?.max_item_discount_rate ?? 2.0;
+
+    // 2. คำนวณจำนวนเงินบาทสูงสุดรวมทั้งหมดที่บิลใบนี้ยอมให้ลดได้ (ราคาเต็มรวม × เปอร์เซ็นต์เพดาน)
+    const allowedTotalDiscountAmount = (totalItemPrice * maxGlobalRate) / 100;
+
+    // 3. หักโควตา: หาจำนวนเงินส่วนลดท้ายบิลที่ "เหลือยอมให้ลดเพิ่มได้อีก"
+    const remainingQuotaAmount = allowedTotalDiscountAmount - totalLineDiscount;
+
+    // 4. ถ้าพนักงานใช้โควตาลดต่อชิ้นจนเต็ม Max (หรือเกิน) ไปเรียบร้อยแล้ว -> บล็อกทันที ห้ามลดท้ายบิลเพิ่ม
+    if (remainingQuotaAmount <= 0 && inputValue > 0) {
+      alert(
+        `ไม่สามารถให้ส่วนลดท้ายบิลเพิ่มได้ เนื่องจากคุณได้ให้ส่วนลดต่อรายการสินค้าไปเต็มสิทธิ์เพดานรวม ${maxGlobalRate}% ของร้านค้าแล้วครับ`,
+      );
+      return;
+    }
+
+    // 5. จำลองมูลค่าเงินบาทของส่วนลดท้ายบิลตามจำนวนที่กำลังพิมพ์
+    let simulationBillDiscountAmount = 0;
+    if (billDiscountType === "amount") {
+      simulationBillDiscountAmount = inputValue;
+    } else if (billDiscountType === "percentage") {
+      const remainingAfterLineDiscount = totalItemPrice - totalLineDiscount;
+      simulationBillDiscountAmount =
+        (remainingAfterLineDiscount * inputValue) / 100;
+    }
+
+    // 6. ดักตรวจ: หากส่วนลดท้ายบิลที่พิมพ์อยู่ ดันทะลุโควตาเงินที่เหลืออยู่
+    if (simulationBillDiscountAmount > remainingQuotaAmount) {
+      alert(
+        `ส่วนลดท้ายบิลเกินสิทธิ์ที่เหลืออยู่! บิลนี้เหลือโควตาให้ลดเพิ่มได้อีกสูงสุดไม่เกิน ${remainingQuotaAmount.toFixed(2)} ฿ (เพื่อให้ยอดรวมทั้งบิลอยู่ในเกณฑ์ ${maxGlobalRate}%)`,
+      );
+      return;
+    }
+
+    // ถ้าผ่านกฎโควตาทุกข้อ บันทึกค่าลง State ได้ตามปกติ
+    setBillDiscountValue(inputValue);
+  };
+
+  // ─── ฟังก์ชันเปิด-ปิดส่วนลดของแต่ละรายการเมื่อกด Checkbox ───
+  const handleDiscountToggle = (index: number, isChecked: boolean) => {
+    setCart((prev) =>
+      prev.map((item, i) => {
+        if (i === index) {
+          return {
+            ...item,
+            discount_type: isChecked ? "percentage" : "none",
+            discount_value: isChecked
+              ? customer?.standard_discount_rate || 0
+              : 0,
+          };
+        }
+        return item;
+      }),
+    );
+  };
+
+  // ─── ฟังก์ชันสลับประเภทส่วนลดต่อรายการ (฿ / %) ───
+  const handleDiscountTypeChange = (
+    index: number,
+    type: "amount" | "percentage",
+  ) => {
+    setCart((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, discount_type: type } : item,
+      ),
+    );
+  };
+
+  // ─── ฟังก์ชันแก้ไขจำนวนส่วนลดพร้อมระบบตรวจจับเงื่อนไขร้านค้า ───
+  const handleDiscountValueChange = (index: number, valueStr: string) => {
+    const rawValue = valueStr === "" ? 0 : parseFloat(valueStr) || 0;
+    const item = cart[index];
+
+    // เรียกใช้ลอจิกความปลอดภัยสแกนเพดานจากไฟล์บริการส่วนกลาง
+    const validatedValue = calculateValidatedDiscount(
+      item,
+      rawValue,
+      storeConfig,
+    );
+
+    setCart((prev) =>
+      prev.map((cartItem, i) =>
+        i === index
+          ? {
+              ...cartItem,
+              discount_value: validatedValue,
+            }
+          : cartItem,
+      ),
+    );
+  };
+
+  // ─── ฟังก์ชันล้างรายการสินค้าทั้งหมดในตะกร้า ───
+  const handleClearAllCart = () => {
+    if (cart.length === 0) return;
+    if (window.confirm("คุณแน่ใจหรือไม่ว่าต้องการล้างตะกร้าสินค้าทั้งหมด?")) {
+      setCart([]);
+      localStorage.removeItem("pos_cart");
+    }
   };
 
   // ─── คำนวณราคาสุทธิสัมพันธ์ตามจริง ───
@@ -201,7 +317,7 @@ export default function PosPage(): React.JSX.Element {
     };
 
     try {
-      await apiClient.post("/pos/orders", salePayload);
+      await posApiService.createPOSOrder(salePayload);
       alert("บันทึกข้อมูลการขายและทำรายการเช็คเอาท์สำเร็จ!");
       setCart([]);
       localStorage.removeItem("pos_cart");
@@ -232,11 +348,23 @@ export default function PosPage(): React.JSX.Element {
               </p>
               <h1 className="text-4xl font-extrabold text-zinc-900">POS</h1>
             </div>
-            <div className="text-right">
+            <div className="text-right flex flex-col items-end gap-1.5">
               <p className="text-xs text-[#6B7280] font-medium">
-                หมายเลขคำสั่งซื้อ
+                สถานะรายการขาย
               </p>
-              <h2 className="text-2xl font-bold text-zinc-800">INV2-2026001</h2>
+                <h2 className="text-2xl font-bold text-zinc-800">บิลร่าง (DRAFT)</h2>
+              <button
+                type="button"
+                onClick={handleClearAllCart}
+                disabled={cart.length === 0}
+                className={`text-xs font-bold px-2.5 py-1 transition-colors border rounded-none cursor-pointer ${
+                  cart.length === 0
+                    ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed select-none"
+                    : "bg-[#E51C23] text-white border-[#E51C23] hover:bg-[#C62828]"
+                }`}
+              >
+                ล้างทั้งหมด
+              </button>
             </div>
           </div>
 
@@ -256,11 +384,16 @@ export default function PosPage(): React.JSX.Element {
                   <input
                     type="number"
                     value={billDiscountValue}
-                    onChange={(e) =>
-                      setBillDiscountValue(parseFloat(e.target.value) || 0)
+                    onChange={(e) => handleBillDiscountChange(e.target.value)}
+                    disabled={billDiscountType === "none"}
+                    className={`w-full px-3 py-2 pl-10 text-sm focus:outline-none focus:border-red-500 transition-colors ${
+                      billDiscountType === "none"
+                        ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"
+                        : "bg-[#2A2929] text-white"
+                    }`}
+                    placeholder={
+                      billDiscountType === "none" ? "ล็อกไว้" : "0.00"
                     }
-                    className="w-full bg-[#2A2929] px-3 py-2 pl-10 text-sm text-white focus:outline-none focus:border-red-500"
-                    placeholder="0.00"
                   />
                 </div>
                 <button
@@ -314,14 +447,14 @@ export default function PosPage(): React.JSX.Element {
                       {billDiscountValue.toFixed(2)}
                     </span>{" "}
                     {billDiscountType === "percentage" ? "%" : "บาท"}{" "}
-                    จะถูกหักตามสัดส่วน ดำเนินการต่อในรายการ
+                    จะถูกหักตามสัดส่วน ดำเนินการต่อ in รายการ
                   </span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* ตารางแสดงสินค้า (จัดบาลานซ์ คอลัมน์ตรงเป๊ะ 100%) */}
+          {/* ตารางแสดงสินค้า */}
           <div className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -330,19 +463,20 @@ export default function PosPage(): React.JSX.Element {
                   <th className="py-3 px-4 w-[32%]">คำอธิบายสินค้า</th>
                   <th className="py-3 px-4 text-right w-[12%]">หน่วยราคา</th>
                   <th className="py-3 px-4 text-center w-[12%]">QTY</th>
-                  <th className="py-3 px-4 text-center w-[8%]">Disc?</th>
-                  <th className="py-3 px-4 text-center w-[10%]">
+                  <th className="py-3 px-4 text-center w-[8%]">DISC?</th>
+                  <th className="py-3 px-4 text-center w-[12%]">
                     ประเภทส่วนลด
                   </th>
+                  <th className="py-3 px-4 text-center w-[10%]">ลดราคา</th>
                   <th className="py-3 px-4 text-right pr-6 w-[11%]">
-                    รวมสุทธิ
+                    LINE TOTAL
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-sm">
                 {cart.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-gray-400">
+                    <td colSpan={8} className="py-8 text-center text-gray-400">
                       ยังไม่มีสินค้าในตะกร้า
                     </td>
                   </tr>
@@ -358,43 +492,39 @@ export default function PosPage(): React.JSX.Element {
                         key={index}
                         className="hover:bg-gray-50/80 transition-colors"
                       >
-                        {/* คอลัมน์ 1: SKU */}
-                        <td className="py-4 px-4 font-mono text-xs text-zinc-600">
+                        {/* SKU */}
+                        <td className="py-4 px-4 font-bold text-xs text-[#1C1B1B]">
                           {item.product_code || "—"}
                         </td>
 
-                        {/* คอลัมน์ 2: คำอธิบายสินค้า + ดึงรายละเอียดฟีลด์จริงมาพ่นด้านล่าง */}
+                        {/* คำอธิบายสินค้า */}
                         <td className="py-4 px-4">
-                          <p className="font-bold text-zinc-900">
+                          <p className="font-bold text-[#1C1B1B]">
                             {item.product_name}
                           </p>
-                          <p className="text-[11px] text-gray-400 font-mono mt-0.5">
+                          <p className="text-[11px] text-[#6B7280] font-mono mt-0.5">
                             PN: {item.part_number || "—"}
                           </p>
-                          {/* 🎯 ส่วนพ่นข้อมูลเกรด ยี่ห้อ และรุ่นรถยนต์จริงจากระบบหลังบ้าน Go */}
-                          {((item as any).grade_name ||
-                            (item as any).brand_name ||
-                            (item as any).model_name) && (
-                            <p className="text-[11px] text-[#E51C23] font-medium mt-1 bg-red-50 inline-block px-1.5 py-0.5">
-                              {(item as any).brand_name}{" "}
-                              {(item as any).model_name} [เกรด:{" "}
-                              {(item as any).grade_name || "ทั่วไป"}]
+                          {(item.grade_name || item.model_name) && (
+                            <p className="text-[11px] text-[#6B7280] font-medium mt-1 inline-block py-0.5 rounded-sm">
+                              เกรด: {item.grade_name || "ทั่วไป"} |
+                              รุ่นรถที่รองรับ: {item.model_name || "ทุกรุ่น"}
                             </p>
                           )}
                         </td>
 
-                        {/* คอลัมน์ 3: หน่วยราคา (ชิดขวาตรงตามระนาบตัวเลข) */}
-                        <td className="py-4 px-4 text-right font-medium text-zinc-900">
+                        {/* หน่วยราคา */}
+                        <td className="py-4 px-4 text-right font-bold text-[#1C1B1B]">
                           {item.unit_price.toFixed(2)}
                         </td>
 
-                        {/* คอลัมน์ 4: QTY ปุ่มเพิ่มลด */}
+                        {/* QTY */}
                         <td className="py-4 px-4 text-center">
-                          <div className="inline-flex items-center border border-gray-300 rounded bg-[#F3F4F6]">
+                          <div className="inline-flex items-center border border-gray-300 rounded-none bg-[#F6F3F2]">
                             <button
                               type="button"
                               onClick={() => updateQty(index, -1)}
-                              className="p-1 px-2 cursor-pointer text-gray-600 hover:text-black"
+                              className="p-1 px-2 cursor-pointer text-[#1C1B1B] hover:text-black"
                             >
                               <Minus size={12} />
                             </button>
@@ -411,28 +541,93 @@ export default function PosPage(): React.JSX.Element {
                           </div>
                         </td>
 
-                        {/* คอลัมน์ 5: Disc? */}
+                        {/* DISC? */}
                         <td className="py-4 px-4 text-center">
                           <input
                             type="checkbox"
-                            checked={item.discount_value > 0}
-                            readOnly
-                            className="accent-[#E51C23] h-4 w-4 cursor-default"
+                            checked={item.discount_type !== "none"}
+                            className="accent-[#E51C23] h-4 w-4 cursor-pointer "
+                            onChange={(e) =>
+                              handleDiscountToggle(index, e.target.checked)
+                            }
                           />
                         </td>
 
-                        {/* คอลัมน์ 6: ประเภทส่วนลดป้ายแดง */}
+                        {/* ประเภทส่วนลด */}
                         <td className="py-4 px-4 text-center">
-                          {item.discount_value > 0 ? (
-                            <span className="inline-block bg-[#E51C23] text-white text-xs font-bold px-2 py-0.5 rounded-none">
-                              -{item.discount_value}%
-                            </span>
+                          {item.discount_type !== "none" ? (
+                            <div className="inline-flex bg-[#EBE7E7] p-0.5 rounded-none text-xs font-bold">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDiscountTypeChange(index, "amount")
+                                }
+                                className={`px-2 py-1 transition-all cursor-pointer ${
+                                  item.discount_type === "amount"
+                                    ? "bg-[#E51C23] text-white"
+                                    : "text-[#6B7280] hover:text-gray-600"
+                                }`}
+                              >
+                                ฿
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDiscountTypeChange(index, "percentage")
+                                }
+                                className={`px-2 py-1 transition-all cursor-pointer ${
+                                  item.discount_type === "percentage"
+                                    ? "bg-[#E51C23] text-white"
+                                    : "text-[#6B7280] hover:text-gray-600"
+                                }`}
+                              >
+                                %
+                              </button>
+                            </div>
                           ) : (
                             <span className="text-gray-400">—</span>
                           )}
                         </td>
 
-                        {/* คอลัมน์ 7: รวมสุทธิ + ปุ่มลบ */}
+                        {/* ลดราคา */}
+                        <td className="py-4 px-4 text-center">
+                          {item.discount_type !== "none" ? (
+                            <div className="relative inline-flex items-center justify-center px-1.5 py-0.5 min-w-[60px] transition-all border bg-[#F6F3F2] text-gray-700 border-gray-300 rounded-none font-medium">
+                              {item.discount_type === "amount" &&
+                                item.discount_value > 0 && (
+                                  <span className="mr-0.5 text-gray-500 font-bold select-none">
+                                    -
+                                  </span>
+                                )}
+                              <input
+                                type="number"
+                                step="any"
+                                value={
+                                  item.discount_value === 0
+                                    ? ""
+                                    : item.discount_value
+                                }
+                                placeholder="0"
+                                onChange={(e) =>
+                                  handleDiscountValueChange(
+                                    index,
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-9 bg-transparent text-center text-gray-800 text-xs font-bold outline-none border-b border-transparent focus:border-zinc-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                              {item.discount_type === "percentage" && (
+                                <span className="ml-0.5 text-gray-400 text-xs font-bold select-none">
+                                  %
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
+
+                        {/* LINE TOTAL + ปุ่มลบ */}
                         <td className="py-4 px-4 text-right pr-6 font-bold text-zinc-900">
                           <div className="flex justify-end items-center gap-3">
                             <span>{(lineTotal - itemDiscount).toFixed(2)}</span>
