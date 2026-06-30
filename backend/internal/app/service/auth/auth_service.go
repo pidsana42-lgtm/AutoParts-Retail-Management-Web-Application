@@ -30,19 +30,15 @@ func (s *authService) Login(req *authDTO.LoginRequest) (*authDTO.LoginResponse, 
         return nil, errors.New("ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง")
     }
 
-    // 💡 เพิ่ม 3 บรรทัดนี้เพื่อดูว่าหน้าบ้านส่งอะไรมา และหลังบ้านหยิบอะไรไปเช็ก
     log.Println("=== [DEBUG AUTH] ===")
     log.Printf("Trying Username: %s", req.Username)
     log.Printf("Input Raw Password from Client: '%s'", req.Password)
 
-    // 2. ตรวจสอบรหัสผ่าน (ใช้ฟังก์ชัน CheckPasswordHash ของโบว์)
-    // 2. ตรวจสอบรหัสผ่าน (ใช้ bcrypt มาตรฐานเรียกตรงๆ เพื่อตัดปัญหาความเพี้ยนของสตริงแฮช)
     err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
     if err != nil {
         return nil, errors.New("ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง")
     }
 
-    // 3. รหัสผ่านถูกต้อง! ทำการสร้าง Claims สำหรับตั๋ว JWT
     claims := jwt.MapClaims{
         "user_id": user.ID,
         "role":    string(user.Role.RoleName), // ดึงค่าจาก Enum ในตาราง Role ของโบว์มาแปลงเป็น string
