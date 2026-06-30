@@ -9,6 +9,7 @@ type CustomerRepository interface {
 	CreateCustomer(customer *entity.Customer) error
 	GetAllCustomers() ([]entity.Customer, error)
 	GetCustomerByID(id uint) (*entity.Customer, error)
+
 }
 
 type customerRepository struct {
@@ -35,3 +36,4 @@ func (r *customerRepository) GetCustomerByID(id uint) (*entity.Customer, error) 
 	err := r.db.Preload("CustomerType").First(&customer, id).Error
 	return &customer, err
 }
+

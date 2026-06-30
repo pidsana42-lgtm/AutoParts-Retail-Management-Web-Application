@@ -7,7 +7,6 @@ import {
   Coins,
   Plus,
   Minus,
-  Search,
 } from "lucide-react";
 import Button from "../../../components/elements/button";
 import {
@@ -19,7 +18,11 @@ import type {
   CreateSaleOrderRequest,
 } from "../../../interface/pos/pos_interface";
 import type { StoreConfigInterface } from "../../../interface/pos/store_config_interface";
-import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
+import type {
+  CustomerDiscountResponse,
+  CustomerTypeInterface,
+} from "../../../interface/pos/customer_interface";
+import apiClient from "../../../service/http/apiClient";
 
 export default function PosPage(): React.JSX.Element {
   // ─── States ───
@@ -46,6 +49,29 @@ export default function PosPage(): React.JSX.Element {
     null,
   );
 
+  const [customerTypes, setCustomerTypes] = useState<CustomerTypeInterface[]>(
+    [],
+  );
+  
+  // ─── แก้ไขจุดบกพร่อง: เพิ่มสิทธิ์สำหรับควบคุมปุ่มแบบแมนนวลและซิงค์ ID ตาราง ───
+  const [activeTypeId, setActiveTypeId] = useState<number>(1);
+  const [selectedPaymentType, setSelectedPaymentType] = useState<"CASH" | "CREDIT">("CASH");
+
+  // ─── ดึงข้อมูลประเภทลูกค้าทั้งหมดจาก API ───
+  React.useEffect(() => {
+    const fetchCustomerTypes = async () => {
+      try {
+        const response = await apiClient.get<CustomerTypeInterface[]>(
+          "/pos/customer-types",
+        );
+        setCustomerTypes(response.data);
+      } catch (error) {
+        console.error("ไม่สามารถดึงข้อมูลประเภทลูกค้าได้:", error);
+      }
+    };
+    fetchCustomerTypes();
+  }, []);
+
   // ดึงค่าคอนฟิกร้านค้ามาจากหลังบ้านผ่าน Service ตอนเปิดหน้าจอ
   React.useEffect(() => {
     posApiService
@@ -65,41 +91,53 @@ export default function PosPage(): React.JSX.Element {
     e.preventDefault();
     if (!searchCustomerQuery) return;
     try {
-      const customerData =
-        await posApiService.searchCustomerDiscount(searchCustomerQuery);
+      const response = await apiClient.get<CustomerDiscountResponse[]>(
+        `/pos/customer-discount?search=${searchCustomerQuery}`,
+      );
+      const dataList = response.data;
+      if (!dataList || dataList.length === 0) {
+        alert("ไม่พบข้อมูลลูกค้ารายนี้ในระบบ");
+        return;
+      }
+
+      const customerData = dataList[0];
       setCustomer(customerData);
 
-      if (customerData.is_discount_enabled) {
-        setCart((prev) =>
-          prev.map((item) => ({
-            ...item,
-            discount_type: "percentage",
-            discount_value: customerData.standard_discount_rate,
-          })),
-        );
+      // ✨ ดีดตัวแท็บไฮไลท์สีตามข้อมูลจริงข้ามความสัมพันธ์ตาราง
+      if (customerData.customer_type) {
+        setActiveTypeId(customerData.customer_type.id);
+
+        // สลับโหมดเครดิตอัตโนมัติตามประเภทคีย์ดาต้าเบส
+        if (customerData.customer_type.type_name !== "GENERAL") {
+          setSelectedPaymentType("CREDIT");
+          setPaymentMethodId(3); // เด้งไปแท็บ CREDIT เสมอ
+        } else {
+          setSelectedPaymentType("CASH");
+          setPaymentMethodId(1); // ลูกค้าทั่วไปใช้โหมดเงินสด
+        }
       }
     } catch (error) {
-      alert("ไม่พบข้อมูลสิทธิ์ส่วนลดของลูกค้ารายนี้");
-      setCustomer(null);
+      console.error(error);
     }
   };
 
-  // ─── ฟังก์ชันค้นหาอะไหล่ยนต์และเพิ่มเข้าตะกร้า ───
+  // ─── ฟังก์ชันค้นหาอะไหล่ยนต์ด้วยบาร์โค้ดและเพิ่มเข้าตะกร้า ───
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery) return;
+    const cleanedQuery = searchQuery.trim();
+    if (!cleanedQuery) return;
 
     try {
-      const products = await posApiService.searchProducts(searchQuery);
+      const products = await posApiService.searchProducts(cleanedQuery);
 
       if (!products || products.length === 0) {
-        alert("ไม่พบสินค้าชิ้นนี้ในสต๊อกระบบ");
+        alert("ไม่พบรหัสบาร์โค้ดสินค้าชิ้นนี้ในสต๊อกระบบ");
         return;
       }
 
       const product =
         products.find(
-          (p) => p.product_code === searchQuery || p.barcode === searchQuery,
+          (p) => p.barcode === cleanedQuery || p.product_code === cleanedQuery,
         ) || products[0];
 
       const existingIndex = cart.findIndex(
@@ -150,21 +188,15 @@ export default function PosPage(): React.JSX.Element {
     setCart(cart.filter((_, i) => i !== index));
   };
 
-  // ─── ฟังก์ชันตรวจสอบและบันทึกส่วนลดท้ายบิล (ล็อกโควตารวมไม่ให้เกินเกณฑ์ร้าน) ───
+  // ─── ฟังก์ชันตรวจสอบและบันทึกส่วนลดท้ายบิล ───
   const handleBillDiscountChange = (valueStr: string) => {
     const inputValue = parseFloat(valueStr) || 0;
     if (inputValue < 0) return;
 
-    // 1. ดึงเปอร์เซ็นต์เพดานรวมของร้านค้าจาก Store Config (Default 2.00%)
     const maxGlobalRate = storeConfig?.max_item_discount_rate ?? 2.0;
-
-    // 2. คำนวณจำนวนเงินบาทสูงสุดรวมทั้งหมดที่บิลใบนี้ยอมให้ลดได้ (ราคาเต็มรวม × เปอร์เซ็นต์เพดาน)
     const allowedTotalDiscountAmount = (totalItemPrice * maxGlobalRate) / 100;
-
-    // 3. หักโควตา: หาจำนวนเงินส่วนลดท้ายบิลที่ "เหลือยอมให้ลดเพิ่มได้อีก"
     const remainingQuotaAmount = allowedTotalDiscountAmount - totalLineDiscount;
 
-    // 4. ถ้าพนักงานใช้โควตาลดต่อชิ้นจนเต็ม Max (หรือเกิน) ไปเรียบร้อยแล้ว -> บล็อกทันที ห้ามลดท้ายบิลเพิ่ม
     if (remainingQuotaAmount <= 0 && inputValue > 0) {
       alert(
         `ไม่สามารถให้ส่วนลดท้ายบิลเพิ่มได้ เนื่องจากคุณได้ให้ส่วนลดต่อรายการสินค้าไปเต็มสิทธิ์เพดานรวม ${maxGlobalRate}% ของร้านค้าแล้วครับ`,
@@ -172,7 +204,6 @@ export default function PosPage(): React.JSX.Element {
       return;
     }
 
-    // 5. จำลองมูลค่าเงินบาทของส่วนลดท้ายบิลตามจำนวนที่กำลังพิมพ์
     let simulationBillDiscountAmount = 0;
     if (billDiscountType === "amount") {
       simulationBillDiscountAmount = inputValue;
@@ -182,7 +213,6 @@ export default function PosPage(): React.JSX.Element {
         (remainingAfterLineDiscount * inputValue) / 100;
     }
 
-    // 6. ดักตรวจ: หากส่วนลดท้ายบิลที่พิมพ์อยู่ ดันทะลุโควตาเงินที่เหลืออยู่
     if (simulationBillDiscountAmount > remainingQuotaAmount) {
       alert(
         `ส่วนลดท้ายบิลเกินสิทธิ์ที่เหลืออยู่! บิลนี้เหลือโควตาให้ลดเพิ่มได้อีกสูงสุดไม่เกิน ${remainingQuotaAmount.toFixed(2)} ฿ (เพื่อให้ยอดรวมทั้งบิลอยู่ในเกณฑ์ ${maxGlobalRate}%)`,
@@ -190,7 +220,6 @@ export default function PosPage(): React.JSX.Element {
       return;
     }
 
-    // ถ้าผ่านกฎโควตาทุกข้อ บันทึกค่าลง State ได้ตามปกติ
     setBillDiscountValue(inputValue);
   };
 
@@ -219,7 +248,13 @@ export default function PosPage(): React.JSX.Element {
   ) => {
     setCart((prev) =>
       prev.map((item, i) =>
-        i === index ? { ...item, discount_type: type } : item,
+        i === index
+          ? {
+              ...item,
+              discount_type: type,
+              discount_value: 0,
+            }
+          : item,
       ),
     );
   };
@@ -229,7 +264,6 @@ export default function PosPage(): React.JSX.Element {
     const rawValue = valueStr === "" ? 0 : parseFloat(valueStr) || 0;
     const item = cart[index];
 
-    // เรียกใช้ลอจิกความปลอดภัยสแกนเพดานจากไฟล์บริการส่วนกลาง
     const validatedValue = calculateValidatedDiscount(
       item,
       rawValue,
@@ -248,7 +282,6 @@ export default function PosPage(): React.JSX.Element {
     );
   };
 
-  // ─── ฟังก์ชันล้างรายการสินค้าทั้งหมดในตะกร้า ───
   const handleClearAllCart = () => {
     if (cart.length === 0) return;
     if (window.confirm("คุณแน่ใจหรือไม่ว่าต้องการล้างตะกร้าสินค้าทั้งหมด?")) {
@@ -257,7 +290,6 @@ export default function PosPage(): React.JSX.Element {
     }
   };
 
-  // ─── คำนวณราคาสุทธิสัมพันธ์ตามจริง ───
   const totalItemPrice = useMemo(() => {
     return cart.reduce((sum, item) => sum + item.unit_price * item.qty, 0);
   }, [cart]);
@@ -287,7 +319,6 @@ export default function PosPage(): React.JSX.Element {
     return total < 0 ? 0 : total;
   }, [totalItemPrice, totalLineDiscount, computedBillDiscount]);
 
-  // ─── สั่งยิงยอดออเดอร์เข้าเซิร์ฟเวอร์จริง ───
   const handleConfirmSale = async () => {
     if (cart.length === 0) {
       alert("กรุณาเลือกสินค้าลงตะกร้าอย่างน้อย 1 รายการ");
@@ -300,7 +331,7 @@ export default function PosPage(): React.JSX.Element {
     setIsSubmitting(true);
 
     const salePayload: CreateSaleOrderRequest = {
-      customer_id: customer.customer_id,
+      customer_id: customer.id, // ดึงไอดีที่อัพเดตตามโครงจริงแล้ว
       payment_method_id: paymentMethodId,
       bill_discount_type: billDiscountType,
       bill_discount_value: billDiscountValue,
@@ -324,6 +355,8 @@ export default function PosPage(): React.JSX.Element {
       setCustomer(null);
       setBillDiscountValue(0);
       setBillDiscountType("none");
+      setActiveTypeId(1);
+      setSelectedPaymentType("CASH");
     } catch (error: any) {
       alert(
         error.response?.data?.error ||
@@ -352,7 +385,9 @@ export default function PosPage(): React.JSX.Element {
               <p className="text-xs text-[#6B7280] font-medium">
                 สถานะรายการขาย
               </p>
-                <h2 className="text-2xl font-bold text-zinc-800">บิลร่าง (DRAFT)</h2>
+              <h2 className="text-2xl font-bold text-zinc-800">
+                บิลร่าง (DRAFT)
+              </h2>
               <button
                 type="button"
                 onClick={handleClearAllCart}
@@ -546,7 +581,7 @@ export default function PosPage(): React.JSX.Element {
                           <input
                             type="checkbox"
                             checked={item.discount_type !== "none"}
-                            className="accent-[#E51C23] h-4 w-4 cursor-pointer "
+                            className="accent-[#E51C23] h-4 w-4 cursor-pointer"
                             onChange={(e) =>
                               handleDiscountToggle(index, e.target.checked)
                             }
@@ -556,7 +591,7 @@ export default function PosPage(): React.JSX.Element {
                         {/* ประเภทส่วนลด */}
                         <td className="py-4 px-4 text-center">
                           {item.discount_type !== "none" ? (
-                            <div className="inline-flex bg-[#EBE7E7] p-0.5 rounded-none text-xs font-bold">
+                            <div className="inline-flex bg-[#F6F3F2] p-0.5 rounded-none text-xs font-bold">
                               <button
                                 type="button"
                                 onClick={() =>
@@ -592,12 +627,10 @@ export default function PosPage(): React.JSX.Element {
                         {/* ลดราคา */}
                         <td className="py-4 px-4 text-center">
                           {item.discount_type !== "none" ? (
-                            <div className="relative inline-flex items-center justify-center px-1.5 py-0.5 min-w-[60px] transition-all border bg-[#F6F3F2] text-gray-700 border-gray-300 rounded-none font-medium">
+                            <div className="relative inline-flex items-center justify-center px-2 py-1 min-w-[75px] transition-all border bg-gray-100 text-gray-700 border-gray-300 rounded-none font-medium">
                               {item.discount_type === "amount" &&
                                 item.discount_value > 0 && (
-                                  <span className="mr-0.5 text-gray-500 font-bold select-none">
-                                    -
-                                  </span>
+                                  <span className="mr-0.5 text-gray-500 font-bold select-none">-</span>
                                 )}
                               <input
                                 type="number"
@@ -614,10 +647,10 @@ export default function PosPage(): React.JSX.Element {
                                     e.target.value,
                                   )
                                 }
-                                className="w-9 bg-transparent text-center text-gray-800 text-xs font-bold outline-none border-b border-transparent focus:border-zinc-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                className="w-12 bg-transparent text-center text-gray-800 font-bold outline-none border-b border-transparent focus:border-zinc-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                               />
                               {item.discount_type === "percentage" && (
-                                <span className="ml-0.5 text-gray-400 text-xs font-bold select-none">
+                                <span className="ml-0.5 text-gray-400 font-bold select-none">
                                   %
                                 </span>
                               )}
@@ -652,7 +685,7 @@ export default function PosPage(): React.JSX.Element {
         {/* ฟอร์มสแกนรหัสสินค้า */}
         <form onSubmit={handleAddProduct} className="mt-6 flex gap-2">
           <div className="relative flex-1">
-            <Search
+            <QrCode
               className="absolute left-4 top-3.5 text-gray-400"
               size={18}
             />
@@ -660,8 +693,9 @@ export default function PosPage(): React.JSX.Element {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ป้อนรหัสสินค้าอะไหล่ยนต์ หรือใช้เครื่องสแกนบาร์โค้ดที่นี่..."
-              className="w-full bg-white border border-gray-300 rounded pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-red-500 shadow-sm"
+              placeholder="สแกนบาร์โค้ดสินค้า หรือพิมพ์เลขบาร์โค้ดที่นี่เพื่อเพิ่มรายการ..."
+              className="w-full bg-white border border-gray-200 rounded pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-red-500 shadow-sm font-sans"
+              autoFocus
             />
           </div>
           <button
@@ -676,43 +710,249 @@ export default function PosPage(): React.JSX.Element {
       {/* ─── ฝั่งขวา: ข้อมูลลูกค้า & ปุ่มชำระเงินจริง ─── */}
       <div className="w-full lg:w-[27%] bg-[#F6F3F2] p-6 flex flex-col justify-between shadow-2xl shrink-0 min-h-full">
         <div>
-          <form onSubmit={handleSearchCustomer} className="mb-4">
-            <p className="text-xs font-bold text-gray-400 mb-2 uppercase">
-              ค้นหาข้อมูลลูกค้าอู่ / สมาชิก
+          {/* ส่วนหัวกลุ่มประเภทและฟอร์มค้นหาลูกค้า */}
+          <div className="mb-4">
+            <p className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">
+              ข้อมูลลูกค้า
             </p>
-            <div className="flex gap-1">
+
+            {/* ─── เฉพาะบล็อกแท็บประเภทลูกค้า แถวบนสุด (สไตล์เหลี่ยมประกบ คลีนๆ ตามรูป) ─── */}
+<div className="grid grid-cols-3 gap-0 mb-1.5 bg-gray-100/50 p-0.5 border border-gray-200">
+  {customerTypes.map((type) => {
+    // เช็คสถานะการเลือก: ซิงค์ตามคีย์ไอดีความสัมพันธ์ฐานข้อมูล PostgreSQL จริง
+    const isActive =
+      customer && customer.customer_type
+        ? customer.customer_type.id === type.id
+        : activeTypeId === type.id;
+
+    // ประกาศรหัส Code สากลกำกับด้านล่างปุ่มให้ตรงตามรูปโมเดล
+    const subLabelMap: Record<string, string> = {
+      GENERAL: "", // ปุ่ม "ทั่วไป" ไม่มีภาษาอังกฤษกำกับด้านล่าง
+      GARAGE: "CREDIT",
+      WHOLESALE: "SPECIAL",
+    };
+
+    return (
+      <button
+        key={type.id}
+        type="button"
+        onClick={() => {
+          // สลับแมนนวลได้เฉพาะตอนที่ยังไม่มีข้อมูลการเสิร์ชลูกค้าตัวจริงล็อกไว้
+          if (!customer) {
+            setActiveTypeId(type.id);
+            if (type.type_name === "GENERAL") {
+              setSelectedPaymentType("CASH");
+              setPaymentMethodId(1); // ล็อกเป็นเงินสด
+            } else {
+              setSelectedPaymentType("CREDIT");
+              setPaymentMethodId(3); // บังคับดีดเงินเชื่ออัตโนมัติ
+            }
+          }
+        }}
+        className={`flex flex-col items-center justify-center text-center transition-all duration-150 cursor-pointer h-14 ${
+          isActive
+            ? "bg-white border border-zinc-400 text-zinc-900 shadow-sm" // ⚪ ปุ่มที่เลือก: มีขอบเส้นเข้มคมชัดล้อมรอบ
+            : "bg-transparent border border-transparent text-gray-400 hover:text-gray-600" // 🔘 ปุ่มปกติ: จืดจางเนียนไปกับพื้นหลัง
+        }`}
+      >
+        {/* ข้อความชื่อภาษาไทยหลัก เช่น ทั่วไป, อู่ซ่อมรถ, บริษัท */}
+        <span className="text-[11px] font-extrabold text-zinc-800 tracking-tight leading-tight">
+          {type.type_label.replace("ลูกค้า", "")}
+        </span>
+        
+        {/* ข้อความ Code ภาษาอังกฤษตัวเล็กด้านล่าง */}
+        {subLabelMap[type.type_name] && (
+          <span className={`text-[9px] font-mono tracking-wider font-bold mt-0.5 ${isActive ? "text-zinc-500" : "text-gray-400"}`}>
+            {subLabelMap[type.type_name]}
+          </span>
+        )}
+      </button>
+    );
+  })}
+</div>
+
+            {/* แท็บบน: Dynamic 100% ไร้สารเจือปน ดึงจาก Database จริง */}
+            <div className="grid grid-cols-3 gap-1 mb-2">
+              {customerTypes.map((type) => {
+                const isActive =
+                  customer && customer.customer_type
+                    ? customer.customer_type.id === type.id
+                    : activeTypeId === type.id;
+
+                const subLabelMap: Record<string, string> = {
+                  GENERAL: "REGULAR",
+                  GARAGE: "CREDIT",
+                  WHOLESALE: "SPECIAL",
+                };
+
+                return (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => {
+                      if (!customer) {
+                        setActiveTypeId(type.id);
+                        if (type.type_name === "GENERAL") {
+                          setSelectedPaymentType("CASH");
+                          setPaymentMethodId(1);
+                        } else {
+                          setSelectedPaymentType("CREDIT");
+                          setPaymentMethodId(3);
+                        }
+                      }
+                    }}
+                    className={`text-center py-1.5 border font-bold transition-all leading-tight cursor-pointer ${
+                      isActive
+                        ? "bg-white border-zinc-400 text-zinc-900 shadow-sm"
+                        : "bg-gray-50 border-gray-200 text-gray-400 hover:text-gray-600"
+                    }`}
+                  >
+                    {type.type_label.replace("ลูกค้า", "")}
+                    <span
+                      className={`text-[9px] font-mono block ${isActive ? "text-zinc-900 font-bold" : "text-gray-400"}`}
+                    >
+                      {subLabelMap[type.type_name] || type.type_name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* แท็บล่าง: แสดงรูปแบบกลุ่มชำระเงินที่ลูกค้ามีสิทธิ์ (กดคลิกเลือกได้ตามสิทธิ์จริง) */}
+            <div className="grid grid-cols-2 gap-1 mb-4">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!customer) {
+                    setSelectedPaymentType("CASH");
+                    setPaymentMethodId(1);
+                  }
+                }}
+                className={`text-center py-1.5 border text-xs font-bold cursor-pointer transition-all ${
+                  selectedPaymentType === "CASH"
+                    ? "bg-white border-zinc-400 text-zinc-900 shadow-sm"
+                    : "bg-gray-50 border-gray-200 text-gray-400"
+                }`}
+              >
+                เงินสด
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!customer) {
+                    // หากเลือกประเภทแมนนวลเป็นทั่วไป บล็อกไม่ให้เปิดเงินเชื่อหน้าร้าน
+                    const currentActiveType = customerTypes.find(t => t.id === activeTypeId);
+                    if (currentActiveType?.type_name === "GENERAL") {
+                      alert("⚠️ ลูกค้าทั่วไปไม่สามารถเลือกโหมดเงินเชื่อได้");
+                      return;
+                    }
+                    setSelectedPaymentType("CREDIT");
+                    setPaymentMethodId(3);
+                  }
+                }}
+                className={`text-center py-1.5 border text-xs font-bold cursor-pointer transition-all ${
+                  selectedPaymentType === "CREDIT"
+                    ? "bg-white border-zinc-400 text-zinc-900 shadow-sm"
+                    : "bg-gray-50 border-gray-200 text-gray-400"
+                }`}
+              >
+                เงินเชื่อ
+              </button>
+            </div>
+
+            {/* ฟอร์มค้นหาดึงข้อมูลลูกค้า */}
+            <form onSubmit={handleSearchCustomer} className="flex gap-1">
               <input
                 type="text"
                 value={searchCustomerQuery}
                 onChange={(e) => setSearchCustomerQuery(e.target.value)}
-                className="flex-1 bg-gray-50 border border-gray-200 rounded px-3 py-1.5 text-sm"
-                placeholder="กรอกชื่อลูกค้า หรือ คีย์เบอร์โทร..."
+                className="flex-1 bg-white border border-gray-300 rounded px-3 py-2 text-xs shadow-sm focus:outline-none focus:border-zinc-500"
+                placeholder="ค้นหาชื่ออู่ซ่อมรถ หรือคีย์เบอร์โทร..."
               />
               <button
                 type="submit"
-                className="bg-zinc-900 text-white text-xs font-bold px-3 py-1.5 rounded cursor-pointer"
+                className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold px-4 py-2 rounded shadow transition-colors cursor-pointer"
               >
                 ค้นหา
               </button>
-            </div>
-          </form>
-
-          <div className="bg-[#1C1B1B] text-white rounded p-4 mb-6 border border-zinc-800">
-            <h3 className="text-xl font-extrabold tracking-tight">
-              {customer ? customer.customer_name : "ลูกค้ารายย่อยทั่วไป"}
-            </h3>
-            <p className="text-xs text-zinc-400 mt-2">
-              หนี้ค้างชำระในระบบ: ฿
-              {customer ? customer.current_debt_amount.toFixed(2) : "0.00"}
-            </p>
-            <p className="text-xs text-zinc-400">
-              สิทธิ์ลดราคาประจำตัว:{" "}
-              {customer && customer.is_discount_enabled
-                ? `${customer.standard_discount_rate}%`
-                : "ไม่มีส่วนลด"}
-            </p>
+            </form>
           </div>
 
+          {/* 🎯 การ์ดข้อมูลจำลองดีไซน์ดุดันสีดำ */}
+          <div className="bg-[#1C1B1B] text-white rounded-none p-5 mb-6 border border-zinc-800 shadow-lg relative overflow-hidden">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-xl font-black tracking-tight text-white">
+                  {customer ? customer.customer_name : "ลูกค้ารายย่อยทั่วไป"}
+                </h3>
+                <p className="text-xs text-zinc-400 font-medium mt-0.5">
+                  โทร: {customer ? customer.phone_number || "ไม่ระบุ" : "0xxxxxxxxx"}
+                </p>
+              </div>
+
+              <div className="bg-[#2E6B20] text-white text-[10px] font-bold px-2.5 py-1 rounded-none select-none uppercase tracking-wide">
+                {customer && customer.is_discount_enabled
+                  ? "ระดับราคาพิเศษ"
+                  : "ระดับราคามาตรฐาน"}
+              </div>
+            </div>
+
+            {/* ส่วนคำนวณความจุ Progress Bar เครดิตการใช้งานจริง */}
+            <div className="mt-4">
+              <div className="flex justify-between items-center text-[11px] text-zinc-400 mb-1">
+                <span>การใช้เครดิตในระดับราคานี้</span>
+                <span className="font-bold text-white font-mono">
+                  {customer && customer.max_credit_limit && customer.max_credit_limit > 0
+                    ? `${((customer.current_debt_amount / customer.max_credit_limit) * 100).toFixed(0)}%`
+                    : "0%"}
+                </span>
+              </div>
+              <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-zinc-400 h-full transition-all duration-500"
+                  style={{
+                    width:
+                      customer && customer.max_credit_limit && customer.max_credit_limit > 0
+                        ? `${Math.min(100, (customer.current_debt_amount / customer.max_credit_limit) * 100)}%`
+                        : "0%",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* กล่องสรุปยอดเงินค้างและวงเงินที่เหลือแยกบล็อกย่อย */}
+            <div className="grid grid-cols-2 gap-2 mt-5 pt-4 border-t border-zinc-800/60">
+              <div className="bg-[#262525] p-3 border border-zinc-800/40">
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
+                  ยอดคงเหลือปัจจุบัน
+                </p>
+                <p className="text-base font-black font-mono mt-1 text-zinc-300">
+                  ฿{customer && customer.current_debt_amount ? customer.current_debt_amount.toFixed(2) : "0.00"}
+                </p>
+              </div>
+              <div className="bg-[#262525] p-3 border border-zinc-800/40">
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
+                  เครดิตคงเหลือ
+                </p>
+                <p className="text-base font-black font-mono mt-1 text-zinc-300">
+                  ฿
+                  {customer && customer.max_credit_limit
+                    ? (customer.max_credit_limit - customer.current_debt_amount).toFixed(2)
+                    : "0.00"}
+                </p>
+              </div>
+            </div>
+
+            {/* ส่วนท้ายแสดงวงเงินวงเงินเครดิตรวมทั้งหมด */}
+            <div className="mt-3 flex items-center gap-1.5 text-[11px] text-zinc-400 font-medium">
+              <span className="text-zinc-500">ⓘ วงเงินเครดิต:</span>
+              <span className="font-bold font-mono text-zinc-300">
+                ฿{customer && customer.max_credit_limit ? customer.max_credit_limit.toFixed(2) : "0.00"}
+              </span>
+            </div>
+          </div>
+
+          {/* สรุปยอดเงินคำนวณราคาท้ายบิล */}
           <div className="space-y-3 pt-4 border-t text-sm font-medium">
             <div className="flex justify-between text-gray-500">
               <span>ราคารวมสินค้า</span>
@@ -720,61 +960,81 @@ export default function PosPage(): React.JSX.Element {
                 ฿{totalItemPrice.toFixed(2)}
               </span>
             </div>
-            <div className="flex justify-between text-red-600 font-bold">
+            <div className="flex justify-between text-gray-500">
+              <span>ส่วนลดท้ายบิล</span>
+              <span className="font-bold text-zinc-900">
+                ฿{computedBillDiscount.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between text-red-600 font-extrabold text-base border-b border-dashed pb-2">
               <span>ส่วนลดรวมทั้งสิ้น</span>
-              <span>
-                ฿{(totalLineDiscount + computedBillDiscount).toFixed(2)}
+              <span className="font-mono text-lg">
+                {(totalLineDiscount + computedBillDiscount).toFixed(0)}
               </span>
             </div>
           </div>
 
-          <div className="bg-[#1C1B1B] text-white rounded p-5 my-6 flex justify-between items-center border border-zinc-800">
-            <div className="text-zinc-400 text-xs font-medium">
+          {/* ยอดรวมสุทธิขนาดใหญ่ */}
+          <div className="bg-[#1C1B1B] text-white p-5 my-5 flex justify-between items-center border border-zinc-800">
+            <div className="text-zinc-400 text-xs font-bold uppercase tracking-wider">
               ยอดชำระสุทธิ
             </div>
             <div className="text-right">
-              <span className="text-3xl font-black">
+              <span className="text-4xl font-black font-mono">
                 {finalTotal.toLocaleString(undefined, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
               </span>
+              <span className="text-[10px] text-red-500 font-bold block mt-0.5">
+                สกุลเงิน: บาท
+              </span>
             </div>
           </div>
 
+          {/* ส่วนการเลือกช่องทางจ่ายเงิน */}
           <p className="text-xs font-bold text-gray-400 mb-2 uppercase">
             เลือกวิธีการชำระเงิน
           </p>
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => setPaymentMethodId(1)}
-              className={`flex flex-col items-center justify-center py-3 rounded border text-xs font-bold transition-all cursor-pointer ${paymentMethodId === 1 ? "border-red-600 bg-white text-red-600 border-b-4" : "border-gray-200 bg-[#F9FAFB] text-gray-400"}`}
+              className={`flex flex-col items-center justify-center py-3 rounded-none border text-xs font-bold transition-all cursor-pointer ${paymentMethodId === 1 ? "border-red-600 bg-white text-red-600 border-b-4 shadow-sm" : "border-gray-200 bg-[#F9FAFB] text-gray-400 hover:text-zinc-600"}`}
             >
               <Coins size={18} className="mb-1" />
               <span>เงินสด</span>
             </button>
             <button
               onClick={() => setPaymentMethodId(2)}
-              className={`flex flex-col items-center justify-center py-3 rounded border text-xs font-bold transition-all cursor-pointer ${paymentMethodId === 2 ? "border-red-600 bg-white text-red-600 border-b-4" : "border-gray-200 bg-[#F9FAFB] text-gray-400"}`}
+              className={`flex flex-col items-center justify-center py-3 rounded-none border text-xs font-bold transition-all cursor-pointer ${paymentMethodId === 2 ? "border-red-600 bg-white text-red-600 border-b-4 shadow-sm" : "border-gray-200 bg-[#F9FAFB] text-gray-400 hover:text-zinc-600"}`}
             >
               <QrCode size={18} className="mb-1" />
               <span>QR CODE</span>
             </button>
             <button
-              onClick={() => setPaymentMethodId(3)}
-              className={`flex flex-col items-center justify-center py-3 rounded border text-xs font-bold transition-all cursor-pointer ${paymentMethodId === 3 ? "border-red-600 bg-white text-red-600 border-b-4" : "border-gray-200 bg-[#F9FAFB] text-gray-400"}`}
+              onClick={() => {
+                // ดักจับแมนนวลกรณีลูกค้าทั่วไป
+                const currentActiveType = customerTypes.find(t => t.id === activeTypeId);
+                if (!customer && currentActiveType?.type_name === "GENERAL") {
+                  alert("⚠️ ลูกค้าทั่วไปไม่สามารถชำระด้วยเงินเชื่อ (CREDIT) ได้");
+                  return;
+                }
+                setPaymentMethodId(3);
+              }}
+              className={`flex flex-col items-center justify-center py-3 rounded-none border text-xs font-bold transition-all cursor-pointer ${paymentMethodId === 3 ? "border-red-600 bg-white text-red-600 border-b-4 shadow-sm" : "border-gray-200 bg-[#F9FAFB] text-gray-400 hover:text-zinc-600"}`}
             >
               <CreditCard size={18} className="mb-1" />
-              <span>เงินเชื่อ</span>
+              <span>CREDIT</span>
             </button>
           </div>
         </div>
+
         <Button
           onClick={handleConfirmSale}
           variant="primary"
           size="lg"
           isLoading={isSubmitting}
-          className="w-full mt-6 py-4 font-black text-lg tracking-wide shadow-lg"
+          className="w-full mt-6 py-4 font-black text-xl tracking-wide shadow-xl uppercase rounded-none bg-[#E51C23] hover:bg-red-700"
         >
           ยืนยันการขาย
         </Button>

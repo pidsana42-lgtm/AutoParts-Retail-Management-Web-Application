@@ -7,6 +7,7 @@ import (
 	customerRepo "backend/internal/app/repository/customer"
 	posRepo "backend/internal/app/repository/pos"
 	productRepo "backend/internal/app/repository/pos"
+	customerDto "backend/internal/app/dto/customer"
 	"errors"
 	"fmt"
 	"gorm.io/gorm"
@@ -15,6 +16,8 @@ import (
 
 type SaleService interface {
 	CreatePOSOrder(req *pos.CreateSaleOrderRequest) error
+	GetCustomerTypes() ([]entity.CustomerType, error)
+	SearchCustomers(searchQuery string) ([]customerDto.CustomerResponse, error)
 }
 
 type saleService struct {
@@ -318,4 +321,22 @@ func (s *saleService) generateOrderNumber(tx *gorm.DB) (string, error) {
 
     // ประกอบรวม เช่น "INV2606250001"
     return prefix + runningNumber, nil
+}
+
+// ─── 🎯 2. เพิ่มฟังก์ชัน GetCustomerTypes ต่อสายตรงไปหา customerRepo ───
+func (s *saleService) GetCustomerTypes() ([]entity.CustomerType, error) {
+    // ✅ เปลี่ยนมาใช้ s.repo (ตู้ POS ของตัวเอง)
+    return s.repo.GetCustomerTypes() 
+}
+
+// ─── 🎯 3. เพิ่มฟังก์ชัน SearchCustomers และแปลงรูปข้อมูลผ่าน DTO สลักลงบิล POS ───
+func (s *saleService) SearchCustomers(searchQuery string) ([]customerDto.CustomerResponse, error) {
+	// ค้นหารายชื่ออู่หรือเบอร์โทรจากฐานข้อมูล
+	customers, err := s.repo.SearchCustomers(searchQuery)
+	if err != nil {
+		return nil, err
+	}
+	
+	// ✅ แปลงโครงสร้างพ่วงวัตถุสัมพันธ์ CustomerType ส่งออกไปตรงๆ
+	return customerDto.ToCustomerListResponse(customers), nil
 }
