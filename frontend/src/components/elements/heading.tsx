@@ -2,7 +2,7 @@ import { cva } from "class-variance-authority";
 import { cn } from "../../utils/component";
 import React from "react";
 
-type HeadingLevel  = "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+type HeadingLevel  = "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "h7" | "h8";
 type HeadingWeight = "light" | "normal" | "medium" | "semibold" | "bold" | "extrabold";
 
 const headingVariants = cva("font-heading text-gray-900", {
@@ -14,6 +14,8 @@ const headingVariants = cva("font-heading text-gray-900", {
       h4: "text-xl md:text-2xl mb-3",
       h5: "text-lg md:text-xl mb-2",
       h6: "text-base md:text-lg mb-2",
+      h7: "text-sm md:text-base mb-2",
+      h8: "text-[12px] md:text-sm mb-1"
     },
     weight: {
       light:     "font-light",
@@ -37,6 +39,8 @@ const defaultWeights: Record<HeadingLevel, HeadingWeight> = {
   h4: "medium",
   h5: "medium",
   h6: "medium",
+  h7: "normal",
+  h8: "light",
 };
 
 interface HeadingProps extends React.HTMLAttributes<HTMLHeadingElement> {
