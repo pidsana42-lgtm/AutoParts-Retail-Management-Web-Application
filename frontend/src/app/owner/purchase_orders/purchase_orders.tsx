@@ -183,7 +183,7 @@ const PurchaseOrders: React.FC = () => {
         </Card>
 
         {/* Monthly Stats Card */}
-        <div className="bg-[#22252a] text-white rounded-xl p-6 w-1/4 flex flex-col justify-between shadow-sm relative overflow-hidden">
+        <div className="bg-[#22252a] text-white rounded-md p-6 w-1/4 flex flex-col justify-between shadow-sm relative overflow-hidden">
           <div>
             <p className="text-sm text-gray-400 font-light">ใบสั่งซื้อทั้งหมดของเดือนนี้</p>
             <p className="text-4xl font-bold mt-2 flex items-baseline gap-2">
@@ -194,7 +194,22 @@ const PurchaseOrders: React.FC = () => {
             <ShoppingBasket className="w-24 h-24" />
           </div>
         </div>
+      </div>
 
+      { /* TODO: แก้ไขเรียกจากฟังก์ชันจริง */ }
+      <div className="grid grid-cols-3 gap-6">
+        <Card className="border-l-[5px] border-l-black flex flex-col justify-center h-24 p-5">
+          <p className="text-sm text-gray-500 font-medium">รออนุมัติ</p>
+          <p className="text-2xl font-bold mt-1 text-gray-900"></p>
+        </Card>
+        <Card className="border-l-[5px] border-l-emerald-500 flex flex-col justify-center h-24 p-5">
+          <p className="text-sm text-gray-500 font-medium">อนุมัติแล้ว (MTD)</p>
+          <p className="text-2xl font-bold mt-1 text-gray-900"></p>
+        </Card>
+        <Card className="border-l-[5px] border-l-red-500 flex flex-col justify-center h-24 p-5">
+          <p className="text-sm text-gray-500 font-medium">ไม่อนุมัติ (MTD)</p>
+          <p className="text-2xl font-bold mt-1 text-gray-900"></p>
+        </Card>
       </div>
 
       {/* 3. Table */}

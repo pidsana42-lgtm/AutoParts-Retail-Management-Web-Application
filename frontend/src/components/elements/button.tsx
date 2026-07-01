@@ -5,8 +5,8 @@ import React from "react";
 const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 font-medium cursor-pointer",
-    "rounded-sm transition-colors",
-    "focus:outline-none focus:ring-2 focus:ring-offset-2",
+    "rounded-sm transition-colors ",
+    "focus:outline-none",
     "disabled:opacity-60 disabled:cursor-not-allowed",
   ],
   {
@@ -16,7 +16,8 @@ const buttonVariants = cva(
           "bg-gradient-to-r from-[#B70011] to-[#E51C23] text-white",
           "hover:from-[#9e0010] hover:to-[#c9181f]",
         ],
-        secondary: "bg-slate-700 text-white hover:bg-slate-800",
+        secondary: "bg-black text-white hover:bg-gray-800",
+        tertiary:  "bg-[#E5E2E1] text-black hover:bg-[#D4D0CE]",
         danger:    "bg-red-700 text-white hover:bg-red-800",
         outline:   "border-2 border-red-600 text-red-600 hover:bg-red-50",
       },
