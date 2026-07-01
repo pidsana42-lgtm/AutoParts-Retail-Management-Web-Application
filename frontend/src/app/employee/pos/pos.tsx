@@ -52,12 +52,13 @@ export default function PosPage(): React.JSX.Element {
   const [customerTypes, setCustomerTypes] = useState<CustomerTypeInterface[]>(
     [],
   );
-  
-  // ─── แก้ไขจุดบกพร่อง: เพิ่มสิทธิ์สำหรับควบคุมปุ่มแบบแมนนวลและซิงค์ ID ตาราง ───
-  const [activeTypeId, setActiveTypeId] = useState<number>(1);
-  const [selectedPaymentType, setSelectedPaymentType] = useState<"CASH" | "CREDIT">("CASH");
 
-  // ─── ดึงข้อมูลประเภทลูกค้าทั้งหมดจาก API ───
+  const [activeTypeId, setActiveTypeId] = useState<number>(1);
+  const [selectedPaymentType, setSelectedPaymentType] = useState<
+    "CASH" | "CREDIT"
+  >("CASH");
+
+  // ─── Effects ───
   React.useEffect(() => {
     const fetchCustomerTypes = async () => {
       try {
@@ -72,7 +73,6 @@ export default function PosPage(): React.JSX.Element {
     fetchCustomerTypes();
   }, []);
 
-  // ดึงค่าคอนฟิกร้านค้ามาจากหลังบ้านผ่าน Service ตอนเปิดหน้าจอ
   React.useEffect(() => {
     posApiService
       .getStoreConfig()
@@ -86,7 +86,42 @@ export default function PosPage(): React.JSX.Element {
     localStorage.setItem("pos_cart", JSON.stringify(cart));
   }, [cart]);
 
-  // ─── ฟังก์ชันค้นหาและดึงข้อมูลส่วนลดลูกค้า ───
+  // ─── การคำนวณราคาและเพดานส่วนลดรวม (Component Scope) ───
+  const totalItemPrice = useMemo(() => {
+    return cart.reduce((sum, item) => sum + item.unit_price * item.qty, 0);
+  }, [cart]);
+
+  const totalLineDiscount = useMemo(() => {
+    return cart.reduce((sum, item) => {
+      const lineTotal = item.unit_price * item.qty;
+      if (item.discount_type === "percentage") {
+        return sum + (lineTotal * item.discount_value) / 100;
+      } else if (item.discount_type === "amount") {
+        return sum + item.discount_value;
+      }
+      return sum;
+    }, 0);
+  }, [cart]);
+
+  // ✨ ย้ายสิทธิ์คำนวณมาไว้ตรงนี้เพื่อให้เรียกใช้ได้ทั้งไฟล์ (แก้ไข Error TS2304)
+  const maxGlobalRate = storeConfig?.max_item_discount_rate ?? 2.0;
+  const maxAllowedDiscountAmount = (totalItemPrice * maxGlobalRate) / 100;
+  const isLineDiscountFull = totalLineDiscount >= maxAllowedDiscountAmount;
+
+  const computedBillDiscount = useMemo(() => {
+    const remainingAfterLineDiscount = totalItemPrice - totalLineDiscount;
+    if (billDiscountType === "amount") return billDiscountValue;
+    if (billDiscountType === "percentage")
+      return (remainingAfterLineDiscount * billDiscountValue) / 100;
+    return 0;
+  }, [billDiscountType, billDiscountValue, totalItemPrice, totalLineDiscount]);
+
+  const finalTotal = useMemo(() => {
+    const total = totalItemPrice - totalLineDiscount - computedBillDiscount;
+    return total < 0 ? 0 : total;
+  }, [totalItemPrice, totalLineDiscount, computedBillDiscount]);
+
+  // ─── ฟังก์ชันจัดการกิจกรรมต่างๆ ───
   const handleSearchCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchCustomerQuery) return;
@@ -103,17 +138,15 @@ export default function PosPage(): React.JSX.Element {
       const customerData = dataList[0];
       setCustomer(customerData);
 
-      // ✨ ดีดตัวแท็บไฮไลท์สีตามข้อมูลจริงข้ามความสัมพันธ์ตาราง
       if (customerData.customer_type) {
         setActiveTypeId(customerData.customer_type.id);
 
-        // สลับโหมดเครดิตอัตโนมัติตามประเภทคีย์ดาต้าเบส
         if (customerData.customer_type.type_name !== "GENERAL") {
           setSelectedPaymentType("CREDIT");
-          setPaymentMethodId(3); // เด้งไปแท็บ CREDIT เสมอ
+          setPaymentMethodId(3);
         } else {
           setSelectedPaymentType("CASH");
-          setPaymentMethodId(1); // ลูกค้าทั่วไปใช้โหมดเงินสด
+          setPaymentMethodId(1);
         }
       }
     } catch (error) {
@@ -121,7 +154,6 @@ export default function PosPage(): React.JSX.Element {
     }
   };
 
-  // ─── ฟังก์ชันค้นหาอะไหล่ยนต์ด้วยบาร์โค้ดและเพิ่มเข้าตะกร้า ───
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanedQuery = searchQuery.trim();
@@ -157,12 +189,10 @@ export default function PosPage(): React.JSX.Element {
             part_number: product.part_number,
             qty: 1,
             unit_price: product.sale_price,
-
             grade_name: product.grade_name,
             brand_name: product.brand_name,
             model_name: product.model_name,
             note: product.note,
-
             discount_type:
               customer && customer.is_discount_enabled ? "percentage" : "none",
             discount_value:
@@ -188,42 +218,48 @@ export default function PosPage(): React.JSX.Element {
     setCart(cart.filter((_, i) => i !== index));
   };
 
-  // ─── ฟังก์ชันตรวจสอบและบันทึกส่วนลดท้ายบิล ───
   const handleBillDiscountChange = (valueStr: string) => {
     const inputValue = parseFloat(valueStr) || 0;
     if (inputValue < 0) return;
 
-    const maxGlobalRate = storeConfig?.max_item_discount_rate ?? 2.0;
-    const allowedTotalDiscountAmount = (totalItemPrice * maxGlobalRate) / 100;
-    const remainingQuotaAmount = allowedTotalDiscountAmount - totalLineDiscount;
-
-    if (remainingQuotaAmount <= 0 && inputValue > 0) {
-      alert(
-        `ไม่สามารถให้ส่วนลดท้ายบิลเพิ่มได้ เนื่องจากคุณได้ให้ส่วนลดต่อรายการสินค้าไปเต็มสิทธิ์เพดานรวม ${maxGlobalRate}% ของร้านค้าแล้วครับ`,
-      );
-      return;
-    }
-
-    let simulationBillDiscountAmount = 0;
+    let currentInputAmount = 0;
     if (billDiscountType === "amount") {
-      simulationBillDiscountAmount = inputValue;
+      currentInputAmount = inputValue;
     } else if (billDiscountType === "percentage") {
-      const remainingAfterLineDiscount = totalItemPrice - totalLineDiscount;
-      simulationBillDiscountAmount =
-        (remainingAfterLineDiscount * inputValue) / 100;
+      currentInputAmount = (totalItemPrice * inputValue) / 100;
     }
 
-    if (simulationBillDiscountAmount > remainingQuotaAmount) {
-      alert(
-        `ส่วนลดท้ายบิลเกินสิทธิ์ที่เหลืออยู่! บิลนี้เหลือโควตาให้ลดเพิ่มได้อีกสูงสุดไม่เกิน ${remainingQuotaAmount.toFixed(2)} ฿ (เพื่อให้ยอดรวมทั้งบิลอยู่ในเกณฑ์ ${maxGlobalRate}%)`,
+    const totalSimulatedDiscount = totalLineDiscount + currentInputAmount;
+
+    if (totalSimulatedDiscount > maxAllowedDiscountAmount) {
+      const remainingQuotaAmount = Math.max(
+        0,
+        maxAllowedDiscountAmount - totalLineDiscount,
       );
+
+      if (remainingQuotaAmount <= 0) {
+        alert(
+          `ไม่สามารถให้ส่วนลดท้ายบิลเพิ่มได้ เนื่องจากคุณได้ให้ส่วนลดต่อรายการสินค้าไปเต็มสิทธิ์เพดานรวม ${maxGlobalRate}% (${maxAllowedDiscountAmount.toFixed(2)} ฿) ของร้านค้าแล้วครับ`,
+        );
+      } else {
+        if (billDiscountType === "amount") {
+          alert(
+            `ส่วนลดท้ายบิลเกินสิทธิ์ที่เหลืออยู่! บิลนี้เหลือโควตาให้ลดเพิ่มได้อีกสูงสุดไม่เกิน ${remainingQuotaAmount.toFixed(2)} ฿`,
+          );
+        } else if (billDiscountType === "percentage") {
+          const remainingQuotaPercent =
+            (remainingQuotaAmount / totalItemPrice) * 100;
+          alert(
+            `ส่วนลดท้ายบิลเกินสิทธิ์ที่เหลืออยู่! บิลนี้เหลือโควตาให้ลดเพิ่มได้อีกสูงสุดไม่เกิน ${remainingQuotaPercent.toFixed(2)}% (คิดเป็นเงินประมาณ ${remainingQuotaAmount.toFixed(2)} ฿)`,
+          );
+        }
+      }
       return;
     }
 
     setBillDiscountValue(inputValue);
   };
 
-  // ─── ฟังก์ชันเปิด-ปิดส่วนลดของแต่ละรายการเมื่อกด Checkbox ───
   const handleDiscountToggle = (index: number, isChecked: boolean) => {
     setCart((prev) =>
       prev.map((item, i) => {
@@ -241,7 +277,6 @@ export default function PosPage(): React.JSX.Element {
     );
   };
 
-  // ─── ฟังก์ชันสลับประเภทส่วนลดต่อรายการ (฿ / %) ───
   const handleDiscountTypeChange = (
     index: number,
     type: "amount" | "percentage",
@@ -259,7 +294,6 @@ export default function PosPage(): React.JSX.Element {
     );
   };
 
-  // ─── ฟังก์ชันแก้ไขจำนวนส่วนลดพร้อมระบบตรวจจับเงื่อนไขร้านค้า ───
   const handleDiscountValueChange = (index: number, valueStr: string) => {
     const rawValue = valueStr === "" ? 0 : parseFloat(valueStr) || 0;
     const item = cart[index];
@@ -290,35 +324,6 @@ export default function PosPage(): React.JSX.Element {
     }
   };
 
-  const totalItemPrice = useMemo(() => {
-    return cart.reduce((sum, item) => sum + item.unit_price * item.qty, 0);
-  }, [cart]);
-
-  const totalLineDiscount = useMemo(() => {
-    return cart.reduce((sum, item) => {
-      const lineTotal = item.unit_price * item.qty;
-      if (item.discount_type === "percentage") {
-        return sum + (lineTotal * item.discount_value) / 100;
-      } else if (item.discount_type === "amount") {
-        return sum + item.discount_value;
-      }
-      return sum;
-    }, 0);
-  }, [cart]);
-
-  const computedBillDiscount = useMemo(() => {
-    const remainingAfterLineDiscount = totalItemPrice - totalLineDiscount;
-    if (billDiscountType === "amount") return billDiscountValue;
-    if (billDiscountType === "percentage")
-      return (remainingAfterLineDiscount * billDiscountValue) / 100;
-    return 0;
-  }, [billDiscountType, billDiscountValue, totalItemPrice, totalLineDiscount]);
-
-  const finalTotal = useMemo(() => {
-    const total = totalItemPrice - totalLineDiscount - computedBillDiscount;
-    return total < 0 ? 0 : total;
-  }, [totalItemPrice, totalLineDiscount, computedBillDiscount]);
-
   const handleConfirmSale = async () => {
     if (cart.length === 0) {
       alert("กรุณาเลือกสินค้าลงตะกร้าอย่างน้อย 1 รายการ");
@@ -331,7 +336,7 @@ export default function PosPage(): React.JSX.Element {
     setIsSubmitting(true);
 
     const salePayload: CreateSaleOrderRequest = {
-      customer_id: customer.id, // ดึงไอดีที่อัพเดตตามโครงจริงแล้ว
+      customer_id: customer.id,
       payment_method_id: paymentMethodId,
       bill_discount_type: billDiscountType,
       bill_discount_value: billDiscountValue,
@@ -418,22 +423,34 @@ export default function PosPage(): React.JSX.Element {
                   </span>
                   <input
                     type="number"
-                    value={billDiscountValue}
+                    value={billDiscountValue === 0 ? "" : billDiscountValue}
                     onChange={(e) => handleBillDiscountChange(e.target.value)}
-                    disabled={billDiscountType === "none"}
+                    disabled={billDiscountType === "none" || isLineDiscountFull}
                     className={`w-full px-3 py-2 pl-10 text-sm focus:outline-none focus:border-red-500 transition-colors ${
-                      billDiscountType === "none"
+                      billDiscountType === "none" || isLineDiscountFull
                         ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"
                         : "bg-[#2A2929] text-white"
                     }`}
                     placeholder={
-                      billDiscountType === "none" ? "ล็อกไว้" : "0.00"
+                      isLineDiscountFull
+                        ? "สิทธิ์เต็มแล้ว"
+                        : billDiscountType === "none"
+                          ? "ล็อกไว้"
+                          : "0.00"
                     }
                   />
                 </div>
                 <button
                   type="button"
-                  className="bg-[#E51C23] hover:bg-[#B70011] text-white text-xs font-bold px-4 py-2.5 rounded-none shrink-0 transition-colors shadow-sm cursor-pointer"
+                  disabled={billDiscountType === "none" || isLineDiscountFull}
+                  onClick={() =>
+                    handleBillDiscountChange(String(billDiscountValue))
+                  }
+                  className={`text-xs font-bold px-4 py-2.5 rounded-none shrink-0 transition-colors shadow-sm cursor-pointer ${
+                    billDiscountType === "none" || isLineDiscountFull
+                      ? "bg-zinc-700 text-zinc-500 cursor-not-allowed"
+                      : "bg-[#E51C23] hover:bg-[#B70011] text-white"
+                  }`}
                 >
                   อัปเดตบิล
                 </button>
@@ -454,14 +471,20 @@ export default function PosPage(): React.JSX.Element {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setBillDiscountType("amount")}
+                  onClick={() => {
+                    setBillDiscountType("amount");
+                    setBillDiscountValue(0);
+                  }}
                   className={`px-3 py-1 rounded-none transition-all cursor-pointer ${billDiscountType === "amount" ? "bg-[#E51C23] text-white font-bold" : "text-zinc-[#D1D5DB] hover:text-zinc-200"}`}
                 >
                   บิลทั้งหมด (฿)
                 </button>
                 <button
                   type="button"
-                  onClick={() => setBillDiscountType("percentage")}
+                  onClick={() => {
+                    setBillDiscountType("percentage");
+                    setBillDiscountValue(0);
+                  }}
                   className={`px-3 py-1 rounded-none transition-all cursor-pointer ${billDiscountType === "percentage" ? "bg-[#E51C23] text-white font-bold" : "text-zinc-[#D1D5DB] hover:text-zinc-200"}`}
                 >
                   บิลทั้งหมด (%)
@@ -470,19 +493,22 @@ export default function PosPage(): React.JSX.Element {
 
               <div className="bg-[#2D2C2C] p-2 text-[11px] leading-tight text-[#D1D5DB] max-w-[265px] text-left rounded-none">
                 <span className="text-[#E51C23] font-bold mr-1">ⓘ</span>
-                {billDiscountType === "none" ? (
+                {billDiscountType === "none" || isLineDiscountFull ? (
                   <span>
-                    เลือกหน่วย (฿ / %)
-                    และระบุจำนวนส่วนลดที่ต้องการในแต่ละรายการสินค้า
+                    {isLineDiscountFull
+                      ? `คุณให้ส่วนลดต่อรายการเต็มเพดานรวม ${maxGlobalRate}% ของร้านค้าแล้ว ไม่สามารถลดเพิ่มได้อีก`
+                      : "เลือกหน่วย (฿ / %) และระบุจำนวนส่วนลดที่ต้องการในแต่ละรายการสินค้า"}
                   </span>
                 ) : (
                   <span>
                     ส่วนลดกำลังดำเนินการ: (ราคาสินค้า / ยอดรวม) *{" "}
                     <span className="font-bold text-white">
-                      {billDiscountValue.toFixed(2)}
+                      {billDiscountValue
+                        ? billDiscountValue.toFixed(2)
+                        : "0.00"}
                     </span>{" "}
                     {billDiscountType === "percentage" ? "%" : "บาท"}{" "}
-                    จะถูกหักตามสัดส่วน ดำเนินการต่อ in รายการ
+                    จะถูกหักตามสัดส่วน ดำเนินการต่อในรายการ
                   </span>
                 )}
               </div>
@@ -527,12 +553,9 @@ export default function PosPage(): React.JSX.Element {
                         key={index}
                         className="hover:bg-gray-50/80 transition-colors"
                       >
-                        {/* SKU */}
                         <td className="py-4 px-4 font-bold text-xs text-[#1C1B1B]">
                           {item.product_code || "—"}
                         </td>
-
-                        {/* คำอธิบายสินค้า */}
                         <td className="py-4 px-4">
                           <p className="font-bold text-[#1C1B1B]">
                             {item.product_name}
@@ -547,13 +570,9 @@ export default function PosPage(): React.JSX.Element {
                             </p>
                           )}
                         </td>
-
-                        {/* หน่วยราคา */}
                         <td className="py-4 px-4 text-right font-bold text-[#1C1B1B]">
                           {item.unit_price.toFixed(2)}
                         </td>
-
-                        {/* QTY */}
                         <td className="py-4 px-4 text-center">
                           <div className="inline-flex items-center border border-gray-300 rounded-none bg-[#F6F3F2]">
                             <button
@@ -575,8 +594,6 @@ export default function PosPage(): React.JSX.Element {
                             </button>
                           </div>
                         </td>
-
-                        {/* DISC? */}
                         <td className="py-4 px-4 text-center">
                           <input
                             type="checkbox"
@@ -587,8 +604,6 @@ export default function PosPage(): React.JSX.Element {
                             }
                           />
                         </td>
-
-                        {/* ประเภทส่วนลด */}
                         <td className="py-4 px-4 text-center">
                           {item.discount_type !== "none" ? (
                             <div className="inline-flex bg-[#F6F3F2] p-0.5 rounded-none text-xs font-bold">
@@ -623,14 +638,14 @@ export default function PosPage(): React.JSX.Element {
                             <span className="text-gray-400">—</span>
                           )}
                         </td>
-
-                        {/* ลดราคา */}
                         <td className="py-4 px-4 text-center">
                           {item.discount_type !== "none" ? (
                             <div className="relative inline-flex items-center justify-center px-2 py-1 min-w-[75px] transition-all border bg-gray-100 text-gray-700 border-gray-300 rounded-none font-medium">
                               {item.discount_type === "amount" &&
                                 item.discount_value > 0 && (
-                                  <span className="mr-0.5 text-gray-500 font-bold select-none">-</span>
+                                  <span className="mr-0.5 text-gray-500 font-bold select-none">
+                                    -
+                                  </span>
                                 )}
                               <input
                                 type="number"
@@ -659,8 +674,6 @@ export default function PosPage(): React.JSX.Element {
                             <span className="text-gray-400">—</span>
                           )}
                         </td>
-
-                        {/* LINE TOTAL + ปุ่มลบ */}
                         <td className="py-4 px-4 text-right pr-6 font-bold text-zinc-900">
                           <div className="flex justify-end items-center gap-3">
                             <span>{(lineTotal - itemDiscount).toFixed(2)}</span>
@@ -682,7 +695,6 @@ export default function PosPage(): React.JSX.Element {
           </div>
         </div>
 
-        {/* ฟอร์มสแกนรหัสสินค้า */}
         <form onSubmit={handleAddProduct} className="mt-6 flex gap-2">
           <div className="relative flex-1">
             <QrCode
@@ -710,68 +722,11 @@ export default function PosPage(): React.JSX.Element {
       {/* ─── ฝั่งขวา: ข้อมูลลูกค้า & ปุ่มชำระเงินจริง ─── */}
       <div className="w-full lg:w-[27%] bg-[#F6F3F2] p-6 flex flex-col justify-between shadow-2xl shrink-0 min-h-full">
         <div>
-          {/* ส่วนหัวกลุ่มประเภทและฟอร์มค้นหาลูกค้า */}
           <div className="mb-4">
             <p className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">
               ข้อมูลลูกค้า
             </p>
 
-            {/* ─── เฉพาะบล็อกแท็บประเภทลูกค้า แถวบนสุด (สไตล์เหลี่ยมประกบ คลีนๆ ตามรูป) ─── */}
-<div className="grid grid-cols-3 gap-0 mb-1.5 bg-gray-100/50 p-0.5 border border-gray-200">
-  {customerTypes.map((type) => {
-    // เช็คสถานะการเลือก: ซิงค์ตามคีย์ไอดีความสัมพันธ์ฐานข้อมูล PostgreSQL จริง
-    const isActive =
-      customer && customer.customer_type
-        ? customer.customer_type.id === type.id
-        : activeTypeId === type.id;
-
-    // ประกาศรหัส Code สากลกำกับด้านล่างปุ่มให้ตรงตามรูปโมเดล
-    const subLabelMap: Record<string, string> = {
-      GENERAL: "", // ปุ่ม "ทั่วไป" ไม่มีภาษาอังกฤษกำกับด้านล่าง
-      GARAGE: "CREDIT",
-      WHOLESALE: "SPECIAL",
-    };
-
-    return (
-      <button
-        key={type.id}
-        type="button"
-        onClick={() => {
-          // สลับแมนนวลได้เฉพาะตอนที่ยังไม่มีข้อมูลการเสิร์ชลูกค้าตัวจริงล็อกไว้
-          if (!customer) {
-            setActiveTypeId(type.id);
-            if (type.type_name === "GENERAL") {
-              setSelectedPaymentType("CASH");
-              setPaymentMethodId(1); // ล็อกเป็นเงินสด
-            } else {
-              setSelectedPaymentType("CREDIT");
-              setPaymentMethodId(3); // บังคับดีดเงินเชื่ออัตโนมัติ
-            }
-          }
-        }}
-        className={`flex flex-col items-center justify-center text-center transition-all duration-150 cursor-pointer h-14 ${
-          isActive
-            ? "bg-white border border-zinc-400 text-zinc-900 shadow-sm" // ⚪ ปุ่มที่เลือก: มีขอบเส้นเข้มคมชัดล้อมรอบ
-            : "bg-transparent border border-transparent text-gray-400 hover:text-gray-600" // 🔘 ปุ่มปกติ: จืดจางเนียนไปกับพื้นหลัง
-        }`}
-      >
-        {/* ข้อความชื่อภาษาไทยหลัก เช่น ทั่วไป, อู่ซ่อมรถ, บริษัท */}
-        <span className="text-[11px] font-extrabold text-zinc-800 tracking-tight leading-tight">
-          {type.type_label.replace("ลูกค้า", "")}
-        </span>
-        
-        {/* ข้อความ Code ภาษาอังกฤษตัวเล็กด้านล่าง */}
-        {subLabelMap[type.type_name] && (
-          <span className={`text-[9px] font-mono tracking-wider font-bold mt-0.5 ${isActive ? "text-zinc-500" : "text-gray-400"}`}>
-            {subLabelMap[type.type_name]}
-          </span>
-        )}
-      </button>
-    );
-  })}
-</div>
-
-            {/* แท็บบน: Dynamic 100% ไร้สารเจือปน ดึงจาก Database จริง */}
             <div className="grid grid-cols-3 gap-1 mb-2">
               {customerTypes.map((type) => {
                 const isActive =
@@ -801,15 +756,15 @@ export default function PosPage(): React.JSX.Element {
                         }
                       }
                     }}
-                    className={`text-center py-1.5 border font-bold transition-all leading-tight cursor-pointer ${
+                    className={`flex flex-col items-center justify-center text-center transition-all duration-150 cursor-pointer h-10 gap-0 leading-tight ${
                       isActive
-                        ? "bg-white border-zinc-400 text-zinc-900 shadow-sm"
-                        : "bg-gray-50 border-gray-200 text-gray-400 hover:text-gray-600"
+                        ? "bg-white border border-zinc-400 text-zinc-900 shadow-sm"
+                        : "bg-transparent border border-transparent text-gray-400 hover:text-gray-600"
                     }`}
                   >
                     {type.type_label.replace("ลูกค้า", "")}
                     <span
-                      className={`text-[9px] font-mono block ${isActive ? "text-zinc-900 font-bold" : "text-gray-400"}`}
+                      className={`text-[9px] block ${isActive ? "text-[#1C1B1B] font-bold" : "text-gray-400"}`}
                     >
                       {subLabelMap[type.type_name] || type.type_name}
                     </span>
@@ -818,7 +773,6 @@ export default function PosPage(): React.JSX.Element {
               })}
             </div>
 
-            {/* แท็บล่าง: แสดงรูปแบบกลุ่มชำระเงินที่ลูกค้ามีสิทธิ์ (กดคลิกเลือกได้ตามสิทธิ์จริง) */}
             <div className="grid grid-cols-2 gap-1 mb-4">
               <button
                 type="button"
@@ -840,8 +794,9 @@ export default function PosPage(): React.JSX.Element {
                 type="button"
                 onClick={() => {
                   if (!customer) {
-                    // หากเลือกประเภทแมนนวลเป็นทั่วไป บล็อกไม่ให้เปิดเงินเชื่อหน้าร้าน
-                    const currentActiveType = customerTypes.find(t => t.id === activeTypeId);
+                    const currentActiveType = customerTypes.find(
+                      (t) => t.id === activeTypeId,
+                    );
                     if (currentActiveType?.type_name === "GENERAL") {
                       alert("⚠️ ลูกค้าทั่วไปไม่สามารถเลือกโหมดเงินเชื่อได้");
                       return;
@@ -860,7 +815,6 @@ export default function PosPage(): React.JSX.Element {
               </button>
             </div>
 
-            {/* ฟอร์มค้นหาดึงข้อมูลลูกค้า */}
             <form onSubmit={handleSearchCustomer} className="flex gap-1">
               <input
                 type="text"
@@ -878,7 +832,6 @@ export default function PosPage(): React.JSX.Element {
             </form>
           </div>
 
-          {/* 🎯 การ์ดข้อมูลจำลองดีไซน์ดุดันสีดำ */}
           <div className="bg-[#1C1B1B] text-white rounded-none p-5 mb-6 border border-zinc-800 shadow-lg relative overflow-hidden">
             <div className="flex justify-between items-start">
               <div>
@@ -886,10 +839,10 @@ export default function PosPage(): React.JSX.Element {
                   {customer ? customer.customer_name : "ลูกค้ารายย่อยทั่วไป"}
                 </h3>
                 <p className="text-xs text-zinc-400 font-medium mt-0.5">
-                  โทร: {customer ? customer.phone_number || "ไม่ระบุ" : "0xxxxxxxxx"}
+                  โทร:{" "}
+                  {customer ? customer.phone_number || "ไม่ระบุ" : "0xxxxxxxxx"}
                 </p>
               </div>
-
               <div className="bg-[#2E6B20] text-white text-[10px] font-bold px-2.5 py-1 rounded-none select-none uppercase tracking-wide">
                 {customer && customer.is_discount_enabled
                   ? "ระดับราคาพิเศษ"
@@ -897,12 +850,13 @@ export default function PosPage(): React.JSX.Element {
               </div>
             </div>
 
-            {/* ส่วนคำนวณความจุ Progress Bar เครดิตการใช้งานจริง */}
             <div className="mt-4">
               <div className="flex justify-between items-center text-[11px] text-zinc-400 mb-1">
                 <span>การใช้เครดิตในระดับราคานี้</span>
                 <span className="font-bold text-white font-mono">
-                  {customer && customer.max_credit_limit && customer.max_credit_limit > 0
+                  {customer &&
+                  customer.max_credit_limit &&
+                  customer.max_credit_limit > 0
                     ? `${((customer.current_debt_amount / customer.max_credit_limit) * 100).toFixed(0)}%`
                     : "0%"}
                 </span>
@@ -912,7 +866,9 @@ export default function PosPage(): React.JSX.Element {
                   className="bg-zinc-400 h-full transition-all duration-500"
                   style={{
                     width:
-                      customer && customer.max_credit_limit && customer.max_credit_limit > 0
+                      customer &&
+                      customer.max_credit_limit &&
+                      customer.max_credit_limit > 0
                         ? `${Math.min(100, (customer.current_debt_amount / customer.max_credit_limit) * 100)}%`
                         : "0%",
                   }}
@@ -920,14 +876,16 @@ export default function PosPage(): React.JSX.Element {
               </div>
             </div>
 
-            {/* กล่องสรุปยอดเงินค้างและวงเงินที่เหลือแยกบล็อกย่อย */}
             <div className="grid grid-cols-2 gap-2 mt-5 pt-4 border-t border-zinc-800/60">
               <div className="bg-[#262525] p-3 border border-zinc-800/40">
                 <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
                   ยอดคงเหลือปัจจุบัน
                 </p>
                 <p className="text-base font-black font-mono mt-1 text-zinc-300">
-                  ฿{customer && customer.current_debt_amount ? customer.current_debt_amount.toFixed(2) : "0.00"}
+                  ฿
+                  {customer && customer.current_debt_amount
+                    ? customer.current_debt_amount.toFixed(2)
+                    : "0.00"}
                 </p>
               </div>
               <div className="bg-[#262525] p-3 border border-zinc-800/40">
@@ -937,22 +895,25 @@ export default function PosPage(): React.JSX.Element {
                 <p className="text-base font-black font-mono mt-1 text-zinc-300">
                   ฿
                   {customer && customer.max_credit_limit
-                    ? (customer.max_credit_limit - customer.current_debt_amount).toFixed(2)
+                    ? (
+                        customer.max_credit_limit - customer.current_debt_amount
+                      ).toFixed(2)
                     : "0.00"}
                 </p>
               </div>
             </div>
 
-            {/* ส่วนท้ายแสดงวงเงินวงเงินเครดิตรวมทั้งหมด */}
             <div className="mt-3 flex items-center gap-1.5 text-[11px] text-zinc-400 font-medium">
               <span className="text-zinc-500">ⓘ วงเงินเครดิต:</span>
               <span className="font-bold font-mono text-zinc-300">
-                ฿{customer && customer.max_credit_limit ? customer.max_credit_limit.toFixed(2) : "0.00"}
+                ฿
+                {customer && customer.max_credit_limit
+                  ? customer.max_credit_limit.toFixed(2)
+                  : "0.00"}
               </span>
             </div>
           </div>
 
-          {/* สรุปยอดเงินคำนวณราคาท้ายบิล */}
           <div className="space-y-3 pt-4 border-t text-sm font-medium">
             <div className="flex justify-between text-gray-500">
               <span>ราคารวมสินค้า</span>
@@ -969,12 +930,11 @@ export default function PosPage(): React.JSX.Element {
             <div className="flex justify-between text-red-600 font-extrabold text-base border-b border-dashed pb-2">
               <span>ส่วนลดรวมทั้งสิ้น</span>
               <span className="font-mono text-lg">
-                {(totalLineDiscount + computedBillDiscount).toFixed(0)}
+                {(totalLineDiscount + computedBillDiscount).toFixed(2)}
               </span>
             </div>
           </div>
 
-          {/* ยอดรวมสุทธิขนาดใหญ่ */}
           <div className="bg-[#1C1B1B] text-white p-5 my-5 flex justify-between items-center border border-zinc-800">
             <div className="text-zinc-400 text-xs font-bold uppercase tracking-wider">
               ยอดชำระสุทธิ
@@ -992,7 +952,6 @@ export default function PosPage(): React.JSX.Element {
             </div>
           </div>
 
-          {/* ส่วนการเลือกช่องทางจ่ายเงิน */}
           <p className="text-xs font-bold text-gray-400 mb-2 uppercase">
             เลือกวิธีการชำระเงิน
           </p>
@@ -1013,10 +972,13 @@ export default function PosPage(): React.JSX.Element {
             </button>
             <button
               onClick={() => {
-                // ดักจับแมนนวลกรณีลูกค้าทั่วไป
-                const currentActiveType = customerTypes.find(t => t.id === activeTypeId);
+                const currentActiveType = customerTypes.find(
+                  (t) => t.id === activeTypeId,
+                );
                 if (!customer && currentActiveType?.type_name === "GENERAL") {
-                  alert("⚠️ ลูกค้าทั่วไปไม่สามารถชำระด้วยเงินเชื่อ (CREDIT) ได้");
+                  alert(
+                    "⚠️ ลูกค้าทั่วไปไม่สามารถชำระด้วยเงินเชื่อ (CREDIT) ได้",
+                  );
                   return;
                 }
                 setPaymentMethodId(3);
