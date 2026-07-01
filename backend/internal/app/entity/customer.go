@@ -30,5 +30,10 @@ type Customer struct {
 	CurrentBalance       float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"current_balance"`
 	StandardDiscountRate float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"standard_discount_rate"`
 	CurrentDebtAmount    float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"current_debt_amount"`
-	IsDiscountEnabled    bool    `gorm:"type:boolean;not null;default:true" json:"is_discount_enabled"`
+	// เปิด-ปิดการให้ส่วนลดพิเศษของอู่นี้ (ถ้าเครดิตไม่ดีก็สั่งเป็น false)
+	IsDiscountEnabled bool `gorm:"type:boolean;not null;default:true" json:"is_discount_enabled"`
+	
+	// เปลี่ยนมาใช้ฟิลด์นี้เก็บ "เปอร์เซ็นต์ส่วนลดที่จะเอาไปบวกเพิ่มให้ทุกชิ้น"
+	// เช่น อู่เครดิตดีมาก ใส่ตรงนี้เป็น 3.00 (%) พอไปดึงของเพื่อนมา มันจะเอาไป +3% อัตโนมัติ
+	OntopDiscountRate float64 `gorm:"type:decimal(5,2);not null;default:0.00" json:"ontop_discount_rate"`
 }

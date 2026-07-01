@@ -27,7 +27,10 @@ func ToCustomerEntity(req RegisterCustomerRequest, idCardImagePath string, defau
 		CurrentBalance:       0.00,
 		StandardDiscountRate: 0.00,
 		CurrentDebtAmount:    0.00,
-		IsDiscountEnabled:    true,
+
+		// ฟิลด์ใหม่ที่เพิ่มเข้ามาใน Entity (ใส่ไว้เป็นค่าเริ่มต้น หรือรอให้ Service เขียนทับ)
+		IsDiscountEnabled: false, // ให้ Service เป็นคนสั่งเปิดถ้าเป็นอู่
+		OntopDiscountRate: 0.00,  // ให้แอดมินไปปรับเพิ่มให้ตามเกรดอู่หน้าระบบทีหลัง
 	}
 }
 
@@ -36,8 +39,15 @@ type CustomerResponse struct {
 	CustomerName         string `json:"customer_name"`
 	PhoneNumber          string `json:"phone_number"`
 	IdCardNumberCustomer string `json:"id_card_number_customer"`
-	DisplayAddress       string `json:"display_address"`     // ทำฟิลด์สรุปที่อยู่ส่งไปให้หน้าบ้านใช้ง่ายๆ
-	CustomerTypeLabel    string `json:"customer_type_label"` // เอาชื่อภาษาไทย เช่น "ลูกค้าอู่" ตรงๆ เลย
+	DisplayAddress       string `json:"display_address"`
+	CustomerTypeLabel    string `json:"customer_type_label"` // ค้างไว้เพื่อให้ระบบเดิมทำงานได้
+
+	CurrentDebtAmount    float64              `json:"current_debt_amount"`
+	MaxCreditLimit       float64              `json:"max_credit_limit"` // ดึงมาจาก CreditLimit ในคลัง
+	IsDiscountEnabled    bool                 `json:"is_discount_enabled"`
+	StandardDiscountRate float64              `json:"standard_discount_rate"`
+	OntopDiscountRate    float64              `json:"ontop_discount_rate"` // เพิ่มบรรทัดนี้เพื่อแมปข้อมูลออกไป
+	CustomerType         CustomerTypeResponse `json:"customer_type"`       // สลักฝังข้อมูลออบเจกต์ข้ามตาราง
 }
 
 func ToCustomerListResponse(customers []entity.Customer) []CustomerResponse {
@@ -57,6 +67,16 @@ func ToCustomerListResponse(customers []entity.Customer) []CustomerResponse {
 			IdCardNumberCustomer: c.IdCardNumberCustomer,
 			DisplayAddress:       address,
 			CustomerTypeLabel:    c.CustomerType.TypeLabel, // ดึงชื่อภาษาไทยมาจากตารางประเภทลูกค้าที่เรา Preload ไว้
+			CurrentDebtAmount:    c.CurrentDebtAmount,
+			MaxCreditLimit:       c.CreditLimit,
+			IsDiscountEnabled:    c.IsDiscountEnabled,
+			StandardDiscountRate: c.StandardDiscountRate,
+			OntopDiscountRate:    c.OntopDiscountRate, // เพิ่มบรรทัดนี้เพื่อแมปข้อมูลออกไป
+			CustomerType: CustomerTypeResponse{
+				ID:        c.CustomerType.ID,
+				TypeName:  c.CustomerType.TypeName,
+				TypeLabel: c.CustomerType.TypeLabel,
+			},
 		})
 	}
 
@@ -78,23 +98,50 @@ type CustomerDetailResponse struct {
 	StandardDiscountRate float64 `json:"standard_discount_rate"`
 	CurrentDebtAmount    float64 `json:"current_debt_amount"`
 	IsDiscountEnabled    bool    `json:"is_discount_enabled"`
+	OntopDiscountRate    float64 `json:"ontop_discount_rate"` // เพิ่มบรรทัดนี้เพื่อแมปข้อมูลออกไป
 }
 
 func ToCustomerDetailResponse(c entity.Customer) CustomerDetailResponse {
-    return CustomerDetailResponse{
-        ID:                   c.ID,
-        CustomerName:         c.CustomerName,
-        CustomerTypeID:       c.CustomerTypeID,
-        CustomerTypeLabel:    c.CustomerType.TypeLabel, // ดึงชื่อภาษาไทยออกมาโชว์
-        CreditLimit:          c.CreditLimit,
-        PhoneNumber:          c.PhoneNumber,
-        IdCardNumberCustomer: c.IdCardNumberCustomer,
-        IdCardImagePath:      c.IdCardImagePath,
-        RegisteredAddress:    c.RegisteredAddress,
-        ShippingAddress:      c.ShippingAddress,
-        CurrentBalance:       c.CurrentBalance,
-        StandardDiscountRate: c.StandardDiscountRate,
-        CurrentDebtAmount:    c.CurrentDebtAmount,
-        IsDiscountEnabled:    c.IsDiscountEnabled,
-    }
+	return CustomerDetailResponse{
+		ID:                   c.ID,
+		CustomerName:         c.CustomerName,
+		CustomerTypeID:       c.CustomerTypeID,
+		CustomerTypeLabel:    c.CustomerType.TypeLabel, // ดึงชื่อภาษาไทยออกมาโชว์
+		CreditLimit:          c.CreditLimit,
+		PhoneNumber:          c.PhoneNumber,
+		IdCardNumberCustomer: c.IdCardNumberCustomer,
+		IdCardImagePath:      c.IdCardImagePath,
+		RegisteredAddress:    c.RegisteredAddress,
+		ShippingAddress:      c.ShippingAddress,
+		CurrentBalance:       c.CurrentBalance,
+		StandardDiscountRate: c.StandardDiscountRate,
+		CurrentDebtAmount:    c.CurrentDebtAmount,
+		IsDiscountEnabled:    c.IsDiscountEnabled,
+		OntopDiscountRate:    c.OntopDiscountRate, // เพิ่มบรรทัดนี้เพื่อแมปข้อมูลออกไป
+	}
+}
+
+type CustomerTypeResponse struct {
+	ID        uint   `json:"id"`
+	TypeName  string `json:"type_name"`  // เช่น GENERAL, GARAGE, WHOLESALE
+	TypeLabel string `json:"type_label"` // เช่น ลูกค้าทั่วไป, ลูกค้าอู่ซ่อมรถ
+}
+
+func ToCustomerTypeListResponse(customerTypes []entity.CustomerType) []CustomerTypeResponse {
+	var list []CustomerTypeResponse
+
+	for _, ct := range customerTypes {
+		list = append(list, CustomerTypeResponse{
+			ID:        ct.ID,
+			TypeName:  ct.TypeName,
+			TypeLabel: ct.TypeLabel,
+		})
+	}
+
+	return list
+}
+
+type UpdateCustomerDiscountRequest struct {
+	IsDiscountEnabled bool    `json:"is_discount_enabled"`
+	OntopDiscountRate float64 `json:"ontop_discount_rate" binding:"required,min=0"`
 }
