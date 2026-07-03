@@ -1,13 +1,13 @@
 package auth
 
 import (
-	"backend/config"
 	authDTO "backend/internal/app/dto/auth"
 	authRepo "backend/internal/app/repository/auth"
 	"errors"
 	"time"
 	"os"
-
+	"golang.org/x/crypto/bcrypt"
+    "log"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -31,13 +31,15 @@ func (s *authService) Login(req *authDTO.LoginRequest) (*authDTO.LoginResponse, 
         return nil, errors.New("ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง")
     }
 
-    // 2. ตรวจสอบรหัสผ่าน (ใช้ฟังก์ชัน CheckPasswordHash ของโบว์)
-    isMatch := config.CheckPasswordHash([]byte(req.Password), []byte(user.Password))
-    if !isMatch {
+    log.Println("=== [DEBUG AUTH] ===")
+    log.Printf("Trying Username: %s", req.Username)
+    log.Printf("Input Raw Password from Client: '%s'", req.Password)
+
+    err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+    if err != nil {
         return nil, errors.New("ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง")
     }
 
-    // 3. รหัสผ่านถูกต้อง! ทำการสร้าง Claims สำหรับตั๋ว JWT
     claims := jwt.MapClaims{
         "user_id": user.ID,
         "role":    string(user.Role.RoleName), // ดึงค่าจาก Enum ในตาราง Role ของโบว์มาแปลงเป็น string
