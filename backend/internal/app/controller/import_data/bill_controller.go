@@ -46,6 +46,51 @@ func (ctrl *BillController) ListBills(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
+func (ctrl *BillController) UpdateBill(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	var input importDataDTO.ConfirmBillImportDTO
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: " + err.Error()})
+		return
+	}
+
+	res, err := ctrl.svc.UpdateBill(uint(id), input)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update bill: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Updated successfully",
+		"data":    res,
+	})
+}
+
+func (ctrl *BillController) DeleteBill(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	err = ctrl.svc.DeleteBill(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete bill: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Deleted successfully",
+	})
+}
+
 func (ctrl *BillController) CreateBillImage(c *gin.Context) {
 	var input importDataDTO.CreateBillImageDTO
 	if err := c.ShouldBindJSON(&input); err != nil {

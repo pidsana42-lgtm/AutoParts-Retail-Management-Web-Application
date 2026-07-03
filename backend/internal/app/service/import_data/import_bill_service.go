@@ -25,6 +25,8 @@ type ImportBillService interface {
 	GetBillImportJob(id uint) (importDataDTO.BillImportJobResponseDTO, error)
 	ConfirmBillImport(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.ConfirmBillImportResponseDTO, error)
 	CreateBillItem(input importDataDTO.CreateBillItemDTO) (importDataDTO.BillItemResponseDTO, error)
+	UpdateBill(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.BillResponseDTO, error)
+	DeleteBill(id uint) error
 }
 
 type importBillService struct {
@@ -98,9 +100,22 @@ func (s *importBillService) CreateBillItem(input importDataDTO.CreateBillItemDTO
 }
 
 func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.ConfirmBillImportResponseDTO, error) {
-	job, err := s.repo.GetBillImportJobByID(id)
-	if err != nil {
-		return importDataDTO.ConfirmBillImportResponseDTO{}, err
+	var job *entity.BillImportJob
+	var err error
+	if id > 0 {
+		job, err = s.repo.GetBillImportJobByID(id)
+	}
+
+	if id == 0 || err != nil {
+		// Placeholder job for manual/CSV entries
+		job = &entity.BillImportJob{
+			FileURL:   "manual_entry",
+			FileType:  "invoice",
+			Status:    "pending",
+		}
+		if errCreate := s.repo.CreateBillImportJob(job); errCreate != nil {
+			return importDataDTO.ConfirmBillImportResponseDTO{}, errCreate
+		}
 	}
 
 	bill := input.Bill.ToEntity()
@@ -132,6 +147,27 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 		Bill:  importDataDTO.ToBillResponseDTO(&bill),
 		Items: itemResponses,
 	}, nil
+}
+
+func (s *importBillService) UpdateBill(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.BillResponseDTO, error) {
+	bill := input.Bill.ToEntity()
+	bill.ID = id
+	billItems := make([]entity.BillItem, len(input.Items))
+	for i, itemInput := range input.Items {
+		billItems[i] = itemInput.ToEntity()
+		billItems[i].BillID = id
+	}
+
+	err := s.repo.UpdateBill(id, &bill, billItems)
+	if err != nil {
+		return importDataDTO.BillResponseDTO{}, err
+	}
+
+	return importDataDTO.ToBillResponseDTO(&bill), nil
+}
+
+func (s *importBillService) DeleteBill(id uint) error {
+	return s.repo.DeleteBill(id)
 }
 
 func (s *importBillService) processOCRInBackground(jobID uint, fileURL string) {

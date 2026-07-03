@@ -108,6 +108,10 @@ func SetupDatabase() {
 		&entity.POType{},
 		&entity.POItems{},
 		&entity.ReceiveEvidenceExcel{},
+
+		// LINE OA system
+		&entity.LineUser{},
+		&entity.LineMessage{},
 	); err != nil {
 		log.Fatalf("failed to migrate schema: %v", err)
 	}

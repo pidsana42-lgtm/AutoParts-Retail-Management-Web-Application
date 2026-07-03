@@ -5,6 +5,7 @@ import (
 	"backend/internal/app/route/claim"
 	"backend/internal/app/route/customer"
 	"backend/internal/app/route/import_bill"
+	"backend/internal/app/route/oa"
 	"backend/internal/app/route/pos"
 	"backend/internal/app/route/pre_order"
 	"backend/internal/app/route/purchase_orders"
@@ -14,6 +15,8 @@ import (
 )
 
 func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
+	// LINE OA routes
+	oa.SetupOARoutes(r, db)
 
 	//auth routes
 	auth.SetupAuthRoutes(r, db)
