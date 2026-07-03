@@ -61,3 +61,26 @@ func (ctrl *CustomerController) GetCustomerByID(c *gin.Context) {
 
     c.JSON(http.StatusOK, customer)
 }
+
+func (ctrl *CustomerController) UpdateCustomerDiscount(c *gin.Context) {
+	//ดึง id ของลูกค้าที่ต้องการแก้ไขจาก URL
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบ ID ลูกค้าไม่ถูกต้อง"})
+		return
+	}
+
+	var req customerDto.UpdateCustomerDiscountRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบข้อมูล JSON ไม่ถูกต้อง: " + err.Error()})
+		return
+	}
+
+	if err := ctrl.svc.UpdateCustomerDiscount(uint(id), req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถอัปเดตข้อมูลส่วนลดลูกค้าได้: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "อัปเดตข้อมูลส่วนลดลูกค้าสำเร็จ"})
+}

@@ -11,6 +11,8 @@ type SaleRepository interface {
 	GetStoreConfig() (*entity.StoreConfig, error)
 	BeginTransaction() *gorm.DB
 	GetPaymentMethodByID(id uint) (*entity.PaymentMethod, error)
+	GetCustomerTypes() ([]entity.CustomerType, error)
+    SearchCustomers(searchQuery string) ([]entity.Customer, error)
 }
 
 type saleRepository struct {
@@ -53,4 +55,20 @@ func (r *saleRepository) GetPaymentMethodByID(id uint) (*entity.PaymentMethod, e
 		return nil, err
 	}
 	return &method, nil
+}
+
+func (r *saleRepository) GetCustomerTypes() ([]entity.CustomerType, error) {
+    var customerTypes []entity.CustomerType
+    err := r.db.Find(&customerTypes).Error
+    return customerTypes, err
+}
+
+func (r *saleRepository) SearchCustomers(query string) ([]entity.Customer, error) {
+    var customers []entity.Customer
+    
+    err := r.db.Preload("CustomerType").
+        Where("customer_name LIKE ? OR phone_number LIKE ?", "%"+query+"%", "%"+query+"%").
+        Find(&customers).Error
+        
+    return customers, err
 }
