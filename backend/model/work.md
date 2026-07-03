@@ -1,15 +1,16 @@
 # คู่มือการทำงานและการติดตั้งระบบประมวลผลบิล (Go Backend & FastAPI AI Agent)
 
-ไฟล์นี้อธิบายถึงสถาปัตยกรรมการทำงานร่วมกันระหว่าง **Go Backend** และ **FastAPI (Python)** สำหรับระบบนำเข้าบิลด้วยโมเดล OCR และการเตรียมระบบเพื่อรองรับ AI Agent ในอนาคต
+ไฟล์นี้อธิบายถึงสถาปัตยกรรมการทำงานร่วมกันระหว่าง **Go Backend** และ **FastAPI (Python)** สำหรับระบบนำเข้าบิลด้วยโมเดล OCR และการเชื่อมต่อแชทบอท LINE OA ร่วมกับ AI Agent ในการดึงข้อมูลหลังบ้านโดยตรง
 
 ---
 
 ## 1. สถาปัตยกรรมระบบ (Architecture Overview)
 
 ระบบนี้ใช้สถาปัตยกรรมแบบ **Hybrid Architecture** เพื่อดึงข้อดีของทั้งสองภาษา:
-*   **Go Backend:** ทำหน้าที่เป็นแอปพลิเคชันหลัก ดูแลระบบจัดการร้านอะไหล่ (WMS, POS), สิทธิ์ผู้ใช้งาน (Auth) และการทำธุรกรรมลงฐานข้อมูล (Database Transactions) ด้วย GORM
-*   **FastAPI (Python) Service:** ทำหน้าที่เป็นเครื่องยนต์สำหรับงานด้านปัญญาประดิษฐ์ (AI Agent & OCR) เช่น การวิเคราะห์รูปภาพด้วยโมเดล Gemma-4, จัดเก็บสถานะโมเดลไว้บนหน่วยความจำ ทำให้การประมวลผลรวดเร็ว (ไม่ต้องโหลดโมเดลใหม่ทุกครั้งที่เรียกใช้)
+*   **Go Backend:** ทำหน้าที่เป็นแอปพลิเคชันหลัก ดูแลระบบจัดการร้านอะไหล่ (WMS, POS), สิทธิ์ผู้ใช้งาน (Auth) การทำธุรกรรมลงฐานข้อมูล (Database Transactions) ด้วย GORM และรับคำขอ Webhook จาก LINE Platform
+*   **FastAPI (Python) Service:** ทำหน้าที่เป็นเครื่องยนต์สำหรับงานด้านปัญญาประดิษฐ์ (AI Agent & OCR) เช่น การวิเคราะห์รูปภาพบิล และการประมวลผลความเข้าใจภาษาธรรมชาติเพื่อแปลงภาษาคนเป็นคำสั่งคิวรี SQL ดึงข้อมูลจากฐานข้อมูลของระบบโดยตรง
 
+### กราฟแสดงเส้นทางการเชื่อมต่อระบบนำเข้าบิล (OCR Flow):
 ```
 [ Frontend / User ]
         │ (1. Upload Bill Image)
@@ -18,7 +19,7 @@
         │
         ├──► (2. HTTP POST JSON) ──► [ FastAPI Service (Port: 8000) ]
         │                                  │
-        │                            (วิเคราะห์บิลผ่าน Gemma-4 / AI Agent)
+        │                       (วิเคราะห์บิลผ่าน Gemini / AI Agent)
         │                                  │
         │◄── (3. Return JSON Data) ◄───────┘
         │
@@ -26,133 +27,123 @@
 [ PostgreSQL Database ]
 ```
 
+### กราฟแสดงเส้นทางการแชทถามข้อมูลผ่านไลน์ (LINE OA Chat & AI Agent Flow):
+```
+[ ลูกค้าพิมพ์แชทในมือถือ ]
+        │ (1. ส่งข้อความเข้ามาใน LINE OA)
+        ▼
+[ LINE Platform ]
+        │ (2. ยิง HTTPS Webhook)
+        ▼ (ผ่านช่องทาง ngrok /webhook)
+[ Go Backend (Port: 8080) ]
+        │
+        ├──► (3. ยิง HTTP POST) ──► [ FastAPI /api/agent (Port: 8000) ]
+        │    (หรือรัน CLI fallback)        │
+        │                           (4. แปลงคำถาม -> SELECT SQL)
+        │                                  │
+        │◄── (5. คืนคำตอบภาษาไทย) ◄─────────▼ (ดึงข้อมูลตรงจาก DB)
+        │
+        ▼ (6. ส่งข้อความตอบกลับ)
+[ LINE Messaging API ] ──► [ มือถือลูกค้า ]
+```
+
 ---
 
 ## 2. รายละเอียดไฟล์และโค้ดหลัก
 
-### A. FastAPI Server (`backend/model/server.py`)
-ทำหน้าที่สร้าง Web API บนพอร์ต `8000` โดยโหลดโมเดล Gemma-4 ไว้ทันทีตอนเปิดเครื่อง (Hot Start) และ **เชื่อมต่อโดยตรงกับ PostgreSQL Database** (อ่านการตั้งค่าจากไฟล์ `.env`):
-*   มีระบบเชื่อมฐานข้อมูลด้วย SQLAlchemy แบบดิบ (Raw SQL)
-*   **เมื่อ Go Backend เรียกใช้งาน:** จะส่ง `job_id` มาด้วย FastAPI จะทำการ `UPDATE` สถานะและข้อมูลผลลัพธ์ลงตาราง `bill_import_jobs` ในฐานข้อมูลทันทีที่วิเคราะห์เสร็จ
-*   **เมื่อเทสจากภายนอก (เช่น Swagger UI):** ไม่จำเป็นต้องส่ง `job_id` ตัว FastAPI จะทำการ `INSERT` ข้อมูลเป็นรายการใหม่ลงตาราง `bill_import_jobs` ให้โดยอัตโนมัติ
-*   มี Endpoint หลัก:
-    1.  `POST /api/extract-invoice` : รับพาธของไฟล์รูปภาพบนเครื่องเซิร์ฟเวอร์ พร้อม `job_id` (ถ้ามี)
-    2.  `POST /api/extract-invoice/upload` : รองรับการอัปโหลดไฟล์ตรง พร้อม `job_id` (ถ้ามี)
+### A. FastAPI Server (`backend/model/server.py` และ `backend/model/embedder.py`)
+ทำหน้าที่สร้าง Web API บนพอร์ต `8000` โดยต่อสายใช้งานตรงกับ Google Gemini API และ **เชื่อมต่อโดยตรงกับ PostgreSQL Database**:
+*   `POST /api/extract-invoice` : รับพาธของไฟล์รูปภาพบิล แล้วส่งให้โมเดลทำ OCR
+*   `POST /api/agent` : รับคำถามภาษาไทยจาก Go Backend พร้อมรหัส LINE User ID แล้วเรียกตัว AI Agent ค้นหาข้อมูลใน DB ส่งคืนกลับไปให้แชทไลน์โดยตรง
+*   **ระบบสแกนจับคู่สินค้าด้วย AI (Vector Similarity Product Mapping):** เมื่อสแกนบิล OCR สำเร็จ ระบบจะดึงโมเดล `onnx-community/embeddinggemma-300m-ONNX` (รันผ่าน ONNX Runtime ใน `embedder.py`) มาคำนวณเวกเตอร์ embeddings ของสินค้า แล้วเปรียบเทียบความคล้ายคลึง (Cosine Similarity) กับสินค้าของระบบ เพื่อเลือกผูก `product_id` ให้อัตโนมัติทันทีก่อนบันทึกใบสั่งซื้อ (มีระบบ TF-IDF เป็น Fallback ช่วยสำรองกรณีหน่วยความจำไม่เพียงพอ)
 
-### B. Go Integration Service (`backend/internal/app/service/import_data/import_bill_service.go`)
-ในเมธอด `processOCRInBackground` จะปรับเปลี่ยนวิธีการดึงผลลัพธ์:
-1.  ส่งคำขอ HTTP POST ไปหา FastAPI (`http://localhost:8000/api/extract-invoice`) พร้อมแนบ JSON บอดี้ระบุที่อยู่ไฟล์ภาพ
-2.  รับข้อมูล JSON ผลวิเคราะห์กลับมาถอดรหัส แล้วบันทึกใส่ฐานข้อมูลในตาราง `bill_import_jobs` ในฟิลด์ `draft_json`
-3.  **กลไกสำรอง (Fallback):** หากติดต่อ FastAPI ไม่สำเร็จ เช่น เซิร์ฟเวอร์ปิดอยู่ ตัว Go จะสลับไปรันแบบ Command Line (`python3 model/main.py`) อัตโนมัติ เพื่อให้ระบบไม่ล่ม
+### B. AI Text-to-SQL Agent (`backend/model/agent.py`)
+*   ทำหน้าที่เป็นตัวประสานงาน (Agent Core) ทำการประเมินประโยคคำถามของลูกค้าใน LINE
+*   **Customer context mapping:** ระบบจะไปค้นหาข้อมูลไลน์ของลูกค้าก่อนว่าเชื่อมโยงเข้ากับอู่ซ่อมรถหรือโปรไฟล์ลูกค้าคนไหนในร้าน เพื่อให้คำตอบที่สอดคล้องกับเจ้าตัว
+*   **Text-to-SQL:** หากคำถามเกี่ยวกับการเช็คสต็อกสินค้า, ค้างชำระ หรือราคาสินค้า บอทจะใช้โมเดล Gemini เจนเนอเรตคำสั่ง SQL (Read-Only) แล้วยิงคิวรีข้อมูลดิบจาก Postgres ทันที ก่อนที่จะเรียบเรียงออกมาเป็นประโยคคำตอบที่สุภาพเรียบร้อย
+
+### C. Go Integration Service (`backend/internal/app/service/oa/oa_service.go`)
+*   ทำหน้าที่ดักจับข้อความแชทที่ลูกค้าพิมพ์ส่งมาในแชนเนลไลน์
+*   **ฟีเจอร์เชื่อมต่อบัญชีอัตโนมัติ (Chat-based Linking):** หากลูกค้าพิมพ์ว่า `#เชื่อมต่อ 0812345678` หรือ `#link <เบอร์โทรศัพท์>` ระบบจะวิ่งไปค้นเบอร์โทรในตาราง `customers` และผูก ID บัญชีไลน์เข้าด้วยกันทันที โดยไม่ต้องอาศัยหน้าเว็บล็อกอิน
+*   **ระบบสลับริชเมนูตามสิทธิ์ (Dynamic Rich Menu Swapping):** เมื่อเกิดอีเวนต์ทักทาย (Follow) หรือผูกบัญชีสำเร็จ (Linked Account) ระบบจะตรวจค้นบทบาทผู้ใช้งานใน DB และยิง API สลับภาพ Rich Menu ให้สอดคล้องกับบทบาทรายคนทันที (Customer / Employee / Owner)
+*   **กลไกการเรียกใช้งาน Agent:** จะเรียกหาทาง HTTP `/api/agent` ก่อน แต่หากเซิร์ฟเวอร์ไพทอนปิดอยู่ จะใช้ระบบสำรอง (CLI Fallback) รันคำสั่ง `python3 model/agent.py "<คำถาม>" "<UserID>"` อัตโนมัติ ป้องกันไม่ให้แชทบอทหยุดตอบสนอง
 
 ---
 
 ## 3. ขั้นตอนการติดตั้งและรันใช้งาน
 
 ### ขั้นตอนที่ 1: ติดตั้งไลบรารีของ Python (Dependencies)
-เปิด Terminal และรันคำสั่งติดตั้งไลบรารีที่จำเป็นทั้งหมด (รวมถึงตัวเชื่อมต่อฐานข้อมูล `psycopg2-binary`):
-
-*   **หากอยู่ที่โฟลเดอร์ root ของโปรเจกต์:**
-    ```bash
-    pip install -r backend/model/requirements.txt
-    ```
-*   **หากอยู่ที่โฟลเดอร์ `backend/model`:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+เปิด Terminal และรันคำสั่งติดตั้งไลบรารีที่จำเป็นทั้งหมด:
+```bash
+pip install -r backend/model/requirements.txt
+```
 
 ### ขั้นตอนที่ 2: ตั้งค่าไฟล์ `.env`
-ตรวจสอบไฟล์ `backend/.env` ว่ามีข้อมูลการเชื่อมต่อฐานข้อมูลถูกต้อง เช่น:
+ตรวจสอบไฟล์ `backend/.env` ว่ามีข้อมูลการเชื่อมต่อฐานข้อมูลและ API Key ครบถ้วน:
 ```env
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
 DB_PASSWORD=1234
 DB_NAME=Autopartsdb
+GOOGLE_STUDIO= AIzaSy... (คีย์ Gemini ของคุณ)
+Channel_ID= 2010... (LINE Channel ID)
+Channel_secret= 28f9... (LINE Channel Secret)
+LINE_RICH_MENU_CUSTOMER=richmenu-customer-mock-id
+LINE_RICH_MENU_OWNER=richmenu-owner-mock-id
+LINE_RICH_MENU_EMPLOYEE=richmenu-employee-mock-id
 ```
 
-### ขั้นตอนที่ 3: เริ่มต้นสตาร์ทระบบ
-
+### ขั้นตอนที่ 3: เริ่มต้นสตาร์ทระบบหลังบ้านคู่ขนาน
 1.  **เปิดใช้งาน FastAPI Service (พอร์ต 8000):**
-    *   **หากรันจากโฟลเดอร์ `backend`:**
-        ```bash
-        python model/server.py
-        ```
-    *   **หากรันจากโฟลเดอร์ `backend/model`:**
-        ```bash
-        python server.py
-        ```
-    *(ปล่อยหน้าต่าง Terminal นี้ไว้ ห้ามปิดเด็ดขาดเพื่อเปิดให้เซิร์ฟเวอร์รันอยู่)*
-
+    ```bash
+    python backend/model/server.py
+    ```
 2.  **เปิดใช้งาน Go Backend (พอร์ต 8080):**
-    เปิด Terminal อีกหน้าต่างหนึ่ง เข้าไปที่โฟลเดอร์ `backend` แล้วรัน:
+    เปิด Terminal อีกหน้าต่างหนึ่ง รันคำสั่ง:
     ```bash
-    go run main.go
+    go run backend/main.go
     ```
 
 ---
 
-## 4. แนวทางการพัฒนา AI Agent ในอนาคต
+## 4. วิธีการทดสอบระบบแชทบอท LINE OA & AI Agent
 
-เมื่อคุณใช้ FastAPI รันควบคู่ไปแล้ว คุณสามารถสร้าง **AI Agent** (เช่น ใช้ LangChain หรือ LangGraph) ในฝั่ง Python ได้สะดวกมาก โดยการเพิ่ม API และเชื่อมโยง Database ดังนี้:
+คุณสามารถทดสอบความถูกต้องของการเชื่อมต่อแชทและ AI ได้สองแนวทาง:
 
-1.  **สร้าง Tools ให้ Agent:** สามารถสร้างฟังก์ชัน Python เพื่อดึงสต็อกสินค้าจากตาราง `products` หรือบันทึกบิลอิงตาม SQLAlchemy ใน `server.py`
-2.  **รัน LLM Agent Reasoning:** เมื่อหน้าบ้านต้องการปรึกษา Agent สามารถส่งคำสั่งมายัง FastAPI จากนั้นให้ Agent ดำเนินการเช็คข้อมูลใน DB และคืนการวิเคราะห์ที่ซับซ้อนให้หน้าบ้านแสดงผลได้ทันที
-
----
-
-## 5. วิธีการทดสอบระบบ (System Testing)
-
-คุณสามารถทดสอบความถูกต้องของระบบนำเข้าบิลได้ 3 ช่องทางตามความสะดวกครับ:
-
-### วิธีที่ 1: ทดสอบผ่าน Swagger UI ของ FastAPI (ง่ายที่สุด 💻)
-FastAPI มีหน้าเว็บสำหรับทดสอบ API ให้ในตัว:
-1.  ตรวจสอบว่ารัน FastAPI อยู่ (`python model/server.py`)
-2.  เปิดเว็บเบราว์เซอร์ไปที่: `http://localhost:8000/docs`
-3.  ค้นหาหัวข้อ `POST /api/extract-invoice/upload` (แถบสีเขียว)
-4.  คลิกขยายขึ้นมา -> กดปุ่ม **Try it out**
-5.  ที่ช่อง `file` ให้คลิกอัปโหลดรูปภาพบิลตัวอย่างของคุณจากเครื่องคอมพิวเตอร์
-6.  กดปุ่ม **Execute** สีน้ำเงิน -> ระบบจะส่งรูปภาพเข้าโมเดล Gemma-4 และแสดงผลลัพธ์เป็น JSON ข้อมูลบิลด้านล่างทันที
-
-### วิธีที่ 2: ทดสอบด้วยคำสั่ง cURL (ผ่าน Terminal)
-หากต้องการยิงเทสด้วยคำสั่ง Command line:
-
-*   **ทดสอบการส่งแบบ Multipart Upload (อัปโหลดรูปตรง):**
+### วิธีที่ 1: ทดสอบผ่านแชท LINE จริงบนโทรศัพท์มือถือ 📱
+1.  ทำการดาวน์โหลดและรันอุโมงค์ Ngrok เพื่อส่งผ่านข้อมูล HTTPS:
     ```bash
-    curl -X POST "http://localhost:8000/api/extract-invoice/upload" \
-         -F "file=@/path/to/your/invoice.jpg"
+    ngrok http 8080
     ```
-*   **ทดสอบการระบุ Path บนเครื่อง (ส่ง JSON):**
-    ```bash
-    curl -X POST "http://localhost:8000/api/extract-invoice" \
-         -H "Content-Type: application/json" \
-         -d '{"file_path": "uploads/your_bill.jpg"}'
-    ```
+2.  คัดลอก URL HTTPS ที่ได้ (เช่น `https://abcd-1234.ngrok-free.app/webhook`) ไปวางในช่อง **Webhook URL** บนหน้าตั้งค่า Messaging API ของ LINE Developers Console
+3.  เปิดสวิตช์ **Use webhook** เป็นเปิด (On) แล้วกดปุ่ม **Verify** (ต้องได้รับสถานะสีเขียว Success 200 OK)
+4.  สแกน QR Code เพื่อติดตาม LINE OA ของร้านค้า และทดลองพิมพ์คำสั่งเหล่านี้ในแชท:
+    *   `#เชื่อมต่อ 0812345678` *(เพื่อผูกเบอร์โทรศัพท์เข้ากับลูกค้าในระบบ)*
+    *   `เช็คยอดหนี้ค้างชำระของฉันให้หน่อย`
+    *   `มีปะเก็นฝาสูบหรือกรองน้ำมันเครื่องกี่ชิ้น`
 
-### วิธีที่ 3: ทดสอบการทำงานร่วมกันแบบ End-to-End (ผ่าน Go Backend)
-เป็นการทดสอบจำลองภาพการทำงานที่ติดต่อข้อมูลกับฐานข้อมูลและการควบคุมความปลอดภัยผ่าน Go API:
+### วิธีที่ 2: ทดสอบแบบรวดเร็วผ่าน Webhook Simulator (ผ่าน cURL 💻)
+หากไม่ต้องการต่อ Ngrok หรือใช้โทรศัพท์มือถือจริง คุณสามารถใช้คำสั่งจำลองเหตุการณ์ส่งจากคอมพิวเตอร์ของคุณเอง:
 
-1.  ให้แน่ใจว่าทั้ง **Go Backend (พอร์ต 8080)** และ **FastAPI (พอร์ต 8000)** รันอยู่คู่กัน
-2.  **ดึงข้อมูล JWT Token สำหรับล็อกอิน:**
-    เนื่องจากทางเดิน API ของ Go มีระบบ Auth ป้องกันอยู่ และหลังบ้านคาดหวังรหัสผ่านที่เป็น Base64 (รหัสผ่าน `owner123` ในรูปแบบ Base64 คือ `b3duZXIxMjM=`) ให้รันคำสั่งบรรทัดเดียวนี้เพื่อรับ Token:
+*   **จำลองการพิมพ์ขอเชื่อมต่อหมายเลขโทรศัพท์ลูกค้าในแชท:**
     ```bash
-    curl -X POST "http://localhost:8080/api/auth/login" -H "Content-Type: application/json" -d '{"username": "owner", "password": "b3duZXIxMjM="}'
+    curl -X POST http://localhost:8080/api/oa/simulate \
+      -H "Content-Type: application/json" \
+      -d '{
+        "line_user_id": "U_TEST_USER_999",
+        "display_name": "อู่วิชัยยนต์",
+        "text": "#เชื่อมต่อ 0812345678"
+      }'
     ```
-    คัดลอกคีย์ข้อความยาว ๆ ในช่อง `"token"` ที่ได้กลับมา เพื่อนำไปใช้ในขั้นตอนถัดไป
-3.  **ทำการสร้าง Job วิเคราะห์บิล:**
-    ส่งคำขอสร้าง Job โดยแนบ Token ใน Header (สับเปลี่ยน `<ใส่_JWT_Token_ที่นี่>` ด้วย Token จริงที่ได้ในข้อ 2):
+*   **จำลองการถามข้อมูลยอดคงค้างหนี้สิน (หลังจากทำการเชื่อมต่อเสร็จสิ้น):**
     ```bash
-    curl -X POST "http://localhost:8080/api/import-data/bill-import-jobs" -H "Content-Type: application/json" -H "Authorization: Bearer <ใส่_JWT_Token_ที่นี่>" -d '{"file_url": "uploads/your_bill.jpg", "file_type": "invoice", "created_by": 1}'
+    curl -X POST http://localhost:8080/api/oa/simulate \
+      -H "Content-Type: application/json" \
+      -d '{
+        "line_user_id": "U_TEST_USER_999",
+        "display_name": "อู่วิชัยยนต์",
+        "text": "ยอดค้างชำระของฉันทั้งหมดเท่าไหร่ครับตอนนี้"
+      }'
     ```
-4.  **ตรวจสอบสถานะ Job และ JSON ดราฟต์:**
-    เช็คว่าระบบบันทึกผลการแปลงภาพบิลสำเร็จหรือไม่:
-    ```bash
-    curl -X GET "http://localhost:8080/api/import-data/bill-import-jobs/1" -H "Authorization: Bearer <ใส่_JWT_Token_ที่นี่>"
-    ```
-    จะพบข้อมูลบิลที่แปลเสร็จแล้วบันทึกในตารางฐานข้อมูลในคอลัมน์ `draft_json`
-5.  **กดยืนยัน (Confirm) บันทึกบิลลงตารางหลัก:**
-    ส่งข้อมูลผลลัพธ์บิลเพื่อเขียนลงตาราง `bills` และ `bill_items` ในฐานข้อมูลจริง (คำสั่งแบบบรรทัดเดียวป้องกัน Error ใน zsh):
-    ```bash
-    curl -X POST "http://localhost:8080/api/import-data/bill-import-jobs/1/confirm" -H "Content-Type: application/json" -H "Authorization: Bearer <ใส่_JWT_Token_ที่นี่>" -d '{"bill": {"total_amount": 15450.00, "bill_no": "INV-9923841", "due_date": "2026-07-24T00:00:00Z", "transport_by": "Kerry Express Logistics", "supplier_id": 1, "subtotal": 14439.25, "bill_image_id": 1, "discount_total": 500.00, "credit_term": "30 Days", "vat_amount": 1010.75, "grand_total": 15450.00, "payment_status": "unpaid", "po_id": 1}, "items": [{"bill_id": 1, "item_sequence": 1, "company_product_code": "SPK-001", "company_product_name": "Spark Plug Premium Bosch", "order_quantity": 10, "unit": "PCS", "conversion_factor": 1.0, "price_per_unit": 350.00, "discount_amount": 0.0, "net_amount": 3500.00, "is_freebie": false, "product_id": 1}]}'
-    ```
-
+    *(หลังบ้าน Go จะส่งคำถามเข้า Agent ไพทอนเพื่อดึงข้อมูลเครดิตลูกค้า 'อู่วิชัยยนต์' และส่งคำตอบแสดงผลออกมาในทันที)*

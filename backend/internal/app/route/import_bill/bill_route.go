@@ -34,6 +34,8 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB) {
 		importDataGroup.POST("/bill-import-jobs/:id/confirm", ctrl.ConfirmBillImport)
 		importDataGroup.POST("/bills", ctrl.CreateBill)
 		importDataGroup.GET("/bills", ctrl.ListBills)
+		importDataGroup.PUT("/bills/:id", ctrl.UpdateBill)
+		importDataGroup.DELETE("/bills/:id", ctrl.DeleteBill)
 		importDataGroup.POST("/bill-items", ctrl.CreateBillItem)
 	}
 }
