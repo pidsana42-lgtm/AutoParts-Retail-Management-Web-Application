@@ -906,7 +906,7 @@ export default function ImportBill() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Left: Document Preview & File Selection */}
           {!isManualEntry && (
-            <div className="lg:col-span-5 bg-[#e2e2e2] rounded-xl p-6 flex flex-col gap-4 min-h-[750px]">
+            <div className="lg:col-span-6 bg-[#e2e2e2] rounded-xl p-6 flex flex-col gap-4 min-h-[750px]">
           {/* Top Bar: Zoom/Rotate and Change Image Button */}
           {previewUrl && (
             <div className="flex items-center justify-between bg-white p-2 rounded shadow-sm w-full">
@@ -923,7 +923,7 @@ export default function ImportBill() {
           )}
           
           {previewUrl ? (
-            <div className="w-full flex-1 flex flex-col items-center justify-center p-4">
+            <div className="w-full flex-1 flex flex-col items-center justify-center p-0">
               {/* Batch items tabs list */}
               {batchImages.length > 0 && (
                 <div className="w-full bg-white rounded-lg border border-gray-200 p-3 mb-4 max-h-[160px] overflow-y-auto">
@@ -1034,13 +1034,29 @@ export default function ImportBill() {
                   </div>
                 )}
               </div>
-              <label className="mt-6 cursor-pointer text-sm text-red-600 font-bold hover:underline bg-white py-2 px-6 rounded-full shadow-sm">
-                เลือกเปลี่ยนรูปภาพใหม่
-                <input type="file" className="hidden" accept="image/*" multiple onChange={handleFileChange} />
-              </label>
+              {!formData && (
+                <button 
+                  type="button"
+                  onClick={handleOcrProcess}
+                  disabled={scanning}
+                  className="mt-6 cursor-pointer text-sm text-[#b32025] font-bold hover:bg-gray-50 bg-white py-2 px-6 rounded-full shadow-sm flex items-center gap-2 transition-all border border-gray-100 disabled:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  {scanning ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      <span>{batchImages.length > 0 ? 'กำลังสแกนบิลแบบกลุ่ม...' : 'กำลังสแกนรูปภาพผ่าน AI...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={18} />
+                      <span>{batchImages.length > 0 ? 'สแกนข้อมูลแบบกลุ่ม (OCR Batch)' : 'สแกนข้อมูลจากบิล (OCR)'}</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           ) : (
-            <div className="w-[85%] h-[90%] border-4 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center p-8 bg-gray-50 text-center">
+            <div className="w-full flex-1 border-4 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center p-8 bg-gray-50 text-center">
               <Camera size={64} className="text-gray-400 mb-4 animate-pulse" />
               <p className="text-gray-600 font-bold mb-2">ลากไฟล์บิลของคุณวางที่นี่ หรือ</p>
               <label className="cursor-pointer text-white bg-[#b32025] hover:bg-[#9a1a1f] px-6 py-2.5 rounded font-bold transition-all shadow-sm">
@@ -1051,30 +1067,12 @@ export default function ImportBill() {
             </div>
           )}
 
-          {previewUrl && !formData && (
-            <button 
-              onClick={handleOcrProcess}
-              disabled={scanning}
-              className="absolute bottom-6 bg-[#b32025] hover:bg-[#9a1a1f] text-white px-8 py-3 rounded-full text-sm font-bold flex items-center gap-2 transition-all shadow-lg disabled:bg-gray-400 cursor-pointer"
-            >
-              {scanning ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  <span>{batchImages.length > 0 ? 'กำลังสแกนบิลแบบกลุ่ม...' : 'กำลังสแกนรูปภาพผ่าน AI...'}</span>
-                </>
-              ) : (
-                <>
-                  <Camera size={18} />
-                  <span>{batchImages.length > 0 ? 'สแกนข้อมูลแบบกลุ่ม (OCR Batch)' : 'สแกนข้อมูลจากบิล (OCR)'}</span>
-                </>
-              )}
-            </button>
-          )}
+
         </div>
         )}
 
         {/* Right: Extracted Data Fields */}
-        <div className={`${isManualEntry ? 'lg:col-span-12' : 'lg:col-span-7'} bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[700px]`}>
+        <div className={`${isManualEntry ? 'lg:col-span-12' : 'lg:col-span-6'} bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[700px]`}>
           {!formData ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-gray-400">
               <FileUp size={48} className="text-gray-300 mb-4" />
