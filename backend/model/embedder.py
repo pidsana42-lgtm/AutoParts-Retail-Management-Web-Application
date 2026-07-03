@@ -182,8 +182,10 @@ class ProductMatcher:
         # Fallback to TF-IDF if ONNX is disabled or failed
         if not self.use_onnx or self.product_embeddings is None:
             match, score = self.fallback_matcher.find_best_match(query_text)
-            if match and score >= threshold:
-                return match.get("id"), score
+            if match:
+                req_threshold = 0.80 if match.get("type") == "correction" else threshold
+                if score >= req_threshold:
+                    return match.get("id"), score
             return None, score
 
         try:
@@ -191,8 +193,10 @@ class ProductMatcher:
             query_emb = self._get_embeddings_batch([query_text])
             if query_emb is None:
                 match, score = self.fallback_matcher.find_best_match(query_text)
-                if match and score >= threshold:
-                    return match.get("id"), score
+                if match:
+                    req_threshold = 0.80 if match.get("type") == "correction" else threshold
+                    if score >= req_threshold:
+                        return match.get("id"), score
                 return None, score
 
             # Calculate cosine similarities against combined targets
@@ -202,15 +206,18 @@ class ProductMatcher:
             matched_item = self.combined_data[best_idx]
 
             print(f"[Embedding Match] Scanned: '{query_text}' matches {matched_item.get('type')}: '{matched_item.get('name')}' with score: {best_score:.4f}")
-            if best_score >= threshold:
+            req_threshold = 0.80 if matched_item.get("type") == "correction" else threshold
+            if best_score >= req_threshold:
                 return matched_item.get("id"), best_score
             else:
-                print(f"[Embedding Match] Score {best_score:.4f} is below threshold {threshold}. Product unmatched.")
+                print(f"[Embedding Match] Score {best_score:.4f} is below threshold {req_threshold}. Product unmatched.")
                 return None, best_score
         except Exception as e:
             print(f"Error matching product via ONNX embeddings: {e}")
             # Try TF-IDF fallback
             match, score = self.fallback_matcher.find_best_match(query_text)
-            if match and score >= threshold:
-                return match.get("id"), score
+            if match:
+                req_threshold = 0.80 if match.get("type") == "correction" else threshold
+                if score >= req_threshold:
+                    return match.get("id"), score
             return None, score
