@@ -118,11 +118,7 @@ func SetupDatabase() {
 
 	seed.Supplier(db)
 	
-	seed.PurchaseOrdersType(db)
-	seed.PurchaseOrders(db)
-	seed.BillImage(db)
-	seed.Bill(db)
-	seed.SaleOrder(db)
+	
   
   seed.Role(db)
   seed.CustomerType(db)
@@ -141,8 +137,15 @@ func SetupDatabase() {
     if err := seed.User(db); err != nil {
         log.Printf("Warning: failed to seed default user: %v", err)
     }
+	
     seed.Customer(db)
     seed.Product(db)
+	
+	seed.PurchaseOrdersType(db)
+	seed.PurchaseOrders(db)
+	seed.BillImage(db)
+	seed.Bill(db)
+	seed.SaleOrder(db)
 
     log.Println("Database migration complete! Server Ready.")
 }
