@@ -7,7 +7,7 @@ export interface CustomerDiscountResponse {
   is_discount_enabled: boolean;
   current_debt_amount: number;
   customer_type?: CustomerTypeInterface;
-
+  ontop_discount_rate?: number; // สิทธิ์ส่วนลดพิเศษสำหรับกลุ่มอู่ซ่อมรถยนต์
   max_credit_limit: number;
   is_credit_enabled: boolean;
 }

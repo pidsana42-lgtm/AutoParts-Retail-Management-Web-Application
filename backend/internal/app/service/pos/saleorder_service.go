@@ -1,37 +1,37 @@
 package pos
 
 import (
-	"backend/internal/app/dto/pos"
-	"backend/internal/app/entity"
-	"backend/internal/app/enum"
-	customerRepo "backend/internal/app/repository/customer"
-	posRepo "backend/internal/app/repository/pos"
-	productRepo "backend/internal/app/repository/pos"
+    "backend/internal/app/dto/pos"
+    "backend/internal/app/entity"
+    "backend/internal/app/enum"
+    customerRepo "backend/internal/app/repository/customer"
+    posRepo "backend/internal/app/repository/pos"
+    productRepo "backend/internal/app/repository/pos"
 	customerDto "backend/internal/app/dto/customer"
-	"errors"
-	"fmt"
-	"gorm.io/gorm"
-	"time"
+    "errors"
+    "fmt"
+    "gorm.io/gorm"
+    "time"
 )
 
 type SaleService interface {
-	CreatePOSOrder(req *pos.CreateSaleOrderRequest) error
-	GetCustomerTypes() ([]entity.CustomerType, error)
-	SearchCustomers(searchQuery string) ([]customerDto.CustomerResponse, error)
+    CreatePOSOrder(req *pos.CreateSaleOrderRequest) error
+    GetCustomerTypes() ([]entity.CustomerType, error)
+    SearchCustomers(searchQuery string) ([]customerDto.CustomerResponse, error)
 }
 
 type saleService struct {
-	repo         posRepo.SaleRepository
-	customerRepo customerRepo.CustomerRepository
-	productRepo  productRepo.POSProductRepository // เอาไว้ดึงทุนและหักสต็อก
+    repo         posRepo.SaleRepository
+    customerRepo customerRepo.CustomerRepository
+    productRepo  productRepo.POSProductRepository // เอาไว้ดึงทุนและหักสต็อก
 }
 
 func NewSaleService(repo posRepo.SaleRepository, cRepo customerRepo.CustomerRepository, pRepo productRepo.POSProductRepository) SaleService {
-	return &saleService{
-		repo:         repo,
-		customerRepo: cRepo,
-		productRepo:  pRepo,
-	}
+    return &saleService{
+        repo:         repo,
+        customerRepo: cRepo,
+        productRepo:  pRepo,
+    }
 }
 
 func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest) error {
@@ -43,23 +43,21 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest) error {
     // ถ้ามีคำสั่งไหนพังกลางทาง ระบบจะไม่บันทึกอะไรเลย (ป้องกันข้อมูลพัง)
     tx := s.repo.BeginTransaction()
 
-    // defer จะทำงานอัตโนมัติ "ตอนจบฟังก์ชัน" เสมอ
-    // ท่อนนี้เขียนไว้ดักจับกรณีที่โค้ดเกิด Runtime Panic (ระบบล่มกะทันหัน) ให้สั่ง Rollback คืนค่าทันที
+    // ดักจับกรณีที่โค้ดเกิด Runtime Panic ให้สั่ง Rollback คืนค่าทันที
     defer func() {
         if r := recover(); r != nil {
             tx.Rollback()
         }
     }()
 
-    // customer คือออบเจกต์ที่เก็บข้อมูลลูกค้าที่ดึงมาจาก DB โดยใช้ ID ที่ส่งมาจากหน้าบ้าน (req.CustomerID)
-    // err คือตัวแปรเช็คข้อผิดพลาดตามมาตรฐานของ Go
+    // ดึงข้อมูลลูกค้า
     customer, err := s.customerRepo.GetCustomerByID(req.CustomerID)
     if err != nil {
-        tx.Rollback() // สั่งยกเลิกท่อ Transaction ทันทีเพราะหาลูกค้าไม่เจอ
-        return errors.New("ไม่พบข้อมูลลูกค้าในระบบ") // ส่ง Error กลับไปบอก Controller
+        tx.Rollback()
+        return errors.New("ไม่พบข้อมูลลูกค้าในระบบ")
     }
 
-    // orderNumber คือตัวแปรเก็บเลขที่บิลขายใบนี้ (เช่น INV2607010001) ที่เจนขึ้นมาอัตโนมัติ
+    // เจนเลขที่บิลขายอัตโนมัติ (เช่น INV2607030001)
     orderNumber, err := s.generateOrderNumber(tx)
     if err != nil {
         tx.Rollback()
@@ -113,16 +111,22 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest) error {
             finalDiscountPercent = (itemReq.DiscountValue / itemReq.UnitPrice) * 100
         }
 
-        // [LAYER 2]: ตรวจสอบว่าเป็นกลุ่มอู่ และมีสิทธิ์เปิดใช้งานส่วนลดอยู่ใช่ไหม
+        // [LAYER 2 & DYNAMIC VALIDATION]: เอาโควตาส่วนลดสินค้า + สิทธิ์ออนท็อปอู่มารวมกันเป็นเพดานใหม่
+        allowedMaxDiscount := product.MaxDiscountRate // ตั้งต้นจากเพดานสินค้า (เช่น 2%)
+
         if customer.CustomerType.TypeName == "GARAGE" && customer.IsDiscountEnabled {
-            // ถ้างดงามตามเงื่อนไข ให้เอาเปอร์เซ็นต์ออนท็อปประจำอู่นี้ (+3% หรือ +5%) บวกเพิ่มเข้าไปยกแผงทันที!
+            // บวกส่วนลดออนท็อปประจำอู่นี้เข้าไป (+3%)
             finalDiscountPercent += customer.OntopDiscountRate
+            
+            // ขยายเพดานสูงสุดของสินค้ารายชิ้นนี้พ่วงสิทธิ์ของอู่เข้าไปด้วย (เช่น 2% + 3% = 5%)
+            allowedMaxDiscount += customer.OntopDiscountRate
         }
 
-        // [ดักนโยบายร้าน]: เอา % ลดรวมที่ผสมเสร็จ ไปเทียบกับเพดานสูงสุดที่เพื่อนฝั่ง Product เซ็ตล็อกไว้รายชิ้น
-        if finalDiscountPercent > product.MaxDiscountRate {
+        // ตรวจสอบกับเพดานสะสมผสมสิทธิ์แล้ว (เช่น 3% ไม่เกิน 5% ผ่านฉลุย!)
+        if finalDiscountPercent > allowedMaxDiscount {
             tx.Rollback()
-            return fmt.Errorf("สินค้า %s มีส่วนลดรวม %.2f%% ซึ่งเกินกว่าเกณฑ์สูงสุดที่ยอมให้ลดได้ (สูงสุด %.2f%%)", product.Product_Name, finalDiscountPercent, product.MaxDiscountRate)
+            return fmt.Errorf("สินค้า %s มีส่วนลดรวม %.2f%% ซึ่งเกินกว่าเกณฑ์สูงสุดที่ยอมให้ลดได้สำหรับอู่นี้ (สูงสุด %.2f%%)", 
+                product.Product_Name, finalDiscountPercent, allowedMaxDiscount)
         }
 
         // itemDiscountAmount คือมูลค่าส่วนลดรวมของแถวนี้คิดเป็นเงินบาท
@@ -168,55 +172,55 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest) error {
     // -------------------------------------------------------------------------
     // [LAYER 3: คำนวณส่วนลดท้ายบิลภาพรวม (Bill Discount)]
     // -------------------------------------------------------------------------
-    
-    // billDiscountAmount คือตัวแปรเก็บมูลค่ารวมของส่วนลดท้ายบิลแปลงเป็น "บาท"
     var billDiscountAmount float64
-    // billDiscountPercent คือตัวแปรเก็บมูลค่ารวมของส่วนลดท้ายบิลแปลงเป็น "%"
     var billDiscountPercent float64
     
-    // orderSubtotalAfterItems คือยอดรวมสินค้าทั้งบิลหลังจากที่หักส่วนลดรายชิ้นรายอู่ไปหมดแล้ว
+    // ยอดคงเหลือทั้งหมดของบิลหลักหลังลบส่วนลดต่อชิ้นออกไปเรียบร้อยแล้ว
     orderSubtotalAfterItems := subtotalAmount - totalDiscountItems 
 
-    // คำนวณหาค่าเงินลดท้ายบิลตามประเภทที่พนักงานเลือกคีย์หน้างาน
     if req.BillDiscountType == "percentage" && orderSubtotalAfterItems > 0 {
         billDiscountPercent = req.BillDiscountValue
         billDiscountAmount = orderSubtotalAfterItems * billDiscountPercent / 100
     } else if req.BillDiscountType == "amount" {
         billDiscountAmount = req.BillDiscountValue
         if orderSubtotalAfterItems > 0 {
-            // แปลงเงินบาทท้ายบิลกลับเป็นเปอร์เซ็นต์รวมท้ายบิล
             billDiscountPercent = (billDiscountAmount / orderSubtotalAfterItems) * 100
         }
     }
 
+    // 🔍 ดึงนโยบายของร้านค้าจากฐานข้อมูลมาตรวจสอบเพดานท้ายบิลตรง ๆ
+    storeConfig, err := s.repo.GetStoreConfig()
+    if err != nil {
+        tx.Rollback()
+        return fmt.Errorf("ไม่สามารถเรียกดูข้อมูลนโยบายความปลอดภัยร้านค้าได้: %w", err)
+    }
+    isCompany := customer.CustomerType.TypeName == "WHOLESALE" || customer.CustomerType.ID == 3
+    // 🚨 [CHECK]: ตรวจสอบเฉพาะส่วนลดท้ายบิลเพียวๆ ห้ามเกิน MaxExtraDiscountRate ของร้านเด็ดขาด!
+    if !isCompany && billDiscountPercent > (storeConfig.MaxExtraDiscountRate + 0.01) {
+        tx.Rollback()
+        return fmt.Errorf("ส่วนลดท้ายบิลรวม %.2f%% เกินกว่านโยบายความปลอดภัยของร้านค้าที่กำหนดไว้ (สูงสุด %.2f%%)", 
+            billDiscountPercent, storeConfig.MaxExtraDiscountRate)
+    }
+
     // -------------------------------------------------------------------------
-    // [LOOP รอบที่ 2: วนถัวเฉลี่ยส่วนลดท้ายบิลลงไอเทมรายชิ้น (Weighted Average)]
+    // [LOOP รอบที่ 2: เฉลี่ยส่วนลดท้ายบิลลงสินค้า (Weighted Average สำหรับรองรับคืนเงิน)]
     // -------------------------------------------------------------------------
-    
-    // distributedBillDiscount คือตัวแปรคอยสะสมยอดเงินที่เฉลี่ยไปแล้ว เพื่อเอาไว้หักลบในชิ้นสุดท้าย (แก้ปัญหาน้ำหนักทศนิยมเคลื่อน)
+    // (ท่อนนี้คงเดิมไว้เลยครับ เพราะมันเอาค่ายอดรวมท้ายบิลที่ผ่านการอนุมัติแล้ว 
+    // มาถัวเฉลี่ยแจกแจงลงฟิลด์ NetSubtotal ของแต่ละแถวเพื่อรอใช้ตอนลูกค้ามาเคลมคืนเงินเฉย ๆ)
     var distributedBillDiscount float64 
-    
-    // วนลูปตามดัชนี (i) ของอาเรย์สินค้าที่เราเตรียมไว้เซฟ
     for i := range orderItems {
         if orderSubtotalAfterItems > 0 {
-            // เช็คว่าถ้าเป็นสินค้า "ชิ้นสุดท้ายในบิล"
             if i == len(orderItems)-1 {
-                // ให้เอาเงินลดท้ายบิลทั้งหมด ตั้งลบด้วยเงินที่แจกจ่ายให้ชิ้นก่อน ๆ ไปแล้วดื้อ ๆ ตัวเลขจะตรงเป๊ะไม่หายไป 0.01 บาท
                 orderItems[i].AllocatedBillDiscount = billDiscountAmount - distributedBillDiscount
             } else {
-                // ชิ้นปกติ: คำนวณตามสัดส่วนน้ำหนักราคา
-                // weight คือสัดส่วนน้ำหนัก (ราคาสุทธิของชิ้นนี้ / ยอดรวมทั้งบิล)
                 weight := orderItems[i].Subtotal / orderSubtotalAfterItems
                 allocatedAmount := billDiscountAmount * weight
-                
-                // ทำการปัดเศษทศนิยมให้เหลือนิ่ง ๆ 2 ตำแหน่งตามระบบการเงิน (Math Rounding Trick)
                 allocatedAmount = float64(int(allocatedAmount*100+0.5)) / 100
                 
-                orderItems[i].AllocatedBillDiscount = allocatedAmount // หยอดเงินเฉลี่ยลงฟิลด์ของชิ้นนี้
-                distributedBillDiscount += allocatedAmount            // สะสมยอดเงินที่จ่ายออกไปแล้ว
+                orderItems[i].AllocatedBillDiscount = allocatedAmount
+                distributedBillDiscount += allocatedAmount            
             }
         }
-        // NetSubtotal คือราคาสุทธิเน็ตขั้นสุดท้ายของสินค้าแถวนี้หลังหักลดทุกรูปแบบเกลี้ยงตับแล้ว
         orderItems[i].NetSubtotal = orderItems[i].Subtotal - orderItems[i].AllocatedBillDiscount
     }
 
@@ -342,8 +346,8 @@ func (s *saleService) GetCustomerTypes() ([]entity.CustomerType, error) {
 func (s *saleService) SearchCustomers(searchQuery string) ([]customerDto.CustomerResponse, error) {
 	// ค้นหารายชื่ออู่หรือเบอร์โทรจากฐานข้อมูล
 	customers, err := s.repo.SearchCustomers(searchQuery)
-	if err != nil {
-		return nil, err
-	}
-		return customerDto.ToCustomerListResponse(customers), nil
+    if err != nil {
+        return nil, err
+    }
+    return customerDto.ToCustomerListResponse(customers), nil
 }

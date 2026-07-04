@@ -103,7 +103,6 @@ export default function PosPage(): React.JSX.Element {
     }, 0);
   }, [cart]);
 
-  // ✨ ย้ายสิทธิ์คำนวณมาไว้ตรงนี้เพื่อให้เรียกใช้ได้ทั้งไฟล์ (แก้ไข Error TS2304)
   const maxGlobalRate = storeConfig?.max_item_discount_rate ?? 2.0;
   const maxAllowedDiscountAmount = (totalItemPrice * maxGlobalRate) / 100;
   const isLineDiscountFull = totalLineDiscount >= maxAllowedDiscountAmount;
@@ -161,7 +160,6 @@ export default function PosPage(): React.JSX.Element {
 
     try {
       const products = await posApiService.searchProducts(cleanedQuery);
-
       if (!products || products.length === 0) {
         alert("ไม่พบรหัสบาร์โค้ดสินค้าชิ้นนี้ในสต๊อกระบบ");
         return;
@@ -171,6 +169,15 @@ export default function PosPage(): React.JSX.Element {
         products.find(
           (p) => p.barcode === cleanedQuery || p.product_code === cleanedQuery,
         ) || products[0];
+
+      // เรียกใช้ฟังก์ชันหา Default ส่วนลดตามสิทธิ์กลุ่มลูกค้า
+      const { getDefaultProductDiscount } =
+        await import("../../../service/http/pos/pos_service");
+      const discountConfig = getDefaultProductDiscount(
+        product,
+        customer,
+        activeTypeId,
+      );
 
       const existingIndex = cart.findIndex(
         (item) => item.product_id === product.id,
@@ -193,12 +200,10 @@ export default function PosPage(): React.JSX.Element {
             brand_name: product.brand_name,
             model_name: product.model_name,
             note: product.note,
-            discount_type:
-              customer && customer.is_discount_enabled ? "percentage" : "none",
-            discount_value:
-              customer && customer.is_discount_enabled
-                ? customer.standard_discount_rate
-                : 0,
+            max_discount_rate: product.max_discount_rate,
+            // รองรับอู่ลดทันที / บริษัทห้ามลด
+            discount_type: discountConfig.type,
+            discount_value: discountConfig.value,
           },
         ]);
       }
@@ -219,41 +224,55 @@ export default function PosPage(): React.JSX.Element {
   };
 
   const handleBillDiscountChange = (valueStr: string) => {
-    const inputValue = parseFloat(valueStr) || 0;
+    const inputValue = valueStr === "" ? 0 : parseFloat(valueStr) || 0;
     if (inputValue < 0) return;
 
-    let currentInputAmount = 0;
-    if (billDiscountType === "amount") {
-      currentInputAmount = inputValue;
-    } else if (billDiscountType === "percentage") {
-      currentInputAmount = (totalItemPrice * inputValue) / 100;
+    const currentCustomerTypeId = customer?.customer_type?.id || activeTypeId;
+    const currentCustomerTypeName = customer?.customer_type?.type_name || "";
+
+    // RULE 1: ลูกค้ากลุ่มบริษัท -> ห้ามลดท้ายบิลเด็ดขาด
+    if (
+      currentCustomerTypeId === 3 ||
+      currentCustomerTypeName === "WHOLESALE"
+    ) {
+      alert("ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น");
+      setBillDiscountValue(0);
+      return;
     }
 
-    const totalSimulatedDiscount = totalLineDiscount + currentInputAmount;
+    // ดึงค่านโยบายร้านค้าจาก StoreConfig (เช่น ห้ามลดท้ายบิลเกิน 6%)
+    const maxExtraConfigRate = storeConfig?.max_extra_discount_rate ?? 6.0;
 
-    if (totalSimulatedDiscount > maxAllowedDiscountAmount) {
-      const remainingQuotaAmount = Math.max(
-        0,
-        maxAllowedDiscountAmount - totalLineDiscount,
-      );
+    // ฐานยอดรวมหลังหักลดรายชิ้นแล้ว (ราคาสุทธิที่จะเอามาคิดลดท้ายบิลต่อ)
+    const remainingAfterLineDiscount = totalItemPrice - totalLineDiscount;
 
-      if (remainingQuotaAmount <= 0) {
+    // แปลงค่าเงินที่พนักงานกรอกท้ายบิลให้เป็นหน่วยเปอร์เซ็นต์ (%) เพื่อเช็คกับนโยบายร้าน
+    let inputAmountInPercent = 0;
+    if (billDiscountType === "percentage") {
+      inputAmountInPercent = inputValue;
+    } else if (
+      billDiscountType === "amount" &&
+      remainingAfterLineDiscount > 0
+    ) {
+      inputAmountInPercent = (inputValue / remainingAfterLineDiscount) * 100;
+    }
+
+    // ตรวจสอบเงื่อนไข: ส่วนลดท้ายบิลต้องไม่เกินที่ Store Config กำหนดไว้ (ไม่สนใจส่วนลดต่อชิ้น)
+    if (inputAmountInPercent > maxExtraConfigRate + 0.01) {
+      if (billDiscountType === "percentage") {
         alert(
-          `ไม่สามารถให้ส่วนลดท้ายบิลเพิ่มได้ เนื่องจากคุณได้ให้ส่วนลดต่อรายการสินค้าไปเต็มสิทธิ์เพดานรวม ${maxGlobalRate}% (${maxAllowedDiscountAmount.toFixed(2)} ฿) ของร้านค้าแล้วครับ`,
+          `ส่วนลดท้ายบิลเกินนโยบายร้านค้า \n(ร้านค้ายอมให้ลดเพิ่มท้ายบิลสูงสุดไม่เกิน ${maxExtraConfigRate.toFixed(1)}%)`,
         );
       } else {
-        if (billDiscountType === "amount") {
-          alert(
-            `ส่วนลดท้ายบิลเกินสิทธิ์ที่เหลืออยู่! บิลนี้เหลือโควตาให้ลดเพิ่มได้อีกสูงสุดไม่เกิน ${remainingQuotaAmount.toFixed(2)} ฿`,
-          );
-        } else if (billDiscountType === "percentage") {
-          const remainingQuotaPercent =
-            (remainingQuotaAmount / totalItemPrice) * 100;
-          alert(
-            `ส่วนลดท้ายบิลเกินสิทธิ์ที่เหลืออยู่! บิลนี้เหลือโควตาให้ลดเพิ่มได้อีกสูงสุดไม่เกิน ${remainingQuotaPercent.toFixed(2)}% (คิดเป็นเงินประมาณ ${remainingQuotaAmount.toFixed(2)} ฿)`,
-          );
-        }
+        // ฿ เคสกรอกเป็นบาท: คำนวณหาจำนวนเงินบาทสูงสุดที่เป็นไปได้จากโควตา % ของร้าน
+        const maxExtraDiscountBaht =
+          (remainingAfterLineDiscount * maxExtraConfigRate) / 100;
+        alert(
+          `ส่วนลดท้ายบิลเกินนโยบายร้านค้า \n(ร้านค้ายอมให้ลดเพิ่มท้ายบิลสูงสุดไม่เกิน ฿${maxExtraDiscountBaht.toFixed(2)})`,
+        );
       }
+
+      setBillDiscountValue(0); // ดีดกลับเป็น 0 เพื่อความปลอดภัย
       return;
     }
 
@@ -294,24 +313,93 @@ export default function PosPage(): React.JSX.Element {
     );
   };
 
+  // ─── ค้นหาฟังก์ชันเดิมแล้วเปลี่ยนเป็นชุดนี้ ───
   const handleDiscountValueChange = (index: number, valueStr: string) => {
+    // 1. แปลงค่าอินพุตที่คีย์เข้ามาให้ปลอดภัย
     const rawValue = valueStr === "" ? 0 : parseFloat(valueStr) || 0;
+    if (rawValue < 0) return;
+
+    const currentCustomerTypeId = customer?.customer_type?.id || activeTypeId;
+    const currentCustomerTypeName = customer?.customer_type?.type_name || "";
+
+    // ลูกค้ากลุ่มบริษัท -> บล็อกสิทธิ์ทันที ห้ามลดทุกกรณี
+    if (
+      currentCustomerTypeId === 3 ||
+      currentCustomerTypeName === "WHOLESALE"
+    ) {
+      alert("ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น");
+      setCart((prev) =>
+        prev.map((cartItem, i) =>
+          i === index
+            ? { ...cartItem, discount_value: 0, discount_type: "none" }
+            : cartItem,
+        ),
+      );
+      return;
+    }
+
     const item = cart[index];
+    const lineTotal = item.unit_price * item.qty;
 
-    const validatedValue = calculateValidatedDiscount(
-      item,
-      rawValue,
-      storeConfig,
-    );
+    // 2. คำนวณหาเพดานสูงสุด (Max Allowed Rate) ของรายการชิ้นนี้เพียวๆ
+    // ทั่วไปเริ่มต้นจากสินค้า (เช่น 2.0%) / อู่ซ่อมรถได้บวก Ontop เพิ่มพิเศษ (เช่น +3.0%)
+    let allowedMaxRate = item.max_discount_rate ?? 2.0;
+    const isGarageMode =
+      currentCustomerTypeId === 2 ||
+      currentCustomerTypeName === "GARAGE" ||
+      customer?.customer_name?.includes("อู่");
 
+    if (isGarageMode) {
+      const ontopRate = customer
+        ? ((customer as any).ontop_discount_rate ?? 3.0)
+        : 3.0;
+      allowedMaxRate += ontopRate; // สิทธิ์สูงสุดรวมของอู่ชิ้นนี้คือ 5.0%
+    }
+
+    // 3. แปลงค่าที่พนักงานกำลังป้อนหน้างานให้กลายเป็นหน่วยเปอร์เซ็นต์ (%) เพื่อตรวจสอบกับเพดาน
+    let inputLineDiscountPercent = 0;
+    if (item.discount_type === "percentage") {
+      inputLineDiscountPercent = rawValue;
+    } else if (item.discount_type === "amount" && lineTotal > 0) {
+      inputLineDiscountPercent = (rawValue / lineTotal) * 100;
+    }
+
+    // 4. [จุดแก้ไขสำคัญ]: ตรวจเช็คเฉพาะ "เปอร์เซ็นต์ที่กรอกใหม่" เทียบกับ "allowedMaxRate" ตรงๆ
+    // ไม่เอาข้อมูล ส่วนลดท้ายบิล หรือค่าน้ำหนักถัวเฉลี่ยใดๆ มาร่วมคำนวณในเงื่อนไขนี้อีกต่อไป
+    if (inputLineDiscountPercent > allowedMaxRate + 0.01) {
+      if (item.discount_type === "percentage") {
+        alert(
+          `ไม่สามารถให้ส่วนลดเกินข้อกำหนดสิทธิ์ลูกค้าได้ \n(รายการนี้กรอกช่องต่อชิ้นได้สูงสุดไม่เกิน ${allowedMaxRate.toFixed(2)}%)`,
+        );
+      } else {
+        const maxDiscountBaht = (lineTotal * allowedMaxRate) / 100;
+        alert(
+          `ไม่สามารถให้ส่วนลดเกินข้อกำหนดสิทธิ์ลูกค้าได้ \n(รายการนี้กรอกช่องต่อชิ้นได้สูงสุดไม่เกิน ฿${maxDiscountBaht.toFixed(2)})`,
+        );
+      }
+
+      // ปรับปรุง: เมื่อป้อนผิด ให้ดีดค่ากลับไปเป็นสิทธิ์สูงสุดของอู่นั้นๆ (เช่น 5%)
+      // แทนการดีดเป็น 0 เพื่อให้ระบบคงราคาส่วนลดมาตรฐานของอู่ไว้ ไม่หลุดเป็นราคาเต็ม
+      setCart((prev) =>
+        prev.map((cartItem, i) =>
+          i === index
+            ? {
+                ...cartItem,
+                discount_value:
+                  item.discount_type === "percentage"
+                    ? allowedMaxRate
+                    : (lineTotal * allowedMaxRate) / 100,
+              }
+            : cartItem,
+        ),
+      );
+      return;
+    }
+
+    // 5. หากผ่านเกณฑ์ อัปเดตข้อมูลลงตะกร้ารถตามปกติ
     setCart((prev) =>
       prev.map((cartItem, i) =>
-        i === index
-          ? {
-              ...cartItem,
-              discount_value: validatedValue,
-            }
-          : cartItem,
+        i === index ? { ...cartItem, discount_value: rawValue } : cartItem,
       ),
     );
   };
@@ -335,13 +423,35 @@ export default function PosPage(): React.JSX.Element {
     }
     setIsSubmitting(true);
 
-    const salePayload: CreateSaleOrderRequest = {
-      customer_id: customer.id,
-      payment_method_id: paymentMethodId,
-      bill_discount_type: billDiscountType,
-      bill_discount_value: billDiscountValue,
-      note: "บันทึกคำสั่งซื้อจากหน้าร้านระบบขาย POS",
-      items: cart.map((item) => ({
+    const totalSubtotalAfterLineDiscount = totalItemPrice - totalLineDiscount;
+    let distributedBillDiscountAccumulator = 0;
+
+    // คำนวณกระจายน้ำหนัก Pro-rata / Weighted Average ลงรายไอเทม
+    const computedItems = cart.map((item, index) => {
+      const lineTotal = item.unit_price * item.qty;
+      const itemDiscount =
+        item.discount_type === "percentage"
+          ? (lineTotal * item.discount_value) / 100
+          : item.discount_value;
+
+      const subtotalAfterLineDiscount = lineTotal - itemDiscount;
+      let allocatedBillDiscount = 0;
+
+      if (totalSubtotalAfterLineDiscount > 0 && computedBillDiscount > 0) {
+        if (index === cart.length - 1) {
+          // ชิ้นสุดท้ายเก็บเศษทศนิยมขยะทั้งหมดเพื่อไม่ให้ยอดรวมเคลื่อน
+          allocatedBillDiscount =
+            computedBillDiscount - distributedBillDiscountAccumulator;
+        } else {
+          const weight =
+            subtotalAfterLineDiscount / totalSubtotalAfterLineDiscount;
+          allocatedBillDiscount =
+            Math.round(computedBillDiscount * weight * 100) / 100;
+          distributedBillDiscountAccumulator += allocatedBillDiscount;
+        }
+      }
+
+      return {
         product_id: item.product_id,
         product_code: item.product_code,
         product_name: item.product_name,
@@ -349,12 +459,24 @@ export default function PosPage(): React.JSX.Element {
         unit_price: item.unit_price,
         discount_type: item.discount_type,
         discount_value: item.discount_value,
-      })),
+        // แนบข้อมูลการถัวเฉลี่ยรายบรรทัดส่งไปเซฟลง DB สำหรับใช้ดึงตอนรับคืนสินค้า (Refund)
+        allocated_bill_discount: allocatedBillDiscount,
+        net_subtotal: subtotalAfterLineDiscount - allocatedBillDiscount,
+      };
+    });
+
+    const salePayload: CreateSaleOrderRequest = {
+      customer_id: customer.id,
+      payment_method_id: paymentMethodId,
+      bill_discount_type: billDiscountType,
+      bill_discount_value: billDiscountValue,
+      note: "บันทึกคำสั่งซื้อผ่านระบบ POS หน้าร้าน (ถัวเฉลี่ยท้ายบิลรองรับงานรับคืน)",
+      items: computedItems as any,
     };
 
     try {
       await posApiService.createPOSOrder(salePayload);
-      alert("บันทึกข้อมูลการขายและทำรายการเช็คเอาท์สำเร็จ!");
+      alert("บันทึกข้อมูลการขายสำเร็จ!");
       setCart([]);
       localStorage.removeItem("pos_cart");
       setCustomer(null);
@@ -366,7 +488,7 @@ export default function PosPage(): React.JSX.Element {
       alert(
         error.response?.data?.error ||
           error.message ||
-          "เกิดปัญหาในการส่งคำสั่งซื้อไปบันทึกที่หลังบ้าน",
+          "เกิดปัญหาที่ระบบหลังบ้าน",
       );
     } finally {
       setIsSubmitting(false);
@@ -425,29 +547,25 @@ export default function PosPage(): React.JSX.Element {
                     type="number"
                     value={billDiscountValue === 0 ? "" : billDiscountValue}
                     onChange={(e) => handleBillDiscountChange(e.target.value)}
-                    disabled={billDiscountType === "none" || isLineDiscountFull}
+                    disabled={billDiscountType === "none"}
                     className={`w-full px-3 py-2 pl-10 text-sm focus:outline-none focus:border-red-500 transition-colors ${
-                      billDiscountType === "none" || isLineDiscountFull
+                      billDiscountType === "none"
                         ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"
                         : "bg-[#2A2929] text-white"
                     }`}
                     placeholder={
-                      isLineDiscountFull
-                        ? "สิทธิ์เต็มแล้ว"
-                        : billDiscountType === "none"
-                          ? "ล็อกไว้"
-                          : "0.00"
+                      billDiscountType === "none" ? "ล็อกไว้" : "0.00"
                     }
                   />
                 </div>
                 <button
                   type="button"
-                  disabled={billDiscountType === "none" || isLineDiscountFull}
+                  disabled={billDiscountType === "none"}
                   onClick={() =>
                     handleBillDiscountChange(String(billDiscountValue))
                   }
                   className={`text-xs font-bold px-4 py-2.5 rounded-none shrink-0 transition-colors shadow-sm cursor-pointer ${
-                    billDiscountType === "none" || isLineDiscountFull
+                    billDiscountType === "none"
                       ? "bg-zinc-700 text-zinc-500 cursor-not-allowed"
                       : "bg-[#E51C23] hover:bg-[#B70011] text-white"
                   }`}
@@ -493,11 +611,10 @@ export default function PosPage(): React.JSX.Element {
 
               <div className="bg-[#2D2C2C] p-2 text-[11px] leading-tight text-[#D1D5DB] max-w-[265px] text-left rounded-none">
                 <span className="text-[#E51C23] font-bold mr-1">ⓘ</span>
-                {billDiscountType === "none" || isLineDiscountFull ? (
+                {billDiscountType === "none" ? (
                   <span>
-                    {isLineDiscountFull
-                      ? `คุณให้ส่วนลดต่อรายการเต็มเพดานรวม ${maxGlobalRate}% ของร้านค้าแล้ว ไม่สามารถลดเพิ่มได้อีก`
-                      : "เลือกหน่วย (฿ / %) และระบุจำนวนส่วนลดที่ต้องการในแต่ละรายการสินค้า"}
+                    เลือกหน่วย (฿ / %)
+                    และระบุจำนวนส่วนลดที่ต้องการในแต่ละรายการสินค้า
                   </span>
                 ) : (
                   <span>
@@ -548,6 +665,50 @@ export default function PosPage(): React.JSX.Element {
                       item.discount_type === "percentage"
                         ? (lineTotal * item.discount_value) / 100
                         : item.discount_value;
+
+                    // ย้ายการประกาศ subtotalAfterDiscount ขึ้นมาไว้ตรงนี้ก่อนนำไปใช้คำนวณ Weight ด้านล่าง (แก้ปัญหา NaN / บั๊กป้ายแดงไม่ขึ้น)
+                    const subtotalAfterDiscount = lineTotal - itemDiscount;
+
+                    let allocatedDiscount = 0;
+                    const totalSubtotalAfterLineDiscount =
+                      totalItemPrice - totalLineDiscount;
+
+                    if (
+                      totalSubtotalAfterLineDiscount > 0 &&
+                      computedBillDiscount > 0
+                    ) {
+                      if (index === cart.length - 1) {
+                        let distributedAmount = 0;
+                        for (let i = 0; i < index; i++) {
+                          const prevItem = cart[i];
+                          const prevLineTotal =
+                            prevItem.unit_price * prevItem.qty;
+                          const prevItemDiscount =
+                            prevItem.discount_type === "percentage"
+                              ? (prevLineTotal * prevItem.discount_value) / 100
+                              : prevItem.discount_value;
+                          const prevWeight =
+                            (prevLineTotal - prevItemDiscount) /
+                            totalSubtotalAfterLineDiscount;
+                          distributedAmount +=
+                            Math.round(
+                              computedBillDiscount * prevWeight * 100,
+                            ) / 100;
+                        }
+                        allocatedDiscount =
+                          computedBillDiscount - distributedAmount;
+                      } else {
+                        const weight =
+                          subtotalAfterDiscount /
+                          totalSubtotalAfterLineDiscount;
+                        allocatedDiscount =
+                          Math.round(computedBillDiscount * weight * 100) / 100;
+                      }
+                    }
+
+                    const finalLineTotal =
+                      subtotalAfterDiscount - allocatedDiscount;
+
                     return (
                       <tr
                         key={index}
@@ -638,45 +799,73 @@ export default function PosPage(): React.JSX.Element {
                             <span className="text-gray-400">—</span>
                           )}
                         </td>
+
+                        {/* คอลัมน์ "ลดราคา" (คอลัมน์ที่ 7) */}
                         <td className="py-4 px-4 text-center">
                           {item.discount_type !== "none" ? (
-                            <div className="relative inline-flex items-center justify-center px-2 py-1 min-w-[75px] transition-all border bg-gray-100 text-gray-700 border-gray-300 rounded-none font-medium">
-                              {item.discount_type === "amount" &&
-                                item.discount_value > 0 && (
-                                  <span className="mr-0.5 text-gray-500 font-bold select-none">
-                                    -
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="relative inline-flex items-center justify-center px-2 py-1 min-w-[75px] transition-all border bg-gray-100 text-gray-700 border-gray-300 rounded-none font-medium">
+                                {item.discount_type === "amount" &&
+                                  item.discount_value > 0 && (
+                                    <span className="mr-0.5 text-gray-500 font-bold select-none">
+                                      -
+                                    </span>
+                                  )}
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={
+                                    item.discount_value === 0
+                                      ? ""
+                                      : item.discount_value
+                                  }
+                                  placeholder="0"
+                                  onChange={(e) =>
+                                    handleDiscountValueChange(
+                                      index,
+                                      e.target.value,
+                                    )
+                                  }
+                                  className="w-12 bg-transparent text-center text-gray-800 font-bold outline-none border-b border-transparent focus:border-zinc-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                                {item.discount_type === "percentage" && (
+                                  <span className="ml-0.5 text-gray-400 font-bold select-none">
+                                    %
                                   </span>
                                 )}
-                              <input
-                                type="number"
-                                step="any"
-                                value={
-                                  item.discount_value === 0
-                                    ? ""
-                                    : item.discount_value
-                                }
-                                placeholder="0"
-                                onChange={(e) =>
-                                  handleDiscountValueChange(
-                                    index,
-                                    e.target.value,
-                                  )
-                                }
-                                className="w-12 bg-transparent text-center text-gray-800 font-bold outline-none border-b border-transparent focus:border-zinc-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              />
-                              {item.discount_type === "percentage" && (
-                                <span className="ml-0.5 text-gray-400 font-bold select-none">
-                                  %
+                              </div>
+                              {/* แสดงป้ายแดงถัวเฉลี่ยลดรวมเฉพาะเวลาค่ามากกว่า 0 */}
+                              {itemDiscount + allocatedDiscount > 0 && (
+                                <span className="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-sm block whitespace-nowrap mt-0.5">
+                                  ถัวเฉลี่ยลด: -฿
+                                  {(itemDiscount + allocatedDiscount).toFixed(
+                                    2,
+                                  )}
                                 </span>
                               )}
                             </div>
+                          ) : allocatedDiscount > 0 ? (
+                            <span className="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-sm inline-block whitespace-nowrap">
+                              ถัวเฉลี่ยลด: -฿{allocatedDiscount.toFixed(2)}
+                            </span>
                           ) : (
                             <span className="text-gray-400">—</span>
                           )}
                         </td>
+
+                        {/* คอลัมน์ "LINE TOTAL" (คอลัมน์ที่ 8 ขวาสุด) */}
                         <td className="py-4 px-4 text-right pr-6 font-bold text-zinc-900">
                           <div className="flex justify-end items-center gap-3">
-                            <span>{(lineTotal - itemDiscount).toFixed(2)}</span>
+                            <div className="text-right">
+                              {itemDiscount + allocatedDiscount > 0 && (
+                                <span className="text-[11px] text-zinc-400 line-through block font-normal">
+                                  ฿{lineTotal.toFixed(2)}
+                                </span>
+                              )}
+                              <span className="text-sm font-black text-zinc-950 block">
+                                ฿{finalLineTotal.toFixed(2)}
+                              </span>
+                            </div>
                             <button
                               type="button"
                               onClick={() => handleRemoveItem(index)}
@@ -798,7 +987,7 @@ export default function PosPage(): React.JSX.Element {
                       (t) => t.id === activeTypeId,
                     );
                     if (currentActiveType?.type_name === "GENERAL") {
-                      alert("⚠️ ลูกค้าทั่วไปไม่สามารถเลือกโหมดเงินเชื่อได้");
+                      alert("ลูกค้าทั่วไปไม่สามารถเลือกโหมดเงินเชื่อได้");
                       return;
                     }
                     setSelectedPaymentType("CREDIT");

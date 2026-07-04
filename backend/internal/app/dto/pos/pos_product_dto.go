@@ -11,7 +11,7 @@ type POSProductResponse struct {
 	Quantity     int     `json:"quantity"`
 	SalePrice    float64 `json:"sale_price"`
 	Note         string  `json:"note"`
-
+    MaxDiscountRate float64 `json:"max_discount_rate"`
 	Grade_Name		string  `json:"grade_name"`
 	Brand_Name		string  `json:"brand_name"`
 	Model_Name		string  `json:"model_name"`
@@ -50,6 +50,7 @@ func ToPOSProductResponseList(products []entity.Product) []POSProductResponse {
             Barcode:      p.Barcode,
             Quantity:     p.Quantity,
             SalePrice:    p.Sale_price,
+            MaxDiscountRate: p.MaxDiscountRate,
             Note:         p.Note,
             Grade_Name:   GradeName,
             Brand_Name:   BrandName,
