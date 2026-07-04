@@ -58,12 +58,32 @@ def init_db():
             # Sync sequences and create product_mapping_corrections table
             try:
                 with engine.begin() as transaction_conn:
-                    # Drop old table to migrate to new AI/User schema
-                    transaction_conn.execute(text("DROP TABLE IF EXISTS product_mapping_corrections;"))
-                    # Create corrections table for active learning human-in-the-loop mapping
+                    # Check if supplier_id column exists
+                    table_exists = transaction_conn.execute(text("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_name = 'product_mapping_corrections'
+                        );
+                    """)).fetchone()[0]
+                    
+                    has_supplier_id = False
+                    if table_exists:
+                        has_supplier_id = transaction_conn.execute(text("""
+                            SELECT EXISTS (
+                                SELECT FROM information_schema.columns 
+                                WHERE table_name = 'product_mapping_corrections' AND column_name = 'supplier_id'
+                            );
+                        """)).fetchone()[0]
+                    
+                    if table_exists and not has_supplier_id:
+                        # Drop old table to migrate to new supplier-aware schema
+                        transaction_conn.execute(text("DROP TABLE IF EXISTS product_mapping_corrections;"))
+                        
+                    # Create corrections table with supplier_id and updated unique constraint
                     transaction_conn.execute(text("""
                         CREATE TABLE IF NOT EXISTS product_mapping_corrections (
                             id SERIAL PRIMARY KEY,
+                            supplier_id INTEGER NOT NULL DEFAULT 1,
                             ai_product_name VARCHAR(255) NOT NULL,
                             ai_product_code VARCHAR(255) NOT NULL DEFAULT '',
                             user_product_name VARCHAR(255) NOT NULL,
@@ -71,7 +91,7 @@ def init_db():
                             product_id INTEGER NOT NULL,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            CONSTRAINT uq_ai_name_code UNIQUE (ai_product_name, ai_product_code)
+                            CONSTRAINT uq_supplier_ai_name_code UNIQUE (supplier_id, ai_product_name, ai_product_code)
                         );
                     """))
                     
@@ -383,8 +403,9 @@ def match_bill_products(result):
                 
                 # Get corrections
                 try:
-                    corr_query = text("SELECT ai_product_name, ai_product_code, product_id FROM product_mapping_corrections")
-                    corr_rows = conn.execute(corr_query).fetchall()
+                    supplier_id = int(result.get("supplier_id") or 1)
+                    corr_query = text("SELECT ai_product_name, ai_product_code, product_id FROM product_mapping_corrections WHERE supplier_id = :supplier_id")
+                    corr_rows = conn.execute(corr_query, {"supplier_id": supplier_id}).fetchall()
                     for cr in corr_rows:
                         corrections.append({
                             "company_product_name": cr[0],
@@ -543,6 +564,60 @@ def ask_agent(request: AgentRequest):
         tb = traceback.format_exc()
         print(f"Agent error: {e}\n{tb}")
         raise HTTPException(status_code=500, detail=str(e))
+
+class GenerateCodesRequest(BaseModel):
+    product_ids: list[int]
+
+def sanitize_filename(name: str) -> str:
+    import re
+    # Keep only alphanumeric characters, underscores, and dashes
+    s = re.sub(r'[^a-zA-Z0-9_\-]', '-', name)
+    s = re.sub(r'-+', '-', s)
+    return s.strip('-')
+
+@app.post("/api/products/generate-codes")
+def generate_product_codes(request: GenerateCodesRequest):
+    """
+    Query products table by ID to get the real internal WMS product code.
+    Generates Barcode (Code 128) using these internal values,
+    and saves them under the backend/barcode folder using generator.py.
+    """
+    import os
+    import sys
+    
+    # Add backend root to path to allow importing from barcode package
+    backend_root = "/Users/phonsirithabunsri/Desktop/AutoParts-Retail-Management-Web-Application/backend"
+    if backend_root not in sys.path:
+        sys.path.append(backend_root)
+        
+    try:
+        from barcode_generator import generate_barcode
+    except ImportError as e:
+        print(f"Error importing barcode generator: {e}")
+        raise HTTPException(status_code=500, detail=f"Barcode module import error: {e}")
+
+    BARCODE_DIR = os.path.join(backend_root, "barcode")
+    generated = []
+    
+    with engine.connect() as conn:
+        for prod_id in request.product_ids:
+            try:
+                # Query the actual internal WMS product code (source of truth)
+                query = text("SELECT product_code FROM products WHERE id = :id")
+                row = conn.execute(query, {"id": prod_id}).fetchone()
+                if not row:
+                    print(f"Product ID {prod_id} not found in DB, skipping code generation.")
+                    continue
+                
+                wms_code = row[0] or ""
+                
+                # Call the modular barcode generator
+                generate_barcode(prod_id, wms_code, BARCODE_DIR)
+                generated.append(prod_id)
+            except Exception as item_err:
+                print(f"Error processing product ID {prod_id}: {item_err}")
+                
+    return {"status": "success", "generated_product_ids": generated}
 
 @app.get("/health")
 def health_check():

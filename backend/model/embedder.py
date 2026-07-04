@@ -139,14 +139,15 @@ class ProductMatcher:
         with torch.no_grad():
             model_output = self.model(**encoded_input)
         
+        import numpy as np
         # Mean Pooling to get sentence embeddings
         token_embeddings = model_output[0]
         # Check type of token_embeddings (if it's numpy array or torch tensor)
-        if hasattr(token_embeddings, "numpy"):
+        if isinstance(token_embeddings, np.ndarray):
             token_embeddings = torch.from_numpy(token_embeddings)
         
         attention_mask = encoded_input['attention_mask']
-        if hasattr(attention_mask, "numpy"):
+        if isinstance(attention_mask, np.ndarray):
             attention_mask = torch.from_numpy(attention_mask)
 
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
@@ -181,43 +182,128 @@ class ProductMatcher:
 
         # Fallback to TF-IDF if ONNX is disabled or failed
         if not self.use_onnx or self.product_embeddings is None:
-            match, score = self.fallback_matcher.find_best_match(query_text)
-            if match:
-                req_threshold = 0.80 if match.get("type") == "correction" else threshold
-                if score >= req_threshold:
-                    return match.get("id"), score
-            return None, score
+            if not self.fallback_matcher.fitted:
+                return None, 0.0
+            try:
+                query_vector = self.fallback_matcher.vectorizer.transform([query_text])
+                from sklearn.metrics.pairwise import cosine_similarity
+                similarities = cosine_similarity(query_vector, self.fallback_matcher.product_vectors)[0]
+                
+                best_corr_idx = -1
+                best_corr_score = -1.0
+                best_prod_idx = -1
+                best_prod_score = -1.0
+                
+                for idx, score in enumerate(similarities):
+                    item = self.combined_data[idx]
+                    if item.get("type") == "correction":
+                        if score > best_corr_score:
+                            best_corr_score = score
+                            best_corr_idx = idx
+                    else:
+                        if score > best_prod_score:
+                            best_prod_score = score
+                            best_prod_idx = idx
+                            
+                # Check user corrections with 0.80 threshold first
+                if best_corr_idx != -1 and best_corr_score >= 0.80:
+                    return self.combined_data[best_corr_idx].get("id"), best_corr_score
+                if best_prod_idx != -1 and best_prod_score >= threshold:
+                    return self.combined_data[best_prod_idx].get("id"), best_prod_score
+                    
+                return None, max(best_corr_score, best_prod_score)
+            except Exception as e:
+                print(f"Error during TF-IDF search: {e}")
+                return None, 0.0
 
         try:
             # Get query embedding
             query_emb = self._get_embeddings_batch([query_text])
             if query_emb is None:
-                match, score = self.fallback_matcher.find_best_match(query_text)
-                if match:
-                    req_threshold = 0.80 if match.get("type") == "correction" else threshold
-                    if score >= req_threshold:
-                        return match.get("id"), score
-                return None, score
+                if not self.fallback_matcher.fitted:
+                    return None, 0.0
+                query_vector = self.fallback_matcher.vectorizer.transform([query_text])
+                from sklearn.metrics.pairwise import cosine_similarity
+                similarities = cosine_similarity(query_vector, self.fallback_matcher.product_vectors)[0]
+                
+                best_corr_idx = -1
+                best_corr_score = -1.0
+                best_prod_idx = -1
+                best_prod_score = -1.0
+                
+                for idx, score in enumerate(similarities):
+                    item = self.combined_data[idx]
+                    if item.get("type") == "correction":
+                        if score > best_corr_score:
+                            best_corr_score = score
+                            best_corr_idx = idx
+                    else:
+                        if score > best_prod_score:
+                            best_prod_score = score
+                            best_prod_idx = idx
+                            
+                if best_corr_idx != -1 and best_corr_score >= 0.80:
+                    return self.combined_data[best_corr_idx].get("id"), best_corr_score
+                if best_prod_idx != -1 and best_prod_score >= threshold:
+                    return self.combined_data[best_prod_idx].get("id"), best_prod_score
+                return None, max(best_corr_score, best_prod_score)
 
             # Calculate cosine similarities against combined targets
             similarities = np.dot(self.product_embeddings, query_emb[0])
-            best_idx = np.argmax(similarities)
-            best_score = float(similarities[best_idx])
-            matched_item = self.combined_data[best_idx]
-
-            print(f"[Embedding Match] Scanned: '{query_text}' matches {matched_item.get('type')}: '{matched_item.get('name')}' with score: {best_score:.4f}")
-            req_threshold = 0.80 if matched_item.get("type") == "correction" else threshold
-            if best_score >= req_threshold:
-                return matched_item.get("id"), best_score
-            else:
-                print(f"[Embedding Match] Score {best_score:.4f} is below threshold {req_threshold}. Product unmatched.")
-                return None, best_score
+            
+            best_corr_idx = -1
+            best_corr_score = -1.0
+            best_prod_idx = -1
+            best_prod_score = -1.0
+            
+            for idx, score in enumerate(similarities):
+                item = self.combined_data[idx]
+                if item.get("type") == "correction":
+                    if score > best_corr_score:
+                        best_corr_score = score
+                        best_corr_idx = idx
+                else:
+                    if score > best_prod_score:
+                        best_prod_score = score
+                        best_prod_idx = idx
+                        
+            if best_corr_idx != -1 and best_corr_score >= 0.80:
+                print(f"[Embedding Match] Found correction match: '{self.combined_data[best_corr_idx].get('name')}' with score: {best_corr_score:.4f}")
+                return self.combined_data[best_corr_idx].get("id"), best_corr_score
+            if best_prod_idx != -1 and best_prod_score >= threshold:
+                print(f"[Embedding Match] Found product match: '{self.combined_data[best_prod_idx].get('name')}' with score: {best_prod_score:.4f}")
+                return self.combined_data[best_prod_idx].get("id"), best_prod_score
+                
+            best_score = max(best_corr_score, best_prod_score)
+            print(f"[Embedding Match] Score {best_score:.4f} is below threshold. Product unmatched.")
+            return None, best_score
         except Exception as e:
             print(f"Error matching product via ONNX embeddings: {e}")
             # Try TF-IDF fallback
-            match, score = self.fallback_matcher.find_best_match(query_text)
-            if match:
-                req_threshold = 0.80 if match.get("type") == "correction" else threshold
-                if score >= req_threshold:
-                    return match.get("id"), score
-            return None, score
+            if not self.fallback_matcher.fitted:
+                return None, 0.0
+            query_vector = self.fallback_matcher.vectorizer.transform([query_text])
+            from sklearn.metrics.pairwise import cosine_similarity
+            similarities = cosine_similarity(query_vector, self.fallback_matcher.product_vectors)[0]
+            
+            best_corr_idx = -1
+            best_corr_score = -1.0
+            best_prod_idx = -1
+            best_prod_score = -1.0
+            
+            for idx, score in enumerate(similarities):
+                item = self.combined_data[idx]
+                if item.get("type") == "correction":
+                    if score > best_corr_score:
+                        best_corr_score = score
+                        best_corr_idx = idx
+                else:
+                    if score > best_prod_score:
+                        best_prod_score = score
+                        best_prod_idx = idx
+                        
+            if best_corr_idx != -1 and best_corr_score >= 0.80:
+                return self.combined_data[best_corr_idx].get("id"), best_corr_score
+            if best_prod_idx != -1 and best_prod_score >= threshold:
+                return self.combined_data[best_prod_idx].get("id"), best_prod_score
+            return None, max(best_corr_score, best_prod_score)

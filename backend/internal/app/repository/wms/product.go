@@ -28,7 +28,7 @@ func (r *productRepository) CreateProduct(product *entity.Product) error {
 
 func (r *productRepository) GetProductByID(id uint) (*entity.Product, error) {
 	var product entity.Product
-	err := r.db.Preload("Brand").Preload("Category").Preload("Unit").Preload("Shelf").Preload("ProductImages").
+	err := r.db.Preload("Brand").Preload("Category").Preload("SubCategory").Preload("Unit").Preload("Shelf").Preload("ProductImages").
 		First(&product, id).Error
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func (r *productRepository) DeleteProduct(id uint) error {
 
 func (r *productRepository) ListProducts() ([]entity.Product, error) {
 	var products []entity.Product
-	err := r.db.Preload("Brand").Preload("Category").Preload("Unit").Preload("Shelf").Preload("ProductImages").
+	err := r.db.Preload("Brand").Preload("Category").Preload("SubCategory").Preload("Unit").Preload("Shelf").Preload("ProductImages").
 		Find(&products).Error
 	return products, err
 }

@@ -4,6 +4,7 @@ import (
 	wmsCtrl "backend/internal/app/controller/wms"
 	wmsRepo "backend/internal/app/repository/wms"
 	wmsSvc  "backend/internal/app/service/wms"
+	"backend/internal/app/entity"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -21,5 +22,15 @@ func SetupProductRoutes(r *gin.Engine, db *gorm.DB) {
 		wms.GET("/products/:id", controller.GetProductByID)
 		wms.PUT("/products/:id", controller.UpdateProduct)
 		wms.DELETE("/products/:id", controller.DeleteProduct)
+
+		// Static fetch for categories and sub-categories
+		wms.GET("/categories", func(c *gin.Context) {
+			var categories []entity.Category
+			if err := db.Preload("SubCategories").Find(&categories).Error; err != nil {
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(200, categories)
+		})
 	}
 }

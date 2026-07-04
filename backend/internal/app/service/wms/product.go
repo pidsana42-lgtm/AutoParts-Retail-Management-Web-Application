@@ -1,6 +1,12 @@
 package wms
 
 import (
+	"bytes"
+	"encoding/json"
+	"log"
+	"net/http"
+	"time"
+
 	wmsDto  "backend/internal/app/dto/wms"
 	wmsRepo "backend/internal/app/repository/wms"
 )
@@ -23,7 +29,15 @@ func NewProductService(repo wmsRepo.ProductRepository) ProductService {
 
 func (s *productService) CreateProduct(req *wmsDto.ProductRequestDTO) error {
 	product := req.ToEntity()
-	return s.repo.CreateProduct(&product)
+	if product.Barcode == "" {
+		product.Barcode = product.Product_Code
+	}
+	err := s.repo.CreateProduct(&product)
+	if err != nil {
+		return err
+	}
+	triggerBarcodeGen([]uint{product.ID})
+	return nil
 }
 
 func (s *productService) GetProductByID(id uint) (*wmsDto.ProductListResponseDTO, error) {
@@ -39,7 +53,15 @@ func (s *productService) GetProductByID(id uint) (*wmsDto.ProductListResponseDTO
 func (s *productService) UpdateProduct(id uint, req *wmsDto.ProductRequestDTO) error {
 	product := req.ToEntity()
 	product.ID = id
-	return s.repo.UpdateProduct(&product)
+	if product.Barcode == "" {
+		product.Barcode = product.Product_Code
+	}
+	err := s.repo.UpdateProduct(&product)
+	if err != nil {
+		return err
+	}
+	triggerBarcodeGen([]uint{id})
+	return nil
 }
 
 func (s *productService) DeleteProduct(id uint) error {
@@ -56,4 +78,31 @@ func (s *productService) ListProducts() ([]wmsDto.ProductListResponseDTO, error)
 		result[i].FromEntity(p)
 	}
 	return result, nil
+}
+
+func triggerBarcodeGen(ids []uint) {
+	if len(ids) == 0 {
+		return
+	}
+	go func() {
+		payload := map[string]interface{}{
+			"product_ids": ids,
+		}
+		jsonPayload, errPayload := json.Marshal(payload)
+		if errPayload != nil {
+			log.Printf("[WMS] Error marshaling product IDs payload for manual creation: %v\n", errPayload)
+			return
+		}
+		client := http.Client{
+			Timeout: 15 * time.Second,
+		}
+		fastAPIURL := "http://localhost:8000/api/products/generate-codes"
+		resp, errReq := client.Post(fastAPIURL, "application/json", bytes.NewBuffer(jsonPayload))
+		if errReq != nil {
+			log.Printf("[WMS] Error calling FastAPI to generate barcode for manually created product: %v\n", errReq)
+			return
+		}
+		defer resp.Body.Close()
+		log.Printf("[WMS] FastAPI manual product barcode generation response status: %d\n", resp.StatusCode)
+	}()
 }

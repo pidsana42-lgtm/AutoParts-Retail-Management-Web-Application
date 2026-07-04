@@ -26,6 +26,8 @@ interface Product {
   id: number;
   product_name: string;
   product_code: string;
+  category_name?: string;
+  sub_category_name?: string;
 }
 
 interface BillItemDTO {
@@ -43,6 +45,8 @@ interface BillItemDTO {
   is_freebie: boolean;
   remark: string;
   product_id: number | null;
+  category_id?: number | null;
+  sub_category_id?: number | null;
 }
 
 interface ScannedBillData {
@@ -106,6 +110,7 @@ export default function ImportBill() {
   const [bills, setBills] = useState<SavedBill[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   
   // Loading and Error States
   const [loadingBills, setLoadingBills] = useState(false);
@@ -126,6 +131,40 @@ export default function ImportBill() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [rotate, setRotate] = useState(0);
+
+  // Resizable split panels state
+  const [leftWidth, setLeftWidth] = useState<number>(50); // percentage (e.g. 50%)
+  const [isResizing, setIsResizing] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const container = document.getElementById('split-pane-container');
+      if (!container) return;
+      
+      const containerRect = container.getBoundingClientRect();
+      const relativeX = e.clientX - containerRect.left;
+      const percentage = (relativeX / containerRect.width) * 100;
+      
+      // Constraint bounds between 25% and 75%
+      if (percentage >= 25 && percentage <= 75) {
+        setLeftWidth(percentage);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   // Form State
   const [formData, setFormData] = useState<ScannedBillData | null>(null);
@@ -154,7 +193,9 @@ export default function ImportBill() {
       net_amount: 0,
       is_freebie: false,
       remark: '',
-      product_id: products[0]?.id || 2
+      product_id: null,
+      category_id: null,
+      sub_category_id: null,
     };
     
     const updatedItems = [...formData.items, newRow];
@@ -340,15 +381,19 @@ export default function ImportBill() {
   const fetchSuppliersAndProducts = async () => {
     setLoadingSuppliersProducts(true);
     try {
-      const [suppliersRes, productsRes] = await Promise.all([
+      const [suppliersRes, productsRes, categoriesRes] = await Promise.all([
         apiClient.get('/wms/suppliers'),
-        apiClient.get('/wms/products')
+        apiClient.get('/wms/products'),
+        apiClient.get('/wms/categories')
       ]);
       if (suppliersRes.data) {
         setSuppliers(Array.isArray(suppliersRes.data) ? suppliersRes.data : (suppliersRes.data.data || []));
       }
       if (productsRes.data) {
         setProducts(Array.isArray(productsRes.data) ? productsRes.data : (productsRes.data.data || []));
+      }
+      if (categoriesRes.data) {
+        setCategories(categoriesRes.data || []);
       }
     } catch (err: any) {
       console.error('Error fetching configuration details:', err);
@@ -411,14 +456,20 @@ export default function ImportBill() {
 
       // Map parsed items to associate product_id automatically if they match codes in local DB
       const mappedItems = (parsedData.items || []).map((item: any) => {
-        const matchedProduct = products.find(
-          (p) => p.product_code.toLowerCase() === item.company_product_code.toLowerCase()
-        );
+        let finalProductId = item.product_id || null;
+        if (!finalProductId && item.company_product_code) {
+          const matchedProduct = products.find(
+            (p) => p.product_code.toLowerCase() === item.company_product_code.toLowerCase()
+          );
+          if (matchedProduct) {
+            finalProductId = matchedProduct.id;
+          }
+        }
         return {
           ...item,
           ai_product_name: item.company_product_name,
           ai_product_code: item.company_product_code,
-          product_id: matchedProduct ? matchedProduct.id : (products[0]?.id || 2), // Default fallback to first product or 2
+          product_id: finalProductId,
         };
       });
 
@@ -468,14 +519,20 @@ export default function ImportBill() {
         }
         
         const mappedItems = (parsedData.items || []).map((item: any) => {
-          const matchedProduct = products.find(
-            (p) => p.product_code.toLowerCase() === item.company_product_code.toLowerCase()
-          );
+          let finalProductId = item.product_id || null;
+          if (!finalProductId && item.company_product_code) {
+            const matchedProduct = products.find(
+              (p) => p.product_code.toLowerCase() === item.company_product_code.toLowerCase()
+            );
+            if (matchedProduct) {
+              finalProductId = matchedProduct.id;
+            }
+          }
           return {
             ...item,
             ai_product_name: item.company_product_name,
             ai_product_code: item.company_product_code,
-            product_id: matchedProduct ? matchedProduct.id : (products[0]?.id || 2),
+            product_id: finalProductId,
           };
         });
         
@@ -586,7 +643,9 @@ export default function ImportBill() {
             ...item,
             ai_product_name: item.ai_product_name || item.company_product_name,
             ai_product_code: item.ai_product_code || item.company_product_code,
-            product_id: item.product_id ? Number(item.product_id) : 2,
+            product_id: item.product_id ? Number(item.product_id) : 0,
+            category_id: item.category_id ? Number(item.category_id) : null,
+            sub_category_id: item.sub_category_id ? Number(item.sub_category_id) : null,
           }))
         };
         
@@ -641,7 +700,9 @@ export default function ImportBill() {
           ...item,
           ai_product_name: item.ai_product_name || item.company_product_name,
           ai_product_code: item.ai_product_code || item.company_product_code,
-          product_id: item.product_id ? Number(item.product_id) : 2,
+          product_id: item.product_id ? Number(item.product_id) : 0,
+          category_id: item.category_id ? Number(item.category_id) : null,
+          sub_category_id: item.sub_category_id ? Number(item.sub_category_id) : null,
         }))
       };
 
@@ -781,7 +842,7 @@ export default function ImportBill() {
                   net_amount: 0,
                   is_freebie: false,
                   remark: '',
-                  product_id: products[0]?.id || 2
+                  product_id: null
                 }
               ],
               db_job_id: 0,
@@ -903,10 +964,14 @@ export default function ImportBill() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div id="split-pane-container" className="flex flex-col lg:flex-row gap-0 w-full min-h-[750px] relative">
           {/* Left: Document Preview & File Selection */}
           {!isManualEntry && (
-            <div className="lg:col-span-6 bg-[#e2e2e2] rounded-xl p-6 flex flex-col gap-4 min-h-[750px]">
+            <>
+              <div 
+                style={{ width: typeof window !== 'undefined' && window.innerWidth >= 1024 ? `${leftWidth}%` : '100%' }}
+                className="bg-[#e2e2e2] rounded-xl p-6 flex flex-col gap-4 min-h-[750px]"
+              >
           {/* Top Bar: Zoom/Rotate and Change Image Button */}
           {previewUrl && (
             <div className="flex items-center justify-between bg-white p-2 rounded shadow-sm w-full">
@@ -1069,10 +1134,36 @@ export default function ImportBill() {
 
 
         </div>
-        )}
+        
+        {/* Resizer Divider Bar */}
+        <div
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setIsResizing(true);
+          }}
+          className={`hidden lg:flex w-2.5 hover:w-3.5 cursor-col-resize hover:bg-[#b32025]/50 bg-gray-200 border-l border-r border-gray-300 items-center justify-center relative select-none rounded-md transition-all group z-10 mx-2 ${
+            isResizing ? 'bg-[#b32025]/80 w-3.5' : ''
+          }`}
+          style={{ cursor: 'col-resize' }}
+        >
+          <div className="flex flex-col gap-1 text-gray-400 group-hover:text-white pointer-events-none select-none font-bold text-[8px]">
+            <span>•</span>
+            <span>•</span>
+            <span>•</span>
+          </div>
+        </div>
+      </>
+      )}
 
-        {/* Right: Extracted Data Fields */}
-        <div className={`${isManualEntry ? 'lg:col-span-12' : 'lg:col-span-6'} bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[700px]`}>
+      {/* Right: Extracted Data Fields */}
+      <div 
+        style={{ 
+          width: typeof window !== 'undefined' && window.innerWidth >= 1024 
+            ? (isManualEntry ? '100%' : `${100 - leftWidth}%`) 
+            : '100%' 
+        }}
+        className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[700px]"
+      >
           {!formData ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-gray-400">
               <FileUp size={48} className="text-gray-300 mb-4" />
@@ -1149,9 +1240,10 @@ export default function ImportBill() {
                 <table className="w-full text-left text-sm border-collapse">
                   <thead>
                     <tr className="border-b border-gray-100 text-xs text-gray-500">
-                      <th className="py-4 px-6 font-bold w-1/4">สแกนรหัส (บิล)</th>
-                      <th className="py-4 px-6 font-bold w-1/3">ชื่อสินค้า (บิล)</th>
-                      <th className="py-4 px-6 font-bold w-1/4">เทียบสินค้าในระบบ</th>
+                      <th className="py-4 px-6 font-bold w-[15%]">สแกนรหัส (บิล)</th>
+                      <th className="py-4 px-6 font-bold w-[25%]">ชื่อสินค้า (บิล)</th>
+                      <th className="py-4 px-6 font-bold w-[25%]">เทียบสินค้าในระบบ</th>
+                      <th className="py-4 px-6 font-bold w-[20%]">หมวดหมู่ WMS</th>
                       <th className="py-4 px-6 font-bold text-right">จำนวน</th>
                       <th className="py-4 px-6 font-bold text-right">ราคา/หน่วย</th>
                       <th className="py-4 px-6 font-bold text-center w-12">ลบ</th>
@@ -1189,6 +1281,61 @@ export default function ImportBill() {
                               <option key={p.id} value={p.id}>[{p.product_code}] {p.product_name}</option>
                             ))}
                           </select>
+                        </td>
+                        <td className="py-2 px-4">
+                          {item.product_id ? (
+                            (() => {
+                              const prod = products.find(p => p.id === Number(item.product_id));
+                              if (prod) {
+                                return (
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded font-medium inline-block truncate max-w-[150px]" title={prod.category_name}>
+                                      {prod.category_name || 'ไม่ระบุหมวดหมู่'}
+                                    </span>
+                                    {prod.sub_category_name && (
+                                      <span className="text-[9px] text-gray-400 pl-1 truncate max-w-[150px]" title={prod.sub_category_name}>
+                                        └─ {prod.sub_category_name}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              return <span className="text-gray-400 text-xs">-</span>;
+                            })()
+                          ) : (
+                            <div className="flex flex-col gap-1 p-1 bg-red-50/30 rounded border border-red-100/70">
+                              {/* Category Dropdown */}
+                              <select
+                                value={item.category_id || ''}
+                                onChange={(e) => {
+                                  const catId = e.target.value ? Number(e.target.value) : null;
+                                  handleItemChange(idx, 'category_id', catId);
+                                  handleItemChange(idx, 'sub_category_id', null); // Reset subcategory when category changes
+                                }}
+                                className="bg-white border border-gray-200 rounded p-0.5 text-[10px] w-full focus:ring-0 text-gray-700 font-medium"
+                              >
+                                <option value="">-- หมวดหมู่หลัก --</option>
+                                {categories.map((c: any) => (
+                                  <option key={c.ID} value={c.ID}>{c.category_name}</option>
+                                ))}
+                              </select>
+
+                              {/* Sub-Category Dropdown */}
+                              <select
+                                value={item.sub_category_id || ''}
+                                disabled={!item.category_id}
+                                onChange={(e) => {
+                                  handleItemChange(idx, 'sub_category_id', e.target.value ? Number(e.target.value) : null);
+                                }}
+                                className="bg-white border border-gray-200 rounded p-0.5 text-[10px] w-full focus:ring-0 text-gray-700 font-medium disabled:opacity-50"
+                              >
+                                <option value="">-- หมวดหมู่ย่อย --</option>
+                                {item.category_id && ((categories.find((c: any) => c.ID === item.category_id))?.sub_categories || []).map((sc: any) => (
+                                  <option key={sc.ID} value={sc.ID}>{sc.sub_category_name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
                         </td>
                         <td className="py-2 px-4 text-right">
                           <div className="flex items-center gap-1 justify-end">

@@ -22,6 +22,8 @@ type CreateBillItemDTO struct {
 	AIProductCode      string  `json:"ai_product_code"`
 	AIProductName      string  `json:"ai_product_name"`
 	ProductID          uint    `json:"product_id" binding:"required"`
+	CategoryID         *uint   `json:"category_id"`
+	SubCategoryID      *uint   `json:"sub_category_id"`
 }
 
 type UpdateBillItemDTO struct {
@@ -76,6 +78,8 @@ func (d *CreateBillItemDTO) ToEntity() entity.BillItem {
 		AIProductCode:      d.AIProductCode,
 		AIProductName:      d.AIProductName,
 		ProductID:          d.ProductID,
+		CategoryID:         d.CategoryID,
+		SubCategoryID:      d.SubCategoryID,
 	}
 }
 

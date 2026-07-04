@@ -129,6 +129,7 @@ func SetupDatabase() {
 	seed.Zone(db)
     seed.Unit(db)
     seed.Category(db)
+    seed.SubCategory(db)
     seed.Grade(db)
     seed.Shelf(db)
     seed.Brand(db) 
