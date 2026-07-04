@@ -115,10 +115,19 @@ func SetupDatabase() {
 	db.Exec("SET session_replication_role = 'origin';")
 
 	// Looktao
-    seed.Role(db)
-    seed.CustomerType(db)
-    seed.PaymentMethod(db)
-    seed.StoreConfig(db)
+
+	seed.Supplier(db)
+	
+	seed.PurchaseOrdersType(db)
+	seed.PurchaseOrders(db)
+	seed.BillImage(db)
+	seed.Bill(db)
+	seed.SaleOrder(db)
+  
+  seed.Role(db)
+  seed.CustomerType(db)
+  seed.PaymentMethod(db)
+  seed.StoreConfig(db)
     
 	// Toto WMS
 
