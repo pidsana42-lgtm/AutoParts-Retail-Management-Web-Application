@@ -21,4 +21,6 @@ type BillItem struct {
 	AIProductName      string   `gorm:"type:varchar(255)" json:"ai_product_name"`
 	ProductID          uint     `gorm:"not null;index" json:"product_id"`
 	Product            *Product `gorm:"foreignKey:ProductID" json:"product,omitempty"`
+	CategoryID         *uint    `json:"category_id" gorm:"default:null"`
+	SubCategoryID      *uint    `json:"sub_category_id" gorm:"default:null"`
 }

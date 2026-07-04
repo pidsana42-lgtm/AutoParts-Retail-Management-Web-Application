@@ -137,6 +137,39 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 		return importDataDTO.ConfirmBillImportResponseDTO{}, err
 	}
 
+	// Trigger QR and Barcode generation on FastAPI using internal product IDs
+	var productIDs []uint
+	seenIDs := make(map[uint]bool)
+	for _, item := range billItems {
+		if item.ProductID > 0 && !seenIDs[item.ProductID] {
+			seenIDs[item.ProductID] = true
+			productIDs = append(productIDs, item.ProductID)
+		}
+	}
+	if len(productIDs) > 0 {
+		go func(ids []uint) {
+			payload := map[string]interface{}{
+				"product_ids": ids,
+			}
+			jsonPayload, errPayload := json.Marshal(payload)
+			if errPayload != nil {
+				log.Printf("[WMS] Error marshaling product IDs payload: %v\n", errPayload)
+				return
+			}
+			client := http.Client{
+				Timeout: 15 * time.Second,
+			}
+			fastAPIURL := "http://localhost:8000/api/products/generate-codes"
+			resp, errReq := client.Post(fastAPIURL, "application/json", bytes.NewBuffer(jsonPayload))
+			if errReq != nil {
+				log.Printf("[WMS] Error calling FastAPI to generate product codes: %v\n", errReq)
+				return
+			}
+			defer resp.Body.Close()
+			log.Printf("[WMS] FastAPI product codes generation response status: %d\n", resp.StatusCode)
+		}(productIDs)
+	}
+
 	itemResponses := make([]importDataDTO.BillItemResponseDTO, len(billItems))
 	for i := range billItems {
 		itemResponses[i] = importDataDTO.ToBillItemResponseDTO(&billItems[i])
