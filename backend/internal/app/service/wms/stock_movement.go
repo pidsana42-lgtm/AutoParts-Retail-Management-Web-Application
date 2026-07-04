@@ -3,8 +3,8 @@ package wms
 import (
 	"time"
 
+	wmsDto "backend/internal/app/dto/wms"
 	"backend/internal/app/entity"
-	wmsDto  "backend/internal/app/dto/wms"
 	wmsRepo "backend/internal/app/repository/wms"
 )
 
@@ -31,9 +31,15 @@ func (s *stockMovementService) Create(req *wmsDto.StockMovementRequestDTO) error
 		ProductID:         req.ProductID,
 		UserID:            req.UserID,
 	}
-	if req.SupplierID != nil  { sm.SupplierID  = *req.SupplierID  }
-	if req.SaleOrderID != nil { sm.SaleOrderID = *req.SaleOrderID }
-	if req.BillID != nil      { sm.BillID      = *req.BillID      }
+	if req.SupplierID != nil {
+		sm.SupplierID = req.SupplierID
+	}
+	if req.SaleOrderID != nil {
+		sm.SaleOrderID = req.SaleOrderID
+	}
+	if req.BillID != nil {
+		sm.BillID = req.BillID
+	}
 	return s.repo.Create(&sm)
 }
 
@@ -68,10 +74,20 @@ func toMovementResponse(sm *entity.StockMovement) *wmsDto.StockMovementResponseD
 		UserID:            sm.UserID,
 		CreatedAt:         sm.CreatedAt,
 	}
-	if sm.Product  != nil { res.ProductName  = sm.Product.Product_Name   }
-	if sm.Supplier != nil { res.SupplierName = sm.Supplier.SupplierName  }
-	if sm.SupplierID  != 0 { uid := sm.SupplierID;  res.SupplierID  = &uid }
-	if sm.SaleOrderID != 0 { uid := sm.SaleOrderID; res.SaleOrderID = &uid }
-	if sm.BillID      != 0 { uid := sm.BillID;      res.BillID      = &uid }
+	if sm.Product != nil {
+		res.ProductName = sm.Product.Product_Name
+	}
+	if sm.Supplier != nil {
+		res.SupplierName = sm.Supplier.SupplierName
+	}
+	if sm.SupplierID != nil {
+		res.SupplierID = sm.SupplierID
+	}
+	if sm.SaleOrderID != nil {
+		res.SaleOrderID = sm.SaleOrderID
+	}
+	if sm.BillID != nil {
+		res.BillID = sm.BillID
+	}
 	return res
 }

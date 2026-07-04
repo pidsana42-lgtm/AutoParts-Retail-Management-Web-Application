@@ -1,0 +1,17 @@
+package wms
+
+type ShelfResponseDTO struct {
+	ID         uint   `json:"id"`
+	Shelf_Name string `json:"shelf_name"`
+	ZoneID     uint   `json:"zone_id"`
+}
+
+type ShelfRequestDTO struct {
+	Shelf_Name string `json:"shelf_name" binding:"required"`
+	ZoneID     uint   `json:"zone_id" binding:"required,gt=0"`
+}
+
+type ShelfUpdateDTO struct {
+	Shelf_Name string `json:"shelf_name"`
+	ZoneID     uint   `json:"zone_id" binding:"required,gt=0"`
+}
