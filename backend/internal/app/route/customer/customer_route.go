@@ -25,5 +25,7 @@ func SetupCustomerRoutes(r *gin.Engine, db *gorm.DB) {
 		customerGroup.POST("/register", customerCtrl.RegisterCustomer)
 		customerGroup.GET("", customerCtrl.GetAllCustomers)
 		customerGroup.GET("/:id", customerCtrl.GetCustomerByID)
+		customerGroup.PUT("/:id/discount", customerCtrl.UpdateCustomerDiscount)
+		
 	}
 }
