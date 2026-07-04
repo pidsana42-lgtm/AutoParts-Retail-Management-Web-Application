@@ -32,7 +32,7 @@ func Bill(db *gorm.DB) error {
 			SupplierID:  1, // สมมติ ID ของ Supplier เป็น 99
 			BillImageID: 1, // ตรงกับ BillImage IDด้านบน
 			VerifiedBy:  1, // ตรงกับ User ID ด้านบน
-			POID:        1, // ตรงกับ PO ID ด้านบน
+			POID:        2, // ตรงกับ PO ID ด้านบน
 		},
 	}
 
