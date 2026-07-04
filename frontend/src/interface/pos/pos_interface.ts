@@ -7,6 +7,7 @@ export interface SaleOrderItemRequest {
   unit_price: number;
   discount_type: "none" | "percentage" | "amount";
   discount_value: number;
+  max_discount_rate?: number; // เพดานส่วนลดสูงสุดของสินค้าตัวนี้ (หน้าบ้านต้องพ่วงฟิลด์นี้มาด้วย)
   part_number?: string;
   grade_name?: string;
   brand_name?: string;
