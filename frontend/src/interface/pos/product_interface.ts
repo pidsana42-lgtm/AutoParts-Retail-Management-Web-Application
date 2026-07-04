@@ -8,4 +8,7 @@ export interface POSProductResponse {
   quantity: number;
   sale_price: number;
   note: string;
+  grade_name?: string;
+  brand_name?: string;
+  model_name?: string;
 }

@@ -37,4 +37,7 @@ type Product struct {
 	ProductImages []ProductImage `gorm:"foreignKey:ProductID" json:"product_images"`
 	StockMovements []StockMovement `gorm:"foreignKey:ProductID" json:"stock_movements"`
 	BillItems []BillItem `gorm:"foreignKey:ProductID" json:"bill_items"`
+
+	// เพิ่มฟิลด์นี้เพื่อให้ Product เซ็ตเพดานส่วนลดของแต่ละชิ้น
+	MaxDiscountRate float64 `gorm:"type:decimal(5,2);not null;default:0.00" json:"max_discount_rate"`
 }

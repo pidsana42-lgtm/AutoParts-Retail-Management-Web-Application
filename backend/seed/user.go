@@ -25,23 +25,24 @@ func User(db *gorm.DB) error {
         _ = db.Where("id = ?", 1).First(&storeConfig)
     }
 
-    // 3. ตรวจสอบและดึงข้อมูลบทบาท (Role) ทั้งหมดมารอไว้สำหรับสร้าง User
+    // 3. ดึงข้อมูลบทบาท (Role) มารอไว้สำหรับสร้าง User (เอาอันที่สั่งรัน Seed ซ้ำออก)
     var roleOwner, roleEmployee, roleAdmin entity.Role
+    
     if err := db.Where("role_name = ?", enum.RoleOwner).First(&roleOwner).Error; err != nil {
-        if errSeed := Role(db); errSeed != nil {
-            return fmt.Errorf("failed to seed roles from user seed: %w", errSeed)
-        }
-        _ = db.Where("role_name = ?", enum.RoleOwner).First(&roleOwner)
+        return fmt.Errorf("failed to fetch role owner: %w", err)
     }
-    _ = db.Where("role_name = ?", enum.RoleEmployee).First(&roleEmployee)
-    _ = db.Where("role_name = ?", enum.RoleAdmin).First(&roleAdmin)
+    if err := db.Where("role_name = ?", enum.RoleEmployee).First(&roleEmployee).Error; err != nil {
+        return fmt.Errorf("failed to fetch role employee: %w", err)
+    }
+    if err := db.Where("role_name = ?", enum.RoleAdmin).First(&roleAdmin).Error; err != nil {
+        return fmt.Errorf("failed to fetch role admin: %w", err)
+    }
 
     // 4. เข้ารหัส Passwords เตรียมไว้ล่วงหน้า
-    ownerHashBytes, _ := bcrypt.GenerateFromPassword([]byte("owner123"), 14)
-    employeeHashBytes, _ := bcrypt.GenerateFromPassword([]byte("employee123"), 14)
-    adminHashBytes, _ := bcrypt.GenerateFromPassword([]byte("admin123"), 14)
+    ownerHashBytes, _ := bcrypt.GenerateFromPassword([]byte("123456"), 10)
+    employeeHashBytes, _ := bcrypt.GenerateFromPassword([]byte("employee123"), 10)
+    adminHashBytes, _ := bcrypt.GenerateFromPassword([]byte("123456"), 10)
 
-    
     ownerPasswordHashed := string(ownerHashBytes)
     employeePasswordHashed := string(employeeHashBytes)
     adminPasswordHashed := string(adminHashBytes)
@@ -52,12 +53,12 @@ func User(db *gorm.DB) error {
             FirstName:         "Owner",
             LastName:          "System",
             IdCardNumberUser:  "1100000000001",
-            Username:          "owner",
+            Username:          "boss",
             Password:          ownerPasswordHashed,
             StoreConfigID:     storeConfig.ID, // จะได้ค่าเป็น 1 เสมอ
             BankID:            bank.ID,
             BankAccountNumber: "123-4-56789-0",
-            RoleID:            roleOwner.ID,
+            RoleID:            1, // roleOwner.ID
         },
         {
             FirstName:         "Somchai",
@@ -68,18 +69,18 @@ func User(db *gorm.DB) error {
             StoreConfigID:     storeConfig.ID,
             BankID:            bank.ID,
             BankAccountNumber: "123-4-56789-1",
-            RoleID:            roleEmployee.ID,
+            RoleID:            2, // roleEmployee.ID
         },
         {
             FirstName:         "Manager",
             LastName:          "IT",
             IdCardNumberUser:  "1100000000003",
-            Username:          "manager",
+            Username:          "admin",
             Password:          adminPasswordHashed,
             StoreConfigID:     storeConfig.ID,
             BankID:            bank.ID,
             BankAccountNumber: "123-4-56789-2",
-            RoleID:            roleAdmin.ID,
+            RoleID:            3, // roleAdmin.ID
         },
         {
             FirstName:         "เนตรนภัทร",
@@ -90,7 +91,7 @@ func User(db *gorm.DB) error {
             StoreConfigID:     storeConfig.ID,
             BankID:            bank.ID,
             BankAccountNumber: "123-4-56789-3",
-            RoleID:            roleAdmin.ID,
+            RoleID:            3, // roleAdmin.ID
         },
     }
 
