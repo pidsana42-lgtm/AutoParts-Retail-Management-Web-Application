@@ -9,7 +9,7 @@ type StockAlert struct {
 	Limit_Quantity int `json:"limit_quantity"`
 	Is_Resolved string `json:"is_resolved"`
 
-	ProductID uint `json:"product_id"`
+	ProductID *uint `json:"product_id"`
 
 	Product *Product `gorm:"foreignKey:ProductID" json:"product"`
 }

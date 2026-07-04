@@ -120,11 +120,17 @@ func SetupDatabase() {
 	if err := seed.User(db); err != nil {
 		log.Printf("Warning: failed to seed default user: %v", err)
 	}
+	seed.Supplier(db)
 	seed.CustomerType(db)
 	seed.PaymentMethod(db)
 	seed.StoreConfig(db)
 	seed.Customer(db)
 	
+	seed.PurchaseOrdersType(db)
+	seed.PurchaseOrders(db)
+	seed.BillImage(db)
+	seed.Bill(db)
+	seed.SaleOrder(db)
 	
 	// Toto WMS
 	seed.Zone(db)
