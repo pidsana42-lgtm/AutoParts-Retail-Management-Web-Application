@@ -49,6 +49,12 @@ type POItemResponse struct {
 	PreOrderItemID            	*uint    `json:"pre_order_item_id,omitempty"`
 }
 
+type POSummaryResponse struct {
+    PendingAmount     	float64 	`json:"pending_amount"`
+    ApprovedMTDAmount 	float64 	`json:"approved_mtd_amount"`
+    RejectedMTDAmount 	float64 	`json:"rejected_mtd_amount"`
+}
+
 type ListPOQuery struct {
 	Page   int    `form:"page"`
 	Limit  int    `form:"limit"`
@@ -61,4 +67,8 @@ type ListPOQuery struct {
 type ListPOResponse struct {
 	Data  []PurchaseOrderResponse `json:"data"`  // POResponse คือ DTO ของข้อมูล PO 1 ตัวที่คุณน่าจะมีอยู่แล้ว
 	Total int64        `json:"total"` // จำนวนข้อมูลทั้งหมด
+}
+
+type DeletePORequest struct {
+	ID uint `uri:"id" binding:"required"`
 }

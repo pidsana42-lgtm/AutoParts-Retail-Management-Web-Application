@@ -32,5 +32,7 @@ func SetupPORoutes(r *gin.Engine, db *gorm.DB) {
 	{
 		poGroup.POST("/new-purchase-orders", poController.CreatePO)
 		poGroup.GET("/get-all-po", poController.ListPOs)
+		poGroup.GET("/summary", poController.GetSummary)
+		poGroup.DELETE("/:id", poController.DeletePO)
 	}
 }

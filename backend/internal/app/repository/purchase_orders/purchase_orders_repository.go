@@ -1,6 +1,8 @@
 package purchaseorders
 
 import (
+	"time"
+	"errors"
 	"context"
 	"gorm.io/gorm"
 	poEntity "backend/internal/app/entity"
@@ -9,23 +11,13 @@ import (
 
 // PurchaseOrderRepository คุมตาราง purchase_orders และ po_items
 type PurchaseOrderRepository interface {
-	Save(ctx context.Context, po *poEntity.PO) error
-	FindAll(ctx context.Context, query poDto.ListPOQuery) ([]poEntity.PO, int64, error)
-}
-
-// ProductRepository คุมตาราง products (เอาไว้ให้ Service ไปหาข้อมูลมาทำ Snapshot)
-type ProductRepository interface {
-	GetProductByID(ctx context.Context, id uint) (*poEntity.Product, error)
-}
-
-// SupplierRepository คุมตาราง suppliers
-type SupplierRepository interface {
-	GetSupplierByID(ctx context.Context, id uint) (*poEntity.Supplier, error)
-}
-
-// UserRepository คุมตาราง users
-type UserRepository interface {
-	FindByID(ctx context.Context, id uint) (*poEntity.User, error)
+	SavePO(ctx context.Context, po *poEntity.PO) error
+	FindAll(ctx context.Context, userID uint, query poDto.ListPOQuery) ([]poEntity.PO, int64, error)
+	DeletePOByID(ctx context.Context, id uint) error
+	GetPOByID(ctx context.Context, id uint) (*poEntity.PO, error)
+	GetPOByIDWithItems(ctx context.Context, id uint) (*poEntity.PO, error)
+	GetPOSummary(ctx context.Context, userID uint) (*poDto.POSummaryResponse, error)
+	// UpdatePDF(ctx context.Context, id uint, url string) error
 }
 
 type purchaseOrderRepository struct {
@@ -39,91 +31,138 @@ func NewPORepository(db *gorm.DB) PurchaseOrderRepository {
 	}
 }
 
-// Supplier Repo
-type supplierRepository struct {
-	db *gorm.DB
-}
-
-func NewSupplierRepository(db *gorm.DB) SupplierRepository {
-	return &supplierRepository{
-		db: db,
-	}
-}
-
-// Product Repo
-type productRepository struct {
-	db *gorm.DB
-}
-func NewProductRepository(db *gorm.DB) ProductRepository {
-	return &productRepository{db: db}
-}
-
-// User Repo
-type userRepository struct {
-	db *gorm.DB
-}
-func NewUserRepository(db *gorm.DB) UserRepository {
-	return &userRepository{db: db}
-}
-
 // Save บันทึกใบสั่งซื้อพร้อมไอเทมลูกทั้งหมดลง Database (มีระบบ Transaction ป้องกันข้อมูลพัง)
-func (r *purchaseOrderRepository) Save(ctx context.Context, po *poEntity.PO) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(po).Error; err != nil {
-			return err
-		}
-		return nil
-	})
+func (r *purchaseOrderRepository) SavePO(ctx context.Context, po *poEntity.PO) error {
+    return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+        // บันทึก PO ก่อน
+        if err := tx.Create(po).Error; err != nil {
+            return err
+        }
+
+        return nil
+    })
 }
 
-// FindByID ดึงข้อมูลใบสั่งซื้อ 1 ใบ พร้อม Preload รายการสินค้า (POItems) ติดมาด้วย
-func (r *userRepository) FindByID(ctx context.Context, id uint) (*poEntity.User, error) {
-    var user poEntity.User
-    
-    err := r.db.WithContext(ctx).First(&user, id).Error
-    
-    if err != nil {
-        return nil, err
-    }
-    
-    return &user, nil
-}
-
-func (r *purchaseOrderRepository) FindAll(ctx context.Context, query poDto.ListPOQuery) ([]poEntity.PO, int64, error) {
-	var pos []poEntity.PO
+func (r *purchaseOrderRepository) FindAll(ctx context.Context, userID uint, query poDto.ListPOQuery) ([]poEntity.PO, int64, error) {
+	var po []poEntity.PO
 	var total int64
 
-	// เริ่มต้น Query จาก Model PO
-	dbQuery := r.db.WithContext(ctx).Model(&poEntity.PO{})
+	dbQuery := r.db.WithContext(ctx).Model(&poEntity.PO{}).Where("created_by = ?", userID)
 
-	// 1. ใส่ Logic การ Filter
+	// Filter Status
 	if query.Status != "" {
 		dbQuery = dbQuery.Where("status = ?", query.Status)
 	}
+	// Filter Search
 	if query.Search != "" {
-		// ใช้ LIKE เพื่อค้นหา po_number
 		dbQuery = dbQuery.Where("po_number LIKE ?", "%"+query.Search+"%")
 	}
+	// Filter Date
 	if query.Date != "" {
-		// ค้นหาตามวันที่ (ถ้าใช้ MySQL)
 		dbQuery = dbQuery.Where("DATE(created_at) = ?", query.Date)
 	}
-
-	// 2. นับจำนวนทั้งหมดก่อน (Count ต้องทำก่อนการ Limit/Offset)
+	// Count
 	if err := dbQuery.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// 3. ดึงข้อมูลแบบ Pagination
 	offset := (query.Page - 1) * query.Limit
 	err := dbQuery.
-		Preload("Creator").     // ดึงข้อมูล User ผู้สร้าง
-		Preload("Supplier").    // ดึงข้อมูล Supplier
-		Preload("PO_Items").    // ดึงข้อมูลรายการสินค้า
+		Preload("Creator").
+		Preload("Supplier").
+		Preload("PO_Items").
+		Preload("PO_Items.Alert").
+        Preload("PO_Items.PreOrderItem").
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(query.Limit).
-		Find(&pos).Error
+		Find(&po).Error
 
-	return pos, total, err
+	return po, total, err
+}
+
+func (r *purchaseOrderRepository) GetPOSummary(ctx context.Context, userID uint) (*poDto.POSummaryResponse, error) {
+	var summary poDto.POSummaryResponse
+
+	// หาวันที่ 1 ของเดือนปัจจุบัน (สำหรับ MTD)
+	now := time.Now()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+
+	// 1. Query ยอดรออนุมัติ
+	r.db.WithContext(ctx).Model(&poEntity.PO{}). 
+		Where("user_id = ? AND status = ?", userID, "Pending").
+		Select("COALESCE(SUM(total_amount), 0)").
+		Scan(&summary.PendingAmount)
+
+	// 2. Query ยอดอนุมัติแล้ว (MTD)
+	r.db.WithContext(ctx).Model(&poEntity.PO{}).
+		Where("user_id = ? AND status = ? AND created_at >= ?", userID, "Approved", startOfMonth).
+		Select("COALESCE(SUM(total_amount), 0)").
+		Scan(&summary.ApprovedMTDAmount)
+
+	// 3. Query ยอดไม่อนุมัติ (MTD)
+	r.db.WithContext(ctx).Model(&poEntity.PO{}).
+		Where("user_id = ? AND status = ? AND created_at >= ?", userID, "Rejected", startOfMonth).
+		Select("COALESCE(SUM(total_amount), 0)").
+		Scan(&summary.RejectedMTDAmount)
+
+	return &summary, nil
+}
+
+// Get เพื่อเช็คว่ามี PO นี้อยู่จริงไหมก่อนลบ
+func (r *purchaseOrderRepository) GetPOByID(ctx context.Context, id uint) (*poEntity.PO, error) {
+	var po poEntity.PO
+
+	err := r.db.WithContext(ctx).
+		Preload("PO_Items").
+		First(&po, id).Error
+
+	// ถ้ามี Error เกิดขึ้น (รวมถึงหาไม่เจอ gorm.ErrRecordNotFound) ส่งกลับไปให้ Service จัดการเลย
+	if err != nil {
+		return nil, err 
+	}
+
+	return &po, nil
+}
+
+// ลบแบบ Soft Delete เก็บไว้ 14 วัน
+func (r *purchaseOrderRepository) DeletePOByID(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+
+		// 1. Soft delete items ก่อน
+		if err := tx.Where("po_id = ?", id).
+			Delete(&poEntity.POItems{}).Error; err != nil {
+			return err
+		}
+
+		// 2. Soft delete PO
+		result := tx.Delete(&poEntity.PO{}, id)
+		if result.Error != nil {
+			return result.Error
+		}
+
+		if result.RowsAffected == 0 {
+			return errors.New("purchase order not found")
+		}
+
+		return nil
+	})
+}
+
+// Get เพื่อไปทำ PDF
+func (r *purchaseOrderRepository) GetPOByIDWithItems(ctx context.Context, id uint) (*poEntity.PO, error) {
+	var po poEntity.PO
+	
+	err := r.db.WithContext(ctx).Where("id = ?", id).
+		Preload("Creator").
+		Preload("Supplier").
+		Preload("PO_Type").
+		Preload("PO_Items").
+		First(&po, id).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &po, err
 }

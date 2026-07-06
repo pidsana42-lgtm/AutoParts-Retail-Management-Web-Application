@@ -22,7 +22,7 @@ import {
 import { cn } from "../../../utils/component";
 import { useNavigate } from "react-router-dom";
 
-import type { POResponse } from "../../../interface/purchase_orders/po_interface";
+import type { POItemResponse, POResponse, POSummaryResponse } from "../../../interface/purchase_orders/po_interface";
 import { formatDate } from "../../../utils/formatdate";
 import { poService } from "../../../service/http/purchase_orders/po_service";
 
@@ -81,6 +81,12 @@ const PurchaseOrders: React.FC = () => {
   const [totalItems, setTotalItems] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [poList, setPoList] = useState<POItemResponse[]>([]);
+  const [summary, setSummary] = useState<POSummaryResponse>({
+    pending_amount: 0,
+    approved_mtd_amount: 0,
+    rejected_mtd_amount: 0
+  });
 
   // 2. States สำหรับ Filter
   const [statusFilter, setStatusFilter] = useState("all");
@@ -91,6 +97,7 @@ const PurchaseOrders: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  // ดึงข้อมูล PO ทั้งหมดของ User
   useEffect(() => {
     const fetchPurchaseOrders = async () => {
       setIsLoading(true);
@@ -127,6 +134,21 @@ const PurchaseOrders: React.FC = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [statusFilter, searchId, dateFilter]);
+
+  // ดึงข้อมูลสรุปยอดสั่งซื้อ
+  useEffect(() => {
+    const fetchSummary = async () => {
+      try {
+        const response = await poService.getPurchaseOrderSummary();
+        setSummary(response); 
+        
+      } catch (err: any) {
+        console.error("Failed to fetch PO summary:", err);
+      }
+    };
+
+    fetchSummary();
+  }, []); // [] หมายถึงให้รันแค่ครั้งเดียวตอนโหลดหน้าจอ
 
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
   const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -200,15 +222,21 @@ const PurchaseOrders: React.FC = () => {
       <div className="grid grid-cols-3 gap-6">
         <Card className="border-l-[5px] border-l-black flex flex-col justify-center h-24 p-5">
           <p className="text-sm text-gray-500 font-medium">รออนุมัติ</p>
-          <p className="text-2xl font-bold mt-1 text-gray-900"></p>
+          <p className="text-2xl font-bold mt-1 text-gray-900">
+            ฿{(summary?.pending_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
         </Card>
         <Card className="border-l-[5px] border-l-emerald-500 flex flex-col justify-center h-24 p-5">
           <p className="text-sm text-gray-500 font-medium">อนุมัติแล้ว (MTD)</p>
-          <p className="text-2xl font-bold mt-1 text-gray-900"></p>
+          <p className="text-2xl font-bold mt-1 text-gray-900">
+            ฿{(summary?.approved_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
         </Card>
         <Card className="border-l-[5px] border-l-red-500 flex flex-col justify-center h-24 p-5">
           <p className="text-sm text-gray-500 font-medium">ไม่อนุมัติ (MTD)</p>
-          <p className="text-2xl font-bold mt-1 text-gray-900"></p>
+          <p className="text-2xl font-bold mt-1 text-gray-900">
+            ฿{(summary?.rejected_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
         </Card>
       </div>
 
