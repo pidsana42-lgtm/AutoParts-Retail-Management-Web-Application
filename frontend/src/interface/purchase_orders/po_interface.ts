@@ -35,3 +35,9 @@ export interface GetPOsParams {
   search?: string;
   date?: string;
 }
+
+export interface POSummaryResponse {
+  pending_amount: number;
+  approved_mtd_amount: number;
+  rejected_mtd_amount: number;
+}

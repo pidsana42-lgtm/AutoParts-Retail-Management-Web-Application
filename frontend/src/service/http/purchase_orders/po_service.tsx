@@ -1,6 +1,6 @@
 import apiClient from "../apiClient"; // คุณ Import มาแล้วแต่ไม่ได้ใช้
 import type { CreatePORequest, CreatePOResponse } from '../../../interface/purchase_orders/create_po_interface'; 
-import type { GetPOsResponse, GetPOsParams } from '../../../interface/purchase_orders/po_interface';
+import type { GetPOsResponse, GetPOsParams, POSummaryResponse } from '../../../interface/purchase_orders/po_interface';
 
 export const poService = {
   
@@ -42,6 +42,16 @@ export const poService = {
       
     } catch (error) {
       console.error("เกิดข้อผิดพลาดในการสร้างใบสั่งซื้อ:", error);
+      throw error; 
+    }
+  },
+
+  getPurchaseOrderSummary: async (): Promise<POSummaryResponse> => {
+    try {
+      const response = await apiClient.get<POSummaryResponse>('/po/summary');
+      return response.data;
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการดึงข้อมูลสรุปยอด:", error);
       throw error; 
     }
   },
