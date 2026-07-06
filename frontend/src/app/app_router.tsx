@@ -57,6 +57,8 @@ export default function AppRouter(): React.JSX.Element {
           !isAdminOrOwner ? <EmployeeDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
+        <Route path="/employee/orders" element={<PurchaseOrders />} />
+
       </Route>
 
       {/* ถ้าพิมพ์ URL มั่ว ให้ดีดกลับหน้าล็อกอิน */}

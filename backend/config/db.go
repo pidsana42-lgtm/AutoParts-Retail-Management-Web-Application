@@ -143,6 +143,7 @@ func SetupDatabase() {
 	
 	seed.PurchaseOrdersType(db)
 	seed.PurchaseOrders(db)
+	seed.PurchaseOrdersItems(db)
 	seed.BillImage(db)
 	seed.Bill(db)
 	seed.SaleOrder(db)

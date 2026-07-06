@@ -22,7 +22,7 @@ import {
 import { cn } from "../../../utils/component";
 import { useNavigate } from "react-router-dom";
 
-import type { POItemResponse, POResponse, POSummaryResponse } from "../../../interface/purchase_orders/po_interface";
+import type { POResponse, POSummaryResponse } from "../../../interface/purchase_orders/po_interface";
 import { formatDate } from "../../../utils/formatdate";
 import { poService } from "../../../service/http/purchase_orders/po_service";
 
@@ -38,8 +38,20 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge variant="outline">{status}</Badge>;
 }
 
-function ActionButtons({ status }: { status: string }) {
+function ActionButtons({ id, status }: { id: number; status: string }) {
+  const navigate = useNavigate();
   const currentStatus = status?.toLowerCase();
+
+  const handlePrint = async () => {
+    try {
+      const blob = await poService.printPurchaseOrder(id);
+      // สร้าง URL จำลองสำหรับไฟล์ PDF แล้วสั่งเปิดในแท็บใหม่
+      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      window.open(url, '_blank'); 
+    } catch (err) {
+      console.error("พิมพ์ไม่สำเร็จ:", err);
+    }
+  };
 
   if (currentStatus === "pending" || currentStatus === "draft") {
     return (
@@ -56,11 +68,20 @@ function ActionButtons({ status }: { status: string }) {
 
   return (
     <div className="flex items-center justify-center gap-3">
-      <button className="text-gray-500 hover:text-gray-700 transition cursor-pointer">
+      {/* ปุ่มรูปตา: นำทางไปหน้าดูรายละเอียด */}
+      <button 
+        onClick={() => navigate(`/owner/purchase-orders/${id}`)}
+        className="text-gray-500 hover:text-gray-700 transition cursor-pointer"
+      >
         <Eye className="w-4 h-4" />
       </button>
+      
+      {/* ปุ่มเครื่องพิมพ์: เรียกฟังก์ชัน Generate PDF */}
       {currentStatus === "approved" ? (
-        <button className="text-gray-500 hover:text-gray-700 transition cursor-pointer">
+        <button 
+          onClick={handlePrint}
+          className="text-gray-500 hover:text-gray-700 transition cursor-pointer"
+        >
           <Printer className="w-4 h-4" />
         </button>
       ) : (
@@ -81,11 +102,12 @@ const PurchaseOrders: React.FC = () => {
   const [totalItems, setTotalItems] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [poList, setPoList] = useState<POItemResponse[]>([]);
+  const [monthlyTotalCount, setMonthlyTotalCount] = useState(0);
   const [summary, setSummary] = useState<POSummaryResponse>({
     pending_amount: 0,
     approved_mtd_amount: 0,
-    rejected_mtd_amount: 0
+    rejected_mtd_amount: 0,
+    total_count: 0,
   });
 
   // 2. States สำหรับ Filter
@@ -141,7 +163,7 @@ const PurchaseOrders: React.FC = () => {
       try {
         const response = await poService.getPurchaseOrderSummary();
         setSummary(response); 
-        
+        setMonthlyTotalCount(response.total_count);
       } catch (err: any) {
         console.error("Failed to fetch PO summary:", err);
       }
@@ -209,7 +231,7 @@ const PurchaseOrders: React.FC = () => {
           <div>
             <p className="text-sm text-gray-400 font-light">ใบสั่งซื้อทั้งหมดของเดือนนี้</p>
             <p className="text-4xl font-bold mt-2 flex items-baseline gap-2">
-              {totalItems} <span className="text-lg font-normal text-gray-300">ใบสั่งซื้อ</span>
+              {monthlyTotalCount} <span className="text-lg font-normal text-gray-300">ใบสั่งซื้อ</span>
             </p>
           </div>
           <div className="absolute right-4 bottom-4 opacity-5 pointer-events-none">
@@ -283,11 +305,10 @@ const PurchaseOrders: React.FC = () => {
                     </TableCell>
                     <TableCell className="text-gray-500">{formatDate(po.created_at)}</TableCell>
                     <TableCell>
-                      <div className="font-medium text-gray-900">{po.supplier?.supplier_name || "ไม่ระบุ"}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{po.supplier?.short_supplier_name || "-"}</div>
+                      <div className="font-medium text-gray-900">{po.supplier_name || "ไม่ระบุ"}</div>
                     </TableCell>
                     <TableCell className="text-gray-600">
-                      {po.creator?.first_name || "ไม่ระบุ"}
+                      {po.creator_name || "ไม่ระบุ"}
                     </TableCell>
                     <TableCell className="text-center font-medium">{totalItemTypes}</TableCell>
                     <TableCell className="text-center font-medium">{totalQuantity}</TableCell>
@@ -298,7 +319,7 @@ const PurchaseOrders: React.FC = () => {
                       <StatusBadge status={po.status} />
                     </TableCell>
                     <TableCell className="text-center">
-                      <ActionButtons status={po.status} />
+                      <ActionButtons id={po.id} status={po.status} />
                     </TableCell>
                   </TableRow>
                 );

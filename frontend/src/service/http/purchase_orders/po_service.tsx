@@ -55,4 +55,16 @@ export const poService = {
       throw error; 
     }
   },
+
+  printPurchaseOrder: async (id: number | string): Promise<Blob> => {
+    try {
+      const response = await apiClient.get(`/po/print/${id}`, {
+        responseType: 'blob', // สำคัญมาก: บอก axios ว่ารับข้อมูลเป็นไฟล์ Binary (PDF)
+      });
+      return response.data;
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการโหลด PDF:", error);
+      throw error;
+    }
+  }
 };
