@@ -1,6 +1,8 @@
 package purchaseorders
 
 import (
+	"fmt"
+	"strconv"
 	"errors"
 	"net/http"
 	poDto 	"backend/internal/app/dto/purchase_orders"
@@ -187,6 +189,30 @@ func (ctrl *PurchaseOrderController) GetSummary(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, res)
+}
+
+func (c *PurchaseOrderController) PrintPO(ctx *gin.Context) {
+    idStr := ctx.Param("id")
+    id, err := strconv.ParseUint(idStr, 10, 32)
+    if err != nil {
+        ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid PO ID"})
+        return
+    }
+
+    // เรียก Service เพื่อ Gen PDF (คืนค่ากลับมาเป็น []byte)
+    pdfBytes, err := c.poService.GeneratePOPDF(ctx.Request.Context(), uint(id))
+    if err != nil {
+		fmt.Println("PDF Generation Error:", err)
+        ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate PDF"})
+        return
+    }
+
+    // ตั้งค่า Header สำหรับไฟล์ PDF
+    ctx.Header("Content-Type", "application/pdf")
+    ctx.Header("Content-Disposition", fmt.Sprintf("inline; filename=PO-%d.pdf", id))
+    
+    // ส่งไฟล์กลับไป
+    ctx.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
 
 func (ctrl *PurchaseOrderController) DeletePO(c *gin.Context) {

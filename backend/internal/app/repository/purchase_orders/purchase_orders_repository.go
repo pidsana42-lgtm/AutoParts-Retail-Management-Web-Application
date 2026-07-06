@@ -1,6 +1,7 @@
 package purchaseorders
 
 import (
+	"fmt"
 	"time"
 	"errors"
 	"context"
@@ -11,11 +12,12 @@ import (
 
 // PurchaseOrderRepository คุมตาราง purchase_orders และ po_items
 type PurchaseOrderRepository interface {
+	GetLatestPONumberByYear(ctx context.Context, year string) (string, error)
 	SavePO(ctx context.Context, po *poEntity.PO) error
 	FindAll(ctx context.Context, userID uint, query poDto.ListPOQuery) ([]poEntity.PO, int64, error)
 	DeletePOByID(ctx context.Context, id uint) error
 	GetPOByID(ctx context.Context, id uint) (*poEntity.PO, error)
-	GetPOByIDWithItems(ctx context.Context, id uint) (*poEntity.PO, error)
+	GetPOForPDF(ctx context.Context, id uint) (*poEntity.PO, error)
 	GetPOSummary(ctx context.Context, userID uint) (*poDto.POSummaryResponse, error)
 	// UpdatePDF(ctx context.Context, id uint, url string) error
 }
@@ -29,6 +31,28 @@ func NewPORepository(db *gorm.DB) PurchaseOrderRepository {
 	return &purchaseOrderRepository{
 		db: db,
 	}
+}
+
+// ค้นหา PO_NUMBER ล่าสุด
+func (r *purchaseOrderRepository) GetLatestPONumberByYear(ctx context.Context, year string) (string, error) {
+	var lastPO poEntity.PO
+	prefix := fmt.Sprintf("PO-%s-", year)
+
+	// ค้นหา PO ที่ขึ้นต้นด้วย "PO-YYYY-" และเรียงจากล่าสุด (id desc)
+	err := r.db.WithContext(ctx).
+		Where("po_number LIKE ?", prefix+"%").
+		Order("id desc").
+		First(&lastPO).Error
+
+	if err != nil {
+		// ถ้าหาไม่เจอเลย แปลว่าเป็นบิลใบแรกของปี
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil 
+		}
+		return "", err
+	}
+
+	return lastPO.PO_number, nil
 }
 
 // Save บันทึกใบสั่งซื้อพร้อมไอเทมลูกทั้งหมดลง Database (มีระบบ Transaction ป้องกันข้อมูลพัง)
@@ -90,21 +114,26 @@ func (r *purchaseOrderRepository) GetPOSummary(ctx context.Context, userID uint)
 
 	// 1. Query ยอดรออนุมัติ
 	r.db.WithContext(ctx).Model(&poEntity.PO{}). 
-		Where("user_id = ? AND status = ?", userID, "Pending").
+		Where("created_by = ? AND UPPER(status) = ?", userID, "PENDING").
 		Select("COALESCE(SUM(total_amount), 0)").
 		Scan(&summary.PendingAmount)
 
 	// 2. Query ยอดอนุมัติแล้ว (MTD)
 	r.db.WithContext(ctx).Model(&poEntity.PO{}).
-		Where("user_id = ? AND status = ? AND created_at >= ?", userID, "Approved", startOfMonth).
+		Where("created_by = ? AND UPPER(status) = ? AND created_at >= ?", userID, "APPROVED", startOfMonth).
 		Select("COALESCE(SUM(total_amount), 0)").
 		Scan(&summary.ApprovedMTDAmount)
 
 	// 3. Query ยอดไม่อนุมัติ (MTD)
 	r.db.WithContext(ctx).Model(&poEntity.PO{}).
-		Where("user_id = ? AND status = ? AND created_at >= ?", userID, "Rejected", startOfMonth).
+		Where("created_by = ? AND UPPER(status) = ? AND created_at >= ?", userID, "REJECTED", startOfMonth).
 		Select("COALESCE(SUM(total_amount), 0)").
 		Scan(&summary.RejectedMTDAmount)
+
+	// 4. ดึงจำนวนใบสั่งซื้อทั้งหมดของเดือนนี้
+	r.db.WithContext(ctx).Model(&poEntity.PO{}).
+        Where("created_by = ? AND UPPER(status) = ? AND created_at >= ?", userID, "APPROVED", startOfMonth).
+        Count(&summary.TotalCount)
 
 	return &summary, nil
 }
@@ -150,7 +179,7 @@ func (r *purchaseOrderRepository) DeletePOByID(ctx context.Context, id uint) err
 }
 
 // Get เพื่อไปทำ PDF
-func (r *purchaseOrderRepository) GetPOByIDWithItems(ctx context.Context, id uint) (*poEntity.PO, error) {
+func (r *purchaseOrderRepository) GetPOForPDF(ctx context.Context, id uint) (*poEntity.PO, error) {
 	var po poEntity.PO
 	
 	err := r.db.WithContext(ctx).Where("id = ?", id).

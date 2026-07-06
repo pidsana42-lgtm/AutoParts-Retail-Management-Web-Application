@@ -53,6 +53,7 @@ type POSummaryResponse struct {
     PendingAmount     	float64 	`json:"pending_amount"`
     ApprovedMTDAmount 	float64 	`json:"approved_mtd_amount"`
     RejectedMTDAmount 	float64 	`json:"rejected_mtd_amount"`
+	TotalCount			int64		`json:"total_count"`
 }
 
 type ListPOQuery struct {

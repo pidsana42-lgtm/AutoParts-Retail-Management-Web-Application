@@ -1,6 +1,3 @@
-import type { SupplierResponse } from "./supplier_interface";
-import type { UserResponse } from "./user_interface";
-
 export interface POItemResponse {
     id: number;
     product_id: number;
@@ -15,10 +12,10 @@ export interface POItemResponse {
 export interface POResponse {
     id: number;
     order_number: string;
-    supplier: SupplierResponse;
+    supplier_name: string;
     total_amount: number;
     status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
-    creator: UserResponse;
+    creator_name: string;
     created_at: Date;
     po_items: POItemResponse[];
 }
@@ -40,4 +37,5 @@ export interface POSummaryResponse {
   pending_amount: number;
   approved_mtd_amount: number;
   rejected_mtd_amount: number;
+  total_count: number;
 }
