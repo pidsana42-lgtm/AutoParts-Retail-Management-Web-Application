@@ -8,6 +8,10 @@ export interface SaleOrderItemRequest {
   discount_type: "none" | "percentage" | "amount";
   discount_value: number;
   part_number?: string;
+  grade_name?: string;
+  brand_name?: string;
+  model_name?: string;
+  note?: string;
 }
 
 // แมตช์ตาม CreateSaleOrderRequest ของฝั่ง Go (ก้อนวัตถุ Payload ภาพรวมทั้งบิล)
