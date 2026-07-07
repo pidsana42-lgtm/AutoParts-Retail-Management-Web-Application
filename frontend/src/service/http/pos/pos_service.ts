@@ -27,30 +27,81 @@ export const posApiService = {
 export const calculateValidatedDiscount = (
   item: SaleOrderItemRequest,
   value: number,
-  storeConfig: StoreConfigInterface | null
+  customer: CustomerDiscountResponse | null,
+  activeTypeId?: number
 ): number => {
-  const maxDiscountRate = storeConfig?.max_item_discount_rate ?? 2.00;
   const itemPrice = item.unit_price || 0;
+  const currentCustomerTypeId = customer?.customer_type?.id || activeTypeId;
+  const currentCustomerTypeName = customer?.customer_type?.type_name || "";
+
+  // [กฎข้อที่ 1]: ลูกค้ากลุ่มบริษัท (WHOLESALE) ห้ามรับส่วนลดใดๆ ทั้งสิ้นในระบบ
+  if (currentCustomerTypeId === 3 || currentCustomerTypeName === "WHOLESALE") {
+    alert("ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น");
+    return 0;
+  }
+
+  // [กฎข้อที่ 2]: ตรวจสอบสิทธิ์กลุ่มอู่ซ่อมรถ (GARAGE)
+  const isGarageMode = 
+    currentCustomerTypeId === 2 || 
+    currentCustomerTypeName === "GARAGE" ||
+    (customer?.customer_name?.includes("อู่"));
+
+  let allowedMaxDiscount = (item as any).max_discount_rate ?? 2.00;
+
+  if (isGarageMode) {
+    const ontopRate = customer ? ((customer as any).ontop_discount_rate ?? 3.00) : 3.00;
+    allowedMaxDiscount += ontopRate; // เพดานขยายเป็น (Product Max + Ontop อู่)
+  }
 
   if (item.discount_type === "percentage") {
-    if (value > maxDiscountRate) {
-      alert(`ไม่สามารถให้ส่วนลดเกินข้อกำหนดของร้านค้าได้ (สูงสุดต่อรายการคือ ${maxDiscountRate}%)`);
-      return maxDiscountRate; 
+    if (value > (allowedMaxDiscount + 0.01)) {
+      alert(`เกินข้อกำหนดสูงสุด (จำกัดที่ ${allowedMaxDiscount.toFixed(2)}%)`);
+      return 0;
     }
     return value;
   }
 
   if (item.discount_type === "amount") {
-    const maxDiscountBaht = (itemPrice * maxDiscountRate) / 100;
+    const lineTotal = itemPrice * (item.qty || 1);
+    const maxDiscountBaht = (lineTotal * allowedMaxDiscount) / 100;
 
-    if (value > maxDiscountBaht) {
-      alert(
-        `สินค้าชิ้นนี้ลดได้สูงสุดไม่เกิน ${maxDiscountBaht.toFixed(2)} ฿ (คำนวณจากเกณฑ์ร้านค้าสูงสุด ${maxDiscountRate}%)`
-      );
-      return parseFloat(maxDiscountBaht.toFixed(2)); 
+    if (value > (maxDiscountBaht + 0.01)) {
+      alert(`เกินข้อกำหนดสูงสุด (จำกัดที่ ฿${maxDiscountBaht.toFixed(2)})`);
+      return 0;
     }
     return value;
   }
 
   return 0;
+};
+
+/**
+ * ฟังก์ชันหาค่าส่วนลดเริ่มต้น (Default) ทันทีตอนดึงสินค้าเข้าตะกร้า
+ */
+export const getDefaultProductDiscount = (
+  product: any,
+  customer: CustomerDiscountResponse | null,
+  activeTypeId?: number
+): { type: "none" | "percentage" | "amount"; value: number } => {
+  const currentCustomerTypeId = customer?.customer_type?.id || activeTypeId;
+  const currentCustomerTypeName = customer?.customer_type?.type_name || "";
+
+  if (currentCustomerTypeId === 3 || currentCustomerTypeName === "WHOLESALE") {
+    return { type: "none", value: 0 };
+  }
+
+  const isGarage = 
+    currentCustomerTypeId === 2 || 
+    currentCustomerTypeName === "GARAGE" || 
+    customer?.customer_name?.includes("อู่");
+
+  if (isGarage && customer && customer.is_discount_enabled) {
+    // อู่ซ่อมรถ: คีย์ปุ๊บ ลดให้ทันทีอัตโนมัติ = สิทธิ์สินค้า + สิทธิ์ออนท็อปอู่
+    const baseRate = product.max_discount_rate ?? 2.0;
+    const ontopRate = (customer as any).ontop_discount_rate ?? 3.0;
+    return { type: "percentage", value: baseRate + ontopRate };
+  }
+
+  // ลูกค้าทั่วไป: เริ่มต้นไม่มีส่วนลดอัตโนมัติ
+  return { type: "none", value: 0 };
 };

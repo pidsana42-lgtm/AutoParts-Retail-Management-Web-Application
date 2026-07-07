@@ -1,298 +1,335 @@
 package pos
 
 import (
-	"backend/internal/app/dto/pos"
-	"backend/internal/app/entity"
-	"backend/internal/app/enum"
-	customerRepo "backend/internal/app/repository/customer"
-	posRepo "backend/internal/app/repository/pos"
-	productRepo "backend/internal/app/repository/pos"
+    "backend/internal/app/dto/pos"
+    "backend/internal/app/entity"
+    "backend/internal/app/enum"
+    customerRepo "backend/internal/app/repository/customer"
+    posRepo "backend/internal/app/repository/pos"
+    productRepo "backend/internal/app/repository/pos"
 	customerDto "backend/internal/app/dto/customer"
-	"errors"
-	"fmt"
-	"gorm.io/gorm"
-	"time"
+    "errors"
+    "fmt"
+    "gorm.io/gorm"
+    "time"
 )
 
 type SaleService interface {
-	CreatePOSOrder(req *pos.CreateSaleOrderRequest) error
-	GetCustomerTypes() ([]entity.CustomerType, error)
-	SearchCustomers(searchQuery string) ([]customerDto.CustomerResponse, error)
+    CreatePOSOrder(req *pos.CreateSaleOrderRequest) error
+    GetCustomerTypes() ([]entity.CustomerType, error)
+    SearchCustomers(searchQuery string) ([]customerDto.CustomerResponse, error)
 }
 
 type saleService struct {
-	repo         posRepo.SaleRepository
-	customerRepo customerRepo.CustomerRepository
-	productRepo  productRepo.POSProductRepository // เอาไว้ดึงทุนและหักสต็อก
+    repo         posRepo.SaleRepository
+    customerRepo customerRepo.CustomerRepository
+    productRepo  productRepo.POSProductRepository // เอาไว้ดึงทุนและหักสต็อก
 }
 
 func NewSaleService(repo posRepo.SaleRepository, cRepo customerRepo.CustomerRepository, pRepo productRepo.POSProductRepository) SaleService {
-	return &saleService{
-		repo:         repo,
-		customerRepo: cRepo,
-		productRepo:  pRepo,
-	}
+    return &saleService{
+        repo:         repo,
+        customerRepo: cRepo,
+        productRepo:  pRepo,
+    }
 }
 
 func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest) error {
-	// 1. เปิดระบบ Transaction มัดรวมคำสั่ง (ถ้ามีจุดไหนพัง จะได้ Rollback ทุกอย่างกลับไปเหมือนเดิม)
-	tx := s.repo.BeginTransaction()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+    // -------------------------------------------------------------------------
+    // [เตรียมระบบฐานข้อมูลและดึงข้อมูลตั้งต้น]
+    // -------------------------------------------------------------------------
 
-	// 2. ดึง StoreConfig ขึ้นมาเตรียมเช็คสิทธิ์ส่วนลด
-	config, err := s.repo.GetStoreConfig()
-	if err != nil {
-		tx.Rollback()
-		return errors.New("ไม่สามารถดึงค่าคอนฟิกร้านค้าได้")
-	}
+    // tx คือตัวแปรเก็บสถานะ "Transaction" มัดรวมคำสั่ง SQL ทั้งหมดในบิลนี้ไว้ด้วยกัน
+    // ถ้ามีคำสั่งไหนพังกลางทาง ระบบจะไม่บันทึกอะไรเลย (ป้องกันข้อมูลพัง)
+    tx := s.repo.BeginTransaction()
 
-	// เจนเลขที่ออเดอร์อัตโนมัติ (INV + วันที่ + เลขรัน)
+    // ดักจับกรณีที่โค้ดเกิด Runtime Panic ให้สั่ง Rollback คืนค่าทันที
+    defer func() {
+        if r := recover(); r != nil {
+            tx.Rollback()
+        }
+    }()
+
+    var customer *entity.Customer
+    var err error
+
+    if req.CustomerID == 0 {
+        clientName := "ลูกค้าทั่วไป (หน้าร้าน)"
+        if req.CustomerNameTemp != "" {
+            clientName = req.CustomerNameTemp
+        }
+
+        // ประกาศสร้าง Customer ขาจร
+        customer = &entity.Customer{
+            CustomerName:      clientName,
+            IsDiscountEnabled: false,
+            CurrentDebtAmount: 0.0,
+            CreditLimit:       0.0,
+        }
+        
+        // หยอดประเภทเข้าไปทีหลังผ่าน property เพื่อเลี่ยงการเขียน Struct Literal ที่ทลายไทป์ GORM
+        customer.CustomerType.TypeName = "GENERAL"
+        
+    } else {
+        customer, err = s.customerRepo.GetCustomerByID(req.CustomerID)
+        if err != nil {
+            tx.Rollback()
+            return errors.New("ไม่พบข้อมูลลูกค้าในระบบ")
+        }
+    }
+
+    // เจนเลขที่บิลขายอัตโนมัติ (เช่น INV2607030001)
     orderNumber, err := s.generateOrderNumber(tx)
     if err != nil {
         tx.Rollback()
         return fmt.Errorf("ไม่สามารถสร้างเลขที่บิลอัตโนมัติได้: %w", err)
     }
 
-	// 3. ดึงข้อมูลลูกค้าขึ้นมาตรวจสอบ CreditLimit, CurrentDebtAmount
-	customer, err := s.customerRepo.GetCustomerByID(req.CustomerID)
-	if err != nil {
-		tx.Rollback()
-		return errors.New("ไม่พบข้อมูลลูกค้าในระบบ")
-	}
+    // -------------------------------------------------------------------------
+    // [ตั้งตัวแปรสะสมภาพรวมของทั้งบิล (Grand Totals)]
+    // -------------------------------------------------------------------------
+    
+    // subtotalAmount ใช้สะสม "ยอดรวมราคาเต็มของสินค้าทุกชิ้น" คูณจำนวน (ก่อนหักส่วนลดใดๆ)
+    var subtotalAmount float64            
 
-	//ตัวแปรสะสมระหว่างวนลูปสินค้า
-	var subtotalAmount float64            // ยอดรวมราคาเต็ม (ก่อนหักส่วนลดทุกประเภท)
-	var totalDiscountItems float64        // ยอดรวมส่วนลดรายชิ้นสะสมทุกรายการ
-	var orderItems []entity.SaleOrderItem // Slice เก็บรายการสินค้าที่จะบันทึกลง DB
+    // totalDiscountItems ใช้สะสม "มูลค่าส่วนลดรายบรรทัดรวมกันทั้งบิล" (บาท)
+    var totalDiscountItems float64        
 
-	// 4. วนลูปตรวจสอบและคำนวณรายการสินค้าทีละชิ้น
-	for _, itemReq := range req.Items {
+    // orderItems คือ Slice (อาเรย์ยืดหยุ่น) สำหรับเตรียมเก็บรายการสินค้าแต่ละแถวเพื่อยัดลงฐานข้อมูลพร้อมกัน
+    var orderItems []entity.SaleOrderItem 
 
-		// 4.1 ดึงข้อมูลสินค้าจากฐานข้อมูล
-		product, err := s.productRepo.GetProductByID(itemReq.ProductID)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("ไม่พบสินค้า ID %d", itemReq.ProductID)
-		}
-
-		// 4.2 ตรวจสอบสต็อกคงเหลือ
-		if product.Quantity < itemReq.Qty {
-			tx.Rollback()
-			return fmt.Errorf("สินค้า %s สต็อกไม่พอขาย (เหลือ %d ชิ้น)", product.Product_Name, product.Quantity)
-		}
-
-		// 4.3 ประกาศตัวแปรส่วนลดรายบรรทัด
-		var itemDiscountAmount float64  // ส่วนลดรายชิ้นคิดเป็น "บาท" (รวมทุกชิ้นในบรรทัดนี้)
-		var itemDiscountPercent float64 // ส่วนลดรายชิ้นคิดเป็น "%"
-
-		// 4.4 คำนวณส่วนลดตามประเภทที่เลือก
-		if itemReq.DiscountType == "percentage" {
-			// 1. ห้ามกรอกเปอร์เซ็นต์ส่วนลดรายบรรทัดเกิน StoreConfig
-			if itemReq.DiscountValue > config.MaxItemDiscountRate {
-				// กรณี: ส่วนลดแบบเปอร์เซ็นต์ (เช่น ลด 10%)
-				tx.Rollback()
-				return fmt.Errorf("สินค้า %s ให้ส่วนลด %.2f%% เกินกำหนดสูงสุดของร้าน (สูงสุด %.2f%%)", product.Product_Name, itemReq.DiscountValue, config.MaxItemDiscountRate)
-			}
-			itemDiscountPercent = itemReq.DiscountValue // เก็บ % ส่วนลด
-			// คำนวณเงินส่วนลด: (ราคาต่อชิ้น × % ส่วนลด / 100) × จำนวนชิ้น
-			// เช่นแบบว่า ราคา 100 บาท ลด 10% จำนวน 3 ชิ้น → ส่วนลด = (100×10/100)×3 = 30 บาท
-			itemDiscountAmount = (itemReq.UnitPrice * itemDiscountPercent / 100) * float64(itemReq.Qty)
-
-		} else if itemReq.DiscountType == "amount" {
-            // กรณี: ส่วนลดแบบจำนวนเงิน (ค่าที่ส่งมาจากหน้าบ้านคือส่วนลดต่อชิ้น)
-            discountPerUnit := itemReq.DiscountValue
-            
-            // คำนวณส่วนลดรวมของบรรทัดนี้จริง ๆ: ส่วนลดต่อชิ้น × จำนวนชิ้น
-            itemDiscountAmount = discountPerUnit * float64(itemReq.Qty)
-
-            // แปลงเงินบาทต่อชิ้นกลับเป็น % โดยเทียบกับราคาเต็มต่อชิ้นตรง ๆ (แม่นยำที่สุด)
-            if itemReq.UnitPrice > 0 {
-                // สูตร: (ส่วนลดต่อชิ้น / ราคาเต็มต่อชิ้น) × 100
-                itemDiscountPercent = (discountPerUnit / itemReq.UnitPrice) * 100
-            }
-
-            // ตรวจว่าส่วนลดที่แปลงเป็น % แล้วเกินกำหนดไหม
-            if itemDiscountPercent > config.MaxItemDiscountRate {
-                tx.Rollback()
-                return fmt.Errorf("สินค้า %s ให้ส่วนลดคิดเป็น %.2f%% เกินกำหนดสูงสุดของร้าน (สูงสุด %.2f%%)", product.Product_Name, itemDiscountPercent, config.MaxItemDiscountRate)
-            }
-        }
-		// 4.5 คำนวณราคาสุทธิต่อชิ้นและยอดรวม
-		// ราคาต่อชิ้นหลังหักส่วนลด: ราคาเต็ม - (ส่วนลดรวมบรรทัด / จำนวนชิ้น)
-		// ตัวอย่าง: ราคา 100 ลดไป 30 บาท (3 ชิ้น) → finalUnitPrice = 100 - (30/3) = 90 บาท/ชิ้น
-		finalUnitPrice := itemReq.UnitPrice - (itemDiscountAmount / float64(itemReq.Qty))
-		// ยอดรวมบรรทัดนี้: ราคาสุทธิต่อชิ้น × จำนวนชิ้น
-		// ตัวอย่าง: 90 × 3 = 270 บาท
-		itemSubtotal := finalUnitPrice * float64(itemReq.Qty)
-
-		// 4.6 สะสมยอดรวมเพื่อใช้คำนวณส่วนลดท้ายบิล
-		subtotalAmount += itemReq.UnitPrice * float64(itemReq.Qty) // ยอดรวมราคาเต็ม
-		totalDiscountItems += itemDiscountAmount                   // ผลรวมส่วนลดรายชิ้นสะสม
-
-		// 4.7 สร้าง SaleOrderItem และเพิ่มเข้า Slice ของรายการสินค้าก่อนบันทึกลง DB
-		orderItems = append(orderItems, entity.SaleOrderItem{
-			OrderNumber:     orderNumber,            // เลขที่บิล (เพื่อให้ FK กับ SaleOrder)
-			ProductID:       itemReq.ProductID,      // รหัสสินค้า
-			PartNumber:      product.Part_Number,    // เลขพาร์ทสินค้า (ดึงจาก DB)
-			ProductName:     product.Product_Name,   // ชื่อสินค้า (snapshot ณ วันขาย)
-			Qty:             itemReq.Qty,            // จำนวนที่ขาย
-			Unit:            product.Unit.Unit_Name, // หน่วยนับ (เช่น ชิ้น, กล่อง)
-			UnitPrice:       itemReq.UnitPrice,      // ราคาขายต่อชิ้น (ราคาเต็ม)
-			CostPrice:       product.Cost_price,     // ราคาทุน (สำหรับคำนวณกำไรขาดทุน)
-			DiscountType:    itemReq.DiscountType,   // ประเภทส่วนลด (percentage/amount)
-			DiscountValue:   itemReq.DiscountValue,  // ค่าส่วนลดที่กรอก (ตัวเลขดิบ)
-			DiscountPercent: itemDiscountPercent,    // ส่วนลดคิดเป็น % (เก็บทั้ง 2 แบบ)
-			DiscountAmount:  itemDiscountAmount,     // ส่วนลดคิดเป็นบาท (เก็บทั้ง 2 แบบ)
-			FinalUnitPrice:  finalUnitPrice,         // ราคาสุทธิต่อชิ้นหลังหักส่วนลด
-			Subtotal:        itemSubtotal,           // ยอดรวมบรรทัดนี้หลังหักส่วนลดแล้ว
-		})
-
-		// 4.8 ตัดสต็อกสินค้าทันที (ภายใน Transaction เดียวกัน)
-		product.Quantity -= itemReq.Qty
-		if err := s.productRepo.UpdateProductWithTx(tx, product); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("หักสต็อกสินค้า %s ล้มเหลว", product.Product_Name)
-		}
-	}
-
-	// 5. คำนวณส่วนลดท้ายบิลรวม (Bill Discount)
-    var billDiscountAmount float64  // ส่วนลดท้ายบิลคิดเป็น "บาท"
-    var billDiscountPercent float64 // ส่วนลดท้ายบิลคิดเป็น "%"
-
-    if req.BillDiscountType == "percentage" {
-        if req.BillDiscountValue > config.MaxExtraDiscountRate {
+    // -------------------------------------------------------------------------
+    // [LOOP รอบที่ 1: วนคำนวณส่วนลด Layer 1 (สินค้า) + Layer 2 (อู่)]
+    // -------------------------------------------------------------------------
+    
+    // วนลูปสินค้าทีละรายการที่หน้าบ้านส่งมาในตะกร้า (req.Items)
+    // itemReq คือตัวแปรแทนข้อมูลสินค้าชิ้นนั้น ๆ ที่กำลังคำนวณอยู่ในลูปรอบปัจจุบัน
+    for _, itemReq := range req.Items {
+        
+        // product คือออบเจกต์ข้อมูลตัวสินค้าชิ้นนี้ที่ดึงจาก DB (เอาไว้ดูสต็อก ทุน และเพดานส่วนลด)
+        product, err := s.productRepo.GetProductByID(itemReq.ProductID)
+        if err != nil {
             tx.Rollback()
-            return fmt.Errorf("ส่วนลดท้ายบิล %.2f%% เกินกำหนดสูงสุดของร้าน (สูงสุด %.2f%%)", req.BillDiscountValue, config.MaxExtraDiscountRate)
+            return fmt.Errorf("ไม่พบสินค้า ID %d", itemReq.ProductID)
         }
-        billDiscountPercent = req.BillDiscountValue
-        billDiscountAmount = (subtotalAmount - totalDiscountItems) * billDiscountPercent / 100
 
+        // เช็คว่าของในคลัง (product.Quantity) มีพอกับที่ลูกค้าจะสั่งซื้อ (itemReq.Qty) ไหม
+        if product.Quantity < itemReq.Qty {
+            tx.Rollback()
+            return fmt.Errorf("สินค้า %s สต็อกไม่พอขาย (เหลือ %d ชิ้น)", product.Product_Name, product.Quantity)
+        }
+
+        // finalDiscountPercent คือตัวแปรสะสม "เปอร์เซ็นต์ส่วนลดรวมของไอเทมชิ้นนี้" (Layer 1 + Layer 2)
+        var finalDiscountPercent float64
+
+        // ตรวจสอบประเภทส่วนลดแถวที่หน้าบ้านกดเลือกส่งมา
+        if itemReq.DiscountType == "percentage" {
+            // ถ้าเลือกเป็น % ก็ดึงค่าดิบ (เช่น เลข 2.00) มาตั้งต้นเป็นเปอร์เซ็นต์ลดได้เลย
+            finalDiscountPercent = itemReq.DiscountValue
+        } else if itemReq.DiscountType == "amount" && itemReq.UnitPrice > 0 {
+            // ถ้าเลือกลดเป็นบาท (เช่น ลดชิ้นละ 20 บาท) ต้องแปลงกลับเป็น % เพื่อเอาไปผสมสูตรต่อ
+            // สูตร: (เงินส่วนลดต่อชิ้น / ราคาเต็มต่อชิ้น) * 100
+            finalDiscountPercent = (itemReq.DiscountValue / itemReq.UnitPrice) * 100
+        }
+
+        // [LAYER 2 & DYNAMIC VALIDATION]: เอาโควตาส่วนลดสินค้า + สิทธิ์ออนท็อปอู่มารวมกันเป็นเพดานใหม่
+        allowedMaxDiscount := product.MaxDiscountRate // ตั้งต้นจากเพดานสินค้า (เช่น 2%)
+
+        if customer.CustomerType.TypeName == "GARAGE" && customer.IsDiscountEnabled {
+            // บวกส่วนลดออนท็อปประจำอู่นี้เข้าไป (+3%)
+            finalDiscountPercent += customer.OntopDiscountRate
+            
+            // ขยายเพดานสูงสุดของสินค้ารายชิ้นนี้พ่วงสิทธิ์ของอู่เข้าไปด้วย (เช่น 2% + 3% = 5%)
+            allowedMaxDiscount += customer.OntopDiscountRate
+        }
+
+        // ตรวจสอบกับเพดานสะสมผสมสิทธิ์แล้ว (เช่น 3% ไม่เกิน 5% ผ่านฉลุย!)
+        if finalDiscountPercent > allowedMaxDiscount {
+            tx.Rollback()
+            return fmt.Errorf("สินค้า %s มีส่วนลดรวม %.2f%% ซึ่งเกินกว่าเกณฑ์สูงสุดที่ยอมให้ลดได้สำหรับอู่นี้ (สูงสุด %.2f%%)", 
+                product.Product_Name, finalDiscountPercent, allowedMaxDiscount)
+        }
+
+        // itemDiscountAmount คือมูลค่าส่วนลดรวมของแถวนี้คิดเป็นเงินบาท
+        // สูตร: (ราคาเต็มต่อหน่วย × %ส่วนลดรวม / 100) × จำนวนชิ้นที่สั่งซื้อ
+        itemDiscountAmount := (itemReq.UnitPrice * finalDiscountPercent / 100) * float64(itemReq.Qty)
+        
+        // finalUnitPrice คือราคาเน็ตต่อหน่วยหลังหักลดรายชิ้นแล้ว (ราคาเต็ม - เงินลดเฉลี่ยต่อหน่วย)
+        finalUnitPrice := itemReq.UnitPrice - (itemDiscountAmount / float64(itemReq.Qty))
+        
+        // itemSubtotal คือยอดรวมราคาสุทธิของแถวนี้ (ราคาเน็ตต่อหน่วย × จำนวนชิ้น)
+        itemSubtotal := finalUnitPrice * float64(itemReq.Qty)
+
+        // บวกสะสมยอดรวมของทั้งบิลไปเรื่อย ๆ ตามจำนวนสินค้าในตะกร้า
+        subtotalAmount += itemReq.UnitPrice * float64(itemReq.Qty) // ยอดรวมราคาเต็มร้าน
+        totalDiscountItems += itemDiscountAmount                   // ยอดรวมเงินส่วนลดชิ้นทั้งหมด
+
+        // ยัดข้อมูลสินค้าแถวนี้ลงโครงสร้างตาราง SaleOrderItem เตรียมพร้อมรอเซฟ
+        orderItems = append(orderItems, entity.SaleOrderItem{
+            OrderNumber:     orderNumber,
+            ProductID:       itemReq.ProductID,
+            PartNumber:      product.Part_Number,
+            ProductName:     product.Product_Name,
+            Qty:             itemReq.Qty,
+            Unit:            product.Unit.Unit_Name,
+            UnitPrice:       itemReq.UnitPrice,
+            CostPrice:       product.Cost_price,
+            DiscountType:    "percentage", // บังคับเซฟเป็นเปอร์เซ็นต์รวมเพื่อง่ายต่อการตรวจสอบย้อนหลัง
+            DiscountValue:   finalDiscountPercent,
+            DiscountPercent: finalDiscountPercent,
+            DiscountAmount:  itemDiscountAmount,
+            FinalUnitPrice:  finalUnitPrice,
+            Subtotal:        itemSubtotal, // ยอดคงเหลือประจำแถว (หลังหักลดรายชิ้น แต่ก่อนหักลดท้ายบิล)
+        })
+
+        // สั่งตัดสต็อกสินค้าชิ้นนี้ในคลังออกตามจำนวนที่ขายจริง (ทำงานภายใต้ท่อ Transaction)
+        product.Quantity -= itemReq.Qty
+        if err := s.productRepo.UpdateProductWithTx(tx, product); err != nil {
+            tx.Rollback()
+            return fmt.Errorf("หักสต็อกสินค้า %s ล้มเหลว", product.Product_Name)
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // [LAYER 3: คำนวณส่วนลดท้ายบิลภาพรวม (Bill Discount)]
+    // -------------------------------------------------------------------------
+    var billDiscountAmount float64
+    var billDiscountPercent float64
+    
+    // ยอดคงเหลือทั้งหมดของบิลหลักหลังลบส่วนลดต่อชิ้นออกไปเรียบร้อยแล้ว
+    orderSubtotalAfterItems := subtotalAmount - totalDiscountItems 
+
+    if req.BillDiscountType == "percentage" && orderSubtotalAfterItems > 0 {
+        billDiscountPercent = req.BillDiscountValue
+        billDiscountAmount = orderSubtotalAfterItems * billDiscountPercent / 100
     } else if req.BillDiscountType == "amount" {
         billDiscountAmount = req.BillDiscountValue
-        if subtotalAmount > 0 {
-            billDiscountPercent = (billDiscountAmount / (subtotalAmount - totalDiscountItems)) * 100
-        }
-        if billDiscountPercent > config.MaxExtraDiscountRate {
-            tx.Rollback()
-            return fmt.Errorf("ส่วนลดท้ายบิลคิดเป็น %.2f%% เกินกำหนดสูงสุดของร้าน (สูงสุด %.2f%%)", billDiscountPercent, config.MaxExtraDiscountRate)
+        if orderSubtotalAfterItems > 0 {
+            billDiscountPercent = (billDiscountAmount / orderSubtotalAfterItems) * 100
         }
     }
 
-    if subtotalAmount > 0 {
-        // 1. คำนวณหาผลรวมของส่วนลดทุกประเภทในบิลนี้ (ลดรายชิ้นสะสม + ลดท้ายบิล)
-        combinedTotalDiscount := totalDiscountItems + billDiscountAmount
-
-        // 2. แปลงผลรวมส่วนลดทั้งหมดกลับมาเป็นเปอร์เซ็นต์เมื่อเทียบกับ "ราคารวมราคาเต็มก่อนลด"
-        // สูตร: (ส่วนลดทั้งหมด / ยอดรวมราคาเต็ม) × 100
-        actualTotalDiscountRate := (combinedTotalDiscount / subtotalAmount) * 100
-
-        // 3. ตั้งเกณฑ์เพดานรวม (สมมติใช้สิทธิ์ตามตัวเลขสูงสุดใน storeconfig)
-        // เพื่อความยืดหยุ่น จะใช้ config.MaxItemDiscountRate (เช่น 2%) มาเป็นเกณฑ์สูงสุดของทั้งบิล
-        allowedGlobalMaxRate := config.MaxItemDiscountRate
-
-        // 4. ถ้าเปอร์เซ็นต์รวมส่วนลดจริงดันสูงกว่ากฎเหล็กของอู่ -> สั่ง Rollback ทันที!
-        if actualTotalDiscountRate > allowedGlobalMaxRate {
-            tx.Rollback()
-            return fmt.Errorf(
-                "ไม่สามารถอนุมัติบิลได้! ส่วนลดรายชิ้นรวมกับส่วนลดท้ายบิลคิดเป็น %.2f%% ซึ่งเกินเกณฑ์เพดานรวมสูงสุดของร้านที่ยอมให้ลดได้ (สูงสุด %.2f%% ของมูลค่าบิล)", 
-                actualTotalDiscountRate, 
-                allowedGlobalMaxRate,
-            )
-        }
+    // 🔍 ดึงนโยบายของร้านค้าจากฐานข้อมูลมาตรวจสอบเพดานท้ายบิลตรง ๆ
+    storeConfig, err := s.repo.GetStoreConfig()
+    if err != nil {
+        tx.Rollback()
+        return fmt.Errorf("ไม่สามารถเรียกดูข้อมูลนโยบายความปลอดภัยร้านค้าได้: %w", err)
+    }
+    isCompany := customer.CustomerType.TypeName == "WHOLESALE" || customer.CustomerType.ID == 3
+    // 🚨 [CHECK]: ตรวจสอบเฉพาะส่วนลดท้ายบิลเพียวๆ ห้ามเกิน MaxExtraDiscountRate ของร้านเด็ดขาด!
+    if !isCompany && billDiscountPercent > (storeConfig.MaxExtraDiscountRate + 0.01) {
+        tx.Rollback()
+        return fmt.Errorf("ส่วนลดท้ายบิลรวม %.2f%% เกินกว่านโยบายความปลอดภัยของร้านค้าที่กำหนดไว้ (สูงสุด %.2f%%)", 
+            billDiscountPercent, storeConfig.MaxExtraDiscountRate)
     }
 
-	// 6. คำนวณยอดสุทธิทั้งบิล
-	// สูตร: (ราคาเต็มรวม - ส่วนลดรายชิ้นรวม) - ส่วนลดท้ายบิล = ยอดที่ลูกค้าต้องจ่ายจริง
-	// ตัวอย่าง: (2000 - 200) - 90 = 1710 บาท
-	totalAmount := (subtotalAmount - totalDiscountItems) - billDiscountAmount
+    // -------------------------------------------------------------------------
+    // [LOOP รอบที่ 2: เฉลี่ยส่วนลดท้ายบิลลงสินค้า (Weighted Average สำหรับรองรับคืนเงิน)]
+    // -------------------------------------------------------------------------
+    // (ท่อนนี้คงเดิมไว้เลยครับ เพราะมันเอาค่ายอดรวมท้ายบิลที่ผ่านการอนุมัติแล้ว 
+    // มาถัวเฉลี่ยแจกแจงลงฟิลด์ NetSubtotal ของแต่ละแถวเพื่อรอใช้ตอนลูกค้ามาเคลมคืนเงินเฉย ๆ)
+    var distributedBillDiscount float64 
+    for i := range orderItems {
+        if orderSubtotalAfterItems > 0 {
+            if i == len(orderItems)-1 {
+                orderItems[i].AllocatedBillDiscount = billDiscountAmount - distributedBillDiscount
+            } else {
+                weight := orderItems[i].Subtotal / orderSubtotalAfterItems
+                allocatedAmount := billDiscountAmount * weight
+                allocatedAmount = float64(int(allocatedAmount*100+0.5)) / 100
+                
+                orderItems[i].AllocatedBillDiscount = allocatedAmount
+                distributedBillDiscount += allocatedAmount            
+            }
+        }
+        orderItems[i].NetSubtotal = orderItems[i].Subtotal - orderItems[i].AllocatedBillDiscount
+    }
 
-	// 7. จัดการตามประเภทการชำระเงิน
+    // totalAmount คือยอดเงินเน็ตสุทธิรวมขวาล่างสุดที่ลูกค้าต้องควักกระเป๋าจ่ายจริง ๆ
+    totalAmount := orderSubtotalAfterItems - billDiscountAmount
+
+    // -------------------------------------------------------------------------
+    // [จัดการระบบเครดิตเงินกู้ และอัปเดตสถานะบัญชีลูกค้า]
+    // -------------------------------------------------------------------------
+    
+    // paymentMethod คือออบเจกต์ตรวจสอบช่องทางชำระเงินที่เลือก (เช่น เงินสด โอน หรือเครดิตอู่)
     paymentMethod, err := s.repo.GetPaymentMethodByID(req.PaymentMethodID)
     if err != nil {
         tx.Rollback()
         return fmt.Errorf("ไม่พบช่องทางการชำระเงินในระบบ: %w", err)
     }
-
     if !paymentMethod.IsActive {
         tx.Rollback()
         return fmt.Errorf("ช่องทางการชำระเงิน %s ถูกปิดใช้งานในขณะนี้", paymentMethod.MethodName)
     }
 
-    isCreditPayment := paymentMethod.IsCredit
+    var paymentStatus string // ใช้เก็บข้อความสถานะจ่ายเงิน ("paid" หรือ "unpaid")
+    var balanceDue float64   // ยอดหนี้คงค้างของบิลนี้
+    var paidAmount float64   // ยอดเงินสดที่ได้รับจริงในบิลนี้
 
-	// ประกาศตัวแปรสถานะการชำระเงิน
-	var paymentStatus string // "paid" = ชำระแล้ว, "unpaid" = ค้างชำระ
-	var balanceDue float64   // ยอดที่ยังค้างชำระ
-	var paidAmount float64   // ยอดที่ชำระแล้ว
-
-	if isCreditPayment {
-		// กรณี: ซื้อเชื่อ (เครดิต)
-
-		// ตรวจสอบวงเงินเครดิต: หนี้เดิม + บิลใหม่ ต้องไม่เกินวงเงินที่กำหนด
-		// ตัวอย่าง: หนี้เดิม 3000 + บิลใหม่ 1710 = 4710 เกินวงเงิน 4500 -> ปฏิเสธ
-		if customer.CurrentDebtAmount+totalAmount > customer.CreditLimit {
-			tx.Rollback()
-			return fmt.Errorf("วงเงินเครดิตไม่เพียงพอ! วงเงินคงเหลือขาดไป %.2f บาท", (customer.CurrentDebtAmount+totalAmount)-customer.CreditLimit)
-		}
+    // ตรวจสอบเงื่อนไขว่าเป็นการเลือกชำระแบบ "ซื้อเชื่อ / แปะโป้งเครดิตอู่" ใช่ไหม
+    if paymentMethod.IsCredit {
+        // เช็คว่า หนี้เก่าสะสม + หนี้ใหม่บิลนี้ มันทะลุเพดานวงเงินที่เถ้าแก่อนุมัติไว้ให้ไหม
+        if customer.CurrentDebtAmount+totalAmount > customer.CreditLimit {
+            tx.Rollback()
+            return fmt.Errorf("วงเงินเครดิตไม่เพียงพอ! วงเงินคงเหลือขาดไป %.2f บาท", (customer.CurrentDebtAmount+totalAmount)-customer.CreditLimit)
+        }
 
 		paymentStatus = "unpaid" // สถานะ: ยังค้างชำระ
 		balanceDue = totalAmount // ยอดค้างชำระ = ยอดสุทธิทั้งบิล
 		paidAmount = 0.00        // ยังไม่ได้รับเงิน
 
 		// บวกยอดหนี้สะสมเพิ่มเข้าบัญชีลูกค้า
-		customer.CurrentDebtAmount += totalAmount
-
+        customer.CurrentDebtAmount += totalAmount
+        
 		// UPDATE ยอดหนี้สะสมลูกค้าลง DB (ใน TX เดียวกัน)
-		if err := tx.Session(&gorm.Session{}).Save(customer).Error; err != nil {
-			tx.Rollback()
-			return fmt.Errorf("อัปเดตยอดหนี้สะสมของลูกค้าล้มเหลว: %v", err)
-		}
-	} else {
+        if err := tx.Session(&gorm.Session{}).Save(customer).Error; err != nil {
+            tx.Rollback()
+            return fmt.Errorf("อัปเดตยอดหนี้สะสมของลูกค้าล้มเหลว: %v", err)
+        }
+    } else {
 		// กรณี: ชำระเงินสด (หรือวิธีอื่นที่ไม่ใช่เครดิต)
 		paymentStatus = "paid"   // สถานะ: ชำระแล้ว
 		balanceDue = 0.00        // ไม่มียอดค้างชำระ
 		paidAmount = totalAmount // ยอดที่รับมา = ยอดสุทธิทั้งบิล
-	}
+    }
 
 	// 8. ประกอบ SaleOrder Entity เพื่อบันทึก
-	order := &entity.SaleOrder{
-		OrderNumber:        orderNumber,                   // เลขที่บิล (สร้างจาก Frontend หรือ System)
-		OrderDate:          time.Now(),                        // วันเวลาที่ทำรายการ (ใช้เวลาเซิร์ฟเวอร์)
-		CustomerID:         req.CustomerID,                    // รหัสลูกค้า
-		Status:             "completed",                       // สถานะออเดอร์: เสร็จสิ้น
-		PaymentStatus:      enum.PaymentStatus(paymentStatus), // แปลง string → enum ก่อนเก็บ
-		Subtotal:           subtotalAmount,                    // ยอดรวมราคาเต็ม (ก่อนลดทุกประเภท)
-		BillDiscountType:   req.BillDiscountType,              // ประเภทส่วนลดท้ายบิล
-		BillDiscountValue:  req.BillDiscountValue,             // ค่าส่วนลดท้ายบิล (ตัวเลขดิบ)
-		DiscountAmount:     billDiscountAmount,                // ส่วนลดท้ายบิลคิดเป็นบาท
-		DiscountPercent:    billDiscountPercent,               // ส่วนลดท้ายบิลคิดเป็น %
-		TotalDiscountItems: totalDiscountItems,                // ยอดรวมส่วนลดรายชิ้นทุกบรรทัด
-		TotalAmount:        totalAmount,                       // ยอดสุทธิที่ลูกค้าจ่ายจริง
-		PaidAmount:         paidAmount,                        // ยอดที่ชำระแล้ว
-		BalanceDue:         balanceDue,                        // ยอดที่ยังค้างชำระ
-		ChangeAmount:       0.00,                              // เงินทอน (TODO: คำนวณจาก CashReceived - TotalAmount)
-		Note:               req.Note,                          // หมายเหตุ
-		Items:              orderItems,                        // รายการสินค้าทั้งหมด (GORM จะ INSERT ลูกพร้อมพ่อ)
-	}
+    order := &entity.SaleOrder{
+        OrderNumber:        orderNumber,
+        OrderDate:          time.Now(),
+        CustomerID:         req.CustomerID,
+        CustomerNameTemp:   &customer.CustomerName,
+        CustomerPhoneTemp:  &customer.PhoneNumber,
+        Status:             "completed",
+        PaymentStatus:      enum.PaymentStatus(paymentStatus),
+        Subtotal:           orderSubtotalAfterItems, 
+        BillDiscountType:   req.BillDiscountType,
+        BillDiscountValue:  req.BillDiscountValue,
+        DiscountAmount:     billDiscountAmount,
+        DiscountPercent:    billDiscountPercent,
+        TotalDiscountItems: totalDiscountItems,
+        TotalAmount:        totalAmount,
+        PaidAmount:         paidAmount,
+        BalanceDue:         balanceDue,
+        ChangeAmount:       0.00,
+        Note:               req.Note,
+        Items:              orderItems, // ผูกอาเรย์สินค้าลูกเข้าไปด้วย GORM จะสั่งบันทึกตารางไอเทมพ่วงให้เองอัตโนมัติ
+    }
 
 	// 9. สั่งเซฟลงฐานข้อมูลผ่าน Repository ด้วยท่อ Transaction
-	if err := s.repo.CreateOrderWithTx(tx, order); err != nil {
-		tx.Rollback()
-		return err
-	}
+    if err := s.repo.CreateOrderWithTx(tx, order); err != nil {
+        tx.Rollback()
+        return err
+    }
 
-	// 10. Commit Transaction เพื่อยืนยันการบันทึกทั้งหมด
-	errCommit := tx.Commit().Error
-	if errCommit != nil {
-		tx.Rollback()
-		return fmt.Errorf("ไม่สามารถเซฟยืนยันข้อมูลลงเบสได้ (Commit Error): %v", errCommit)
-	}
+    // สั่ง "Commit" เพื่อแกะครั่งปิดผนึกท่อ Transaction บันทึกข้อมูลลงฮาร์ดดิสก์แบบถาวรชั่วลูกชั่วหลาน
+    if err := tx.Commit().Error; err != nil {
+        tx.Rollback()
+        return fmt.Errorf("Commit Error: %v", err)
+    }
 
-	return nil
+    return nil 
 }
 
 func (s *saleService) generateOrderNumber(tx *gorm.DB) (string, error) {
@@ -323,20 +360,17 @@ func (s *saleService) generateOrderNumber(tx *gorm.DB) (string, error) {
     return prefix + runningNumber, nil
 }
 
-// ─── 🎯 2. เพิ่มฟังก์ชัน GetCustomerTypes ต่อสายตรงไปหา customerRepo ───
+// เพิ่มฟังก์ชัน GetCustomerTypes ต่อสายตรงไปหา customerRepo
 func (s *saleService) GetCustomerTypes() ([]entity.CustomerType, error) {
-    // ✅ เปลี่ยนมาใช้ s.repo (ตู้ POS ของตัวเอง)
     return s.repo.GetCustomerTypes() 
 }
 
-// ─── 🎯 3. เพิ่มฟังก์ชัน SearchCustomers และแปลงรูปข้อมูลผ่าน DTO สลักลงบิล POS ───
+// เพิ่มฟังก์ชัน SearchCustomers และแปลงรูปข้อมูลผ่าน DTO สลักลงบิล POS 
 func (s *saleService) SearchCustomers(searchQuery string) ([]customerDto.CustomerResponse, error) {
 	// ค้นหารายชื่ออู่หรือเบอร์โทรจากฐานข้อมูล
 	customers, err := s.repo.SearchCustomers(searchQuery)
-	if err != nil {
-		return nil, err
-	}
-	
-	// ✅ แปลงโครงสร้างพ่วงวัตถุสัมพันธ์ CustomerType ส่งออกไปตรงๆ
-	return customerDto.ToCustomerListResponse(customers), nil
+    if err != nil {
+        return nil, err
+    }
+    return customerDto.ToCustomerListResponse(customers), nil
 }

@@ -35,7 +35,7 @@ func (s *storeConfigService) UpdateStoreConfig(req *storeconfigDto.StoreConfigRe
 	//เขียนทับค่าการตั้งค่าร้านค้าด้วยค่าที่ได้รับจากrequest Match
 	config.MaxCredit = req.MaxCredit
 	config.MaxOverdueDays = req.MaxOverdueDays
-	config.MaxItemDiscountRate = req.MaxItemDiscountRate
+	//config.MaxItemDiscountRate = req.MaxItemDiscountRate
 	config.MaxExtraDiscountRate = req.MaxExtraDiscountRate
 	config.SupervisedPin = req.SupervisedPin
 
