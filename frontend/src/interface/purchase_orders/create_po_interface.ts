@@ -2,7 +2,7 @@ export interface CreatePOItemRequest {
     product_id: number;
     quantity: number;
     unit_price: number;
-    notes: string;
+    notes?: string;
     alert_id?: number;
     pre_order_item_id?: number;
 }
@@ -18,7 +18,7 @@ export interface CreatePOItemResponse {
     product_id: number;
     product_name_snapshot: string;
     product_name_code_snapshot: string;
-    quantity: string;
+    quantity: number;
     unit: string;
     unit_price: number;
     sub_total: number;
