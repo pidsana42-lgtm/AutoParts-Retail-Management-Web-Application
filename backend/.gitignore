@@ -1,1 +1,6 @@
 .env*
+.png
+.jpeg
+.jpg
+.gif
+.gguf
