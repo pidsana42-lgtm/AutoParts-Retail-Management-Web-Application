@@ -6,3 +6,5 @@
 .gguf
 model/*.gguf
 uploads/
+.csv
+.xlsx
