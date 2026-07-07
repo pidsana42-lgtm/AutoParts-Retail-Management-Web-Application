@@ -5,8 +5,12 @@ import (
 	poEnum 		"backend/internal/app/enum"
 	poRepo 		"backend/internal/app/repository/purchase_orders"
 	poEntity 	"backend/internal/app/entity"
+	"gorm.io/gorm"
+	"strings"
 	"context"
 	"errors"
+	"strconv"
+	"time"
 	"fmt"
 )
 
@@ -15,6 +19,11 @@ type PurchaseOrderService interface {
 	CreatePO(ctx context.Context, req *poDto.CreatePurchaseOrderRequest, creatorID uint) (*poDto.PurchaseOrderResponse, error)
 	GetPOByID(ctx context.Context, id uint) (*poDto.PurchaseOrderResponse, error)
 	UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus) error
+	ListPOs(ctx context.Context, userID uint, query poDto.ListPOQuery) (*poDto.ListPOResponse, error)
+	GetPOSummary(ctx context.Context, userID uint, role string) (*poDto.POSummaryResponse, error)
+	GeneratePOPDF(ctx context.Context, id uint) ([]byte, error)
+	Delete(ctx context.Context, id uint) error
+	// GeneratePDF(ctx context.Context, id uint) (string, error)
 }
 
 // purchaseOrderService ตัว Struct หลักที่จะทำงานจริง (Implement Interface ด้านบน)
@@ -40,15 +49,7 @@ func NewPOService(
 	}
 }
 
-func (s *purchaseOrderService) CreatePO(
-	ctx context.Context, 
-	req *poDto.CreatePurchaseOrderRequest, // ใส่ชื่อแพ็กเกจย่อยที่ import เข้ามา
-	creatorID uint,
-) (*poDto.PurchaseOrderResponse, error) { // ตรงนี้ก็ต้องตรงกับสเปก Interface ข้างบน
-	
-	// เขียน Logic ด้านในชั่วคราวก่อนเพื่อให้คอมไพล์ผ่าน
-	// return nil, nil
-
+func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePurchaseOrderRequest, creatorID uint) (*poDto.PurchaseOrderResponse, error) {
 	supplier, err := s.supplierRepo.GetSupplierByID(ctx, req.SupplierID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find supplier: %w", err)
@@ -57,14 +58,37 @@ func (s *purchaseOrderService) CreatePO(
 		return nil, errors.New("supplier not found")
 	}
 
-	generatedPONumber := fmt.Sprintf("PO-%s-%d", "20260625", req.SupplierID)
+	currentYear := time.Now().Format("2006") // ดึงปี ค.ศ. ปัจจุบัน
+	prefix := fmt.Sprintf("PO-%s-", currentYear)
+	nextSequence := 1 // ค่าเริ่มต้นคือ 1
 
-	poData := &poEntity.PO {
-		PO_number: generatedPONumber,
+	// ดึงเลข PO ล่าสุดของปีนี้จาก Repository
+	latestPONumber, err := s.poRepository.GetLatestPONumberByYear(ctx, currentYear)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest PO number: %w", err)
+	}
+
+	// ถ้ามีเลขล่าสุดอยู่แล้ว (เช่น "PO-2026-0015") ให้เอามาตัดแล้วบวก 1
+	if latestPONumber != "" {
+		parts := strings.Split(latestPONumber, "-")
+		if len(parts) == 3 {
+			lastSeq, err := strconv.Atoi(parts[2])
+			if err == nil {
+				nextSequence = lastSeq + 1
+			}
+		}
+	}
+
+	// เติม 0 ให้ครบ 4 หลัก
+	generatedPONumber := fmt.Sprintf("%s%04d", prefix, nextSequence)
+
+
+	poData := &poEntity.PO{
+		PO_number:  generatedPONumber, // ใช้เลขที่ Generate ใหม่
 		SupplierID: req.SupplierID,
 		PO_type_id: req.POTypeID,
 		Created_by: creatorID,
-		Status: poEnum.StatusPending,
+		Status:     poEnum.StatusPending,
 	}
 
 	var totalAmount float64 = 0
@@ -80,8 +104,8 @@ func (s *purchaseOrderService) CreatePO(
 		}
 
 		productName := product.Product_Name
-        productCode := product.Product_Code
-        unitName := "ชิ้น"
+		productCode := product.Product_Code
+		var unitName string
 		if product.Unit != nil {
 			unitName = product.Unit.Unit_Name
 		}
@@ -107,7 +131,7 @@ func (s *purchaseOrderService) CreatePO(
 	poData.PO_Items = poItems
 	poData.Total_amount = totalAmount
 
-	if err := s.poRepository.Save(ctx, poData); err != nil {
+	if err := s.poRepository.SavePO(ctx, poData); err != nil {
 		return nil, fmt.Errorf("failed to save purchase order: %w", err)
 	}
 
@@ -124,7 +148,7 @@ func (s *purchaseOrderService) CreatePO(
 			ProductID:                 item.ProductID,
 			ProductNameSnapshot:       item.Product_name_snapshot,
 			SupplyProductCodeSnapshot: item.Supply_product_code_snapshot,
-			Quantity:                  int(item.Quantity),		
+			Quantity:                  int(item.Quantity),      
 			Unit:                      item.Unit,
 			UnitPrice:                 item.UnitPrice,
 			SubTotal:                  item.SubTotal,
@@ -160,3 +184,126 @@ func (s *purchaseOrderService) GetPOByID(
 func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus) error {
 	return nil
 }
+
+func (s *purchaseOrderService) ListPOs(ctx context.Context, userID uint, query poDto.ListPOQuery) (*poDto.ListPOResponse, error) {
+    po, total, err := s.poRepository.FindAll(ctx, userID, query)
+    if err != nil {
+        return nil, err
+    }
+
+    var data []poDto.PurchaseOrderResponse
+    for _, p := range po {
+        var itemResponses []poDto.POItemResponse
+		for _, item := range p.PO_Items {
+			itemResponses = append(itemResponses, poDto.POItemResponse{
+				ID:                        item.ID,
+				ProductID:                 item.ProductID,
+				ProductNameSnapshot:       item.Product_name_snapshot,
+				SupplyProductCodeSnapshot: item.Supply_product_code_snapshot,
+				Quantity:                  int(item.Quantity),
+				Unit:                      item.Unit,
+				UnitPrice:                 item.UnitPrice,
+				SubTotal:                  item.SubTotal,
+				AlertID:                   item.AlertID,
+				PreOrderItemID:            item.PreOrderItemID,
+			})
+		}
+
+		supplierName := ""
+		if p.Supplier.ID != 0 {
+			supplierName = p.Supplier.SupplierName
+		}
+
+		creatorName := ""
+		if p.Creator.ID != 0 {
+			creatorName = p.Creator.FirstName + " " + p.Creator.LastName
+		}
+
+		// 2. จัดการข้อมูล PO หลัก
+		data = append(data, poDto.PurchaseOrderResponse{
+			ID:           p.ID,
+			OrderNumber:  p.PO_number,
+			SupplierID:   p.SupplierID,
+			SupplierName: supplierName,
+			POTypeID:     p.PO_type_id,
+			TotalAmount:  p.Total_amount,
+			Status:       poEnum.POStatus(p.Status),
+			CreatorID:    p.Created_by,
+			CreatorName:  creatorName,
+			CreatedAt:    p.CreatedAt,
+			POItems:      itemResponses, 
+		})
+    }
+
+    return &poDto.ListPOResponse{
+        Data:  data,
+        Total: total,
+    }, nil
+}
+
+func (s *purchaseOrderService) GetPOSummary(ctx context.Context, userID uint, role string) (*poDto.POSummaryResponse, error) {
+	if !strings.EqualFold(role, "Owner") {
+		return nil, errors.New("forbidden: only owner can view PO summary")
+	}
+	return s.poRepository.GetPOSummary(ctx, userID)
+}
+
+var (
+	ErrPONotFound    = errors.New("purchase order not found")
+	ErrPOCannotDelete = errors.New("approved PO cannot be deleted")
+)
+
+// Delete แบบ Soft ให้กู้คืนได้
+func (s *purchaseOrderService) Delete(ctx context.Context, id uint) error {
+	// 1. ดึงข้อมูล
+	po, err := s.poRepository.GetPOByID(ctx, id)
+	
+	// ดัก Error ถ้า Repo ส่ง gorm.ErrRecordNotFound มา ให้แปลงเป็น ErrPONotFound
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrPONotFound
+	}
+	// ถ้ามี Error อื่นๆ (เช่น Database พัง) ก็ให้ส่งต่อปกติ
+	if err != nil {
+		return err
+	}
+
+	// 2. Business rule
+	if po.Status == poEnum.StatusApproved {
+		return ErrPOCannotDelete // ใช้ตัวแปร Error 
+	}
+
+	// 3. delete
+	return s.poRepository.DeletePOByID(ctx, id)
+}
+
+// Generate PDF File
+// func (s *purchaseOrderService) GeneratePDF(ctx context.Context, id uint) (string, error) {
+//     // 1. ดึงข้อมูล
+//     po, err := s.poRepository.GetPOByIDWithItems(ctx, id)
+//     if err != nil {
+//         return "", err
+//     }
+
+//     // 2. สร้าง PDF
+//     pdfBytes, err := pdf.GeneratePO(po)
+//     if err != nil {
+//         return "", err
+//     }
+
+// 	filePath := fmt.Sprintf("po/%s.pdf", po.PO_number)
+
+//     // 3. อัปโหลดขึ้น Storage บน Cloud
+//     url, err := s.storage.Upload(filePath, pdfBytes)
+//     if err != nil {
+//         return "", err
+//     }
+    
+//     // 4. อัปเดต URL ลง Database
+//     err = s.poRepository.UpdatePDF(ctx, id, url)
+//     if err != nil {
+//         return "", err
+//     }
+
+//     // 5. ส่ง URL กลับไปให้ฝั่ง Controller / Frontend
+//     return url, nil
+// }
