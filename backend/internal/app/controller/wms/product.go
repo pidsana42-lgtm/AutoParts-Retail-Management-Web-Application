@@ -89,3 +89,21 @@ func (ctrl *ProductController) ListProducts(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, res)
 }
+
+func (ctrl *ProductController) ListBrands(c *gin.Context) {
+	res, err := ctrl.service.ListBrands()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}
+
+func (ctrl *ProductController) ListGrades(c *gin.Context) {
+	res, err := ctrl.service.ListGrades()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}

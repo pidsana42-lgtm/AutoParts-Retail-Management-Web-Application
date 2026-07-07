@@ -8,6 +8,9 @@ import { getMenuByRole } from '../config/menu';
 import { useAuth } from '../contexts/AuthContexts'; 
 import StoreConfig from './owner/storeconfig/storeconfig'; 
 import EmployeeDashboard from './employee/dashboard/dashboard';
+import Stock from './owner/stock/stock';
+import StockMovement from './owner/stock/stock_movement/stock_movement';
+import Stockdata from './owner/stock/Stock_data/stock_data';
 import ImportBill from './owner/import-bills/import_bill';
 import PreOrder from './owner/pre-order/pre-order';
 import ClaimsPage from './owner/claim/claims';
@@ -51,6 +54,18 @@ export default function AppRouter(): React.JSX.Element {
         } />
 
         <Route path="/owner/storeconfig" element={<StoreConfig />} />
+
+        <Route path="/owner/stock" element={
+          isAdminOrOwner ? <Stock /> : <Navigate to={firstMenuPath} replace />
+        } />
+
+        <Route path="/owner/stock/stock-movement" element={
+          isAdminOrOwner ? <StockMovement /> : <Navigate to={firstMenuPath} replace />
+        } />
+
+        <Route path="/owner/stock/stock-data" element={
+          isAdminOrOwner ? <Stockdata /> : <Navigate to={firstMenuPath} replace />
+        } />
         {/* -------- เพิ่ม Route สำหรับหน้านำเข้าบิลตรงนี้ครับ -------- */}
         <Route path="/owner/import-bills" element={<ImportBill />} />
         {/* -------------------------------------------------- */}

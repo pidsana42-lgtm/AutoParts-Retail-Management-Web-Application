@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, FileText, Boxes, MonitorSmartphone,
-  ShoppingCart, FileClock, RefreshCw, Settings
+  ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, SquarePlus, ArrowLeftRight 
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -11,6 +11,7 @@ export interface MenuItem {
   roles: string[]; 
   subPath?: string;
   subLabel?: string;
+  subIcon?: LucideIcon;
 }
 
 export const SIDEBAR_MENUS: MenuItem[] = [
@@ -32,7 +33,8 @@ export const SIDEBAR_MENUS: MenuItem[] = [
 
   // เมนูอื่น ๆ ล็อกสิทธิ์ตามที่วางโครงสร้างไว้
   { icon: FileText, label: "นำเข้าสินค้าจากบิล", path: "/owner/import-bills", roles: ["OWNER", "ADMIN"] },
-  { icon: Boxes, label: "คลังสินค้า", path: "/owner/stock", roles: ["OWNER", "ADMIN"] },
+  { icon: Boxes, label: "คลังสินค้า", path: "/owner/stock", roles: ["OWNER", "ADMIN"], subIcon: ArrowLeftRight, subPath: "/owner/stock/stock-movement", subLabel: "การเคลื่อนไหวของคลังสินค้า" },
+  { icon: FolderPlus, label:"สร้างข้อมูลสินค้า", path: "/owner/stock/stock-data", roles: ["OWNER", "ADMIN"] },
   { icon: MonitorSmartphone, label: "ระบบขาย POS", path: "/employee/pos", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"] },
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/owner/orders", roles: ["OWNER", "ADMIN"] },
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/employee/orders", roles: ["EMPLOYEE"] },
