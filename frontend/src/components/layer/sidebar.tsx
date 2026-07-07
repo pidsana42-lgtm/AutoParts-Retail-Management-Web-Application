@@ -43,6 +43,7 @@ export default function Sidebar({
         <ul className="mt-4 space-y-0.5">
           {menuItems.map((item, index) => {
             const Icon = item.icon;
+            const SubIcon = item.subIcon || Percent; // ใช้ Percent เป็นค่าเริ่มต้นถ้าไม่มี subIcon
             const isActive =
               location.pathname === item.path ||
               (item.subPath ? location.pathname === item.subPath : false);
@@ -63,9 +64,11 @@ export default function Sidebar({
                 {isActive && item.subPath && (
                   <div
                     onClick={() => navigate(item.subPath!)}
-                    className={`bg-[#181818] py-2 flex items-center cursor-pointer hover:bg-[#202020] ${location.pathname === item.subPath ? "text-[#d93838]" : "text-gray-500"} ${collapsed ? "justify-center" : "pl-13 py-3 text-xs"}`}
+                    className={`bg-[#181818] py-2 flex items-center cursor-pointer hover:bg-[#202020] ${location.pathname === item.subPath ? "text-gray-400" : "text-gray-500"} ${collapsed ? "justify-center" : "pl-13 py-3 text-xs"}`}
                   >
-                    <Percent className="w-3.5 h-3.5 shrink-0" />
+                    <SubIcon
+                      className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-gray-400"} ${!collapsed ? "mr-3" : ""}`}
+                    />
                     {!collapsed && (
                       <span className="ml-2 truncate">{item.subLabel || ""}</span>
                     )}

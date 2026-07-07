@@ -1,6 +1,7 @@
 package wms
 
 import (
+	"backend/internal/app/entity"
 	wmsDto  "backend/internal/app/dto/wms"
 	wmsRepo "backend/internal/app/repository/wms"
 )
@@ -11,6 +12,8 @@ type ProductService interface {
 	UpdateProduct(id uint, req *wmsDto.ProductRequestDTO) error
 	DeleteProduct(id uint) error
 	ListProducts() ([]wmsDto.ProductListResponseDTO, error)
+	ListBrands() ([]entity.Brand, error)
+	ListGrades() ([]entity.Grade, error)
 }
 
 type productService struct {
@@ -56,4 +59,12 @@ func (s *productService) ListProducts() ([]wmsDto.ProductListResponseDTO, error)
 		result[i].FromEntity(p)
 	}
 	return result, nil
+}
+
+func (s *productService) ListBrands() ([]entity.Brand, error) {
+	return s.repo.ListBrands()
+}
+
+func (s *productService) ListGrades() ([]entity.Grade, error) {
+	return s.repo.ListGrades()
 }

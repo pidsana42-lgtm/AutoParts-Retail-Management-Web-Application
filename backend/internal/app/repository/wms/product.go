@@ -12,6 +12,8 @@ type ProductRepository interface {
 	UpdateProduct(product *entity.Product) error
 	DeleteProduct(id uint) error
 	ListProducts() ([]entity.Product, error)
+	ListBrands() ([]entity.Brand, error)
+	ListGrades() ([]entity.Grade, error)
 }
 
 type productRepository struct {
@@ -28,7 +30,7 @@ func (r *productRepository) CreateProduct(product *entity.Product) error {
 
 func (r *productRepository) GetProductByID(id uint) (*entity.Product, error) {
 	var product entity.Product
-	err := r.db.Preload("Brand").Preload("Category").Preload("Unit").Preload("Shelf").Preload("ProductImages").
+	err := r.db.Preload("Brand").Preload("Category").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ProductImages").Preload("Inventories.Supplier").
 		First(&product, id).Error
 	if err != nil {
 		return nil, err
@@ -46,7 +48,19 @@ func (r *productRepository) DeleteProduct(id uint) error {
 
 func (r *productRepository) ListProducts() ([]entity.Product, error) {
 	var products []entity.Product
-	err := r.db.Preload("Brand").Preload("Category").Preload("Unit").Preload("Shelf").Preload("ProductImages").
+	err := r.db.Preload("Brand").Preload("Category").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ProductImages").Preload("Inventories.Supplier").
 		Find(&products).Error
 	return products, err
+}
+
+func (r *productRepository) ListBrands() ([]entity.Brand, error) {
+	var brands []entity.Brand
+	err := r.db.Order("brand_name asc").Find(&brands).Error
+	return brands, err
+}
+
+func (r *productRepository) ListGrades() ([]entity.Grade, error) {
+	var grades []entity.Grade
+	err := r.db.Order("grade_name asc").Find(&grades).Error
+	return grades, err
 }

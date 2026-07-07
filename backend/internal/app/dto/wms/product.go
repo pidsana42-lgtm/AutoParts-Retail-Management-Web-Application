@@ -43,19 +43,24 @@ func (r *ProductRequestDTO) ToEntity() entity.Product {
 }
 
 type ProductListResponseDTO struct {
-	ID           uint    `json:"id"`
-	Product_Code string  `json:"product_code"`
-	Part_Number  string  `json:"part_number"`
-	Product_Name string  `json:"product_name"`
-	Barcode      string  `json:"barcode"`
-	Quantity     int     `json:"quantity"`
-	Sale_price   float64 `json:"sale_price"`
-	Is_Active    bool    `json:"is_active"`
-	BrandName    string  `json:"brand_name"`
-	CategoryName string  `json:"category_name"`
-	UnitName     string  `json:"unit_name"`
-	ShelfName    string  `json:"shelf_name"`
-	ThumbnailUrl string  `json:"thumbnail_url"`
+	ID             uint    `json:"id"`
+	Product_Code   string  `json:"product_code"`
+	Part_Number    string  `json:"part_number"`
+	Product_Name   string  `json:"product_name"`
+	Barcode        string  `json:"barcode"`
+	Quantity       int     `json:"quantity"`
+	Limit_Quantity int     `json:"limit_quantity"`
+	Sale_price     float64 `json:"sale_price"`
+	Cost_price     float64 `json:"cost_price"`
+	Is_Active      bool    `json:"is_active"`
+	BrandName      string  `json:"brand_name"`
+	CategoryName   string  `json:"category_name"`
+	GradeName      string  `json:"grade_name"`
+	UnitName       string  `json:"unit_name"`
+	ShelfName      string  `json:"shelf_name"`
+	ThumbnailUrl   string  `json:"thumbnail_url"`
+	SupplierName   string  `json:"supplier_name"`
+	Note           string  `json:"note"`
 }
 
 // Helper function ใน DTO สำหรับแปลงข้อมูลยกชุด
@@ -66,18 +71,28 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	d.Product_Name = p.Product_Name
 	d.Barcode = p.Barcode
 	d.Quantity = p.Quantity
+	d.Limit_Quantity = p.Limit_Quantity
 	d.Sale_price = p.Sale_price
+	d.Cost_price = p.Cost_price
 	d.Is_Active = p.Is_Active
 
 	// สังเกต: พอลบ Pointer (*) ออกจาก Entity แล้ว 
 	// สามารถจิ้มเข้าฟิลด์ .Brand_Name ได้ทันทีโดยไม่ต้องกลัว Nil Pointer Crash
 	d.BrandName = p.Brand.Brand_Name
 	d.CategoryName = p.Category.Category_Name
+	if p.Grade != nil {
+		d.GradeName = p.Grade.Grade_Name
+	}
 	d.UnitName = p.Unit.Unit_Name
 	d.ShelfName = p.Shelf.Shelf_Name
+	d.Note = p.Note
 
 	if len(p.ProductImages) > 0 {
 		d.ThumbnailUrl = p.ProductImages[0].Image_URL
+	}
+
+	if len(p.Inventories) > 0 && p.Inventories[0].Supplier != nil {
+		d.SupplierName = p.Inventories[0].Supplier.SupplierName
 	}
 }
 
