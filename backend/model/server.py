@@ -239,14 +239,31 @@ def get_local_llm():
         
         # Check if files exist in the same directory as server.py
         if not os.path.exists(model_path) or not os.path.exists(clip_path):
-            # Fallback to cache directory check
+            print("Model files not found locally in directory. Attempting to download from Hugging Face Hub...")
             try:
                 from huggingface_hub import hf_hub_download
-                print("Checking Hugging Face hub for cached model files...")
-                model_path = hf_hub_download(repo_id="Phonsiri/Gemma-4-E4B-it-PARL-GGUF", filename="Gemma-4-E4B-it-PARL-Q4_K_M.gguf", local_files_only=True)
-                clip_path = hf_hub_download(repo_id="Phonsiri/Gemma-4-E4B-it-PARL-GGUF", filename="Gemma-4-E4B-it-PARL-mmproj.gguf", local_files_only=True)
-            except Exception:
-                raise RuntimeError(f"GGUF model files not found locally or in Hugging Face cache. Please place them in {os.path.dirname(model_path)} or download them first.")
+                model_dir = os.path.dirname(model_path)
+                
+                # Download model files if they are missing
+                if not os.path.exists(model_path):
+                    print(f"Downloading Gemma-4-E4B-it-PARL-Q4_K_M.gguf to {model_dir}...")
+                    model_path = hf_hub_download(
+                        repo_id="Phonsiri/Gemma-4-E4B-it-PARL-GGUF", 
+                        filename="Gemma-4-E4B-it-PARL-Q4_K_M.gguf",
+                        local_dir=model_dir
+                    )
+                if not os.path.exists(clip_path):
+                    print(f"Downloading Gemma-4-E4B-it-PARL-mmproj.gguf to {model_dir}...")
+                    clip_path = hf_hub_download(
+                        repo_id="Phonsiri/Gemma-4-E4B-it-PARL-GGUF", 
+                        filename="Gemma-4-E4B-it-PARL-mmproj.gguf",
+                        local_dir=model_dir
+                    )
+            except Exception as dl_err:
+                raise RuntimeError(
+                    f"Failed to automatically download GGUF model files from Hugging Face: {dl_err}. "
+                    f"Please place them manually in {os.path.dirname(model_path)}."
+                )
                 
         print(f"Loading local Gemma 4 model from {model_path}...")
         from llama_cpp import Llama
@@ -332,7 +349,8 @@ def perform_ocr(img, image_name_for_mock="image.jpg"):
         return extract_mock_data(image_name_for_mock)
         
     try:
-        prompt = """You are an expert invoice OCR system. Analyze the invoice/bill image carefully and extract ALL visible information.
+        prompt = """You are an expert in reading Thai auto parts store bills (บิลร้านอะไหล่รถยนต์).
+Analyze the invoice/bill image carefully. You can intelligently correct typos, guess garbled characters, and reconstruct words using the auto parts context, brand names (e.g. ISUZU, TOYOTA, FORD, KUBOTA, MAZDA), and item descriptions.
 Return ONLY a raw JSON object (no markdown, no explanation) with this exact structure:
 {
   "bill_no": "Invoice/Bill number visible in the image",
