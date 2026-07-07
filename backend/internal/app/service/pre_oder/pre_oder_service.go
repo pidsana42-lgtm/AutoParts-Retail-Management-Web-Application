@@ -1,7 +1,18 @@
 package pre_order
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
 	preOrderDTO "backend/internal/app/dto/pre_oder"
+	"backend/internal/app/entity"
 	preOrderRepo "backend/internal/app/repository/pre_oder"
 )
 
@@ -23,12 +34,117 @@ func NewPreOrderService(repo preOrderRepo.PreOrderRepository) PreOrderService {
 }
 
 func (s *preOrderService) CreatePreOrder(input preOrderDTO.CreatePreOrderDTO) (preOrderDTO.PreOrderResponseDTO, error) {
-	entity := input.ToEntity()
-	err := s.repo.CreatePreOrder(&entity)
+	poEntity := input.ToEntity()
+	err := s.repo.CreatePreOrder(&poEntity)
 	if err != nil {
 		return preOrderDTO.PreOrderResponseDTO{}, err
 	}
-	return preOrderDTO.ToPreOrderResponseDTO(&entity), nil
+
+	// Trigger LINE OA push notification asynchronously
+	go func(customerID, preOrderID uint) {
+		lineUserID, errLU := s.repo.GetLineUserIDByCustomerID(customerID)
+		if errLU != nil || lineUserID == "" {
+			log.Printf("[LINE Send] LINE account is not linked for Customer ID %d. LINE notification skipped.\n", customerID)
+			return
+		}
+
+		loadedPreOrder, errGet := s.repo.GetPreOrderByID(preOrderID)
+		if errGet != nil || loadedPreOrder == nil {
+			log.Printf("[LINE Send] Error loading pre-order details for notification: %v\n", errGet)
+			return
+		}
+
+		sendLineNotification(lineUserID, loadedPreOrder)
+	}(poEntity.CustomerID, poEntity.ID)
+
+	return preOrderDTO.ToPreOrderResponseDTO(&poEntity), nil
+}
+
+func sendLineNotification(lineUserID string, preOrder *entity.PreOrder) {
+	token := strings.TrimSpace(os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"))
+	if token == "" {
+		log.Println("WARNING: LINE_CHANNEL_ACCESS_TOKEN not configured. LINE notification skipped.")
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("🔔 *มีใบสั่งจองสินค้าล่วงหน้าใหม่ (Pre-Order)*\n\n"))
+	sb.WriteString(fmt.Sprintf("เลขที่ใบจอง: PRE-%05d\n", preOrder.ID))
+	sb.WriteString(fmt.Sprintf("วันที่จอง: %s\n", preOrder.OrderDate.Format("02/01/2006 15:04")))
+	
+	typeStr := "หน้าร้าน"
+	if preOrder.PreOrderType == "LINE" {
+		typeStr = "LINE OA"
+	} else if preOrder.PreOrderType == "TEL" {
+		typeStr = "โทรศัพท์"
+	}
+	sb.WriteString(fmt.Sprintf("ช่องทางการจอง: %s\n", typeStr))
+	
+	if preOrder.Customer != nil {
+		sb.WriteString(fmt.Sprintf("ชื่อลูกค้า: %s\nเบอร์โทรศัพท์: %s\n", preOrder.Customer.CustomerName, preOrder.Customer.PhoneNumber))
+	}
+	
+	sb.WriteString("\n📋 รายการอะไหล่ที่จอง:\n")
+	var total float64 = 0
+	for idx, item := range preOrder.PreOrderItems {
+		pName := "อะไหล่ทั่วไป"
+		if item.Product != nil {
+			pName = item.Product.Product_Name
+		}
+		itemTotal := float64(item.Quantity) * item.UnitPrice
+		total += itemTotal
+		sb.WriteString(fmt.Sprintf("%d. %s x%d (฿%.2f)\n", idx+1, pName, item.Quantity, item.UnitPrice))
+	}
+	
+	sb.WriteString(fmt.Sprintf("\n💰 ยอดรวม: ฿%.2f\n", total))
+	sb.WriteString(fmt.Sprintf("💵 มัดจำแล้ว: ฿%.2f\n", preOrder.DepositAmount))
+	sb.WriteString(fmt.Sprintf("💳 คงค้างตอนรับของ: ฿%.2f\n", total-preOrder.DepositAmount))
+	sb.WriteString(fmt.Sprintf("สถานะ: %s\n\n", "กำลังจัดหาอะไหล่"))
+	
+	sb.WriteString("*ทางร้านได้รับยอดจองแล้วและกำลังดำเนินการสั่งอะไหล่ด่วนให้ทันทีค่ะ เมื่อของถึงร้านจะส่งไลน์แจ้งอีกครั้งนะคะ ขอบคุณค่ะ 🙏*")
+
+	text := sb.String()
+
+	url := "https://api.line.me/v2/bot/message/push"
+	payload := map[string]interface{}{
+		"to": lineUserID,
+		"messages": []map[string]interface{}{
+			{
+				"type": "text",
+				"text": text,
+			},
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("[LINE Send] Error marshaling LINE payload: %v\n", err)
+		return
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("[LINE Send] Error creating LINE http request: %v\n", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[LINE Send] Error calling LINE API: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		log.Printf("[LINE Send] LINE API returned code %d: %s\n", resp.StatusCode, string(respBody))
+	} else {
+		log.Printf("[LINE Send] Successfully sent pre-order notification to LINE User %s\n", lineUserID)
+	}
 }
 
 func (s *preOrderService) CreatePreOrderItem(input preOrderDTO.CreatePreOrderItemDTO) (preOrderDTO.PreOrderItemResponseDTO, error) {

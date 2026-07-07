@@ -165,9 +165,19 @@ class ProductMatcher:
         Returns:
             matched_product_id (int or None), similarity_score (float)
         """
-        # 1. Exact match on user-corrected mappings (highest priority, case-insensitive)
         comp_name_lower = company_product_name.strip().lower()
         comp_code_lower = company_product_code.strip().lower()
+
+        # 0. Exact code or barcode match check (first priority)
+        if comp_code_lower:
+            for p in self.product_data:
+                db_code = p.get("product_code", "").strip().lower()
+                db_barcode = p.get("barcode", "").strip().lower()
+                if comp_code_lower == db_code or comp_code_lower == db_barcode:
+                    print(f"[Code/Barcode Match] Exact match found: '{company_product_code}' -> DB Product ID {p.get('id')}")
+                    return p.get("id"), 1.0
+
+        # 1. Exact match on user-corrected mappings (highest priority, case-insensitive)
         
         for c in self.corrections:
             c_name = c.get("company_product_name", "").strip().lower()

@@ -58,10 +58,11 @@ export async function scanBill(file: File): Promise<any> {
   uploadData.append("file", file);
 
   try {
-    const response = await axios.post("http://localhost:8000/api/extract-invoice/upload", uploadData, {
+    const response = await axios.post("/ocr/api/extract-invoice/upload", uploadData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
+      timeout: 120000, // 2 นาที - local model อาจช้า
     });
     
     if (response.data && response.data.error) {

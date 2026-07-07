@@ -229,9 +229,54 @@ def extract_mock_data(image_path_or_url):
     }
     return mock_response
 
+local_llm = None
+
+def get_local_llm():
+    global local_llm
+    if local_llm is None:
+        model_path = os.path.join(os.path.dirname(__file__), "Gemma-4-E4B-it-PARL-Q4_K_M.gguf")
+        clip_path = os.path.join(os.path.dirname(__file__), "Gemma-4-E4B-it-PARL-mmproj.gguf")
+        
+        # Check if files exist in the same directory as server.py
+        if not os.path.exists(model_path) or not os.path.exists(clip_path):
+            # Fallback to cache directory check
+            try:
+                from huggingface_hub import hf_hub_download
+                print("Checking Hugging Face hub for cached model files...")
+                model_path = hf_hub_download(repo_id="Phonsiri/Gemma-4-E4B-it-PARL-GGUF", filename="Gemma-4-E4B-it-PARL-Q4_K_M.gguf", local_files_only=True)
+                clip_path = hf_hub_download(repo_id="Phonsiri/Gemma-4-E4B-it-PARL-GGUF", filename="Gemma-4-E4B-it-PARL-mmproj.gguf", local_files_only=True)
+            except Exception:
+                raise RuntimeError(f"GGUF model files not found locally or in Hugging Face cache. Please place them in {os.path.dirname(model_path)} or download them first.")
+                
+        print(f"Loading local Gemma 4 model from {model_path}...")
+        from llama_cpp import Llama
+        try:
+            from llama_cpp.llama_chat_format import Gemma4ChatHandler
+            chat_handler = Gemma4ChatHandler(clip_model_path=clip_path, use_gpu=False)
+            print("Using Gemma4ChatHandler (CPU mode) for Gemma 4 multimodal format")
+        except ImportError:
+            try:
+                from llama_cpp.llama_chat_format import Gemma3ChatHandler
+                chat_handler = Gemma3ChatHandler(clip_model_path=clip_path, use_gpu=False)
+                print("Using Gemma3ChatHandler (CPU mode) for Gemma 4 multimodal format")
+            except ImportError:
+                from llama_cpp.llama_chat_format import Llava15ChatHandler
+                chat_handler = Llava15ChatHandler(clip_model_path=clip_path)
+                print("Warning: Gemma4/3ChatHandler not found, falling back to Llava15ChatHandler")
+        
+        local_llm = Llama(
+            model_path=model_path,
+            chat_handler=chat_handler,
+            n_ctx=4096,        # เพิ่มจาก 2048 → รูป(266) + prompt(250) + JSON(800) = ~1316 tokens
+            n_gpu_layers=0,    # บังคับใช้ CPU เท่านั้นเพื่อหลีกเลี่ยงบั๊ก Metal compiler บน Apple M4 Mac
+            verbose=False      # ซ่อน log tensor loading เยอะๆ
+        )
+        print("Local Gemma 4 model loaded successfully!")
+    return local_llm
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Load DB and configure Gemini API
+    # Startup: Load DB and configure local GGUF model
     print(f"Starting OCR Service (Mock Mode: {MOCK_MODE})")
     
     # Initialize DB connection
@@ -248,16 +293,11 @@ async def lifespan(app: FastAPI):
         print(f"Warning: Could not pre-load ProductMatcher: {pm_err}")
     
     if not MOCK_MODE:
-        if not GEMINI_API_KEY:
-            print("Warning: GOOGLE_STUDIO (or GEMINI_API_KEY) is not set in .env! Running in Mock Mode.")
-        else:
-            try:
-                print(f"Configuring Gemini API (Model: {GEMINI_MODEL})...")
-                genai.configure(api_key=GEMINI_API_KEY)
-                print("Gemini API configured successfully.")
-            except Exception as e:
-                print(f"Error configuring Gemini API: {e}")
-                traceback.print_exc()
+        try:
+            print("Pre-loading local Gemma 4 model (GGUF)...")
+            get_local_llm()
+        except Exception as llm_err:
+            print(f"Warning: Could not pre-load local model during startup: {llm_err}")
     
     yield
     print("Shutting down OCR Service")
@@ -271,7 +311,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -282,88 +327,145 @@ class ExtractRequest(BaseModel):
     job_id: int = None
 
 def perform_ocr(img, image_name_for_mock="image.jpg"):
-    if MOCK_MODE or not LIGHTNING_API_KEY:
-        print("Mock Mode active or LIGHTNING_API_KEY missing. Returning mock data.")
+    if MOCK_MODE:
+        print("Mock Mode active. Returning mock data.")
         return extract_mock_data(image_name_for_mock)
         
     try:
-        prompt = """Analyze the invoice/bill image and extract the following information in JSON format:
+        prompt = """You are an expert invoice OCR system. Analyze the invoice/bill image carefully and extract ALL visible information.
+Return ONLY a raw JSON object (no markdown, no explanation) with this exact structure:
 {
-  "bill_no": "Invoice/Bill number (string)",
-  "total_amount": 0.0 (float),
-  "due_date": "YYYY-MM-DD (string)",
-  "transport_by": "Transportation provider if any (string)",
-  "supplier_id": 1 (integer),
-  "subtotal": 0.0 (float),
-  "discount_total": 0.0 (float),
-  "credit_term": "Credit term details (e.g. 30 Days) (string)",
-  "vat_amount": 0.0 (float),
-  "grand_total": 0.0 (float),
+  "bill_no": "Invoice/Bill number visible in the image",
+  "total_amount": 0.0,
+  "due_date": "YYYY-MM-DD",
+  "transport_by": "Transportation provider if shown, else null",
+  "supplier_id": 1,
+  "subtotal": 0.0,
+  "discount_total": 0.0,
+  "credit_term": "e.g. 30 Days or null",
+  "vat_amount": 0.0,
+  "grand_total": 0.0,
   "payment_status": "unpaid",
   "items": [
     {
       "item_sequence": 1,
-      "company_product_code": "Product code (string)",
-      "company_product_name": "Product name (string)",
-      "order_quantity": 1 (integer),
-      "unit": "Unit (e.g. PCS, Box) (string)",
-      "conversion_factor": 1.0 (float),
-      "price_per_unit": 0.0 (float),
-      "discount_amount": 0.0 (float),
-      "net_amount": 0.0 (float),
-      "is_freebie": false (boolean),
-      "remark": "Any remark (string)",
-      "product_id": 1 (integer)
+      "company_product_code": "product code from invoice",
+      "company_product_name": "product name from invoice",
+      "order_quantity": 1,
+      "unit": "PCS",
+      "conversion_factor": 1.0,
+      "price_per_unit": 0.0,
+      "discount_amount": 0.0,
+      "net_amount": 0.0,
+      "is_freebie": false,
+      "remark": "",
+      "product_id": null
     }
   ]
 }
-Return ONLY the raw JSON object representation. Do not include any formatting like ```json ... ``` or additional explanations."""
+Extract every line item. Use null for missing fields. Return ONLY the JSON, nothing else."""
 
         import io
         import base64
-        import requests
         
+        # แปลง PIL Image เป็น JPEG bytes
         img_byte_arr = io.BytesIO()
-        temp_img = img
+        temp_img = img.copy()
         if temp_img.mode in ('RGBA', 'LA', 'P'):
             temp_img = temp_img.convert('RGB')
-        temp_img.save(img_byte_arr, format='JPEG')
-        img_b64 = base64.b64encode(img_byte_arr.getvalue()).decode('utf-8')
+        temp_img.save(img_byte_arr, format='JPEG', quality=95)
+        img_bytes = img_byte_arr.getvalue()
+        img_b64 = base64.b64encode(img_bytes).decode('utf-8')
 
-        headers = {
-            "Authorization": f"Bearer {LIGHTNING_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "model": GEMINI_MODEL,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        { "type": "text", "text": prompt },
-                        { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
+        generated_text = None
+
+        # === วิธีที่ 1: Local GGUF model (หลัก) ===
+        try:
+            llm = get_local_llm()
+            print("Performing local inference with Gemma 4 GGUF model...")
+            response = llm.create_chat_completion(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            { "type": "text", "text": prompt },
+                            { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
+                        ]
+                    }
+                ],
+                temperature=0.1,
+                max_tokens=2048
+            )
+            generated_text = response['choices'][0]['message']['content']
+            print("Local model inference completed!")
+        except Exception as local_err:
+            print(f"Local model inference failed: {local_err}")
+
+        # === วิธีที่ 2: Lightning AI (fallback) ===
+        if generated_text is None and LIGHTNING_API_KEY:
+            print("Falling back to Lightning AI completions API (Gemini model)...")
+            try:
+                headers = {
+                    "Authorization": f"Bearer {LIGHTNING_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                
+                payload = {
+                    "model": GEMINI_MODEL,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                { "type": "text", "text": prompt },
+                                { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
+                            ]
+                        }
                     ]
                 }
-            ]
-        }
 
-        print(f"Calling Lightning AI completions with model {GEMINI_MODEL}...")
-        resp = requests.post(
-            url="https://lightning.ai/api/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=60
-        )
-        resp.raise_for_status()
-        resp_json = resp.json()
-        generated_text = resp_json['choices'][0]['message']['content']
+                resp = requests.post(
+                    url="https://lightning.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=60
+                )
+                resp.raise_for_status()
+                resp_json = resp.json()
+                generated_text = resp_json['choices'][0]['message']['content']
+                print(f"Lightning AI completions inference ({GEMINI_MODEL}) completed!")
+            except Exception as lightning_err:
+                print(f"Lightning AI API fallback failed: {lightning_err}")
         
-        # Extract JSON from response
-        json_match = re.search(r"(\{.*\})", generated_text, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(1)
-            parsed_json = json.loads(json_str)
+        print(f"Raw model output (first 500 chars): {generated_text[:500]}")
+        
+        # Extract JSON from response - ลอง parse หลายแบบ
+        # แบบที่ 1: หา JSON block โดยตรง
+        generated_text_clean = generated_text.strip()
+        if generated_text_clean.startswith("```"):
+            # กำจัด markdown code block
+            generated_text_clean = re.sub(r"```(?:json)?\s*", "", generated_text_clean)
+            generated_text_clean = re.sub(r"```\s*$", "", generated_text_clean).strip()
+        
+        # Remove commas inside numbers (e.g. 12,000.0 -> 12000.0) to make it valid JSON
+        generated_text_clean = re.sub(r'(?<=\d),(?=\d)', '', generated_text_clean)
+        
+        parsed_json = None
+        # แบบที่ 2: parse ตรงๆ ก่อน
+        try:
+            parsed_json = json.loads(generated_text_clean)
+        except Exception:
+            pass
+        
+        # แบบที่ 3: หา JSON ด้วย regex
+        if parsed_json is None:
+            json_match = re.search(r"(\{.*\})", generated_text_clean, re.DOTALL)
+            if json_match:
+                try:
+                    parsed_json = json.loads(json_match.group(1))
+                except Exception:
+                    pass
+        
+        if parsed_json:
             parsed_json["ocr_text"] = generated_text
             return parsed_json
         else:
@@ -373,6 +475,7 @@ Return ONLY the raw JSON object representation. Do not include any formatting li
             }
     except Exception as e:
         tb = traceback.format_exc()
+        print(f"Error during OCR execution: {e}\n{tb}")
         mock_data = extract_mock_data(image_name_for_mock)
         mock_data["ocr_text"] = f"--- OCR EXECUTION FALLBACK (MOCK DATA GENERATED) ---\nError Detail:\n{tb}\n\n" + mock_data["ocr_text"]
         return mock_data
@@ -392,13 +495,14 @@ def match_bill_products(result):
         if engine is not None:
             with engine.connect() as conn:
                 # Get base products
-                query = text("SELECT id, product_name, product_code FROM products WHERE is_active = true")
+                query = text("SELECT id, product_name, product_code, barcode FROM products WHERE is_active = true")
                 rows = conn.execute(query).fetchall()
                 for r in rows:
                     db_products.append({
                         "id": r[0],
                         "product_name": r[1],
-                        "product_code": r[2]
+                        "product_code": r[2],
+                        "barcode": r[3] or ""
                     })
                 
                 # Get corrections
@@ -499,12 +603,29 @@ def extract_invoice_from_path(request: ExtractRequest):
 @app.post("/api/extract-invoice/upload")
 async def extract_invoice_from_upload(file: UploadFile = File(...), job_id: int = Query(None)):
     """
-    Extracts invoice information from an uploaded multipart image file, and saves to database.
+    Extracts invoice information from an uploaded multipart image or PDF file, and saves to database.
     """
     import time
+    import fitz
     try:
         contents = await file.read()
-        img = Image.open(BytesIO(contents))
+        is_pdf = file.filename.lower().endswith(".pdf") or file.content_type == "application/pdf"
+        
+        if is_pdf:
+            print(f"Detecting PDF upload: {file.filename}. Converting first page to PNG...")
+            doc = fitz.open(stream=contents, filetype="pdf")
+            if len(doc) == 0:
+                raise Exception("The PDF file is empty or corrupted")
+            page = doc.load_page(0)
+            pix = page.get_pixmap(dpi=200) # 200 DPI is optimal for OCR quality
+            file_to_save = pix.tobytes("png")
+            img = Image.open(BytesIO(file_to_save))
+            safe_filename = f"{int(time.time())}_{file.filename}.png"
+        else:
+            img = Image.open(BytesIO(contents))
+            file_to_save = contents
+            safe_filename = f"{int(time.time())}_{file.filename}"
+
         result = perform_ocr(img, image_name_for_mock=file.filename)
         # Perform local vector product matching
         result = match_bill_products(result)
@@ -513,10 +634,9 @@ async def extract_invoice_from_upload(file: UploadFile = File(...), job_id: int 
         uploads_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads"))
         os.makedirs(uploads_dir, exist_ok=True)
         
-        safe_filename = f"{int(time.time())}_{file.filename}"
         file_path = os.path.join(uploads_dir, safe_filename)
         with open(file_path, "wb") as f:
-            f.write(contents)
+            f.write(file_to_save)
             
         # Create a database record in bill_images table
         bill_image_id = None
@@ -591,7 +711,7 @@ def generate_product_codes(request: GenerateCodesRequest):
         sys.path.append(backend_root)
         
     try:
-        from barcode_generator import generate_barcode
+        from backend.barcode.barcode_generator import generate_barcode
     except ImportError as e:
         print(f"Error importing barcode generator: {e}")
         raise HTTPException(status_code=500, detail=f"Barcode module import error: {e}")

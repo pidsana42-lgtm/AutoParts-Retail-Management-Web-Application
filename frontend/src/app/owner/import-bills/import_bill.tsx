@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../../../service/http/apiClient';
+import * as XLSX from 'xlsx';
 
 import { 
   Camera, FileUp, ArrowRight, Eye, History, 
@@ -169,6 +170,59 @@ export default function ImportBill() {
   // Form State
   const [formData, setFormData] = useState<ScannedBillData | null>(null);
   const [poReference, setPoReference] = useState('1'); // Default to PO ID 1 in local seed
+
+  const exportBillsHistoryToExcel = () => {
+    try {
+      const exportData = bills.map((b) => ({
+        "เลขที่บิล (Invoice No)": b.bill_no,
+        "วันที่นำเข้า (Import Date)": formatDate(b.created_at),
+        "ผู้จัดจำหน่าย (Supplier)": getSupplierName(b.supplier_id),
+        "ยอดรวมสุทธิ (Total)": b.total_amount,
+        "สถานะ (Status)": "บันทึกคลังแล้ว"
+      }));
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "ประวัตินำเข้าบิล");
+      XLSX.writeFile(workbook, "bills_history.xlsx");
+    } catch (err) {
+      console.error(err);
+      alert("เกิดข้อผิดพลาดในการส่งออกไฟล์ Excel: " + String(err));
+    }
+  };
+
+  const exportBillItemsToExcel = () => {
+    if (!formData || !formData.items || formData.items.length === 0) return;
+    try {
+      const exportData = formData.items.map((item, idx) => {
+        const matchingProd = products.find(p => p.id === Number(item.product_id));
+        const matchingCat = categories.find(c => c.ID === Number(item.category_id));
+        const subCategories = matchingCat?.sub_categories || [];
+        const matchingSubCat = subCategories.find((sc: any) => sc.ID === Number(item.sub_category_id));
+        
+        return {
+          "ลำดับ (Seq)": item.item_sequence || (idx + 1),
+          "รหัสสินค้าของคู่ค้า (Supplier Code)": item.company_product_code,
+          "ชื่อสินค้าของคู่ค้า (Supplier Product Name)": item.company_product_name,
+          "เทียบสินค้าในระบบ (Matched Code)": matchingProd ? matchingProd.product_code : '-',
+          "ชื่อสินค้าในระบบ (Matched Name)": matchingProd ? matchingProd.product_name : '-',
+          "หมวดหมู่หลัก (Category)": matchingCat ? matchingCat.category_name : '-',
+          "หมวดหมู่ย่อย (Sub Category)": matchingSubCat ? matchingSubCat.sub_category_name : '-',
+          "จำนวน (Quantity)": item.order_quantity,
+          "หน่วย (Unit)": item.unit,
+          "ราคาต่อหน่วย (Unit Price)": item.price_per_unit,
+          "รวมเงิน (Net Amount)": item.net_amount
+        };
+      });
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "รายการในบิล");
+      const filename = `bill_${formData.bill_no || 'import'}.xlsx`;
+      XLSX.writeFile(workbook, filename);
+    } catch (err) {
+      console.error(err);
+      alert("เกิดข้อผิดพลาดในการส่งออกไฟล์ Excel: " + String(err));
+    }
+  };
 
   // Fetch lists on mount
   useEffect(() => {
@@ -384,7 +438,7 @@ export default function ImportBill() {
       const [suppliersRes, productsRes, categoriesRes] = await Promise.all([
         apiClient.get('/wms/suppliers'),
         apiClient.get('/wms/products'),
-        apiClient.get('/wms/categories')
+        apiClient.get('/import-data/categories-tree')
       ]);
       if (suppliersRes.data) {
         setSuppliers(Array.isArray(suppliersRes.data) ? suppliersRes.data : (suppliersRes.data.data || []));
@@ -875,9 +929,18 @@ export default function ImportBill() {
             <History size={20} />
             <span>รายการสแกนล่าสุด (Recent Scans)</span>
           </div>
-          <button onClick={fetchBills} className="text-[#b32025] text-sm font-bold hover:underline cursor-pointer">
-            ดูทั้งหมด
-          </button>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={exportBillsHistoryToExcel}
+              className="text-gray-600 hover:text-gray-900 text-xs font-bold flex items-center gap-1.5 cursor-pointer bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg transition-all"
+            >
+              <FileUp size={14} />
+              ส่งออกประวัติ Excel
+            </button>
+            <button onClick={fetchBills} className="text-[#b32025] text-sm font-bold hover:underline cursor-pointer">
+              ดูทั้งหมด
+            </button>
+          </div>
         </div>
         
         {loadingBills ? (
@@ -981,8 +1044,8 @@ export default function ImportBill() {
                 <button onClick={() => setRotate(prev => (prev + 90) % 360)} className="bg-gray-100 p-2 rounded hover:bg-gray-200 text-gray-700 cursor-pointer" title="หมุน"><RotateCw size={18} /></button>
               </div>
               <label className="cursor-pointer text-xs text-red-600 font-bold hover:underline py-2 px-4 bg-gray-50 rounded border border-gray-200">
-                เปลี่ยนรูปภาพ
-                <input type="file" className="hidden" accept="image/*" multiple onChange={handleFileChange} />
+                เปลี่ยนไฟล์บิล (ภาพ/PDF)
+                <input type="file" className="hidden" accept="image/*,application/pdf" multiple onChange={handleFileChange} />
               </label>
             </div>
           )}
@@ -1125,8 +1188,8 @@ export default function ImportBill() {
               <Camera size={64} className="text-gray-400 mb-4 animate-pulse" />
               <p className="text-gray-600 font-bold mb-2">ลากไฟล์บิลของคุณวางที่นี่ หรือ</p>
               <label className="cursor-pointer text-white bg-[#b32025] hover:bg-[#9a1a1f] px-6 py-2.5 rounded font-bold transition-all shadow-sm">
-                อัปโหลดภาพบิล
-                <input type="file" className="hidden" accept="image/*" multiple onChange={handleFileChange} />
+                อัปโหลดบิล (ภาพ/PDF)
+                <input type="file" className="hidden" accept="image/*,application/pdf" multiple onChange={handleFileChange} />
               </label>
               <p className="text-xs text-gray-400 mt-3">รองรับการเลือกทีละหลายไฟล์สำหรับสแกนแบบกลุ่ม</p>
             </div>
@@ -1236,16 +1299,17 @@ export default function ImportBill() {
               </div>
 
               {/* Items Table */}
-              <div className="flex-1 overflow-auto max-h-[350px]">
-                <table className="w-full text-left text-sm border-collapse">
+              <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[350px]">
+                <table className="w-full min-w-[1200px] text-left text-sm border-collapse">
                   <thead>
                     <tr className="border-b border-gray-100 text-xs text-gray-500">
-                      <th className="py-4 px-6 font-bold w-[15%]">สแกนรหัส (บิล)</th>
-                      <th className="py-4 px-6 font-bold w-[25%]">ชื่อสินค้า (บิล)</th>
-                      <th className="py-4 px-6 font-bold w-[25%]">เทียบสินค้าในระบบ</th>
-                      <th className="py-4 px-6 font-bold w-[20%]">หมวดหมู่ WMS</th>
-                      <th className="py-4 px-6 font-bold text-right">จำนวน</th>
-                      <th className="py-4 px-6 font-bold text-right">ราคา/หน่วย</th>
+                      <th className="py-4 px-6 font-bold w-[12%]">สแกนรหัส (บิล)</th>
+                      <th className="py-4 px-6 font-bold w-[22%]">ชื่อสินค้า (บิล)</th>
+                      <th className="py-4 px-6 font-bold w-[22%]">เทียบสินค้าในระบบ</th>
+                      <th className="py-4 px-6 font-bold w-[15%]">หมวดหมู่หลัก</th>
+                      <th className="py-4 px-6 font-bold w-[15%]">หมวดหมู่ย่อย</th>
+                      <th className="py-4 px-6 font-bold text-right w-[6%]">จำนวน</th>
+                      <th className="py-4 px-6 font-bold text-right w-[8%]">ราคา/หน่วย</th>
                       <th className="py-4 px-6 font-bold text-center w-12">ลบ</th>
                     </tr>
                   </thead>
@@ -1282,59 +1346,66 @@ export default function ImportBill() {
                             ))}
                           </select>
                         </td>
+                        {/* Category Column */}
                         <td className="py-2 px-4">
                           {item.product_id ? (
                             (() => {
                               const prod = products.find(p => p.id === Number(item.product_id));
                               if (prod) {
                                 return (
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded font-medium inline-block truncate max-w-[150px]" title={prod.category_name}>
-                                      {prod.category_name || 'ไม่ระบุหมวดหมู่'}
-                                    </span>
-                                    {prod.sub_category_name && (
-                                      <span className="text-[9px] text-gray-400 pl-1 truncate max-w-[150px]" title={prod.sub_category_name}>
-                                        └─ {prod.sub_category_name}
-                                      </span>
-                                    )}
-                                  </div>
+                                  <span className="text-[10px] text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded font-medium inline-block truncate max-w-[150px]" title={prod.category_name}>
+                                    {prod.category_name || 'ไม่ระบุหมวดหมู่'}
+                                  </span>
                                 );
                               }
                               return <span className="text-gray-400 text-xs">-</span>;
                             })()
                           ) : (
-                            <div className="flex flex-col gap-1 p-1 bg-red-50/30 rounded border border-red-100/70">
-                              {/* Category Dropdown */}
-                              <select
-                                value={item.category_id || ''}
-                                onChange={(e) => {
-                                  const catId = e.target.value ? Number(e.target.value) : null;
-                                  handleItemChange(idx, 'category_id', catId);
-                                  handleItemChange(idx, 'sub_category_id', null); // Reset subcategory when category changes
-                                }}
-                                className="bg-white border border-gray-200 rounded p-0.5 text-[10px] w-full focus:ring-0 text-gray-700 font-medium"
-                              >
-                                <option value="">-- หมวดหมู่หลัก --</option>
-                                {categories.map((c: any) => (
-                                  <option key={c.ID} value={c.ID}>{c.category_name}</option>
-                                ))}
-                              </select>
+                            <select
+                              value={item.category_id || ''}
+                              onChange={(e) => {
+                                const catId = e.target.value ? Number(e.target.value) : null;
+                                handleItemChange(idx, 'category_id', catId);
+                                handleItemChange(idx, 'sub_category_id', null); // Reset subcategory when category changes
+                              }}
+                              className="bg-white border border-gray-200 rounded p-0.5 text-[10px] w-full focus:ring-0 text-gray-700 font-medium"
+                            >
+                              <option value="">-- หมวดหมู่หลัก --</option>
+                              {categories.map((c: any) => (
+                                <option key={c.ID} value={c.ID}>{c.category_name}</option>
+                              ))}
+                            </select>
+                          )}
+                        </td>
 
-                              {/* Sub-Category Dropdown */}
-                              <select
-                                value={item.sub_category_id || ''}
-                                disabled={!item.category_id}
-                                onChange={(e) => {
-                                  handleItemChange(idx, 'sub_category_id', e.target.value ? Number(e.target.value) : null);
-                                }}
-                                className="bg-white border border-gray-200 rounded p-0.5 text-[10px] w-full focus:ring-0 text-gray-700 font-medium disabled:opacity-50"
-                              >
-                                <option value="">-- หมวดหมู่ย่อย --</option>
-                                {item.category_id && ((categories.find((c: any) => c.ID === item.category_id))?.sub_categories || []).map((sc: any) => (
-                                  <option key={sc.ID} value={sc.ID}>{sc.sub_category_name}</option>
-                                ))}
-                              </select>
-                            </div>
+                        {/* Sub-Category Column */}
+                        <td className="py-2 px-4">
+                          {item.product_id ? (
+                            (() => {
+                              const prod = products.find(p => p.id === Number(item.product_id));
+                              if (prod && prod.sub_category_name) {
+                                return (
+                                  <span className="text-[9px] text-gray-400 pl-1 truncate max-w-[150px]" title={prod.sub_category_name}>
+                                    └─ {prod.sub_category_name}
+                                  </span>
+                                );
+                              }
+                              return <span className="text-gray-400 text-xs">-</span>;
+                            })()
+                          ) : (
+                            <select
+                              value={item.sub_category_id || ''}
+                              disabled={!item.category_id}
+                              onChange={(e) => {
+                                handleItemChange(idx, 'sub_category_id', e.target.value ? Number(e.target.value) : null);
+                              }}
+                              className="bg-white border border-gray-200 rounded p-0.5 text-[10px] w-full focus:ring-0 text-gray-700 font-medium disabled:opacity-50"
+                            >
+                              <option value="">-- หมวดหมู่ย่อย --</option>
+                              {item.category_id && ((categories.find((c: any) => c.ID === item.category_id))?.sub_categories || []).map((sc: any) => (
+                                <option key={sc.ID} value={sc.ID}>{sc.sub_category_name}</option>
+                              ))}
+                            </select>
                           )}
                         </td>
                         <td className="py-2 px-4 text-right">
@@ -1396,11 +1467,19 @@ export default function ImportBill() {
                   <p>จำนวนรายการทั้งหมด : <span className="text-gray-900 font-bold">{formData.items.length} รายการ</span></p>
                   <p>ภาษีมูลค่าเพิ่ม (VAT 7%) : <span className="text-gray-900 font-bold">{formData.vat_amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</span></p>
                 </div>
-                <div className="text-right flex items-end gap-8">
+                <div className="text-right flex items-end gap-4">
                   <div>
                     <p className="text-xs text-[#b32025] font-bold mb-1 text-left">ยอดเงินสุทธิรวม:</p>
                     <p className="text-3xl text-[#b32025] font-bold">{formData.total_amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</p>
                   </div>
+                  <button 
+                    type="button"
+                    onClick={exportBillItemsToExcel}
+                    className="bg-[#1C1B1B] hover:bg-[#2a2929] text-white px-6 py-3 rounded text-sm font-bold flex items-center gap-2 transition-all shadow-sm cursor-pointer"
+                  >
+                    <FileUp size={18} />
+                    <span>ส่งออกเป็น Excel</span>
+                  </button>
                   <button 
                     onClick={batchResults.length > 0 ? handleSaveAllBatchBills : handleSaveBill}
                     disabled={saving}
@@ -1431,70 +1510,29 @@ export default function ImportBill() {
   // --------------------------------------------------------
   // 3. หน้าอัปโหลด Excel / CSV (Excel View)
   // --------------------------------------------------------
-  const parseCSV = (text: string) => {
-    const lines = text.split(/\r?\n/);
-    if (lines.length < 2) return [];
-    
-    const firstLine = lines[0];
-    let delimiter = ',';
-    if (firstLine.includes(';')) delimiter = ';';
-    else if (firstLine.includes('\t')) delimiter = '\t';
-    
-    const headers = firstLine.split(delimiter).map(h => h.trim().replace(/^["']|["']$/g, ''));
-    
-    const items: any[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-      
-      const values: string[] = [];
-      let current = '';
-      let inQuotes = false;
-      for (let j = 0; j < line.length; j++) {
-        const char = line[j];
-        if (char === '"') {
-          inQuotes = !inQuotes;
-        } else if (char === delimiter && !inQuotes) {
-          values.push(current.trim().replace(/^["']|["']$/g, ''));
-          current = '';
-        } else {
-          current += char;
-        }
-      }
-      values.push(current.trim().replace(/^["']|["']$/g, ''));
-      
-      if (values.length >= headers.length) {
-        const itemObj: any = {};
-        headers.forEach((header, idx) => {
-          itemObj[header] = values[idx];
-        });
-        items.push(itemObj);
-      }
-    }
-    return items;
-  };
-
   const renderExcelView = () => {
-    const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleExcelFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      processCsvFile(file);
+      processExcelFile(file);
     };
 
-    const processCsvFile = (file: File) => {
+    const processExcelFile = (file: File) => {
       const reader = new FileReader();
       reader.onload = (event) => {
-        const text = event.target?.result as string;
-        if (!text) return;
-        
         try {
-          const rows = parseCSV(text);
+          const data = new Uint8Array(event.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(worksheet);
+          
           if (rows.length === 0) {
-            alert('ไม่พบข้อมูลในไฟล์ CSV หรือรูปแบบไฟล์ไม่ถูกต้อง');
+            alert('ไม่พบข้อมูลในไฟล์ หรือรูปแบบไฟล์ไม่ถูกต้อง');
             return;
           }
 
-          // Smart map CSV columns to BillItemDTO structure
+          // Smart map Excel/CSV columns to BillItemDTO structure
           const mappedItems: BillItemDTO[] = rows.map((row: any, index: number) => {
             const findValue = (keywords: string[]) => {
               const matchedKey = Object.keys(row).find(key => 
@@ -1503,11 +1541,11 @@ export default function ImportBill() {
               return matchedKey ? row[matchedKey] : '';
             };
 
-            const code = findValue(['code', 'product_code', 'รหัส', 'รหัสสินค้า']);
-            const name = findValue(['name', 'product_name', 'ชื่อ', 'ชื่อสินค้า']);
-            const qty = parseFloat(findValue(['quantity', 'qty', 'จำนวน', 'จำนวนต่อหน่วย']) || '1') || 1;
-            const unit = findValue(['unit', 'หน่วย']) || 'ชิ้น';
-            const price = parseFloat(findValue(['price', 'rate', 'ราคา', 'ราคาต่อหน่วย']) || '0') || 0;
+            const code = findValue(['code', 'product_code', 'รหัส', 'รหัสสินค้า', 'part_number', 'part_no', 'sku']);
+            const name = findValue(['name', 'product_name', 'ชื่อ', 'ชื่อสินค้า', 'description', 'detail']);
+            const qty = parseFloat(findValue(['quantity', 'qty', 'จำนวน', 'จำนวนต่อหน่วย', 'ordered', 'vol']) || '1') || 1;
+            const unit = findValue(['unit', 'หน่วย', 'uom', 'pack']) || 'ชิ้น';
+            const price = parseFloat(findValue(['price', 'rate', 'ราคา', 'ราคาต่อหน่วย', 'cost', 'unit_cost']) || '0') || 0;
 
             return {
               item_sequence: index + 1,
@@ -1529,7 +1567,7 @@ export default function ImportBill() {
           const subtotal = mappedItems.reduce((sum, item) => sum + item.net_amount, 0);
 
           setFormData({
-            bill_no: 'CSV-' + Math.floor(1000 + Math.random() * 9000),
+            bill_no: 'IMPORT-' + Math.floor(1000 + Math.random() * 9000),
             total_amount: subtotal,
             due_date: new Date().toISOString().split('T')[0],
             transport_by: '',
@@ -1546,15 +1584,15 @@ export default function ImportBill() {
             filename: file.name
           });
 
-          setPreviewUrl(null); // No image preview for CSV mode
+          setPreviewUrl(null); // No image preview for Excel/CSV mode
           setCurrentView('scan'); // Direct to scan view editor
           setErrorMsg(null);
         } catch (error) {
           console.error(error);
-          alert('เกิดข้อผิดพลาดในการอ่านไฟล์ CSV: ' + String(error));
+          alert('เกิดข้อผิดพลาดในการอ่านไฟล์: ' + String(error));
         }
       };
-      reader.readAsText(file);
+      reader.readAsArrayBuffer(file);
     };
 
     return (
@@ -1567,35 +1605,25 @@ export default function ImportBill() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 flex flex-col items-center justify-center text-center min-h-[500px]">
-          <div className="bg-[#1c1b1b]/5 p-6 rounded-full mb-6 text-gray-800">
-            <FileUp size={64} />
+          {/* Centered Icon Box styled consistently with Home View card */}
+          <div className="bg-[#1c1b1b] text-white p-5 rounded-xl mb-6 shadow-sm">
+            <FileUp size={48} className="text-white" />
           </div>
-          <h3 className="text-xl font-bold text-gray-800 mb-2">นำเข้าไฟล์สั่งซื้ออะไหล่</h3>
-          <p className="text-gray-500 text-sm max-w-md mb-8">
-            อัปโหลดไฟล์ในรูปแบบ CSV (.csv) โดยสามารถส่งออกข้อมูลจาก Excel เป็นไฟล์ CSV ก่อนนำมานำเข้าได้ที่นี่
+
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">นำเข้าไฟล์สั่งซื้ออะไหล่ (Excel / CSV)</h3>
+          <p className="text-gray-500 text-sm max-w-md mb-8 leading-relaxed">
+            อัปโหลดไฟล์ในรูปแบบ Excel (.xlsx, .xls) หรือ CSV (.csv) เพื่อนำข้อมูลไปแปลงเป็นหน้าตารางและทำการตรวจสอบแก้ไขได้ทันที
           </p>
 
-          <label className="cursor-pointer text-white bg-[#b32025] hover:bg-[#9a1a1f] px-8 py-3 rounded font-bold transition-all shadow-sm">
-            เลือกไฟล์ CSV เพื่อนำเข้า
+          <label className="cursor-pointer text-white bg-[#b32025] hover:bg-[#9a1a1f] px-8 py-3 rounded-lg font-bold transition-all shadow-sm">
+            เลือกไฟล์ Excel / CSV เพื่อนำเข้า
             <input 
               type="file" 
               className="hidden" 
-              accept=".csv" 
-              onChange={handleCsvFileChange} 
+              accept=".csv, .xlsx, .xls" 
+              onChange={handleExcelFileChange} 
             />
           </label>
-
-          <div className="mt-8 border-t border-gray-100 pt-6 w-full max-w-lg text-left">
-            <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">💡 รูปแบบคอลัมน์ในไฟล์ที่แนะนำ:</h4>
-            <div className="bg-gray-50 p-4 rounded-lg font-mono text-xs text-gray-600 overflow-x-auto">
-              รหัสสินค้า, ชื่อสินค้า, จำนวน, หน่วย, ราคาต่อหน่วย <br/>
-              BR-900X, Turbocharger, 50, ชิ้น, 870 <br/>
-              GSK-882, Gasket Set, 40, ชุด, 240
-            </div>
-            <p className="text-[11px] text-gray-400 mt-2">
-              * ระบบจะทำการจับคู่คอลัมน์อัตโนมัติทั้งชื่อคอลัมน์ภาษาไทยและภาษาอังกฤษ
-            </p>
-          </div>
         </div>
       </div>
     );
