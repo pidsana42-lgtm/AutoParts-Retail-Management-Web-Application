@@ -16,5 +16,6 @@ func SetupAuthRoutes(r *gin.Engine, db *gorm.DB) {
 	authGroup := r.Group("/api/auth")
 	{
 		authGroup.POST("/login", authController.Login)
+		authGroup.GET("/line/callback", authController.LineCallback)
 	}
 }

@@ -4,30 +4,36 @@ import json
 import re
 import traceback
 from PIL import Image
+import requests
+from io import BytesIO
+import google.generativeai as genai
 
 # Parse environment variables manually (if no dotenv is installed)
 def load_env():
-    if os.path.exists(".env"):
-        with open(".env", "r") as f:
-            for line in f:
-                if "=" in line and not line.startswith("#"):
-                    parts = line.strip().split("=", 1)
-                    if len(parts) == 2:
-                        os.environ[parts[0].strip()] = parts[1].strip()
+    env_paths = [".env", "../.env", "../../.env"]
+    for path in env_paths:
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                for line in f:
+                    if "=" in line and not line.startswith("#"):
+                        parts = line.strip().split("=", 1)
+                        if len(parts) == 2:
+                            os.environ[parts[0].strip()] = parts[1].strip()
+            break
 
 load_env()
 
-# Determine if we should mock the response
-# We will mock if MOCK_LLM is set to 'true', or if imports/loading fails, or if explicitly requested.
 MOCK_MODE = os.getenv("MOCK_LLM", "false").lower() == "true"
+GEMINI_API_KEY = (os.getenv("GOOGLE_STUDIO") or os.getenv("GEMINI_API_KEY") or "").strip()
+GEMINI_MODEL = (os.getenv("GEMINI_MODEL") or "google/gemini-3.1-pro").strip()
+LIGHTNING_API_KEY = (os.getenv("LIGHTNING_API_KEY") or "").strip()
+print(f"Loaded LIGHTNING_API_KEY: {LIGHTNING_API_KEY[:6]}...{LIGHTNING_API_KEY[-6:] if len(LIGHTNING_API_KEY) > 12 else ''} (Length: {len(LIGHTNING_API_KEY)})")
 
 def extract_mock_data(image_path_or_url):
     """
-    Returns realistic mock invoice structured data.
+    Returns realistic mock invoice structured data (matching server.py).
     """
-    # Create high-quality mock data based on the file name if possible
     filename = os.path.basename(image_path_or_url)
-    
     mock_response = {
         "bill_no": f"INV-{abs(hash(filename)) % 100000000:08d}",
         "total_amount": 15450.00,
@@ -95,37 +101,11 @@ def main():
         
     image_path = sys.argv[1]
     
-    if MOCK_MODE:
-        # Return mock data immediately
+    if MOCK_MODE or not LIGHTNING_API_KEY:
         print(json.dumps(extract_mock_data(image_path), indent=2, ensure_ascii=False))
         sys.exit(0)
         
     try:
-        import torch
-        from transformers import AutoProcessor, AutoModelForCausalLM
-        import requests
-        from io import BytesIO
-        
-        # Determine execution device
-        if torch.backends.mps.is_available():
-            device = torch.device("mps")
-        elif torch.cuda.is_available():
-            device = torch.device("cuda")
-        else:
-            device = torch.device("cpu")
-            
-        model_id = "Phonsiri/Gemma-4-E4B-it-PARL"
-        
-        # Load model and processor
-        # Since Gemma 4 is very new, we set trust_remote_code=True
-        processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True, token=os.getenv("HF_TOKEN"))
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            torch_dtype=torch.float16 if device.type != "cpu" else torch.float32,
-            trust_remote_code=True,
-            token=os.getenv("HF_TOKEN")
-        ).to(device)
-        
         # Load image
         if image_path.startswith("http://") or image_path.startswith("https://"):
             response = requests.get(image_path, timeout=30)
@@ -133,7 +113,6 @@ def main():
         else:
             img = Image.open(image_path)
             
-        # Prepare prompts
         prompt = """Analyze the invoice/bill image and extract the following information in JSON format:
 {
   "bill_no": "Invoice/Bill number (string)",
@@ -166,48 +145,60 @@ def main():
 }
 Return ONLY the raw JSON object representation. Do not include any formatting like ```json ... ``` or additional explanations."""
 
-        # Format message template for Gemma 4
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": img},
-                    {"type": "text", "text": prompt}
-                ]
-            }
-        ]
+        import io
+        import base64
+        import requests
         
-        # Apply prompt template
-        text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        img_byte_arr = io.BytesIO()
+        temp_img = img
+        if temp_img.mode in ('RGBA', 'LA', 'P'):
+            temp_img = temp_img.convert('RGB')
+        temp_img.save(img_byte_arr, format='JPEG')
+        img_b64 = base64.b64encode(img_byte_arr.getvalue()).decode('utf-8')
+
+        headers = {
+            "Authorization": f"Bearer {LIGHTNING_API_KEY}",
+            "Content-Type": "application/json"
+        }
         
-        # Process and generate
-        inputs = processor(images=img, text=text, return_tensors="pt").to(device)
-        output_ids = model.generate(**inputs, max_new_tokens=2048)
+        payload = {
+            "model": GEMINI_MODEL,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        { "type": "text", "text": prompt },
+                        { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
+                    ]
+                }
+            ]
+        }
+
+        resp = requests.post(
+            url="https://lightning.ai/api/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=60
+        )
+        resp.raise_for_status()
+        resp_json = resp.json()
+        generated_text = resp_json['choices'][0]['message']['content']
         
-        # Decode and extract response
-        generated_text = processor.decode(output_ids[0], skip_special_tokens=True)
-        
-        # Find JSON block in generated text (in case there's any prefix/suffix)
+        # Find JSON block in generated text
         json_match = re.search(r"(\{.*\})", generated_text, re.DOTALL)
         if json_match:
             json_str = json_match.group(1)
-            # Try to parse to ensure it's valid JSON
             parsed_json = json.loads(json_str)
-            # If valid, inject the raw ocr text as metadata
             parsed_json["ocr_text"] = generated_text
             print(json.dumps(parsed_json, indent=2, ensure_ascii=False))
         else:
-            # If no JSON found, format the raw response as text
             print(json.dumps({
                 "error": "Failed to parse JSON from model output",
                 "raw_output": generated_text
             }))
             
     except Exception as e:
-        # Fall back to mock response in case of any failure (e.g. model type unrecognized, CUDA out of memory, etc.)
-        # This keeps the system fully functional and resilient.
         mock_data = extract_mock_data(image_path)
-        # Log the actual traceback in the ocr_text for debugging/verification
         tb = traceback.format_exc()
         mock_data["ocr_text"] = f"--- OCR EXECUTION FALLBACK (MOCK DATA GENERATED) ---\nError Detail:\n{tb}\n\n" + mock_data["ocr_text"]
         print(json.dumps(mock_data, indent=2, ensure_ascii=False))

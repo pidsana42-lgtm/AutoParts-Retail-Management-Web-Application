@@ -8,6 +8,9 @@ import { getMenuByRole } from '../config/menu';
 import { useAuth } from '../contexts/AuthContexts'; 
 import StoreConfig from './owner/storeconfig/storeconfig'; 
 import EmployeeDashboard from './employee/dashboard/dashboard';
+import ImportBill from './owner/import-bills/import_bill';
+import PreOrder from './owner/pre-order/pre-order';
+import ClaimsPage from './owner/claim/claims';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -46,6 +49,18 @@ export default function AppRouter(): React.JSX.Element {
         } />
 
         <Route path="/owner/storeconfig" element={<StoreConfig />} />
+        {/* -------- เพิ่ม Route สำหรับหน้านำเข้าบิลตรงนี้ครับ -------- */}
+        <Route path="/owner/import-bills" element={<ImportBill />} />
+        {/* -------------------------------------------------- */}
+        
+        {/* -------- เพิ่ม Route สำหรับหน้าพรีออเดอร์ตรงนี้ครับ -------- */}
+        <Route path="/owner/pre-orders" element={<PreOrder />} />
+        {/* --------------------------------------------------- */}
+
+        {/* -------- เพิ่ม Route สำหรับหน้าคืนเเละเคลมสินค้าตรงนี้ครับ -------- */}
+        <Route path="/owner/claims" element={<ClaimsPage />} />
+        {/* ----------------------------------------------------------- */}
+
         <Route path="/employee/pos" element={<Pos />} />
         
         {/* แดชบอร์ดของฝั่งพนักงาน */}
