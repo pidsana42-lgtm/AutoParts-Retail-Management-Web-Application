@@ -5,8 +5,8 @@ import (
     customerdiscountRepo "backend/internal/app/repository/pos"
 )
 
-type CustomerDiscountService interface {
-    GetCustomerDiscount() ([]*customerdiscountDto.GetCustomerDiscountResponse, error)
+type CustomerDiscountService interface { 
+    GetCustomerDiscount(searchQuery string) ([]*customerdiscountDto.GetCustomerDiscountResponse, error)
     BulkUpdateCustomerDiscounts(req *customerdiscountDto.BulkUpdateCustomerDiscountRequest) error
 }
 
@@ -18,16 +18,16 @@ func NewCustomerDiscountService(repo customerdiscountRepo.CustomerDiscountReposi
     return &customerDiscountService{repo: repo}
 }
 
-func (s *customerDiscountService) GetCustomerDiscount() ([]*customerdiscountDto.GetCustomerDiscountResponse, error) {
+func (s *customerDiscountService) GetCustomerDiscount(searchQuery string) ([]*customerdiscountDto.GetCustomerDiscountResponse, error) {
     var customerDiscounts []*customerdiscountDto.GetCustomerDiscountResponse
 
-    customers, err := s.repo.GetCreditCustomers()
+    customers, err := s.repo.SearchCustomers(searchQuery)
     if err != nil {
         return nil, err
     }
 
-    for _, customer := range customers {
-        customerDiscount := customerdiscountDto.ToCustomerDiscountResponse(&customer)
+    for i := range customers {
+        customerDiscount := customerdiscountDto.ToCustomerDiscountResponse(&customers[i])
         customerDiscounts = append(customerDiscounts, customerDiscount)
     }
 
