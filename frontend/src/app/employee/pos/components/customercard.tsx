@@ -22,7 +22,7 @@ export function CustomerCard({ customer }: CustomerCardProps): React.JSX.Element
             {customer?.customer_name || "ลูกค้าทั่วไป (หน้าร้าน)"}
           </h3>
           <p className="text-xs text-zinc-400 font-medium mt-0.5">
-            โทร: {isGuest ? "ลูกค้าทั่วไป (ไม่ระบุ)" : customer?.phone_number || "ไม่ระบุ"}
+            โทร: {customer?.phone_number || "ลูกค้าทั่วไป (ไม่ระบุ)"}
           </p>
         </div>
         
