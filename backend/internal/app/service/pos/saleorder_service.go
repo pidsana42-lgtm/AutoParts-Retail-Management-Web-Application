@@ -50,11 +50,32 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest) error {
         }
     }()
 
-    // ดึงข้อมูลลูกค้า
-    customer, err := s.customerRepo.GetCustomerByID(req.CustomerID)
-    if err != nil {
-        tx.Rollback()
-        return errors.New("ไม่พบข้อมูลลูกค้าในระบบ")
+    var customer *entity.Customer
+    var err error
+
+    if req.CustomerID == 0 {
+        clientName := "ลูกค้าทั่วไป (หน้าร้าน)"
+        if req.CustomerNameTemp != "" {
+            clientName = req.CustomerNameTemp
+        }
+
+        // ประกาศสร้าง Customer ขาจร
+        customer = &entity.Customer{
+            CustomerName:      clientName,
+            IsDiscountEnabled: false,
+            CurrentDebtAmount: 0.0,
+            CreditLimit:       0.0,
+        }
+        
+        // หยอดประเภทเข้าไปทีหลังผ่าน property เพื่อเลี่ยงการเขียน Struct Literal ที่ทลายไทป์ GORM
+        customer.CustomerType.TypeName = "GENERAL"
+        
+    } else {
+        customer, err = s.customerRepo.GetCustomerByID(req.CustomerID)
+        if err != nil {
+            tx.Rollback()
+            return errors.New("ไม่พบข้อมูลลูกค้าในระบบ")
+        }
     }
 
     // เจนเลขที่บิลขายอัตโนมัติ (เช่น INV2607030001)
@@ -278,6 +299,8 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest) error {
         OrderNumber:        orderNumber,
         OrderDate:          time.Now(),
         CustomerID:         req.CustomerID,
+        CustomerNameTemp:   &customer.CustomerName,
+        CustomerPhoneTemp:  &customer.PhoneNumber,
         Status:             "completed",
         PaymentStatus:      enum.PaymentStatus(paymentStatus),
         Subtotal:           orderSubtotalAfterItems, 

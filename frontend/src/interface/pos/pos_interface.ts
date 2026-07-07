@@ -19,6 +19,8 @@ export interface SaleOrderItemRequest {
 export interface CreateSaleOrderRequest {
   customer_id: number;
   payment_method_id: number; // 1=เงินสด, 2=QR, 3=เงินเชื่อ
+  customer_name_temp?: string; // ชื่อลูกค้า (สำหรับบิลใบเสร็จ)
+  customer_phone_temp?: string; // เบอร์โทรลูกค้า (สำหรับบิลใบเสร็จ)
   bill_discount_type: "none" | "percentage" | "amount";
   bill_discount_value: number;
   note: string;

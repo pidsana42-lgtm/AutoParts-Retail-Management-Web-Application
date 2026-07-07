@@ -64,11 +64,15 @@ func (r *saleRepository) GetCustomerTypes() ([]entity.CustomerType, error) {
 }
 
 func (r *saleRepository) SearchCustomers(searchQuery string) ([]entity.Customer, error) {
-	    var customers []entity.Customer
+    var customers []entity.Customer
     
-    err := r.db.Preload("CustomerType").
-        Where("customer_name LIKE ? OR phone_number LIKE ?", "%"+searchQuery+"%", "%"+searchQuery+"%").
-        Find(&customers).Error
-        
+    query := r.db.Preload("CustomerType").Model(&entity.Customer{})
+    
+    if searchQuery != "" {
+        likeQuery := "%" + searchQuery + "%"
+        query = query.Where("customer_name LIKE ? OR phone_number LIKE ?", likeQuery, likeQuery)
+    }
+    
+    err := query.Find(&customers).Error
     return customers, err
 }
