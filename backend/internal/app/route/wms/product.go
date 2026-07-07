@@ -21,5 +21,7 @@ func SetupProductRoutes(r *gin.Engine, db *gorm.DB) {
 		wms.GET("/products/:id", controller.GetProductByID)
 		wms.PUT("/products/:id", controller.UpdateProduct)
 		wms.DELETE("/products/:id", controller.DeleteProduct)
+		wms.GET("/brands", controller.ListBrands)
+		wms.GET("/grades", controller.ListGrades)
 	}
 }
