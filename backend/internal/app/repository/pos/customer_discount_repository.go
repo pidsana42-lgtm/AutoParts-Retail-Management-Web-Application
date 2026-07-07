@@ -6,6 +6,7 @@ import (
 )
 
 type CustomerDiscountRepository interface {
+	SearchCustomers(searchQuery string) ([]entity.Customer, error)
 	GetCreditCustomerByID(id uint) (*entity.Customer, error)
 	GetCreditCustomers() ([]entity.Customer, error)
 	UpdateCustomer(customer *entity.Customer) error
@@ -33,4 +34,18 @@ func (r *customerDiscountRepository) GetCreditCustomerByID(id uint) (*entity.Cus
 
 func (r *customerDiscountRepository) UpdateCustomer(customer *entity.Customer) error {
 	return r.db.Save(customer).Error
+}
+
+func (r *customerDiscountRepository) SearchCustomers(searchQuery string) ([]entity.Customer, error) {
+    var customers []entity.Customer
+    
+    query := r.db.Preload("CustomerType").Model(&entity.Customer{})
+    
+    if searchQuery != "" {
+        likeQuery := "%" + searchQuery + "%"
+        query = query.Where("customer_name LIKE ? OR phone_number LIKE ?", likeQuery, likeQuery)
+    }
+    
+    err := query.Find(&customers).Error
+    return customers, err
 }

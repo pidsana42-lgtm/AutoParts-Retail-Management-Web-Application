@@ -16,7 +16,8 @@ func NewCustomerDiscountController(svc customerdiscountSvc.CustomerDiscountServi
 }
 
 func (ctrl *CustomerDiscountController) GetCustomerDiscount(c *gin.Context) {
-	discounts, err := ctrl.svc.GetCustomerDiscount()
+	searchQuery := c.Query("search")
+	discounts, err := ctrl.svc.GetCustomerDiscount(searchQuery)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลส่วนลดลูกค้าได้: " + err.Error()})
 		return

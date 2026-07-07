@@ -10,16 +10,29 @@ import (
 )
 
 func PurchaseOrders(db *gorm.DB) error {
-	// ค่าที่ใช้ร่วม (ต้องประกาศในฟังก์ชัน)
+	// Query users dynamically to avoid hardcoded ID mismatches
+	var owner entity.User
+	var employee entity.User
+	var admin entity.User
+
+	if err := db.Where("username = ?", "boss").First(&owner).Error; err != nil {
+		return fmt.Errorf("failed to fetch owner user for PO seeding: %w", err)
+	}
+	if err := db.Where("username = ?", "employee").First(&employee).Error; err != nil {
+		return fmt.Errorf("failed to fetch employee user for PO seeding: %w", err)
+	}
+	if err := db.Where("username = ?", "admin").First(&admin).Error; err != nil {
+		return fmt.Errorf("failed to fetch admin user for PO seeding: %w", err)
+	}
+
 	noteText := "ส่งสินค้าภายในเวลาทำการ 09:00 - 16:00 น. เท่านั้น"
-	approvedBy := uint(2)                          // User ID: 2 (employee) เป็นผู้อนุมัติ
-	approvedAt := time.Now().Add(-1 * time.Hour)   // อนุมัติเมื่อ 1 ชั่วโมงที่แล้ว
-	expiresAt := time.Now().AddDate(0, 3, 0)       // หมดอายุในอีก 3 เดือน
+	approvedBy := employee.ID
+	approvedAt := time.Now().Add(-1 * time.Hour)   
+	expiresAt := time.Now().AddDate(0, 3, 0)       
 	pdfGeneratedAt := time.Now().Add(-2 * time.Hour)
 
 	purchaseOrders := []entity.PO{
 		{
-			// ผูกกับ BILL-2024-001 (Subtotal 59,000)
 			PO_number:        "PO-2026-0001",
 			Status:           enum.StatusApproved,
 			Total_amount:     59000.00,
@@ -27,14 +40,13 @@ func PurchaseOrders(db *gorm.DB) error {
 			Pdf_url:          "https://storage.googleapis.com/bucket/pos/po-2026-0001.pdf",
 			Pdf_generated_at: &pdfGeneratedAt,
 			Notes:            &noteText,
-			Created_by:       1, // owner
+			Created_by:       owner.ID,
 			Approved_by:      &approvedBy,
 			Approved_at:      &approvedAt,
-			SupplierID:       1, // บริษัท ไทยออโต้พาร์ท จำกัด (TAP)
-			PO_type_id:       1, // Procurement
+			SupplierID:       1, 
+			PO_type_id:       1, 
 		},
 		{
-			// ผูกกับ BILL-2024-002 (Subtotal 30,000)
 			PO_number:        "PO-2026-0002",
 			Status:           enum.StatusApproved,
 			Total_amount:     30000.00,
@@ -42,14 +54,13 @@ func PurchaseOrders(db *gorm.DB) error {
 			Pdf_url:          "https://storage.googleapis.com/bucket/pos/po-2026-0002.pdf",
 			Pdf_generated_at: &pdfGeneratedAt,
 			Notes:            &noteText,
-			Created_by:       1, // owner
+			Created_by:       owner.ID,
 			Approved_by:      &approvedBy,
 			Approved_at:      &approvedAt,
-			SupplierID:       2, // หจก. โคราชมอเตอร์พาร์ท (KMP)
-			PO_type_id:       1, // Procurement
+			SupplierID:       2, 
+			PO_type_id:       1, 
 		},
 		{
-			// ผูกกับ BILL-2024-003 (Subtotal 100,000)
 			PO_number:        "PO-2026-0003",
 			Status:           enum.StatusApproved,
 			Total_amount:     100000.00,
@@ -57,11 +68,11 @@ func PurchaseOrders(db *gorm.DB) error {
 			Pdf_url:          "https://storage.googleapis.com/bucket/pos/po-2026-0003.pdf",
 			Pdf_generated_at: &pdfGeneratedAt,
 			Notes:            &noteText,
-			Created_by:       3, // manager
+			Created_by:       admin.ID,
 			Approved_by:      &approvedBy,
 			Approved_at:      &approvedAt,
-			SupplierID:       3, // บริษัท ปตท. หล่อลื่น จำกัด (PTT-LUB)
-			PO_type_id:       1, // Procurement
+			SupplierID:       3, 
+			PO_type_id:       1, 
 		},
 	}
 

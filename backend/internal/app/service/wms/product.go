@@ -26,7 +26,15 @@ func NewProductService(repo wmsRepo.ProductRepository) ProductService {
 
 func (s *productService) CreateProduct(req *wmsDto.ProductRequestDTO) error {
 	product := req.ToEntity()
-	return s.repo.CreateProduct(&product)
+	if product.Barcode == "" {
+		product.Barcode = product.Product_Code
+	}
+	err := s.repo.CreateProduct(&product)
+	if err != nil {
+		return err
+	}
+	triggerBarcodeGen([]uint{product.ID})
+	return nil
 }
 
 func (s *productService) GetProductByID(id uint) (*wmsDto.ProductListResponseDTO, error) {
@@ -42,7 +50,15 @@ func (s *productService) GetProductByID(id uint) (*wmsDto.ProductListResponseDTO
 func (s *productService) UpdateProduct(id uint, req *wmsDto.ProductRequestDTO) error {
 	product := req.ToEntity()
 	product.ID = id
-	return s.repo.UpdateProduct(&product)
+	if product.Barcode == "" {
+		product.Barcode = product.Product_Code
+	}
+	err := s.repo.UpdateProduct(&product)
+	if err != nil {
+		return err
+	}
+	triggerBarcodeGen([]uint{id})
+	return nil
 }
 
 func (s *productService) DeleteProduct(id uint) error {

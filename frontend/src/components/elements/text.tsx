@@ -1,30 +1,38 @@
-import React from 'react';
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "../../utils/component";
+import React from "react";
 
-type TextVariant = 'body' | 'lead' | 'small' | 'muted';
+const textVariants = cva("", {
+  variants: {
+    variant: {
+      body:  "text-base text-gray-800 leading-relaxed mb-4",
+      lead:  "text-lg md:text-xl text-gray-700 leading-relaxed mb-6 font-medium",
+      small: "text-sm text-gray-600 mb-2",
+      muted: "text-base text-gray-500 leading-relaxed mb-4",
+    },
+  },
+  defaultVariants: {
+    variant: "body",
+  },
+});
 
-interface TextProps extends React.HTMLAttributes<HTMLParagraphElement> {
-  variant?: TextVariant;
-}
+interface TextProps
+  extends React.HTMLAttributes<HTMLParagraphElement>,
+    VariantProps<typeof textVariants> {}
 
-const Text: React.FC<TextProps> = ({ 
-  variant = 'body', 
-  className = '', 
-  children, 
-  ...props 
-}) => {
-  // ตั้งค่ามาตรฐานสำหรับแต่ละรูปแบบ พร้อมปรับระยะห่างบรรทัด (leading-relaxed) ให้อ่านง่าย
-  const styles: Record<TextVariant, string> = {
-    body: "text-base text-gray-800 leading-relaxed mb-4",
-    lead: "text-lg md:text-xl text-gray-700 leading-relaxed mb-6 font-medium",
-    small: "text-sm text-gray-600 mb-2",
-    muted: "text-base text-gray-500 leading-relaxed mb-4",
-  };
-
-  return (
-    <p className={`${styles[variant]} ${className}`} {...props}>
+const Text = React.forwardRef<HTMLParagraphElement, TextProps>(
+  ({ variant, className, children, ...props }, ref) => (
+    <p
+      ref={ref}
+      className={cn(textVariants({ variant }), className)}
+      {...props}
+    >
       {children}
     </p>
-  );
-};
+  )
+);
 
+Text.displayName = "Text";
+
+export { textVariants };
 export default Text;

@@ -67,8 +67,10 @@ type BillResponseDTO struct {
 	POID               uint      `json:"po_id"`
 	EvidenceFileURL    string    `json:"evidence_file_url"`
 	EvidenceUploadedAt time.Time `json:"evidence_uploaded_at"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	CreatedAt          time.Time             `json:"created_at"`
+	UpdatedAt          time.Time             `json:"updated_at"`
+	BillItems          []BillItemResponseDTO `json:"bill_items,omitempty"`
+	BillImage          *BillImageResponseDTO `json:"bill_image,omitempty"`
 }
 
 // ToEntity แปลงจาก CreateBillDTO เป็น entity.Bill สำหรับการบันทึกลง Database
@@ -166,5 +168,19 @@ func ToBillResponseDTO(m *entity.Bill) BillResponseDTO {
 		EvidenceUploadedAt: m.EvidenceUploadedAt,
 		CreatedAt:          m.CreatedAt,
 		UpdatedAt:          m.UpdatedAt,
+		BillItems: func() []BillItemResponseDTO {
+			items := make([]BillItemResponseDTO, len(m.BillItems))
+			for i := range m.BillItems {
+				items[i] = ToBillItemResponseDTO(&m.BillItems[i])
+			}
+			return items
+		}(),
+		BillImage: func() *BillImageResponseDTO {
+			if m.BillImage == nil {
+				return nil
+			}
+			dto := ToBillImageResponseDTO(m.BillImage)
+			return &dto
+		}(),
 	}
 }

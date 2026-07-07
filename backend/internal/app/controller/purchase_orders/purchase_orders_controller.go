@@ -1,6 +1,9 @@
 package purchaseorders
 
 import (
+	"fmt"
+	"strconv"
+	"errors"
 	"net/http"
 	poDto 	"backend/internal/app/dto/purchase_orders"
 	poEnum 	"backend/internal/app/enum"
@@ -20,7 +23,7 @@ func NewPOController(poService poSvc.PurchaseOrderService) *PurchaseOrderControl
 }
 
 // สร้างใบสั่งซื้อใหม่
-func (ctrl *PurchaseOrderController) CreatePO(c *gin.Context) {
+func (ctrl *PurchaseOrderController) CreatePO(c *gin.Context) { 
 	var req poDto.CreatePurchaseOrderRequest
 
 	// ถ้าเกิดว่าไม่ได้รับ JSOn จาก Frontend
@@ -30,15 +33,21 @@ func (ctrl *PurchaseOrderController) CreatePO(c *gin.Context) {
 	}
 
 	// ตรวจสอบ ID ของ User ที่สั่งสร้างใบสั่งซื้อจาก JWT Token
-	// userID, exists := c.Get("userID")
-	// if !exists {
-	// 	c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized: missing user profile"})
-	// 	return
-	// }
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized: missing user profile"})
+		return
+	}
 
-	userID := uint(1)
-	CreatorID := userID
-	// CreatorID := userID.(uint)
+	var CreatorID uint
+	if idFloat, ok := userID.(float64); ok {
+		// ถ้าค่าที่ได้มาเป็น float64 จริง ให้แปลงเป็น uint
+		CreatorID = uint(idFloat)
+	} else {
+		// กันเหนียวเผื่อในอนาคตค่าที่ได้มาไม่ใช่ตัวเลข
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id type in token"})
+		return
+	}
 
 	// เผื่อ server ใช้งานไม่ได้
 	res, err := ctrl.poService.CreatePO(c.Request.Context(), &req, CreatorID)
@@ -97,4 +106,138 @@ func (ctrl *PurchaseOrderController) UpdateStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "purchase order status updated successfully"})
+}
+
+// ฟังก์ชันเรียกดูลิสต์ PO ทั้งหมดของแต่ละ ID
+func (ctrl *PurchaseOrderController) ListPOs(c *gin.Context) {
+	var query poDto.ListPOQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid query parameters"})
+		return
+	}
+	// หลังจากถอด Token จาก JWT ตัวเลขจะถูกแปลงเป็น float64 
+	// พอจะแปลงให้เป็น uint ตรง ๆ GO มันก็มองว่า Data Type ไม่ตรงกันเลยพ่น 401 ออกมา
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	// ต้อง cast เป็น float64 ก่อน
+	userIDFloat, ok := userIDValue.(float64)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id type"})
+		return
+	}
+	
+	userID := uint(userIDFloat)
+
+	if query.Page <= 0 {
+		query.Page = 1
+	}
+	if query.Limit <= 0 {
+		query.Limit = 10
+	}
+
+	res, err := ctrl.poService.ListPOs(c.Request.Context(), userID, query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+func (ctrl *PurchaseOrderController) GetSummary(c *gin.Context) {
+	// ดึง userID จาก Context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	userIDFloat, ok := userIDValue.(float64)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id type"})
+		return
+	}
+	userID := uint(userIDFloat)
+
+	// ดึง Role จาก Context (ที่ Auth Middleware ยัดไว้ให้)
+	roleValue, exists := c.Get("role")
+	if !exists {
+		c.JSON(http.StatusForbidden, gin.H{"error": "role not found in token"})
+		return
+	}
+	
+	role, ok := roleValue.(string)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "invalid role type"})
+		return
+	}
+
+	// ส่ง role เข้าไปใน Service ด้วย
+	res, err := ctrl.poService.GetPOSummary(c.Request.Context(), userID, role)
+	if err != nil {
+		// ถ้ามี Error จาก Business Logic (เช่น สิทธิ์ไม่ถึง) ให้ส่ง 403 Forbidden กลับไป
+		if err.Error() == "forbidden: only owner can view PO summary" {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch PO summary"})
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+func (c *PurchaseOrderController) PrintPO(ctx *gin.Context) {
+    idStr := ctx.Param("id")
+    id, err := strconv.ParseUint(idStr, 10, 32)
+    if err != nil {
+        ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid PO ID"})
+        return
+    }
+
+    // เรียก Service เพื่อ Gen PDF (คืนค่ากลับมาเป็น []byte)
+    pdfBytes, err := c.poService.GeneratePOPDF(ctx.Request.Context(), uint(id))
+    if err != nil {
+		fmt.Println("PDF Generation Error:", err)
+        ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate PDF"})
+        return
+    }
+
+    // ตั้งค่า Header สำหรับไฟล์ PDF
+    ctx.Header("Content-Type", "application/pdf")
+    ctx.Header("Content-Disposition", fmt.Sprintf("inline; filename=PO-%d.pdf", id))
+    
+    // ส่งไฟล์กลับไป
+    ctx.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+func (ctrl *PurchaseOrderController) DeletePO(c *gin.Context) {
+	var req poDto.DeletePORequest
+
+	if err := c.ShouldBindUri(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid purchase order id"})
+		return
+	}
+
+	err := ctrl.poService.Delete(c.Request.Context(), req.ID)
+	if err != nil {
+		// ใช้ errors.Is เทียบกับตัวแปร Error จาก Service ตรงๆ
+		switch {
+		case errors.Is(err, poSvc.ErrPONotFound): // กรณีหาข้อมูลไม่เจอ
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		case errors.Is(err, poSvc.ErrPOCannotDelete): // กรณีติด Business Logic (ห้ามลบ)
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()}) // ใช้ 409 Conflict หรือ 400 ก็ได้
+			return
+		default: // กรณี Server มีปัญหา (DB ล่ม ฯลฯ)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "purchase order deleted successfully"})
 }

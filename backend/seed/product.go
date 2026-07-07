@@ -18,6 +18,7 @@ func Product(db *gorm.DB) error {
             Limit_Quantity:  5,
             Sale_price:      870.00,
             Cost_price:      600.00,
+            MaxDiscountRate: 2.0, // กำหนดเพดานส่วนลดสูงสุดเป็น 2%
             Is_Active:       true,
             Import_DateTime: time.Now(),
             Note:            "เกรด: สูงสมรรถนะ | รุ่นรถที่รองรับ: TOYOTA HILUX REVO 2.8, FORD RANGER RAPTOR 2.0Bi",
@@ -36,6 +37,7 @@ func Product(db *gorm.DB) error {
             Limit_Quantity:  10,
             Sale_price:      240.00,
             Cost_price:      150.00,
+            MaxDiscountRate: 5.0, // กำหนดเพดานส่วนลดสูงสุดเป็น 5%
             Is_Active:       true,
             Import_DateTime: time.Now(),
             Note:            "เกรด: ซิลิโคนทนความร้อนสูง | รุ่นรถที่รองรับ: ISUZU D-MAX 1.9/3.0 (BLUE POWER), MITSUBISHI TRITON",
@@ -54,6 +56,7 @@ func Product(db *gorm.DB) error {
             Limit_Quantity:  8,
             Sale_price:      110.00,
             Cost_price:      70.00,
+            MaxDiscountRate: 3.0, // กำหนดเพดานส่วนลดสูงสุดเป็น 3%
             Is_Active:       true,
             Import_DateTime: time.Now(),
             Note:            "เกรด: สังเคราะห์แท้ | รุ่นรถที่รองรับ: TOYOTA CAMRY 2.5, HONDA CIVIC 1.5T, MAZDA 3 (SKYACTIV)",

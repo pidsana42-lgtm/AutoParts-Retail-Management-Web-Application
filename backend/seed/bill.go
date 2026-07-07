@@ -37,8 +37,36 @@ func Bill(db *gorm.DB) error {
 	}
 
 	for _, b := range bills {
-		if err := db.FirstOrCreate(&b, &entity.Bill{BillNo: b.BillNo}).Error; err != nil {
-			log.Fatalf("failed to seed bill %s: %v", b.BillNo, err)
+		var existing entity.Bill
+		err := db.Unscoped().Where("bill_no = ?", b.BillNo).First(&existing).Error
+		if err == gorm.ErrRecordNotFound {
+			// Find actual database IDs dynamically to ensure foreign key constraints are met
+			var supplier entity.Supplier
+			var billImage entity.BillImage
+			var ownerUser entity.User
+			var po entity.PO
+
+			if err := db.Where("id = ?", 1).First(&supplier).Error; err == nil {
+				b.SupplierID = supplier.ID
+			}
+			if err := db.Where("id = ?", 1).First(&billImage).Error; err == nil {
+				b.BillImageID = billImage.ID
+			}
+			if err := db.Where("username = ?", "boss").First(&ownerUser).Error; err == nil {
+				b.VerifiedBy = ownerUser.ID
+			}
+			if err := db.Where("po_number = ?", "PO-2026-0002").First(&po).Error; err == nil {
+				b.POID = po.ID
+			}
+
+			if err := db.Create(&b).Error; err != nil {
+				log.Fatalf("failed to seed bill %s: %v", b.BillNo, err)
+			}
+			log.Printf("Created bill: %s\n", b.BillNo)
+		} else if err != nil {
+			log.Fatalf("failed to query bill %s: %v", b.BillNo, err)
+		} else {
+			log.Printf("Skipped bill (exists): %s\n", b.BillNo)
 		}
 	}
 

@@ -19,7 +19,11 @@ type CreateBillItemDTO struct {
 	NetAmount          float64 `json:"net_amount"`
 	IsFreebie          bool    `json:"is_freebie"`
 	Remark             string  `json:"remark"`
+	AIProductCode      string  `json:"ai_product_code"`
+	AIProductName      string  `json:"ai_product_name"`
 	ProductID          uint    `json:"product_id" binding:"required"`
+	CategoryID         *uint   `json:"category_id"`
+	SubCategoryID      *uint   `json:"sub_category_id"`
 }
 
 type UpdateBillItemDTO struct {
@@ -71,7 +75,11 @@ func (d *CreateBillItemDTO) ToEntity() entity.BillItem {
 		NetAmount:          d.NetAmount,
 		IsFreebie:          d.IsFreebie,
 		Remark:             d.Remark,
+		AIProductCode:      d.AIProductCode,
+		AIProductName:      d.AIProductName,
 		ProductID:          d.ProductID,
+		CategoryID:         d.CategoryID,
+		SubCategoryID:      d.SubCategoryID,
 	}
 }
 

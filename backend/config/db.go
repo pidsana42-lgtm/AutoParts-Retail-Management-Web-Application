@@ -107,6 +107,10 @@ func SetupDatabase() {
 		&entity.POType{},
 		&entity.POItems{},
 		&entity.ReceiveEvidenceExcel{},
+
+		// LINE OA system
+		&entity.LineUser{},
+		&entity.LineMessage{},
 	); err != nil {
 		log.Fatalf("failed to migrate schema: %v", err)
 	}
@@ -130,6 +134,7 @@ func SetupDatabase() {
 	seed.Zone(db)
     seed.Unit(db)
     seed.Category(db)
+    seed.SubCategory(db)
     seed.Grade(db)
     seed.Shelf(db)
     seed.Brand(db) 
@@ -143,6 +148,7 @@ func SetupDatabase() {
 	
 	seed.PurchaseOrdersType(db)
 	seed.PurchaseOrders(db)
+	seed.PurchaseOrdersItems(db)
 	seed.BillImage(db)
 	seed.Bill(db)
 	seed.SaleOrder(db)
