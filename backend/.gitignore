@@ -1,1 +1,10 @@
 .env*
+.png
+.jpeg
+.jpg
+.gif
+.gguf
+model/*.gguf
+uploads/
+.csv
+.xlsx

@@ -13,6 +13,7 @@ import (
 
 type AuthService interface {
     Login(req *authDTO.LoginRequest) (*authDTO.LoginResponse, error)
+    LoginWithLine(lineUserID string) (*authDTO.LoginResponse, error)
 }
 
 type authService struct {
@@ -65,5 +66,41 @@ func (s *authService) Login(req *authDTO.LoginRequest) (*authDTO.LoginResponse, 
         FirstName: user.FirstName,
         LastName: user.LastName,
         Username: user.Username,
+    }, nil
+}
+
+func (s *authService) LoginWithLine(lineUserID string) (*authDTO.LoginResponse, error) {
+    // 1. ค้นหาผู้ใช้ในฐานข้อมูลผ่าน Repo
+    user, err := s.userRepo.GetByLineUserID(lineUserID)
+    if err != nil {
+        return nil, errors.New("บัญชี LINE นี้ยังไม่ได้ลงทะเบียนในระบบ หรือยังไม่ได้รับการเชื่อมต่อบัญชี")
+    }
+
+    // 2. สร้าง Claims สำหรับตั๋ว JWT
+    claims := jwt.MapClaims{
+        "user_id": user.ID,
+        "role":    string(user.Role.RoleName),
+        "exp":     time.Now().Add(time.Hour * 24).Unix(), // 24 ชั่วโมง
+    }
+
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+    
+    secret := os.Getenv("JWT_SECRET")
+    if secret == "" {
+        secret = "replace-with-secure-secret"
+    }
+
+    tokenString, err := token.SignedString([]byte(secret))
+    if err != nil {
+        return nil, errors.New("ไม่สามารถสร้างรหัสเข้าสู่ระบบได้")
+    }
+
+    // 3. ส่ง Token และข้อมูลผู้ใช้กลับไป
+    return &authDTO.LoginResponse{
+        Token:     tokenString,
+        Role:      string(user.Role.RoleName),
+        FirstName: user.FirstName,
+        LastName:  user.LastName,
+        Username:  user.Username,
     }, nil
 }               

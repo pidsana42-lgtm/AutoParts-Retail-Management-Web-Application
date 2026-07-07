@@ -11,6 +11,11 @@ import EmployeeDashboard from './employee/dashboard/dashboard';
 import Stock from './owner/stock/stock';
 import StockMovement from './owner/stock/stock_movement/stock_movement';
 import Stockdata from './owner/stock/Stock_data/stock_data';
+import ImportBill from './owner/import-bills/import_bill';
+import PreOrder from './owner/pre-order/pre-order';
+import ClaimsPage from './owner/claim/claims';
+import PurchaseOrders from './owner/purchase_orders/purchase_orders';
+import CreatePurchaseOrders from './owner/purchase_orders/create_po';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -61,12 +66,28 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/owner/stock/stock-data" element={
           isAdminOrOwner ? <Stockdata /> : <Navigate to={firstMenuPath} replace />
         } />
+        {/* -------- เพิ่ม Route สำหรับหน้านำเข้าบิลตรงนี้ครับ -------- */}
+        <Route path="/owner/import-bills" element={<ImportBill />} />
+        {/* -------------------------------------------------- */}
+        
+        {/* -------- เพิ่ม Route สำหรับหน้าพรีออเดอร์ตรงนี้ครับ -------- */}
+        <Route path="/owner/pre-orders" element={<PreOrder />} />
+        {/* --------------------------------------------------- */}
+
+        {/* -------- เพิ่ม Route สำหรับหน้าคืนเเละเคลมสินค้าตรงนี้ครับ -------- */}
+        <Route path="/owner/claims" element={<ClaimsPage />} />
+        {/* ----------------------------------------------------------- */}
+
         <Route path="/employee/pos" element={<Pos />} />
+        <Route path="/owner/orders" element={<PurchaseOrders />} />
+        <Route path="/owner/new-orders" element={<CreatePurchaseOrders />} />
         
         {/* แดชบอร์ดของฝั่งพนักงาน */}
         <Route path="/employee/dashboard" element={
           !isAdminOrOwner ? <EmployeeDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
+
+        <Route path="/employee/orders" element={<PurchaseOrders />} />
 
       </Route>
 

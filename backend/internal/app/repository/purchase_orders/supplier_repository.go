@@ -1,9 +1,23 @@
 package purchaseorders
 
 import (
-	"context"
 	poEntity "backend/internal/app/entity"
+	"context"
+	"gorm.io/gorm"
 )
+
+// SupplierRepository คุมตาราง suppliers
+type SupplierRepository interface {
+	GetSupplierByID(ctx context.Context, id uint) (*poEntity.Supplier, error)
+}
+
+type supplierRepository struct {
+	db *gorm.DB
+}
+
+func NewSupplierRepository(db *gorm.DB) SupplierRepository {
+	return &supplierRepository{db: db}
+}
 
 func (r *supplierRepository) GetSupplierByID(ctx context.Context, id uint) (*poEntity.Supplier, error) {
 	var supplier poEntity.Supplier

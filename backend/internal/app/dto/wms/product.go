@@ -5,7 +5,7 @@ import (
 )
 
 type ProductRequestDTO struct {
-	Product_Code   string  `json:"product_code" binding:"required"`
+	Product_Code   string  `json:"product_code"` // Not required anymore because we can auto-generate it!
 	Part_Number    string  `json:"part_number"`
 	Product_Name   string  `json:"product_name" binding:"required"`
 	Barcode        string  `json:"barcode"`
@@ -15,11 +15,12 @@ type ProductRequestDTO struct {
 	Cost_price     float64 `json:"cost_price" binding:"required,gt=0"`
 	Note           string  `json:"note"`
 
-	BrandID    uint `json:"brand_id" binding:"required"`
-	UnitID     uint `json:"unit_id" binding:"required"`
-	CategoryID uint `json:"category_id" binding:"required"`
-	GradeID    uint `json:"grade_id" binding:"required"`
-	ShelfID    uint `json:"shelf_id" binding:"required"`
+	BrandID       uint  `json:"brand_id" binding:"required"`
+	UnitID        uint  `json:"unit_id" binding:"required"`
+	CategoryID    uint  `json:"category_id" binding:"required"`
+	SubCategoryID *uint `json:"sub_category_id"`
+	GradeID       uint  `json:"grade_id" binding:"required"`
+	ShelfID       uint  `json:"shelf_id" binding:"required"`
 }
 
 func (r *ProductRequestDTO) ToEntity() entity.Product {
@@ -37,6 +38,7 @@ func (r *ProductRequestDTO) ToEntity() entity.Product {
 		BrandID:        r.BrandID,
 		UnitID:         r.UnitID,
 		CategoryID:     r.CategoryID,
+		SubCategoryID:  r.SubCategoryID,
 		GradeID:        r.GradeID,
 		ShelfID:        r.ShelfID,
 	}

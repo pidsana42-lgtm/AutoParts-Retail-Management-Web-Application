@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom"; 
 import { loginUser } from "../service/http/login/login_service"; 
 import type { LoginRequest } from "../interface/login/login_interface";
+import { getMenuByRole } from "../config/menu";
 
 interface User {
   id: string;
@@ -40,6 +41,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // --------------------------
   useEffect(() => {
     try {
+      // Handle URL redirect query parameters from LINE Login
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlToken = searchParams.get("token");
+      const urlRole = searchParams.get("role");
+      const urlUsername = searchParams.get("username");
+      const urlFirstName = searchParams.get("first_name");
+      const urlError = searchParams.get("error");
+
+      if (urlError) {
+        alert("เข้าสู่ระบบผ่าน LINE ล้มเหลว: " + urlError);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (urlToken && urlRole) {
+        const userObj = {
+          id: "",
+          name: urlFirstName ? decodeURIComponent(urlFirstName) : (urlUsername || "LINE User"),
+          username: urlUsername || "line_user",
+          first_name: urlFirstName ? decodeURIComponent(urlFirstName) : "",
+          last_name: ""
+        };
+
+        localStorage.setItem("token", urlToken);
+        localStorage.setItem("role", urlRole);
+        localStorage.setItem("user", JSON.stringify(userObj));
+
+        setUser(userObj);
+        setToken(urlToken);
+        setRole(urlRole);
+        setIsAuthenticated(true);
+
+        // Remove parameters from URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        // Redirect to dashboard
+        const userMenus = getMenuByRole(urlRole);
+        if (userMenus && userMenus.length > 0) {
+          navigate(userMenus[0].path, { replace: true });
+        }
+        setIsLoading(false);
+        return;
+      }
+
       const savedUser = localStorage.getItem("user");
       const savedToken = localStorage.getItem("token");
       const savedRole = localStorage.getItem("role"); 
@@ -60,7 +102,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [navigate]);
 
   // --------------------------
   // LOGIN (พาร์ทสำคัญที่เพิ่มการจัดการสิทธิ์)
