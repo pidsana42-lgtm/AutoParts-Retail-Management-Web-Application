@@ -17,6 +17,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   // local state ของข้อมูลลูกค้าและการชำระเงิน
   const [customer, setCustomer] = useState<CustomerDiscountResponse | null>(null); // ข้อมูลลูกค้าที่เลือก/ค้นหาเจอ
   const [searchCustomerQuery, setSearchCustomerQuery] = useState<string>(""); // ข้อความที่ใช้ค้นหาลูกค้า (ชื่อ/เบอร์โทร)
+  const [tempPhone, setTempPhone] = useState<string>(""); // เบอร์โทรชั่วคราวสำหรับลูกค้าขาจร (กรณีพิมพ์สด)
   const [customerTypes, setCustomerTypes] = useState<CustomerTypeInterface[]>([]); // รายการประเภทลูกค้าทั้งหมด (ดึงจากฐานข้อมูล)
   const [activeTypeId, setActiveTypeId] = useState<number>(1); // ID ประเภทลูกค้าที่กำลังเลือกอยู่ (เช่น 1: ทั่วไป, 2: อู่)
   const [selectedPaymentType, setSelectedPaymentType] = useState<"CASH" | "CREDIT">("CASH"); // โหมดการจ่ายหลัก (เงินสด/เงินเชื่อ)
@@ -25,6 +26,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const [billDiscountType, setBillDiscountType] = useState<"none" | "percentage" | "amount">("none"); // ประเภทส่วนลดท้ายบิล (ลดเป็นบาท/%)
   const [storeConfig, setStoreConfig] = useState<StoreConfigInterface | null>(null); // ค่าตั้งค่านโยบายของร้าน (เช่น เพดานส่วนลด)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false); // สถานะกำลังส่งบันทึกบิลไปยังหลังบ้าน (ป้องกันกดเบิ้ล)
+  const [searchResults, setSearchResults] = useState<CustomerDiscountResponse[]>([]); // ผลลัพธ์การค้นหาลูกค้าสมาชิกจาก API
 
   // INITIAL FETCH EFFECTS
   // ดึงข้อมูลประเภทลูกค้าและนโยบายร้านค้าจากหลังบ้านมาเตรียมไว้ตั้งแต่เปิดหน้าเว็บ
@@ -70,6 +72,8 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     if (!cleanedQuery) {
       setCustomer(null);
       setActiveTypeId(1);
+      setSearchResults([]);
+      setTempPhone(""); // ล้างค่าเบอร์โทรชั่วคราวด้วย
       return;
     }
 
@@ -79,24 +83,27 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       );
       const dataList = response.data;
 
-      if (dataList && dataList.length > 0) {
-        // เคสที่ 1: เจอสมาชิกในฐานข้อมูล
-        const matchedCustomer = dataList.find(
-          (c) => c.customer_name?.toLowerCase().includes(cleanedQuery.toLowerCase())
-        );
-        const customerData = matchedCustomer || dataList[0];
-        setCustomer(customerData);
+      // 🟢 จุดสำคัญ: เปลี่ยนมาตรวจสอบแบบ Exact Match (เช็คตัวอักษรตรงกันเป๊ะๆ 100%)
+      const exactMatchedCustomer = dataList && dataList.length > 0 
+        ? dataList.find(
+            (c) => c.customer_name?.toLowerCase() === cleanedQuery.toLowerCase() || 
+                   c.phone_number === cleanedQuery
+          )
+        : null;
 
-        if (customerData.customer_type) {
-          setActiveTypeId(customerData.customer_type.id);
+      if (exactMatchedCustomer) {
+        // เคสที่ 1: เจอสมาชิกตัวจริงในระบบที่ชื่อหรือเบอร์ตรงกันเป๊ะ
+        setCustomer(exactMatchedCustomer);
+        if (exactMatchedCustomer.customer_type) {
+          setActiveTypeId(exactMatchedCustomer.customer_type.id);
         }
       } else {
-        // เคสที่ 2: ไม่เจอสมาชิก (เป็นลูกค้าขาจร คีย์ชื่อสดหน้างาน)
-        // จำลองข้อมูลส่งเข้า State ทันทีเพื่อนำชื่อนี้ไปใช้พิมพ์บนบิลร่างและใบเสร็จ
+        // เคสที่ 2: ไม่เจอสมาชิกในระบบ (เป็นลูกค้าขาจรคีย์สดหน้างาน)
+        // บังคับจำลองสเตทขาจรพร้อมดึงค่าเบอร์โทรจาก tempPhone มาแสดงผลทันที
         setCustomer({
           id: 0, // ID 0 บอกหลังบ้านว่าเป็นลูกค้าขาจร
           customer_name: cleanedQuery, // สลักชื่อที่พิมพ์สดลงไปตรงๆ
-          phone_number: "ลูกค้าทั่วไป (ไม่ระบุ)",
+          phone_number: tempPhone.trim() || "ลูกค้าทั่วไป (ไม่ระบุ)", // 🟢 ดึงค่าเบอร์โทรศัพท์ล่าสุดที่พิมพ์จากสเตทมาแนบที่นี่
           standard_discount_rate: 0,
           is_discount_enabled: false,
           current_debt_amount: 0,
@@ -105,13 +112,34 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
           customer_type: {
             id: 1,
             type_name: "GENERAL",
-            type_label: "ลูกค้าทั่วไป (ขาจร)"
+            type_label: "ลูกค้าทั่วไป"
           }
         });
-        setActiveTypeId(1); // สลับ Active ปุ่มกลุ่มลูกค้าด้านบนมาที่ "ทั่วไป" อัตโนมัติ
+        setActiveTypeId(1); // สลับแท็บสิทธิ์กลุ่มลูกค้ามาที่ "ทั่วไป" อัตโนมัติ
       }
+
+      // 🟢 ล้างรายการดรอปดาวน์ค้นหาออกไปจากหน้าจอทันทีเพื่อปิดกล่องข้อความแจ้งเตือนเมื่อขั้นตอนเสร็จสมบูรณ์
+      setSearchResults([]);
+
     } catch (error) {
       console.error("เกิดข้อผิดพลาดในการค้นหาลูกค้า:", error);
+    }
+  };
+
+  // ฟังก์ชันค้นหาสด (Live Search) สำหรับช่องค้นหาลูกค้า
+  const triggerLiveSearch = async (query: string) => {
+    const cleaned = query.trim();
+    if (cleaned.length === 0) {
+      setSearchResults([]);
+      return;
+    }
+    try {
+      const response = await apiClient.get<CustomerDiscountResponse[]>(
+        `/pos/customer-discount?search=${cleaned}`
+      );
+      setSearchResults(response.data || []);
+    } catch (error) {
+      console.error("Live Search ล้มเหลว:", error);
     }
   };
 
@@ -215,11 +243,11 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       await posApiService.createPOSOrder(salePayload);
       alert("บันทึกข้อมูลการขายสำเร็จ!");
       
-      // 🧼 ล้างข้อมูลตะกร้าสินค้าผ่าน Setter เพื่อเคลียร์ตารางหน้า UI ให้โล่ง
+      // ล้างข้อมูลตะกร้าสินค้าผ่าน Setter เพื่อเคลียร์ตารางหน้า UI ให้โล่ง
       setCart([]);
       localStorage.removeItem("pos_cart");
       
-      // 🧼 ล้างสถานะฝั่งคำนวณเงินทั้งหมดคืนค่าเริ่มต้นเพื่อเริ่มเปิดบิลใบถัดไป
+      // ล้างสถานะฝั่งคำนวณเงินทั้งหมดคืนค่าเริ่มต้นเพื่อเริ่มเปิดบิลใบถัดไป
       setCustomer(null);
       setBillDiscountValue(0);
       setBillDiscountType("none");
@@ -227,6 +255,8 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       setSelectedPaymentType("CASH");
       setPaymentMethodId(1);
       setSearchCustomerQuery("");
+      setTempPhone(""); // ล้างเบอร์โทรชั่วคราวของลูกค้าขาจร
+      setSearchResults([]);
     } catch (error: any) {
       alert(error.response?.data?.error || "เกิดปัญหาที่ระบบหลังบ้าน");
     } finally {
@@ -244,6 +274,9 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   return {
     customer, setCustomer,
     searchCustomerQuery, setSearchCustomerQuery,
+    setTempPhone, tempPhone, //ส่งออกไปให้หน้า UI คอมโพเนนต์เรียกใช้งาน
+    searchResults, setSearchResults,
+    triggerLiveSearch,
     customerTypes, activeTypeId, setActiveTypeId,
     selectedPaymentType, setSelectedPaymentType,
     paymentMethodId, setPaymentMethodId,
