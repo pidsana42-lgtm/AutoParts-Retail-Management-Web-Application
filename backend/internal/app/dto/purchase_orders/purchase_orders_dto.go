@@ -48,3 +48,28 @@ type POItemResponse struct {
 	AlertID                   	*uint    `json:"alert_id,omitempty"`
 	PreOrderItemID            	*uint    `json:"pre_order_item_id,omitempty"`
 }
+
+type POSummaryResponse struct {
+    PendingAmount     	float64 	`json:"pending_amount"`
+    ApprovedMTDAmount 	float64 	`json:"approved_mtd_amount"`
+    RejectedMTDAmount 	float64 	`json:"rejected_mtd_amount"`
+	TotalCount			int64		`json:"total_count"`
+}
+
+type ListPOQuery struct {
+	Page   int    `form:"page"`
+	Limit  int    `form:"limit"`
+	Status string `form:"status"` // เช่น PENDING, APPROVED
+	Search string `form:"search"` // ค้นหาด้วย po_number
+	Date   string `form:"date"`   // ค้นหาด้วยวันที่สร้าง
+}
+
+// Struct สำหรับตอบกลับ (ตรงกับที่ Frontend รอรับ)
+type ListPOResponse struct {
+	Data  []PurchaseOrderResponse `json:"data"`  // POResponse คือ DTO ของข้อมูล PO 1 ตัวที่คุณน่าจะมีอยู่แล้ว
+	Total int64        `json:"total"` // จำนวนข้อมูลทั้งหมด
+}
+
+type DeletePORequest struct {
+	ID uint `uri:"id" binding:"required"`
+}

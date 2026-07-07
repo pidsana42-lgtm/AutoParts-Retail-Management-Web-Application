@@ -1,6 +1,40 @@
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "../../utils/component";
 import { type InputHTMLAttributes, type ReactNode, forwardRef, useId } from "react";
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+const inputVariants = cva(
+  [
+    "h-10 w-full rounded-sm bg-gray-100 px-3 text-sm text-slate-800",
+    "placeholder:text-slate-400",
+    "transition-colors duration-150 ease-out",
+    "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
+  ],
+  {
+    variants: {
+      hasError: {
+        true:  "border border-red-400 focus:outline-none focus:border-red-500",
+        false: "border-none focus:outline-none",
+      },
+      hasLeftIcon: {
+        true:  "pl-12",
+        false: "",
+      },
+      hasRightIcon: {
+        true:  "pr-9",
+        false: "",
+      },
+    },
+    defaultVariants: {
+      hasError:     false,
+      hasLeftIcon:  false,
+      hasRightIcon: false,
+    },
+  }
+);
+
+interface InputProps
+  extends InputHTMLAttributes<HTMLInputElement>,
+    Omit<VariantProps<typeof inputVariants>, "hasError" | "hasLeftIcon" | "hasRightIcon"> {
   label?: string;
   error?: string;
   helperText?: string;
@@ -17,8 +51,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       helperText,
       leftIcon,
       rightIcon,
-      containerClassName = "",
-      className = "",
+      containerClassName,
+      className,
       id,
       required,
       ...rest
@@ -29,12 +63,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     const inputId = id ?? generatedId;
 
     return (
-      <div className={["flex flex-col gap-1.5", containerClassName].join(" ")}>
+      <div className={cn("flex flex-col gap-1.5", containerClassName)}>
         {label && (
-          <label
-            htmlFor={inputId}
-            className="text-sm font-medium text-slate-700"
-          >
+          <label htmlFor={inputId} className="text-sm font-medium text-slate-700">
             {label}
             {required && <span className="ml-0.5 text-red-500">*</span>}
           </label>
@@ -53,18 +84,15 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             required={required}
             aria-invalid={!!error}
             aria-describedby={error ? `${inputId}-error` : undefined}
-            className={[
-              "h-10 w-full rounded-none bg-gray-100 px-3 text-sm text-slate-800",
-              "placeholder:text-slate-400",
-              "transition-colors duration-150 ease-out",
-              error
-                ? "border border-red-400 focus:outline-none focus:border-red-500"
-                : "border-none focus:outline-none",
-              "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
-              leftIcon ? "pl-12" : "",
-              rightIcon ? "pr-9" : "",
-              className,
-            ].join(" ")}
+            className={cn(
+              inputVariants({
+                hasError:     !!error,
+                hasLeftIcon:  !!leftIcon,
+                hasRightIcon: !!rightIcon,
+              }),
+               rest.type === "date" && "[&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60 [&::-webkit-calendar-picker-indicator]:hover:opacity-100",
+              className
+            )}
             {...rest}
           />
 
@@ -89,4 +117,5 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
 Input.displayName = "Input";
 
+export { inputVariants };
 export default Input;

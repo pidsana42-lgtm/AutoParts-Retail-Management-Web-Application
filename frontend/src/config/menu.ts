@@ -35,6 +35,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   { icon: Boxes, label: "คลังสินค้า", path: "/owner/stock", roles: ["OWNER", "ADMIN"] },
   { icon: MonitorSmartphone, label: "ระบบขาย POS", path: "/employee/pos", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"] },
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/owner/orders", roles: ["OWNER", "ADMIN"] },
+  { icon: ShoppingCart, label: "สั่งซื้อ", path: "/employee/orders", roles: ["EMPLOYEE"] },
   { icon: FileClock, label: "พรีออเดอร์", path: "/owner/pre-orders", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"] },
   { icon: RefreshCw, label: "คืน และ เคลมสินค้า", path: "/owner/claims", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"] },
   { 
