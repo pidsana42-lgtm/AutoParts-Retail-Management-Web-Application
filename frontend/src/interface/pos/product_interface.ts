@@ -11,4 +11,5 @@ export interface POSProductResponse {
   grade_name?: string;
   brand_name?: string;
   model_name?: string;
+  max_discount_rate?: number; // เพดานส่วนลดสูงสุดของสินค้าตัวนี้ (หน้าบ้านต้องพ่วงฟิลด์นี้มาด้วย)
 }
