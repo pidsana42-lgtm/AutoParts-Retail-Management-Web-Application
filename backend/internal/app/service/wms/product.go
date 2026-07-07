@@ -1,12 +1,7 @@
 package wms
 
 import (
-	"bytes"
-	"encoding/json"
-	"log"
-	"net/http"
-	"time"
-
+	"backend/internal/app/entity"
 	wmsDto  "backend/internal/app/dto/wms"
 	wmsRepo "backend/internal/app/repository/wms"
 )
@@ -17,6 +12,8 @@ type ProductService interface {
 	UpdateProduct(id uint, req *wmsDto.ProductRequestDTO) error
 	DeleteProduct(id uint) error
 	ListProducts() ([]wmsDto.ProductListResponseDTO, error)
+	ListBrands() ([]entity.Brand, error)
+	ListGrades() ([]entity.Grade, error)
 }
 
 type productService struct {
@@ -80,29 +77,10 @@ func (s *productService) ListProducts() ([]wmsDto.ProductListResponseDTO, error)
 	return result, nil
 }
 
-func triggerBarcodeGen(ids []uint) {
-	if len(ids) == 0 {
-		return
-	}
-	go func() {
-		payload := map[string]interface{}{
-			"product_ids": ids,
-		}
-		jsonPayload, errPayload := json.Marshal(payload)
-		if errPayload != nil {
-			log.Printf("[WMS] Error marshaling product IDs payload for manual creation: %v\n", errPayload)
-			return
-		}
-		client := http.Client{
-			Timeout: 15 * time.Second,
-		}
-		fastAPIURL := "http://localhost:8000/api/products/generate-codes"
-		resp, errReq := client.Post(fastAPIURL, "application/json", bytes.NewBuffer(jsonPayload))
-		if errReq != nil {
-			log.Printf("[WMS] Error calling FastAPI to generate barcode for manually created product: %v\n", errReq)
-			return
-		}
-		defer resp.Body.Close()
-		log.Printf("[WMS] FastAPI manual product barcode generation response status: %d\n", resp.StatusCode)
-	}()
+func (s *productService) ListBrands() ([]entity.Brand, error) {
+	return s.repo.ListBrands()
+}
+
+func (s *productService) ListGrades() ([]entity.Grade, error) {
+	return s.repo.ListGrades()
 }
