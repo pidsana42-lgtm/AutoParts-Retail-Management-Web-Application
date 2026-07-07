@@ -1,8 +1,8 @@
 import { type HTMLAttributes, type ReactNode } from "react";
 
-interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  title?: string;
-  subtitle?: string;
+interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
+  title?: ReactNode;
+  subtitle?: ReactNode;
   headerAction?: ReactNode;
   footer?: ReactNode;
   noPadding?: boolean;

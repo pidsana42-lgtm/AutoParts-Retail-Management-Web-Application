@@ -59,6 +59,7 @@ func User(db *gorm.DB) error {
             BankID:            bank.ID,
             BankAccountNumber: "123-4-56789-0",
             RoleID:            1, // roleOwner.ID
+            LineUserID:        "LINE_BOSS",
         },
         {
             FirstName:         "Somchai",
@@ -70,6 +71,7 @@ func User(db *gorm.DB) error {
             BankID:            bank.ID,
             BankAccountNumber: "123-4-56789-1",
             RoleID:            2, // roleEmployee.ID
+            LineUserID:        "LINE_EMPLOYEE",
         },
         {
             FirstName:         "Manager",
@@ -81,6 +83,7 @@ func User(db *gorm.DB) error {
             BankID:            bank.ID,
             BankAccountNumber: "123-4-56789-2",
             RoleID:            3, // roleAdmin.ID
+            LineUserID:        "LINE_ADMIN",
         },
         {
             FirstName:         "เนตรนภัทร",
@@ -92,6 +95,7 @@ func User(db *gorm.DB) error {
             BankID:            bank.ID,
             BankAccountNumber: "123-4-56789-3",
             RoleID:            3, // roleAdmin.ID
+            LineUserID:        "LINE_MANAGER2",
         },
     }
 

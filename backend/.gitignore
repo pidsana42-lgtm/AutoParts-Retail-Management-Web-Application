@@ -4,3 +4,5 @@
 .jpg
 .gif
 .gguf
+model/*.gguf
+uploads/

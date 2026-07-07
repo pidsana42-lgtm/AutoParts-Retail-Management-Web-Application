@@ -5,6 +5,7 @@ import (
 	billRepo "backend/internal/app/repository/import_data"
 	billSvc "backend/internal/app/service/import_data"
 
+	"backend/internal/app/entity"
 	"backend/internal/app/enum"
 	"backend/internal/middleware"
 	"github.com/gin-gonic/gin"
@@ -34,6 +35,18 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB) {
 		importDataGroup.POST("/bill-import-jobs/:id/confirm", ctrl.ConfirmBillImport)
 		importDataGroup.POST("/bills", ctrl.CreateBill)
 		importDataGroup.GET("/bills", ctrl.ListBills)
+		importDataGroup.PUT("/bills/:id", ctrl.UpdateBill)
+		importDataGroup.DELETE("/bills/:id", ctrl.DeleteBill)
 		importDataGroup.POST("/bill-items", ctrl.CreateBillItem)
+
+		// Custom route for WMS Import Bill flow to fetch categories with preloaded subcategories (Keeps friend's files untouched)
+		importDataGroup.GET("/categories-tree", func(c *gin.Context) {
+			var categories []entity.Category
+			if err := db.Preload("SubCategories").Find(&categories).Error; err != nil {
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(200, categories)
+		})
 	}
 }

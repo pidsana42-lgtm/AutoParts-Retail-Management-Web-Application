@@ -5,7 +5,7 @@ import (
 )
 
 type ProductRequestDTO struct {
-	Product_Code   string  `json:"product_code" binding:"required"`
+	Product_Code   string  `json:"product_code"` // Not required anymore because we can auto-generate it!
 	Part_Number    string  `json:"part_number"`
 	Product_Name   string  `json:"product_name" binding:"required"`
 	Barcode        string  `json:"barcode"`
@@ -15,11 +15,12 @@ type ProductRequestDTO struct {
 	Cost_price     float64 `json:"cost_price" binding:"required,gt=0"`
 	Note           string  `json:"note"`
 
-	BrandID    uint `json:"brand_id" binding:"required"`
-	UnitID     uint `json:"unit_id" binding:"required"`
-	CategoryID uint `json:"category_id" binding:"required"`
-	GradeID    uint `json:"grade_id" binding:"required"`
-	ShelfID    uint `json:"shelf_id" binding:"required"`
+	BrandID       uint  `json:"brand_id" binding:"required"`
+	UnitID        uint  `json:"unit_id" binding:"required"`
+	CategoryID    uint  `json:"category_id" binding:"required"`
+	SubCategoryID *uint `json:"sub_category_id"`
+	GradeID       uint  `json:"grade_id" binding:"required"`
+	ShelfID       uint  `json:"shelf_id" binding:"required"`
 }
 
 func (r *ProductRequestDTO) ToEntity() entity.Product {
@@ -37,25 +38,28 @@ func (r *ProductRequestDTO) ToEntity() entity.Product {
 		BrandID:        r.BrandID,
 		UnitID:         r.UnitID,
 		CategoryID:     r.CategoryID,
+		SubCategoryID:  r.SubCategoryID,
 		GradeID:        r.GradeID,
 		ShelfID:        r.ShelfID,
 	}
 }
 
 type ProductListResponseDTO struct {
-	ID           uint    `json:"id"`
-	Product_Code string  `json:"product_code"`
-	Part_Number  string  `json:"part_number"`
-	Product_Name string  `json:"product_name"`
-	Barcode      string  `json:"barcode"`
-	Quantity     int     `json:"quantity"`
-	Sale_price   float64 `json:"sale_price"`
-	Is_Active    bool    `json:"is_active"`
-	BrandName    string  `json:"brand_name"`
-	CategoryName string  `json:"category_name"`
-	UnitName     string  `json:"unit_name"`
-	ShelfName    string  `json:"shelf_name"`
-	ThumbnailUrl string  `json:"thumbnail_url"`
+	ID              uint    `json:"id"`
+	Product_Code    string  `json:"product_code"`
+	Part_Number     string  `json:"part_number"`
+	Product_Name    string  `json:"product_name"`
+	Barcode         string  `json:"barcode"`
+	Quantity        int     `json:"quantity"`
+	Sale_price      float64 `json:"sale_price"`
+	Is_Active       bool    `json:"is_active"`
+	BrandName       string  `json:"brand_name"`
+	CategoryName    string  `json:"category_name"`
+	SubCategoryID   *uint   `json:"sub_category_id"`
+	SubCategoryName string  `json:"sub_category_name"`
+	UnitName        string  `json:"unit_name"`
+	ShelfName       string  `json:"shelf_name"`
+	ThumbnailUrl    string  `json:"thumbnail_url"`
 }
 
 // Helper function ใน DTO สำหรับแปลงข้อมูลยกชุด
@@ -73,6 +77,10 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	// สามารถจิ้มเข้าฟิลด์ .Brand_Name ได้ทันทีโดยไม่ต้องกลัว Nil Pointer Crash
 	d.BrandName = p.Brand.Brand_Name
 	d.CategoryName = p.Category.Category_Name
+	d.SubCategoryID = p.SubCategoryID
+	if p.SubCategory != nil {
+		d.SubCategoryName = p.SubCategory.Sub_Category_Name
+	}
 	d.UnitName = p.Unit.Unit_Name
 	d.ShelfName = p.Shelf.Shelf_Name
 
