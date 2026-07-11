@@ -5,10 +5,11 @@ import React from "react";
 const textVariants = cva("", {
   variants: {
     variant: {
-      body:  "text-base text-gray-800 leading-relaxed mb-4",
+      body:  "text-base text-gray-800 font-normal leading-relaxed mb-4",
       lead:  "text-lg md:text-xl text-gray-700 leading-relaxed mb-6 font-medium",
-      small: "text-sm text-gray-600 mb-2",
-      muted: "text-base text-gray-500 leading-relaxed mb-4",
+      small: "text-sm text-gray-600 font-normal mb-2",
+      muted: "text-base text-gray-500 font-normal leading-relaxed mb-4",
+      xs:    "text-xs font-normal text-gray-500 mb-0 subpixel-antialiased",
     },
   },
   defaultVariants: {

@@ -18,16 +18,16 @@ export function CustomerCard({ customer }: CustomerCardProps): React.JSX.Element
       {/* ─── ส่วนที่ 1: ชื่อลูกค้า และ ป้ายสถานะระดับราคา (Header Section) ─── */}
       <div className="flex justify-between items-start">
         <div>
-          <h3 className="text-xl font-black tracking-tight text-white">
+          <h3 className="text-xl tracking-tight text-white">
             {customer?.customer_name || "ลูกค้าทั่วไป (หน้าร้าน)"}
           </h3>
-          <p className="text-xs text-zinc-400 font-medium mt-0.5">
+          <p className="text-xs text-zinc-400 mt-0.5">
             โทร: {customer?.phone_number || "ลูกค้าทั่วไป (ไม่ระบุ)"}
           </p>
         </div>
         
         {/* ป้ายระดับราคาพิเศษ */}
-        <div className="bg-[#2E6B20] text-white text-[10px] font-bold px-2.5 py-1 select-none uppercase tracking-wide">
+        <div className="bg-[#2E6B20] text-white text-[10px] px-2.5 py-1 select-none uppercase tracking-wide">
           {!isGuest && customer?.is_discount_enabled ? "ระดับราคาพิเศษ" : "ระดับราคามาตรฐาน"}
         </div>
       </div>
@@ -37,7 +37,7 @@ export function CustomerCard({ customer }: CustomerCardProps): React.JSX.Element
         <div className="flex justify-between items-center text-[11px] text-zinc-400 mb-1">
           <span>การใช้เครดิตในระดับราคานี้</span>
           {/* สูตรคำนวณหา % เครดิตที่ใช้ไป: (หนี้ปัจจุบัน / วงเงินสูงสุด) * 100 */}
-          <span className="font-bold text-white font-mono">
+          <span className=" text-white ">
             {customer && customer.max_credit_limit ? `${((customer.current_debt_amount / customer.max_credit_limit) * 100).toFixed(0)}%` : "0%"}
           </span>
         </div>
@@ -58,16 +58,16 @@ export function CustomerCard({ customer }: CustomerCardProps): React.JSX.Element
         
         {/* กล่องซ้าย: ยอดหนี้ค้างชำระปัจจุบัน (Current Debt) */}
         <div className="bg-[#262525] p-3 border border-zinc-800/40">
-          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">ยอดคงเหลือปัจจุบัน</p>
-          <p className="text-base font-black font-mono mt-1 text-zinc-300">
+          <p className="text-[10px] text-zinc-500  uppercase tracking-wider">ยอดคงเหลือปัจจุบัน</p>
+          <p className="text-base  mt-1 text-zinc-300">
             ฿{customer && customer.current_debt_amount ? customer.current_debt_amount.toFixed(2) : "0.00"}
           </p>
         </div>
         
         {/* กล่องขวา: จำนวนเงินวงเงินเครดิตที่ยังสามารถติดหนี้เพิ่มได้ (Remaining Credit) */}
         <div className="bg-[#262525] p-3 border border-zinc-800/40">
-          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">เครดิตคงเหลือ</p>
-          <p className="text-base font-black font-mono mt-1 text-zinc-300">
+          <p className="text-[10px] text-zinc-500  uppercase tracking-wider">เครดิตคงเหลือ</p>
+          <p className="text-base  mt-1 text-zinc-300">
             {/* สูตรคำนวณหาเครดิตเหลือ: วงเงินสูงสุด - หนี้ปัจจุบัน */}
             ฿{customer && customer.max_credit_limit ? (customer.max_credit_limit - customer.current_debt_amount).toFixed(2) : "0.00"}
           </p>
