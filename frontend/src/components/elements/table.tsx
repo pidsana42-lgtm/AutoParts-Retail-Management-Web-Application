@@ -68,7 +68,7 @@ export function TableRow({
 
 export function TableHead({ className, children, ...props }: ThHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <th className={cn("px-4 py-3 font-medium text-slate-500 text-left", className)} {...props}>
+    <th className={cn("px-4 py-3 font-normal text-slate-500 text-left", className)} {...props}>
       {children}
     </th>
   );
@@ -118,7 +118,7 @@ export function GenericTable<T>({
               <th
                 key={col.key}
                 style={{ width: col.width }}
-                className={cn("px-4 py-3 font-medium text-slate-500", tableCellVariants({ align: col.align }))}
+                className={cn("px-4 py-3 font-normal text-slate-500", tableCellVariants({ align: col.align }))}
               >
                 {col.header}
               </th>

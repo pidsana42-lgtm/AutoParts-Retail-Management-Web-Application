@@ -83,7 +83,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       );
       const dataList = response.data;
 
-      // 🟢 จุดสำคัญ: เปลี่ยนมาตรวจสอบแบบ Exact Match (เช็คตัวอักษรตรงกันเป๊ะๆ 100%)
+      //  จุดสำคัญ: เปลี่ยนมาตรวจสอบแบบ Exact Match (เช็คตัวอักษรตรงกันเป๊ะๆ 100%)
       const exactMatchedCustomer = dataList && dataList.length > 0 
         ? dataList.find(
             (c) => c.customer_name?.toLowerCase() === cleanedQuery.toLowerCase() || 
@@ -103,7 +103,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         setCustomer({
           id: 0, // ID 0 บอกหลังบ้านว่าเป็นลูกค้าขาจร
           customer_name: cleanedQuery, // สลักชื่อที่พิมพ์สดลงไปตรงๆ
-          phone_number: tempPhone.trim() || "ลูกค้าทั่วไป (ไม่ระบุ)", // 🟢 ดึงค่าเบอร์โทรศัพท์ล่าสุดที่พิมพ์จากสเตทมาแนบที่นี่
+          phone_number: tempPhone.trim() || "ลูกค้าทั่วไป (ไม่ระบุ)", //  ดึงค่าเบอร์โทรศัพท์ล่าสุดที่พิมพ์จากสเตทมาแนบที่นี่
           standard_discount_rate: 0,
           is_discount_enabled: false,
           current_debt_amount: 0,
@@ -118,7 +118,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         setActiveTypeId(1); // สลับแท็บสิทธิ์กลุ่มลูกค้ามาที่ "ทั่วไป" อัตโนมัติ
       }
 
-      // 🟢 ล้างรายการดรอปดาวน์ค้นหาออกไปจากหน้าจอทันทีเพื่อปิดกล่องข้อความแจ้งเตือนเมื่อขั้นตอนเสร็จสมบูรณ์
+      //  ล้างรายการดรอปดาวน์ค้นหาออกไปจากหน้าจอทันทีเพื่อปิดกล่องข้อความแจ้งเตือนเมื่อขั้นตอนเสร็จสมบูรณ์
       setSearchResults([]);
 
     } catch (error) {
