@@ -14,11 +14,11 @@ import (
 type PurchaseOrderRepository interface {
 	GetLatestPONumberByYear(ctx context.Context, year string) (string, error)
 	SavePO(ctx context.Context, po *poEntity.PO) error
-	FindAll(ctx context.Context, userID uint, query poDto.ListPOQuery) ([]poEntity.PO, int64, error)
+	FindAll(ctx context.Context, query poDto.ListPOQuery) ([]poEntity.PO, int64, error)
 	DeletePOByID(ctx context.Context, id uint) error
 	GetPOByID(ctx context.Context, id uint) (*poEntity.PO, error)
 	GetPOForPDF(ctx context.Context, id uint) (*poEntity.PO, error)
-	GetPOSummary(ctx context.Context, userID uint) (*poDto.POSummaryResponse, error)
+	GetPOSummary(ctx context.Context) (*poDto.POSummaryResponse, error)
 	// UpdatePDF(ctx context.Context, id uint, url string) error
 }
 
@@ -67,11 +67,11 @@ func (r *purchaseOrderRepository) SavePO(ctx context.Context, po *poEntity.PO) e
     })
 }
 
-func (r *purchaseOrderRepository) FindAll(ctx context.Context, userID uint, query poDto.ListPOQuery) ([]poEntity.PO, int64, error) {
+func (r *purchaseOrderRepository) FindAll(ctx context.Context, query poDto.ListPOQuery) ([]poEntity.PO, int64, error) {
 	var po []poEntity.PO
 	var total int64
 
-	dbQuery := r.db.WithContext(ctx).Model(&poEntity.PO{}).Where("created_by = ?", userID)
+	dbQuery := r.db.WithContext(ctx).Model(&poEntity.PO{})
 
 	// Filter Status
 	if query.Status != "" {
@@ -105,7 +105,7 @@ func (r *purchaseOrderRepository) FindAll(ctx context.Context, userID uint, quer
 	return po, total, err
 }
 
-func (r *purchaseOrderRepository) GetPOSummary(ctx context.Context, userID uint) (*poDto.POSummaryResponse, error) {
+func (r *purchaseOrderRepository) GetPOSummary(ctx context.Context) (*poDto.POSummaryResponse, error) {
 	var summary poDto.POSummaryResponse
 
 	// หาวันที่ 1 ของเดือนปัจจุบัน (สำหรับ MTD)
@@ -114,25 +114,25 @@ func (r *purchaseOrderRepository) GetPOSummary(ctx context.Context, userID uint)
 
 	// 1. Query ยอดรออนุมัติ
 	r.db.WithContext(ctx).Model(&poEntity.PO{}). 
-		Where("created_by = ? AND UPPER(status) = ?", userID, "PENDING").
+		Where("UPPER(status) = ?", "PENDING").
 		Select("COALESCE(SUM(total_amount), 0)").
 		Scan(&summary.PendingAmount)
 
 	// 2. Query ยอดอนุมัติแล้ว (MTD)
 	r.db.WithContext(ctx).Model(&poEntity.PO{}).
-		Where("created_by = ? AND UPPER(status) = ? AND created_at >= ?", userID, "APPROVED", startOfMonth).
+		Where("UPPER(status) = ? AND created_at >= ?", "APPROVED", startOfMonth).
 		Select("COALESCE(SUM(total_amount), 0)").
 		Scan(&summary.ApprovedMTDAmount)
 
 	// 3. Query ยอดไม่อนุมัติ (MTD)
 	r.db.WithContext(ctx).Model(&poEntity.PO{}).
-		Where("created_by = ? AND UPPER(status) = ? AND created_at >= ?", userID, "REJECTED", startOfMonth).
+		Where("UPPER(status) = ? AND created_at >= ?", "REJECTED", startOfMonth).
 		Select("COALESCE(SUM(total_amount), 0)").
 		Scan(&summary.RejectedMTDAmount)
 
 	// 4. ดึงจำนวนใบสั่งซื้อทั้งหมดของเดือนนี้
 	r.db.WithContext(ctx).Model(&poEntity.PO{}).
-        Where("created_by = ? AND UPPER(status) = ? AND created_at >= ?", userID, "APPROVED", startOfMonth).
+        Where("UPPER(status) = ? AND created_at >= ?", "APPROVED", startOfMonth).
         Count(&summary.TotalCount)
 
 	return &summary, nil

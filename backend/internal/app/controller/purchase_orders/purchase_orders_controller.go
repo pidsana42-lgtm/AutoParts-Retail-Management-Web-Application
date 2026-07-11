@@ -115,21 +115,6 @@ func (ctrl *PurchaseOrderController) ListPOs(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid query parameters"})
 		return
 	}
-	// หลังจากถอด Token จาก JWT ตัวเลขจะถูกแปลงเป็น float64 
-	// พอจะแปลงให้เป็น uint ตรง ๆ GO มันก็มองว่า Data Type ไม่ตรงกันเลยพ่น 401 ออกมา
-	userIDValue, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	// ต้อง cast เป็น float64 ก่อน
-	userIDFloat, ok := userIDValue.(float64)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id type"})
-		return
-	}
-	
-	userID := uint(userIDFloat)
 
 	if query.Page <= 0 {
 		query.Page = 1
@@ -138,7 +123,7 @@ func (ctrl *PurchaseOrderController) ListPOs(c *gin.Context) {
 		query.Limit = 10
 	}
 
-	res, err := ctrl.poService.ListPOs(c.Request.Context(), userID, query)
+	res, err := ctrl.poService.ListPOs(c.Request.Context(), query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -148,20 +133,6 @@ func (ctrl *PurchaseOrderController) ListPOs(c *gin.Context) {
 }
 
 func (ctrl *PurchaseOrderController) GetSummary(c *gin.Context) {
-	// ดึง userID จาก Context
-	userIDValue, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	userIDFloat, ok := userIDValue.(float64)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id type"})
-		return
-	}
-	userID := uint(userIDFloat)
-
 	// ดึง Role จาก Context (ที่ Auth Middleware ยัดไว้ให้)
 	roleValue, exists := c.Get("role")
 	if !exists {
@@ -176,7 +147,7 @@ func (ctrl *PurchaseOrderController) GetSummary(c *gin.Context) {
 	}
 
 	// ส่ง role เข้าไปใน Service ด้วย
-	res, err := ctrl.poService.GetPOSummary(c.Request.Context(), userID, role)
+	res, err := ctrl.poService.GetPOSummary(c.Request.Context(), role)
 	if err != nil {
 		// ถ้ามี Error จาก Business Logic (เช่น สิทธิ์ไม่ถึง) ให้ส่ง 403 Forbidden กลับไป
 		if err.Error() == "forbidden: only owner can view PO summary" {
@@ -240,4 +211,28 @@ func (ctrl *PurchaseOrderController) DeletePO(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "purchase order deleted successfully"})
+}
+
+func (c *PurchaseOrderController) SearchProducts(ctx *gin.Context) {
+	var query poDto.ProductSearchQuery
+
+	if err := ctx.ShouldBindQuery(&query); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "Bad Request: กรุณาระบุรหัสผู้จัดจำหน่าย (supplier_id)",
+		})
+		return
+	}
+
+	// 2. เรียกใช้ Service
+	products, err := c.poService.SearchProducts(query)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Internal Server Error",
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"data": products,
+	})
 }
