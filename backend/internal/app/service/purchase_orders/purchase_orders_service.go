@@ -19,10 +19,11 @@ type PurchaseOrderService interface {
 	CreatePO(ctx context.Context, req *poDto.CreatePurchaseOrderRequest, creatorID uint) (*poDto.PurchaseOrderResponse, error)
 	GetPOByID(ctx context.Context, id uint) (*poDto.PurchaseOrderResponse, error)
 	UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus) error
-	ListPOs(ctx context.Context, userID uint, query poDto.ListPOQuery) (*poDto.ListPOResponse, error)
-	GetPOSummary(ctx context.Context, userID uint, role string) (*poDto.POSummaryResponse, error)
+	ListPOs(ctx context.Context, query poDto.ListPOQuery) (*poDto.ListPOResponse, error)
+	GetPOSummary(ctx context.Context, role string) (*poDto.POSummaryResponse, error)
 	GeneratePOPDF(ctx context.Context, id uint) ([]byte, error)
 	Delete(ctx context.Context, id uint) error
+	SearchProducts(query poDto.ProductSearchQuery) ([]poDto.ProductSearchResponse, error)
 	// GeneratePDF(ctx context.Context, id uint) (string, error)
 }
 
@@ -185,8 +186,8 @@ func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, stat
 	return nil
 }
 
-func (s *purchaseOrderService) ListPOs(ctx context.Context, userID uint, query poDto.ListPOQuery) (*poDto.ListPOResponse, error) {
-    po, total, err := s.poRepository.FindAll(ctx, userID, query)
+func (s *purchaseOrderService) ListPOs(ctx context.Context, query poDto.ListPOQuery) (*poDto.ListPOResponse, error) {
+    po, total, err := s.poRepository.FindAll(ctx, query)
     if err != nil {
         return nil, err
     }
@@ -241,11 +242,11 @@ func (s *purchaseOrderService) ListPOs(ctx context.Context, userID uint, query p
     }, nil
 }
 
-func (s *purchaseOrderService) GetPOSummary(ctx context.Context, userID uint, role string) (*poDto.POSummaryResponse, error) {
+func (s *purchaseOrderService) GetPOSummary(ctx context.Context, role string) (*poDto.POSummaryResponse, error) {
 	if !strings.EqualFold(role, "Owner") {
 		return nil, errors.New("forbidden: only owner can view PO summary")
 	}
-	return s.poRepository.GetPOSummary(ctx, userID)
+	return s.poRepository.GetPOSummary(ctx)
 }
 
 var (
@@ -276,34 +277,6 @@ func (s *purchaseOrderService) Delete(ctx context.Context, id uint) error {
 	return s.poRepository.DeletePOByID(ctx, id)
 }
 
-// Generate PDF File
-// func (s *purchaseOrderService) GeneratePDF(ctx context.Context, id uint) (string, error) {
-//     // 1. ดึงข้อมูล
-//     po, err := s.poRepository.GetPOByIDWithItems(ctx, id)
-//     if err != nil {
-//         return "", err
-//     }
-
-//     // 2. สร้าง PDF
-//     pdfBytes, err := pdf.GeneratePO(po)
-//     if err != nil {
-//         return "", err
-//     }
-
-// 	filePath := fmt.Sprintf("po/%s.pdf", po.PO_number)
-
-//     // 3. อัปโหลดขึ้น Storage บน Cloud
-//     url, err := s.storage.Upload(filePath, pdfBytes)
-//     if err != nil {
-//         return "", err
-//     }
-    
-//     // 4. อัปเดต URL ลง Database
-//     err = s.poRepository.UpdatePDF(ctx, id, url)
-//     if err != nil {
-//         return "", err
-//     }
-
-//     // 5. ส่ง URL กลับไปให้ฝั่ง Controller / Frontend
-//     return url, nil
-// }
+func (s *purchaseOrderService) SearchProducts(query poDto.ProductSearchQuery) ([]poDto.ProductSearchResponse, error) {
+	return s.productRepo.SearchProducts(query.SupplierID, query.Keyword)
+}

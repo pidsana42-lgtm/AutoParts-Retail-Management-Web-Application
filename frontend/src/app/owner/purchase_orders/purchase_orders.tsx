@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   ShoppingBasket, CircleCheck, Pencil,
-  Eye, Printer, Trash2,
+  Eye, Printer, Trash2, Info,
   ChevronLeft, ChevronRight,
   ChevronsLeft, ChevronsRight,
 } from "lucide-react";
@@ -11,19 +11,16 @@ import Input   from "../../../components/elements/input";
 import Select  from "../../../components/elements/select";
 import Button  from "../../../components/elements/button";
 import { Badge } from "../../../components/elements/badge";
-import {
-  Card, CardHeader, CardTitle, CardContent,
-} from "../../../components/elements/card";
-import {
-  Table, TableHeader, TableBody,
-  TableRow, TableHead, TableCell,
-} from "../../../components/elements/table";
+import { Card, CardHeader, CardTitle, CardContent } from "../../../components/elements/card";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../components/elements/table";
 
 import { cn } from "../../../utils/component";
 import { useNavigate } from "react-router-dom";
 
 import type { POResponse, POSummaryResponse } from "../../../interface/purchase_orders/po_interface";
 import { formatDate } from "../../../utils/formatdate";
+import { useRejectedBreakdownModal } from "./hooks/useRejectedBreakdownModal";
+import { RejectedBreakdownModal } from "./components/RejectedBreakdownModal";
 import { poService } from "../../../service/http/purchase_orders/po_service";
 
 function StatusBadge({ status }: { status: string }) {
@@ -96,7 +93,9 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
 // ─── Page ──────────
 const PurchaseOrders: React.FC = () => {
   const navigate = useNavigate();
-
+  // 0. Hook
+  const { isOpen, modalData, openModal, closeModal } = useRejectedBreakdownModal();
+  
   // 1. States สำหรับเก็บข้อมูลจาก API
   const [orders, setOrders] = useState<POResponse[]>([]);
   const [totalItems, setTotalItems] = useState(0);
@@ -107,6 +106,7 @@ const PurchaseOrders: React.FC = () => {
     pending_amount: 0,
     approved_mtd_amount: 0,
     rejected_mtd_amount: 0,
+    rejected_by_supplier: [],
     total_count: 0,
   });
 
@@ -180,7 +180,7 @@ const PurchaseOrders: React.FC = () => {
 
       {/* 1. Header */}
       <div className="flex items-center justify-between">
-        <Heading level="h2" weight="semibold" className="m-0 text-gray-800">
+        <Heading level="h1" weight="semibold" className="m-0 text-black">
           จัดการใบสั่งซื้อ
         </Heading>
         <Button leftIcon={<ShoppingBasket className="h-5 w-5" />} size="md" onClick={() => navigate("/owner/new-orders")}>
@@ -194,13 +194,13 @@ const PurchaseOrders: React.FC = () => {
         {/* Search Card */}
         <Card className="flex-1 w-3/4">
           <CardHeader>
-            <CardTitle className="text-base">ค้นหาใบสั่งซื้อด้วย</CardTitle>
+            <CardTitle className="text-base text-black">ค้นหาใบสั่งซื้อด้วย</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-4 items-end">
               <Input
                 label="หมายเลขใบสั่งซื้อ"
-                placeholder="PO-XXXX..."
+                placeholder="PO-XXXX-XXXX"
                 value={searchId}
                 onChange={(e) => setSearchId(e.target.value)}
               />
@@ -243,20 +243,28 @@ const PurchaseOrders: React.FC = () => {
       { /* TODO: แก้ไขเรียกจากฟังก์ชันจริง */ }
       <div className="grid grid-cols-3 gap-6">
         <Card className="border-l-[5px] border-l-black flex flex-col justify-center h-24 p-5">
-          <p className="text-sm text-gray-500 font-medium">รออนุมัติ</p>
+          <p className="text-sm text-[#6B7280] font-medium">รออนุมัติ</p>
           <p className="text-2xl font-bold mt-1 text-gray-900">
             ฿{(summary?.pending_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </Card>
         <Card className="border-l-[5px] border-l-emerald-500 flex flex-col justify-center h-24 p-5">
-          <p className="text-sm text-gray-500 font-medium">อนุมัติแล้ว (MTD)</p>
+          <p className="text-sm text-[#6B7280] font-medium">อนุมัติแล้ว (MTD)</p>
           <p className="text-2xl font-bold mt-1 text-gray-900">
             ฿{(summary?.approved_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </Card>
-        <Card className="border-l-[5px] border-l-red-500 flex flex-col justify-center h-24 p-5">
-          <p className="text-sm text-gray-500 font-medium">ไม่อนุมัติ (MTD)</p>
-          <p className="text-2xl font-bold mt-1 text-gray-900">
+        <Card 
+          onClick={() => openModal(summary?.rejected_by_supplier)}
+          className="border-l-[5px] border-l-red-500 flex flex-col justify-center h-24 p-5 relative group cursor-pointer hover:bg-gray-50/80 transition-all duration-200 select-none"
+        >
+          <div className="flex justify-between items-center w-full">
+            <p className="text-sm text-[#6B7280] font-medium">ไม่อนุมัติ (MTD)</p>
+            <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-sm flex items-center gap-1">
+              <Info className="w-3 h-3" /> ดูรายละเอียดแยกบริษัท
+            </span>
+          </div>
+          <p className="text-2xl font-bold mt-1 text-gray-900 group-hover:text-red-600 transition-colors">
             ฿{(summary?.rejected_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </Card>
@@ -265,7 +273,7 @@ const PurchaseOrders: React.FC = () => {
       {/* 3. Table */}
       <Card className="overflow-hidden" noPadding>
         <Table>
-          <TableHeader className="bg-gray-100 text-gray-600">
+          <TableHeader className="bg-[#f6f3f2] text-[#797878]">
             <TableRow>
               <TableHead className="pl-6">เลขที่ใบสั่งซื้อ</TableHead>
               <TableHead>วันที่สร้าง</TableHead>
@@ -411,6 +419,13 @@ const PurchaseOrders: React.FC = () => {
           </div>
         )}
       </Card>
+
+      <RejectedBreakdownModal 
+        isOpen={isOpen}
+        onClose={closeModal}
+        data={modalData}
+      />
+
     </div>
   );
 };

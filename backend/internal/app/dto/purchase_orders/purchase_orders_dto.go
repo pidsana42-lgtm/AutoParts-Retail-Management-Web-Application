@@ -73,3 +73,19 @@ type ListPOResponse struct {
 type DeletePORequest struct {
 	ID uint `uri:"id" binding:"required"`
 }
+
+// รับค่าจาก Query Parameters
+type ProductSearchQuery struct {
+	Keyword    string `form:"q"`
+	SupplierID string `form:"supplier_id" binding:"required"` // binding:"required" ของ Gin จะช่วยดัก Error ให้ถ่าหน้าบ้านลืมส่ง
+}
+
+// หน้าตาข้อมูลที่จะส่งกลับไปให้หน้าบ้าน
+type ProductSearchResponse struct {
+	ID       int     `json:"id"`
+	Code     string  `json:"code"`
+	Name     string  `json:"name"`
+	Price    float64 `json:"price"`
+	Unit     string  `json:"unit"`
+	StockQty int     `json:"stock_qty"`
+}
