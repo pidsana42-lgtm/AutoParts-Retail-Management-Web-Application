@@ -2,14 +2,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Building2, ChartNoAxesCombined, Info, ScanBarcode, ShoppingBag, 
-    ChevronRight, ShoppingCart, PenLine } from 'lucide-react';
+    ChevronRight, ShoppingCart } from 'lucide-react';
 // Components
 import Heading from '../../../components/elements/heading';
 import Button from '../../../components/elements/button';
 import Input from '../../../components/elements/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/elements/card';
 import Select from '../../../components/elements/select';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../components/elements/table";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableFooter } from "../../../components/elements/table";
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
 // Interface
 import type { CreatePORequest, POItemResponse, PreorderItem } from '../../../interface/purchase_orders/po_interface';
@@ -46,6 +46,16 @@ const CreatePurchaseOrders: React.FC = () => {
     useEffect(() => {
         setTotalItems(item.length);
     }, [item]);
+    // คำนวณจำนวนหน่วยรวม
+    const totalQuantity = React.useMemo(
+        () => item.reduce((sum, row) => sum + row.quantity, 0),
+        [item]
+    );
+    // คำนวณราคาสั่งซื้อโดยประมาณ
+    const totalEstimatedPrice = React.useMemo(
+        () => item.reduce((sum, row) => sum + row.sub_total, 0),
+        [item]
+    );
 
     // ดึงข้อมูล Supplier ตอนโหลดหน้า
     useEffect(() => {
@@ -212,14 +222,14 @@ const CreatePurchaseOrders: React.FC = () => {
                     </Heading>
                 </div>
                 <div className='flex items-end gap-4 justify-end'>
-                    <Button size='md' variant='tertiary' onClick={() => handleSavePO('DRAFT') }>บันทึกฉบับร่าง</Button>
-                    <Button size='md' onClick={() => handleSavePO('PENDING') }>ส่งอนุมัติ</Button>
+                    <Button size='md' variant='tertiary' disabled={isSaving} onClick={() => handleSavePO('DRAFT')}>{isSaving ? "กำลังบันทึก..." : "บันทึกฉบับร่าง"}</Button>
+                    <Button size='md' disabled={isSaving} onClick={() => handleSavePO('PENDING')}>{isSaving ? "กำลังบันทึก..." : "ส่งอนุมัติ"}</Button>
                 </div>
             </div>
 
             { /* Contents */ }
             { /* Left Side */ }
-            <div className="flex gap-6 items-stretch">
+            <div className="flex gap-6 items-start">
                 <div className='w-1/4 flex flex-col gap-6'>
                     <Card className='border-l-[5px] border-l-red-800'>
                         <CardHeader className='items-center justify-start gap-4 mt-2 mb-2'>
@@ -231,7 +241,7 @@ const CreatePurchaseOrders: React.FC = () => {
                                 <Select 
                                     label='ชื่อบริษัท/ผู้จัดจำหน่าย'
                                     value={listsSupplier}
-                                    onChange={(e) => setlistsSupplier(e.target.value)}
+                                    onChange={(e) => handleSupplierChange(e.target.value)}
                                     options={[
                                         { label: "เลือกบริษัท/ผู้จัดจำหน่าย...", value: "" },
                                         ...supplierOptions 
@@ -363,7 +373,7 @@ const CreatePurchaseOrders: React.FC = () => {
                             เพิ่มลงใบสั่งซื้อ
                         </Button>
                     </Card>
-                    <Card className="w-full h-full overflow-hidden" noPadding>
+                    <Card className="w-full overflow-hidden" noPadding>
                         <Table>
                             <TableHeader className="bg-gray-100 text-gray-600">
                                 <TableRow>
@@ -418,6 +428,38 @@ const CreatePurchaseOrders: React.FC = () => {
                                     ))
                                 )}
                             </TableBody>
+                            <TableFooter>
+                                <TableRow>
+                                    <TableCell colSpan={9} className="py-5">
+                                        <div className="flex items-center justify-end gap-10 pr-4">
+                                            <div className="flex flex-col items-center gap-1">
+                                                <span className="text-sm text-gray-500 font-light">รายการทั้งหมด</span>
+                                                <span className="text-2xl font-semibold text-gray-900">
+                                                    {totalItems} <span className="text-sm font-normal text-gray-500">รายการ</span>
+                                                </span>
+                                            </div>
+
+                                            <div className="w-px h-10 bg-gray-200"></div>
+
+                                            <div className="flex flex-col items-center gap-1">
+                                                <span className="text-sm text-gray-500 font-light">จำนวนทั้งหมด</span>
+                                                <span className="text-2xl font-semibold text-gray-900">
+                                                    {totalQuantity} <span className="text-sm font-normal text-gray-500">หน่วย</span>
+                                                </span>
+                                            </div>
+
+                                            <div className="w-px h-10 bg-gray-200"></div>
+
+                                            <div className="flex flex-col items-center gap-1">
+                                                <span className="text-sm text-gray-500 font-light">ราคาสั่งซื้อโดยประมาณ</span>
+                                                <span className="text-2xl font-semibold text-red-600">
+                                                    {totalEstimatedPrice.toLocaleString()} <span className="text-sm font-normal text-gray-500">บาท</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            </TableFooter>
                         </Table>
                     </Card>
                 </div>
