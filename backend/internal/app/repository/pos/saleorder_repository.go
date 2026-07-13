@@ -13,6 +13,7 @@ type SaleRepository interface {
 	GetPaymentMethodByID(id uint) (*entity.PaymentMethod, error)
 	GetCustomerTypes() ([]entity.CustomerType, error)
     SearchCustomers(searchQuery string) ([]entity.Customer, error)
+	GetPaymentMethods() ([]entity.PaymentMethod, error)
 }
 
 type saleRepository struct {
@@ -75,4 +76,10 @@ func (r *saleRepository) SearchCustomers(searchQuery string) ([]entity.Customer,
     
     err := query.Find(&customers).Error
     return customers, err
+}
+
+func (r *saleRepository) GetPaymentMethods() ([]entity.PaymentMethod, error) {
+	var methods []entity.PaymentMethod
+	err := r.db.Find(&methods).Error
+	return methods, err
 }

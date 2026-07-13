@@ -1,4 +1,5 @@
 package pos
+import "backend/internal/app/entity"
 
 type CreateSaleOrderRequest struct {
 	CustomerID        uint   `json:"customer_id"`      // ID ของลูกค้าที่เลือก 
@@ -26,4 +27,20 @@ type SaleOrderItemRequest struct {
 	// ส่วนลดรายบรรทัด (จากช่องติ๊กถูก DISC? ในตาราง)
 	DiscountType  string  `json:"discount_type" binding:"required"` // 'none', 'percentage', 'amount'
 	DiscountValue float64 `json:"discount_value"`                   // ค่าตัวเลขส่วนลดรายชิ้นที่พนักงานกรอก
+}
+
+type PaymentMethodResponse struct {
+    ID   int    `json:"id"`
+    MethodName string `json:"method_name"`
+}
+
+func ToPaymentMethodResponseList(methods []entity.PaymentMethod) []PaymentMethodResponse { 
+    list := []PaymentMethodResponse{}
+    for _, m := range methods {
+        list = append(list, PaymentMethodResponse{
+            ID:   int(m.ID),  
+            MethodName: m.MethodName,
+        })
+    }
+    return list
 }

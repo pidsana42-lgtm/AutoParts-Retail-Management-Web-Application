@@ -8,12 +8,14 @@ interface UsePosCartProps {
   activeTypeId: number;
 }
 
-// Custom Hook สำหรับระบบจัดการสินค้าในตะกร้า (Cart), การสแกนเพิ่ม/ลบสินค้า, 
-// และการคำนวณราคา/สิทธิ์ส่วนลดรายชิ้นตามกลุ่มลูกค้าหน้าร้าน POS
+export interface CartItem extends SaleOrderItemRequest {
+  quantity: number; // จำนวนสินค้าคงเหลือในสต็อก (Stock Quantity) ของสินค้าตัวนั้นๆ
+}
+
+// Custom Hook สำหรับระบบจัดการสินค้าในตะกร้า (Cart), การสแกนเพิ่ม/ลบสินค้า, และการคำนวณราคา/สิทธิ์ส่วนลดรายชิ้นตามกลุ่มลูกค้าหน้าร้าน POS
 export function usePosCart({ customer, activeTypeId }: UsePosCartProps) {
   // LOCAL STATES 
-  const [cart, setCart] = useState<SaleOrderItemRequest[]>(() => {
-    // โหลดข้อมูลตะกร้าสินค้าเดิมที่เคยขายค้างไว้จาก localStorage (ถ้ามี) ป้องกันรีเฟรชหน้าแล้วหาย
+  const [cart, setCart] = useState<CartItem[]>(() => {
     if (typeof window !== "undefined") {
       const savedCart = localStorage.getItem("pos_cart");
       return savedCart ? JSON.parse(savedCart) : [];
@@ -22,14 +24,12 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps) {
   });
   const [searchQuery, setSearchQuery] = useState<string>(""); // ข้อความรหัสบาร์โค้ด หรือ รหัส SKU สินค้าที่กำลังสแกนค้นหา
 
-  // LOCAL STORAGE PERSIST EFFECT
-  // ทุกครั้งที่มีการเปลี่ยนแปลงสินค้าในตะกร้า (ชิ้นส่วนเพิ่ม/ลด/เปลี่ยนจำนวน) ให้บันทึกลง localStorage ทันที
+  // LOCAL STORAGE PERSIST EFFECT  ทุกครั้งที่มีการเปลี่ยนแปลงสินค้าในตะกร้า (ชิ้นส่วนเพิ่ม/ลด/เปลี่ยนจำนวน) ให้บันทึกลง localStorage ทันที
   useEffect(() => {
     localStorage.setItem("pos_cart", JSON.stringify(cart));
   }, [cart]);
 
-  // CUSTOMER SWITCH EFFECT (โจทย์อู่อัตโนมัติ) 
-  //[useEffect]: ตัวดักจับเมื่อพนักงานสั่งสลับกลุ่มสิทธิ์ลูกค้า (เช่น จากทั่วไป -> อู่ซ่อมรถ)
+  // CUSTOMER SWITCH EFFECT (โจทย์อู่อัตโนมัติ) [useEffect]: ตัวดักจับเมื่อพนักงานสั่งสลับกลุ่มสิทธิ์ลูกค้า (เช่น จากทั่วไป -> อู่ซ่อมรถ)
   //ระบบจะทำการ Map อัปเดตประเภทส่วนลดและมูลค่าลดราคาอัตโนมัติยกตะกร้าทันที โดยไม่ทำให้จำนวน (QTY) หรือฟิลด์สินค้าอื่นพัง
   useEffect(() => {
     const updateCartDiscounts = async () => {
@@ -153,6 +153,7 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps) {
             product_name: product.product_name,
             part_number: product.part_number,
             qty: 1,
+            quantity: product.quantity,
             unit_price: product.sale_price,
             grade_name: product.grade_name,
             brand_name: product.brand_name,
@@ -171,10 +172,52 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps) {
   };
 
   //ฟังก์ชันปุ่มกดบวกลบจำนวนสินค้า (QTY) ในตารางบิล POS
-  //การันตีจำนวนชิ้นขั้นต่ำสุดไว้ที่ 1 ชิ้นเสมอ ไม่ปล่อยให้พนักงานลดเหลือ 0 หรือติดลบ
   const updateQty = (index: number, delta: number) => {
     const newCart = [...cart];
-    newCart[index].qty = Math.max(1, newCart[index].qty + delta);
+    const item = newCart[index];
+    const maxStock = (item as any).quantity ?? 999; 
+
+    let newQty = item.qty + delta;
+
+    // การันตีขั้นต่ำ 1 ชิ้น
+    if (newQty < 1) newQty = 1;
+
+    if (newQty > maxStock) {
+      alert(`ไม่สามารถระบุจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+      newQty = maxStock;
+    }
+
+    item.qty = newQty;
+    setCart(newCart);
+  };
+
+  // ฟังก์ชันรองรับการพิมพ์ตัวเลขจำนวนสินค้าโดยตรง (พร้อมเช็กสต็อก)
+  const handleSetQuantity = (index: number, inputValue: string | number) => {
+    const newCart = [...cart];
+    const item = newCart[index];
+    const maxStock = (item as any).quantity ?? 999; 
+
+    // ถ้าพนักงานลบจนช่องว่างเปล่า ให้เซ็ตค่าเป็น 0 ไว้ชั่วคราว
+    if (inputValue === "") {
+      item.qty = 0; 
+      setCart(newCart);
+      return;
+    }
+
+    let validQty = typeof inputValue === "string" ? parseInt(inputValue, 10) : inputValue;
+
+    // ถ้าพิมพ์ตัวแปลกๆ เข้ามา ให้เซ็ตเป็น 0 ไว้ก่อน
+    if (isNaN(validQty) || validQty < 0) {
+      validQty = 0;
+    }
+
+    // เช็กเพดานสต็อก
+    if (validQty > maxStock) {
+      alert(`ไม่สามารถระบุจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+      validQty = maxStock;
+    }
+
+    item.qty = validQty;
     setCart(newCart);
   };
 
@@ -288,6 +331,7 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps) {
     totalLineDiscount,
     handleAddProduct,
     updateQty,
+    handleSetQuantity,
     handleRemoveItem,
     handleClearAllCart,
     handleDiscountToggle,

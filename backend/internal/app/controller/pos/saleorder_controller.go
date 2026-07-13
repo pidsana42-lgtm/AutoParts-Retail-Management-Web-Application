@@ -75,3 +75,13 @@ func (ctrl *SaleController) SearchCustomerDiscount(c *gin.Context) {
 	
 	c.JSON(http.StatusOK, customers)
 }
+
+func (ctrl *SaleController) GetPaymentMethods(c *gin.Context) {
+	paymentMethods, err := ctrl.svc.GetPaymentMethods()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "เกิดข้อผิดพลาดในการดึงข้อมูลวิธีชำระเงิน: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, paymentMethods)
+}

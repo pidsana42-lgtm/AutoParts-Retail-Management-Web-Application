@@ -26,3 +26,8 @@ export interface CreateSaleOrderRequest {
   note: string;
   items: SaleOrderItemRequest[];
 }
+
+export interface PaymentMethodResponse {
+  id: number;
+  method_name: string;
+}

@@ -1,19 +1,12 @@
 import React from "react";
-import {
-  Trash2,
-  Percent,
-  QrCode,
-  CreditCard,
-  Coins,
-  Plus,
-  Minus,
-} from "lucide-react";
+import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus,} from "lucide-react";
 import Button from "../../../components/elements/button";
 import { usePosPayment } from "./hooks/usepospayment";
 import { usePosCart } from "./hooks/useposcart";
 import { CustomerCard } from "./components/customercard";
 import Text from "../../../components/elements/text";
 import { TableHead, TableHeader, TableRow } from "../../../components/elements/table";
+
 
 export default function PosPage(): React.JSX.Element {
   // ─── STATE & HOOK SETUP ───
@@ -33,6 +26,15 @@ export default function PosPage(): React.JSX.Element {
     totalItemPrice: cartHook.totalItemPrice,
     totalLineDiscount: cartHook.totalLineDiscount,
   });
+
+  const getPaymentIcon = (id: number) => {
+  switch (id) {
+    case 1: return <Coins size={18} className="mb-1" />;
+    case 2: return <QrCode size={18} className="mb-1" />;
+    case 3: return <CreditCard size={18} className="mb-1" />;
+    default: return <Coins size={18} className="mb-1" />; 
+  }
+}
 
   // ซิงค์ข้อมูลสิทธิ์ลูกค้าระหว่าง 2 Hooks แบบ Real-time
   React.useEffect(() => {
@@ -272,24 +274,37 @@ export default function PosPage(): React.JSX.Element {
                           )}
                         </td>
 
-                        {/* 🔗 [COLUMN 3]: หน่วยราคา */}
+                        {/* [COLUMN 3]: หน่วยราคา */}
                         <td className="py-4 px-4 text-right text-[#1C1B1B]  ">
                           {item.unit_price.toFixed(2)}
                         </td>
 
-                        {/* 🔗 [COLUMN 4]: QTY */}
+                        {/* [COLUMN 4]: QTY */}
                         <td className="py-4 px-4 text-center">
                           <div className="inline-flex items-center border border-gray-300 rounded-none bg-[#F6F3F2]">
                             <button
                               type="button"
                               onClick={() => cartHook.updateQty(index, -1)}
-                              className="p-1 px-2"
+                              className="p-1 px-2 cursor-pointer text-gray-600 hover:text-black"
                             >
                               <Minus size={12} />
                             </button>
-                            <span className="px-2 min-w-[20px]">
-                              {String(item.qty).padStart(2, "0")}
-                            </span>
+                            
+                            {/* ช่องกรอกตัวเลข */}
+                            <input
+                              type="number"
+                              value={item.qty === 0 ? "" : item.qty}
+                              onChange={(e) => {
+                                cartHook.handleSetQuantity(index, e.target.value);
+                              }}
+                              onBlur={(e) => {
+                                // เมื่อคลิกเมาส์ออกนอกช่อง ถ้าช่องว่างเปล่า หรือน้อยกว่า 1 ให้บังคับเป็น 1 ชิ้น
+                                if (e.target.value === "" || parseInt(e.target.value, 10) < 1) {
+                                  cartHook.handleSetQuantity(index, 1);
+                                }
+                              }}
+                              className="w-10 text-center bg-transparent border-none focus:outline-none focus:ring-0 text-sm p-0 m-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
                             <button
                               type="button"
                               onClick={() => cartHook.updateQty(index, 1)}
@@ -300,7 +315,7 @@ export default function PosPage(): React.JSX.Element {
                           </div>
                         </td>
 
-                        {/* 🔗 [COLUMN 5]: Toggle */}
+                        {/* [COLUMN 5]: Toggle */}
                         <td className="py-4 px-4 text-center">
                           <input
                             type="checkbox"
@@ -312,7 +327,7 @@ export default function PosPage(): React.JSX.Element {
                           />
                         </td>
 
-                        {/* 🔗 [COLUMN 6]: ตัวสลับหน่วยส่วนลด */}
+                        {/* [COLUMN 6]: ตัวสลับหน่วยส่วนลด */}
                         <td className="py-4 px-4 text-center">
                           {item.discount_type !== "none" ? (
                             <div className="inline-flex bg-[#F6F3F2] p-0.5 rounded-none text-xs">
@@ -336,7 +351,7 @@ export default function PosPage(): React.JSX.Element {
                           )}
                         </td>
 
-                        {/* 🔗 [COLUMN 7]: ส่วนลดราคา */}
+                        {/* [COLUMN 7]: ส่วนลดราคา */}
                         <td className="py-4 px-4 text-center">
                           {item.discount_type !== "none" ? (
                             <div className="flex flex-col items-center gap-1">
@@ -371,7 +386,7 @@ export default function PosPage(): React.JSX.Element {
                           )}
                         </td>
 
-                        {/* 🔗 [COLUMN 8]: LINE TOTAL */}
+                        {/* [COLUMN 8]: LINE TOTAL */}
                         <td className="py-4 px-4 text-right pr-6 text-zinc-900 ">
                           <div className="flex justify-end items-center gap-3">
                             <div className="text-right">
@@ -458,7 +473,7 @@ export default function PosPage(): React.JSX.Element {
                     }}
                     className={`flex flex-col items-center justify-center text-center transition-all h-10 leading-tight border text-xs ${isActive ? "bg-white border-zinc-400 text-zinc-900 shadow-sm" : "border-transparent text-gray-400 hover:text-gray-600"}`}
                   >
-                    {type.type_label.replace("ลูกค้า", "")}
+                    {type.type_label?.replace("ลูกค้า", "") || type.type_name}
                     <span className="text-[9px] block">
                       {subLabelMap[type.type_name] || type.type_name}
                     </span>
@@ -585,69 +600,77 @@ export default function PosPage(): React.JSX.Element {
           <CustomerCard customer={paymentData.customer} />
 
           {/* ตารางแจกแจงบิลสรุปราคา */}
-          <div className="space-y-3 pt-4 border-t text-sm ">
-            <div className="flex justify-between text-gray-500">
-              {/*  เปลี่ยนเป็น <Text variant="small"> */}
-              <Text variant="small" className="text-gray-500 mb-0">ราคารวมสินค้า</Text>
-              <span className=" text-zinc-900 ">
-                ฿{cartHook.totalItemPrice.toFixed(2)}
-              </span>
+          <div className="space-y-3 pt-4">
+
+            <div className="flex justify-between">
+              <Text variant="small" className="text-[#6B7280] mb-0">
+                ราคารวมสินค้า
+              </Text>
+              <Text variant="muted" className="text-[#1C1B1B] mb-0">
+                 ฿{cartHook.totalItemPrice.toFixed(2)}
+              </Text>
             </div>
-            <div className="flex justify-between text-gray-500">
-              {/*  เปลี่ยนเป็น <Text variant="small"> */}
-              <Text variant="small" className="text-gray-500 mb-0">ส่วนลดท้ายบิล</Text>
-              <span className=" text-zinc-900 ">
+            
+            <div className="flex justify-between">
+              <Text variant="small" className="text-[#6B7280] mb-0">
+                ส่วนลดท้ายบิล
+              </Text>
+              <Text variant="muted" className="text-[#1C1B1B] mb-0">
                 ฿{paymentData.computedBillDiscount.toFixed(2)}
-              </span>
+              </Text>
             </div>
-            <div className="flex justify-between text-red-600  text-base border-b border-dashed pb-2">
-              <span className="">ส่วนลดรวมทั้งสิ้น</span>
-              <span >
+
+            <div className="flex justify-between items-center text-[#E51C23] border-b border-dashed pb-2">
+              <Text variant="small" className="text-[#E51C23] mb-0">
+                ส่วนลดรวมทั้งสิ้น
+              </Text>
+              <Text variant="muted" className="text-[#E51C23] mb-0">
                 ฿{(cartHook.totalLineDiscount + paymentData.computedBillDiscount).toFixed(2)}
-              </span>
+              </Text>
             </div>
           </div>
 
           {/* ป้ายแสดงยอดชำระสุทธิป้ายใหญ่ */}
-          <div className="bg-[#1C1B1B] text-white p-5 my-5 flex justify-between items-center border border-zinc-800">
-            {/*  เปลี่ยนเป็น <Text variant="small"> */}
-            <Text variant="small" className="text-zinc-400 uppercase mb-0 tracking-wider">
+          <div className="bg-[#1C1B1B] p-5 my-5 flex justify-between items-center border border-zinc-800">
+            <Text variant="small" className="text-[#9CA3AF] uppercase mb-0 tracking-wider">
               ยอดชำระสุทธิ
             </Text>
-            <span >
+            <Text variant="muted" className="text-[#FFFFFF] text-2xl mb-0">
               ฿{paymentData.finalTotal.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
               })}
-            </span>
+            </Text>
           </div>
 
           {/* ปุ่มกดเลือกวิธีการชำระเงิน */}
           {/*  เปลี่ยนเป็น <Text variant="small"> */}
-          <Text variant="small" className="text-gray-400 mb-2 uppercase">
+          <Text variant="small" className="text-[#6B7280] uppercase">
             เลือกวิธีการชำระเงิน
           </Text>
           <div className="grid grid-cols-3 gap-2">
-            {[
-              { id: 1, label: "เงินสด", icon: <Coins size={18} className="mb-1" /> },
-              { id: 2, label: "QR CODE", icon: <QrCode size={18} className="mb-1" /> },
-              { id: 3, label: "CREDIT", icon: <CreditCard size={18} className="mb-1" /> },
-            ].map((method) => (
+            {paymentData.paymentMethods.map((method) => (
               <button
                 key={method.id}
                 onClick={() => {
+                  // เงื่อนไขล็อกเงินเชื่อของเดิม
                   if (method.id === 3) {
                     const currentActiveType = paymentData.customerTypes.find(
                       (t) => t.id === paymentData.activeTypeId,
                     );
                     if (!paymentData.customer && currentActiveType?.type_name === "GENERAL")
-                      return alert("⚠️ ลูกค้าทั่วไปไม่สามารถชำระด้วยเงินเชื่อได้");
+                      return alert("ลูกค้าทั่วไปไม่สามารถชำระด้วยเงินเชื่อได้");
                   }
                   paymentData.setPaymentMethodId(method.id);
                 }}
-                className={`flex flex-col items-center justify-center py-3 border text-xs transition-all ${paymentData.paymentMethodId === method.id ? "border-red-600 bg-white text-red-600 border-b-4 shadow-sm" : "border-gray-200 bg-[#F9FAFB] text-gray-400 hover:text-zinc-600"}`}
+                className={`flex flex-col items-center justify-center py-3 border text-xs transition-all ${
+                  paymentData.paymentMethodId === method.id
+                    ? "border-red-600 bg-white text-red-600 border-b-4 shadow-sm"
+                    : "border-gray-200 bg-[#F9FAFB] text-gray-400 hover:text-zinc-600"
+                }`}
               >
-                {method.icon}
-                <span>{method.label}</span>
+                {/*เรียกใช้ไอคอนตาม ID และดึงชื่อจาก Database */}
+                {getPaymentIcon(method.id)} 
+                <span>{method.method_name}</span>
               </button>
             ))}
           </div>

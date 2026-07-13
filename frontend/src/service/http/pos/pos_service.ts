@@ -21,6 +21,13 @@ export const posApiService = {
   /** บันทึกคำสั่งซื้อออเดอร์ขาย POS */
   createPOSOrder: (payload: CreateSaleOrderRequest): Promise<any> => 
     apiClient.post("/pos/orders", payload).then((res) => res.data),
+
+  getCustomerTypes: (): Promise<{ id: number; type_name: string }[]> => 
+    apiClient.get<{ id: number; type_name: string }[]>("/pos/customer-types").then((res) => res.data),
+
+  /** ดึงรายการวิธีชำระเงินทั้งหมด */
+  getPaymentMethods: (): Promise<{ id: number; method_name: string }[]> => 
+    apiClient.get<{ id: number; method_name: string }[]>("/pos/payment-methods").then((res) => res.data),
 };
 
 // Business Logic 
@@ -54,7 +61,7 @@ export const calculateValidatedDiscount = (
   }
 
   if (item.discount_type === "percentage") {
-    if (value > (allowedMaxDiscount + 0.01)) {
+    if (value > (allowedMaxDiscount)) {
       alert(`เกินข้อกำหนดสูงสุด (จำกัดที่ ${allowedMaxDiscount.toFixed(2)}%)`);
       return 0;
     }
@@ -65,7 +72,7 @@ export const calculateValidatedDiscount = (
     const lineTotal = itemPrice * (item.qty || 1);
     const maxDiscountBaht = (lineTotal * allowedMaxDiscount) / 100;
 
-    if (value > (maxDiscountBaht + 0.01)) {
+    if (value > (maxDiscountBaht)) {
       alert(`เกินข้อกำหนดสูงสุด (จำกัดที่ ฿${maxDiscountBaht.toFixed(2)})`);
       return 0;
     }
