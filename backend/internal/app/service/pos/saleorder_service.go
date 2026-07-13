@@ -8,6 +8,7 @@ import (
     posRepo "backend/internal/app/repository/pos"
     productRepo "backend/internal/app/repository/pos"
 	customerDto "backend/internal/app/dto/customer"
+    
     "errors"
     "fmt"
     "gorm.io/gorm"
@@ -18,6 +19,7 @@ type SaleService interface {
     CreatePOSOrder(req *pos.CreateSaleOrderRequest) error
     GetCustomerTypes() ([]entity.CustomerType, error)
     SearchCustomers(searchQuery string) ([]customerDto.CustomerResponse, error)
+    GetPaymentMethods() ([]pos.PaymentMethodResponse, error)
 }
 
 type saleService struct {
@@ -373,4 +375,12 @@ func (s *saleService) SearchCustomers(searchQuery string) ([]customerDto.Custome
         return nil, err
     }
     return customerDto.ToCustomerListResponse(customers), nil
+}
+
+func (s *saleService) GetPaymentMethods() ([]pos.PaymentMethodResponse, error) {
+    methods, err := s.repo.GetPaymentMethods()
+    if err != nil {
+        return nil, err
+    }
+    return pos.ToPaymentMethodResponseList(methods), nil
 }

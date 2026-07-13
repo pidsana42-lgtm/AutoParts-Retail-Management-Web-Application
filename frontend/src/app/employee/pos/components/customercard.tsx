@@ -1,6 +1,7 @@
 import React from "react";
 import type { CustomerDiscountResponse } from "../../../../interface/pos/customer_interface";
-
+import Text from "../../../../components/elements/text";
+import { BadgeCheck } from "lucide-react";
 // กำหนดพร็อพเพอร์ตี้ (Props) ที่ Component นี้ต้องการรับจากหน้าหลัก
 interface CustomerCardProps {
   customer: CustomerDiscountResponse | null; // รับข้อมูลลูกค้า ถ้าไม่มี (null) แปลว่าเป็นลูกค้ารายย่อยทั่วไป
@@ -18,23 +19,23 @@ export function CustomerCard({ customer }: CustomerCardProps): React.JSX.Element
       {/* ─── ส่วนที่ 1: ชื่อลูกค้า และ ป้ายสถานะระดับราคา (Header Section) ─── */}
       <div className="flex justify-between items-start">
         <div>
-          <h3 className="text-xl tracking-tight text-white">
+          <Text variant="lead" className= "mb-0 leading-tight text-white">
             {customer?.customer_name || "ลูกค้าทั่วไป (หน้าร้าน)"}
-          </h3>
-          <p className="text-xs text-zinc-400 mt-0.5">
+          </Text>
+          <Text variant="xs" className= "mb-0 leading-tight text-[#9CA3AF]">
             โทร: {customer?.phone_number || "ลูกค้าทั่วไป (ไม่ระบุ)"}
-          </p>
+          </Text>
         </div>
         
         {/* ป้ายระดับราคาพิเศษ */}
-        <div className="bg-[#2E6B20] text-white text-[10px] px-2.5 py-1 select-none uppercase tracking-wide">
+        <div className="bg-[#006E0A] text-white text-[10px] px-2.5 py-1 select-none uppercase tracking-wide">
           {!isGuest && customer?.is_discount_enabled ? "ระดับราคาพิเศษ" : "ระดับราคามาตรฐาน"}
         </div>
       </div>
 
       {/* ─── ส่วนที่ 2: แถบเปอร์เซ็นต์แสดงการใช้เครดิต (Credit Progress Bar) ─── */}
       <div className="mt-4">
-        <div className="flex justify-between items-center text-[11px] text-zinc-400 mb-1">
+        <div className="flex justify-between items-center text-[11px] text-[#9CA3AF] font-light mb-1">
           <span>การใช้เครดิตในระดับราคานี้</span>
           {/* สูตรคำนวณหา % เครดิตที่ใช้ไป: (หนี้ปัจจุบัน / วงเงินสูงสุด) * 100 */}
           <span className=" text-white ">
@@ -58,22 +59,33 @@ export function CustomerCard({ customer }: CustomerCardProps): React.JSX.Element
         
         {/* กล่องซ้าย: ยอดหนี้ค้างชำระปัจจุบัน (Current Debt) */}
         <div className="bg-[#262525] p-3 border border-zinc-800/40">
-          <p className="text-[10px] text-zinc-500  uppercase tracking-wider">ยอดคงเหลือปัจจุบัน</p>
-          <p className="text-base  mt-1 text-zinc-300">
+          <Text variant="xs" className="mb-0 text-[10px] text-zinc-500 font-light uppercase tracking-wider">
+            ยอดคงเหลือปัจจุบัน
+          </Text>
+          <Text variant="body" className="mb-0 mt-1 text-base text-zinc-300">
             ฿{customer && customer.current_debt_amount ? customer.current_debt_amount.toFixed(2) : "0.00"}
-          </p>
+          </Text>
         </div>
         
         {/* กล่องขวา: จำนวนเงินวงเงินเครดิตที่ยังสามารถติดหนี้เพิ่มได้ (Remaining Credit) */}
         <div className="bg-[#262525] p-3 border border-zinc-800/40">
-          <p className="text-[10px] text-zinc-500  uppercase tracking-wider">เครดิตคงเหลือ</p>
-          <p className="text-base  mt-1 text-zinc-300">
+          <Text variant="xs" className="mb-0 text-[10px] text-zinc-500 font-light uppercase tracking-wider">
+            เครดิตคงเหลือ
+          </Text>
+          <Text variant="body" className="mb-0 mt-1 text-base text-zinc-300 ">
             {/* สูตรคำนวณหาเครดิตเหลือ: วงเงินสูงสุด - หนี้ปัจจุบัน */}
             ฿{customer && customer.max_credit_limit ? (customer.max_credit_limit - customer.current_debt_amount).toFixed(2) : "0.00"}
-          </p>
+          </Text>
+        </div>
+      </div>
+
+        <div className="mt-4 pl-1 flex items-center gap-1.5">
+            <BadgeCheck className="w-3.5 h-3.5 text-zinc-400" strokeWidth={2}/>
+            <Text variant="xs" className="mb-0 text-zinc-400 font-extralight tracking-wider whitespace-nowrap">
+              วงเงินเครดิต: ฿{customer && customer.max_credit_limit ? customer.max_credit_limit.toFixed(2) : "0.00"}
+            </Text>
         </div>
 
-      </div>
     </div>
   );
 }

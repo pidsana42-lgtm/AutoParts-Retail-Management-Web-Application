@@ -4,10 +4,11 @@ import { posApiService } from "../../../../service/http/pos/pos_service";
 import type { CustomerDiscountResponse, CustomerTypeInterface } from "../../../../interface/pos/customer_interface";
 import type { StoreConfigInterface } from "../../../../interface/pos/store_config_interface";
 import type { SaleOrderItemRequest, CreateSaleOrderRequest } from "../../../../interface/pos/pos_interface";
+import type { CartItem } from "./useposcart";
 
 interface UsePosPaymentProps {
-  cart: SaleOrderItemRequest[];
-  setCart: (cart: SaleOrderItemRequest[]) => void;
+  cart: CartItem[];
+  setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
   totalItemPrice: number;
   totalLineDiscount: number;
 }
@@ -27,13 +28,18 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const [storeConfig, setStoreConfig] = useState<StoreConfigInterface | null>(null); // ค่าตั้งค่านโยบายของร้าน (เช่น เพดานส่วนลด)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false); // สถานะกำลังส่งบันทึกบิลไปยังหลังบ้าน (ป้องกันกดเบิ้ล)
   const [searchResults, setSearchResults] = useState<CustomerDiscountResponse[]>([]); // ผลลัพธ์การค้นหาลูกค้าสมาชิกจาก API
+  const [paymentMethods, setPaymentMethods] = useState<{ id: number; method_name: string }[]>([]); // รายการวิธีชำระเงินที่ดึงจากหลังบ้าน
 
   // INITIAL FETCH EFFECTS
   // ดึงข้อมูลประเภทลูกค้าและนโยบายร้านค้าจากหลังบ้านมาเตรียมไว้ตั้งแต่เปิดหน้าเว็บ
   useEffect(() => {
-    apiClient.get<CustomerTypeInterface[]>("/pos/customer-types")
-      .then((res) => setCustomerTypes(res.data))
-      .catch((err) => console.error("ดึงข้อมูลประเภทลูกค้าล้มเหลว:", err));
+    posApiService.getCustomerTypes()
+      .then((data) => setCustomerTypes(data))
+      .catch((err) => console.error("ดึงประเภทลูกค้าล้มเหลว:", err));
+
+    posApiService.getPaymentMethods()
+      .then((data) => setPaymentMethods(data))
+      .catch((err) => console.error("ดึงข้อมูลวิธีชำระเงินล้มเหลว:", err));
 
     posApiService.getStoreConfig()
       .then((data) => setStoreConfig(data))
@@ -162,28 +168,34 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     // ดึงเพดานส่วนลดสูงสุดท้ายบิลจากนโยบายร้าน (นับเป็น %) เช่น ห้ามเกิน 6%
     const maxExtraConfigRate = storeConfig?.max_extra_discount_rate ?? 6.0;
     const remainingAfterLineDiscount = totalItemPrice - totalLineDiscount;
+    
+    // คำนวณเพดานสูงสุดเป็น "บาท" ไว้รอก่อนเลย
+    const maxDiscountBaht = (remainingAfterLineDiscount * maxExtraConfigRate) / 100;
 
-    // แปลงค่าเงินที่พิมพ์เข้ามาให้กลายเป็นหน่วยเปอร์เซ็นต์ (%) เพื่อไปตรวจสอบกับนโยบายร้าน
-    let inputAmountInPercent = 0;
+    // ตัวแปรเช็กว่าเกินเพดานไหม
+    let isExceed = false;
+
     if (billDiscountType === "percentage") {
-      inputAmountInPercent = inputValue;
+      if (inputValue > maxExtraConfigRate) isExceed = true;
     } else if (billDiscountType === "amount" && remainingAfterLineDiscount > 0) {
-      inputAmountInPercent = (inputValue / remainingAfterLineDiscount) * 100;
+      if (inputValue > maxDiscountBaht) isExceed = true;
     }
 
-    // ตรวจเช็คว่าค่าที่พนักงานพยายามกรอก เกินเพดานนโยบายร้านค้าหรือไม่
-    if (inputAmountInPercent > maxExtraConfigRate + 0.01) {
-      alert("ส่วนลดท้ายบิลเกินนโยบายร้านค้า");
-      setBillDiscountValue(0); // ดีดกลับเป็น 0 เพื่อความปลอดภัย
+    if (isExceed) {
+      alert(
+        `ส่วนลดท้ายบิลเกินนโยบายร้านค้า\n\nระบบอนุญาตให้ลดสูงสุดไม่เกิน:\n• ${maxExtraConfigRate}% ของยอดรวม\n• หรือไม่เกิน ฿${maxDiscountBaht.toFixed(2)}`
+      );
+      setBillDiscountValue(0);
       return;
     }
+    
     setBillDiscountValue(inputValue);
   };
 
   // ฟังก์ชันปิดยอดขาย บันทึกออเดอร์ลงฐานข้อมูล
   // ทำหน้าที่คำนวณกระจายน้ำหนักส่วนลดท้ายบิลเฉลี่ยลงรายไอเทม (Pro-rata Weight) เพื่อรองรับงานรับคืนสินค้า (Refund) 
   // และยิงเซฟ Payload ไปที่ Backend พร้อมล้างค่าหน้าร้านทั้งหมดเมื่อทำรายการสำเร็จ
-  const handleConfirmSale = async (currentCart?: SaleOrderItemRequest[]) => {
+  const handleConfirmSale = async (currentCart?: CartItem[]) => {
     // ป้องกันบั๊ก Data-linkage โดยเลือกดึงตะกร้าล่าสุดที่ส่งตรงมาจากหน้า UI
     const targetCart = currentCart || cart;
     
@@ -273,6 +285,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   // ส่งข้อมูลตัวแปรและฟังก์ชันจัดการบิลชำระเงินทั้งหมดออกไปให้หน้า UI คอมโพเนนต์เรียกใช้งาน
   return {
     customer, setCustomer,
+    paymentMethods, setPaymentMethods,
     searchCustomerQuery, setSearchCustomerQuery,
     setTempPhone, tempPhone, //ส่งออกไปให้หน้า UI คอมโพเนนต์เรียกใช้งาน
     searchResults, setSearchResults,
