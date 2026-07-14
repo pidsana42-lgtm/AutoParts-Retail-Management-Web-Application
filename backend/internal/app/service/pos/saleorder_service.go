@@ -16,7 +16,7 @@ import (
 )
 
 type SaleService interface {
-    CreatePOSOrder(req *pos.CreateSaleOrderRequest) error
+CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uint) error
     GetCustomerTypes() ([]entity.CustomerType, error)
     SearchCustomers(searchQuery string) ([]customerDto.CustomerResponse, error)
     GetPaymentMethods() ([]pos.PaymentMethodResponse, error)
@@ -36,7 +36,7 @@ func NewSaleService(repo posRepo.SaleRepository, cRepo customerRepo.CustomerRepo
     }
 }
 
-func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest) error {
+func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uint) error {
     // -------------------------------------------------------------------------
     // [เตรียมระบบฐานข้อมูลและดึงข้อมูลตั้งต้น]
     // -------------------------------------------------------------------------
@@ -325,7 +325,22 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest) error {
         return err
     }
 
-    // สั่ง "Commit" เพื่อแกะครั่งปิดผนึกท่อ Transaction บันทึกข้อมูลลงฮาร์ดดิสก์แบบถาวรชั่วลูกชั่วหลาน
+    // 10. สร้าง Entity สำหรับบันทึกข้อมูลการชำระเงิน (Payment) ของบิลนี้
+    now := time.Now()
+    payment := &entity.Payment{
+        OrderID:         order.ID, // ตรงนี้จะถูกต้องแล้วเพราะ order.ID ถูกใส่ค่าให้แล้ว
+        PaymentMethodID: req.PaymentMethodID,
+        Amount:          paidAmount,
+        PaidAt:          &now, 
+        ReceivedByID:    userID,
+    }
+
+    if err := tx.Create(payment).Error; err != nil {
+        tx.Rollback()
+        return fmt.Errorf("บันทึกข้อมูลการชำระเงินล้มเหลว: %v", err)
+    }
+
+    // 11. ทำการ Commit
     if err := tx.Commit().Error; err != nil {
         tx.Rollback()
         return fmt.Errorf("Commit Error: %v", err)
