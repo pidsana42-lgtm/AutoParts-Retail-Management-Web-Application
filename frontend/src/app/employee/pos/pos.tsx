@@ -679,7 +679,7 @@ export default function PosPage(): React.JSX.Element {
         <Button
           onClick={(e) => {
             e.preventDefault();
-            paymentData.handleConfirmSale(cartHook.cart);
+            paymentData.handleOpenPaymentModal();
           }}
           variant="primary"
           size="lg"
@@ -688,6 +688,110 @@ export default function PosPage(): React.JSX.Element {
         >
           ยืนยันการขาย
         </Button>
+
+        {/* ================= PAYMENT MODAL ( ================= */}
+        {paymentData.isPaymentModalOpen && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-none">
+            <div className="bg-white w-full max-w-xl rounded-none shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+              
+              {/* Header */}
+              <div className="bg-[#1C1B1B] px-6 py-4 flex justify-between items-center">
+                <Text variant="lead" className="text-white mb-0 font-medium">
+                  ชำระเงิน ({paymentData.paymentMethodId === 1 ? "เงินสด" : paymentData.paymentMethodId === 2 ? "QR CODE" : "เงินเชื่อ"})
+                </Text>
+                <button 
+                  onClick={() => paymentData.setIsPaymentModalOpen(false)} 
+                  className="text-[#9CA3AF] hover:text-white text-xl"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* 2. Body */}
+              <div className="p-6 space-y-4">
+                
+                {/* ข้อมูลลูกค้า (ปรับให้เป็นกรอบขีดซ้าย) */}
+                <div className="flex justify-between items-start border-l-3 border-[#5D3F3C] bg-[#F6F3F2]/50 pl-4 py-3 my-4">
+                  <div className="text-xs">
+                    <p className="text-[#1C1B1B] mb-0.5">ลูกค้า:</p>
+                    <p className="text-[#1C1B1B] font-medium text-sm">{paymentData.customer?.customer_name || "ลูกค้าขาจร"}</p>
+                  </div>
+                  <div className="text-right text-xs mr-2">
+                    <p className="text-[#1C1B1B] mb-0.5">ประเภท:</p>
+                    <p className="text-[#E51C23] ">{paymentData.customer?.customer_type?.type_label || "ทั่วไป"}</p>
+                  </div>
+                </div>
+
+                {/* ยอดสรุป (จัดวางเหมือนเดิม) */}
+                <div className="bg-[#F6F3F2]/50 p-4 space-y-2  border border-[#E7BDB8]/50">
+                  <div className="flex justify-between">
+                    <Text variant="xs" className="text-[#1C1B1B]">ราคารวมสินค้า</Text>
+                    <Text variant="xs" className="text-[#1C1B1B]">{paymentData.totalItemPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท </Text>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <Text variant="xs" className="text-[#1C1B1B]"> ส่วนลดท้ายบิล {paymentData.billDiscountType === 'percentage' ? `(${paymentData.billDiscountValue}%)` : ''} </Text>
+                    <Text variant="xs" className="text-[#1C1B1B]">{paymentData.computedBillDiscount.toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท </Text>
+                  </div>
+
+                  <div className="flex justify-between text-[#259B24]">
+                    <span>ส่วนลดรวมทั้งสิ้น</span>
+                    <span>-{(paymentData.totalItemPrice - paymentData.finalTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-base border-t pt-2 border-[#E7BDB8]/50">
+                    <span>ยอดชำระสุทธิ</span>
+                    <span>{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท</span>
+                  </div>
+                </div>
+
+                {/* 3. ส่วนเนื้อหาเฉพาะ */}
+                {paymentData.paymentMethodId === 1 && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="border border-gray-200 p-4 bg-white"><p className="text-xs text-gray-500 uppercase">ยอดชำระสุทธิ</p><p className="text-2xl font-bold">{paymentData.finalTotal.toFixed(2)}</p></div>
+                      <div className="border border-gray-200 p-4 bg-green-50"><p className="text-xs text-green-700 uppercase">ยอดเงินทอน</p><p className="text-2xl font-bold text-green-600">{Math.max(0, paymentData.receivedAmount - paymentData.finalTotal).toFixed(2)}</p></div>
+                    </div>
+                    <div>
+                      <p className="text-sm mb-2">รับเงินมา</p>
+                      <input type="number" className="w-full text-2xl font-bold border-b-2 outline-none p-1 border-gray-300 focus:border-red-600" value={paymentData.receivedAmount || ""} onChange={(e) => paymentData.setReceivedAmount(Number(e.target.value))} />
+                    </div>
+                  </div>
+                )}
+
+                {paymentData.paymentMethodId === 2 && (
+                  <div className="flex flex-col items-center py-4">
+                    <div className="w-48 h-48 border p-2 bg-gray-100 flex items-center justify-center">
+                      <QrCode size={120} className="text-gray-400" /> 
+                    </div>
+                    <p className="mt-4 font-medium text-gray-700">บจก. พี.เค. อะไหล่ยนต์</p>
+                    <p className="text-sm text-gray-500">สแกนเพื่อชำระเงินด้วย QR CODE</p>
+                  </div>
+                )}
+
+                {paymentData.paymentMethodId === 3 && (
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 p-4 border border-blue-200 rounded">
+                      <p className="text-sm text-blue-800 font-medium">เครดิตคงเหลือ: <span className="font-bold text-lg">{paymentData.customer?.max_credit_limit?.toLocaleString() || "0"} บาท</span></p>
+                    </div>
+                    <div>
+                      <p className="text-sm mb-2 font-medium">ระบุชื่อผู้รับของ / ผู้สั่งซื้อ</p>
+                      <input type="text" className="w-full border-b border-gray-300 outline-none p-2 focus:border-red-600" placeholder="ระบุชื่อ..." value={paymentData.receiverName} onChange={(e) => paymentData.setReceiverName(e.target.value)} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Footer */}
+              <div className="flex p-6 gap-4 border-t bg-gray-50">
+                <button onClick={() => paymentData.setIsPaymentModalOpen(false)} className="flex-1 py-3 bg-gray-200 font-medium rounded hover:bg-gray-300 transition-colors">ยกเลิก</button>
+                <button onClick={() => paymentData.submitOrderToDatabase()} className="flex-1 py-3 bg-[#E51C23] text-white font-medium rounded hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                  ยืนยันและพิมพ์ใบเสร็จ
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

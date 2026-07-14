@@ -27,6 +27,9 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const [billDiscountType, setBillDiscountType] = useState<"none" | "percentage" | "amount">("none"); // ประเภทส่วนลดท้ายบิล (ลดเป็นบาท/%)
   const [storeConfig, setStoreConfig] = useState<StoreConfigInterface | null>(null); // ค่าตั้งค่านโยบายของร้าน (เช่น เพดานส่วนลด)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false); // สถานะกำลังส่งบันทึกบิลไปยังหลังบ้าน (ป้องกันกดเบิ้ล)
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
+  const [receivedAmount, setReceivedAmount] = useState<number>(0); // ยอดเงินที่รับมาจากลูกค้า
+  const [receiverName, setReceiverName] = useState<string>(""); // ชื่อผู้รับของ (กรณีเงินเชื่อ)
   const [searchResults, setSearchResults] = useState<CustomerDiscountResponse[]>([]); // ผลลัพธ์การค้นหาลูกค้าสมาชิกจาก API
   const [paymentMethods, setPaymentMethods] = useState<{ id: number; method_name: string }[]>([]); // รายการวิธีชำระเงินที่ดึงจากหลังบ้าน
 
@@ -195,7 +198,17 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   // ฟังก์ชันปิดยอดขาย บันทึกออเดอร์ลงฐานข้อมูล
   // ทำหน้าที่คำนวณกระจายน้ำหนักส่วนลดท้ายบิลเฉลี่ยลงรายไอเทม (Pro-rata Weight) เพื่อรองรับงานรับคืนสินค้า (Refund) 
   // และยิงเซฟ Payload ไปที่ Backend พร้อมล้างค่าหน้าร้านทั้งหมดเมื่อทำรายการสำเร็จ
-  const handleConfirmSale = async (currentCart?: CartItem[]) => {
+  const handleOpenPaymentModal = () => {
+    if (cart.length === 0) return alert("กรุณาเลือกสินค้าลงตะกร้า");
+    if (!customer) return alert("กรุณาเลือกบัญชีลูกค้าก่อนครับ");
+    
+    // ตั้งค่าเริ่มต้นของช่อง "รับเงินมา" ให้เท่ากับยอดชำระสุทธิพอดี (พนักงานจะได้ไม่ต้องพิมพ์เองถ้ารับพอดี)
+    setReceivedAmount(finalTotal);
+    setIsPaymentModalOpen(true); 
+  };
+
+
+  const submitOrderToDatabase = async (currentCart?: CartItem[]) => {
     // ป้องกันบั๊ก Data-linkage โดยเลือกดึงตะกร้าล่าสุดที่ส่งตรงมาจากหน้า UI
     const targetCart = currentCart || cart;
     
@@ -269,6 +282,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       setSearchCustomerQuery("");
       setTempPhone(""); // ล้างเบอร์โทรชั่วคราวของลูกค้าขาจร
       setSearchResults([]);
+      setIsPaymentModalOpen(false);
+      setReceivedAmount(0);
+      setReceiverName("");
+
     } catch (error: any) {
       alert(error.response?.data?.error || "เกิดปัญหาที่ระบบหลังบ้าน");
     } finally {
@@ -297,7 +314,13 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     billDiscountType, setBillDiscountType,
     isSubmitting, computedBillDiscount, finalTotal,
     totalItemPrice, totalLineDiscount, 
-    handleSearchCustomer, handleBillDiscountChange, handleConfirmSale,
-    resetBillDiscount
+    submitOrderToDatabase,
+    handleOpenPaymentModal, 
+    resetBillDiscount,
+    isPaymentModalOpen, setIsPaymentModalOpen,
+    receivedAmount, setReceivedAmount,
+    receiverName, setReceiverName,
+    handleSearchCustomer,      
+    handleBillDiscountChange,
   };
 }
