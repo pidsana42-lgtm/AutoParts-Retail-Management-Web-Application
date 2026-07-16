@@ -6,7 +6,7 @@ import { usePosCart } from "./hooks/useposcart";
 import { CustomerCard } from "./components/customercard";
 import Text from "../../../components/elements/text";
 import { TableHead, TableHeader, TableRow } from "../../../components/elements/table";
-
+import Input from "../../../components/elements/input";
 
 export default function PosPage(): React.JSX.Element {
   // ─── STATE & HOOK SETUP ───
@@ -102,10 +102,10 @@ export default function PosPage(): React.JSX.Element {
               </div>
               <div className="relative flex items-center gap-2 w-full max-w-xs mt-2.5">
                 <div className="relative w-full">
-                  <span className="absolute left-3 top-2.5 text-xs text-zinc-500 select-none ">
+                  <span className="absolute left-3 top-2.5 text-xs text-[#6B7280] select-none z-15">
                     {paymentData.billDiscountType === "percentage" ? "%" : "฿"}
                   </span>
-                  <input
+                  <Input 
                     type="number"
                     value={
                       paymentData.billDiscountValue === 0
@@ -116,10 +116,10 @@ export default function PosPage(): React.JSX.Element {
                       paymentData.handleBillDiscountChange(e.target.value)
                     }
                     disabled={paymentData.billDiscountType === "none"}
-                    className={`w-full px-3 py-2 pl-10 text-sm focus:outline-none focus:border-red-500 transition-colors ${
+                    className={`h-9 pl-9 text-sm  rounded-none border transition-colors focus:outline-none ${
                       paymentData.billDiscountType === "none"
-                        ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"
-                        : "bg-[#2A2929] text-white "
+                        ? "!bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"
+                        : "!bg-[#2A2929] text-white "
                     }`}
                     placeholder={
                       paymentData.billDiscountType === "none"
@@ -692,7 +692,7 @@ export default function PosPage(): React.JSX.Element {
         {/* ================= PAYMENT MODAL ( ================= */}
         {paymentData.isPaymentModalOpen && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-none">
-            <div className="bg-white w-full max-w-xl rounded-none shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+            <div className="bg-[#FCF9F8] w-full max-w-xl rounded-none shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
               
               {/* Header */}
               <div className="bg-[#1C1B1B] px-6 py-4 flex justify-between items-center">
@@ -711,7 +711,7 @@ export default function PosPage(): React.JSX.Element {
               <div className="p-6 space-y-4">
                 
                 {/* ข้อมูลลูกค้า (ปรับให้เป็นกรอบขีดซ้าย) */}
-                <div className="flex justify-between items-start border-l-3 border-[#5D3F3C] bg-[#F6F3F2]/50 pl-4 py-3 my-4">
+                <div className="flex justify-between items-start border-l-3 border-[#5D3F3C] bg-[#F6F3F2] pl-4 py-3 my-4">
                   <div className="text-xs">
                     <p className="text-[#1C1B1B] mb-0.5">ลูกค้า:</p>
                     <p className="text-[#1C1B1B] font-medium text-sm">{paymentData.customer?.customer_name || "ลูกค้าขาจร"}</p>
@@ -722,7 +722,7 @@ export default function PosPage(): React.JSX.Element {
                   </div>
                 </div>
 
-                {/* ยอดสรุป (จัดวางเหมือนเดิม) */}
+                {/* ยอดสรุป */}
                 <div className="bg-[#F6F3F2]/50 p-4 space-y-2  border border-[#E7BDB8]/50">
                   <div className="flex justify-between">
                     <Text variant="xs" className="text-[#1C1B1B]">ราคารวมสินค้า</Text>
@@ -734,26 +734,81 @@ export default function PosPage(): React.JSX.Element {
                     <Text variant="xs" className="text-[#1C1B1B]">{paymentData.computedBillDiscount.toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท </Text>
                   </div>
 
-                  <div className="flex justify-between text-[#259B24]">
-                    <span>ส่วนลดรวมทั้งสิ้น</span>
-                    <span>-{(paymentData.totalItemPrice - paymentData.finalTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท</span>
+                  <div className="flex justify-between">
+                    <Text variant="xs" className="text-[#259B24]">ส่วนลดรวมทั้งสิ้น</Text>
+                    <Text variant="xs" className="text-[#259B24]">-{(paymentData.totalItemPrice - paymentData.finalTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท</Text>
                   </div>
-                  <div className="flex justify-between font-bold text-base border-t pt-2 border-[#E7BDB8]/50">
-                    <span>ยอดชำระสุทธิ</span>
-                    <span>{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท</span>
+
+                  <div className="flex justify-between border-t pt-2 border-[#E7BDB8]/50">
+                    <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">ยอดชำระสุทธิ</Text>
+                    <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท</Text>
                   </div>
                 </div>
 
                 {/* 3. ส่วนเนื้อหาเฉพาะ */}
+                {/* เงินสด ยอดชำระสุทธิ และ ยอดเงินทอน */}
                 {paymentData.paymentMethodId === 1 && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="border border-gray-200 p-4 bg-white"><p className="text-xs text-gray-500 uppercase">ยอดชำระสุทธิ</p><p className="text-2xl font-bold">{paymentData.finalTotal.toFixed(2)}</p></div>
-                      <div className="border border-gray-200 p-4 bg-green-50"><p className="text-xs text-green-700 uppercase">ยอดเงินทอน</p><p className="text-2xl font-bold text-green-600">{Math.max(0, paymentData.receivedAmount - paymentData.finalTotal).toFixed(2)}</p></div>
+                      <div className="border-l-3 border-[#E51C23] p-4 bg-[#F0EDEC]">
+                        <Text variant="xs" className="text-[#5F5E5E]">ยอดชำระสุทธิ</Text>
+                        <div className="flex justify-between items-baseline mt-2">
+                          <Text variant="fourxl">{paymentData.finalTotal.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </Text>
+                          <Text variant="xs" className="text-[#1C1B1B]">บาท</Text>
+                        </div>
+                      </div>
+
+                      <div className="border-l-3 border-[#006E0A] p-4 bg-[#86F976]/20">
+                        <Text variant="xs" className="text-[#259B24]">ยอดเงินทอน</Text>
+                        <div className="flex justify-between items-baseline mt-2">
+                          <Text variant="fourxl" className={`text-[#259B24] truncate ${
+                              // ถ้าตัวเลขเกินหลายหลัก ให้ลดขนาดลงเหลือ 2xl
+                              Math.max(0, paymentData.receivedAmount - paymentData.finalTotal) > 999999 
+                                ? "text-2xl" 
+                                : "text-4xl"
+                            }`}
+                          >
+                            {Math.max(0, paymentData.receivedAmount - paymentData.finalTotal).toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </Text>
+                          <Text variant="xs" className="text-[#259B24]">บาท</Text>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm mb-2">รับเงินมา</p>
-                      <input type="number" className="w-full text-2xl font-bold border-b-2 outline-none p-1 border-gray-300 focus:border-red-600" value={paymentData.receivedAmount || ""} onChange={(e) => paymentData.setReceivedAmount(Number(e.target.value))} />
+
+                    <div className="flex flex-col gap-1.5">
+                      <Text variant="xs" className="text-[#1C1B1B] font-medium">รับเงินมา</Text>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-baseline justify-between w-full px-4 py-4 bg-white border-b-2 border-[#E7BDB8]">
+                          <Input 
+                            type="text" 
+                            inputMode="decimal"
+                            className="w-full text-4xl text-[#1C1B1B] font-semibold bg-transparent border-none focus:outline-none [appearance:textfield]"
+                            value={paymentData.displayValue || ""} 
+                            onChange={(e) => paymentData.handleReceivedAmountChange(e.target.value)}
+                            onBlur={() => {paymentData.handleReceivedAmountBlur();
+                              const formatted = paymentData.receivedAmount.toLocaleString('en-US', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              });
+                              paymentData.setDisplayValue(formatted);
+                            }}
+                            onFocus={paymentData.handleReceivedAmountFocus}
+                            placeholder="0.00"
+                          />
+                          <Text variant="xs" className="text-[#1C1B1B] ml-2 font-medium">บาท</Text>
+                        </div>
+                        <div className="flex items-center justify-between w-full px-4 py-6 border-b-1 border-[#E7BDB8]">
+                        </div>
+                      </div>
+
                     </div>
                   </div>
                 )}

@@ -32,6 +32,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const [receiverName, setReceiverName] = useState<string>(""); // ชื่อผู้รับของ (กรณีเงินเชื่อ)
   const [searchResults, setSearchResults] = useState<CustomerDiscountResponse[]>([]); // ผลลัพธ์การค้นหาลูกค้าสมาชิกจาก API
   const [paymentMethods, setPaymentMethods] = useState<{ id: number; method_name: string }[]>([]); // รายการวิธีชำระเงินที่ดึงจากหลังบ้าน
+  const [displayValue, setDisplayValue] = useState<string>(""); // ค่าที่ใช้แสดงผลในช่องรับเงินสด (รับเงินมา) เพื่อให้รองรับการพิมพ์ตัวอักษรและเครื่องหมายพิเศษได้
 
   // INITIAL FETCH EFFECTS
   // ดึงข้อมูลประเภทลูกค้าและนโยบายร้านค้าจากหลังบ้านมาเตรียมไว้ตั้งแต่เปิดหน้าเว็บ
@@ -67,6 +68,13 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     const total = totalItemPrice - totalLineDiscount - computedBillDiscount;
     return total < 0 ? 0 : total; // ถ้ายอดติดลบ ให้ปัดเป็น 0 บาทเพื่อความปลอดภัย
   }, [totalItemPrice, totalLineDiscount, computedBillDiscount]);
+
+  //[useMemo]: คำนวณเงินทอน (Change) ที่ต้องคืนลูกค้า (ถ้าเป็นเงินสด)
+  // สูตร: (เงินที่รับมา) - (ยอดชำระสุทธิ)
+  const change = useMemo(() => {
+  const result = receivedAmount - finalTotal;
+  return result > 0 ? result : 0;
+  }, [receivedAmount, finalTotal]);
 
 
   // ─── CORE FUNCTIONS (Event Handlers) ───
@@ -203,10 +211,38 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     if (!customer) return alert("กรุณาเลือกบัญชีลูกค้าก่อนครับ");
     
     // ตั้งค่าเริ่มต้นของช่อง "รับเงินมา" ให้เท่ากับยอดชำระสุทธิพอดี (พนักงานจะได้ไม่ต้องพิมพ์เองถ้ารับพอดี)
-    setReceivedAmount(finalTotal);
+    setReceivedAmount(0);
     setIsPaymentModalOpen(true); 
   };
 
+  // ฟังก์ชันจัดการการเปลี่ยนแปลงของช่อง "รับเงินมา" (Received Amount) ให้รองรับการพิมพ์ตัวอักษรและเครื่องหมายพิเศษได้
+  // 1. ตอนพิมพ์ (onChange): เก็บค่าเป็นเลขดิบๆ ให้พนักงานพิมพ์สะดวก
+  const handleReceivedAmountChange = (value: string) => {
+    // ตัดคอมม่าออกก่อนเพื่อเอาค่าดิบไปคำนวณ
+    const rawValue = value.replace(/,/g, "").replace(/[^0-9.]/g, "");
+    if ((rawValue.match(/\./g) || []).length > 1) return;
+    
+    setDisplayValue(value.replace(/[^0-9.]/g, "")); // โชว์ในช่อง Input แบบไม่มีคอมม่าตอนพิมพ์
+    setReceivedAmount(rawValue === "" ? 0 : Number(rawValue));
+  };
+
+  // 2. ตอนกดออก (onBlur): ค่อยจัด Format ให้มีคอมม่าและทศนิยม
+  const handleReceivedAmountBlur = () => {
+    const rounded = Number(receivedAmount.toFixed(2));
+    setReceivedAmount(rounded);
+    
+    // จัด Format ใส่คอมม่าที่นี่
+    const formatted = rounded.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    setDisplayValue(formatted);
+  };
+
+  const handleReceivedAmountFocus = () => {
+  // เวลาคลิกช่อง ให้เอาค่าดิบมาโชว์ (ลบคอมม่าออก)
+  setDisplayValue(receivedAmount === 0 ? "" : receivedAmount.toString());
+  };
 
   const submitOrderToDatabase = async (currentCart?: CartItem[]) => {
     // ป้องกันบั๊ก Data-linkage โดยเลือกดึงตะกร้าล่าสุดที่ส่งตรงมาจากหน้า UI
@@ -322,5 +358,8 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     receiverName, setReceiverName,
     handleSearchCustomer,      
     handleBillDiscountChange,
+    change, handleReceivedAmountBlur,
+    displayValue, setDisplayValue, handleReceivedAmountChange,
+    handleReceivedAmountFocus,
   };
 }
