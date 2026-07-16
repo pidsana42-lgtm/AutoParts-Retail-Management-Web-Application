@@ -10,6 +10,7 @@ const textVariants = cva("", {
       small: "text-sm text-gray-600 font-normal mb-2",
       muted: "text-base text-gray-500 font-normal leading-relaxed mb-4",
       xs:    "text-xs font-normal text-gray-500 mb-0 subpixel-antialiased",
+      fourxl:  "text-4xl font-semibold text-[#1C1B1B] mb-0",
     },
   },
   defaultVariants: {
