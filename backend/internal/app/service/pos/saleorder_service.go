@@ -55,28 +55,44 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
     var customer *entity.Customer
     var err error
 
-    if req.CustomerID == 0 {
-        clientName := "ลูกค้าทั่วไป (หน้าร้าน)"
-        if req.CustomerNameTemp != "" {
-            clientName = req.CustomerNameTemp
+    // 1. ดึงชื่อชั่วคราวและเบอร์โทรมาล็อคไว้ในตัวแปร Local ทันที ป้องกันค่าโดนเขียนทับหรือสูญหาย
+    savedName := "ลูกค้าทั่วไป (หน้าร้าน)"
+    if req.CustomerNameTemp != "" {
+        savedName = req.CustomerNameTemp
+    }
+    
+    savedPhone := ""
+    if req.CustomerPhoneTemp != "" {
+        if len(req.CustomerPhoneTemp) > 20 {
+            savedPhone = req.CustomerPhoneTemp[:20]
+        } else {
+            savedPhone = req.CustomerPhoneTemp
         }
+    }
 
-        // ประกาศสร้าง Customer ขาจร
+    // 2. ดักเช็คเงื่อนไขจากค่า Original ที่ส่งมาจากหน้าบ้าน (0 หรือ 1 คือลูกค้าขาจร)
+    if req.CustomerID == 0 || req.CustomerID == 1 {
         customer = &entity.Customer{
-            CustomerName:      clientName,
+            CustomerName:      savedName,
             IsDiscountEnabled: false,
             CurrentDebtAmount: 0.0,
             CreditLimit:       0.0,
         }
-        
-        // หยอดประเภทเข้าไปทีหลังผ่าน property เพื่อเลี่ยงการเขียน Struct Literal ที่ทลายไทป์ GORM
         customer.CustomerType.TypeName = "GENERAL"
         
     } else {
+        // กรณีเป็นลูกค้าสมาชิก / อู่
         customer, err = s.customerRepo.GetCustomerByID(req.CustomerID)
         if err != nil {
             tx.Rollback()
             return errors.New("ไม่พบข้อมูลลูกค้าในระบบ")
+        }
+        // ถ้าหน้าบ้านไม่ได้ใส่ชื่อ/เบอร์ชั่วคราวมา ให้ดึงชื่อจริงจากข้อมูลสมาชิกมาใช้
+        if req.CustomerNameTemp == "" {
+            savedName = customer.CustomerName
+        }
+        if req.CustomerPhoneTemp == "" {
+            savedPhone = customer.PhoneNumber
         }
     }
 
@@ -171,12 +187,12 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
             Unit:            product.Unit.Unit_Name,
             UnitPrice:       itemReq.UnitPrice,
             CostPrice:       product.Cost_price,
-            DiscountType:    "percentage", 
-            DiscountValue:   itemDiscountPercent,
-            DiscountPercent: itemDiscountPercent,
+            DiscountType:    itemReq.DiscountType,   
+            DiscountValue:   itemReq.DiscountValue,  
+            DiscountPercent: itemDiscountPercent,    
             DiscountAmount:  itemDiscountAmount,
             FinalUnitPrice:  finalUnitPrice,
-            Subtotal:        itemSubtotal, // ยอดคงเหลือประจำแถว (หลังหักลดรายชิ้น แต่ก่อนหักลดท้ายบิล)
+            Subtotal:        itemSubtotal, 
         })
 
         // สั่งตัดสต็อกสินค้าชิ้นนี้ในคลังออกตามจำนวนที่ขายจริง (ทำงานภายใต้ท่อ Transaction)
@@ -206,14 +222,14 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         }
     }
 
-    // 🔍 ดึงนโยบายของร้านค้าจากฐานข้อมูลมาตรวจสอบเพดานท้ายบิลตรง ๆ
+    // ดึงนโยบายของร้านค้าจากฐานข้อมูลมาตรวจสอบเพดานท้ายบิลตรง ๆ
     storeConfig, err := s.repo.GetStoreConfig()
     if err != nil {
         tx.Rollback()
         return fmt.Errorf("ไม่สามารถเรียกดูข้อมูลนโยบายความปลอดภัยร้านค้าได้: %w", err)
     }
     isCompany := customer.CustomerType.TypeName == "WHOLESALE" || customer.CustomerType.ID == 3
-    // 🚨 [CHECK]: ตรวจสอบเฉพาะส่วนลดท้ายบิลเพียวๆ ห้ามเกิน MaxExtraDiscountRate ของร้านเด็ดขาด!
+    // [CHECK]: ตรวจสอบเฉพาะส่วนลดท้ายบิลเพียวๆ ห้ามเกิน MaxExtraDiscountRate ของร้านเด็ดขาด!
     if !isCompany && billDiscountPercent > (storeConfig.MaxExtraDiscountRate + 0.01) {
         tx.Rollback()
         return fmt.Errorf("ส่วนลดท้ายบิลรวม %.2f%% เกินกว่านโยบายความปลอดภัยของร้านค้าที่กำหนดไว้ (สูงสุด %.2f%%)", 
@@ -268,8 +284,12 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
 
     // ตรวจสอบเงื่อนไขว่าเป็นการเลือกชำระแบบ "ซื้อเชื่อ / แปะโป้งเครดิตอู่" ใช่ไหม
     if paymentMethod.IsCredit {
-        // เช็คว่า หนี้เก่าสะสม + หนี้ใหม่บิลนี้ มันทะลุเพดานวงเงินที่เถ้าแก่อนุมัติไว้ให้ไหม
-        if customer.CurrentDebtAmount+totalAmount > customer.CreditLimit {
+    if req.CustomerID == 0 || req.CustomerID == 1 {
+        tx.Rollback()
+        return errors.New("ลูกค้าทั่วไป/ขาจร ไม่สามารถเลือกชำระแบบซื้อเชื่อได้")
+    }
+
+    if customer.CurrentDebtAmount+totalAmount > customer.CreditLimit {
             tx.Rollback()
             return fmt.Errorf("วงเงินเครดิตไม่เพียงพอ! วงเงินคงเหลือขาดไป %.2f บาท", (customer.CurrentDebtAmount+totalAmount)-customer.CreditLimit)
         }
@@ -307,8 +327,9 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         OrderNumber:        orderNumber,
         OrderDate:          time.Now(),
         CustomerID:         req.CustomerID,
-        CustomerNameTemp:   &customer.CustomerName,
-        CustomerPhoneTemp:  &customer.PhoneNumber,
+        CustomerNameTemp:   &savedName,         // ใช้ Pointer ชี้ไปที่ตัวแปรอิสระที่เราแช่แข็งค่าไว้
+        CustomerPhoneTemp:  &savedPhone,        // ใช้ Pointer ชี้ไปที่เบอร์โทร Local
+        Customer:           entity.Customer{},  // ป้องกัน GORM สั่ง INSERT ข้อมูลลูกค้าซ้ำ (เพราะเรามี CustomerID อยู่แล้ว)
         Status:             "completed",
         PaymentStatus:      enum.PaymentStatus(paymentStatus),
         Subtotal:           orderSubtotalAfterItems, 

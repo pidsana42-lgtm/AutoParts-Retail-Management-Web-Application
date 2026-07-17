@@ -282,7 +282,9 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
 
     const salePayload: CreateSaleOrderRequest = {
       customer_id: posSession.customer.id,
-      customer_name_temp: posSession.customer.customer_name,
+      customer_name_temp: posSession.customer?.id === 0 
+        ? searchCustomerQuery 
+        : posSession.customer?.customer_name,
       customer_phone_temp: posSession.customer.phone_number,
       received_amount: receivedAmount, 
       payment_method_id: finalPaymentMethodId,
