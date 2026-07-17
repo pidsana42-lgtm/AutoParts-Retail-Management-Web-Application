@@ -121,40 +121,35 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
             return fmt.Errorf("สินค้า %s สต็อกไม่พอขาย (เหลือ %d ชิ้น)", product.Product_Name, product.Quantity)
         }
 
-        // finalDiscountPercent คือตัวแปรสะสม "เปอร์เซ็นต์ส่วนลดรวมของไอเทมชิ้นนี้" (Layer 1 + Layer 2)
-        var finalDiscountPercent float64
-
-        // ตรวจสอบประเภทส่วนลดแถวที่หน้าบ้านกดเลือกส่งมา
+        // 1. ดึงส่วนลดที่หน้าบ้านส่งมาคีย์ขายในบิลนี้
+        var itemDiscountPercent float64
         if itemReq.DiscountType == "percentage" {
-            // ถ้าเลือกเป็น % ก็ดึงค่าดิบ (เช่น เลข 2.00) มาตั้งต้นเป็นเปอร์เซ็นต์ลดได้เลย
-            finalDiscountPercent = itemReq.DiscountValue
+            itemDiscountPercent = itemReq.DiscountValue
         } else if itemReq.DiscountType == "amount" && itemReq.UnitPrice > 0 {
-            // ถ้าเลือกลดเป็นบาท (เช่น ลดชิ้นละ 20 บาท) ต้องแปลงกลับเป็น % เพื่อเอาไปผสมสูตรต่อ
-            // สูตร: (เงินส่วนลดต่อชิ้น / ราคาเต็มต่อชิ้น) * 100
-            finalDiscountPercent = (itemReq.DiscountValue / itemReq.UnitPrice) * 100
+            itemDiscountPercent = (itemReq.DiscountValue / itemReq.UnitPrice) * 100
         }
 
-        // [LAYER 2 & DYNAMIC VALIDATION]: เอาโควตาส่วนลดสินค้า + สิทธิ์ออนท็อปอู่มารวมกันเป็นเพดานใหม่
-        allowedMaxDiscount := product.MaxDiscountRate // ตั้งต้นจากเพดานสินค้า (เช่น 2%)
+        // 2. ตั้งต้นเพดานสูงสุดจากตัวสินค้าก่อน (เช่น 2.00%)
+        allowedMaxDiscount := product.MaxDiscountRate 
 
+        // 3. ถ้าเป็นลูกค้ากลุ่ม GARAGE และเปิดใช้งานระบบส่วนลดอู่ 
+        // ให้เอาสิทธิ์ On-top ของอู่คนนี้มาขยายเพดานเพิ่มเข้าไปด้วย!
         if customer.CustomerType.TypeName == "GARAGE" && customer.IsDiscountEnabled {
-            // บวกส่วนลดออนท็อปประจำอู่นี้เข้าไป (+3%)
-            finalDiscountPercent += customer.OntopDiscountRate
-            
-            // ขยายเพดานสูงสุดของสินค้ารายชิ้นนี้พ่วงสิทธิ์ของอู่เข้าไปด้วย (เช่น 2% + 3% = 5%)
+            // บวกเพิ่มเพดานตามสิทธิ์ที่เจ้าของร้าน Set ให้ลูกค้าเครดิตดีคนนี้ (เช่น 2% + 3% = 5%)
             allowedMaxDiscount += customer.OntopDiscountRate
         }
 
-        // ตรวจสอบกับเพดานสะสมผสมสิทธิ์แล้ว (เช่น 3% ไม่เกิน 5% ผ่านฉลุย!)
-        if finalDiscountPercent > allowedMaxDiscount {
+        // ตรวจสอบส่วนลดที่ส่งมา กับ "เพดานใหม่ที่ผสมสิทธิ์อู่แล้ว"
+        // ทีนี้ถ้าหน้าบ้านส่งมา 5.00% แล้วเพดานใหม่คือ 5.00% ก็จะผ่านฉลุย ไม่ระเบิดแล้วครับ!
+        if itemDiscountPercent > allowedMaxDiscount {
             tx.Rollback()
-            return fmt.Errorf("สินค้า %s มีส่วนลดรวม %.2f%% ซึ่งเกินกว่าเกณฑ์สูงสุดที่ยอมให้ลดได้สำหรับอู่นี้ (สูงสุด %.2f%%)", 
-                product.Product_Name, finalDiscountPercent, allowedMaxDiscount)
+            return fmt.Errorf("สินค้า %s มีส่วนลดต่อชิ้น %.2f%% ซึ่งเกินกว่าเกณฑ์สูงสุดที่ยอมให้ลดได้สำหรับลูกค้าท่านนี้ (สูงสุด %.2f%%)", 
+                product.Product_Name, itemDiscountPercent, allowedMaxDiscount)
         }
 
-        // itemDiscountAmount คือมูลค่าส่วนลดรวมของแถวนี้คิดเป็นเงินบาท
+        // 4. คำนวณเงินส่วนลดบาทของแถวนี้โดยอิงจากค่าที่ผ่านการอนุมัติแล้ว
         // สูตร: (ราคาเต็มต่อหน่วย × %ส่วนลดรวม / 100) × จำนวนชิ้นที่สั่งซื้อ
-        itemDiscountAmount := (itemReq.UnitPrice * finalDiscountPercent / 100) * float64(itemReq.Qty)
+        itemDiscountAmount := (itemReq.UnitPrice * itemDiscountPercent / 100) * float64(itemReq.Qty)
         
         // finalUnitPrice คือราคาเน็ตต่อหน่วยหลังหักลดรายชิ้นแล้ว (ราคาเต็ม - เงินลดเฉลี่ยต่อหน่วย)
         finalUnitPrice := itemReq.UnitPrice - (itemDiscountAmount / float64(itemReq.Qty))
@@ -176,9 +171,9 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
             Unit:            product.Unit.Unit_Name,
             UnitPrice:       itemReq.UnitPrice,
             CostPrice:       product.Cost_price,
-            DiscountType:    "percentage", // บังคับเซฟเป็นเปอร์เซ็นต์รวมเพื่อง่ายต่อการตรวจสอบย้อนหลัง
-            DiscountValue:   finalDiscountPercent,
-            DiscountPercent: finalDiscountPercent,
+            DiscountType:    "percentage", 
+            DiscountValue:   itemDiscountPercent,
+            DiscountPercent: itemDiscountPercent,
             DiscountAmount:  itemDiscountAmount,
             FinalUnitPrice:  finalUnitPrice,
             Subtotal:        itemSubtotal, // ยอดคงเหลือประจำแถว (หลังหักลดรายชิ้น แต่ก่อนหักลดท้ายบิล)
@@ -267,7 +262,9 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
 
     var paymentStatus string // ใช้เก็บข้อความสถานะจ่ายเงิน ("paid" หรือ "unpaid")
     var balanceDue float64   // ยอดหนี้คงค้างของบิลนี้
-    var paidAmount float64   // ยอดเงินสดที่ได้รับจริงในบิลนี้
+    var paidAmount float64   //
+    var changeAmount float64  // ยอดเงินทอนลูกค้า (กรณีจ่ายเกิน)
+    var receivedAmount float64 // ยอดเงินที่ลูกค้าจ่ายเข้ามา (รวมทุกช่องทาง)
 
     // ตรวจสอบเงื่อนไขว่าเป็นการเลือกชำระแบบ "ซื้อเชื่อ / แปะโป้งเครดิตอู่" ใช่ไหม
     if paymentMethod.IsCredit {
@@ -290,10 +287,19 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
             return fmt.Errorf("อัปเดตยอดหนี้สะสมของลูกค้าล้มเหลว: %v", err)
         }
     } else {
-		// กรณี: ชำระเงินสด (หรือวิธีอื่นที่ไม่ใช่เครดิต)
-		paymentStatus = "paid"   // สถานะ: ชำระแล้ว
-		balanceDue = 0.00        // ไม่มียอดค้างชำระ
-		paidAmount = totalAmount // ยอดที่รับมา = ยอดสุทธิทั้งบิล
+        // กรณี: ชำระเงินสด / โอน (ปรับปรุง Logic จ่ายเกิน/เงินทอน ตรงนี้)
+        receivedAmount = req.ReceivedAmount
+        
+        // ถ้าหน้าบ้านไม่ได้ส่ง received_amount มา หรือส่งมาน้อยกว่ายอดที่ต้องจ่าย 
+        // ให้ fallback ไปเป็นจ่ายพอดี (ป้องกันระบบพัง/ติดลบ)
+        if receivedAmount < totalAmount {
+            receivedAmount = totalAmount
+        }
+
+        paymentStatus = "paid"   
+        balanceDue = 0.00        
+        paidAmount = totalAmount // เงินที่ร้านได้เข้ากระเป๋าจริง (หักทอนแล้ว) = ยอดสุทธิ
+        changeAmount = receivedAmount - totalAmount // คำนวณเงินทอน
     }
 
 	// 8. ประกอบ SaleOrder Entity เพื่อบันทึก
@@ -312,9 +318,10 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         DiscountPercent:    billDiscountPercent,
         TotalDiscountItems: totalDiscountItems,
         TotalAmount:        totalAmount,
-        PaidAmount:         paidAmount,
+        ReceivedAmount:     receivedAmount, // บันทึกเงินที่รับมาจริง (เช่น 1000.00)
+        PaidAmount:         paidAmount,     // บันทึกเงินเน็ตเข้าคลัง (เช่น 870.00)
         BalanceDue:         balanceDue,
-        ChangeAmount:       0.00,
+        ChangeAmount:       changeAmount,
         Note:               req.Note,
         Items:              orderItems, // ผูกอาเรย์สินค้าลูกเข้าไปด้วย GORM จะสั่งบันทึกตารางไอเทมพ่วงให้เองอัตโนมัติ
     }
@@ -331,6 +338,9 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         OrderID:         order.ID, // ตรงนี้จะถูกต้องแล้วเพราะ order.ID ถูกใส่ค่าให้แล้ว
         PaymentMethodID: req.PaymentMethodID,
         Amount:          paidAmount,
+        ReceivedAmount:  receivedAmount,
+        ChangeAmount:    changeAmount,
+        ReferenceNumber: "", // สามารถปรับให้รับจาก req ได้ถ้าต้องการ
         PaidAt:          &now, 
         ReceivedByID:    userID,
     }
