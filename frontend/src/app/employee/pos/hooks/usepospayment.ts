@@ -48,6 +48,35 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     return { customer: null, activeTypeId: 1, paymentMethodId: 1, billDiscountValue: 0, billDiscountType: "none", receivedAmount: 0, receiverName: "" };
   });
 
+  const resetPaymentState = () => {
+    setCustomer(null);
+    setSearchCustomerQuery("");
+    setTempPhone("");
+    setActiveTypeId(1);
+    setSelectedPaymentType("CASH");
+    setPaymentMethodId(1);
+    setBillDiscountValue(0);
+    setBillDiscountType("none");
+    setReceivedAmount(0);
+    setReceiverName("");
+    setSearchResults([]);
+    setDisplayValue("");
+
+    setPosSession({
+      customer: null,
+      searchQuery: "",
+      activeTypeId: 1,
+      paymentMethodId: 1,
+      billDiscountValue: 0,
+      billDiscountType: "none",
+      receivedAmount: 0,
+      receiverName: ""
+    });
+
+    // 3. ล้างแคชใน Browser
+    localStorage.removeItem("pos_session");
+  };
+
   // INITIAL FETCH EFFECTS
   useEffect(() => {
     posApiService.getCustomerTypes().then(setCustomerTypes).catch(err => console.error(err));
@@ -189,7 +218,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     setDisplayValue(receivedAmount === 0 ? "" : receivedAmount.toString());
   };
 
-  // 📍 ปรับปรุงจุดนี้: ย้ายกลไกการกระจายสัดส่วนตัวเลข (Pro-rata) ไปคุยกับเครื่องคิดเลข
+  // ย้ายกลไกการกระจายสัดส่วนตัวเลข (Pro-rata) ไปคุยกับเครื่องคิดเลข
   const submitOrderToDatabase = async (currentCart?: CartItem[]) => {
     const targetCart = currentCart || cart;
     if (targetCart.length === 0) return alert("กรุณาเลือกสินค้าลงตะกร้า");
@@ -306,5 +335,6 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     receivedAmount, setReceivedAmount, receiverName, setReceiverName,
     handleSearchCustomer, handleBillDiscountChange, change, handleReceivedAmountBlur,
     displayValue, setDisplayValue, handleReceivedAmountChange, handleReceivedAmountFocus,
+    resetPaymentState
   };
 }

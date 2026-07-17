@@ -195,12 +195,13 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
 
   //ฟังก์ชันปุ่ม "ล้างทั้งหมด" เพื่อล้างตารางสินค้าในบิลร่างปัจจุบันให้เกลี้ยงตะกร้า
   const handleClearAllCart = (onClearSuccess?: () => void) => {
-    if (cart.length === 0) return;
-    if (window.confirm("คุณแน่ใจหรือไม่ว่าต้องการล้างตะกร้าสินค้าทั้งหมด?")) {
+    if (window.confirm("คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลทั้งหมด?")) {
       setCart([]);
       localStorage.removeItem("pos_cart");
     }
-    if (onClearSuccess) onClearSuccess();
+    if (onClearSuccess) {
+        onClearSuccess();
+      }
   };
 
   //ฟังก์ชันดักจับปุ่มติ๊กถูก (Checkbox DISC?) ประจำแถวสินค้า 

@@ -44,9 +44,13 @@ export default function PosPage(): React.JSX.Element {
 
   // ซิงค์ข้อมูลสิทธิ์ลูกค้าระหว่าง 2 Hooks เวลาเปลี่ยนลูกค้าใหม่หรือเปลี่ยนประเภทลูกค้า (Active Type) 
   React.useEffect(() => {
+  if (!paymentData.customer) {
+    setCustomerForCart(null);
+  } else {
     setCustomerForCart(paymentData.customer);
-    setActiveTypeForCart(paymentData.activeTypeId);
-  }, [paymentData.customer, paymentData.activeTypeId]);
+  }
+  setActiveTypeForCart(paymentData.activeTypeId);
+}, [paymentData.customer, paymentData.activeTypeId]);
 
   const subLabelMap: Record<string, string> = {
     GENERAL: "REGULAR",
@@ -76,10 +80,18 @@ export default function PosPage(): React.JSX.Element {
               <h2 className="text-2xl text-zinc-800 ">บิลร่าง (DRAFT)</h2>
               <button
                 type="button"
-                onClick={() => cartHook.handleClearAllCart(() => paymentData.resetBillDiscount())}
-                disabled={cartHook.cart.length === 0}
-                className={`text-xs px-3 py-1.5 border cursor-pointer transition-all duration-200  ${
-                  cartHook.cart.length === 0
+                onClick={() =>
+                  cartHook.handleClearAllCart(() => {
+                    paymentData.resetBillDiscount();
+                    paymentData.resetPaymentState();
+                  })
+                }
+                // ถ้าในตะกร้ามีสินค้า หรือ มีการเลือกลูกค้าไว้ ให้ปุ่มนี้ยังคลิกได้
+                disabled={cartHook.cart.length === 0 && !paymentData.customer}
+                
+                // ให้เช็กเงื่อนไขเดียวกันเพื่อให้สีปุ่มแสดงผลถูกต้อง
+                className={`text-xs px-3 py-1.5 border cursor-pointer transition-all duration-200 ${
+                  cartHook.cart.length === 0 && !paymentData.customer
                     ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed select-none"
                     : "bg-[#E51C23] text-white border-[#E51C23] hover:bg-[#C62828] active:bg-[#B71C1C] shadow-sm"
                 }`}
@@ -381,7 +393,7 @@ export default function PosPage(): React.JSX.Element {
             </div>
           </div>
 
-          <CustomerCard customer={paymentData.posSession.customer} />
+          <CustomerCard customer={paymentData.customer} />
 
           {/* ตารางแจกแจงบิลสรุปราคา */}
           <div className="space-y-3 pt-4">
