@@ -28,6 +28,10 @@ export interface POItemResponse {
     unit: string;
     unit_price: number;
     sub_total: number;
+    order_type: string;
+
+    alert_id?: number;
+    pre_order_item_id?: number;
 }
 
 // ข้อมูลที่เพิ่ม type เพื่อใช้จัดการ State ภายในหน้าเว็บ
@@ -71,16 +75,16 @@ export interface CreatePOItemResponse {
 
 export interface CreatePOResponse {
     id: number;
-    order_number: string;
+    po_number: string;
     supplier_id: number;
     supplier_name: string;
     po_type_id: number;
     total_amount: number;
-    status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
+    status: 'DRAFT' | 'PENDING';
     creator_id: number;
     creator_name: string;
-    created_at: Date;
-    updated_at: Date;
+    created_at: string;
+    updated_at: string;
     po_items: CreatePOItemResponse[];
 }
 
@@ -101,12 +105,17 @@ export interface PreorderItem {
 
 export interface POResponse {
     id: number;
-    order_number: string;
+    po_number: string;
+    supplier_id: number;
     supplier_name: string;
     total_amount: number;
-    status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
+    notes?: string;
+    status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'DELETED';
     creator_name: string;
-    created_at: Date;
+    created_at: string;
+    last_updated_by?: number;
+    updated_by_user?: { id: number; name: string };
+    updated_at?: string;
     po_items: POItemResponse[];
 }
 
@@ -132,6 +141,48 @@ export interface POSummaryResponse {
     pending_amount: number;
     approved_mtd_amount: number;
     rejected_mtd_amount: number;
-    total_count: number;
     rejected_by_supplier?: SupplierRejectedSummary[]; 
+}
+
+// -----------------------------------------
+// UPDATE PURCHASE ORDER (ส่วนการแก้ไขใบสั่งซื้อใหม่)
+// -----------------------------------------
+export interface UpdatePOItemRequest {
+  id?: number;          // มีค่า = item เดิม, ไม่มี = item ใหม่
+  product_id: number;
+  quantity: number;
+  unit_price: number;
+}
+
+export interface UpdatePORequest {
+  supplier_id?: number;
+  po_type_id?: number;
+  notes?: string;
+  items?: UpdatePOItemRequest[];
+}
+
+export interface UpdatePOResponse {
+  id: number;
+  po_number: string;
+  supplier_name: string;
+  status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'DELETED';
+  total_amount: number;
+  notes?: string;
+  last_updated_by?: number;
+  updated_by_user?: {
+    id: number;
+    name: string;
+  };
+  updated_at: string;
+  po_items: CreatePOItemResponse[];
+}
+
+// -----------------------------------------
+// SUPPLIER DELIVERY ANALYTICS
+// -----------------------------------------
+export interface POAnalyticsResponse {
+    supplier_id: number;
+    has_enough_data: boolean;
+    estimated_days: number;
+    accuracy_rate: number;
 }

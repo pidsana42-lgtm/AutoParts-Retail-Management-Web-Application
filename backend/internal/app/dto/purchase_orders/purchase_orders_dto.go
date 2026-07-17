@@ -17,14 +17,16 @@ type POItemDTO struct {
 type CreatePurchaseOrderRequest struct {
 	SupplierID			uint			`json:"supplier_id" binding:"required"`
 	POTypeID 			uint			`json:"po_type_id" binding:"required"`
+	Status				poEnum.POStatus	`json:"status" binding:"required,oneof=DRAFT PENDING"`
 	POItems				[]POItemDTO 	`json:"po_items" binding:"required,gt=0"`
 }
 
 type PurchaseOrderResponse struct {
 	ID					uint			`json:"id"`
-	OrderNumber			string 			`json:"order_number"`
+	PONumber			string 			`json:"po_number"`
 	SupplierID			uint			`json:"supplier_id"`
 	SupplierName		string 			`json:"supplier_name"`
+	Expires_at			time.Time		`json:"expires_at,omitempty"`
 	POTypeID			uint 			`json:"po_type_id"`
 	TotalAmount			float64 		`json:"total_amount"`
 	Status				poEnum.POStatus   `json:"status"`
@@ -47,13 +49,22 @@ type POItemResponse struct {
 	Notes                     	string   `json:"notes,omitempty"`
 	AlertID                   	*uint    `json:"alert_id,omitempty"`
 	PreOrderItemID            	*uint    `json:"pre_order_item_id,omitempty"`
+
+	OrderType                   string   `json:"order_type"`
 }
 
+// Struct สำหรับเก็บข้อมูลรายบริษัทที่ถูกไม่อนุมัติ
+type SupplierRejectedSummary struct {
+    SupplierName string  `json:"supplier_name"`
+    Amount       float64 `json:"amount"`
+}
+
+// Struct สำหรับส่งสรุป
 type POSummaryResponse struct {
-    PendingAmount     	float64 	`json:"pending_amount"`
-    ApprovedMTDAmount 	float64 	`json:"approved_mtd_amount"`
-    RejectedMTDAmount 	float64 	`json:"rejected_mtd_amount"`
-	TotalCount			int64		`json:"total_count"`
+    PendingAmount      float64                   `json:"pending_amount"`
+    ApprovedMTDAmount  float64                   `json:"approved_mtd_amount"`
+    RejectedMTDAmount  float64                   `json:"rejected_mtd_amount"`
+    RejectedBySupplier []SupplierRejectedSummary `json:"rejected_by_supplier"`
 }
 
 type ListPOQuery struct {
@@ -88,4 +99,29 @@ type ProductSearchResponse struct {
 	Price    float64 `json:"price"`
 	Unit     string  `json:"unit"`
 	StockQty int     `json:"stock_qty"`
+}
+
+// แก้ไข PO กับ POItems
+type UpdatePurchaseOrderRequest struct {
+	SupplierID *uint                    `json:"supplier_id"`
+	POTypeID   *uint                    `json:"po_type_id"`
+	Notes      *string                  `json:"notes"`
+	Items      []UpdatePOItemRequest    `json:"items"` // ส่งมาทั้งชุด = replace ทั้งหมด
+}
+
+type UpdatePOItemRequest struct {
+	ID         *uint   `json:"id"`          // nil = item ใหม่, มีค่า = item เดิม
+	ProductID  uint    `json:"product_id"`
+	Quantity   float64 `json:"quantity"`
+	UnitPrice  float64 `json:"unit_price"`
+	AlertID    *uint   `json:"alert_id,omitempty"`
+	PreOrderItemID  *uint   `json:"pre_order_item_id,omitempty"`
+}
+
+// POAnalyticsResponse DTO สำหรับส่งข้อมูลการคาดการณ์กลับไปให้ Frontend
+type POAnalyticsResponse struct {
+	SupplierID    int     `json:"supplier_id"`
+	HasEnoughData bool    `json:"has_enough_data"`
+	EstimatedDays int     `json:"estimated_days"`
+	AccuracyRate  float64 `json:"accuracy_rate"`
 }

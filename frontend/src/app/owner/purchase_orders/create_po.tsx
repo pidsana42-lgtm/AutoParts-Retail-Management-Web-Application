@@ -2,7 +2,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Building2, ChartNoAxesCombined, Info, ScanBarcode, ShoppingBag, 
-    ChevronRight, ShoppingCart } from 'lucide-react';
+    ChevronRight, ShoppingCart, 
+    Plus,
+    Minus,
+    Trash2} from 'lucide-react';
 // Components
 import Heading from '../../../components/elements/heading';
 import Button from '../../../components/elements/button';
@@ -12,7 +15,7 @@ import Select from '../../../components/elements/select';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableFooter } from "../../../components/elements/table";
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
 // Interface
-import type { CreatePORequest, POItemResponse, PreorderItem } from '../../../interface/purchase_orders/po_interface';
+import type { CreatePORequest, LocalPOItem, PreorderItem, POAnalyticsResponse } from '../../../interface/purchase_orders/po_interface';
 // Service & Utils
 import { poService } from '../../../service/http/purchase_orders/po_service';
 import { getSuppliersList } from '../../../service/http/wms/product';
@@ -25,23 +28,26 @@ import { usePreorders } from './hooks/usePreorder';
 const CreatePurchaseOrders: React.FC = () => {
     const navigate = useNavigate();
     // States ของ API
-    const [item, setItem] = useState<POItemResponse[]>([]);
+    const [item, setItem] = useState<LocalPOItem[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [date, setDate] = useState<string>(getTodayDateString());
     const [isPreorderModalOpen, setIsPreorderModalOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-
     // States สำหรับ Supplier (ตัวเลือก Dropdown)
     const [listsSupplier, setlistsSupplier] = useState("");
     const [supplierOptions, setSupplierOptions] = useState<{label: string, value: string}[]>([]);
-    
     // Hook การสแกนและค้นหาสินค้า
     const searchInputRef = useRef<HTMLInputElement>(null);
     const { searchInput, addQuantity, setAddQuantity, searchResults, handleSearchInput, handleSelectProduct,
-        handleAddItem, handleScannerEnter } = usePoScanner(listsSupplier, item, setItem);
+        handleAddItem, handleSearchKeyDown, highlightedIndex, setHighlightedIndex, } = usePoScanner(listsSupplier, setItem);
     // ดึงข้อมูลจาก Hook เรียกรายการพรีออเดอร์
-    const { preorders, totalPreorders, isLoading: isPreordersLoading } = usePreorders();
-    
+    const { preorders, totalPreorders, isLoading: isPreordersLoading } = usePreorders(item, setItem, setIsPreorderModalOpen);
+    // สำหรับดึงข้อมูลคาดการณ์ระยะเวลาจัดส่ง
+    const [deliveryEstimate, setDeliveryEstimate] = useState<POAnalyticsResponse | null>(null);
+    const [isEstimateLoading, setIsEstimateLoading] = useState(false);
+    // เก็บค่าที่ผู้ใช้กำลังพิมพ์อยู่ (ระหว่างลบเลขเดิมทิ้งแล้วยังพิมพ์ไม่เสร็จ) แยกจาก items จริง
+    const [qtyDrafts, setQtyDrafts] = useState<Record<string | number, string>>({});
+
     // อัปเดต totalItems อัตโนมัติเมื่อตะกร้า (item) มีการเปลี่ยนแปลง
     useEffect(() => {
         setTotalItems(item.length);
@@ -99,6 +105,29 @@ const CreatePurchaseOrders: React.FC = () => {
         fetchAlertsAutomatically();
     }, [listsSupplier]);
 
+    // ดึงข้อมูลคาดการณ์ระยะเวลาจัดส่งของ Supplier ที่เลือก
+    useEffect(() => {
+        const fetchDeliveryEstimate = async () => {
+            if (!listsSupplier) {
+                setDeliveryEstimate(null);
+                return;
+            }
+
+            setIsEstimateLoading(true);
+            try {
+                const estimate = await poService.getSupplierDeliveryEstimate(listsSupplier);
+                setDeliveryEstimate(estimate);
+            } catch (error) {
+                console.error("โหลดข้อมูลคาดการณ์การจัดส่งล้มเหลว:", error);
+                setDeliveryEstimate(null);
+            } finally {
+                setIsEstimateLoading(false);
+            }
+        };
+
+        fetchDeliveryEstimate();
+    }, [listsSupplier]);
+
     // Function เตือนก่อนว่ามีของในใบสั่งซื้ออยู่ ถ้าเปลี่ยนบริษัทจะดึง Stock Alert ชุดใหม่มาทับตะกร้าเดิม
     const handleSupplierChange = (newSupplierId: string) => {
         if (item.length > 0) {
@@ -119,9 +148,10 @@ const CreatePurchaseOrders: React.FC = () => {
             return;
         }
 
-        const unitCost = 0;
+        // ใช้ราคาที่ตกลงกันไว้ตอนสร้างพรีออเดอร์ (ไม่ใช่ 0) แล้วให้แก้ไขได้ทีหลังในตาราง
+        const unitCost = Number(selectedPreorder.unit_price || 0);
         
-        const newItem: POItemResponse = {
+        const newItem: LocalPOItem = {
             id: generateLocalId(), 
             product_id: selectedPreorder.product_id,
             product_name_snapshot: selectedPreorder.product_name,
@@ -129,7 +159,8 @@ const CreatePurchaseOrders: React.FC = () => {
             quantity: selectedPreorder.quantity,
             unit: selectedPreorder.unit || "ชิ้น",
             unit_price: unitCost,
-            sub_total: unitCost * selectedPreorder.quantity
+            sub_total: unitCost * selectedPreorder.quantity,
+            order_type: 'พรีออเดอร์' // มาจากพรีออเดอร์ ราคาแก้ไขได้ในตาราง
         };
 
         // เพิ่มเข้าตะกร้าหลัก (ตารางด้านล่างของจอ)
@@ -139,13 +170,15 @@ const CreatePurchaseOrders: React.FC = () => {
         setIsPreorderModalOpen(false);
     };
 
-    // Function แก้ไขจำนวนของรายการในใบสั่งซื้อ
-    const handleUpdateItem = (id: number, field: 'quantity', rawValue: string) => {
+    // Function แก้ไขจำนวน หรือราคาต่อหน่วย (เฉพาะแถวพรีออเดอร์) ของรายการในใบสั่งซื้อ
+    const handleUpdateItem = (id: number, field: 'quantity' | 'unit_price', rawValue: string) => {
         const numValue = Number(rawValue);
         const safeValue = isNaN(numValue) || numValue < 0 ? 0 : numValue;
 
         setItem(prev => prev.map(row => {
             if (row.id !== id) return row;
+            // กันไว้อีกชั้น: ห้ามแก้ราคาของแถวที่ไม่ใช่พรีออเดอร์ แม้จะถูกเรียกผิดทางก็ตาม
+            if (field === 'unit_price' && row.order_type !== 'พรีออเดอร์') return row;
             const updatedRow = { ...row, [field]: safeValue };
             updatedRow.sub_total = updatedRow.quantity * updatedRow.unit_price;
             return updatedRow;
@@ -189,7 +222,7 @@ const CreatePurchaseOrders: React.FC = () => {
             // เรียกใช้ API ตัวเดียวกันได้เลย
             const response = await poService.createPurchaseOrder(payload);
             
-            const createdPoNumber = response?.order_number || "";
+            const createdPoNumber = response?.po_number || "";
             const message = submitStatus === 'DRAFT' 
                 ? `บันทึกฉบับร่าง ${createdPoNumber} เรียบร้อยแล้ว` 
                 : `ส่งใบสั่งซื้อ ${createdPoNumber} เพื่อขออนุมัติเรียบร้อยแล้ว`;
@@ -204,7 +237,35 @@ const CreatePurchaseOrders: React.FC = () => {
             setIsSaving(false);
         }
     };
-    
+
+    const handleQtyDraftChange = (key: number | string, rawValue: string) => {
+        setQtyDrafts(prev => ({ ...prev, [key]: rawValue }));
+    };
+
+    // ตอนออกจากช่อง (blur) ค่อย commit ค่าจริง
+    const handleQtyBlur = (id: number, key: number | string) => {
+        const raw = qtyDrafts[key];
+        if (raw === undefined) return; // ไม่ได้แก้ไขอะไร
+
+        const trimmed = raw.trim();
+        if (trimmed === '' || isNaN(Number(trimmed)) || Number(trimmed) < 1) {
+            // พิมพ์ไม่เสร็จ/ใส่ 0 -> คืนค่าตัวเลขเดิม ไม่ต้อง commit
+            setQtyDrafts(prev => {
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            });
+            return;
+        }
+
+        handleUpdateItem(id, 'quantity', trimmed);
+        setQtyDrafts(prev => {
+            const next = { ...prev };
+            delete next[key];
+            return next;
+        });
+    };    
+
     return (
         <div className='p-8 space-y-6 bg-gray-50 min-h-screen'>
             { /* Header */ }
@@ -264,10 +325,13 @@ const CreatePurchaseOrders: React.FC = () => {
                         <CardContent>
                             <div className='flex items-center justify-between h-fit'>
                                 <Heading level='p' weight='light'>
-                                    {isPreordersLoading 
-                                        ? "กำลังดึงข้อมูล..." 
-                                        : `มีรายการพรีออเดอร์ค้างอยู่ ${totalPreorders} รายการ`
-                                    }
+                                    {isPreordersLoading ? (
+                                        "กำลังดึงข้อมูล..."
+                                    ) : (
+                                        <>
+                                            มีรายการพรีออเดอร์ค้างอยู่ <strong className="font-medium">{totalPreorders}</strong> รายการ
+                                        </>
+                                    )}
                                 </Heading>
                                 
                                 {/* 4. สั่งให้ปุ่มตั้งค่า Modal เป็นเปิด */}
@@ -282,19 +346,39 @@ const CreatePurchaseOrders: React.FC = () => {
                             </div>
                         </CardContent>
                     </Card>
-                    <div className='bg-[#22252a] text-white rounded-md p-6 h-fit shadow-sm relative overflow-hidden'>
-                        <div className='absolute right-4 top-4 opacity-5 pointer-events-none'>
-                            <ChartNoAxesCombined className='w-12 h-12' />
-                        </div>
-                        <div>
-                            <Heading level='h5' weight='semibold' className='text-white'>ข้อมูลวิเคราะห์จากระบบ</Heading>
-                            <Heading level='p' weight='light' className='text-white mt-3'>โดยปกติบริษัทรายนี้จะใช้เวลาจัดส่ง  ทำการ เราขอแนะนำให้คุณวางแผนการขนส่งสำหรับ </Heading>
-                            <div className='flex items-center justify-start gap-3 mt-3'>
-                                <Heading className='text-base text-white w-auto m-0'>{<Info className="h-4 w-4" />}</Heading>
-                                <Heading level='p' weight='light' className='text-white w-auto m-0'>ระยะเวลาการจัดส่ง: แม่นยำร้อยละ </Heading>
+                    {listsSupplier && (
+                        <div className='bg-[#22252a] text-white rounded-md p-6 h-fit shadow-sm relative overflow-hidden'>
+                            <div className='absolute right-4 top-4 opacity-5 pointer-events-none'>
+                                <ChartNoAxesCombined className='w-12 h-12' />
+                            </div>
+                            <div>
+                                <Heading level='h5' weight='semibold' className='text-white'>ข้อมูลวิเคราะห์จากระบบ</Heading>
+
+                                {isEstimateLoading ? (
+                                    <Heading level='p' weight='light' className='text-white mt-3'>
+                                        กำลังวิเคราะห์ข้อมูล...
+                                    </Heading>
+                                ) : !deliveryEstimate?.has_enough_data ? (
+                                    <Heading level='p' weight='light' className='text-white mt-3'>
+                                        บริษัทรายนี้มีประวัติการจัดส่งไม่เพียงพอสำหรับการคาดการณ์ระยะเวลาจัดส่ง
+                                    </Heading>
+                                ) : (
+                                    <>
+                                        <Heading level='p' weight='light' className='text-white mt-3'>
+                                            โดยปกติบริษัทรายนี้จะใช้เวลาจัดส่งประมาณ {deliveryEstimate.estimated_days} วันทำการ
+                                            เราขอแนะนำให้คุณวางแผนการขนส่งล่วงหน้าตามนั้น
+                                        </Heading>
+                                        <div className='flex items-center justify-start gap-3 mt-3'>
+                                            <Heading className='text-base text-white w-auto m-0'>{<Info className="h-4 w-4" />}</Heading>
+                                            <Heading level='p' weight='light' className='text-white w-auto m-0'>
+                                                ระยะเวลาการจัดส่ง: แม่นยำร้อยละ {deliveryEstimate.accuracy_rate}
+                                            </Heading>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 { /* Right Side */ }
@@ -305,13 +389,7 @@ const CreatePurchaseOrders: React.FC = () => {
                                 ref={searchInputRef} // ผูก Ref เข้ากับ Input
                                 value={searchInput}
                                 onChange={(e) => handleSearchInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                    // ดักจับว่าปุ่มที่กด (หรือที่เครื่องสแกนส่งมา) คือ Enter หรือไม่
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault(); // ป้องกันฟอร์ม Submit อัตโนมัติ (ถ้ามี)
-                                        handleScannerEnter();
-                                    }
-                                }}
+                                onKeyDown={handleSearchKeyDown}
                                 className="bg-transparent border-none shadow-none focus:outline-none"
                                 disabled={!listsSupplier}
                                 leftIcon={
@@ -340,10 +418,13 @@ const CreatePurchaseOrders: React.FC = () => {
                             {/* เพิ่ม Dropdown แสดงผลลัพธ์การค้นหา */}
                             {searchResults.length > 0 && (
                                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
-                                    {searchResults.map((product) => (
+                                    {searchResults.map((product, index) => (
                                         <div 
                                             key={product.id}
-                                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                            className={`px-4 py-2 cursor-pointer text-sm ${
+                                                index === highlightedIndex ? 'bg-gray-100' : 'hover:bg-gray-100'
+                                            }`}
+                                            onMouseEnter={() => setHighlightedIndex(index)}
                                             onClick={() => handleSelectProduct(product)}
                                         >
                                             {product.name} (รหัส: {product.code})
@@ -402,26 +483,70 @@ const CreatePurchaseOrders: React.FC = () => {
                                     item.map((row, index) => (
                                         <TableRow key={row.id}>
                                             <TableCell className="pl-6">{index + 1}</TableCell>
-                                            <TableCell>ทั่วไป</TableCell> {/* ปรับตามประเภทจริง */}
+                                            <TableCell>{row.order_type}</TableCell>
                                             <TableCell>{row.product_name_code_snapshot}</TableCell>
                                             <TableCell>{row.product_name_snapshot}</TableCell>
                                             <TableCell className="text-center">
-                                                <input
-                                                    type="number"
-                                                    min={1}
-                                                    value={row.quantity}
-                                                    onChange={(e) => handleUpdateItem(row.id, 'quantity', e.target.value)}
-                                                    className="w-16 text-center bg-transparent border border-transparent hover:border-gray-200 focus:border-gray-400 rounded px-1 py-0.5 focus:outline-none"
-                                                /></TableCell>
+                                                <div className='inline-flex items-center border border-gray-200 rounded-md overflow-hidden'>
+                                                    <button
+                                                        type='button'
+                                                        onClick={() => {
+                                                            setQtyDrafts(prev => {
+                                                                const next = { ...prev };
+                                                                delete next[row.id];
+                                                                return next;
+                                                            });
+                                                            if (row.quantity <= 1) {
+                                                                const confirmed = window.confirm('จำนวนสินค้าจะเหลือ 0 ต้องการลบรายการนี้ออกจากตะกร้าหรือไม่?');
+                                                                if (confirmed) handleRemoveItem(row.id.toString());
+                                                                return;
+                                                            }
+                                                            handleUpdateItem(row.id, 'quantity', String(row.quantity - 1));
+                                                        }}
+                                                        className='w-8 h-8 flex items-center justify-center text-gray-400 hover:bg-gray-50 border-r border-gray-200 transition-colors'
+                                                    >
+                                                        <Minus className='w-3.5 h-3.5' />
+                                                    </button>
+                                                    <input
+                                                        type='text'
+                                                        inputMode='numeric'
+                                                        value={qtyDrafts[row.id] !== undefined ? qtyDrafts[row.id] : String(row.quantity)}
+                                                        onChange={(e) => {
+                                                            const raw = e.target.value;
+                                                            if (raw !== '' && !/^\d*$/.test(raw)) return;
+                                                            handleQtyDraftChange(row.id, raw);
+                                                        }}
+                                                        onBlur={() => handleQtyBlur(row.id, row.id)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                                        }}
+                                                        className='w-11 h-8 text-center text-black font-medium outline-none'
+                                                    />
+                                                    <button
+                                                        type='button'
+                                                        onClick={() => {
+                                                            setQtyDrafts(prev => {
+                                                                const next = { ...prev };
+                                                                delete next[row.id];
+                                                                return next;
+                                                            });
+                                                            handleUpdateItem(row.id, 'quantity', String(row.quantity + 1));
+                                                        }}
+                                                        className='w-8 h-8 flex items-center justify-center text-gray-400 hover:bg-gray-50 border-l border-gray-200 transition-colors'
+                                                    >
+                                                        <Plus className='w-3.5 h-3.5' />
+                                                    </button>
+                                                </div>
+                                            </TableCell>
                                             <TableCell className="text-center">{row.unit}</TableCell>
-                                            <TableCell className="text-center">{row.unit_price} ฿</TableCell>
+                                            <TableCell className="text-right pr-10">{row.unit_price.toLocaleString()} ฿</TableCell>
                                             <TableCell className="text-right pr-6">{row.sub_total} ฿</TableCell>
                                             <TableCell className="text-center">
                                                 <button 
                                                     onClick={() => handleRemoveItem(row.id.toString())}
                                                     className="text-red-500 hover:text-red-700 font-light"
                                                 >
-                                                    ลบ
+                                                    <Trash2 className='w-4 h-4' />
                                                 </button>
                                             </TableCell>
                                         </TableRow>
