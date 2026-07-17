@@ -15,8 +15,12 @@ type Payment struct {
 	PaymentMethodID uint          `gorm:"not null" json:"payment_method_id" binding:"required"`
 	PaymentMethod   PaymentMethod `gorm:"foreignKey:PaymentMethodID" json:"payment_method"`
 
-	Amount          float64 `gorm:"type:decimal(15,2);not null" json:"amount" binding:"required"`
+	Amount          float64 `gorm:"type:decimal(15,2);not null" json:"amount" binding:"required"` // ยอดเงินที่ระบบบันทึกตัดชำระจริง (ไม่เกินยอดค้างของบิล)
 	ReferenceNumber string  `gorm:"type:varchar(100);" json:"reference_number"`
+
+	// เพิ่ม 2 ฟิลด์นี้ เพื่อบันทึกว่ารายการนี้รับมาเท่าไหร่ ทอนเท่าไหร่
+    ReceivedAmount  float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"received_amount"` 
+    ChangeAmount    float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"change_amount"`
 
 	PaidAt *time.Time `gorm:"type:timestamp;" json:"paid_at"`
 

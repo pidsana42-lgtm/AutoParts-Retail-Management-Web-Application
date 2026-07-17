@@ -11,6 +11,8 @@ type CreateSaleOrderRequest struct {
 	BillDiscountType  string  `json:"bill_discount_type" binding:"required"` // 'none' (ไม่ลด), 'percentage' (ลด%), 'amount' (ลดบาท)
 	BillDiscountValue float64 `json:"bill_discount_value"`                   // ค่าตัวเลขส่วนลดท้ายบิลที่พนักงานคีย์ลงไป
 
+	ReceivedAmount    float64 `json:"received_amount"`
+
 	Note string `json:"note"` // หมายเหตุเพิ่มเติม 
 
 	// ตะกร้าสินค้า มัดรวมรายการอะไหล่ทั้งหมดที่กำลังจะขายส่งมาเป็น Array

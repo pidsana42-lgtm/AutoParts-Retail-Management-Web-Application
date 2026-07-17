@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus,} from "lucide-react";
+import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer,} from "lucide-react";
 import Button from "../../../components/elements/button";
 import { usePosPayment } from "./hooks/usepospayment";
 import { usePosCart } from "./hooks/useposcart";
@@ -10,11 +10,13 @@ import { CustomerCard } from "./components/customercard";
 import Text from "../../../components/elements/text";
 import { TableHead, TableHeader, TableRow } from "../../../components/elements/table";
 import Input from "../../../components/elements/input";
+import { usePosSessionMeta } from "./hooks/usePosSessionMeta";
 
 export default function PosPage(): React.JSX.Element {
   // ─── STATE & HOOK SETUP ───
   const [customerForCart, setCustomerForCart] = React.useState<any>(null);
   const [activeTypeForCart, setActiveTypeForCart] = React.useState<number>(1);
+  const { formatDate, formatTime, currentStaff } = usePosSessionMeta();
 
   // ระบบจัดการสินค้าในตะกร้า 
   const cartHook = usePosCart({
@@ -143,9 +145,9 @@ export default function PosPage(): React.JSX.Element {
 
             <div className="flex flex-col items-end gap-2 text-xs shrink-0">
               <div className="flex bg-[#2D2C2C] rounded-none p-0.5 ">
-                <button type="button" onClick={() => { paymentData.setBillDiscountType("none"); paymentData.setBillDiscountValue(0); }} className={`px-3 py-1 rounded-none transition-all cursor-pointer ${paymentData.billDiscountType === "none" ? "bg-[#E51C23] text-white" : "text-[#D1D5DB] hover:text-zinc-200"}`}>ต่อรายการ</button>
-                <button type="button" onClick={() => { paymentData.setBillDiscountType("amount"); paymentData.setBillDiscountValue(0); }} className={`px-3 py-1 rounded-none transition-all cursor-pointer ${paymentData.billDiscountType === "amount" ? "bg-[#E51C23] text-white" : "text-[#D1D5DB] hover:text-zinc-200"}`}>บิลทั้งหมด (฿)</button>
-                <button type="button" onClick={() => { paymentData.setBillDiscountType("percentage"); paymentData.setBillDiscountValue(0); }} className={`px-3 py-1 rounded-none transition-all cursor-pointer ${paymentData.billDiscountType === "percentage" ? "bg-[#E51C23] text-white" : "text-[#D1D5DB] hover:text-zinc-200"}`}>บิลทั้งหมด (%)</button>
+                <button type="button" onClick={() => { paymentData.updateSession("billDiscountType", "none"); paymentData.updateSession("billDiscountValue", 0);}} className={`px-3 py-1 rounded-none transition-all cursor-pointer ${paymentData.billDiscountType === "none" ? "bg-[#E51C23] text-white" : "text-[#D1D5DB] hover:text-zinc-200"}`}>ต่อรายการ</button>
+                <button type="button" onClick={() => { paymentData.updateSession("billDiscountType", "amount"); paymentData.updateSession("billDiscountValue", 0);}} className={`px-3 py-1 rounded-none transition-all cursor-pointer ${paymentData.billDiscountType === "amount" ? "bg-[#E51C23] text-white" : "text-[#D1D5DB] hover:text-zinc-200"}`}>บิลทั้งหมด (฿)</button>
+                <button type="button" onClick={() => { paymentData.updateSession("billDiscountType", "percentage"); paymentData.updateSession("billDiscountValue", 0);}} className={`px-3 py-1 rounded-none transition-all cursor-pointer ${paymentData.billDiscountType === "percentage" ? "bg-[#E51C23] text-white" : "text-[#D1D5DB] hover:text-zinc-200"}`}>บิลทั้งหมด (%)</button>
               </div>
               <div className="bg-[#2D2C2C] p-2 text-[11px] leading-tight text-[#D1D5DB] max-w-[265px] text-left rounded-none">
                 <span className="text-[#E51C23] mr-1 ">ⓘ</span>
@@ -313,7 +315,6 @@ export default function PosPage(): React.JSX.Element {
                     type="button"
                     onClick={() => {
                       paymentData.updateSession("activeTypeId", type.id);
-                      paymentData.updateSession("paymentMethodId", type.type_name === "GENERAL" ? 1 : 3);
                     }}
                     className={`flex flex-col items-center justify-center text-center transition-all h-10 leading-tight border text-xs ${isActive ? "bg-white border-zinc-400 text-zinc-900 shadow-sm" : "border-transparent text-gray-400 hover:text-gray-600"}`}
                   >
@@ -335,7 +336,7 @@ export default function PosPage(): React.JSX.Element {
                       if (currentActiveType?.type_name === "GENERAL") return alert("ลูกค้าทั่วไปไม่สามารถเลือกโหมดเงินเชื่อได้");
                     }
                     paymentData.setSelectedPaymentType(mode as any);
-                    paymentData.setPaymentMethodId(mode === "CASH" ? 1 : 3);
+                    paymentData.updateSession("paymentMethodId", mode === "CASH" ? 1 : 3);
                   }}
                   className={`text-center py-1.5 border text-xs transition-all ${paymentData.selectedPaymentType === mode ? "bg-white border-zinc-400 text-zinc-900 shadow-sm" : "bg-gray-50 border-gray-200 text-gray-400"}`}
                 >
@@ -375,7 +376,7 @@ export default function PosPage(): React.JSX.Element {
                         if (cust.customer_type) {
                           paymentData.updateSession("activeTypeId", cust.customer_type.id);
                           paymentData.setSelectedPaymentType(cust.customer_type.type_name === "GENERAL" ? "CASH" : "CREDIT");
-                          paymentData.updateSession("paymentMethodId", cust.customer_type.type_name === "GENERAL" ? 1 : 3);
+                          paymentData.updateSession("paymentMethodId", cust.customer_type.type_name === "GENERAL" ? 1 : 1);
                         }
                         if (typeof paymentData.setSearchResults === "function") paymentData.setSearchResults([]);
                       }}
@@ -418,26 +419,48 @@ export default function PosPage(): React.JSX.Element {
 
           <Text variant="small" className="text-[#6B7280] uppercase">เลือกวิธีการชำระเงิน</Text>
           <div className="grid grid-cols-3 gap-2">
-            {paymentData.paymentMethods.map((method) => (
-              <button
-                key={method.id}
-                onClick={() => {
-                  if (method.id === 3) {
-                    const currentActiveType = paymentData.customerTypes.find((t) => t.id === paymentData.activeTypeId);
-                    if (!paymentData.customer && currentActiveType?.type_name === "GENERAL") return alert("ลูกค้าทั่วไปไม่สามารถชำระด้วยเงินเชื่อได้");
-                  }
-                  paymentData.setPaymentMethodId(method.id);
-                }}
-                className={`flex flex-col items-center justify-center py-3 border text-xs transition-all ${paymentData.paymentMethodId === method.id ? "border-red-600 bg-white text-red-600 border-b-4 shadow-sm" : "border-gray-200 bg-[#F9FAFB] text-gray-400 hover:text-zinc-600"}`}
-              >
-                {getPaymentIcon(method.id)} 
-                <span>{method.method_name}</span>
-              </button>
-            ))}
+          {paymentData.paymentMethods.map((method) => (
+            <button
+              key={method.id}
+              onClick={() => {
+                if (method.id === 3) {
+                  const currentActiveType = paymentData.customerTypes.find((t) => t.id === paymentData.activeTypeId);
+                  if (!paymentData.customer && currentActiveType?.type_name === "GENERAL") return alert("ลูกค้าทั่วไปไม่สามารถชำระด้วยเงินเชื่อได้");
+                }
+                paymentData.updateSession("paymentMethodId", method.id);
+                if (method.id === 1 || method.id === 2) {
+                  paymentData.setSelectedPaymentType("CASH");
+                } else if (method.id === 3) {
+                  paymentData.setSelectedPaymentType("CREDIT");
+                }
+              }}
+              className={`flex flex-col items-center justify-center py-3 border text-xs transition-all ${
+                paymentData.paymentMethodId === method.id ? "border-red-600 bg-white text-red-600 border-b-4 shadow-sm" : "border-gray-200 bg-[#F9FAFB] text-gray-400 hover:text-zinc-600"
+              }`}
+            >
+              {getPaymentIcon(method.id)} 
+              <span>{method.method_name}</span>
+            </button>
+          ))}
           </div>
         </div>
 
-        <Button onClick={(e) => { e.preventDefault(); paymentData.handleOpenPaymentModal(); }} variant="primary" size="lg" isLoading={paymentData.isSubmitting} className="w-full mt-6 py-4 text-xl bg-[#E51C23] hover:bg-red-700 text-white rounded-none">ยืนยันการขาย</Button>
+        <Button 
+          onClick={(e) => { 
+            e.preventDefault(); 
+            if (paymentData.selectedPaymentType === "CASH" && paymentData.paymentMethodId === 3) {
+              paymentData.updateSession("paymentMethodId", 1);
+            }
+
+            paymentData.handleOpenPaymentModal(); 
+          }} 
+          variant="primary" 
+          size="lg" 
+          isLoading={paymentData.isSubmitting} 
+          className="w-full mt-6 py-4 text-xl bg-[#E51C23] hover:bg-red-700 text-white rounded-none"
+        >
+          ยืนยันการขาย
+        </Button>
 
         {/* ================= PAYMENT MODAL ================= */}
         {paymentData.isPaymentModalOpen && (
@@ -505,6 +528,7 @@ export default function PosPage(): React.JSX.Element {
                       </div>
                     </div>
 
+                    {/* ส่วนรับเงินมา */}
                     <div className="flex flex-col gap-1.5">
                       <Text variant="xs" className="text-[#1C1B1B] font-medium">รับเงินมา</Text>
                       <div className="grid grid-cols-2 gap-4">
@@ -521,8 +545,9 @@ export default function PosPage(): React.JSX.Element {
                           <Text variant="xs" className="text-[#1C1B1B] ml-2 font-medium">บาท</Text>
                         </div>
                         <div className="flex items-center justify-between w-full px-4 py-6 border-b-1 border-[#E7BDB8]"></div>
-                      </div>
+                      </div>   
                       <div className="grid grid-cols-2 gap-4">
+                        {/* ฝั่งขวา ปุ่มเพิ่มจำนวนเงินที่รับมา */}
                         <div className="grid grid-cols-3 gap-3">
                           {[10, 20, 50, 100, 500, 1000].map((amount) => (
                             <button
@@ -538,6 +563,21 @@ export default function PosPage(): React.JSX.Element {
                               {amount} บาท
                             </button>
                           ))}
+                        </div>
+                        {/*ฝั่งซ้าย วันที่, เวลา, ผู้ดำเนินการ */}
+                        <div>
+                          <div className="flex justify-between items-center">
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">วันที่</Text>
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{formatDate}</Text>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">เวลา</Text>
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{formatTime}</Text>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">ผู้ดำเนินการ</Text>
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{currentStaff}</Text>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -566,11 +606,10 @@ export default function PosPage(): React.JSX.Element {
               </div>
 
               {/* 4. Footer */}
-              <div className="flex p-6 gap-4 border-t bg-gray-50">
-                <button type="button" onClick={() => paymentData.setIsPaymentModalOpen(false)} className="flex-1 py-3 bg-gray-200 font-medium rounded hover:bg-gray-300 transition-colors">ยกเลิก</button>
-                <button type="button" onClick={() => paymentData.submitOrderToDatabase()} className="flex-1 py-3 bg-[#E51C23] text-white font-medium rounded hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                  ยืนยันและพิมพ์ใบเสร็จ
+              <div className="flex p-6 gap-4">
+                <button type="button" onClick={() => paymentData.setIsPaymentModalOpen(false)} className="px-20 py-3 bg-[#E5E2E1] font-normal text-sm rounded-none hover:bg-[#E7E5E4] transition-colors">ยกเลิก</button>
+                <button type="button" onClick={() => paymentData.submitOrderToDatabase()} className="flex-1 py-3 bg-[#E51C23] text-white font-normal text-sm rounded-none hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
+                  <Printer className="w-4 h-4" />ยืนยันและพิมพ์ใบเสร็จ
                 </button>
               </div>
             </div>

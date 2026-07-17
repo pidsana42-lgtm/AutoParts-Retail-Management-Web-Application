@@ -188,16 +188,27 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
 
     if (isExceed) {
       alert(`ส่วนลดท้ายบิลเกินนโยบายร้านค้า\n\nระบบอนุญาตให้ลดสูงสุดไม่เกิน:\n• ${maxExtraConfigRate}% ของยอดรวม\n• หรือไม่เกิน ฿${maxDiscountBaht.toFixed(2)}`);
-      setBillDiscountValue(0);
+      updateSession("billDiscountValue", 0);
       return;
     }
-    setBillDiscountValue(inputValue);
+    
+    updateSession("billDiscountValue", inputValue);
   };
 
   const handleOpenPaymentModal = () => {
     if (cart.length === 0) return alert("กรุณาเลือกสินค้าลงตะกร้า");
-    if (!customer) return alert("กรุณาเลือกบัญชีลูกค้าก่อนครับ");
+    if (!customer) return alert("กรุณาเลือกบัญชีลูกค้า");
+
+    // ตรวจสอบเช็คโหมดหน้าบ้านกับ ID วิธีชำระเงินให้ตรงกันก่อนเปิด Modal
+    let targetMethodId = paymentMethodId;
+    if (selectedPaymentType === "CASH" && targetMethodId === 3) {
+      targetMethodId = 1;
+      updateSession("paymentMethodId", 1);
+    }
+
+    updateSession("receivedAmount", 0);
     setReceivedAmount(0);
+    setDisplayValue(""); 
     setIsPaymentModalOpen(true); 
   };
 
@@ -264,11 +275,17 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       return;
     }
 
+    let finalPaymentMethodId = posSession.paymentMethodId;
+    if (selectedPaymentType === "CASH" || receivedAmount > 0) {
+      finalPaymentMethodId = 1; 
+    }
+
     const salePayload: CreateSaleOrderRequest = {
       customer_id: posSession.customer.id,
       customer_name_temp: posSession.customer.customer_name,
       customer_phone_temp: posSession.customer.phone_number,
-      payment_method_id: posSession.paymentMethodId,
+      received_amount: receivedAmount, 
+      payment_method_id: finalPaymentMethodId,
       bill_discount_type: posSession.billDiscountType,
       bill_discount_value: posSession.billDiscountValue,
       note: "บันทึกบิลขายส่งผ่านระบบ POS หน้าร้าน",
