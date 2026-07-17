@@ -8,7 +8,9 @@ import (
 
 func PurchaseOrdersType(db *gorm.DB) error {
 	purchaseOrdersType := []entity.POType{
-		{PO_type_name: "Procurement"},
+		{ PO_type_name: "Purchase" },
+		{ PO_type_name: "PreOrder" },
+		{ PO_type_name: "Mixed" },
 	}
 
 	for _, pot := range purchaseOrdersType {

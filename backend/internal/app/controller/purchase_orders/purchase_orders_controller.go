@@ -71,8 +71,14 @@ func (ctrl *PurchaseOrderController) GetByID(c *gin.Context) {
 
 	res, err := ctrl.poService.GetPOByID(c.Request.Context(), uri.ID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "purchase order not found"})
-		return
+		switch {
+		case errors.Is(err, poSvc.ErrPONotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "purchase order not found"})
+			return
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, res)
@@ -224,7 +230,7 @@ func (c *PurchaseOrderController) SearchProducts(ctx *gin.Context) {
 	}
 
 	// 2. เรียกใช้ Service
-	products, err := c.poService.SearchProducts(query)
+	products, err := c.poService.SearchProducts(ctx.Request.Context(), query)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "Internal Server Error",
@@ -235,4 +241,72 @@ func (c *PurchaseOrderController) SearchProducts(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"data": products,
 	})
+}
+
+// อัปเดตข้อมูลใบสั่งซื้อ (รายการสินค้า, หมายเหตุ)
+func (ctrl *PurchaseOrderController) UpdatePO(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid purchase order ID format"})
+		return
+	}
+
+	// ใช้ Struct ที่เรารอรับ Notes กับ Items
+	var req poDto.UpdatePurchaseOrderRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// ตรวจสอบ ID ของผู้ทำรายการจาก Token (เหมือนตอน CreatePO)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized: missing user profile"})
+		return
+	}
+
+	var updatedBy uint
+	if idFloat, ok := userID.(float64); ok {
+		updatedBy = uint(idFloat)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id type in token"})
+		return
+	}
+
+	// เรียกใช้งาน UpdatePO จาก Service
+	res, err := ctrl.poService.UpdatePO(c.Request.Context(), uri.ID, &req, updatedBy)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+func (ctrl *PurchaseOrderController) GetSupplierDeliveryEstimate(c *gin.Context) {
+	supplierIDStr := c.Param("supplierId")
+	supplierID, err := strconv.Atoi(supplierIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid supplier id"})
+		return
+	}
+
+	res, err := ctrl.poService.GetSupplierDeliveryEstimate(c.Request.Context(), supplierID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+func (ctrl *PurchaseOrderController) GetMonthlyCount(c *gin.Context) {
+	count, err := ctrl.poService.GetMonthlyPOCount(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch monthly PO count"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"total_count": count})
 }
