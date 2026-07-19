@@ -1,4 +1,14 @@
-// แมตช์ตาม GetCustomerDiscountResponse
+export interface CustomerTypeInterface {
+  id: number;
+  type_name: string;   // เช่น "GENERAL", "GARAGE", "WHOLESALE"
+  type_label?: string;  // เช่น "ลูกค้าทั่วไป", "ลูกค้าอู่ซ่อมรถ", "ลูกค้าบริษัท"
+}
+
+/**
+ * ─── RESPONSES ───
+ */
+
+// แมตช์ตาม GetCustomerDiscountResponse (API ข้อมูลดิบจาก Backend)
 export interface CustomerDiscountResponse {
   id: number;
   phone_number: string;
@@ -6,11 +16,28 @@ export interface CustomerDiscountResponse {
   standard_discount_rate: number;
   is_discount_enabled: boolean;
   current_debt_amount: number;
-  customer_type?: CustomerTypeInterface;
-  ontop_discount_rate?: number; // สิทธิ์ส่วนลดพิเศษสำหรับกลุ่มอู่ซ่อมรถยนต์
+  customer_type?: CustomerTypeInterface; // เชื่อมโยงข้อมูลประเภทลูกค้าด้านบน
+  ontop_discount_rate?: number;           // สิทธิ์ส่วนลดพิเศษสำหรับกลุ่มอู่ซ่อมรถยนต์
   max_credit_limit: number;
   is_credit_enabled: boolean;
 }
+
+// ข้อมูลลูกค้าที่ผ่านการคำนวณและแปลง Format พร้อมใช้บน UI (จาก Custom Hook)
+export interface ComputedCustomerData {
+  customerName: string;
+  phoneNumber: string;
+  isGuest: boolean;
+  isSpecialPrice: boolean;
+  creditUsagePercentage: number;
+  currentDebtStr: string;
+  remainingCreditStr: string;
+  maxCreditLimitStr: string;
+  raw: CustomerDiscountResponse | null;
+}
+
+/**
+ * ─── REQUESTS (API Payloads) ───
+ */
 
 // แมตช์ตาม UpdateCustomerDiscountItemRequest
 export interface UpdateCustomerDiscountItemRequest {
@@ -22,9 +49,4 @@ export interface UpdateCustomerDiscountItemRequest {
 // แมตช์ตาม BulkUpdateCustomerDiscountRequest
 export interface BulkUpdateCustomerDiscountRequest {
   discount_items: UpdateCustomerDiscountItemRequest[];
-}
-export interface CustomerTypeInterface {
-  id: number;
-  type_name: string;  // เช่น "GENERAL", "GARAGE", "WHOLESALE"
-  type_label?: string; // เช่น "ลูกค้าทั่วไป", "ลูกค้าอู่ซ่อมรถ", "ลูกค้าบริษัท"
 }

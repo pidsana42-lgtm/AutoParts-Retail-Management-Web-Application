@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer,} from "lucide-react";
+import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, User,} from "lucide-react";
 import Button from "../../../components/elements/button";
 import { usePosPayment } from "./hooks/usepospayment";
 import { usePosCart } from "./hooks/useposcart";
@@ -11,6 +11,7 @@ import Text from "../../../components/elements/text";
 import { TableHead, TableHeader, TableRow } from "../../../components/elements/table";
 import Input from "../../../components/elements/input";
 import { usePosSessionMeta } from "./hooks/usePosSessionMeta";
+import {useCustomerFinancials} from "./hooks/useCustomerFinancials";
 
 export default function PosPage(): React.JSX.Element {
   // ─── STATE & HOOK SETUP ───
@@ -43,6 +44,8 @@ export default function PosPage(): React.JSX.Element {
     default: return <Coins size={18} className="mb-1" />; 
   }
 }
+
+  const { customerName } = useCustomerFinancials(paymentData.customer);
 
   // ซิงค์ข้อมูลสิทธิ์ลูกค้าระหว่าง 2 Hooks เวลาเปลี่ยนลูกค้าใหม่หรือเปลี่ยนประเภทลูกค้า (Active Type) 
   React.useEffect(() => {
@@ -325,7 +328,7 @@ export default function PosPage(): React.JSX.Element {
               })}
             </div>
 
-            <div className="grid grid-cols-2 gap-1 mb-4">
+            {/* <div className="grid grid-cols-2 gap-1 mb-4">
               {["CASH", "CREDIT"].map((mode) => (
                 <button
                   key={mode}
@@ -343,7 +346,7 @@ export default function PosPage(): React.JSX.Element {
                   {mode === "CASH" ? "เงินสด" : "เงินเชื่อ"}
                 </button>
               ))}
-            </div>
+            </div> */}
 
             <div className="relative w-full">
               <form onSubmit={paymentData.handleSearchCustomer} className="flex flex-col gap-1.5">            
@@ -530,7 +533,7 @@ export default function PosPage(): React.JSX.Element {
 
                     {/* ส่วนรับเงินมา */}
                     <div className="flex flex-col gap-1.5">
-                      <Text variant="xs" className="text-[#1C1B1B] font-medium">รับเงินมา</Text>
+                      <Text variant="small" className="text-[#1C1B1B] font-medium">รับเงินมา</Text>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-baseline justify-between w-full px-4 py-4 bg-white border-b-2 border-[#E7BDB8]">
                           <Input 
@@ -548,7 +551,7 @@ export default function PosPage(): React.JSX.Element {
                       </div>   
                       <div className="grid grid-cols-2 gap-4">
                         {/* ฝั่งขวา ปุ่มเพิ่มจำนวนเงินที่รับมา */}
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-3 gap-3 mt-4">
                           {[10, 20, 50, 100, 500, 1000].map((amount) => (
                             <button
                               key={amount}
@@ -565,7 +568,7 @@ export default function PosPage(): React.JSX.Element {
                           ))}
                         </div>
                         {/*ฝั่งซ้าย วันที่, เวลา, ผู้ดำเนินการ */}
-                        <div>
+                        <div className="mt-4">
                           <div className="flex justify-between items-center">
                             <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">วันที่</Text>
                             <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{formatDate}</Text>
@@ -594,12 +597,59 @@ export default function PosPage(): React.JSX.Element {
 
                 {paymentData.paymentMethodId === 3 && (
                   <div className="space-y-4">
-                    <div className="bg-blue-50 p-4 border border-blue-200 rounded">
-                      <p className="text-sm text-blue-800 font-medium">เครดิตคงเหลือ: <span className="font-bold text-lg">{paymentData.customer?.max_credit_limit?.toLocaleString() || "0"} บาท</span></p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="border-l-3 border-[#E51C23] p-4 bg-[#F0EDEC]">
+                        <Text variant="xs" className="text-[#5F5E5E]">ยอดชำระสุทธิ</Text>
+                        <div className="flex justify-between items-baseline mt-2">
+                          <Text variant="fourxl">{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                          <Text variant="xs" className="text-[#1C1B1B]">บาท</Text>
+                        </div>
+                      </div>
+                      <div className="border-l-3 border-[#2563EB] p-4 bg-[#EFF6FF]">
+                        <Text variant="xs" className="text-[#2563EB]">เครดิตคงเหลือ</Text>
+                        <div className="flex justify-between items-baseline mt-2">
+                          <Text variant="fourxl" className={`text-[#2563EB] truncate ${Math.max(0, paymentData.receivedAmount - paymentData.finalTotal) > 999999 ? "text-2xl" : "text-4xl"}`}>
+                            {paymentData.customer?.max_credit_limit?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}
+                          </Text>
+                          <Text variant="xs" className="text-[#2563EB]">บาท</Text>
+                        </div>
+                      </div>
                     </div>
                     <div>
-                      <p className="text-sm mb-2 font-medium">ระบุชื่อผู้รับของ / ผู้สั่งซื้อ</p>
-                      <input type="text" className="w-full border-b border-gray-300 outline-none p-2 focus:border-red-600" placeholder="ระบุชื่อ..." value={paymentData.receiverName} onChange={(e) => paymentData.setReceiverName(e.target.value)} />
+                      <Text variant="small" className="text-[#1C1B1B] font-medium">ชื่อผู้รับของ / ผู้สั่งซื้อ </Text>
+                       <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-baseline justify-between w-full px-4 py-2 bg-white border-b-2 border-[#E7BDB8]">
+                          <Input 
+                              type="text" 
+                              className="w-full text-lg text-[#1C1B1B] font-normal bg-transparent border-none focus:outline-none [appearance:textfield] p-0 placeholder-[#6B7280]"                              
+                              value={paymentData.receiverName} 
+                              onChange={(e) => paymentData.setReceiverName(e.target.value)} 
+                              placeholder="ระบุชื่อผู้รับของ..." 
+                            />
+                            <User className="w-5 h-5 text-[#1C1B1B] shrink-0" />
+                        </div>
+                        <div className="flex items-center justify-between w-full px-4 py-6 border-b-1 border-[#E7BDB8]"></div>
+                      </div>  
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="border-l-3 border-[#E7BDB8] p-4 mt-4 bg-[#F0EDEC]">
+                          <Text variant="xs" className="text-[#1C1B1B] font-light">* ระบบจะดำเนินการเพิ่มยอดหนี้ในบัญชีของ<br /><span className="font-medium">{customerName}</span>{" "}ทันทีหลังจากยืนยันรายการ</Text>
+                        </div>
+                        {/*ฝั่งซ้าย วันที่, เวลา, ผู้ดำเนินการ */}
+                        <div className="mt-4">
+                          <div className="flex justify-between items-center">
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">วันที่</Text>
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{formatDate}</Text>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">เวลา</Text>
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{formatTime}</Text>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">ผู้ดำเนินการ</Text>
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{currentStaff}</Text>
+                          </div>
+                        </div>
+                      </div> 
                     </div>
                   </div>
                 )}
