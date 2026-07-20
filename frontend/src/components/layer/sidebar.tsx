@@ -1,5 +1,5 @@
 import React from "react";
-import { Menu, ChevronLeft, LogOut, Percent } from "lucide-react";
+import { Menu, ChevronLeft, LogOut, Percent,  } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContexts";
 import { useMenu } from "../../hooks/useMenu"; 
@@ -47,7 +47,7 @@ export default function Sidebar({
             const isActive =
               location.pathname === item.path ||
               (item.subPath ? location.pathname === item.subPath : false) ||
-              (item.subMenus ? item.subMenus.some(sub => location.pathname === sub.path.split('?')[0]) : false);
+              (item.subs ? item.subs.some(sub => location.pathname === sub.path.split('?')[0]) : false);
 
             return (
               <li key={index} className="relative group">
@@ -62,10 +62,10 @@ export default function Sidebar({
                 </button>
 
                 {/* Submenu Area */}
-                {isActive && (item.subPath || item.subMenus) && (
+                {isActive && (item.subPath || item.subs) && (
                   <div className="flex flex-col">
-                    {item.subMenus ? (
-                      item.subMenus.map((sub, sIdx) => {
+                    {item.subs ? (
+                      item.subs.map((sub, sIdx) => {
                         const SubIcon = sub.icon || Percent;
                         const isSubActive = location.pathname + location.search === sub.path || location.pathname === sub.path;
                         return (
@@ -88,9 +88,7 @@ export default function Sidebar({
                         onClick={() => navigate(item.subPath!)}
                         className={`bg-[#181818] py-2 flex items-center cursor-pointer hover:bg-[#202020] ${location.pathname === item.subPath ? "text-gray-400" : "text-gray-500"} ${collapsed ? "justify-center" : "pl-13 py-3 text-xs"}`}
                       >
-                        <SubIcon
-                          className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-gray-400"} ${!collapsed ? "mr-3" : ""}`}
-                        />
+                        
                         {!collapsed && (
                           <span className="ml-2 truncate">{item.subLabel || ""}</span>
                         )}
