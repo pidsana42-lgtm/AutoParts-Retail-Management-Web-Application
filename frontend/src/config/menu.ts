@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-export interface SubMenuItem {
+export interface MenuSubItem {
   icon?: LucideIcon;
   label: string;
   path: string;
@@ -19,7 +19,7 @@ export interface MenuItem {
   subPath?: string;
   subLabel?: string;
   subIcon?: LucideIcon;
-  subMenus?: SubMenuItem[];
+
 }
 
 export const SIDEBAR_MENUS: MenuItem[] = [
@@ -45,6 +45,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
     subs: [
       { icon: ArrowLeftRight, path: "/owner/stock/stock-movement", label: "การเคลื่อนไหวของคลังสินค้า" },
       { icon: FolderPlus, path: "/owner/stock/stock-data", label: "สร้างข้อมูลสินค้า" },
+
     ],
   },
   { icon: MonitorSmartphone, label: "ระบบขาย POS", path: "/employee/pos", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"] },
@@ -56,7 +57,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
     label: "คืน และ เคลมสินค้า", 
     path: "/owner/claims", 
     roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],
-    subMenus: [
+    subs: [
       { label: "รายการเคลมสินค้า", path: "/owner/claims", icon: FileText },
       { label: "รายการคืนสินค้า", path: "/owner/returns", icon: RefreshCw }
     ]
