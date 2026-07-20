@@ -20,6 +20,8 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
+        timeout: 300000,      // 5 minutes (300k ms)
+        proxyTimeout: 300000, // 5 minutes
         rewrite: (path) => path.replace(/^\/ocr/, ''),
       },
     },
