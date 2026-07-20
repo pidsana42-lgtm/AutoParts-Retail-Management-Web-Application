@@ -63,6 +63,8 @@ export default function PosPage(): React.JSX.Element {
     WHOLESALE: "SPECIAL",
   };
 
+  console.log("ข้อมูลลูกค้า:", paymentData.customer);
+
   return (
     <div className="flex flex-col lg:flex-row bg-white min-h-[calc(100vh-4rem)] text-gray-800 antialiased overflow-x-hidden">
       
@@ -321,7 +323,7 @@ export default function PosPage(): React.JSX.Element {
                     }}
                     className={`flex flex-col items-center justify-center text-center transition-all h-10 leading-tight border text-xs ${isActive ? "bg-white border-zinc-400 text-zinc-900 shadow-sm" : "border-transparent text-gray-400 hover:text-gray-600"}`}
                   >
-                    {type.type_label?.replace("ลูกค้า", "") || type.type_name}
+                    {type.customer_type_label?.replace("ลูกค้า", "") || type.type_name}
                     <span className="text-[9px] block">{subLabelMap[type.type_name] || type.type_name}</span>
                   </button>
                 );
@@ -485,7 +487,7 @@ export default function PosPage(): React.JSX.Element {
                   </div>
                   <div className="text-right text-xs mr-2">
                     <p className="text-[#1C1B1B] mb-0.5">ประเภท:</p>
-                    <p className="text-[#E51C23] ">{paymentData.customer?.customer_type?.type_label || "ทั่วไป"}</p>
+                    <p className="text-[#E51C23] ">{paymentData.customer?.customer_type?.customer_type_label || "ทั่วไป"}</p>
                   </div>
                 </div>
 
