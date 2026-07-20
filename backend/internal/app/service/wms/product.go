@@ -107,7 +107,7 @@ func triggerBarcodeGen(ids []uint) {
 		client := http.Client{
 			Timeout: 15 * time.Second,
 		}
-		fastAPIURL := "http://localhost:8000/api/products/generate-codes"
+		fastAPIURL := "http://127.0.0.1:8000/api/products/generate-codes"
 		resp, errReq := client.Post(fastAPIURL, "application/json", bytes.NewBuffer(jsonPayload))
 		if errReq != nil {
 			log.Printf("[WMS] Error calling FastAPI to generate product codes: %v\n", errReq)

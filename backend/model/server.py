@@ -32,8 +32,9 @@ MOCK_MODE = os.getenv("MOCK_LLM", "false").lower() == "true"
 # Retrieve API key (check GOOGLE_STUDIO first, and strip any leading/trailing spaces)
 GEMINI_API_KEY = (os.getenv("GOOGLE_STUDIO") or os.getenv("GEMINI_API_KEY") or "").strip()
 GEMINI_MODEL = (os.getenv("GEMINI_MODEL") or "google/gemini-3.1-pro").strip()
-LIGHTNING_API_KEY = (os.getenv("LIGHTNING_API_KEY") or "").strip()
-print(f"Loaded LIGHTNING_API_KEY: {LIGHTNING_API_KEY[:6]}...{LIGHTNING_API_KEY[-6:] if len(LIGHTNING_API_KEY) > 12 else ''} (Length: {len(LIGHTNING_API_KEY)})")
+# Force disable cloud Gemini fallbacks by clearing key as requested
+LIGHTNING_API_KEY = ""
+print("Cloud Gemini Fallbacks are currently disabled.")
 
 # Global variables
 engine = None
@@ -174,6 +175,7 @@ def extract_mock_data(image_path_or_url):
         "total_amount": 15450.00,
         "due_date": "2026-07-24",
         "transport_by": "Kerry Express Logistics",
+        "supplier_name": "AP Auto Parts Co., Ltd.",
         "supplier_id": 1,
         "subtotal": 14439.25,
         "discount_total": 500.00,
@@ -250,14 +252,16 @@ def get_local_llm():
                     model_path = hf_hub_download(
                         repo_id="Phonsiri/Gemma-4-E4B-it-PARL-GGUF", 
                         filename="Gemma-4-E4B-it-PARL-Q4_K_M.gguf",
-                        local_dir=model_dir
+                        local_dir=model_dir,
+                        local_dir_use_symlinks=False
                     )
                 if not os.path.exists(clip_path):
                     print(f"Downloading Gemma-4-E4B-it-PARL-mmproj.gguf to {model_dir}...")
                     clip_path = hf_hub_download(
                         repo_id="Phonsiri/Gemma-4-E4B-it-PARL-GGUF", 
                         filename="Gemma-4-E4B-it-PARL-mmproj.gguf",
-                        local_dir=model_dir
+                        local_dir=model_dir,
+                        local_dir_use_symlinks=False
                     )
             except Exception as dl_err:
                 raise RuntimeError(
@@ -284,8 +288,8 @@ def get_local_llm():
         local_llm = Llama(
             model_path=model_path,
             chat_handler=chat_handler,
-            n_ctx=4096,        # เพิ่มจาก 2048 → รูป(266) + prompt(250) + JSON(800) = ~1316 tokens
-            n_gpu_layers=0,    # บังคับใช้ CPU เท่านั้นเพื่อหลีกเลี่ยงบั๊ก Metal compiler บน Apple M4 Mac
+            n_ctx=16384,       # กำหนดขนาด context window เพื่อรองรับ prompt และผลลัพธ์ JSON ขนาดใหญ่
+            n_gpu_layers=-1,   # โหลดโมเดลทั้งหมดลงบน Apple Silicon Metal (MPS GPU) เพื่อความเร็วสูงสุด
             verbose=False      # ซ่อน log tensor loading เยอะๆ
         )
         print("Local Gemma 4 model loaded successfully!")
@@ -315,7 +319,7 @@ async def lifespan(app: FastAPI):
             get_local_llm()
         except Exception as llm_err:
             print(f"Warning: Could not pre-load local model during startup: {llm_err}")
-    
+
     yield
     print("Shutting down OCR Service")
 
@@ -343,20 +347,370 @@ class ExtractRequest(BaseModel):
     file_path: str
     job_id: int = None
 
-def perform_ocr(img, image_name_for_mock="image.jpg"):
+def extract_text_via_typhoon(img, image_name_for_mock="image.jpg"):
+    TYPHOON_API_KEY = (os.getenv("api_key") or "").strip()
+    if not TYPHOON_API_KEY:
+        print("Warning: api_key (Typhoon) not found in environment!")
+        return None
+        
+    import io
+    img_byte_arr = io.BytesIO()
+    temp_img = img.copy()
+    if temp_img.mode in ('RGBA', 'LA', 'P'):
+        temp_img = temp_img.convert('RGB')
+    temp_img.save(img_byte_arr, format='JPEG', quality=95)
+    img_bytes = img_byte_arr.getvalue()
+    
+    url = "https://api.opentyphoon.ai/v1/ocr"
+    files = {'file': (image_name_for_mock, img_bytes, 'image/jpeg')}
+    data = {
+        'model': 'typhoon-ocr',
+        'max_tokens': '16384',
+        'temperature': '0.1',
+        'top_p': '0.6',
+        'repetition_penalty': '1.2'
+    }
+    headers = {
+        'Authorization': f'Bearer {TYPHOON_API_KEY}'
+    }
+    
+    print(f"Attempting OpenTyphoon OCR for {image_name_for_mock}...")
+    try:
+        response = requests.post(url, files=files, data=data, headers=headers, timeout=60)
+        if response.status_code == 200:
+            result = response.json()
+            extracted_texts = []
+            for page_result in result.get('results', []):
+                if page_result.get('success') and page_result.get('message'):
+                    content = page_result['message']['choices'][0]['message']['content']
+                    try:
+                        parsed_content = json.loads(content)
+                        text = parsed_content.get('natural_text', content)
+                    except json.JSONDecodeError:
+                        text = content
+                    extracted_texts.append(text)
+                elif not page_result.get('success'):
+                    print(f"Error processing page: {page_result.get('error', 'Unknown error')}")
+            
+            full_text = '\n'.join(extracted_texts)
+            return full_text
+        else:
+            print(f"OpenTyphoon OCR returned error {response.status_code}: {response.text}")
+            return None
+    except Exception as e:
+        print(f"Failed to connect to OpenTyphoon OCR: {e}")
+        return None
+
+def match_bill_supplier(result):
+    """
+    Attempts to match the extracted 'supplier_name' to a supplier_id in the database
+    using exact or fuzzy/substring text matching.
+    """
+    if "supplier_name" not in result or not result["supplier_name"]:
+        # Fallback default supplier_id = 1 if not extracted
+        if "supplier_id" not in result or not result["supplier_id"]:
+            result["supplier_id"] = 1
+        return result
+        
+    supplier_name_extracted = str(result["supplier_name"]).strip()
+    if not supplier_name_extracted:
+        if "supplier_id" not in result or not result["supplier_id"]:
+            result["supplier_id"] = 1
+        return result
+        
+    try:
+        if engine is not None:
+            with engine.begin() as conn:
+                query = text("SELECT id, supplier_name, short_supplier_name FROM suppliers")
+                rows = conn.execute(query).fetchall()
+                
+                name_clean = supplier_name_extracted.lower().replace("บริษัท", "").replace("จำกัด", "").replace("บจก.", "").replace("หจก.", "").strip()
+                
+                best_match_id = None
+                best_match_score = 0.0
+                
+                for r in rows:
+                    sup_id = r[0]
+                    sup_name = r[1] or ""
+                    short_name = r[2] or ""
+                    
+                    sup_name_lower = sup_name.lower()
+                    short_name_lower = short_name.lower()
+                    
+                    # Clean names for comparison
+                    sup_name_clean = sup_name_lower.replace("บริษัท", "").replace("จำกัด", "").replace("บจก.", "").replace("หจก.", "").strip()
+                    short_name_clean = short_name_lower.replace("บริษัท", "").replace("จำกัด", "").replace("บจก.", "").replace("หจก.", "").strip()
+                    
+                    # Exact matches on full or short name
+                    if name_clean == sup_name_clean or name_clean == short_name_clean:
+                        result["supplier_id"] = sup_id
+                        print(f"[Supplier Match] Exact match found: '{supplier_name_extracted}' -> Supplier ID {sup_id} ('{sup_name}')")
+                        return result
+                        
+                    # Fuzzy/substring match: check if clean name is a substring or vice-versa
+                    if name_clean and (name_clean in sup_name_clean or sup_name_clean in name_clean or name_clean in short_name_clean):
+                        overlap_score = len(name_clean) / max(len(sup_name_clean), 1)
+                        if overlap_score > best_match_score:
+                            best_match_score = overlap_score
+                            best_match_id = sup_id
+                            
+                if best_match_id and best_match_score >= 0.3:
+                    result["supplier_id"] = best_match_id
+                    print(f"[Supplier Match] Fuzzy match found: '{supplier_name_extracted}' -> Supplier ID {best_match_id} (Score: {best_match_score:.2f})")
+                    return result
+                
+                # If no match is found, dynamically create the supplier so it can be pre-selected in the UI!
+                import time
+                words = name_clean.split()
+                short_name = "".join([w[0].upper() for w in words if w])[:5]
+                if not short_name:
+                    short_name = supplier_name_extracted[:3].upper()
+                
+                email_fallback = f"sale_{short_name.lower()}_{int(time.time())}@na.com"
+                
+                insert_query = text(
+                    "INSERT INTO suppliers (supplier_name, short_supplier_name, supplier_address, contact_line_sale, phone_number_sale, email_sale, bank_account_number, created_at, updated_at) "
+                    "VALUES (:name, :short, 'N/A', 'N/A', 'N/A', :email, 'N/A', NOW(), NOW()) RETURNING id"
+                )
+                insert_res = conn.execute(insert_query, {
+                    "name": supplier_name_extracted, 
+                    "short": short_name,
+                    "email": email_fallback
+                })
+                new_id = insert_res.fetchone()[0]
+                result["supplier_id"] = new_id
+                print(f"[Supplier Match] Created new supplier '{supplier_name_extracted}' with ID {new_id}")
+                return result
+                    
+        # If no DB match is found, default to 1
+        if "supplier_id" not in result or not result["supplier_id"]:
+            result["supplier_id"] = 1
+            
+    except Exception as e:
+        print(f"Error matching/creating bill supplier: {e}")
+        if "supplier_id" not in result or not result["supplier_id"]:
+            result["supplier_id"] = 1
+            
+    return result
+
+async def perform_ocr(img, image_name_for_mock="image.jpg"):
     if MOCK_MODE:
         print("Mock Mode active. Returning mock data.")
         return extract_mock_data(image_name_for_mock)
-        
     try:
-        prompt = """You are an expert in reading Thai auto parts store bills (บิลร้านอะไหล่รถยนต์).
-Analyze the invoice/bill image carefully. You can intelligently correct typos, guess garbled characters, and reconstruct words using the auto parts context, brand names (e.g. ISUZU, TOYOTA, FORD, KUBOTA, MAZDA), and item descriptions.
-Return ONLY a raw JSON object (no markdown, no explanation) with this exact structure:
+        # Step 1: OpenTyphoon OCR to extract text in Markdown/Natural Text
+        extracted_markdown = extract_text_via_typhoon(img, image_name_for_mock)
+        
+        # We will build base64 for image_url if we need to fall back to visual model
+        import io
+        import base64
+        img_byte_arr = io.BytesIO()
+        temp_img = img.copy()
+        if temp_img.mode in ('RGBA', 'LA', 'P'):
+            temp_img = temp_img.convert('RGB')
+        temp_img.save(img_byte_arr, format='JPEG', quality=95)
+        img_bytes = img_byte_arr.getvalue()
+        img_b64 = base64.b64encode(img_bytes).decode('utf-8')
+        
+        generated_text = None
+
+        if extracted_markdown:
+            print("Successfully obtained markdown text from OpenTyphoon OCR. Structuring via LLM...")
+            # Prompt for structuring text
+            prompt = f"""You are an expert OCR JSON Structurer specializing in agricultural machinery and auto parts invoices/bills (บิลร้านอะไหล่รถยนต์).
+Analyze the following extracted markdown text from an invoice/bill carefully. You can intelligently correct typos, guess garbled characters, and reconstruct words using the auto parts context, brand names (e.g. FORD, NEWHOLLAND, KUBOTA, ISUZU, TOYOTA, BOSCH), and item descriptions.
+
+Follow these strict extraction guidelines for this layout:
+1. Invoice Metadata:
+   - "bill_no": Extract from the bill number field (e.g. "IV-202507/01229").
+   - "due_date": Calculate/reconstruct the date based on "วันที่" and "ระยะเครดิต" (e.g. if purchase date is 29/07/2025 and term is 90 days, due_date is 2025-10-27).
+   - "credit_term": Extract the term details (e.g. "90 Days" or "90 วัน").
+   - "transport_by": Extract from "ขนส่งโดย" if present.
+   - "supplier_name": Extract the supplier company name visible in the invoice header/logo (e.g. "บริษัท ไทยออโตพาร์ท จำกัด" or "เจ.เจ. อะไหล่").
+   - "subtotal", "vat_amount", & "grand_total": Extract the corresponding financial summaries at the bottom.
+
+2. Line Items Extraction:
+   - Identify rows by the sequence number under the "ลำดับ" column.
+   - Product Codes: If the "รหัสสินค้า" column contains multiple stacked codes (e.g. "07862" and "A2-260404F"), combine them into "company_product_code" (e.g. "A2-260404F / 07862").
+   - Product Name: The "รายการ" description column may span multiple lines (including compatibility/cross-reference numbers). Group all subsequent lines belonging to the same sequence into a single, clean "company_product_name" string. Do not split them into separate items.
+   - Units: Clean unit string inside parentheses, e.g. change "เส้น(1)" to "เส้น", "ลูก(1)" to "ลูก", and "อัน(1)" to "อัน".
+   - Numbers & Pricing: Clean any comma separators from numbers (e.g. "1,200.00" -> 1200.00). If a discount column is empty or "-", set it to 0.0.
+
+3. Auto Parts Terminology Spelling Corrections (แก้ไขคำสะกดผิดทางภาษาไทยในบริบทอะไหล่รถยนต์/แทรกเตอร์):
+   - You MUST actively correct typical OCR spelling mistakes using the agricultural machinery and auto parts store domain context.
+   - Examples of common corrections you must apply to the item names:
+     * "สายซัก", "สายขึ้ก", "สายชักข้าง..." -> "สายชัก" (Steering linkages / chains)
+     * "เว๋า", "เวีย" -> "เว้า" (e.g. "สายชักข้างหัวงอ เว้า ยาว 32\"")
+     * "ฝาปิดถังเชล่า", "ถังเชล่า" -> "ฝาปิดถังโซล่า" (Fuel tank cap)
+     * "ปิ๊มน้ำ", "ปั้มน้ำ", "ปั้มน้ำดูโบ๊ค" -> "ปั๊มน้ำคูโบต้า" (Kubota Water Pump)
+     * "ยางหมวดเบรค", "ยางหมวกเปรค" -> "ยางหมวกเบรค"
+     * "มีบริษัท", "มีบริปริม" -> "มีสปริง" (e.g. "มีสปริง" instead of "มีบริษัท" or "มีบริปริม")
+     * "ลูกบนพื้นชุด", "ลูกบนทั่งชุด" -> "ลูกบนทั้งชุด" (e.g. "กรองอากาศลูกบนทั้งชุด")
+     * "NEXTWHolland", "NEXTWOLLAND", "NEXTHOLLAND" -> "NEWHOLLAND" (New Holland tractor brand)
+     * "ดูโบต้า", "ดูโบ๊ค" -> "คูโบต้า" (Kubota brand)
+
+Return ONLY a raw JSON object (no markdown block wrappers, no explanation) with this exact structure:
+{{
+  "bill_no": "Invoice/Bill number visible in the image",
+  "total_amount": 0.0,
+  "due_date": "YYYY-MM-DD",
+  "transport_by": "Transportation provider if shown, else null",
+  "supplier_name": "Supplier company name extracted from invoice header",
+  "supplier_id": 1,
+  "subtotal": 0.0,
+  "discount_total": 0.0,
+  "credit_term": "e.g. 30 Days or null",
+  "vat_amount": 0.0,
+  "grand_total": 0.0,
+  "payment_status": "unpaid",
+  "items": [
+    {{
+      "item_sequence": 1,
+      "company_product_code": "product code from invoice",
+      "company_product_name": "product name from invoice",
+      "order_quantity": 1,
+      "unit": "PCS",
+      "conversion_factor": 1.0,
+      "price_per_unit": 0.0,
+      "discount_amount": 0.0,
+      "net_amount": 0.0,
+      "is_freebie": false,
+      "remark": "",
+      "product_id": null
+    }}
+  ]
+}}
+
+Extracted Invoice Markdown:
+\"\"\"
+{extracted_markdown}
+\"\"\"
+
+Extract every line item. Use null for missing fields. Do not include any thinking or reasoning process (do not output <think>...</think> block). Return ONLY the JSON, nothing else."""
+
+            def is_valid_structured_json(text_content):
+                if not text_content:
+                    return False
+                try:
+                    cleaned = re.sub(r"<think>.*?</think>", "", text_content, flags=re.DOTALL).strip()
+                    if cleaned.startswith("```"):
+                        cleaned = re.sub(r"```(?:json)?\s*", "", cleaned)
+                        cleaned = re.sub(r"```\s*$", "", cleaned).strip()
+                    cleaned = re.sub(r'(?<=\d),(?=\d)', '', cleaned)
+                    parsed = json.loads(cleaned)
+                    if "items" in parsed and len(parsed["items"]) > 0:
+                        return True
+                except Exception:
+                    pass
+                return False
+
+            # Try local LLM first to structure text
+            try:
+                llm = get_local_llm()
+                print("Performing local text-only structuring with Gemma 4 GGUF model...")
+                import asyncio
+                response = await asyncio.to_thread(
+                    llm.create_chat_completion,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    temperature=0.1,
+                    max_tokens=8192
+                )
+                local_text = response['choices'][0]['message']['content']
+                print(f"Local text-only model raw output (first 1000 chars):\n{local_text[:1000]}\n----------------------")
+                if is_valid_structured_json(local_text):
+                    generated_text = local_text
+                    print("Local text-only model structuring completed successfully and is valid!")
+                else:
+                    print("Local text-only model output was invalid or contained no items. Invalidating...")
+                    generated_text = None
+            except Exception as local_err:
+                print(f"Local text-only model structuring failed: {local_err}")
+                generated_text = None
+                
+            # If local LLM fails or is invalid, fallback to cloud LLM to structure text
+            if generated_text is None and LIGHTNING_API_KEY:
+                print("Falling back to Lightning AI completions API (Gemini model) for text-only structuring...")
+                try:
+                    headers = {
+                        "Authorization": f"Bearer {LIGHTNING_API_KEY}",
+                        "Content-Type": "application/json"
+                    }
+                    payload = {
+                        "model": GEMINI_MODEL,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ]
+                    }
+                    resp = requests.post(
+                        url="https://lightning.ai/api/v1/chat/completions",
+                        headers=headers,
+                        json=payload,
+                        timeout=60
+                    )
+                    resp.raise_for_status()
+                    resp_json = resp.json()
+                    cloud_text = resp_json['choices'][0]['message']['content']
+                    if is_valid_structured_json(cloud_text):
+                        generated_text = cloud_text
+                        print("Lightning AI text-only fallback completed successfully and is valid!")
+                    else:
+                        print("Lightning AI text-only fallback output was invalid or contained no items. Invalidating...")
+                        generated_text = None
+                except Exception as lightning_err:
+                    print(f"Lightning AI text-only fallback failed: {lightning_err}")
+                    generated_text = None
+
+        # If OpenTyphoon OCR failed, fall back to direct multimodal vision model
+        if generated_text is None:
+            print("Warning: OpenTyphoon OCR or text structuring failed. Falling back to direct multimodal vision OCR...")
+            
+            prompt_vision = """You are an expert OCR AI specializing in reading agricultural machinery and auto parts invoices/bills (บิลร้านอะไหล่รถยนต์).
+Analyze the provided invoice image carefully. You can intelligently correct typos, guess garbled characters, and reconstruct words using the auto parts context, brand names (e.g. FORD, NEWHOLLAND, KUBOTA, ISUZU, TOYOTA, BOSCH), and item descriptions.
+
+Follow these strict extraction guidelines for this layout:
+1. Invoice Metadata:
+   - "bill_no": Extract from the bill number field (e.g. "IV-202507/01229").
+   - "due_date": Calculate/reconstruct the date based on "วันที่" and "ระยะเครดิต" (e.g. if purchase date is 29/07/2025 and term is 90 days, due_date is 2025-10-27).
+   - "credit_term": Extract the term details (e.g. "90 Days" or "90 วัน").
+   - "transport_by": Extract from "ขนส่งโดย" if present.
+   - "supplier_name": Extract the supplier company name visible in the invoice header/logo (e.g. "บริษัท ไทยออโตพาร์ท จำกัด" or "เจ.เจ. อะไหล่").
+   - "subtotal", "vat_amount", & "grand_total": Extract the corresponding financial summaries at the bottom.
+
+2. Line Items Extraction:
+   - Identify rows by the sequence number under the "ลำดับ" column.
+   - Product Codes: If the "รหัสสินค้า" column contains multiple stacked codes (e.g. "07862" and "A2-260404F"), combine them into "company_product_code" (e.g. "A2-260404F / 07862").
+   - Product Name: The "รายการ" description column may span multiple lines (including compatibility/cross-reference numbers). Group all subsequent lines belonging to the same sequence into a single, clean "company_product_name" string. Do not split them into separate items.
+   - Units: Clean unit string inside parentheses, e.g. change "เส้น(1)" to "เส้น", "ลูก(1)" to "ลูก", and "อัน(1)" to "อัน".
+   - Numbers & Pricing: Clean any comma separators from numbers (e.g. "1,200.00" -> 1200.00). If a discount column is empty or "-", set it to 0.0.
+
+3. Auto Parts Terminology Spelling Corrections (แก้ไขคำสะกดผิดทางภาษาไทยในบริบทอะไหล่รถยนต์/แทรกเตอร์):
+   - You MUST actively correct typical OCR spelling mistakes using the agricultural machinery and auto parts store domain context.
+   - Examples of common corrections you must apply to the item names:
+     * "สายซัก", "สายขึ้ก", "สายชักข้าง..." -> "สายชัก" (Steering linkages / chains)
+     * "เว๋า", "เวีย" -> "เว้า" (e.g. "สายชักข้างหัวงอ เว้า ยาว 32\"")
+     * "ฝาปิดถังเชล่า", "ถังเชล่า" -> "ฝาปิดถังโซล่า" (Fuel tank cap)
+     * "ปิ๊มน้ำ", "ปั้มน้ำ", "ปั้มน้ำดูโบ๊ค" -> "ปั๊มน้ำคูโบต้า" (Kubota Water Pump)
+     * "ยางหมวดเบรค", "ยางหมวกเปรค" -> "ยางหมวกเบรค"
+     * "มีบริษัท", "มีบริปริม" -> "มีสปริง" (e.g. "มีสปริง" instead of "มีบริษัท" or "มีบริปริม")
+     * "ลูกบนพื้นชุด", "ลูกบนทั่งชุด" -> "ลูกบนทั้งชุด" (e.g. "กรองอากาศลูกบนทั้งชุด")
+     * "NEXTWHolland", "NEXTWOLLAND", "NEXTHOLLAND" -> "NEWHOLLAND" (New Holland tractor brand)
+     * "ดูโบต้า", "ดูโบ๊ค" -> "คูโบต้า" (Kubota brand)
+
+Return ONLY a raw JSON object (no markdown block wrappers, no explanation) with this exact structure:
 {
   "bill_no": "Invoice/Bill number visible in the image",
   "total_amount": 0.0,
   "due_date": "YYYY-MM-DD",
   "transport_by": "Transportation provider if shown, else null",
+  "supplier_name": "Supplier company name extracted from invoice header",
   "supplier_id": 1,
   "subtotal": 0.0,
   "discount_total": 0.0,
@@ -381,84 +735,75 @@ Return ONLY a raw JSON object (no markdown, no explanation) with this exact stru
     }
   ]
 }
-Extract every line item. Use null for missing fields. Return ONLY the JSON, nothing else."""
+Extract every line item. Use null for missing fields. Do not include any thinking or reasoning process (do not output <think>...</think> block). Return ONLY the JSON, nothing else."""
 
-        import io
-        import base64
-        
-        # แปลง PIL Image เป็น JPEG bytes
-        img_byte_arr = io.BytesIO()
-        temp_img = img.copy()
-        if temp_img.mode in ('RGBA', 'LA', 'P'):
-            temp_img = temp_img.convert('RGB')
-        temp_img.save(img_byte_arr, format='JPEG', quality=95)
-        img_bytes = img_byte_arr.getvalue()
-        img_b64 = base64.b64encode(img_bytes).decode('utf-8')
-
-        generated_text = None
-
-        # === วิธีที่ 1: Local GGUF model (หลัก) ===
-        try:
-            llm = get_local_llm()
-            print("Performing local inference with Gemma 4 GGUF model...")
-            response = llm.create_chat_completion(
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            { "type": "text", "text": prompt },
-                            { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
-                        ]
-                    }
-                ],
-                temperature=0.1,
-                max_tokens=2048
-            )
-            generated_text = response['choices'][0]['message']['content']
-            print("Local model inference completed!")
-        except Exception as local_err:
-            print(f"Local model inference failed: {local_err}")
-
-        # === วิธีที่ 2: Lightning AI (fallback) ===
-        if generated_text is None and LIGHTNING_API_KEY:
-            print("Falling back to Lightning AI completions API (Gemini model)...")
+            # === วิธีที่ 1: Local GGUF model (หลัก) ===
             try:
-                headers = {
-                    "Authorization": f"Bearer {LIGHTNING_API_KEY}",
-                    "Content-Type": "application/json"
-                }
-                
-                payload = {
-                    "model": GEMINI_MODEL,
-                    "messages": [
+                llm = get_local_llm()
+                print("Performing local multimodal inference with Gemma 4 GGUF model...")
+                import asyncio
+                response = await asyncio.to_thread(
+                    llm.create_chat_completion,
+                    messages=[
                         {
                             "role": "user",
                             "content": [
-                                { "type": "text", "text": prompt },
+                                { "type": "text", "text": prompt_vision },
                                 { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
                             ]
                         }
-                    ]
-                }
-
-                resp = requests.post(
-                    url="https://lightning.ai/api/v1/chat/completions",
-                    headers=headers,
-                    json=payload,
-                    timeout=60
+                    ],
+                    temperature=0.1,
+                    max_tokens=8192
                 )
-                resp.raise_for_status()
-                resp_json = resp.json()
-                generated_text = resp_json['choices'][0]['message']['content']
-                print(f"Lightning AI completions inference ({GEMINI_MODEL}) completed!")
-            except Exception as lightning_err:
-                print(f"Lightning AI API fallback failed: {lightning_err}")
-        
+                local_vision_text = response['choices'][0]['message']['content']
+                if is_valid_structured_json(local_vision_text):
+                    generated_text = local_vision_text
+                    print("Local vision model inference completed successfully and is valid!")
+                else:
+                    print("Local vision model output was invalid or contained no items. Invalidating...")
+                    generated_text = None
+            except Exception as local_err:
+                print(f"Local model inference failed: {local_err}")
+                generated_text = None
+
+            # === วิธีที่ 2: Lightning AI (fallback) ===
+            if generated_text is None and LIGHTNING_API_KEY:
+                print("Falling back to Lightning AI completions API (Gemini model)...")
+                try:
+                    headers = {
+                        "Authorization": f"Bearer {LIGHTNING_API_KEY}",
+                        "Content-Type": "application/json"
+                    }
+                    payload = {
+                        "model": GEMINI_MODEL,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": [
+                                    { "type": "text", "text": prompt_vision },
+                                    { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
+                                ]
+                            }
+                        ]
+                    }
+                    resp = requests.post(
+                        url="https://lightning.ai/api/v1/chat/completions",
+                        headers=headers,
+                        json=payload,
+                        timeout=60
+                    )
+                    resp.raise_for_status()
+                    resp_json = resp.json()
+                    generated_text = resp_json['choices'][0]['message']['content']
+                    print(f"Lightning AI completions inference ({GEMINI_MODEL}) fallback completed successfully!")
+                except Exception as lightning_err:
+                    print(f"Lightning AI API fallback failed: {lightning_err}")
+
         print(f"Raw model output (first 500 chars): {generated_text[:500]}")
         
-        # Extract JSON from response - ลอง parse หลายแบบ
-        # แบบที่ 1: หา JSON block โดยตรง
-        generated_text_clean = generated_text.strip()
+        # Remove any thinking block like <think>...</think> if present
+        generated_text_clean = re.sub(r"<think>.*?</think>", "", generated_text, flags=re.DOTALL).strip()
         if generated_text_clean.startswith("```"):
             # กำจัด markdown code block
             generated_text_clean = re.sub(r"```(?:json)?\s*", "", generated_text_clean)
@@ -485,6 +830,7 @@ Extract every line item. Use null for missing fields. Return ONLY the JSON, noth
         
         if parsed_json:
             parsed_json["ocr_text"] = generated_text
+            parsed_json = match_bill_supplier(parsed_json)
             return parsed_json
         else:
             return {
@@ -496,6 +842,7 @@ Extract every line item. Use null for missing fields. Return ONLY the JSON, noth
         print(f"Error during OCR execution: {e}\n{tb}")
         mock_data = extract_mock_data(image_name_for_mock)
         mock_data["ocr_text"] = f"--- OCR EXECUTION FALLBACK (MOCK DATA GENERATED) ---\nError Detail:\n{tb}\n\n" + mock_data["ocr_text"]
+        mock_data = match_bill_supplier(mock_data)
         return mock_data
 
 def match_bill_products(result):
@@ -523,16 +870,16 @@ def match_bill_products(result):
                         "barcode": r[3] or ""
                     })
                 
-                # Get corrections
+                # Get corrections globally for cross-supplier semantic embedding matching
                 try:
-                    supplier_id = int(result.get("supplier_id") or 1)
-                    corr_query = text("SELECT ai_product_name, ai_product_code, product_id FROM product_mapping_corrections WHERE supplier_id = :supplier_id")
-                    corr_rows = conn.execute(corr_query, {"supplier_id": supplier_id}).fetchall()
+                    corr_query = text("SELECT ai_product_name, ai_product_code, product_id, supplier_id FROM product_mapping_corrections")
+                    corr_rows = conn.execute(corr_query).fetchall()
                     for cr in corr_rows:
                         corrections.append({
                             "company_product_name": cr[0],
                             "company_product_code": cr[1],
-                            "product_id": cr[2]
+                            "product_id": cr[2],
+                            "supplier_id": cr[3]
                         })
                 except Exception as ex:
                     print(f"Could not load mapping corrections: {ex}")
@@ -552,12 +899,13 @@ def match_bill_products(result):
         global_matcher.fit(db_products, corrections)
         
         # 3. Match each item using global_matcher
+        supplier_id = int(result.get("supplier_id") or 1)
         for item in result["items"]:
             comp_name = item.get("company_product_name", "")
             comp_code = item.get("company_product_code", "")
             
             # Match
-            matched_id, score = global_matcher.match_product(comp_name, comp_code, threshold=0.90)
+            matched_id, score = global_matcher.match_product(comp_name, comp_code, current_supplier_id=supplier_id, threshold=0.90)
             if matched_id:
                 item["product_id"] = matched_id
                 print(f"[Matcher] Auto-mapped: '{comp_name}' -> DB Product ID {matched_id} (Similarity: {score:.4f})")
@@ -576,7 +924,7 @@ def match_bill_products(result):
     return result
 
 @app.post("/api/extract-invoice")
-def extract_invoice_from_path(request: ExtractRequest):
+async def extract_invoice_from_path(request: ExtractRequest):
     """
     Extracts invoice information from a local file path or web URL, and saves to database.
     """
@@ -601,7 +949,7 @@ def extract_invoice_from_path(request: ExtractRequest):
                 
             img = Image.open(resolved_path)
             
-        result = perform_ocr(img, image_name_for_mock=image_path)
+        result = await perform_ocr(img, image_name_for_mock=image_path)
         # Perform local vector product matching
         result = match_bill_products(result)
         
@@ -644,7 +992,7 @@ async def extract_invoice_from_upload(file: UploadFile = File(...), job_id: int 
             file_to_save = contents
             safe_filename = f"{int(time.time())}_{file.filename}"
 
-        result = perform_ocr(img, image_name_for_mock=file.filename)
+        result = await perform_ocr(img, image_name_for_mock=file.filename)
         # Perform local vector product matching
         result = match_bill_products(result)
         

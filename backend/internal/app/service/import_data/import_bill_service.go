@@ -107,18 +107,35 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 	}
 
 	if id == 0 || err != nil {
+		createdBy := input.Bill.VerifiedBy
+		if createdBy == 0 {
+			createdBy = 1 // Default fallback to user 1
+		}
 		// Placeholder job for manual/CSV entries
 		job = &entity.BillImportJob{
 			FileURL:   "manual_entry",
 			FileType:  "invoice",
 			Status:    "pending",
+			CreatedBy: createdBy,
 		}
 		if errCreate := s.repo.CreateBillImportJob(job); errCreate != nil {
 			return importDataDTO.ConfirmBillImportResponseDTO{}, errCreate
 		}
 	}
 
+	// Resolve supplier_id dynamically by name if supplier_name is provided
+	supplierID := input.Bill.SupplierID
+	if input.Bill.SupplierName != "" {
+		resolvedID, errResolve := s.repo.FindOrCreateSupplierByName(input.Bill.SupplierName)
+		if errResolve == nil {
+			supplierID = resolvedID
+		}
+	} else if supplierID == 0 {
+		supplierID = 1 // default fallback
+	}
+
 	bill := input.Bill.ToEntity()
+	bill.SupplierID = supplierID
 	billItems := make([]entity.BillItem, len(input.Items))
 	for i, itemInput := range input.Items {
 		billItems[i] = itemInput.ToEntity()
@@ -159,7 +176,7 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 			client := http.Client{
 				Timeout: 15 * time.Second,
 			}
-			fastAPIURL := "http://localhost:8000/api/products/generate-codes"
+			fastAPIURL := "http://127.0.0.1:8000/api/products/generate-codes"
 			resp, errReq := client.Post(fastAPIURL, "application/json", bytes.NewBuffer(jsonPayload))
 			if errReq != nil {
 				log.Printf("[WMS] Error calling FastAPI to generate product codes: %v\n", errReq)
@@ -183,7 +200,19 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 }
 
 func (s *importBillService) UpdateBill(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.BillResponseDTO, error) {
+	// Resolve supplier_id dynamically by name if supplier_name is provided
+	supplierID := input.Bill.SupplierID
+	if input.Bill.SupplierName != "" {
+		resolvedID, errResolve := s.repo.FindOrCreateSupplierByName(input.Bill.SupplierName)
+		if errResolve == nil {
+			supplierID = resolvedID
+		}
+	} else if supplierID == 0 {
+		supplierID = 1 // default fallback
+	}
+
 	bill := input.Bill.ToEntity()
+	bill.SupplierID = supplierID
 	bill.ID = id
 	billItems := make([]entity.BillItem, len(input.Items))
 	for i, itemInput := range input.Items {
@@ -227,7 +256,7 @@ func (s *importBillService) processOCRInBackground(jobID uint, fileURL string) {
 	var isFastAPISuccess bool
 
 	// 1. Try sending Request to FastAPI Server first
-	fastAPIURL := "http://localhost:8000/api/extract-invoice"
+	fastAPIURL := "http://127.0.0.1:8000/api/extract-invoice"
 	payload := map[string]interface{}{
 		"file_path": localPath,
 		"job_id":    jobID,

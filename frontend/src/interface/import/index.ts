@@ -35,7 +35,7 @@ export interface ScannedBillData {
   supplier_id: number;
   subtotal: number;
   discount_total: number;
-  credit_term: string;
+  receive_date: string;
   vat_amount: number;
   grand_total: number;
   payment_status: string;
@@ -54,7 +54,7 @@ export interface SavedBill {
   supplier_id: number;
   subtotal: number;
   discount_total: number;
-  credit_term: string;
+  receive_date: string;
   vat_amount: number;
   grand_total: number;
   payment_status: string;

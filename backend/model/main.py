@@ -10,7 +10,7 @@ import google.generativeai as genai
 
 # Parse environment variables manually (if no dotenv is installed)
 def load_env():
-    env_paths = [".env", "../.env", "../../.env"]
+    env_paths = ["backend/.env", ".env", "model/.env", "backend/model/.env", "../.env", "../../.env"]
     for path in env_paths:
         if os.path.exists(path):
             with open(path, "r") as f:
@@ -94,6 +94,61 @@ def extract_mock_data(image_path_or_url):
     }
     return mock_response
 
+def extract_text_via_typhoon(img, image_name_for_mock="image.jpg"):
+    TYPHOON_API_KEY = (os.getenv("api_key") or "").strip()
+    if not TYPHOON_API_KEY:
+        print("Warning: api_key (Typhoon) not found in environment!")
+        return None
+        
+    import io
+    img_byte_arr = io.BytesIO()
+    temp_img = img.copy()
+    if temp_img.mode in ('RGBA', 'LA', 'P'):
+        temp_img = temp_img.convert('RGB')
+    temp_img.save(img_byte_arr, format='JPEG', quality=95)
+    img_bytes = img_byte_arr.getvalue()
+    
+    url = "https://api.opentyphoon.ai/v1/ocr"
+    files = {'file': (image_name_for_mock, img_bytes, 'image/jpeg')}
+    data = {
+        'model': 'typhoon-ocr-preview',
+        'task_type': 'default',
+        'max_tokens': '16384',
+        'temperature': '0.1',
+        'top_p': '0.6',
+        'repetition_penalty': '1.2'
+    }
+    headers = {
+        'Authorization': f'Bearer {TYPHOON_API_KEY}'
+    }
+    
+    print(f"Attempting OpenTyphoon OCR for {image_name_for_mock}...")
+    try:
+        response = requests.post(url, files=files, data=data, headers=headers, timeout=60)
+        if response.status_code == 200:
+            result = response.json()
+            extracted_texts = []
+            for page_result in result.get('results', []):
+                if page_result.get('success') and page_result.get('message'):
+                    content = page_result['message']['choices'][0]['message']['content']
+                    try:
+                        parsed_content = json.loads(content)
+                        text = parsed_content.get('natural_text', content)
+                    except json.JSONDecodeError:
+                        text = content
+                    extracted_texts.append(text)
+                elif not page_result.get('success'):
+                    print(f"Error processing page: {page_result.get('error', 'Unknown error')}")
+            
+            full_text = '\n'.join(extracted_texts)
+            return full_text
+        else:
+            print(f"OpenTyphoon OCR returned error {response.status_code}: {response.text}")
+            return None
+    except Exception as e:
+        print(f"Failed to connect to OpenTyphoon OCR: {e}")
+        return None
+
 def main():
     if len(sys.argv) < 2:
         print(json.dumps({"error": "No image path provided."}))
@@ -113,83 +168,230 @@ def main():
         else:
             img = Image.open(image_path)
             
-        prompt = """Analyze the invoice/bill image and extract the following information in JSON format:
+        # Step 1: OpenTyphoon OCR to extract text in Markdown/Natural Text
+        extracted_markdown = extract_text_via_typhoon(img, os.path.basename(image_path))
+        
+        # We will build base64 for image_url if we need to fall back to visual model
+        import io
+        import base64
+        img_byte_arr = io.BytesIO()
+        temp_img = img.copy()
+        if temp_img.mode in ('RGBA', 'LA', 'P'):
+            temp_img = temp_img.convert('RGB')
+        temp_img.save(img_byte_arr, format='JPEG', quality=95)
+        img_bytes = img_byte_arr.getvalue()
+        img_b64 = base64.b64encode(img_bytes).decode('utf-8')
+        
+        generated_text = None
+
+        if extracted_markdown:
+            print("Successfully obtained markdown text from OpenTyphoon OCR. Structuring via LLM...")
+            # Prompt for structuring text
+            prompt = f"""You are an expert OCR JSON Structurer specializing in agricultural machinery and auto parts invoices/bills (บิลร้านอะไหล่รถยนต์).
+Analyze the following extracted markdown text from an invoice/bill carefully. You can intelligently correct typos, guess garbled characters, and reconstruct words using the auto parts context, brand names (e.g. FORD, NEWHOLLAND, KUBOTA, ISUZU, TOYOTA, BOSCH), and item descriptions.
+
+Follow these strict extraction guidelines for this layout:
+1. Invoice Metadata:
+   - "bill_no": Extract from the bill number field (e.g. "IV-202507/01229").
+   - "due_date": Calculate/reconstruct the date based on "วันที่" and "ระยะเครดิต" (e.g. if purchase date is 29/07/2025 and term is 90 days, due_date is 2025-10-27).
+   - "credit_term": Extract the term details (e.g. "90 Days" or "90 วัน").
+   - "transport_by": Extract from "ขนส่งโดย" if present.
+   - "subtotal", "vat_amount", & "grand_total": Extract the corresponding financial summaries at the bottom.
+
+2. Line Items Extraction:
+   - Identify rows by the sequence number under the "ลำดับ" column.
+   - Product Codes: If the "รหัสสินค้า" column contains multiple stacked codes (e.g. "07862" and "A2-260404F"), combine them into "company_product_code" (e.g. "A2-260404F / 07862").
+   - Product Name: The "รายการ" description column may span multiple lines (including compatibility/cross-reference numbers). Group all subsequent lines belonging to the same sequence into a single, clean "company_product_name" string. Do not split them into separate items.
+   - Units: Clean unit string inside parentheses, e.g. change "เส้น(1)" to "เส้น", "ลูก(1)" to "ลูก", and "อัน(1)" to "อัน".
+   - Numbers & Pricing: Clean any comma separators from numbers (e.g. "1,200.00" -> 1200.00). If a discount column is empty or "-", set it to 0.0.
+
+3. Auto Parts Terminology Spelling Corrections (แก้ไขคำสะกดผิดทางภาษาไทยในบริบทอะไหล่รถยนต์/แทรกเตอร์):
+   - You MUST actively correct typical OCR spelling mistakes using the agricultural machinery and auto parts store domain context.
+   - Examples of common corrections you must apply to the item names:
+     * "สายซัก", "สายขึ้ก", "สายชักข้าง..." -> "สายชัก" (Steering linkages / chains)
+     * "เว๋า", "เวีย" -> "เว้า" (e.g. "สายชักข้างหัวงอ เว้า ยาว 32\"")
+     * "ฝาปิดถังเชล่า", "ถังเชล่า" -> "ฝาปิดถังโซล่า" (Fuel tank cap)
+     * "ปิ๊มน้ำ", "ปั้มน้ำ", "ปั้มน้ำดูโบ๊ค" -> "ปั๊มน้ำคูโบต้า" (Kubota Water Pump)
+     * "ยางหมวดเบรค", "ยางหมวกเปรค" -> "ยางหมวกเบรค"
+     * "มีบริษัท", "มีบริปริม" -> "มีสปริง" (e.g. "มีสปริง" instead of "มีบริษัท" or "มีบริปริม")
+     * "ลูกบนพื้นชุด", "ลูกบนทั่งชุด" -> "ลูกบนทั้งชุด" (e.g. "กรองอากาศลูกบนทั้งชุด")
+     * "NEXTWHolland", "NEXTWOLLAND", "NEXTHOLLAND" -> "NEWHOLLAND" (New Holland tractor brand)
+     * "ดูโบต้า", "ดูโบ๊ค" -> "คูโบต้า" (Kubota brand)
+
+Return ONLY a raw JSON object (no markdown block wrappers, no explanation) with this exact structure:
+{{
+  "bill_no": "Invoice/Bill number visible in the image",
+  "total_amount": 0.0,
+  "due_date": "YYYY-MM-DD",
+  "transport_by": "Transportation provider if shown, else null",
+  "supplier_id": 1,
+  "subtotal": 0.0,
+  "discount_total": 0.0,
+  "credit_term": "e.g. 30 Days or null",
+  "vat_amount": 0.0,
+  "grand_total": 0.0,
+  "payment_status": "unpaid",
+  "items": [
+    {{
+      "item_sequence": 1,
+      "company_product_code": "product code from invoice",
+      "company_product_name": "product name from invoice",
+      "order_quantity": 1,
+      "unit": "PCS",
+      "conversion_factor": 1.0,
+      "price_per_unit": 0.0,
+      "discount_amount": 0.0,
+      "net_amount": 0.0,
+      "is_freebie": false,
+      "remark": "",
+      "product_id": null
+    }}
+  ]
+}}
+
+Extracted Invoice Markdown:
+\"\"\"
+{extracted_markdown}
+\"\"\"
+
+Extract every line item. Use null for missing fields. Do not include any thinking or reasoning process (do not output <think>...</think> block). Return ONLY the JSON, nothing else."""
+
+            # Try cloud LLM first for text-only CLI structuring
+            if LIGHTNING_API_KEY:
+                print("Performing text-only structuring via Lightning AI completions API (Gemini model)...")
+                try:
+                    headers = {
+                        "Authorization": f"Bearer {LIGHTNING_API_KEY}",
+                        "Content-Type": "application/json"
+                    }
+                    payload = {
+                        "model": GEMINI_MODEL,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ]
+                    }
+                    resp = requests.post(
+                        url="https://lightning.ai/api/v1/chat/completions",
+                        headers=headers,
+                        json=payload,
+                        timeout=60
+                    )
+                    resp.raise_for_status()
+                    resp_json = resp.json()
+                    generated_text = resp_json['choices'][0]['message']['content']
+                    print("Lightning AI text-only completed successfully!")
+                except Exception as lightning_err:
+                    print(f"Lightning AI text-only failed: {lightning_err}")
+
+        # If OpenTyphoon OCR failed, fall back to direct multimodal vision model
+        if generated_text is None and LIGHTNING_API_KEY:
+            print("Warning: OpenTyphoon OCR failed. Falling back to direct Gemini vision OCR...")
+            
+            prompt_vision = """You are an expert OCR AI specializing in reading agricultural machinery and auto parts invoices/bills (บิลร้านอะไหล่รถยนต์).
+Analyze the provided invoice image carefully. You can intelligently correct typos, guess garbled characters, and reconstruct words using the auto parts context, brand names (e.g. FORD, NEWHOLLAND, KUBOTA, ISUZU, TOYOTA, BOSCH), and item descriptions.
+
+Follow these strict extraction guidelines for this layout:
+1. Invoice Metadata:
+   - "bill_no": Extract from the bill number field (e.g. "IV-202507/01229").
+   - "due_date": Calculate/reconstruct the date based on "วันที่" and "ระยะเครดิต" (e.g. if purchase date is 29/07/2025 and term is 90 days, due_date is 2025-10-27).
+   - "credit_term": Extract the term details (e.g. "90 Days" or "90 วัน").
+   - "transport_by": Extract from "ขนส่งโดย" if present.
+   - "subtotal", "vat_amount", & "grand_total": Extract the corresponding financial summaries at the bottom.
+
+2. Line Items Extraction:
+   - Identify rows by the sequence number under the "ลำดับ" column.
+   - Product Codes: If the "รหัสสินค้า" column contains multiple stacked codes (e.g. "07862" and "A2-260404F"), combine them into "company_product_code" (e.g. "A2-260404F / 07862").
+   - Product Name: The "รายการ" description column may span multiple lines (including compatibility/cross-reference numbers). Group all subsequent lines belonging to the same sequence into a single, clean "company_product_name" string. Do not split them into separate items.
+   - Units: Clean unit string inside parentheses, e.g. change "เส้น(1)" to "เส้น", "ลูก(1)" to "ลูก", and "อัน(1)" to "อัน".
+   - Numbers & Pricing: Clean any comma separators from numbers (e.g. "1,200.00" -> 1200.00). If a discount column is empty or "-", set it to 0.0.
+
+3. Auto Parts Terminology Spelling Corrections (แก้ไขคำสะกดผิดทางภาษาไทยในบริบทอะไหล่รถยนต์/แทรกเตอร์):
+   - You MUST actively correct typical OCR spelling mistakes using the agricultural machinery and auto parts store domain context.
+   - Examples of common corrections you must apply to the item names:
+     * "สายซัก", "สายขึ้ก", "สายชักข้าง..." -> "สายชัก" (Steering linkages / chains)
+     * "เว๋า", "เวีย" -> "เว้า" (e.g. "สายชักข้างหัวงอ เว้า ยาว 32\"")
+     * "ฝาปิดถังเชล่า", "ถังเชล่า" -> "ฝาปิดถังโซล่า" (Fuel tank cap)
+     * "ปิ๊มน้ำ", "ปั้มน้ำ", "ปั้มน้ำดูโบ๊ค" -> "ปั๊มน้ำคูโบต้า" (Kubota Water Pump)
+     * "ยางหมวดเบรค", "ยางหมวกเปรค" -> "ยางหมวกเบรค"
+     * "มีบริษัท", "มีบริปริม" -> "มีสปริง" (e.g. "มีสปริง" instead of "มีบริษัท" or "มีบริปริม")
+     * "ลูกบนพื้นชุด", "ลูกบนทั่งชุด" -> "ลูกบนทั้งชุด" (e.g. "กรองอากาศลูกบนทั้งชุด")
+     * "NEXTWHolland", "NEXTWOLLAND", "NEXTHOLLAND" -> "NEWHOLLAND" (New Holland tractor brand)
+     * "ดูโบต้า", "ดูโบ๊ค" -> "คูโบต้า" (Kubota brand)
+
+Return ONLY a raw JSON object (no markdown block wrappers, no explanation) with this exact structure:
 {
-  "bill_no": "Invoice/Bill number (string)",
-  "total_amount": 0.0 (float),
-  "due_date": "YYYY-MM-DD (string)",
-  "transport_by": "Transportation provider if any (string)",
-  "supplier_id": 1 (integer),
-  "subtotal": 0.0 (float),
-  "discount_total": 0.0 (float),
-  "credit_term": "Credit term details (e.g. 30 Days) (string)",
-  "vat_amount": 0.0 (float),
-  "grand_total": 0.0 (float),
+  "bill_no": "Invoice/Bill number visible in the image",
+  "total_amount": 0.0,
+  "due_date": "YYYY-MM-DD",
+  "transport_by": "Transportation provider if shown, else null",
+  "supplier_id": 1,
+  "subtotal": 0.0,
+  "discount_total": 0.0,
+  "credit_term": "e.g. 30 Days or null",
+  "vat_amount": 0.0,
+  "grand_total": 0.0,
   "payment_status": "unpaid",
   "items": [
     {
       "item_sequence": 1,
-      "company_product_code": "Product code (string)",
-      "company_product_name": "Product name (string)",
-      "order_quantity": 1 (integer),
-      "unit": "Unit (e.g. PCS, Box) (string)",
-      "conversion_factor": 1.0 (float),
-      "price_per_unit": 0.0 (float),
-      "discount_amount": 0.0 (float),
-      "net_amount": 0.0 (float),
-      "is_freebie": false (boolean),
-      "remark": "Any remark (string)",
-      "product_id": 1 (integer)
+      "company_product_code": "product code from invoice",
+      "company_product_name": "product name from invoice",
+      "order_quantity": 1,
+      "unit": "PCS",
+      "conversion_factor": 1.0,
+      "price_per_unit": 0.0,
+      "discount_amount": 0.0,
+      "net_amount": 0.0,
+      "is_freebie": false,
+      "remark": "",
+      "product_id": null
     }
   ]
 }
-Return ONLY the raw JSON object representation. Do not include any formatting like ```json ... ``` or additional explanations."""
+Extract every line item. Use null for missing fields. Do not include any thinking or reasoning process (do not output <think>...</think> block). Return ONLY the JSON, nothing else."""
 
-        import io
-        import base64
-        import requests
-        
-        img_byte_arr = io.BytesIO()
-        temp_img = img
-        if temp_img.mode in ('RGBA', 'LA', 'P'):
-            temp_img = temp_img.convert('RGB')
-        temp_img.save(img_byte_arr, format='JPEG')
-        img_b64 = base64.b64encode(img_byte_arr.getvalue()).decode('utf-8')
-
-        headers = {
-            "Authorization": f"Bearer {LIGHTNING_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "model": GEMINI_MODEL,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        { "type": "text", "text": prompt },
-                        { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
+            try:
+                headers = {
+                    "Authorization": f"Bearer {LIGHTNING_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": GEMINI_MODEL,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                { "type": "text", "text": prompt_vision },
+                                { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
+                            ]
+                        }
                     ]
                 }
-            ]
-        }
+                resp = requests.post(
+                    url="https://lightning.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=60
+                )
+                resp.raise_for_status()
+                resp_json = resp.json()
+                generated_text = resp_json['choices'][0]['message']['content']
+                print("Lightning AI direct vision completed successfully!")
+            except Exception as lightning_err:
+                print(f"Lightning AI direct vision failed: {lightning_err}")
 
-        resp = requests.post(
-            url="https://lightning.ai/api/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=60
-        )
-        resp.raise_for_status()
-        resp_json = resp.json()
-        generated_text = resp_json['choices'][0]['message']['content']
+        # Remove any thinking block like <think>...</think> if present
+        clean_text = re.sub(r"<think>.*?</think>", "", generated_text, flags=re.DOTALL)
         
         # Find JSON block in generated text
-        json_match = re.search(r"(\{.*\})", generated_text, re.DOTALL)
+        json_match = re.search(r"(\{.*\})", clean_text, re.DOTALL)
         if json_match:
             json_str = json_match.group(1)
             parsed_json = json.loads(json_str)
-            parsed_json["ocr_text"] = generated_text
+            parsed_json["ocr_text"] = clean_text
             print(json.dumps(parsed_json, indent=2, ensure_ascii=False))
         else:
             print(json.dumps({

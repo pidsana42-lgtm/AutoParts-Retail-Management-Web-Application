@@ -8,22 +8,23 @@ import (
 
 // CreateBillDTO ใช้สำหรับรับข้อมูลเมื่อมีการสร้าง Bill ใหม่
 type CreateBillDTO struct {
-	TotalAmount        float64   `json:"total_amount" binding:"required"`
+	TotalAmount        float64   `json:"total_amount" binding:"min=0"`
 	BillNo             string    `json:"bill_no" binding:"required"`
 	DueDate            time.Time `json:"due_date" binding:"required"`
-	TransportBy        string    `json:"transport_by" binding:"required"`
-	SupplierID         uint      `json:"supplier_id" binding:"required"`
-	Subtotal           float64   `json:"subtotal" binding:"required"`
-	BillImageID        uint      `json:"bill_image_id" binding:"required"`
+	TransportBy        string    `json:"transport_by"`
+	SupplierID         uint      `json:"supplier_id"`
+	SupplierName       string    `json:"supplier_name"`
+	Subtotal           float64   `json:"subtotal" binding:"min=0"`
+	BillImageID        uint      `json:"bill_image_id"`
 	DiscountTotal      float64   `json:"discount_total"`
-	CreditTerm         string    `json:"credit_term" binding:"required"`
+	ReceiveDate        time.Time `json:"receive_date" binding:"required"`
 	VatAmount          float64   `json:"vat_amount"`
-	GrandTotal         float64   `json:"grand_total" binding:"required"`
-	PaymentStatus      string    `json:"payment_status" binding:"required"`
+	GrandTotal         float64   `json:"grand_total" binding:"min=0"`
+	PaymentStatus      string    `json:"payment_status"`
 	IsVerified         bool      `json:"is_verified"`
 	VerifiedBy         uint      `json:"verified_by"`
 	OCRText            string    `json:"ocr_text"`
-	POID               uint      `json:"po_id" binding:"required"`
+	POID               uint      `json:"po_id"`
 	EvidenceFileURL    string    `json:"evidence_file_url"`
 	EvidenceUploadedAt time.Time `json:"evidence_uploaded_at"`
 }
@@ -35,7 +36,7 @@ type UpdateBillDTO struct {
 	TransportBy        string    `json:"transport_by"`
 	Subtotal           float64   `json:"subtotal"`
 	DiscountTotal      float64   `json:"discount_total"`
-	CreditTerm         string    `json:"credit_term"`
+	ReceiveDate        time.Time `json:"receive_date"`
 	VatAmount          float64   `json:"vat_amount"`
 	GrandTotal         float64   `json:"grand_total"`
 	PaymentStatus      string    `json:"payment_status"`
@@ -57,7 +58,7 @@ type BillResponseDTO struct {
 	Subtotal           float64   `json:"subtotal"`
 	BillImageID        uint      `json:"bill_image_id"`
 	DiscountTotal      float64   `json:"discount_total"`
-	CreditTerm         string    `json:"credit_term"`
+	ReceiveDate        time.Time `json:"receive_date"`
 	VatAmount          float64   `json:"vat_amount"`
 	GrandTotal         float64   `json:"grand_total"`
 	PaymentStatus      string    `json:"payment_status"`
@@ -84,7 +85,7 @@ func (d *CreateBillDTO) ToEntity() entity.Bill {
 		Subtotal:           d.Subtotal,
 		BillImageID:        d.BillImageID,
 		DiscountTotal:      d.DiscountTotal,
-		CreditTerm:         d.CreditTerm,
+		ReceiveDate:        d.ReceiveDate,
 		VatAmount:          d.VatAmount,
 		GrandTotal:         d.GrandTotal,
 		PaymentStatus:      d.PaymentStatus,
@@ -114,8 +115,8 @@ func (d *UpdateBillDTO) ToEntity(existing entity.Bill) entity.Bill {
 	if d.DiscountTotal > 0 {
 		existing.DiscountTotal = d.DiscountTotal
 	}
-	if d.CreditTerm != "" {
-		existing.CreditTerm = d.CreditTerm
+	if !d.ReceiveDate.IsZero() {
+		existing.ReceiveDate = d.ReceiveDate
 	}
 	if d.VatAmount > 0 {
 		existing.VatAmount = d.VatAmount
@@ -156,7 +157,7 @@ func ToBillResponseDTO(m *entity.Bill) BillResponseDTO {
 		Subtotal:           m.Subtotal,
 		BillImageID:        m.BillImageID,
 		DiscountTotal:      m.DiscountTotal,
-		CreditTerm:         m.CreditTerm,
+		ReceiveDate:        m.ReceiveDate,
 		VatAmount:          m.VatAmount,
 		GrandTotal:         m.GrandTotal,
 		PaymentStatus:      m.PaymentStatus,

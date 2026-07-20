@@ -14,6 +14,9 @@ import Stockdata from './owner/stock/Stock_data/stock_data';
 import ImportBill from './owner/import-bills/import_bill';
 import PreOrder from './owner/pre-order/pre-order';
 import ClaimsPage from './owner/claim/claims';
+import ClaimDetailPage from './owner/claim/claim_detail';
+import ReturnsPage from './owner/return/returns';
+import ReturnDetailPage from './owner/return/return_detail';
 import PurchaseOrders from './owner/purchase_orders/purchase_orders';
 import CreatePurchaseOrders from './owner/purchase_orders/create_po';
 
@@ -76,6 +79,9 @@ export default function AppRouter(): React.JSX.Element {
 
         {/* -------- เพิ่ม Route สำหรับหน้าคืนเเละเคลมสินค้าตรงนี้ครับ -------- */}
         <Route path="/owner/claims" element={<ClaimsPage />} />
+        <Route path="/owner/claims/detail/:id" element={<ClaimDetailPage />} />
+        <Route path="/owner/returns" element={<ReturnsPage />} />
+        <Route path="/owner/returns/detail/:id" element={<ReturnDetailPage />} />
         {/* ----------------------------------------------------------- */}
 
         <Route path="/employee/pos" element={<Pos />} />

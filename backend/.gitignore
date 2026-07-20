@@ -1,10 +1,57 @@
+# Environment & Secrets
 .env*
-.png
-.jpeg
-.jpg
-.gif
-.gguf
-model/*.gguf
+
+# AI & ML Models (Large model files & weights)
+*.gguf
+*.onnx
+*.onnx_data
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.h5
+*.keras
+*.ckpt
+*.tflite
+*.pb
+*.weights
+*.model
+*.pkl
+*.npz
+model/*-ONNX/
+model/*-onnx/
+model/embeddinggemma*/
+models/
+saved_models/
+checkpoints/
+
+# Python Cache & Artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+venv/
+.venv/
+
+# Binaries & Builds
+test_build
+*.exe
+*.out
+*.test
+
+# Uploads & Media Assets
 uploads/
-.csv
-.xlsx
+*.png
+*.jpeg
+*.jpg
+*.gif
+*.webp
+
+# Data Exports & Spreadsheets
+*.csv
+*.xlsx
+*.xls
+
+# System Files
+.DS_Store
