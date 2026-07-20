@@ -52,7 +52,7 @@ export default function Sidebar({
               <li key={index} className="relative group">
                 <button
                   onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center py-3 text-sm transition-colors cursor-pointer ${collapsed ? "justify-center px-0" : "px-6"} ${isActive ? "bg-[#252525] text-white border-l-4 border-red-600 font-medium" : "hover:bg-[#252525] hover:text-white"}`}
+                  className={`w-full flex items-center py-3 text-sm transition-colors cursor-pointer ${collapsed ? "justify-center px-0" : "px-6"} ${isActive ? "bg-[#252525] text-white border-l-4 border-red-600 " : "hover:bg-[#252525] hover:text-white"}`}
                 >
                   <Icon
                     className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-gray-400"} ${!collapsed ? "mr-3" : ""}`}
@@ -89,7 +89,7 @@ export default function Sidebar({
       <div className="p-4">
         <button
           onClick={handleLogout}
-          className={`bg-gradient-to-r from-[#B70011] to-[#E51C23] text-white rounded flex items-center justify-center text-sm font-medium cursor-pointer ${collapsed ? "w-12 h-12 mx-auto" : "w-full py-2.5 px-4"}`}
+          className={`bg-gradient-to-r from-[#B70011] to-[#E51C23] text-white rounded flex items-center justify-center text-sm  cursor-pointer ${collapsed ? "w-12 h-12 mx-auto" : "w-full py-2.5 px-4"}`}
         >
           <LogOut className={`w-4 h-4 shrink-0 ${!collapsed ? "mr-2" : ""}`} />
           {!collapsed && <span>ออกจากระบบ</span>}

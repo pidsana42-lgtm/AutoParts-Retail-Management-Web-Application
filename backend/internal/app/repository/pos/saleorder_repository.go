@@ -13,6 +13,7 @@ type SaleRepository interface {
 	GetPaymentMethodByID(id uint) (*entity.PaymentMethod, error)
 	GetCustomerTypes() ([]entity.CustomerType, error)
     SearchCustomers(searchQuery string) ([]entity.Customer, error)
+	GetPaymentMethods() ([]entity.PaymentMethod, error)
 }
 
 type saleRepository struct {
@@ -31,12 +32,16 @@ func (r *saleRepository) BeginTransaction() *gorm.DB {
 
 // 2. CreateOrderWithTx ทำหน้าที่ยัดข้อมูล SaleOrder และลูก ๆ (Items) ลงเบสผ่านท่อ Transaction
 func (r *saleRepository) CreateOrderWithTx(tx *gorm.DB, order *entity.SaleOrder) error {
-	// GORM จะฉลาดพอครับโบว์ พอเราสั่ง Save หัวบิลก้อนใหญ่ 
-	// มันจะสอยเอาอาร์เรย์ Items ที่อยู่ข้างในไปสร้างลงตาราง SaleOrderItem ให้เองอัตโนมัติเลยครับ
-	if err := tx.Create(order).Error; err != nil {
-		return err
-	}
-	return nil
+    // ดักจับเคสลูกค้าขาจรหน้าร้าน (ID = 0)
+    if order.CustomerID == 0 {
+        order.CustomerID = 1
+    }
+
+    if err := tx.Omit("Customer").Create(order).Error; err != nil {
+        return err
+    }
+
+    return nil
 }
 
 // 3. GetStoreConfig ใช้สำหรับดึงนโยบายร้านค้า (เช่น % ส่วนลดสูงสุด) ขึ้นมาให้ Service ตรวจสอบ
@@ -75,4 +80,10 @@ func (r *saleRepository) SearchCustomers(searchQuery string) ([]entity.Customer,
     
     err := query.Find(&customers).Error
     return customers, err
+}
+
+func (r *saleRepository) GetPaymentMethods() ([]entity.PaymentMethod, error) {
+	var methods []entity.PaymentMethod
+	err := r.db.Find(&methods).Error
+	return methods, err
 }

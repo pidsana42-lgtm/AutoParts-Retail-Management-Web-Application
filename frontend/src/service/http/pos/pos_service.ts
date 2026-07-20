@@ -21,6 +21,13 @@ export const posApiService = {
   /** บันทึกคำสั่งซื้อออเดอร์ขาย POS */
   createPOSOrder: (payload: CreateSaleOrderRequest): Promise<any> => 
     apiClient.post("/pos/orders", payload).then((res) => res.data),
+
+  getCustomerTypes: (): Promise<{ id: number; type_name: string }[]> => 
+    apiClient.get<{ id: number; type_name: string }[]>("/pos/customer-types").then((res) => res.data),
+
+  /** ดึงรายการวิธีชำระเงินทั้งหมด */
+  getPaymentMethods: (): Promise<{ id: number; method_name: string }[]> => 
+    apiClient.get<{ id: number; method_name: string }[]>("/pos/payment-methods").then((res) => res.data),
 };
 
 // Business Logic 
@@ -40,11 +47,14 @@ export const calculateValidatedDiscount = (
     return 0;
   }
 
-  // [กฎข้อที่ 2]: ตรวจสอบสิทธิ์กลุ่มอู่ซ่อมรถ (GARAGE)
+  // [กฎข้อที่ 2]: ตรวจสอบสิทธิ์กลุ่มอู่ซ่อมรถ (GARAGE) และต้องเปิดใช้งานระบบส่วนลด (is_discount_enabled)
+  const isDiscountEnabled = customer ? customer.is_discount_enabled : true; // ถ้าเป็น Guest ทั่วไปยอมให้กดส่วนลดได้ตามปกติ
   const isGarageMode = 
-    currentCustomerTypeId === 2 || 
-    currentCustomerTypeName === "GARAGE" ||
-    (customer?.customer_name?.includes("อู่"));
+    isDiscountEnabled && (
+      currentCustomerTypeId === 2 || 
+      currentCustomerTypeName === "GARAGE" ||
+      (customer?.customer_name?.includes("อู่"))
+    );
 
   let allowedMaxDiscount = (item as any).max_discount_rate ?? 2.00;
 
@@ -54,6 +64,7 @@ export const calculateValidatedDiscount = (
   }
 
   if (item.discount_type === "percentage") {
+    // ปรับการเปรียบเทียบทศนิยม ป้องกันบั๊ก floating point ของ javascript (เช่น 5.00000001 > 5)
     if (value > (allowedMaxDiscount + 0.01)) {
       alert(`เกินข้อกำหนดสูงสุด (จำกัดที่ ${allowedMaxDiscount.toFixed(2)}%)`);
       return 0;
@@ -95,6 +106,7 @@ export const getDefaultProductDiscount = (
     currentCustomerTypeName === "GARAGE" || 
     customer?.customer_name?.includes("อู่");
 
+  // อู่ซ่อมรถ และ ต้องเปิดใช้งานส่วนลดระบบ
   if (isGarage && customer && customer.is_discount_enabled) {
     // อู่ซ่อมรถ: คีย์ปุ๊บ ลดให้ทันทีอัตโนมัติ = สิทธิ์สินค้า + สิทธิ์ออนท็อปอู่
     const baseRate = product.max_discount_rate ?? 2.0;

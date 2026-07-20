@@ -17,7 +17,7 @@ export default function MainLayout({
   };
 
   return (
-    <div className="flex bg-white h-screen overflow-hidden font-sans select-none">
+    <div className="flex bg-white h-screen overflow-hidden select-none">
       <Sidebar collapsed={collapsed} onToggle={handleToggleSidebar} />
       <div className="flex-1 flex flex-col h-full min-w-0">
         <Navbar />
