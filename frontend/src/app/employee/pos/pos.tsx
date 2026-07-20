@@ -504,6 +504,18 @@ export default function PosPage(): React.JSX.Element {
                     <Text variant="xs" className="text-[#259B24]">ส่วนลดรวมทั้งสิ้น</Text>
                     <Text variant="xs" className="text-[#259B24]">-{(paymentData.totalItemPrice - paymentData.finalTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท</Text>
                   </div>
+                  {paymentData.selectedPaymentType === "CREDIT" && (
+                    <>
+                    <div className="flex justify-between">
+                      <Text variant="xs" className="text-[#1C1B1B]">ระยะเวลาเครดิต</Text>
+                      <Text variant="xs" className="text-[#1C1B1B]">{paymentData.storeConfig?.max_overdue_days ?? 30} วัน</Text>
+                    </div>
+                    <div className="flex justify-between">
+                      <Text variant="xs" className="text-[#1C1B1B]">กำหนดชำระ</Text>
+                      <Text variant="xs" className="text-[#1C1B1B]">{paymentData.formattedCreditDueDate}</Text>
+                    </div>
+                    </>
+                  )}
                   <div className="flex justify-between border-t pt-2 border-[#E7BDB8]/50">
                     <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">ยอดชำระสุทธิ</Text>
                     <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท</Text>

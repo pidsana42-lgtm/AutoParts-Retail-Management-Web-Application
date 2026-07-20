@@ -85,6 +85,29 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     return total < 0 ? 0 : Math.round(total * 100) / 100; // ป้องกันเศษทศนิยมปัดไม่ลงตัว
   }, [totalItemPrice, totalLineDiscount, computedBillDiscount]);
 
+  const creditDueDate = useMemo(() => {
+    const maxDays = storeConfig?.max_overdue_days ?? 30;
+    const date = new Date();
+    date.setDate(date.getDate() + maxDays);
+    return date;
+  }, [storeConfig]);
+
+  const formattedCreditDueDate = useMemo(() => {
+    if (!creditDueDate) return "";
+    return creditDueDate.toLocaleDateString("th-TH", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }, [creditDueDate]);
+
+  const isExceedCreditLimit = useMemo(() => {
+    if (!customer || !storeConfig) return false;
+    const projectDebt = (customer.current_debt_amount || 0) + finalTotal;
+    const maxCredit = customer.max_credit_limit > 0 ? customer.max_credit_limit : storeConfig.max_credit;
+    return projectDebt > maxCredit;
+  }, [customer, storeConfig, finalTotal]);
+
   const change = useMemo(() => {
     const result = receivedAmount - finalTotal;
     return result > 0 ? Math.round(result * 100) / 100 : 0;
@@ -318,6 +341,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     receivedAmount, setReceivedAmount, receiverName, setReceiverName,
     handleSearchCustomer, handleBillDiscountChange, change, handleReceivedAmountBlur,
     displayValue, setDisplayValue, handleReceivedAmountChange, handleReceivedAmountFocus,
-    resetPaymentState
+    resetPaymentState,
+    storeConfig,
+    creditDueDate,
+    formattedCreditDueDate,
+    isExceedCreditLimit
   };
 }
