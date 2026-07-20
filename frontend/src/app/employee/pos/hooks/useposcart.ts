@@ -1,6 +1,6 @@
 // usePosCart.ts
-import { useState, useEffect, useMemo } from "react";
-import { posApiService } from "../../../../service/http/pos/pos_service";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { posApiService, getDefaultProductDiscount } from "../../../../service/http/pos/pos_service";
 import { useDiscountCalculation } from "./useDiscountCalculation";
 import type { UsePosCartProps, CartItem, UsePosCartReturn } from "../../../../interface/pos/usePosCart.interface";
 
@@ -18,57 +18,64 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
   const [searchQuery, setSearchQuery] = useState<string>(""); // searchQuery = เก็บข้อมูลรหัสบาร์โค้ดหรือ SKU ที่พนักงานกรอกเพื่อค้นหาสินค้า (ตัวแปรฝั่งข้อมูล) setSearchQuery = ฟังก์ชันสำหรับอัปเดตข้อมูลรหัสบาร์โค้ดหรือ SKU ที่พนักงานกรอกเพื่อค้นหาสินค้า (ตัวแปรฝั่งข้อมูล)
   const { calculateLineDiscountAmount, validateLineDiscountPolicy } = useDiscountCalculation();
 
-  // ทุกครั้งที่มีการเปลี่ยนแปลงสินค้าในตะกร้า (ชิ้นส่วนเพิ่ม/ลด/เปลี่ยนจำนวน) ให้บันทึกลง localStorage ทันที
+  // เก็บ ID ลูกค้าล่าสุดไว้เช็คความเปลี่ยนแปลง ป้องกัน Loop
+  const prevCustomerIdRef = useRef<number | undefined>(customer?.id);
+  const prevActiveTypeIdRef = useRef<number | undefined>(activeTypeId);
+
+  // บันทึกลง localStorage เฉพาะเมื่อ cart เปลี่ยนแปลงจริง
   useEffect(() => {
     localStorage.setItem("pos_cart", JSON.stringify(cart));
   }, [cart]);
 
   // ตัวดักจับเมื่อพนักงานสั่งสลับกลุ่มสิทธิ์ลูกค้า (เช่น จากทั่วไป -> อู่ซ่อมรถ)จะทำการ Map อัปเดตประเภทส่วนลดและมูลค่าลดราคาอัตโนมัติยกตะกร้าทันที 
   useEffect(() => {
-    const updateCartDiscounts = async () => {
-      if (cart.length === 0) return;
-      try {
-        const { getDefaultProductDiscount } = await import(
-          "../../../../service/http/pos/pos_service"
-        );
+    // ทำงานเฉพาะเมื่อ ID ลูกค้า หรือ ประเภทลูกค้าเปลี่ยนจริงๆ เท่านั้น
+    if (
+      prevCustomerIdRef.current === customer?.id &&
+      prevActiveTypeIdRef.current === activeTypeId
+    ) {
+      return;
+    }
 
-        const updatedCart = cart.map((item) => {
-          // จำลองโครงสร้าง product object เพื่อส่งไปให้ฟังก์ชันสิทธิประโยชน์คำนวณค่า
-          const mockProduct = {
-            id: item.product_id,
-            product_code: item.product_code,
-            product_name: item.product_name,
-            part_number: item.part_number,
-            sale_price: item.unit_price,
-            max_discount_rate: item.max_discount_rate,
-            grade_name: item.grade_name,
-            brand_name: item.brand_name,
-            model_name: item.model_name,
-            note: item.note,
-          };
+    if (cart.length === 0) {
+      prevCustomerIdRef.current = customer?.id;
+      prevActiveTypeIdRef.current = activeTypeId;
+      return;
+    }
 
-          // คำนวณหาโครงสร้างส่วนลดมาตรฐานใหม่ตามกลุ่มลูกค้า
-          const discountConfig = getDefaultProductDiscount(
-            mockProduct as any,
-            customer,
-            activeTypeId
-          );
+    const updatedCart = cart.map((item) => {
+      const mockProduct = {
+        id: item.product_id,
+        product_code: item.product_code,
+        product_name: item.product_name,
+        part_number: item.part_number,
+        sale_price: item.unit_price,
+        max_discount_rate: item.max_discount_rate,
+        grade_name: item.grade_name,
+        brand_name: item.brand_name,
+        model_name: item.model_name,
+        note: item.note,
+      };
 
-          return {
-            ...item,
-            discount_type: discountConfig.type,     
-            discount_value: discountConfig.value,   
-          };
-        });
+      const discountConfig = getDefaultProductDiscount(
+        mockProduct as any,
+        customer,
+        activeTypeId
+      );
 
-        setCart(updatedCart);
-      } catch (error) {
-        console.error("เกิดข้อผิดพลาดในการคำนวณส่วนลดกลุ่มลูกค้าใหม่:", error);
-      }
-    };
+      return {
+        ...item,
+        discount_type: discountConfig.type,     
+        discount_value: discountConfig.value,   
+      };
+    });
 
-    updateCartDiscounts();
-  }, [activeTypeId, customer]);
+    setCart(updatedCart);
+    
+    // อัปเดต ref ล่าสุด
+    prevCustomerIdRef.current = customer?.id;
+    prevActiveTypeIdRef.current = activeTypeId;
+  }, [activeTypeId, customer, cart.length]); // ไม่ผูกกับวัตถุ cart ตรงๆ
 
   // ─── COMPUTED VALUES ───
 
@@ -91,7 +98,8 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
   //ฟังก์ชันแอดสินค้าเข้าตะกร้าผ่านการแสกนบาร์โค้ด หรือพิมพ์เลข SKU
   //หากสินค้าชิ้นนั้นเคยอยู่ในตะกร้าแล้วจะทำการบวกจำนวนเพิ่ม 1 ชิ้น (qty + 1) อัตโนมัติ
   const handleAddProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault(); //ป้องกันไม่ให้หน้าเว็บรีเฟรชตอนกด Enter
+    // โซนที่ 2: ดึงข้อมูลดิบ (ยิงไปเอาของจากหลังบ้านมา)
     const cleanedQuery = searchQuery.trim();
     if (!cleanedQuery) return;
 
@@ -101,24 +109,20 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
         alert("ไม่พบรหัสบาร์โค้ดสินค้าชิ้นนี้ในสต๊อกระบบ");
         return;
       }
-
+      //.find() ค้นหาในอาร์เรย์ตัวที่ตรงที่สุด
       const product = products.find((p) => p.barcode === cleanedQuery || p.product_code === cleanedQuery) || products[0];
-
-      // ดึงสิทธิ์ลดราคาเริ่มต้นประจำตัวสินค้าตามกลุ่มลูกค้าหน้าร้านทันทีที่แอดเข้าบิล
-      const { getDefaultProductDiscount } = await import(
-        "../../../../service/http/pos/pos_service"
-      );
+      // โซนที่ 3 & 4: คำนวณและเช็คความปลอดภัย (มีของซ้ำไหม/สิทธิ์ส่วนลดได้เท่าไหร่)
       const discountConfig = getDefaultProductDiscount(product, customer, activeTypeId);
-
       const existingIndex = cart.findIndex((item) => item.product_id === product.id);
       
+      // โซนที่ 5: สั่งเซ็ตค่ากลับลง State (ปิดงาน)
       if (existingIndex > -1) {
         // เคส 1: สินค้าเดิมมีอยู่แล้ว ทำการบวกจำนวนชิ้นเพิ่มขึ้น 1
         const newCart = [...cart];
         newCart[existingIndex].qty += 1;
         setCart(newCart);
       } else {
-        // เคส 2: สินค้าใหม่เอี่ยม ยัด Object ลงอาร์เรย์ตะกร้า พร้อมแนบค่าพาร์ท เกรด และสิทธิ์ส่วนลดเริ่มต้น
+        // สินค้าใหม่เอี่ยม ยัด Object ลงอาร์เรย์ตะกร้า พร้อมแนบค่าพาร์ท เกรด และสิทธิ์ส่วนลดเริ่มต้น
         setCart([
           ...cart,
           {
@@ -163,13 +167,11 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
     setCart(newCart);
   };
 
-  // ฟังก์ชันรองรับการพิมพ์ตัวเลขจำนวนสินค้าโดยตรง (พร้อมเช็กสต็อก)
   const handleSetQuantity = (index: number, inputValue: string | number) => {
     const newCart = [...cart];
     const item = newCart[index];
     const maxStock = (item as any).quantity ?? 999; 
 
-    // ถ้าพนักงานลบจนช่องว่างเปล่า ให้เซ็ตค่าเป็น 0 ไว้ชั่วคราว
     if (inputValue === "") {
       item.qty = 0; 
       setCart(newCart);
@@ -198,10 +200,8 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
     if (window.confirm("คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลทั้งหมด?")) {
       setCart([]);
       localStorage.removeItem("pos_cart");
+      if (onClearSuccess) onClearSuccess();
     }
-    if (onClearSuccess) {
-        onClearSuccess();
-      }
   };
 
   //ฟังก์ชันดักจับปุ่มติ๊กถูก (Checkbox DISC?) ประจำแถวสินค้า 
