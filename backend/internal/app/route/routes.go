@@ -51,4 +51,5 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	wms.SetupUnitRoutes(r, db)
 	wms.SetupZoneRoutes(r, db)
 	wms.SetupShelfRoutes(r, db)
+	wms.SetupSubSubCategoryRoutes(r, db)
 }

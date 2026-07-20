@@ -86,6 +86,7 @@ func SetupDatabase() {
 		// โตโต้ WMS
 		&entity.Category{},
 		&entity.SubCategory{},
+		&entity.SubSubCategory{},
 		&entity.Grade{},
 		&entity.Shelf{},
 		&entity.Zone{},

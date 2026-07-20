@@ -78,7 +78,7 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	d.Cost_price = p.Cost_price
 	d.Is_Active = p.Is_Active
 
-	// สังเกต: พอลบ Pointer (*) ออกจาก Entity แล้ว 
+	// สังเกต: พอลบ Pointer (*) ออกจาก Entity แล้ว
 	// สามารถจิ้มเข้าฟิลด์ .Brand_Name ได้ทันทีโดยไม่ต้องกลัว Nil Pointer Crash
 	d.BrandName = p.Brand.Brand_Name
 	d.CategoryName = p.Category.Category_Name
@@ -97,4 +97,3 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 		d.SupplierName = p.Inventories[0].Supplier.SupplierName
 	}
 }
-
