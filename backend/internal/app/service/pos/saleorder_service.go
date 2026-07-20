@@ -281,6 +281,7 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
     var paidAmount float64   //
     var changeAmount float64  // ยอดเงินทอนลูกค้า (กรณีจ่ายเกิน)
     var receivedAmount float64 // ยอดเงินที่ลูกค้าจ่ายเข้ามา (รวมทุกช่องทาง)
+    var dueDate *time.Time // กำหนดวันครบกำหนดชำระเงิน (สำหรับเครดิตอู่)
 
     // ตรวจสอบเงื่อนไขว่าเป็นการเลือกชำระแบบ "ซื้อเชื่อ / แปะโป้งเครดิตอู่" ใช่ไหม
     if paymentMethod.IsCredit {
@@ -297,6 +298,16 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
 		paymentStatus = "unpaid" // สถานะ: ยังค้างชำระ
 		balanceDue = totalAmount // ยอดค้างชำระ = ยอดสุทธิทั้งบิล
 		paidAmount = 0.00        // ยังไม่ได้รับเงิน
+
+        storeConfig, err := s.repo.GetStoreConfig()
+        if err == nil && storeConfig.MaxOverdueDays > 0 {
+            calculatedDueDate := time.Now().AddDate(0, 0, storeConfig.MaxOverdueDays)
+            dueDate = &calculatedDueDate // ตั้งค่า DueDate สำหรับบิลเงินเชื่อ
+        } else {
+            // Fallback กรณีหา config ไม่เจอ (เช่น ค่าตั้งต้น 30 วัน)
+            defaultDueDate := time.Now().AddDate(0, 0, 30)
+            dueDate = &defaultDueDate
+        }
 
 		// บวกยอดหนี้สะสมเพิ่มเข้าบัญชีลูกค้า
         customer.CurrentDebtAmount += totalAmount
@@ -326,6 +337,7 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
     order := &entity.SaleOrder{
         OrderNumber:        orderNumber,
         OrderDate:          time.Now(),
+        DueDate:            dueDate, // สำหรับเครดิตอู่
         CustomerID:         req.CustomerID,
         CustomerNameTemp:   &savedName,         // ใช้ Pointer ชี้ไปที่ตัวแปรอิสระที่เราแช่แข็งค่าไว้
         CustomerPhoneTemp:  &savedPhone,        // ใช้ Pointer ชี้ไปที่เบอร์โทร Local
