@@ -3,6 +3,7 @@ package import_data
 import (
 	"backend/internal/app/entity"
 	"errors"
+
 	"gorm.io/gorm"
 )
 
@@ -105,21 +106,21 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				}
 
 				newProd := entity.Product{
-					Product_Name:    items[i].CompanyProductName,
-					Product_Code:    "",                           // Leave blank to trigger BeforeCreate GORM hook auto-generation
-					Part_Number:     items[i].CompanyProductCode,  // Store supplier code in Part_Number
-					Barcode:         "",                           // Leave blank to match the auto-generated code
-					Cost_price:      items[i].PricePerUnit,
-					Sale_price:      items[i].PricePerUnit * 1.25, // default markup 25%
+					Product_Name:   items[i].CompanyProductName,
+					Product_Code:   "",                          // Leave blank to trigger BeforeCreate GORM hook auto-generation
+					Part_Number:    items[i].CompanyProductCode, // Store supplier code in Part_Number
+					Barcode:        "",                          // Leave blank to match the auto-generated code
+					Cost_price:     items[i].PricePerUnit,
+					Sale_price:     items[i].PricePerUnit * 1.25, // default markup 25%
 					Is_Active:      true,
-					Quantity:        items[i].OrderQuantity,       // Set initial quantity from bill
-					Limit_Quantity:  5,
-					BrandID:         1, // Default Brand ID
-					UnitID:          1, // Default Unit ID
-					CategoryID:      catID,
-					SubCategoryID:   subCatID,
-					GradeID:         1, // Default Grade ID
-					ShelfID:         1, // Default Shelf ID
+					Quantity:       items[i].OrderQuantity, // Set initial quantity from bill
+					Limit_Quantity: 5,
+					BrandID:        1, // Default Brand ID
+					UnitID:         1, // Default Unit ID
+					CategoryID:     catID,
+					SubCategoryID:  subCatID,
+					GradeID:        1, // Default Grade ID
+					ShelfID:        1, // Default Shelf ID
 				}
 				if err := tx.Create(&newProd).Error; err != nil {
 					return err
