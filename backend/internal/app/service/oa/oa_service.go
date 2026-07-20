@@ -266,7 +266,7 @@ func (s *service) HandleWebhook(req dto.LineWebhookRequest) error {
 
 func (s *service) queryAgent(queryText string, lineUserID string) (string, error) {
 	// Try sending HTTP Request to FastAPI Server first
-	fastAPIURL := "http://localhost:8000/api/agent"
+	fastAPIURL := "http://127.0.0.1:8000/api/agent"
 	payload := map[string]interface{}{
 		"query":        queryText,
 		"line_user_id": lineUserID,

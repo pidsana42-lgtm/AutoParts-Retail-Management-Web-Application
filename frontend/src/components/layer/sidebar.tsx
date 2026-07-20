@@ -46,7 +46,8 @@ export default function Sidebar({
             const subItems = item.subs || (item.subPath ? [{ icon: item.subIcon, path: item.subPath, label: item.subLabel || "" }] : []);
             const isActive =
               location.pathname === item.path ||
-              subItems.some((sub) => location.pathname === sub.path);
+              (item.subPath ? location.pathname === item.subPath : false) ||
+              (item.subMenus ? item.subMenus.some(sub => location.pathname === sub.path.split('?')[0]) : false);
 
             return (
               <li key={index} className="relative group">
@@ -61,25 +62,42 @@ export default function Sidebar({
                 </button>
 
                 {/* Submenu Area */}
-                {isActive && subItems.length > 0 && subItems.map((sub) => {
-                  const SubIcon = sub.icon || Percent;
-                  const isSubActive = location.pathname === sub.path;
-
-                  return (
-                    <div
-                      key={sub.path}
-                      onClick={() => navigate(sub.path)}
-                      className={`bg-[#181818] py-2 flex items-center cursor-pointer hover:bg-[#202020] ${isSubActive ? "text-gray-400" : "text-gray-500"} ${collapsed ? "justify-center" : "pl-13 py-3 text-xs"}`}
-                    >
-                      <SubIcon
-                        className={`w-4 h-4 shrink-0 ${isSubActive ? "text-white" : "text-gray-400"} ${!collapsed ? "mr-3" : ""}`}
-                      />
-                      {!collapsed && (
-                        <span className="ml-2 truncate">{sub.label}</span>
-                      )}
-                    </div>
-                  );
-                })}
+                {isActive && (item.subPath || item.subMenus) && (
+                  <div className="flex flex-col">
+                    {item.subMenus ? (
+                      item.subMenus.map((sub, sIdx) => {
+                        const SubIcon = sub.icon || Percent;
+                        const isSubActive = location.pathname + location.search === sub.path || location.pathname === sub.path;
+                        return (
+                          <div
+                            key={sIdx}
+                            onClick={() => navigate(sub.path)}
+                            className={`bg-[#181818] py-2 flex items-center cursor-pointer hover:bg-[#202020] ${isSubActive ? "text-white bg-[#202020]" : "text-gray-500"} ${collapsed ? "justify-center" : "pl-13 py-3 text-xs"}`}
+                          >
+                            <SubIcon
+                              className={`w-4 h-4 shrink-0 ${isSubActive ? "text-white" : "text-gray-400"} ${!collapsed ? "mr-3" : ""}`}
+                            />
+                            {!collapsed && (
+                              <span className="ml-2 truncate">{sub.label}</span>
+                            )}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div
+                        onClick={() => navigate(item.subPath!)}
+                        className={`bg-[#181818] py-2 flex items-center cursor-pointer hover:bg-[#202020] ${location.pathname === item.subPath ? "text-gray-400" : "text-gray-500"} ${collapsed ? "justify-center" : "pl-13 py-3 text-xs"}`}
+                      >
+                        <SubIcon
+                          className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-gray-400"} ${!collapsed ? "mr-3" : ""}`}
+                        />
+                        {!collapsed && (
+                          <span className="ml-2 truncate">{item.subLabel || ""}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </li>
             );
           })}

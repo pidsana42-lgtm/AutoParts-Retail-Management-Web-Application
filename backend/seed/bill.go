@@ -21,7 +21,7 @@ func Bill(db *gorm.DB) error {
 			GrandTotal:         10165.00,                    // ยอดสุทธิที่ต้องจ่าย (Subtotal + VatAmount)
 			DueDate:            time.Now().AddDate(0, 1, 0), // ครบกำหนดอีก 30 วันข้างหน้า
 			TransportBy:        "Kerry Express",
-			CreditTerm:         "30 Days",
+			ReceiveDate:        time.Now(),
 			PaymentStatus:      "PENDING",
 			IsVerified:         true,
 			OCRText:            "THANK YOU FOR YOUR BUSINESS... TOTAL: 10,165 THB",

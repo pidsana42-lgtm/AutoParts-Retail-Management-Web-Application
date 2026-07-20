@@ -3,6 +3,8 @@ package import_data
 import (
 	"backend/internal/app/entity"
 	"errors"
+	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -20,6 +22,7 @@ type BillRepository interface {
 	ConfirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob) error
 	UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem) error
 	DeleteBill(id uint) error
+	FindOrCreateSupplierByName(name string) (uint, error)
 }
 
 type billRepository struct {
@@ -201,4 +204,31 @@ func (r *billRepository) DeleteBill(id uint) error {
 		}
 		return nil
 	})
+}
+
+func (r *billRepository) FindOrCreateSupplierByName(name string) (uint, error) {
+	var sup entity.Supplier
+	err := r.db.Where("LOWER(supplier_name) = LOWER(?)", name).First(&sup).Error
+	if err == nil {
+		return sup.ID, nil
+	}
+
+	shortName := name
+	if len(shortName) > 50 {
+		shortName = shortName[:50]
+	}
+
+	newSup := entity.Supplier{
+		SupplierName:      name,
+		ShortSupplierName: shortName,
+		SupplierAddress:   "N/A",
+		ContactLineSale:   "N/A",
+		PhoneNumberSale:   "N/A",
+		EmailSale:         fmt.Sprintf("sale_%d@na.com", time.Now().UnixNano()),
+		BankAccountNumber: "N/A",
+	}
+	if errCreate := r.db.Create(&newSup).Error; errCreate != nil {
+		return 0, errCreate
+	}
+	return newSup.ID, nil
 }

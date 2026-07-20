@@ -43,7 +43,7 @@ class TFIDFMatcher:
 
 class ProductMatcher:
     def __init__(self):
-        self.model_id = "onnx-community/embeddinggemma-300m-ONNX"
+        import os
         self.model = None
         self.tokenizer = None
         self.use_onnx = False
@@ -51,9 +51,10 @@ class ProductMatcher:
         self.product_embeddings = None
         self.fallback_matcher = TFIDFMatcher()
 
+        local_model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "embeddinggemma-300m-ONNX"))
+
         # Try to initialize ONNX model
         try:
-            print(f"Attempting to load ONNX embedding model: {self.model_id}...")
             # Disable torch warnings
             import warnings
             warnings.filterwarnings("ignore")
@@ -62,6 +63,26 @@ class ProductMatcher:
             from transformers import AutoTokenizer
             from optimum.onnxruntime import ORTModelForFeatureExtraction
 
+            # Check if model exists locally
+            if os.path.exists(local_model_path):
+                self.model_id = local_model_path
+                print(f"ONNX model found locally at: {local_model_path}")
+            else:
+                self.model_id = "onnx-community/embeddinggemma-300m-ONNX"
+                print(f"ONNX model not found locally in {local_model_path}. Downloading from Hugging Face Hub and saving locally...")
+                
+                # Download and save locally
+                temp_tokenizer = AutoTokenizer.from_pretrained(self.model_id)
+                temp_model = ORTModelForFeatureExtraction.from_pretrained(self.model_id, provider="CPUExecutionProvider")
+                
+                os.makedirs(local_model_path, exist_ok=True)
+                temp_tokenizer.save_pretrained(local_model_path)
+                temp_model.save_pretrained(local_model_path)
+                
+                self.model_id = local_model_path
+                print(f"ONNX model saved successfully to: {local_model_path}")
+
+            print(f"Attempting to load ONNX embedding model from: {self.model_id}...")
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
             self.model = ORTModelForFeatureExtraction.from_pretrained(
                 self.model_id, 
@@ -70,7 +91,7 @@ class ProductMatcher:
             self.use_onnx = True
             print("ONNX Embedding model loaded successfully! CPU Acceleration enabled.")
         except Exception as e:
-            print(f"Could not load ONNX model {self.model_id}: {e}")
+            print(f"Could not load ONNX model: {e}")
             print("Falling back to local TF-IDF text similarity matcher.")
 
     def fit(self, products, corrections=[]):
@@ -101,7 +122,8 @@ class ProductMatcher:
                 "type": "correction",
                 "id": c.get("product_id"),
                 "name": c.get("company_product_name", ""),
-                "code": c.get("company_product_code", "")
+                "code": c.get("company_product_code", ""),
+                "supplier_id": c.get("supplier_id")
             })
             corpus.append(f"{c.get('company_product_name', '')} {c.get('company_product_code', '')}".strip())
 
@@ -159,7 +181,7 @@ class ProductMatcher:
         embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
         return embeddings.numpy()
 
-    def match_product(self, company_product_name, company_product_code, threshold=0.90):
+    def match_product(self, company_product_name, company_product_code, current_supplier_id=None, threshold=0.90):
         """
         Finds the closest database product matching the scanned invoice item.
         Returns:
@@ -178,12 +200,22 @@ class ProductMatcher:
                     return p.get("id"), 1.0
 
         # 1. Exact match on user-corrected mappings (highest priority, case-insensitive)
-        
+        # Prioritize matching corrections from the current supplier first
+        if current_supplier_id is not None:
+            for c in self.corrections:
+                if c.get("supplier_id") == current_supplier_id:
+                    c_name = c.get("company_product_name", "").strip().lower()
+                    c_code = c.get("company_product_code", "").strip().lower()
+                    if c_name == comp_name_lower and c_code == comp_code_lower:
+                        print(f"[Direct Supplier Correction Match] Exact match found: '{company_product_name}' -> DB Product ID {c.get('product_id')}")
+                        return c.get("product_id"), 1.0
+
+        # Fallback to any supplier's exact correction match
         for c in self.corrections:
             c_name = c.get("company_product_name", "").strip().lower()
             c_code = c.get("company_product_code", "").strip().lower()
             if c_name == comp_name_lower and c_code == comp_code_lower:
-                print(f"[Direct Correction Match] Exact match found: '{company_product_name}' -> DB Product ID {c.get('product_id')}")
+                print(f"[Direct Cross-Supplier Correction Match] Exact match found: '{company_product_name}' -> DB Product ID {c.get('product_id')}")
                 return c.get("product_id"), 1.0
 
         query_text = f"{company_product_name} {company_product_code}".strip()

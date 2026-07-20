@@ -62,7 +62,7 @@ export async function scanBill(file: File): Promise<any> {
       headers: {
         "Content-Type": "multipart/form-data",
       },
-      timeout: 120000, // 2 นาที - local model อาจช้า
+      timeout: 300000, // 5 นาที - local model อาจช้า
     });
     
     if (response.data && response.data.error) {
