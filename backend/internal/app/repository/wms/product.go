@@ -55,7 +55,7 @@ func (r *productRepository) ListProducts() ([]entity.Product, error) {
 
 func (r *productRepository) ListBrands() ([]entity.Brand, error) {
 	var brands []entity.Brand
-	err := r.db.Order("brand_name asc").Find(&brands).Error
+	err := r.db.Preload("Models").Order("brand_name asc").Find(&brands).Error
 	return brands, err
 }
 

@@ -10,38 +10,38 @@ import (
 
 type Product struct {
 	gorm.Model
-	Product_Code string  `json:"product_code"`
-	Part_Number   string  `json:"part_number"`
-	Product_Name  string  `json:"product_name"`
-	Barcode       string  `json:"barcode"`
-	Quantity	 int     `json:"quantity"`
-	Limit_Quantity  int     `json:"limit_quantity"`
-	Sale_price      float64 `json:"sale_price"`
-	Cost_price      float64 `json:"cost_price"`
-	Is_Active      bool    `json:"is_active"`
+	Product_Code    string    `json:"product_code"`
+	Part_Number     string    `json:"part_number"`
+	Product_Name    string    `json:"product_name"`
+	Barcode         string    `json:"barcode"`
+	Quantity        int       `json:"quantity"`
+	Limit_Quantity  int       `json:"limit_quantity"`
+	Sale_price      float64   `json:"sale_price"`
+	Cost_price      float64   `json:"cost_price"`
+	Is_Active       bool      `json:"is_active"`
 	Import_DateTime time.Time `json:"import_datetime"`
-	Note		   string  `json:"note"`
+	Note            string    `json:"note"`
 
-	BrandID uint `json:"brand_id"`
-	UnitID uint `json:"unit_id"`
-	CategoryID uint `json:"category_id"`
+	BrandID       uint  `json:"brand_id"`
+	UnitID        uint  `json:"unit_id"`
+	CategoryID    uint  `json:"category_id"`
 	SubCategoryID *uint `json:"sub_category_id" gorm:"default:null"`
-	GradeID uint `json:"grade_id"`
-	ShelfID uint `json:"shelf_id"`
+	GradeID       uint  `json:"grade_id"`
+	ShelfID       uint  `json:"shelf_id"`
 
-	Brand *Brand `gorm:"foreignKey:BrandID" json:"brand"`
-	Unit  *Unit  `gorm:"foreignKey:UnitID" json:"unit"`
-	Category *Category `gorm:"foreignKey:CategoryID" json:"category"`
+	Brand       *Brand       `gorm:"foreignKey:BrandID" json:"brand"`
+	Unit        *Unit        `gorm:"foreignKey:UnitID" json:"unit"`
+	Category    *Category    `gorm:"foreignKey:CategoryID" json:"category"`
 	SubCategory *SubCategory `gorm:"foreignKey:SubCategoryID" json:"sub_category"`
-	Grade *Grade `gorm:"foreignKey:GradeID" json:"grade"`
-	Shelf *Shelf `gorm:"foreignKey:ShelfID" json:"shelf"`
+	Grade       *Grade       `gorm:"foreignKey:GradeID" json:"grade"`
+	Shelf       *Shelf       `gorm:"foreignKey:ShelfID" json:"shelf"`
 
-	StockAlerts []StockAlert `gorm:"foreignKey:ProductID" json:"stock_alerts"`
-	Inventories []Inventory `gorm:"foreignKey:ProductID" json:"inventories"`
-	CheckStocks []CheckStock `gorm:"foreignKey:ProductID" json:"check_stocks"`
-	ProductImages []ProductImage `gorm:"foreignKey:ProductID" json:"product_images"`
+	StockAlerts    []StockAlert    `gorm:"foreignKey:ProductID" json:"stock_alerts"`
+	Inventories    []Inventory     `gorm:"foreignKey:ProductID" json:"inventories"`
+	CheckStocks    []CheckStock    `gorm:"foreignKey:ProductID" json:"check_stocks"`
+	ProductImages  []ProductImage  `gorm:"foreignKey:ProductID" json:"product_images"`
 	StockMovements []StockMovement `gorm:"foreignKey:ProductID" json:"stock_movements"`
-	BillItems []BillItem `gorm:"foreignKey:ProductID" json:"bill_items"`
+	BillItems      []BillItem      `gorm:"foreignKey:ProductID" json:"bill_items"`
 
 	// เพิ่มฟิลด์นี้เพื่อให้ Product เซ็ตเพดานส่วนลดของแต่ละชิ้น
 	MaxDiscountRate float64 `gorm:"type:decimal(5,2);not null;default:0.00" json:"max_discount_rate"`
@@ -108,7 +108,7 @@ func (p *Product) BeforeCreate(tx *gorm.DB) error {
 
 	// 4. Combine into final product code
 	p.Product_Code = fmt.Sprintf("%s%s-%05d", catPrefix, subPrefix, runningNumber)
-	
+
 	// 5. Fallback barcode to product code if empty
 	if p.Barcode == "" {
 		p.Barcode = p.Product_Code
