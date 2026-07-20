@@ -1,5 +1,6 @@
 import sys
 import os
+import glob
 import json
 import re
 import traceback
@@ -232,6 +233,121 @@ def extract_mock_data(image_path_or_url):
     return mock_response
 
 local_llm = None
+cuda_dll_directory_handles = []
+cuda_dll_directories_added = set()
+cuda_dll_handles = []
+cuda_dlls_preloaded = set()
+
+def add_windows_cuda_dll_directories():
+    global cuda_dll_directories_added, cuda_dlls_preloaded
+    if os.name != "nt" or not hasattr(os, "add_dll_directory"):
+        return
+
+    candidate_dirs = []
+    llama_lib_dirs = []
+    try:
+        import site
+        site_roots = set(site.getsitepackages())
+        user_site = site.getusersitepackages()
+        if user_site:
+            site_roots.add(user_site)
+
+        for site_root in site_roots:
+            llama_lib = os.path.join(site_root, "llama_cpp", "lib")
+            if os.path.isdir(llama_lib):
+                candidate_dirs.append(llama_lib)
+                llama_lib_dirs.append(llama_lib)
+
+            nvidia_root = os.path.join(site_root, "nvidia")
+            if not os.path.isdir(nvidia_root):
+                continue
+            for current_dir, _, filenames in os.walk(nvidia_root):
+                if any(filename.lower().endswith(".dll") for filename in filenames):
+                    candidate_dirs.append(current_dir)
+    except Exception as err:
+        print(f"Warning: Could not inspect NVIDIA Python DLL directories: {err}")
+
+    driver_store = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "DriverStore", "FileRepository")
+    for pattern in ("nv*.inf_amd64_*", "nvhm.inf_amd64_*"):
+        for dll_path in glob.glob(os.path.join(driver_store, pattern, "nvcudart_hybrid64.dll")):
+            candidate_dirs.append(os.path.dirname(dll_path))
+
+    for directory in candidate_dirs:
+        if not os.path.isdir(directory):
+            continue
+        normalized = os.path.normcase(os.path.abspath(directory))
+        if normalized in cuda_dll_directories_added:
+            continue
+        try:
+            cuda_dll_directory_handles.append(os.add_dll_directory(directory))
+            cuda_dll_directories_added.add(normalized)
+        except OSError as err:
+            print(f"Warning: Could not add CUDA DLL directory {directory}: {err}")
+
+    try:
+        import ctypes
+        preload_order = (
+            "ggml-base.dll",
+            "ggml-cpu.dll",
+            "ggml-cuda.dll",
+            "ggml.dll",
+            "mtmd.dll",
+            "llama.dll",
+        )
+        for llama_lib in llama_lib_dirs:
+            for dll_name in preload_order:
+                dll_path = os.path.join(llama_lib, dll_name)
+                normalized = os.path.normcase(os.path.abspath(dll_path))
+                if normalized in cuda_dlls_preloaded or not os.path.exists(dll_path):
+                    continue
+                try:
+                    cuda_dll_handles.append(ctypes.CDLL(dll_path))
+                    cuda_dlls_preloaded.add(normalized)
+                except OSError as err:
+                    print(f"Warning: Could not preload {dll_name}: {err}")
+    except Exception as err:
+        print(f"Warning: Could not preload llama.cpp CUDA DLLs: {err}")
+
+def resolve_llama_cuda_config(llama_supports_gpu_offload):
+    cuda_mode = os.getenv("LLAMA_CPP_USE_CUDA", "auto").strip().lower()
+    force_cpu = cuda_mode in {"0", "false", "no", "off", "cpu"}
+    force_cuda = cuda_mode in {"1", "true", "yes", "on", "cuda", "gpu"}
+
+    torch_cuda_available = False
+    cuda_device_name = None
+    torch_error = None
+    try:
+        import torch
+        torch_cuda_available = bool(torch.cuda.is_available())
+        if torch_cuda_available:
+            cuda_device_name = torch.cuda.get_device_name(0)
+    except Exception as err:
+        torch_error = str(err)
+
+    llama_gpu_offload_available = bool(llama_supports_gpu_offload())
+    use_cuda = False
+    if not force_cpu:
+        use_cuda = (cuda_mode in {"", "auto"} or force_cuda) and llama_gpu_offload_available
+
+    if use_cuda:
+        device_text = cuda_device_name or "llama.cpp GPU backend"
+        print(f"CUDA mode enabled for llama.cpp GPU offload ({device_text}).")
+        if not torch_cuda_available:
+            print("Note: PyTorch CUDA is not available in this environment, but llama.cpp GPU offload is available.")
+    else:
+        if force_cpu:
+            print("CUDA mode disabled by LLAMA_CPP_USE_CUDA; using CPU mode.")
+        elif force_cuda:
+            print("LLAMA_CPP_USE_CUDA requested CUDA, but CUDA offload is not available; using CPU mode.")
+        elif not llama_gpu_offload_available:
+            print("llama-cpp-python was installed without CUDA/GPU offload support; using CPU mode.")
+        elif not torch_cuda_available:
+            print("PyTorch CUDA is not available, but this does not block llama.cpp GPU offload.")
+
+        if torch_error:
+            print(f"Warning: Could not inspect PyTorch CUDA status: {torch_error}")
+
+    return use_cuda, (-1 if use_cuda else 0)
 
 def get_local_llm():
     global local_llm
@@ -270,16 +386,19 @@ def get_local_llm():
                 )
                 
         print(f"Loading local Gemma 4 model from {model_path}...")
-        from llama_cpp import Llama
+        add_windows_cuda_dll_directories()
+        from llama_cpp import Llama, llama_supports_gpu_offload
+        use_cuda, n_gpu_layers = resolve_llama_cuda_config(llama_supports_gpu_offload)
+        runtime_mode = "CUDA mode" if use_cuda else "CPU mode"
         try:
             from llama_cpp.llama_chat_format import Gemma4ChatHandler
-            chat_handler = Gemma4ChatHandler(clip_model_path=clip_path, use_gpu=False)
-            print("Using Gemma4ChatHandler (CPU mode) for Gemma 4 multimodal format")
+            chat_handler = Gemma4ChatHandler(clip_model_path=clip_path, use_gpu=use_cuda)
+            print(f"Using Gemma4ChatHandler ({runtime_mode}) for Gemma 4 multimodal format")
         except ImportError:
             try:
                 from llama_cpp.llama_chat_format import Gemma3ChatHandler
-                chat_handler = Gemma3ChatHandler(clip_model_path=clip_path, use_gpu=False)
-                print("Using Gemma3ChatHandler (CPU mode) for Gemma 4 multimodal format")
+                chat_handler = Gemma3ChatHandler(clip_model_path=clip_path, use_gpu=use_cuda)
+                print(f"Using Gemma3ChatHandler ({runtime_mode}) for Gemma 4 multimodal format")
             except ImportError:
                 from llama_cpp.llama_chat_format import Llava15ChatHandler
                 chat_handler = Llava15ChatHandler(clip_model_path=clip_path)
