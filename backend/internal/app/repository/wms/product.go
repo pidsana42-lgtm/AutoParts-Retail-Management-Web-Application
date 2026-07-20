@@ -30,7 +30,7 @@ func (r *productRepository) CreateProduct(product *entity.Product) error {
 
 func (r *productRepository) GetProductByID(id uint) (*entity.Product, error) {
 	var product entity.Product
-	err := r.db.Preload("Brand").Preload("Category").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ProductImages").Preload("Inventories.Supplier").
+	err := r.db.Preload("Brands").Preload("Category").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ProductImages").Preload("Inventories.Supplier").
 		First(&product, id).Error
 	if err != nil {
 		return nil, err
@@ -39,7 +39,11 @@ func (r *productRepository) GetProductByID(id uint) (*entity.Product, error) {
 }
 
 func (r *productRepository) UpdateProduct(product *entity.Product) error {
-	return r.db.Save(product).Error
+	err := r.db.Save(product).Error
+	if err != nil {
+		return err
+	}
+	return r.db.Model(product).Association("Brands").Replace(product.Brands)
 }
 
 func (r *productRepository) DeleteProduct(id uint) error {
@@ -48,7 +52,7 @@ func (r *productRepository) DeleteProduct(id uint) error {
 
 func (r *productRepository) ListProducts() ([]entity.Product, error) {
 	var products []entity.Product
-	err := r.db.Preload("Brand").Preload("Category").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ProductImages").Preload("Inventories.Supplier").
+	err := r.db.Preload("Brands").Preload("Category").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ProductImages").Preload("Inventories.Supplier").
 		Find(&products).Error
 	return products, err
 }
