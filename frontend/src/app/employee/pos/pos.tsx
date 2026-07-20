@@ -63,7 +63,6 @@ export default function PosPage(): React.JSX.Element {
     WHOLESALE: "SPECIAL",
   };
 
-  console.log("ข้อมูลลูกค้า:", paymentData.customer);
 
   return (
     <div className="flex flex-col lg:flex-row bg-white min-h-[calc(100vh-4rem)] text-gray-800 antialiased overflow-x-hidden">

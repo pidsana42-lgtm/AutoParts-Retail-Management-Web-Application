@@ -45,10 +45,9 @@ func (ctrl *SaleController) CreateOrderHandler(ctx *gin.Context) {
     // 3. ส่ง req และ userID เข้าไปใน Service
     if err := ctrl.svc.CreatePOSOrder(&req, userID); err != nil {
 		fmt.Println("บันทึกออเดอร์พังเพราะสาเหตุนี้:", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": err.Error(),
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{
+        "message": err.Error(),
+    })
 		return
 	}
 

@@ -33,9 +33,10 @@ func (r *saleRepository) BeginTransaction() *gorm.DB {
 // 2. CreateOrderWithTx ทำหน้าที่ยัดข้อมูล SaleOrder และลูก ๆ (Items) ลงเบสผ่านท่อ Transaction
 func (r *saleRepository) CreateOrderWithTx(tx *gorm.DB, order *entity.SaleOrder) error {
     // ดักจับเคสลูกค้าขาจรหน้าร้าน (ID = 0)
-    if order.CustomerID == 0 {
-        order.CustomerID = 1
-    }
+    if order.CustomerID == nil {
+    } else if *order.CustomerID == 0 {
+		order.CustomerID = nil // แปลงเป็น NULL ในฐานข้อมูล
+	}
 
     if err := tx.Omit("Customer").Create(order).Error; err != nil {
         return err
