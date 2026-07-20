@@ -17,7 +17,7 @@ type Bill struct {
 	BillImageID        uint       `gorm:"not null;index" json:"bill_image_id"`
 	BillImage          *BillImage `gorm:"foreignKey:BillImageID" json:"bill_image,omitempty"`
 	DiscountTotal      float64    `gorm:"not null" json:"discount_total"`
-	CreditTerm         string     `gorm:"not null" json:"credit_term"`
+	ReceiveDate        time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"receive_date"`
 	VatAmount          float64    `gorm:"not null" json:"vat_amount"`
 	GrandTotal         float64    `gorm:"not null" json:"grand_total"`
 	PaymentStatus      string     `gorm:"not null" json:"payment_status"`

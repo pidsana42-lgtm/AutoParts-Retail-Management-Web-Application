@@ -5,7 +5,8 @@ import * as XLSX from 'xlsx';
 import { 
   Camera, FileUp, ArrowRight, Eye, History, 
   ZoomIn, ZoomOut, RotateCw, Save, Trash2,
-  ChevronLeft, ChevronRight, LayoutPanelLeft, Loader2, AlertCircle
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, LayoutPanelLeft, Loader2, AlertCircle, AlertTriangle,
+  FileText
 } from 'lucide-react';
 
 import {
@@ -15,7 +16,11 @@ import {
   deleteBill
 } from '../../../service/http/import/import_service';
 
-type ViewState = 'home' | 'scan' | 'excel';
+import Button from '../../../components/elements/button';
+import Badge from '../../../components/elements/badge';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
+import Card from '../../../components/elements/card';
+type ViewState = 'home' | 'scan' | 'excel' | 'po';
 
 interface Supplier {
   id: number;
@@ -29,6 +34,7 @@ interface Product {
   product_code: string;
   category_name?: string;
   sub_category_name?: string;
+  cost_price?: number;
 }
 
 interface BillItemDTO {
@@ -56,9 +62,10 @@ interface ScannedBillData {
   due_date: string;
   transport_by: string;
   supplier_id: number;
+  supplier_name?: string;
   subtotal: number;
   discount_total: number;
-  credit_term: string;
+  receive_date: string;
   vat_amount: number;
   grand_total: number;
   payment_status: string;
@@ -77,7 +84,7 @@ interface SavedBill {
   supplier_id: number;
   subtotal: number;
   discount_total: number;
-  credit_term: string;
+  receive_date: string;
   vat_amount: number;
   grand_total: number;
   payment_status: string;
@@ -112,7 +119,12 @@ export default function ImportBill() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-  
+  // Validation & Warning States
+  const [originalPOItems, setOriginalPOItems] = useState<any[]>([]);
+  const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+  const [showValidationModal, setShowValidationModal] = useState<boolean>(false);
+  const [onConfirmAction, setOnConfirmAction] = useState<(() => void) | null>(null);
+
   // Loading and Error States
   const [loadingBills, setLoadingBills] = useState(false);
   const [loadingSuppliersProducts, setLoadingSuppliersProducts] = useState(false);
@@ -169,26 +181,17 @@ export default function ImportBill() {
 
   // Form State
   const [formData, setFormData] = useState<ScannedBillData | null>(null);
-  const [poReference, setPoReference] = useState('1'); // Default to PO ID 1 in local seed
+  
+  // PO Reference States
+  const [poList, setPoList] = useState<any[]>([]);
+  const [poSearchQuery, setPoSearchQuery] = useState('');
+  const [loadingPOs, setLoadingPOs] = useState(false);
+  const [poReference, setPoReference] = useState(''); // Empty string means no reference
 
-  const exportBillsHistoryToExcel = () => {
-    try {
-      const exportData = bills.map((b) => ({
-        "เลขที่บิล (Invoice No)": b.bill_no,
-        "วันที่นำเข้า (Import Date)": formatDate(b.created_at),
-        "ผู้จัดจำหน่าย (Supplier)": getSupplierName(b.supplier_id),
-        "ยอดรวมสุทธิ (Total)": b.total_amount,
-        "สถานะ (Status)": "บันทึกคลังแล้ว"
-      }));
-      const worksheet = XLSX.utils.json_to_sheet(exportData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "ประวัตินำเข้าบิล");
-      XLSX.writeFile(workbook, "bills_history.xlsx");
-    } catch (err) {
-      console.error(err);
-      alert("เกิดข้อผิดพลาดในการส่งออกไฟล์ Excel: " + String(err));
-    }
-  };
+  // Pagination States for Recent Scans Table
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
 
   const exportBillItemsToExcel = () => {
     if (!formData || !formData.items || formData.items.length === 0) return;
@@ -228,10 +231,11 @@ export default function ImportBill() {
   useEffect(() => {
     fetchBills();
     fetchSuppliersAndProducts();
+    fetchPOsList();
     if (loadingSuppliersProducts || batchErrorMsg) {
       // noop
     }
-  }, [loadingSuppliersProducts, batchErrorMsg]);
+  }, []);
 
   const handleAddRow = () => {
     if (!formData) return;
@@ -329,7 +333,7 @@ export default function ImportBill() {
       supplier_id: bill.supplier_id,
       subtotal: bill.subtotal || bill.total_amount,
       discount_total: bill.discount_total || 0,
-      credit_term: bill.credit_term || '',
+      receive_date: bill.receive_date ? bill.receive_date.split('T')[0] : '',
       vat_amount: bill.vat_amount || 0,
       grand_total: bill.grand_total || bill.total_amount,
       payment_status: bill.payment_status || 'unpaid',
@@ -381,6 +385,99 @@ export default function ImportBill() {
     }
   };
 
+  const fetchPOsList = async () => {
+    setLoadingPOs(true);
+    try {
+      const response = await apiClient.get('/po/get-all-po?limit=100');
+      if (response.data) {
+        setPoList(Array.isArray(response.data) ? response.data : (response.data.data || []));
+      }
+    } catch (err) {
+      console.error('Error fetching POs list:', err);
+    } finally {
+      setLoadingPOs(false);
+    }
+  };
+
+  const handleSelectPO = async (poId: number) => {
+    if (!poId) {
+      setPoReference('');
+      setOriginalPOItems([]);
+      return;
+    }
+    setErrorMsg(null);
+    setLoadingPOs(true);
+    try {
+      const response = await apiClient.get(`/po/${poId}`);
+      if (response.data) {
+        const po = response.data;
+        setOriginalPOItems(po.po_items || []);
+        // Map PO Items to ScannedBillData format
+        const mappedItems = (po.po_items || []).map((item: any, idx: number) => {
+          return {
+            item_sequence: idx + 1,
+            company_product_code: item.product_name_code_snapshot || '',
+            company_product_name: item.product_name_snapshot || '',
+            order_quantity: item.quantity,
+            unit: item.unit || 'ชิ้น',
+            conversion_factor: 1,
+            price_per_unit: item.unit_price,
+            discount_amount: 0,
+            net_amount: item.sub_total || (item.quantity * item.unit_price),
+            is_freebie: false,
+            remark: '',
+            product_id: item.product_id || null
+          };
+        });
+
+        setFormData({
+          bill_no: '',
+          total_amount: po.total_amount || 0,
+          due_date: new Date().toISOString().split('T')[0],
+          transport_by: '',
+          supplier_id: po.supplier_id || (suppliers[0]?.id || 1),
+          subtotal: po.total_amount || 0,
+          discount_total: 0,
+          receive_date: new Date().toISOString().split('T')[0],
+          vat_amount: 0,
+          grand_total: po.total_amount || 0,
+          payment_status: 'unpaid',
+          items: mappedItems.length > 0 ? mappedItems : [
+            {
+              item_sequence: 1,
+              company_product_code: '',
+              company_product_name: '',
+              order_quantity: 1,
+              unit: 'ชิ้น',
+              conversion_factor: 1,
+              price_per_unit: 0,
+              discount_amount: 0,
+              net_amount: 0,
+              is_freebie: false,
+              remark: '',
+              product_id: null
+            }
+          ],
+          db_job_id: 0,
+          bill_image_id: 1
+        });
+
+        setPoReference(String(po.id));
+        setPreviewUrl(null);
+        setBillImage(null);
+        setBatchImages([]);
+        setBatchResults([]);
+        setEditingBillId(null);
+        setCurrentView('scan');
+      }
+    } catch (err: any) {
+      console.error('Error fetching PO details:', err);
+      alert('ล้มเหลวในการดึงข้อมูลใบสั่งซื้อ: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setLoadingPOs(false);
+    }
+  };
+
   const handleItemChange = (idx: number, key: keyof BillItemDTO, value: any) => {
     if (!formData) return;
     const updatedItems = [...formData.items];
@@ -412,16 +509,14 @@ export default function ImportBill() {
       newSubtotal += item.net_amount;
     });
 
-    const newVat = Math.round((newSubtotal * 0.07) * 100) / 100;
-    const newTotal = newSubtotal - formData.discount_total + newVat;
-
     const updated = {
       ...formData,
       items: updatedItems,
       subtotal: newSubtotal,
-      vat_amount: newVat,
-      total_amount: newTotal,
-      grand_total: newTotal
+      vat_amount: 0,
+      discount_total: 0,
+      total_amount: newSubtotal,
+      grand_total: newSubtotal
     };
     setFormData(updated);
 
@@ -508,6 +603,9 @@ export default function ImportBill() {
         throw new Error(parsedData.error);
       }
 
+      // Refetch suppliers list to load any auto-created supplier
+      await fetchSuppliersAndProducts();
+
       // Map parsed items to associate product_id automatically if they match codes in local DB
       const mappedItems = (parsedData.items || []).map((item: any) => {
         let finalProductId = item.product_id || null;
@@ -533,9 +631,10 @@ export default function ImportBill() {
         due_date: parsedData.due_date || new Date().toISOString().split('T')[0],
         transport_by: parsedData.transport_by || '',
         supplier_id: parsedData.supplier_id || (suppliers[0]?.id || 1),
+        supplier_name: parsedData.supplier_name || '',
         subtotal: parsedData.subtotal || 0,
         discount_total: parsedData.discount_total || 0,
-        credit_term: parsedData.credit_term || '30 Days',
+        receive_date: new Date().toISOString().split('T')[0],
         vat_amount: parsedData.vat_amount || 0,
         grand_total: parsedData.grand_total || 0,
         payment_status: parsedData.payment_status || 'unpaid',
@@ -572,6 +671,9 @@ export default function ImportBill() {
           throw new Error(parsedData.error);
         }
         
+        // Refetch suppliers list to load any auto-created supplier
+        await fetchSuppliersAndProducts();
+        
         const mappedItems = (parsedData.items || []).map((item: any) => {
           let finalProductId = item.product_id || null;
           if (!finalProductId && item.company_product_code) {
@@ -596,9 +698,10 @@ export default function ImportBill() {
           due_date: parsedData.due_date || new Date().toISOString().split('T')[0],
           transport_by: parsedData.transport_by || '',
           supplier_id: parsedData.supplier_id || (suppliers[0]?.id || 1),
+          supplier_name: parsedData.supplier_name || '',
           subtotal: parsedData.subtotal || 0,
           discount_total: parsedData.discount_total || 0,
-          credit_term: parsedData.credit_term || '30 Days',
+          receive_date: new Date().toISOString().split('T')[0],
           vat_amount: parsedData.vat_amount || 0,
           grand_total: parsedData.grand_total || 0,
           payment_status: parsedData.payment_status || 'unpaid',
@@ -668,8 +771,47 @@ export default function ImportBill() {
     }
   };
 
-  const handleSaveAllBatchBills = async () => {
+  const getBillWarnings = (billData: any, poItemsList: any[]) => {
+    const warnings: string[] = [];
+    if (!billData || !billData.items) return warnings;
+    
+    let calcSubtotal = 0;
+    billData.items.forEach((item: any) => {
+      const qty = Number(item.order_quantity) || 0;
+      const price = Number(item.price_per_unit) || 0;
+      const disc = Number(item.discount_amount) || 0;
+      calcSubtotal += (qty * price) - disc;
+    });
+    
+    const expectedGrandTotal = calcSubtotal - (billData.discount_total || 0) + (billData.vat_amount || 0);
+    if (Math.abs(expectedGrandTotal - (billData.grand_total || 0)) > 1.0) {
+      warnings.push(`ราคารวมบิลสุทธิ (฿${billData.grand_total.toLocaleString('th-TH', { minimumFractionDigits: 2 })}) ไม่ตรงกับยอดคำนวณจริงของรายการสินค้าทั้งหมด (฿${expectedGrandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })})`);
+    }
+    
+    return warnings;
+  };
+
+  const handleSaveAllBatchBills = async (bypassWarnings: boolean = false) => {
     if (batchResults.length === 0) return;
+
+    if (!bypassWarnings) {
+      const allWarnings: string[] = [];
+      batchResults.forEach((bill, bIdx) => {
+        const warnings = getBillWarnings(bill, []);
+        if (warnings.length > 0) {
+          allWarnings.push(`[บิลที่ ${bIdx + 1} เลขที่ ${bill.bill_no || 'ไม่ระบุ'}]:`);
+          warnings.forEach(w => allWarnings.push(`  - ${w}`));
+        }
+      });
+
+      if (allWarnings.length > 0) {
+        setValidationWarnings(allWarnings);
+        setOnConfirmAction(() => () => handleSaveAllBatchBills(true));
+        setShowValidationModal(true);
+        return;
+      }
+    }
+
     setSaving(true);
     setErrorMsg(null);
     setBatchErrorMsg(null);
@@ -686,12 +828,12 @@ export default function ImportBill() {
             subtotal: billData.subtotal,
             bill_image_id: Number(billData.bill_image_id || 1),
             discount_total: billData.discount_total,
-            credit_term: billData.credit_term,
+            receive_date: billData.receive_date.includes('T') ? billData.receive_date : `${billData.receive_date}T00:00:00Z`,
             vat_amount: billData.vat_amount,
             grand_total: billData.grand_total,
             payment_status: billData.payment_status,
             verified_by: 1, // Default owner ID
-            po_id: Number(poReference),
+            po_id: poReference ? Number(poReference) : (poList[0]?.id || 1),
           },
           items: billData.items.map(item => ({
             ...item,
@@ -727,8 +869,19 @@ export default function ImportBill() {
   };
 
   // Submit confirmed bill to Go Backend
-  const handleSaveBill = async () => {
+  const handleSaveBill = async (bypassWarnings: boolean = false) => {
     if (!formData) return;
+
+    if (!bypassWarnings) {
+      const warnings = getBillWarnings(formData, originalPOItems);
+      if (warnings.length > 0) {
+        setValidationWarnings(warnings);
+        setOnConfirmAction(() => () => handleSaveBill(true));
+        setShowValidationModal(true);
+        return;
+      }
+    }
+
     setSaving(true);
     setErrorMsg(null);
 
@@ -743,12 +896,12 @@ export default function ImportBill() {
           subtotal: formData.subtotal,
           bill_image_id: Number(formData.bill_image_id || 1),
           discount_total: formData.discount_total,
-          credit_term: formData.credit_term,
+          receive_date: formData.receive_date.includes('T') ? formData.receive_date : `${formData.receive_date}T00:00:00Z`,
           vat_amount: formData.vat_amount,
           grand_total: formData.grand_total,
           payment_status: formData.payment_status,
           verified_by: 1, // User Owner ID 1
-          po_id: Number(poReference),
+          po_id: poReference ? Number(poReference) : (poList[0]?.id || 1),
         },
         items: formData.items.map(item => ({
           ...item,
@@ -814,12 +967,18 @@ export default function ImportBill() {
   // --------------------------------------------------------
   // 1. หน้าหลัก (Home View)
   // --------------------------------------------------------
-  const renderHomeView = () => (
-    <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
+  const renderHomeView = () => {
+    const totalItems = bills.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+    const paginatedBills = bills.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
+
+    return (
+      <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
       <h1 className="text-3xl font-bold text-gray-900 mb-8">นำเข้าใบสั่งซื้อ</h1>
 
       {/* Cards Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         {/* Card 1: สแกนบิล */}
         <div 
           onClick={() => {
@@ -840,8 +999,8 @@ export default function ImportBill() {
               <Camera size={32} className="text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold mb-1">สแกนบิลด้วย AI (Gemini)</h2>
-              <p className="text-sm text-white/70">Scan Invoice using Gemini 3.5 Flash</p>
+              <h2 className="text-2xl font-bold mb-1">สแกนบิลด้วยรูปภาพ / PDF</h2>
+              <p className="text-sm text-white/70">Scan Invoice using Image or PDF</p>
             </div>
           </div>
           <ArrowRight size={32} className="text-white/50 group-hover:text-white transition-colors" />
@@ -864,7 +1023,24 @@ export default function ImportBill() {
           <LayoutPanelLeft size={36} className="text-white/20" />
         </div>
 
-        {/* Card 3: กรอกข้อมูลด้วยตนเอง */}
+        {/* Card 3: อ้างอิงใบสั่งซื้อ PO */}
+        <div 
+          onClick={() => {
+            fetchPOsList();
+            setCurrentView('po');
+          }}
+          className="bg-[#2563EB] hover:bg-[#1d4ed8] text-white p-8 rounded-xl flex items-center justify-between cursor-pointer transition-all shadow-md group"
+        >
+          <div className="flex items-center gap-6">
+            <div>
+              <h2 className="text-2xl font-bold mb-1">นำเข้าจากใบสั่งซื้อ</h2>
+              <p className="text-sm text-white/70">Import from Purchase Order</p>
+            </div>
+          </div>
+          <ArrowRight size={32} className="text-white/50 group-hover:text-white transition-colors" />
+        </div>
+
+        {/* Card 4: กรอกข้อมูลด้วยตนเอง */}
         <div 
           onClick={() => {
             setBillImage(null);
@@ -879,7 +1055,7 @@ export default function ImportBill() {
               supplier_id: suppliers[0]?.id || 1,
               subtotal: 0,
               discount_total: 0,
-              credit_term: '30 Days',
+              receive_date: new Date().toISOString().split('T')[0],
               vat_amount: 0,
               grand_total: 0,
               payment_status: 'unpaid',
@@ -923,22 +1099,15 @@ export default function ImportBill() {
       </div>
 
       {/* Recent Scans Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <Card className="overflow-hidden" noPadding>
         <div className="flex justify-between items-center p-6 border-b border-gray-100">
           <div className="flex items-center gap-2 text-[#b32025] font-bold">
             <History size={20} />
             <span>รายการสแกนล่าสุด (Recent Scans)</span>
           </div>
           <div className="flex items-center gap-4">
-            <button 
-              onClick={exportBillsHistoryToExcel}
-              className="text-gray-600 hover:text-gray-900 text-xs font-bold flex items-center gap-1.5 cursor-pointer bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg transition-all"
-            >
-              <FileUp size={14} />
-              ส่งออกประวัติ Excel
-            </button>
-            <button onClick={fetchBills} className="text-[#b32025] text-sm font-bold hover:underline cursor-pointer">
-              ดูทั้งหมด
+            <button onClick={fetchBills} className="text-gray-500 hover:text-gray-900 text-xs font-bold flex items-center gap-1.5 cursor-pointer bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg transition-all">
+              รีเฟรชข้อมูล
             </button>
           </div>
         </div>
@@ -953,30 +1122,32 @@ export default function ImportBill() {
             ยังไม่มีบิลนำเข้าที่ถูกยืนยันในฐานข้อมูล
           </div>
         ) : (
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#f9fafb] text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                <th className="py-4 px-6 text-center w-32">INVOICE NO.</th>
-                <th className="py-4 px-6">วันที่นำเข้า (IMPORT DATE)</th>
-                <th className="py-4 px-6">ผู้จัดจำหน่าย (SUPPLIER)</th>
-                <th className="py-4 px-6 text-right">ยอดรวมสุทธิ (TOTAL)</th>
-                <th className="py-4 px-6 text-center">สถานะ (STATUS)</th>
-                <th className="py-4 px-6 text-center w-24">การจัดการ</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm divide-y divide-gray-50">
-              {bills.map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="py-5 px-6 font-bold text-gray-900 text-center">{row.bill_no}</td>
-                  <td className="py-5 px-6 text-gray-600">{formatDate(row.created_at)}</td>
-                  <td className="py-5 px-6 text-gray-800 font-medium">{getSupplierName(row.supplier_id)}</td>
-                  <td className="py-5 px-6 text-right font-bold text-gray-900">{row.total_amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</td>
-                  <td className="py-5 px-6 text-center">
-                    <span className="inline-block bg-green-50 text-green-600 text-xs font-bold px-4 py-1.5 rounded-full border border-green-100">
+          <Table>
+            <TableHeader className="bg-gray-100 text-gray-600">
+              <TableRow>
+                <TableHead className="pl-6 text-center w-32">INVOICE NO.</TableHead>
+                <TableHead>วันที่นำเข้า (IMPORT DATE)</TableHead>
+                <TableHead>ผู้จัดจำหน่าย (SUPPLIER)</TableHead>
+                <TableHead className="text-right">ยอดรวมสุทธิ (TOTAL)</TableHead>
+                <TableHead className="text-center">สถานะ (STATUS)</TableHead>
+                <TableHead className="text-center pr-6 w-24">การจัดการ</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="text-gray-700">
+              {paginatedBills.map((row) => (
+                <TableRow key={row.id} className="hover:bg-gray-50/70 transition-colors">
+                  <TableCell className="pl-6 font-bold text-gray-900 text-center">{row.bill_no}</TableCell>
+                  <TableCell className="text-gray-600">{formatDate(row.created_at)}</TableCell>
+                  <TableCell className="text-gray-800 font-medium">{getSupplierName(row.supplier_id)}</TableCell>
+                  <TableCell className="text-right font-bold text-gray-900">
+                    ฿{row.total_amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="success" size="md">
                       บันทึกแล้ว
-                    </span>
-                  </td>
-                  <td className="py-5 px-6 text-center">
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center pr-6">
                     <div className="flex items-center justify-center gap-3">
                       <button 
                         onClick={() => handleViewSavedBill(row)} 
@@ -993,21 +1164,110 @@ export default function ImportBill() {
                         <Trash2 size={20} />
                       </button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
-      </div>
+
+        {totalItems > 0 && (
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 p-6 border-t border-gray-100 text-xs text-gray-500 bg-gray-50">
+            <div className="flex items-center gap-4">
+              <span>
+                แสดง {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} ถึง {Math.min(currentPage * itemsPerPage, totalItems)} จาก {totalItems} รายการบิล
+              </span>
+              <div className="flex items-center gap-2">
+                <span>รายการต่อหน้า:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="border border-gray-200 rounded px-2 py-1 text-gray-600 bg-white hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200 cursor-pointer"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(1)}
+                aria-label="หน้าแรก"
+                className="p-1.5 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((prev) => prev - 1)}
+                aria-label="หน้าก่อนหน้า"
+                className="p-1.5 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {pageNumbers.map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`px-3 py-1.5 rounded font-medium transition-colors cursor-pointer ${
+                    currentPage === page
+                      ? "bg-[#d61c24] text-white"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((prev) => prev + 1)}
+                aria-label="หน้าถัดไป"
+                className="p-1.5 rounded text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                aria-label="หน้าสุดท้าย"
+                className="p-1.5 rounded text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
-  );
+    );
+  };
 
   // --------------------------------------------------------
   // 2. หน้าสแกนบิล (Scan View)
   // --------------------------------------------------------
   const renderScanView = () => {
     const isManualEntry = formData && !previewUrl;
+
+    let calcSubtotal = 0;
+    if (formData && formData.items) {
+      formData.items.forEach((item: any) => {
+        const qty = Number(item.order_quantity) || 0;
+        const price = Number(item.price_per_unit) || 0;
+        const disc = Number(item.discount_amount) || 0;
+        calcSubtotal += (qty * price) - disc;
+      });
+    }
+    const expectedGrandTotal = formData ? calcSubtotal : 0;
+    const isTotalMismatched = formData ? Math.abs(expectedGrandTotal - formData.total_amount) > 1.0 : false;
 
     return (
       <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
@@ -1136,7 +1396,7 @@ export default function ImportBill() {
                 {batchImages.length > 1 && (
                   <div className="mt-4 flex flex-col items-center gap-1.5 w-full">
                     <div className="text-[10px] font-bold text-gray-500 bg-white/85 px-3 py-1 rounded-full border border-gray-200 shadow-sm">
-                      📄 รูปที่ {activeBatchIndex + 1} จาก {batchImages.length}
+                      รูปที่ {activeBatchIndex + 1} จาก {batchImages.length}
                     </div>
                     <div className="flex gap-1.5 justify-center">
                       {batchImages.map((_, idx) => (
@@ -1172,12 +1432,12 @@ export default function ImportBill() {
                   {scanning ? (
                     <>
                       <Loader2 size={18} className="animate-spin" />
-                      <span>{batchImages.length > 0 ? 'กำลังสแกนบิลแบบกลุ่ม...' : 'กำลังสแกนรูปภาพผ่าน AI...'}</span>
+                      <span>{batchImages.length > 0 ? 'กำลังสแกนบิลแบบกลุ่ม...' : 'กำลังสแกนรูปภาพ/PDF...'}</span>
                     </>
                   ) : (
                     <>
                       <Camera size={18} />
-                      <span>{batchImages.length > 0 ? 'สแกนข้อมูลแบบกลุ่ม (OCR Batch)' : 'สแกนข้อมูลจากบิล (OCR)'}</span>
+                      <span>{batchImages.length > 0 ? 'สแกนข้อมูลแบบกลุ่ม (OCR Batch)' : 'สแกนข้อมูลจากบิล (รูปภาพ/PDF)'}</span>
                     </>
                   )}
                 </button>
@@ -1231,7 +1491,7 @@ export default function ImportBill() {
             <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-gray-400">
               <FileUp size={48} className="text-gray-300 mb-4" />
               <h3 className="font-bold text-lg text-gray-600 mb-2">รอการประมวลผลข้อมูล</h3>
-              <p className="text-sm max-w-md">กรุณาเลือกไฟล์ภาพบิลด้านซ้าย และกดปุ่มสแกนบิลด้วย AI เพื่อตรวจสอบวิเคราะห์ข้อมูล</p>
+              <p className="text-sm max-w-md">กรุณาเลือกไฟล์บิลด้านซ้าย และกดปุ่มสแกนบิลเพื่อตรวจสอบวิเคราะห์ข้อมูล</p>
             </div>
           ) : (
             <div className="flex flex-col flex-1 animate-in fade-in duration-300">
@@ -1239,15 +1499,29 @@ export default function ImportBill() {
               <div className="p-6 grid grid-cols-2 gap-6 border-b border-gray-100">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-2">ซัพพลายเออร์ (SUPPLIER)</label>
-                  <select 
-                    value={formData.supplier_id}
-                    onChange={(e) => updateFormState({ supplier_id: Number(e.target.value) })}
-                    className="w-full bg-[#f4f4f5] border-none rounded p-3 text-sm focus:ring-0 text-gray-800 font-medium appearance-none"
-                  >
-                    {suppliers.map(sup => (
-                      <option key={sup.id} value={sup.id}>{sup.supplier_name}</option>
-                    ))}
-                  </select>
+                  <input 
+                    type="text" 
+                    value={formData.supplier_name || ''} 
+                    onChange={(e) => {
+                      const typedName = e.target.value;
+                      const matched = suppliers.find(s => 
+                        s.supplier_name.toLowerCase().trim() === typedName.toLowerCase().trim()
+                      );
+                      updateFormState({ 
+                        supplier_name: typedName,
+                        supplier_id: matched ? matched.id : 0
+                      });
+                    }}
+                    className="w-full bg-[#f4f4f5] border-none rounded p-3 text-sm focus:ring-0 text-gray-800 font-medium" 
+                    placeholder="พิมพ์ชื่อซัพพลายเออร์..."
+                  />
+                  {formData.supplier_name && !suppliers.some(s => 
+                    s.supplier_name.toLowerCase().replace(/บริษัท|จำกัด|บจก\.|หจก\./g, '').trim() === formData.supplier_name!.toLowerCase().replace(/บริษัท|จำกัด|บจก\.|หจก\./g, '').trim()
+                  ) && (
+                    <span className="text-[11px] text-amber-500 mt-1.5 block font-medium">
+                      ⚠️ ซัพพลายเออร์นี้จะถูกลงทะเบียนเข้าสู่ระบบโดยอัตโนมัติเมื่อกดบันทึก
+                    </span>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-2">เลขที่บิล (INVOICE NO.)</label>
@@ -1274,8 +1548,12 @@ export default function ImportBill() {
                     onChange={(e) => setPoReference(e.target.value)}
                     className="w-full bg-[#f4f4f5] border-none rounded p-3 text-sm focus:ring-0 text-gray-800 font-medium appearance-none"
                   >
-                    <option value="1">ใบสั่งซื้อ PO #1 (จำลองสินค้า)</option>
-                    <option value="2">ใบสั่งซื้อ PO #2</option>
+                    <option value="">-- นำเข้าทั่วไป (ไม่มีอ้างอิง PO) --</option>
+                    {poList.map((po) => (
+                      <option key={po.id} value={String(po.id)}>
+                        {po.order_number} ({po.supplier_name || 'ไม่ระบุซัพพลายเออร์'}) - ฿{po.total_amount?.toLocaleString() || 0}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -1288,51 +1566,74 @@ export default function ImportBill() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-2">เงื่อนไขเครดิต (CREDIT TERM)</label>
+                  <label className="block text-xs font-bold text-gray-500 mb-2">วันที่รับสินค้า (RECEIVE DATE)</label>
                   <input 
-                    type="text" 
-                    value={formData.credit_term} 
-                    onChange={(e) => updateFormState({ credit_term: e.target.value })}
+                    type="date" 
+                    value={formData.receive_date ? formData.receive_date.split('T')[0] : ''} 
+                    onChange={(e) => updateFormState({ receive_date: e.target.value })}
                     className="w-full bg-[#f4f4f5] border-none rounded p-3 text-sm focus:ring-0 text-gray-800 font-medium" 
                   />
                 </div>
               </div>
 
               {/* Items Table */}
-              <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[350px]">
-                <table className="w-full min-w-[1200px] text-left text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b border-gray-100 text-xs text-gray-500">
-                      <th className="py-4 px-6 font-bold w-[12%]">สแกนรหัส (บิล)</th>
-                      <th className="py-4 px-6 font-bold w-[22%]">ชื่อสินค้า (บิล)</th>
-                      <th className="py-4 px-6 font-bold w-[22%]">เทียบสินค้าในระบบ</th>
-                      <th className="py-4 px-6 font-bold w-[15%]">หมวดหมู่หลัก</th>
-                      <th className="py-4 px-6 font-bold w-[15%]">หมวดหมู่ย่อย</th>
-                      <th className="py-4 px-6 font-bold text-right w-[6%]">จำนวน</th>
-                      <th className="py-4 px-6 font-bold text-right w-[8%]">ราคา/หน่วย</th>
-                      <th className="py-4 px-6 font-bold text-center w-12">ลบ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
+              <div className="flex-1 overflow-y-auto max-h-[350px]">
+                <Table className="min-w-[1200px] text-left text-sm border-collapse">
+                  <TableHeader className="bg-gray-100 text-gray-600 border-b border-gray-100 text-xs">
+                    <TableRow>
+                      <TableHead className="py-4 px-6 font-bold text-left text-gray-600 min-w-[120px]">สแกนรหัส (บิล)</TableHead>
+                      <TableHead className="py-4 px-6 font-bold text-left text-gray-600 min-w-[280px]">ชื่อสินค้า (บิล)</TableHead>
+                      <TableHead className="py-4 px-6 font-bold text-left text-gray-600 min-w-[250px]">เทียบสินค้าในระบบ</TableHead>
+                      <TableHead className="py-4 px-6 font-bold text-left text-gray-600 min-w-[130px]">หมวดหมู่หลัก</TableHead>
+                      <TableHead className="py-4 px-6 font-bold text-left text-gray-600 min-w-[130px]">หมวดหมู่ย่อย</TableHead>
+                      <TableHead className="py-4 px-6 font-bold text-right text-gray-600 min-w-[100px]">จำนวน</TableHead>
+                      <TableHead className="py-4 px-6 font-bold text-right text-gray-600 min-w-[100px]">ราคา/หน่วย</TableHead>
+                      <TableHead className="py-4 px-6 font-bold text-right text-gray-600 min-w-[120px]">ยอดรวม (TOTAL)</TableHead>
+                      <TableHead className="py-4 px-6 font-bold text-center text-gray-600 min-w-[50px]">ลบ</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="divide-y divide-gray-50">
                     {formData.items.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="py-2 px-4">
-                          <input 
-                            type="text" 
+                      <TableRow key={idx} className="hover:bg-gray-50 align-top">
+                        <TableCell className="py-2 px-4">
+                          <textarea 
                             value={item.company_product_code || ''}
                             onChange={(e) => handleItemChange(idx, 'company_product_code', e.target.value)}
-                            className="bg-transparent border-b border-gray-200 focus:border-red-500 focus:ring-0 w-full text-xs font-mono text-gray-700 p-1"
+                            rows={1}
+                            onInput={(e) => {
+                              const target = e.target as HTMLTextAreaElement;
+                              target.style.height = 'auto';
+                              target.style.height = `${target.scrollHeight}px`;
+                            }}
+                            ref={(el) => {
+                              if (el) {
+                                el.style.height = 'auto';
+                                el.style.height = `${el.scrollHeight}px`;
+                              }
+                            }}
+                            className="bg-transparent border-none border-b border-gray-200 focus:border-red-500 focus:ring-0 w-full text-xs font-mono text-gray-700 p-1 resize-none overflow-hidden min-h-[36px]"
                           />
-                        </td>
-                        <td className="py-2 px-4">
-                          <input 
-                            type="text" 
+                        </TableCell>
+                        <TableCell className="py-2 px-4">
+                          <textarea 
                             value={item.company_product_name || ''}
                             onChange={(e) => handleItemChange(idx, 'company_product_name', e.target.value)}
-                            className="bg-transparent border-b border-gray-200 focus:border-red-500 focus:ring-0 w-full text-xs font-medium text-gray-900 p-1"
+                            rows={1}
+                            onInput={(e) => {
+                              const target = e.target as HTMLTextAreaElement;
+                              target.style.height = 'auto';
+                              target.style.height = `${target.scrollHeight}px`;
+                            }}
+                            ref={(el) => {
+                              if (el) {
+                                el.style.height = 'auto';
+                                el.style.height = `${el.scrollHeight}px`;
+                              }
+                            }}
+                            className="bg-transparent border-none border-b border-gray-200 focus:border-red-500 focus:ring-0 w-full text-xs font-medium text-gray-900 p-1 resize-none overflow-hidden min-h-[36px]"
                           />
-                        </td>
-                        <td className="py-2 px-4">
+                        </TableCell>
+                        <TableCell className="py-2 px-4">
                           <select
                             value={item.product_id || ''}
                             onChange={(e) => {
@@ -1345,9 +1646,9 @@ export default function ImportBill() {
                               <option key={p.id} value={p.id}>[{p.product_code}] {p.product_name}</option>
                             ))}
                           </select>
-                        </td>
+                        </TableCell>
                         {/* Category Column */}
-                        <td className="py-2 px-4">
+                        <TableCell className="py-2 px-4">
                           {item.product_id ? (
                             (() => {
                               const prod = products.find(p => p.id === Number(item.product_id));
@@ -1376,10 +1677,10 @@ export default function ImportBill() {
                               ))}
                             </select>
                           )}
-                        </td>
+                        </TableCell>
 
                         {/* Sub-Category Column */}
-                        <td className="py-2 px-4">
+                        <TableCell className="py-2 px-4">
                           {item.product_id ? (
                             (() => {
                               const prod = products.find(p => p.id === Number(item.product_id));
@@ -1402,13 +1703,13 @@ export default function ImportBill() {
                               className="bg-white border border-gray-200 rounded p-0.5 text-[10px] w-full focus:ring-0 text-gray-700 font-medium disabled:opacity-50"
                             >
                               <option value="">-- หมวดหมู่ย่อย --</option>
-                              {item.category_id && ((categories.find((c: any) => c.ID === item.category_id))?.sub_categories || []).map((sc: any) => (
+                              {item.category_id ? ((categories.find((c: any) => c.ID === item.category_id))?.sub_categories || []).map((sc: any) => (
                                 <option key={sc.ID} value={sc.ID}>{sc.sub_category_name}</option>
-                              ))}
+                              )) : null}
                             </select>
                           )}
-                        </td>
-                        <td className="py-2 px-4 text-right">
+                        </TableCell>
+                        <TableCell className="py-2 px-4 text-right">
                           <div className="flex items-center gap-1 justify-end">
                             <input 
                               type="number" 
@@ -1423,8 +1724,8 @@ export default function ImportBill() {
                               className="bg-transparent border-b border-gray-200 focus:border-red-500 focus:ring-0 w-8 text-left text-xs text-gray-500 p-1"
                             />
                           </div>
-                        </td>
-                        <td className="py-2 px-4 text-right">
+                        </TableCell>
+                        <TableCell className="py-2 px-4 text-right">
                           <input 
                             type="number" 
                             step="0.01"
@@ -1432,8 +1733,11 @@ export default function ImportBill() {
                             onChange={(e) => handleItemChange(idx, 'price_per_unit', e.target.value)}
                             className="bg-transparent border-b border-gray-200 focus:border-red-500 focus:ring-0 w-16 text-right text-xs text-gray-700 font-bold p-1"
                           />
-                        </td>
-                        <td className="py-2 px-4 text-center">
+                        </TableCell>
+                        <TableCell className="py-2 px-4 text-right font-bold text-gray-900 text-xs">
+                          ฿{((item.order_quantity || 0) * (item.price_per_unit || 0) - (item.discount_amount || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                        </TableCell>
+                        <TableCell className="py-2 px-4 text-center">
                           <button
                             type="button"
                             onClick={() => handleRemoveRow(idx)}
@@ -1443,11 +1747,11 @@ export default function ImportBill() {
                           >
                             <Trash2 size={16} />
                           </button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
 
               {/* Add Row Button */}
@@ -1461,11 +1765,34 @@ export default function ImportBill() {
                 </button>
               </div>
 
+              {/* ยอดรวมไม่ตรงกัน Warning Banner */}
+              {isTotalMismatched && (
+                <div className="mx-6 my-4 p-4 bg-red-50 border border-red-200 text-[#b32025] text-sm rounded-lg flex items-start gap-3 animate-in slide-in-from-top-2 duration-200 shadow-sm text-left">
+                  <AlertCircle className="text-[#b32025] shrink-0 mt-0.5" size={20} />
+                  <div className="flex-1 text-xs">
+                    <p className="font-bold text-sm text-[#b32025] mb-1">ยอดเงินไม่ตรงกัน (Amount Mismatch)</p>
+                    <p className="leading-relaxed text-red-700">
+                      ยอดเงินสุทธิรวมในบิล (<span className="font-bold">฿{formData.total_amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>) 
+                      ไม่ตรงกับผลรวมคำนวณจริงของรายการสินค้าทั้งหมดในตาราง (<span className="font-bold">฿{expectedGrandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>)
+                    </p>
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => updateFormState({ total_amount: expectedGrandTotal })}
+                        className="bg-[#b32025] hover:bg-[#9a1a1f] text-white font-bold px-3 py-1.5 rounded transition-all cursor-pointer text-[11px] shadow-sm"
+                      >
+                        ปรับยอดบิลให้ตรงตามตาราง
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Summary & Submit */}
               <div className="border-t border-gray-100 p-6 flex justify-between items-end bg-[#fafafa] rounded-b-xl mt-auto">
-                <div className="text-xs text-gray-600 space-y-2">
+                <div className="text-xs text-gray-600 space-y-2 text-left">
                   <p>จำนวนรายการทั้งหมด : <span className="text-gray-900 font-bold">{formData.items.length} รายการ</span></p>
-                  <p>ภาษีมูลค่าเพิ่ม (VAT 7%) : <span className="text-gray-900 font-bold">{formData.vat_amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</span></p>
+                  <p>มูลค่าสินค้า (SUBTOTAL) : <span className="text-gray-900 font-bold">฿{formData.subtotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span></p>
                 </div>
                 <div className="text-right flex items-end gap-4">
                   <div>
@@ -1481,7 +1808,7 @@ export default function ImportBill() {
                     <span>ส่งออกเป็น Excel</span>
                   </button>
                   <button 
-                    onClick={batchResults.length > 0 ? handleSaveAllBatchBills : handleSaveBill}
+                    onClick={() => batchResults.length > 0 ? handleSaveAllBatchBills(false) : handleSaveBill(false)}
                     disabled={saving}
                     className="bg-[#b32025] hover:bg-[#9a1a1f] text-white px-8 py-3 rounded text-sm font-bold flex items-center gap-2 transition-all shadow-sm disabled:bg-gray-400 cursor-pointer"
                   >
@@ -1532,20 +1859,67 @@ export default function ImportBill() {
             return;
           }
 
+          const getSimilarity = (s1: string, s2: string): number => {
+            const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9ก-๙]/g, '');
+            const w1 = clean(s1);
+            const w2 = clean(s2);
+            
+            if (w1 === w2) return 1.0;
+            if (w1.includes(w2) || w2.includes(w1)) return 0.8;
+            
+            const track = Array(w2.length + 1).fill(null).map(() =>
+              Array(w1.length + 1).fill(null)
+            );
+            for (let i = 0; i <= w1.length; i += 1) track[0][i] = i;
+            for (let j = 0; j <= w2.length; j += 1) track[j][0] = j;
+            for (let j = 1; j <= w2.length; j += 1) {
+              for (let i = 1; i <= w1.length; i += 1) {
+                const indicator = w1[i - 1] === w2[j - 1] ? 0 : 1;
+                track[j][i] = Math.min(
+                  track[j][i - 1] + 1,
+                  track[j - 1][i] + 1,
+                  track[j - 1][i - 1] + indicator
+                );
+              }
+            }
+            const distance = track[w2.length][w1.length];
+            const maxLength = Math.max(w1.length, w2.length);
+            return maxLength === 0 ? 0 : 1 - (distance / maxLength);
+          };
+
           // Smart map Excel/CSV columns to BillItemDTO structure
           const mappedItems: BillItemDTO[] = rows.map((row: any, index: number) => {
             const findValue = (keywords: string[]) => {
+              // 1. Direct or substring matching
               const matchedKey = Object.keys(row).find(key => 
-                keywords.some(kw => key.toLowerCase().includes(kw.toLowerCase()))
+                keywords.some(kw => key.toLowerCase().includes(kw.toLowerCase()) || kw.toLowerCase().includes(key.toLowerCase()))
               );
-              return matchedKey ? row[matchedKey] : '';
+              if (matchedKey) return row[matchedKey];
+
+              // 2. Fuzzy Levenshtein semantic similarity matching
+              let bestKey = '';
+              let bestScore = 0;
+              for (const key of Object.keys(row)) {
+                for (const kw of keywords) {
+                  const score = getSimilarity(key, kw);
+                  if (score > bestScore) {
+                    bestScore = score;
+                    bestKey = key;
+                  }
+                }
+              }
+
+              if (bestScore > 0.55 && bestKey) {
+                return row[bestKey];
+              }
+              return '';
             };
 
-            const code = findValue(['code', 'product_code', 'รหัส', 'รหัสสินค้า', 'part_number', 'part_no', 'sku']);
-            const name = findValue(['name', 'product_name', 'ชื่อ', 'ชื่อสินค้า', 'description', 'detail']);
-            const qty = parseFloat(findValue(['quantity', 'qty', 'จำนวน', 'จำนวนต่อหน่วย', 'ordered', 'vol']) || '1') || 1;
-            const unit = findValue(['unit', 'หน่วย', 'uom', 'pack']) || 'ชิ้น';
-            const price = parseFloat(findValue(['price', 'rate', 'ราคา', 'ราคาต่อหน่วย', 'cost', 'unit_cost']) || '0') || 0;
+            const code = findValue(['code', 'product_code', 'รหัส', 'รหัสสินค้า', 'part_number', 'part_no', 'sku', 'รหัสอะไหล่']);
+            const name = findValue(['name', 'product_name', 'ชื่อ', 'ชื่อสินค้า', 'description', 'detail', 'รายการ', 'ชื่ออะไหล่']);
+            const qty = parseFloat(findValue(['quantity', 'qty', 'จำนวน', 'จำนวนต่อหน่วย', 'ordered', 'vol', 'ยอดสั่งซื้อ']) || '1') || 1;
+            const unit = findValue(['unit', 'หน่วย', 'uom', 'pack', 'ขนาดบรรจุ']) || 'ชิ้น';
+            const price = parseFloat(findValue(['price', 'rate', 'ราคา', 'ราคาต่อหน่วย', 'cost', 'unit_cost', 'ราคา/หน่วย']) || '0') || 0;
 
             return {
               item_sequence: index + 1,
@@ -1574,7 +1948,7 @@ export default function ImportBill() {
             supplier_id: suppliers[0]?.id || 1,
             subtotal: subtotal,
             discount_total: 0,
-            credit_term: '30 Days',
+            receive_date: new Date().toISOString().split('T')[0],
             vat_amount: 0,
             grand_total: subtotal,
             payment_status: 'unpaid',
@@ -1629,11 +2003,179 @@ export default function ImportBill() {
     );
   };
 
+  // Render PO Selection Page View
+  const renderPOView = () => {
+    // Filter POs by search query (OrderNumber or SupplierName)
+    const filteredPOs = poList.filter(po => {
+      const q = poSearchQuery.toLowerCase();
+      const num = (po.order_number || '').toLowerCase();
+      const name = (po.supplier_name || '').toLowerCase();
+      return num.includes(q) || name.includes(q);
+    });
+
+    return (
+      <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
+        {/* Header Bar */}
+        <div className="flex items-center gap-4 mb-8">
+          <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+            <ChevronLeft size={24} className="text-gray-600" />
+          </button>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+            <span>นำเข้าสินค้าด้วยใบสั่งซื้อ</span>
+          </h1>
+        </div>
+
+        {/* Content Box */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col min-h-[500px]">
+          {/* Search Box */}
+          <div className="mb-6">
+            <label className="block text-xs font-bold text-gray-500 mb-2">ค้นหาใบสั่งซื้อ (SEARCH PURCHASE ORDER)</label>
+            <input 
+              type="text"
+              placeholder="พิมพ์ค้นหาเลขที่ PO หรือชื่อผู้จัดจำหน่าย..."
+              value={poSearchQuery}
+              onChange={(e) => setPoSearchQuery(e.target.value)}
+              className="w-full bg-[#f4f4f5] border-none rounded-lg p-3 text-sm focus:ring-1 focus:ring-blue-500 text-gray-800 font-medium"
+            />
+          </div>
+
+          {/* List Section */}
+          <div className="flex-1 overflow-y-auto min-h-[300px]">
+            {loadingPOs ? (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                <Loader2 size={36} className="animate-spin text-[#2563EB] mb-2" />
+                <span className="text-sm font-medium">กำลังโหลดรายการใบสั่งซื้อ...</span>
+              </div>
+            ) : filteredPOs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                <FileText size={48} className="text-gray-300 mb-2" />
+                <span className="text-sm font-bold text-gray-500">ไม่พบรายการใบสั่งซื้อที่ตรงกับเงื่อนไข</span>
+                <span className="text-xs text-gray-400 mt-1">กรุณาตรวจสอบชื่อค้นหา หรือสร้างใบสั่งซื้อ (PO) ก่อนในหน้าระบบสั่งซื้อ</span>
+              </div>
+            ) : (
+              <Card className="overflow-hidden" noPadding>
+                <Table>
+                  <TableHeader className="bg-gray-100 text-gray-600">
+                    <TableRow>
+                      <TableHead className="pl-6">เลขที่ใบสั่งซื้อ (PO NO.)</TableHead>
+                      <TableHead>ผู้จัดจำหน่าย (SUPPLIER)</TableHead>
+                      <TableHead>วันที่ออกเอกสาร (DATE)</TableHead>
+                      <TableHead className="text-right">ยอดเงินรวม (TOTAL)</TableHead>
+                      <TableHead className="text-center">สถานะ (STATUS)</TableHead>
+                      <TableHead className="text-center pr-6">ดำเนินการ (ACTION)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="text-gray-700">
+                    {filteredPOs.map((po) => (
+                      <TableRow key={po.id} className="hover:bg-gray-50/70 transition-colors">
+                        <TableCell className="pl-6 font-semibold text-gray-900">{po.order_number}</TableCell>
+                        <TableCell>{po.supplier_name || 'ไม่ระบุ'}</TableCell>
+                        <TableCell className="text-xs text-gray-500">{formatDate(po.created_at)}</TableCell>
+                        <TableCell className="text-right font-medium text-gray-900">
+                          ฿{po.total_amount?.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge 
+                            variant={
+                              po.status === 'APPROVED' 
+                                ? 'success' 
+                                : po.status === 'PENDING'
+                                ? 'warning'
+                                : po.status === 'REJECTED'
+                                ? 'error'
+                                : 'neutral'
+                            }
+                            size="md"
+                          >
+                            {po.status === 'APPROVED' ? 'อนุมัติแล้ว' : po.status === 'PENDING' ? 'รออนุมัติ' : po.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center pr-6">
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleSelectPO(po.id)}
+                            className="shadow-sm"
+                          >
+                            ดึงข้อมูลเข้าบิล
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
       {currentView === 'home' && renderHomeView()}
       {currentView === 'scan' && renderScanView()}
       {currentView === 'excel' && renderExcelView()}
+      {currentView === 'po' && renderPOView()}
+
+      {/* Validation Warning Modal */}
+      {showValidationModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="bg-[#fffbeb] border-b border-amber-200 px-6 py-4 flex items-center gap-3 text-amber-800">
+              <AlertTriangle className="w-6 h-6 shrink-0 text-amber-600 animate-pulse" />
+              <div>
+                <h3 className="font-bold text-lg">คำเตือน: ตรวจพบข้อมูลไม่สอดคล้องหรือน่าสงสัย</h3>
+                <p className="text-xs text-amber-700">กรุณาตรวจสอบรายละเอียดด้านล่างก่อนยืนยันบันทึกข้อมูล</p>
+              </div>
+            </div>
+            
+            {/* Body */}
+            <div className="p-6 overflow-y-auto space-y-3 flex-1">
+              <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded border border-gray-100">
+                ระบบวิเคราะห์ข้อมูลใบเสร็จของคุณแล้วพบจุดผิดพลาดหรือแจ้งเตือนที่อาจเกิดจากความไม่สอดคล้อง (เช่น ยอดผลรวมต่างกัน, จำนวน/ราคาไม่ตรงกับใบสั่งซื้อ PO หรือยังไม่ได้จับคู่สินค้า)
+              </div>
+              <div className="space-y-2">
+                {validationWarnings.map((w, idx) => (
+                  <div key={idx} className="flex gap-2 text-xs text-red-700 bg-red-50 p-2 rounded border border-red-100">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
+                    <span className="font-medium whitespace-pre-wrap">{w}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowValidationModal(false);
+                  setValidationWarnings([]);
+                  setOnConfirmAction(null);
+                }}
+                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                ย้อนกลับไปแก้ไข
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowValidationModal(false);
+                  if (onConfirmAction) {
+                    onConfirmAction();
+                  }
+                }}
+                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                ยืนยันบันทึกข้อมูลต่อไป
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
