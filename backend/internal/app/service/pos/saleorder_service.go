@@ -294,8 +294,8 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
 
 	if paymentMethod.IsCredit {
 		// ลูกค้าทั่วไป หรือลูกค้าขาจร (customerIDForOrder == nil) ห้ามซื้อเชื่อ
-		if customer.CustomerType.TypeName == "GENERAL" || customerIDForOrder == nil {
-			tx.Rollback()
+		if customerIDForOrder == nil {
+        tx.Rollback()
 			return errors.New("ลูกค้าทั่วไป/ขาจร ไม่สามารถเลือกชำระแบบซื้อเชื่อได้")
 		}
 
