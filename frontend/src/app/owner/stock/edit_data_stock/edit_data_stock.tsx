@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Modal from "../../../../components/elements/modal";
 import Input from "../../../../components/elements/input";
 import Select from "../../../../components/elements/select";
+import MultiSelect from "../../../../components/elements/multiselect";
 import Button from "../../../../components/elements/button";
 import { updateProduct } from "../../../../service/http/wms/product";
 import type { StockItem } from "../../../../interface/wms/product";
@@ -44,7 +45,7 @@ export default function EditDataStock({
     sale_price: 0,
     cost_price: 0,
     note: "",
-    brand_id: "",
+    brand_ids: [] as string[],
     category_id: "",
     grade_id: "",
     unit_id: "",
@@ -55,8 +56,17 @@ export default function EditDataStock({
 
   useEffect(() => {
     if (isOpen && product) {
-      // ค้นหา ID ที่สอดคล้องกับชื่อเพื่อตั้งเป็นค่าเริ่มต้นในฟอร์มแก้ไข
-      const matchedBrand = brands.find((b) => b.label.toUpperCase() === product.Brand?.toUpperCase());
+      // สำหรับแบรนด์ เนื่องจาก product.Brand เป็น string ที่มี , คั่น (เช่น "Toyota, Honda") เราจะ split และหาค่า id
+      const matchedBrandIds: string[] = [];
+      if (product.Brand) {
+        const brandNames = product.Brand.split(",").map(s => s.trim().toUpperCase());
+        brands.forEach(b => {
+          if (brandNames.includes(b.label.toUpperCase())) {
+            matchedBrandIds.push(b.value);
+          }
+        });
+      }
+      
       const matchedCategory = formCategories.find((c) => c.label.toUpperCase() === product.Category?.toUpperCase());
       const matchedGrade = grades.find((g) => g.label.toUpperCase() === product.Grade?.toUpperCase());
       const matchedUnit = units.find((u) => u.label.toUpperCase() === product.Unit?.toUpperCase());
@@ -72,7 +82,7 @@ export default function EditDataStock({
         sale_price: product.Price || 0,
         cost_price: product.CostPrice || 0,
         note: product.Note || "",
-        brand_id: matchedBrand ? matchedBrand.value : "",
+        brand_ids: matchedBrandIds,
         category_id: matchedCategory ? matchedCategory.value : "",
         grade_id: matchedGrade ? matchedGrade.value : "",
         unit_id: matchedUnit ? matchedUnit.value : "",
@@ -89,7 +99,7 @@ export default function EditDataStock({
       if (
         !formData.product_code ||
         !formData.product_name ||
-        !formData.brand_id ||
+        formData.brand_ids.length === 0 ||
         !formData.category_id ||
         !formData.grade_id ||
         !formData.unit_id ||
@@ -106,7 +116,7 @@ export default function EditDataStock({
         limit_quantity: Number(formData.limit_quantity),
         sale_price: Number(formData.sale_price),
         cost_price: Number(formData.cost_price),
-        brand_id: Number(formData.brand_id),
+        brand_ids: formData.brand_ids.map(Number),
         category_id: Number(formData.category_id),
         grade_id: Number(formData.grade_id),
         unit_id: Number(formData.unit_id),
@@ -196,13 +206,13 @@ export default function EditDataStock({
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Select
+          <MultiSelect
             label="แบรนด์สินค้า"
             required
             options={brands}
             placeholder="เลือกแบรนด์"
-            value={formData.brand_id}
-            onChange={(e) => setFormData({ ...formData, brand_id: e.target.value })}
+            value={formData.brand_ids}
+            onChange={(values) => setFormData({ ...formData, brand_ids: values })}
           />
           <Select
             label="ประเภทสินค้า"

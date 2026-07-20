@@ -15,7 +15,7 @@ type ProductRequestDTO struct {
 	Cost_price     float64 `json:"cost_price" binding:"required,gt=0"`
 	Note           string  `json:"note"`
 
-	BrandID       uint  `json:"brand_id" binding:"required"`
+	BrandIDs      []uint `json:"brand_ids" binding:"required"`
 	UnitID        uint  `json:"unit_id" binding:"required"`
 	CategoryID    uint  `json:"category_id" binding:"required"`
 	SubCategoryID *uint `json:"sub_category_id"`
@@ -35,7 +35,6 @@ func (r *ProductRequestDTO) ToEntity() entity.Product {
 		Cost_price:     r.Cost_price,
 		Is_Active:      true, // กำหนดค่าเริ่มต้นให้เปิดใช้งานทันที
 		Note:           r.Note,
-		BrandID:        r.BrandID,
 		UnitID:         r.UnitID,
 		CategoryID:     r.CategoryID,
 		SubCategoryID:  r.SubCategoryID,
@@ -78,9 +77,14 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	d.Cost_price = p.Cost_price
 	d.Is_Active = p.Is_Active
 
-	// สังเกต: พอลบ Pointer (*) ออกจาก Entity แล้ว
-	// สามารถจิ้มเข้าฟิลด์ .Brand_Name ได้ทันทีโดยไม่ต้องกลัว Nil Pointer Crash
-	d.BrandName = p.Brand.Brand_Name
+	brandNames := ""
+	for i, b := range p.Brands {
+		if i > 0 {
+			brandNames += ", "
+		}
+		brandNames += b.Brand_Name
+	}
+	d.BrandName = brandNames
 	d.CategoryName = p.Category.Category_Name
 	if p.Grade != nil {
 		d.GradeName = p.Grade.Grade_Name
