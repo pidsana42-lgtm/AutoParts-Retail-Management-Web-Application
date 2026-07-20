@@ -10,6 +10,8 @@ import (
 	wmsDto "backend/internal/app/dto/wms"
 	"backend/internal/app/entity"
 	wmsRepo "backend/internal/app/repository/wms"
+
+	"gorm.io/gorm"
 )
 
 type ProductService interface {
@@ -32,6 +34,11 @@ func NewProductService(repo wmsRepo.ProductRepository) ProductService {
 
 func (s *productService) CreateProduct(req *wmsDto.ProductRequestDTO) error {
 	product := req.ToEntity()
+	for _, id := range req.BrandIDs {
+		product.Brands = append(product.Brands, entity.Brand{
+			Model: gorm.Model{ID: id},
+		})
+	}
 	if product.Barcode == "" {
 		product.Barcode = product.Product_Code
 	}
@@ -56,6 +63,11 @@ func (s *productService) GetProductByID(id uint) (*wmsDto.ProductListResponseDTO
 func (s *productService) UpdateProduct(id uint, req *wmsDto.ProductRequestDTO) error {
 	product := req.ToEntity()
 	product.ID = id
+	for _, brandId := range req.BrandIDs {
+		product.Brands = append(product.Brands, entity.Brand{
+			Model: gorm.Model{ID: brandId},
+		})
+	}
 	if product.Barcode == "" {
 		product.Barcode = product.Product_Code
 	}
