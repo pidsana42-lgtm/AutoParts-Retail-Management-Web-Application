@@ -21,11 +21,12 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	//auth routes
 	auth.SetupAuthRoutes(r, db)
 
-	//pos and customer routes
+	//pos and customer payment routes
 	customer.SetupCustomerRoutes(r, db)
 	pos.SetupPOSRoutes(r, db)
 	pos.SetupStoreConfigRoutes(r, db)
 	pos.SetupCustomerDiscountRoutes(r, db)
+	pos.SetupPaymentRoutes(r, db)
 
 	//ของทุกคนก็เพิ่มเอาในนี้เลย comment ระบบตัวเองไว้ด้วยนะ ใน main มันจะได้ไ่ม่เยอะ
 
