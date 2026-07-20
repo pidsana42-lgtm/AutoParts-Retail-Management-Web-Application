@@ -82,7 +82,7 @@ func SaleOrder(db *gorm.DB) error {
 
 	for _, so := range saleOrders {
 		if err := db.FirstOrCreate(&so, &entity.SaleOrder{OrderNumber: so.OrderNumber}).Error; err != nil {
-			log.Fatalf("failed to seed sale order %s: %w", so.OrderNumber, err)
+			log.Fatalf("failed to seed sale order %s: %v", so.OrderNumber, err)
 		}
 		
 	}
