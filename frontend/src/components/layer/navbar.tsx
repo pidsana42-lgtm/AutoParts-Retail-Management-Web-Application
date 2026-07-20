@@ -49,7 +49,7 @@ export default function Navbar(): React.JSX.Element {
           <UserCircle className="w-6 h-6 text-gray-600 shrink-0" />
           <div className="text-left flex flex-col justify-center min-w-0">
             <p className="text-[10px] text-gray-400 leading-none mb-0.5">บัญชีผู้ใช้</p>
-            <p className="font-semibold text-gray-700 tracking-wide truncate pr-2" title={displayName}>
+            <p className=" text-gray-700 tracking-wide truncate pr-2" title={displayName}>
               {displayName}
             </p>
           </div>

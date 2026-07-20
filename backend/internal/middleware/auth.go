@@ -48,9 +48,6 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		// ดึงค่าข้อมูลจาก Token และเซ็ตลง Context เพื่อให้ Controller ดึงไปใช้ต่อได้ง่ายๆ
-		if sutID, ok := claims["sut_id"].(string); ok && sutID != "" {
-			c.Set("sut_id", sutID)
-		}
 		if uid, ok := claims["user_id"]; ok {
 			c.Set("user_id", uid)
 		}

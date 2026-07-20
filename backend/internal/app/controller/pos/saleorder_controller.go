@@ -19,11 +19,11 @@ func NewSaleController(svc posService.SaleService) *SaleController {
 	return &SaleController{svc: svc}
 }
 
-// 🎯 ปรับแก้จาก (c *SaleController) เป็น (ctrl *SaleController) ให้เหมือนกันทั้งไฟล์
 func (ctrl *SaleController) CreateOrderHandler(ctx *gin.Context) {
 	var req pos.CreateSaleOrderRequest
 
-	if err := ctx.ShouldBindJSON(&req); err != nil {
+	//// 1. Bind JSON 
+    if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
 			"message": "ข้อมูลใบสั่งซื้อไม่ถูกต้องหรือส่งฟิลด์มาไม่ครบ",
@@ -32,7 +32,18 @@ func (ctrl *SaleController) CreateOrderHandler(ctx *gin.Context) {
 		return
 	}
 
-	if err := ctrl.svc.CreatePOSOrder(&req); err != nil {
+    // 2. ดึง user_id จาก Middleware (ค่านี้มาจาก JWT)
+    userIDFloat, exists := ctx.Get("user_id")
+    if !exists {
+        ctx.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "ไม่พบข้อมูลพนักงานในระบบ"})
+        return
+    }
+    
+    // แปลง float64 (จาก jwt.MapClaims) เป็น uint
+    userID := uint(userIDFloat.(float64))
+
+    // 3. ส่ง req และ userID เข้าไปใน Service
+    if err := ctrl.svc.CreatePOSOrder(&req, userID); err != nil {
 		fmt.Println("บันทึกออเดอร์พังเพราะสาเหตุนี้:", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
@@ -47,7 +58,6 @@ func (ctrl *SaleController) CreateOrderHandler(ctx *gin.Context) {
 	})
 }
 
-// ─── 🎯 GET /pos/customer-types ───
 func (ctrl *SaleController) GetCustomerTypes(c *gin.Context) {
 	customerTypes, err := ctrl.svc.GetCustomerTypes()
 	if err != nil {
@@ -55,11 +65,9 @@ func (ctrl *SaleController) GetCustomerTypes(c *gin.Context) {
 		return
 	}
 
-	// ✅ เรียกผ่านแพ็กเกจที่เราอ้างชื่อย่อ (Alias) ไว้ในกลุ่ม Import ด้านบน
 	c.JSON(http.StatusOK, customerDto.ToCustomerTypeListResponse(customerTypes))
 }
 
-// ─── 🎯 GET /pos/customer-discount ───
 func (ctrl *SaleController) SearchCustomerDiscount(c *gin.Context) {
 	searchQuery := c.Query("search")
 	if searchQuery == "" {
@@ -74,4 +82,14 @@ func (ctrl *SaleController) SearchCustomerDiscount(c *gin.Context) {
 	}
 	
 	c.JSON(http.StatusOK, customers)
+}
+
+func (ctrl *SaleController) GetPaymentMethods(c *gin.Context) {
+	paymentMethods, err := ctrl.svc.GetPaymentMethods()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "เกิดข้อผิดพลาดในการดึงข้อมูลวิธีชำระเงิน: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, paymentMethods)
 }
