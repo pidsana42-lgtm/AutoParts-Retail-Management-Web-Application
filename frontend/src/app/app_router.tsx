@@ -19,6 +19,7 @@ import ReturnsPage from './owner/return/returns';
 import ReturnDetailPage from './owner/return/return_detail';
 import PurchaseOrders from './owner/purchase_orders/purchase_orders';
 import CreatePurchaseOrders from './owner/purchase_orders/create_po';
+import OrderDetail from './owner/purchase_orders/po_detail';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -87,7 +88,7 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/employee/pos" element={<Pos />} />
         <Route path="/owner/orders" element={<PurchaseOrders />} />
         <Route path="/owner/new-orders" element={<CreatePurchaseOrders />} />
-        
+        <Route path="/owner/orders/:id" element={<OrderDetail />} />
         {/* แดชบอร์ดของฝั่งพนักงาน */}
         <Route path="/employee/dashboard" element={
           !isAdminOrOwner ? <EmployeeDashboard /> : <Navigate to={firstMenuPath} replace />

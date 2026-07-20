@@ -49,6 +49,14 @@ export function TableBody({ className, children, ...props }: HTMLAttributes<HTML
   );
 }
 
+export function TableFooter({ className, children, ...props }: HTMLAttributes<HTMLTableSectionElement>) {
+  return (
+    <tfoot className={cn("border-t border-slate-200 bg-slate-50", className)} {...props}>
+      {children}
+    </tfoot>
+  );
+}
+
 export function TableRow({
   className,
   onClick,
