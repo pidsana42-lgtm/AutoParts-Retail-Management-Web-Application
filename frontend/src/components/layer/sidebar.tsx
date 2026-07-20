@@ -43,7 +43,7 @@ export default function Sidebar({
         <ul className="mt-4 space-y-0.5">
           {menuItems.map((item, index) => {
             const Icon = item.icon;
-            const SubIcon = item.subIcon || Percent; // ใช้ Percent เป็นค่าเริ่มต้นถ้าไม่มี subIcon
+            const subItems = item.subs || (item.subPath ? [{ icon: item.subIcon, path: item.subPath, label: item.subLabel || "" }] : []);
             const isActive =
               location.pathname === item.path ||
               (item.subPath ? location.pathname === item.subPath : false) ||
