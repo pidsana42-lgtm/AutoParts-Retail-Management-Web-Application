@@ -16,7 +16,7 @@ import (
 )
 
 type SaleService interface {
-CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uint) error
+    CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uint) error
     GetCustomerTypes() ([]entity.CustomerType, error)
     SearchCustomers(searchQuery string) ([]customerDto.CustomerResponse, error)
     GetPaymentMethods() ([]pos.PaymentMethodResponse, error)
@@ -52,56 +52,65 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         }
     }()
 
-    var customer *entity.Customer
-    var err error
+	var customer *entity.Customer
+	var customerIDForOrder *uint // ใช้ Pointer เพื่อให้บันทึกเป็น NULL ได้กรณีขาจร
+	var savedName string
+	var savedPhone string
 
-    // 1. ดึงชื่อชั่วคราวและเบอร์โทรมาล็อคไว้ในตัวแปร Local ทันที ป้องกันค่าโดนเขียนทับหรือสูญหาย
-    savedName := "ลูกค้าทั่วไป (หน้าร้าน)"
-    if req.CustomerNameTemp != "" {
-        savedName = req.CustomerNameTemp
-    }
-    
-    savedPhone := ""
-    if req.CustomerPhoneTemp != "" {
-        if len(req.CustomerPhoneTemp) > 20 {
-            savedPhone = req.CustomerPhoneTemp[:20]
-        } else {
-            savedPhone = req.CustomerPhoneTemp
-        }
-    }
+	// -------------------------------------------------------------------------
+	// [1. แยก Logic ระหว่าง ลูกค้าสมาชิก vs ลูกค้าขาจร (ไม่ได้ลงทะเบียน)]
+	// -------------------------------------------------------------------------
+	if req.CustomerID > 0 {
+		// กรณี: ลูกค้าเป็นสมาชิกที่มีอยู่ในระบบ (เช่น อู่ ID 1, สมชาย ID 2)
+		customer = &entity.Customer{}
+		if err := tx.Preload("CustomerType").First(customer, req.CustomerID).Error; err != nil {
+			tx.Rollback()
+			return errors.New("ไม่พบข้อมูลลูกค้าในระบบ")
+		}
 
-    // 2. ดักเช็คเงื่อนไขจากค่า Original ที่ส่งมาจากหน้าบ้าน (0 หรือ 1 คือลูกค้าขาจร)
-    if req.CustomerID == 0 || req.CustomerID == 1 {
-        customer = &entity.Customer{
-            CustomerName:      savedName,
-            IsDiscountEnabled: false,
-            CurrentDebtAmount: 0.0,
-            CreditLimit:       0.0,
-        }
-        customer.CustomerType.TypeName = "GENERAL"
-        
-    } else {
-        // กรณีเป็นลูกค้าสมาชิก / อู่
-        customer, err = s.customerRepo.GetCustomerByID(req.CustomerID)
-        if err != nil {
-            tx.Rollback()
-            return errors.New("ไม่พบข้อมูลลูกค้าในระบบ")
-        }
-        // ถ้าหน้าบ้านไม่ได้ใส่ชื่อ/เบอร์ชั่วคราวมา ให้ดึงชื่อจริงจากข้อมูลสมาชิกมาใช้
-        if req.CustomerNameTemp == "" {
-            savedName = customer.CustomerName
-        }
-        if req.CustomerPhoneTemp == "" {
-            savedPhone = customer.PhoneNumber
-        }
-    }
+		customerIDForOrder = &req.CustomerID // กำหนด ID สมาชิกเพื่อบันทึกลง DB
 
-    // เจนเลขที่บิลขายอัตโนมัติ (เช่น INV2607030001)
-    orderNumber, err := s.generateOrderNumber(tx)
-    if err != nil {
-        tx.Rollback()
-        return fmt.Errorf("ไม่สามารถสร้างเลขที่บิลอัตโนมัติได้: %w", err)
-    }
+		// ถ้าไม่ได้พิมพ์ชื่อชั่วคราวมา ให้ดึงชื่อจากสมาชิกใน DB
+		savedName = customer.CustomerName
+		if req.CustomerNameTemp != "" {
+			savedName = req.CustomerNameTemp
+		}
+
+		savedPhone = customer.PhoneNumber
+		if req.CustomerPhoneTemp != "" {
+			savedPhone = req.CustomerPhoneTemp
+		}
+	} else {
+		// กรณี: ลูกค้าขาจร (เช่น คุณสมจิต / ไม่ได้ลงทะเบียน / CustomerID == 0)
+		customerIDForOrder = nil // บันทึก customer_id ลงตาราง sale_orders เป็น NULL ไม่ทับใคร 100%
+
+		// สร้าง Object ชั่วคราวใน Memory สำหรับเช็กสิทธิ์ส่วนลด (ไม่เซฟลง DB)
+		customer = &entity.Customer{
+			IsDiscountEnabled: false,
+			CustomerType: entity.CustomerType{
+				TypeName: "GENERAL",
+			},
+		}
+
+		savedName = req.CustomerNameTemp
+		if savedName == "" {
+			savedName = "ลูกค้าทั่วไป (หน้าร้าน)"
+		}
+
+		savedPhone = req.CustomerPhoneTemp
+	}
+
+	// ตัดความยาวเบอร์โทรไม่ให้เกิน 20 ตัวอักษรตาม Constraint DB
+	if len(savedPhone) > 20 {
+		savedPhone = savedPhone[:20]
+	}
+
+	// เจนเลขที่บิลขายอัตโนมัติ (เช่น INV2607200001)
+	orderNumber, err := s.generateOrderNumber(tx)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("ไม่สามารถสร้างเลขที่บิลอัตโนมัติได้: %w", err)
+	}
 
     // -------------------------------------------------------------------------
     // [ตั้งตัวแปรสะสมภาพรวมของทั้งบิล (Grand Totals)]
@@ -276,27 +285,38 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         return fmt.Errorf("ช่องทางการชำระเงิน %s ถูกปิดใช้งานในขณะนี้", paymentMethod.MethodName)
     }
 
-    var paymentStatus string // ใช้เก็บข้อความสถานะจ่ายเงิน ("paid" หรือ "unpaid")
+	var paymentStatus string // ใช้เก็บข้อความสถานะจ่ายเงิน ("paid" หรือ "unpaid")
     var balanceDue float64   // ยอดหนี้คงค้างของบิลนี้
     var paidAmount float64   //
     var changeAmount float64  // ยอดเงินทอนลูกค้า (กรณีจ่ายเกิน)
     var receivedAmount float64 // ยอดเงินที่ลูกค้าจ่ายเข้ามา (รวมทุกช่องทาง)
+    var dueDate *time.Time // กำหนดวันครบกำหนดชำระเงิน (สำหรับเครดิตอู่)
 
-    // ตรวจสอบเงื่อนไขว่าเป็นการเลือกชำระแบบ "ซื้อเชื่อ / แปะโป้งเครดิตอู่" ใช่ไหม
-    if paymentMethod.IsCredit {
-    if req.CustomerID == 0 || req.CustomerID == 1 {
-        tx.Rollback()
-        return errors.New("ลูกค้าทั่วไป/ขาจร ไม่สามารถเลือกชำระแบบซื้อเชื่อได้")
-    }
+	if paymentMethod.IsCredit {
+		// ลูกค้าทั่วไป หรือลูกค้าขาจร (customerIDForOrder == nil) ห้ามซื้อเชื่อ
+		if customer.CustomerType.TypeName == "GENERAL" || customerIDForOrder == nil {
+			tx.Rollback()
+			return errors.New("ลูกค้าทั่วไป/ขาจร ไม่สามารถเลือกชำระแบบซื้อเชื่อได้")
+		}
 
-    if customer.CurrentDebtAmount+totalAmount > customer.CreditLimit {
-            tx.Rollback()
-            return fmt.Errorf("วงเงินเครดิตไม่เพียงพอ! วงเงินคงเหลือขาดไป %.2f บาท", (customer.CurrentDebtAmount+totalAmount)-customer.CreditLimit)
-        }
+		if customer.CurrentDebtAmount+totalAmount > customer.CreditLimit {
+			tx.Rollback()
+			return fmt.Errorf("วงเงินเครดิตไม่เพียงพอ! วงเงินคงเหลือขาดไป %.2f บาท", (customer.CurrentDebtAmount+totalAmount)-customer.CreditLimit)
+		}
 
 		paymentStatus = "unpaid" // สถานะ: ยังค้างชำระ
 		balanceDue = totalAmount // ยอดค้างชำระ = ยอดสุทธิทั้งบิล
 		paidAmount = 0.00        // ยังไม่ได้รับเงิน
+
+        storeConfig, err := s.repo.GetStoreConfig()
+        if err == nil && storeConfig.MaxOverdueDays > 0 {
+            calculatedDueDate := time.Now().AddDate(0, 0, storeConfig.MaxOverdueDays)
+            dueDate = &calculatedDueDate // ตั้งค่า DueDate สำหรับบิลเงินเชื่อ
+        } else {
+            // Fallback กรณีหา config ไม่เจอ (เช่น ค่าตั้งต้น 30 วัน)
+            defaultDueDate := time.Now().AddDate(0, 0, 30)
+            dueDate = &defaultDueDate
+        }
 
 		// บวกยอดหนี้สะสมเพิ่มเข้าบัญชีลูกค้า
         customer.CurrentDebtAmount += totalAmount
@@ -322,56 +342,59 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         changeAmount = receivedAmount - totalAmount // คำนวณเงินทอน
     }
 
-	// 8. ประกอบ SaleOrder Entity เพื่อบันทึก
-    order := &entity.SaleOrder{
-        OrderNumber:        orderNumber,
-        OrderDate:          time.Now(),
-        CustomerID:         req.CustomerID,
-        CustomerNameTemp:   &savedName,         // ใช้ Pointer ชี้ไปที่ตัวแปรอิสระที่เราแช่แข็งค่าไว้
-        CustomerPhoneTemp:  &savedPhone,        // ใช้ Pointer ชี้ไปที่เบอร์โทร Local
-        Customer:           entity.Customer{},  // ป้องกัน GORM สั่ง INSERT ข้อมูลลูกค้าซ้ำ (เพราะเรามี CustomerID อยู่แล้ว)
-        Status:             "completed",
-        PaymentStatus:      enum.PaymentStatus(paymentStatus),
-        Subtotal:           orderSubtotalAfterItems, 
-        BillDiscountType:   req.BillDiscountType,
-        BillDiscountValue:  req.BillDiscountValue,
-        DiscountAmount:     billDiscountAmount,
-        DiscountPercent:    billDiscountPercent,
-        TotalDiscountItems: totalDiscountItems,
-        TotalAmount:        totalAmount,
-        ReceivedAmount:     receivedAmount, // บันทึกเงินที่รับมาจริง (เช่น 1000.00)
-        PaidAmount:         paidAmount,     // บันทึกเงินเน็ตเข้าคลัง (เช่น 870.00)
-        BalanceDue:         balanceDue,
-        ChangeAmount:       changeAmount,
-        Note:               req.Note,
-        Items:              orderItems, // ผูกอาเรย์สินค้าลูกเข้าไปด้วย GORM จะสั่งบันทึกตารางไอเทมพ่วงให้เองอัตโนมัติ
-    }
+	// -------------------------------------------------------------------------
+	// [ประกอบ SaleOrder Entity เพื่อบันทึก]
+	// -------------------------------------------------------------------------
+	order := &entity.SaleOrder{
+		OrderNumber:        orderNumber,
+		OrderDate:          time.Now(),
+		DueDate:            dueDate,
+		CustomerID:         customerIDForOrder, // ใส่ NULL สำหรับขาจร หรือ *uint สำหรับสมาชิก
+		CustomerNameTemp:   &savedName,
+		CustomerPhoneTemp:  &savedPhone,
+		Customer:           entity.Customer{}, // ป้องกัน GORM ทำการ Insert/Update Customer ซ้ำ
+		Status:             "completed",
+		PaymentStatus:      enum.PaymentStatus(paymentStatus),
+		Subtotal:           orderSubtotalAfterItems,
+		BillDiscountType:   req.BillDiscountType,
+		BillDiscountValue:  req.BillDiscountValue,
+		DiscountAmount:     billDiscountAmount,
+		DiscountPercent:    billDiscountPercent,
+		TotalDiscountItems: totalDiscountItems,
+		TotalAmount:        totalAmount,
+		ReceivedAmount:     receivedAmount,
+		PaidAmount:         paidAmount,
+		BalanceDue:         balanceDue,
+		ChangeAmount:       changeAmount,
+		Note:               req.Note,
+		Items:              orderItems,
+	}
 
-	// 9. สั่งเซฟลงฐานข้อมูลผ่าน Repository ด้วยท่อ Transaction
+	// สั่งเซฟลงฐานข้อมูลผ่าน Repository ด้วยท่อ Transaction
     if err := s.repo.CreateOrderWithTx(tx, order); err != nil {
         tx.Rollback()
         return err
     }
 
-    // 10. สร้าง Entity สำหรับบันทึกข้อมูลการชำระเงิน (Payment) ของบิลนี้
-    now := time.Now()
-    payment := &entity.Payment{
-        OrderID:         order.ID, // ตรงนี้จะถูกต้องแล้วเพราะ order.ID ถูกใส่ค่าให้แล้ว
-        PaymentMethodID: req.PaymentMethodID,
-        Amount:          paidAmount,
-        ReceivedAmount:  receivedAmount,
-        ChangeAmount:    changeAmount,
-        ReferenceNumber: "", // สามารถปรับให้รับจาก req ได้ถ้าต้องการ
-        PaidAt:          &now, 
-        ReceivedByID:    userID,
-    }
+	// บันทึกข้อมูลการชำระเงิน (Payment)
+	now := time.Now()
+	payment := &entity.Payment{
+		OrderID:         order.ID,
+		PaymentMethodID: req.PaymentMethodID,
+		Amount:          paidAmount,
+		ReceivedAmount:  receivedAmount,
+		ChangeAmount:    changeAmount,
+		ReferenceNumber: "",
+		PaidAt:          &now,
+		ReceivedByID:    userID,
+	}
 
     if err := tx.Create(payment).Error; err != nil {
         tx.Rollback()
         return fmt.Errorf("บันทึกข้อมูลการชำระเงินล้มเหลว: %v", err)
     }
 
-    // 11. ทำการ Commit
+    // ทำการ Commit
     if err := tx.Commit().Error; err != nil {
         tx.Rollback()
         return fmt.Errorf("Commit Error: %v", err)

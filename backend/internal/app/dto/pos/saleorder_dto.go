@@ -1,19 +1,22 @@
 package pos
+
 import "backend/internal/app/entity"
+import "time"
 
 type CreateSaleOrderRequest struct {
-	CustomerID        uint   `json:"customer_id"`      // ID ของลูกค้าที่เลือก 
-	PaymentMethodID   uint   `json:"payment_method_id" binding:"required"` // ID วิธีชำระเงิน (1=เงินสด, 2=QR, 3=เงินเชื่อ)
-	
-	CustomerNameTemp        string `json:"customer_name_temp"`  
-    CustomerPhoneTemp       string `json:"customer_phone_temp"`
+	CustomerID      uint       `json:"customer_id"`                          // ID ของลูกค้าที่เลือก
+	PaymentMethodID uint       `json:"payment_method_id" binding:"required"` // ID วิธีชำระเงิน (1=เงินสด, 2=QR, 3=เงินเชื่อ)
+	DueDate         *time.Time `gorm:"type:datetime" json:"due_date"`
+
+	CustomerNameTemp  string `json:"customer_name_temp"`
+	CustomerPhoneTemp string `json:"customer_phone_temp"`
 	// ส่วนลดท้ายบิลรวม (จากแถบสีดำตรงกลางจอ)
 	BillDiscountType  string  `json:"bill_discount_type" binding:"required"` // 'none' (ไม่ลด), 'percentage' (ลด%), 'amount' (ลดบาท)
 	BillDiscountValue float64 `json:"bill_discount_value"`                   // ค่าตัวเลขส่วนลดท้ายบิลที่พนักงานคีย์ลงไป
 
-	ReceivedAmount    float64 `json:"received_amount"`
+	ReceivedAmount float64 `json:"received_amount"`
 
-	Note string `json:"note"` // หมายเหตุเพิ่มเติม 
+	Note string `json:"note"` // หมายเหตุเพิ่มเติม
 
 	// ตะกร้าสินค้า มัดรวมรายการอะไหล่ทั้งหมดที่กำลังจะขายส่งมาเป็น Array
 	Items []SaleOrderItemRequest `json:"items" binding:"required,gt=0"` // binding gt=0 บังคับว่าต้องมีสินค้าอย่างน้อย 1 ชิ้นในบิล
@@ -32,17 +35,17 @@ type SaleOrderItemRequest struct {
 }
 
 type PaymentMethodResponse struct {
-    ID   int    `json:"id"`
-    MethodName string `json:"method_name"`
+	ID         int    `json:"id"`
+	MethodName string `json:"method_name"`
 }
 
-func ToPaymentMethodResponseList(methods []entity.PaymentMethod) []PaymentMethodResponse { 
-    list := []PaymentMethodResponse{}
-    for _, m := range methods {
-        list = append(list, PaymentMethodResponse{
-            ID:   int(m.ID),  
-            MethodName: m.MethodName,
-        })
-    }
-    return list
+func ToPaymentMethodResponseList(methods []entity.PaymentMethod) []PaymentMethodResponse {
+	list := []PaymentMethodResponse{}
+	for _, m := range methods {
+		list = append(list, PaymentMethodResponse{
+			ID:         int(m.ID),
+			MethodName: m.MethodName,
+		})
+	}
+	return list
 }

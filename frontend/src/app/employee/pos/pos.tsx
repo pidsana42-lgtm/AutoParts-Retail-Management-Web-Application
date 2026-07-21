@@ -63,6 +63,7 @@ export default function PosPage(): React.JSX.Element {
     WHOLESALE: "SPECIAL",
   };
 
+
   return (
     <div className="flex flex-col lg:flex-row bg-white min-h-[calc(100vh-4rem)] text-gray-800 antialiased overflow-x-hidden">
       
@@ -422,29 +423,30 @@ export default function PosPage(): React.JSX.Element {
 
           <Text variant="small" className="text-[#6B7280] uppercase">เลือกวิธีการชำระเงิน</Text>
           <div className="grid grid-cols-3 gap-2">
-          {paymentData.paymentMethods.map((method) => (
-            <button
-              key={method.id}
-              onClick={() => {
-                if (method.id === 3) {
-                  const currentActiveType = paymentData.customerTypes.find((t) => t.id === paymentData.activeTypeId);
-                  if (!paymentData.customer && currentActiveType?.type_name === "GENERAL") return alert("ลูกค้าทั่วไปไม่สามารถชำระด้วยเงินเชื่อได้");
-                }
-                paymentData.updateSession("paymentMethodId", method.id);
-                if (method.id === 1 || method.id === 2) {
-                  paymentData.setSelectedPaymentType("CASH");
-                } else if (method.id === 3) {
-                  paymentData.setSelectedPaymentType("CREDIT");
-                }
-              }}
-              className={`flex flex-col items-center justify-center py-3 border text-xs transition-all ${
-                paymentData.paymentMethodId === method.id ? "border-red-600 bg-white text-red-600 border-b-4 shadow-sm" : "border-gray-200 bg-[#F9FAFB] text-gray-400 hover:text-zinc-600"
-              }`}
-            >
-              {getPaymentIcon(method.id)} 
-              <span>{method.method_name}</span>
-            </button>
-          ))}
+            {paymentData.paymentMethods.map((method) => {
+              // 1. เช็กว่าเป็นปุ่มเงินเชื่อ และลูกค้ายังไม่ได้ลงทะเบียนสมาชิกหรือไม่
+              const isCreditMethod = method.id === 3;
+              const isCreditDisabled = isCreditMethod && !paymentData.isRegisteredCustomer;
+
+              return (
+                <button
+                  key={method.id}
+                  // 2. เรียกใช้ฟังก์ชันที่เขียนไว้ใน Hook ได้เลย
+                  onClick={() => paymentData.selectPaymentMethod(method.id)} 
+                  // 3. ปรับ Style ให้ปุ่มดูทำรายการไม่ได้ถ้าโดน Disable
+                  className={`flex flex-col items-center justify-center py-3 border text-xs transition-all ${
+                    isCreditDisabled ? "opacity-50 cursor-not-allowed " : ""
+                  }${
+                    paymentData.paymentMethodId === method.id
+                      ? "border-red-600 bg-white text-red-600 border-b-4 shadow-sm"
+                      : "border-gray-200 bg-[#F9FAFB] text-gray-400 hover:text-zinc-600"
+                  }`}
+                >
+                  {getPaymentIcon(method.id)}
+                  <span>{method.method_name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -502,6 +504,18 @@ export default function PosPage(): React.JSX.Element {
                     <Text variant="xs" className="text-[#259B24]">ส่วนลดรวมทั้งสิ้น</Text>
                     <Text variant="xs" className="text-[#259B24]">-{(paymentData.totalItemPrice - paymentData.finalTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท</Text>
                   </div>
+                  {paymentData.selectedPaymentType === "CREDIT" && (
+                    <>
+                    <div className="flex justify-between">
+                      <Text variant="xs" className="text-[#1C1B1B]">ระยะเวลาเครดิต</Text>
+                      <Text variant="xs" className="text-[#1C1B1B]">{paymentData.storeConfig?.max_overdue_days ?? 30} วัน</Text>
+                    </div>
+                    <div className="flex justify-between">
+                      <Text variant="xs" className="text-[#1C1B1B]">กำหนดชำระ</Text>
+                      <Text variant="xs" className="text-[#1C1B1B]">{paymentData.formattedCreditDueDate}</Text>
+                    </div>
+                    </>
+                  )}
                   <div className="flex justify-between border-t pt-2 border-[#E7BDB8]/50">
                     <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">ยอดชำระสุทธิ</Text>
                     <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท</Text>

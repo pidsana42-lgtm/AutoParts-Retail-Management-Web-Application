@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"os/exec"
@@ -254,6 +255,11 @@ func (s *service) HandleWebhook(req dto.LineWebhookRequest) error {
 						}
 					}(event.Source.UserID, event.Message.Text)
 				}
+			} else if event.Message.Type == "image" && event.Message.ID != "" {
+				log.Printf("[LINE Webhook] Received image message %s from user %s\n", event.Message.ID, event.Source.UserID)
+				go func(userId, messageId string) {
+					s.handleImageMessage(userId, messageId)
+				}(event.Source.UserID, event.Message.ID)
 			}
 		} else if event.Type == "follow" {
 			log.Printf("LINE user followed: %s\n", event.Source.UserID)
@@ -262,6 +268,92 @@ func (s *service) HandleWebhook(req dto.LineWebhookRequest) error {
 		}
 	}
 	return nil
+}
+
+func (s *service) handleImageMessage(userId, messageId string) {
+	token := strings.TrimSpace(os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"))
+	if token == "" {
+		_ = s.SendMessage(userId, "📷 ได้รับรูปภาพเรียบร้อยแล้วค่ะ")
+		return
+	}
+
+	// 1. Fetch image content from LINE Data API
+	url := fmt.Sprintf("https://api-data.line.me/v2/bot/message/%s/content", messageId)
+	req, errReq := http.NewRequest("GET", url, nil)
+	if errReq != nil {
+		log.Printf("[LINE Image] Error creating request: %v", errReq)
+		_ = s.SendMessage(userId, "เกิดข้อผิดพลาดในการรับรูปภาพค่ะ")
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, errDo := client.Do(req)
+	if errDo != nil || resp.StatusCode != http.StatusOK {
+		log.Printf("[LINE Image] Error fetching image data: %v, status: %d", errDo, resp.StatusCode)
+		_ = s.SendMessage(userId, "ไม่สามารถอ่านข้อมูลรูปภาพได้ในขณะนี้ค่ะ")
+		return
+	}
+	defer resp.Body.Close()
+
+	imgBytes, errRead := io.ReadAll(resp.Body)
+	if errRead != nil || len(imgBytes) == 0 {
+		_ = s.SendMessage(userId, "ไม่พบข้อมูลรูปภาพค่ะ")
+		return
+	}
+
+	_ = s.SendMessage(userId, "📷 ได้รับรูปภาพแล้วค่ะ กำลังวิเคราะห์ข้อมูลและตรวจสอบบิล/สินค้าด้วย AI สักครู่นะคะ... ✨")
+
+	// 2. Post image bytes to FastAPI OCR upload endpoint
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+	fw, errFw := w.CreateFormFile("file", fmt.Sprintf("line_%s.jpg", messageId))
+	if errFw == nil {
+		_, _ = fw.Write(imgBytes)
+	}
+	_ = w.Close()
+
+	ocrReq, errOcrReq := http.NewRequest("POST", "http://127.0.0.1:8000/api/extract-invoice/upload", &b)
+	if errOcrReq == nil {
+		ocrReq.Header.Set("Content-Type", w.FormDataContentType())
+		ocrResp, errOcrDo := client.Do(ocrReq)
+		if errOcrDo == nil && ocrResp.StatusCode == http.StatusOK {
+			defer ocrResp.Body.Close()
+			var ocrResult struct {
+				InvoiceNumber string  `json:"invoice_number"`
+				SupplierName  string  `json:"supplier_name"`
+				TotalAmount   float64 `json:"total_amount"`
+				Items         []struct {
+					ProductName string  `json:"product_name"`
+					Quantity    int     `json:"quantity"`
+					UnitPrice   float64 `json:"unit_price"`
+					TotalPrice  float64 `json:"total_price"`
+				} `json:"items"`
+			}
+			if errDecode := json.NewDecoder(ocrResp.Body).Decode(&ocrResult); errDecode == nil && len(ocrResult.Items) > 0 {
+				var replyLines []string
+				replyLines = append(replyLines, "📷 อ่านข้อมูลจากรูปภาพสำเร็จแล้วค่ะ! 🎉")
+				if ocrResult.SupplierName != "" {
+					replyLines = append(replyLines, fmt.Sprintf("🏢 ร้านค้า/ผู้ส่ง: %s", ocrResult.SupplierName))
+				}
+				if ocrResult.InvoiceNumber != "" {
+					replyLines = append(replyLines, fmt.Sprintf("📄 เลขที่บิล/ใบเสร็จ: %s", ocrResult.InvoiceNumber))
+				}
+				replyLines = append(replyLines, "\n📦 รายการสินค้าที่พบในรูปภาพ:")
+				for _, item := range ocrResult.Items {
+					replyLines = append(replyLines, fmt.Sprintf("🔹 %s x%d (%.2f บาท)", item.ProductName, item.Quantity, item.TotalPrice))
+				}
+				if ocrResult.TotalAmount > 0 {
+					replyLines = append(replyLines, fmt.Sprintf("\n💰 ยอดรวมทั้งสิ้น: %.2f บาท", ocrResult.TotalAmount))
+				}
+				replyLines = append(replyLines, "\nระบบทำการบันทึกข้อมูลใบเสร็จเรียบร้อยแล้วค่ะ 😊")
+				_ = s.SendMessage(userId, strings.Join(replyLines, "\n"))
+				return
+			}
+		}
+	}
+
+	_ = s.SendMessage(userId, "📷 ระบบได้รับรูปภาพของคุณเรียบร้อยแล้วค่ะ! ทีมงานแอดมินจะช่วยตรวจสอบรายละเอียดเพิ่มเติมให้อีกครั้งนะคะ 🙏")
 }
 
 func (s *service) queryAgent(queryText string, lineUserID string) (string, error) {

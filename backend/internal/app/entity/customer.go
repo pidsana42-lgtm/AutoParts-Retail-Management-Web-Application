@@ -27,9 +27,9 @@ type Customer struct {
 	ShippingAddress      string `gorm:"type:varchar(255)" json:"shipping_address"`   // ที่อยู่จัดส่ง/ที่ตั้งอู่
 
 	// ระบบ Set เอง
-	CurrentBalance       float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"current_balance"`
-	StandardDiscountRate float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"standard_discount_rate"`
-	CurrentDebtAmount    float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"current_debt_amount"`
+	CurrentBalance       float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"current_balance"` // ยอดคงเหลือของลูกค้า (เช่น 1000.00 หมายถึงค้างชำระ 1,000 บาท)
+	StandardDiscountRate float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"standard_discount_rate"` // เปอร์เซ็นต์ส่วนลดมาตรฐานของอู่ (เช่น 5.00 หมายถึง 5%)	
+	CurrentDebtAmount    float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"current_debt_amount"` // ยอดหนี้คงค้างของอู่ (เช่น 1000.00 หมายถึงค้างชำระ 1,000 บาท)
 	// เปิด-ปิดการให้ส่วนลดพิเศษของอู่นี้ (ถ้าเครดิตไม่ดีก็สั่งเป็น false)
 	IsDiscountEnabled bool `gorm:"type:boolean;not null;default:true" json:"is_discount_enabled"`
 	
