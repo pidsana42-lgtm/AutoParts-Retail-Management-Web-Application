@@ -28,6 +28,10 @@ export const posApiService = {
   /** ดึงรายการวิธีชำระเงินทั้งหมด */
   getPaymentMethods: (): Promise<{ id: number; method_name: string }[]> => 
     apiClient.get<{ id: number; method_name: string }[]>("/pos/payment-methods").then((res) => res.data),
+
+  /** สร้าง QR Code สำหรับชำระเงินผ่าน PromptPay */
+  generatePromptPayQR: (orderId: number, receivedById: number): Promise<any> => 
+    apiClient.post("/pos/payments/generate-qr", { order_id: orderId, received_by_id: receivedById }).then((res) => res.data),
 };
 
 // Business Logic 

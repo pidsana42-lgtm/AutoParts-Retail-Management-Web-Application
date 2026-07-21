@@ -14,7 +14,7 @@ func SetupPaymentRoutes(r *gin.Engine, db *gorm.DB) {
 	paymentService := posService.NewPaymentService(paymentRepo)
 	paymentCtrl := posController.NewPaymentController(paymentService)
 
-	api := r.Group("/api")
+	api := r.Group("/api/pos")
 	{
 		api.POST("/payments/generate-qr", paymentCtrl.GenerateQR)
 	}

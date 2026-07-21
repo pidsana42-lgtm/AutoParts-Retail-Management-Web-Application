@@ -14,5 +14,6 @@ type GenerateQRResponse struct {
 	Amount          float64    `json:"amount"`
 	QRCode          string     `json:"qr_code"`
 	ReferenceNumber string     `json:"reference_number"`
+	TransactionRef  *string    `json:"transaction_ref"`
 	CreatedAt       time.Time  `json:"created_at"`
 }

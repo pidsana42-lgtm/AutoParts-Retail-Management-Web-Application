@@ -6,6 +6,7 @@ import (
 	posDto "backend/internal/app/dto/pos"
 	"backend/internal/app/entity"
 	posRepository "backend/internal/app/repository/pos"
+	"os"
 )
 
 type PaymentService interface {
@@ -27,11 +28,12 @@ func (s *paymentService) GeneratePromptPayQR(req posDto.GenerateQRRequest) (*pos
 		return nil, fmt.Errorf("ไม่พบรายการสั่งซื้อ: %v", err)
 	}
 
-	// 📌 สมมติว่ายอดเงินรวมอยู่ใน order.TotalAmount (ปรับตาม field จริงของ SaleOrder ได้ครับ)
+	// สมมติว่ายอดเงินรวมอยู่ใน order.TotalAmount (ปรับตาม field จริงของ SaleOrder ได้ครับ)
 	amount := order.TotalAmount 
 
-	// 2. สร้าง Reference Number สำหรับอ้างอิงธุรกรรม (เช่น REF-ORDERID-TIMESTAMP)
-	refNo := fmt.Sprintf("REF-%d-%d", req.OrderID, time.Now().Unix())
+    // 2. สร้าง Reference Number โดยดึง OrderNumber จาก order struct
+	// REF-INV2606250001-1782012345
+    refNo := fmt.Sprintf("REF-%s-%d", order.OrderNumber, time.Now().Unix())
 
 	// 3. กำหนด ID ของ PaymentMethod สำหรับ PromptPay (สมมติว่าเป็น ID 2)
 	var promptPayMethodID uint = 2 
@@ -44,6 +46,7 @@ func (s *paymentService) GeneratePromptPayQR(req posDto.GenerateQRRequest) (*pos
 		ReceivedAmount:  amount, // สำหรับ QR Code ยอดรับจะเท่ากับยอดชำระพอดี
 		ChangeAmount:    0.00,   // ไม่มีการเงินทอน
 		ReferenceNumber: refNo,
+		TransactionRef:  nil, // รอ Webhook จากธนาคารหรือ Payment Gateway
 		ReceivedByID:    req.ReceivedByID,
 		PaidAt:          nil,    // ยังไม่อัปเดตเวลาจ่าย จนกว่า Webhook ตรวจสลิปผ่าน
 	}
@@ -53,7 +56,7 @@ func (s *paymentService) GeneratePromptPayQR(req posDto.GenerateQRRequest) (*pos
 	}
 
 	// 5. Gen QR Code
-	merchantPromptPayNo := "0967985115" // เบอร์พร้อมเพย์ร้าน
+	merchantPromptPayNo := os.Getenv("PromptPayNo") // เบอร์พร้อมเพย์ร้าน
 	qrBase64, err := s.paymentRepo.GeneratePromptPayQR(merchantPromptPayNo, amount)
 	if err != nil {
 		return nil, fmt.Errorf("ไม่สามารถสร้าง QR Code ได้: %v", err)
@@ -67,6 +70,7 @@ func (s *paymentService) GeneratePromptPayQR(req posDto.GenerateQRRequest) (*pos
 		Amount:          payment.Amount,
 		QRCode:          qrBase64,
 		ReferenceNumber: refNo,
+		TransactionRef:  nil,
 		CreatedAt:       payment.CreatedAt,
 	}, nil
 }
