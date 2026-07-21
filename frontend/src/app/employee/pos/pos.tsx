@@ -205,9 +205,9 @@ export default function PosPage(): React.JSX.Element {
                         <td className="py-4 px-4">
                           <Text variant="body" className="text-[#1C1B1B] mb-0 ">{item.product_name}</Text>
                           <Text variant="small" className="text-[11px] text-[#6B7280] mt-0.5 mb-0">PN: {item.part_number || "—"}</Text>
-                          {(item.grade_name || item.model_name) && (
+                          {(item.brand_name || item.grade_name || item.model_name) && (
                             <Text variant="small" className="text-[11px] text-[#6B7280] mt-1 inline-block py-0.5 rounded-sm mb-0">
-                              เกรด: {item.grade_name || "ทั่วไป"} | รุ่นรถที่รองรับ: {item.model_name || "ทุกรุ่น"}
+                              แบรนด์: {item.brand_name || "ไม่ระบุ"} | เกรด: {item.grade_name || "ทั่วไป"} | รุ่นรถที่รองรับ: {item.model_name || "ทุกรุ่น"}
                             </Text>
                           )}
                         </td>
