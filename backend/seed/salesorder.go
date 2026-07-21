@@ -9,7 +9,9 @@ import (
 
 	"gorm.io/gorm"
 )
-
+func uintPtr(n uint) *uint {
+    return &n
+}
 func SaleOrder(db *gorm.DB) error {
 	now := time.Now()
 	due30 := now.AddDate(0, 0, 30)
@@ -20,7 +22,7 @@ func SaleOrder(db *gorm.DB) error {
 		{
 			OrderNumber:        "SO-2026-0001",
 			OrderDate:          now,
-			CustomerID:         2, // สมชาย ใจดี
+			CustomerID:         uintPtr(2), // สมชาย ใจดี
 			Status:             enum.OrderCompleted,
 			PaymentStatus:      enum.PaymentPaid,
 			Subtotal:           2070.00,
@@ -40,7 +42,7 @@ func SaleOrder(db *gorm.DB) error {
 		{
 			OrderNumber:        "SO-2026-0002",
 			OrderDate:          now,
-			CustomerID:         1, // เอเป็กซ์ ออโต้
+			CustomerID:         uintPtr(1), // เอเป็กซ์ ออโต้
 			Status:             enum.OrderCompleted,
 			PaymentStatus:      enum.PaymentPartial,
 			Subtotal:           3030.00,
@@ -60,7 +62,7 @@ func SaleOrder(db *gorm.DB) error {
 		{
 			OrderNumber:        "SO-2026-0003",
 			OrderDate:          now,
-			CustomerID:         3, // บจก.โคราชคอนสตรัคชั่น
+			CustomerID:         uintPtr(3), // บจก.โคราชคอนสตรัคชั่น
 			Status:             enum.OrderPending,
 			PaymentStatus:      enum.PaymentUnpaid,
 			Subtotal:           10250.00,
@@ -80,7 +82,7 @@ func SaleOrder(db *gorm.DB) error {
 
 	for _, so := range saleOrders {
 		if err := db.FirstOrCreate(&so, &entity.SaleOrder{OrderNumber: so.OrderNumber}).Error; err != nil {
-			log.Fatalf("failed to seed sale order %s: %w", so.OrderNumber, err)
+			log.Fatalf("failed to seed sale order %s: %v", so.OrderNumber, err)
 		}
 		
 	}

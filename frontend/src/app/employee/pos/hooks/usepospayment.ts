@@ -35,7 +35,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const [tempPhone, setTempPhone] = useState<string>("");
   const [customerTypes, setCustomerTypes] = useState<CustomerTypeInterface[]>([]);
   const [activeTypeId, setActiveTypeId] = useState<number>(posSession.activeTypeId);
-  const [selectedPaymentType, setSelectedPaymentType] = useState<"CASH" | "CREDIT">("CASH");
+  const [selectedPaymentType, setSelectedPaymentType] = useState<"CASH" | "QRCODE" | "CREDIT">("CASH");
   const [paymentMethodId, setPaymentMethodId] = useState<number>(posSession.paymentMethodId);
   const [billDiscountValue, setBillDiscountValue] = useState<number>(posSession.billDiscountValue);
   const [billDiscountType, setBillDiscountType] = useState<"none" | "percentage" | "amount">(posSession.billDiscountType);
@@ -47,6 +47,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const [searchResults, setSearchResults] = useState<CustomerDiscountResponse[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<{ id: number; method_name: string }[]>([]);
   const [displayValue, setDisplayValue] = useState<string>("");
+
 
   // บันทึกการเปลี่ยนแปลง Session ลงแคชเครื่องเสมอ
   useEffect(() => {
@@ -72,6 +73,18 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     posApiService.getStoreConfig().then(setStoreConfig).catch(err => console.error(err));
   }, []);
 
+  // ตรวจสอบว่าลูกค้าคนนี้เป็น Guest หรือไม่ (ID = 0 หรือ null)
+  const isRegisteredCustomer = useMemo(() => {
+    return Boolean(customer && customer.id > 0);
+  }, [customer]);
+
+  useEffect(() => {
+    if (paymentMethodId === 3 && !isRegisteredCustomer) {
+      updateSession("paymentMethodId", 1);
+      setSelectedPaymentType("CASH");
+    }
+  }, [paymentMethodId, isRegisteredCustomer]);
+
   // ─── COMPUTED VALUES ───
   const computedBillDiscount = useMemo(() => {
     const remainingAfterLineDiscount = totalItemPrice - totalLineDiscount;
@@ -85,6 +98,29 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     return total < 0 ? 0 : Math.round(total * 100) / 100; // ป้องกันเศษทศนิยมปัดไม่ลงตัว
   }, [totalItemPrice, totalLineDiscount, computedBillDiscount]);
 
+  const creditDueDate = useMemo(() => {
+    const maxDays = storeConfig?.max_overdue_days ?? 30;
+    const date = new Date();
+    date.setDate(date.getDate() + maxDays);
+    return date;
+  }, [storeConfig]);
+
+  const formattedCreditDueDate = useMemo(() => {
+    if (!creditDueDate) return "";
+    return creditDueDate.toLocaleDateString("th-TH", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }, [creditDueDate]);
+
+  const isExceedCreditLimit = useMemo(() => {
+    if (!customer || !storeConfig) return false;
+    const projectDebt = (customer.current_debt_amount || 0) + finalTotal;
+    const maxCredit = customer.max_credit_limit > 0 ? customer.max_credit_limit : storeConfig.max_credit;
+    return projectDebt > maxCredit;
+  }, [customer, storeConfig, finalTotal]);
+
   const change = useMemo(() => {
     const result = receivedAmount - finalTotal;
     return result > 0 ? Math.round(result * 100) / 100 : 0;
@@ -94,6 +130,25 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const updateSession = (key: keyof PosSession, value: any) => {
     setPosSession((prev: PosSession) => ({ ...prev, [key]: value }));
   };
+
+  // ฟังก์ชันเลือกวิธีการชำระเงิน
+  const selectPaymentMethod = (methodId: number) => {
+    if (methodId === 3 && !isRegisteredCustomer) {
+      alert("สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น กรุณาเลือกลูกค้า หรือลงทะเบียนสมัครสมาชิกก่อนทำรายการ");
+      return false;
+    }
+    updateSession("paymentMethodId", methodId);
+    // กำหนดประเภทการชำระเงินตาม ID ของวิธีการชำระเงิน
+    if (methodId === 1 ) {
+      setSelectedPaymentType("CASH");
+    }else if (methodId === 2) {
+      setSelectedPaymentType("QRCODE");
+    }
+    else if (methodId === 3) {
+      setSelectedPaymentType("CREDIT");
+    }
+    return true;
+  }
 
   const handleSearchCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -262,9 +317,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       finalPaymentMethodId = 1; 
     }
 
+    const rawCustomerId = posSession.customer?.id || 0;
     const salePayload: CreateSaleOrderRequest = {
-      customer_id: posSession.customer.id,
-      customer_name_temp: posSession.customer.customer_name, // แก้ไขบั๊กเรียกตัวแปรผิดฝั่ง
+      customer_id: rawCustomerId && rawCustomerId > 0 ? rawCustomerId : (null as any),
+      customer_name_temp: posSession.customer.customer_name,
       customer_phone_temp: posSession.customer.phone_number,
       received_amount: receivedAmount, 
       payment_method_id: finalPaymentMethodId,
@@ -318,6 +374,12 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     receivedAmount, setReceivedAmount, receiverName, setReceiverName,
     handleSearchCustomer, handleBillDiscountChange, change, handleReceivedAmountBlur,
     displayValue, setDisplayValue, handleReceivedAmountChange, handleReceivedAmountFocus,
-    resetPaymentState
+    resetPaymentState,
+    storeConfig,
+    creditDueDate,
+    formattedCreditDueDate,
+    isExceedCreditLimit,
+    isRegisteredCustomer,
+    selectPaymentMethod
   };
 }

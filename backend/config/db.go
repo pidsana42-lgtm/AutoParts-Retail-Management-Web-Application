@@ -19,10 +19,7 @@ func DB() *gorm.DB {
 }
 
 func ConnectDB() {
-	// ค้นหาไฟล์ .env จากโฟลเดอร์หลักของ backend
-	if err := godotenv.Load(); err != nil {
-		log.Println("Warning: .env file not found, using environment variables only")
-	}
+	_ = godotenv.Overload(".env", "../.env", "backend/.env")
 
 	host := os.Getenv("DB_HOST")
 	port := os.Getenv("DB_PORT")

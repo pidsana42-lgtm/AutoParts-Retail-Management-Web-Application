@@ -32,10 +32,15 @@ load_env()
 MOCK_MODE = os.getenv("MOCK_LLM", "false").lower() == "true"
 # Retrieve API key (check GOOGLE_STUDIO first, and strip any leading/trailing spaces)
 GEMINI_API_KEY = (os.getenv("GOOGLE_STUDIO") or os.getenv("GEMINI_API_KEY") or "").strip()
-GEMINI_MODEL = (os.getenv("GEMINI_MODEL") or "google/gemini-3.1-pro").strip()
-# Force disable cloud Gemini fallbacks by clearing key as requested
-LIGHTNING_API_KEY = ""
-print("Cloud Gemini Fallbacks are currently disabled.")
+raw_model = (os.getenv("GEMINI_MODEL") or "gemini-2.5-flash").strip()
+if "/" in raw_model:
+    raw_model = raw_model.split("/")[-1]
+GEMINI_MODEL = raw_model
+LIGHTNING_API_KEY = (os.getenv("LIGHTNING_API_KEY") or "").strip()
+if LIGHTNING_API_KEY:
+    print(f"Lightning AI API active with key: {LIGHTNING_API_KEY[:6]}...")
+else:
+    print("Lightning AI API key not configured.")
 
 # Global variables
 engine = None
@@ -434,8 +439,12 @@ async def lifespan(app: FastAPI):
     
     if not MOCK_MODE:
         try:
-            print("Pre-loading local Gemma 4 model (GGUF)...")
-            get_local_llm()
+            model_path = os.path.join(os.path.dirname(__file__), "Gemma-4-E4B-it-PARL-Q4_K_M.gguf")
+            if os.path.exists(model_path):
+                print("Pre-loading local Gemma 4 model (GGUF)...")
+                get_local_llm()
+            else:
+                print("Local GGUF model file not found; using Cloud Gemini API.")
         except Exception as llm_err:
             print(f"Warning: Could not pre-load local model during startup: {llm_err}")
 

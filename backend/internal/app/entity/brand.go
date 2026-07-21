@@ -8,5 +8,5 @@ type Brand struct {
 
 	Models []Models `gorm:"foreignKey:BrandID" json:"models"`
 
-	Products []Product `gorm:"foreignKey:BrandID" json:"products"`
+	Products []Product `gorm:"many2many:product_brands;" json:"products"`
 }

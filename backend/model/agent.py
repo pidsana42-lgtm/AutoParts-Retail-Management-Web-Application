@@ -22,11 +22,46 @@ def load_env():
 
 load_env()
 
+LIGHTNING_API_KEY = (os.getenv("LIGHTNING_API_KEY") or "").strip()
+LIGHTNING_MODEL = "google/gemini-2.5-flash"
 GEMINI_API_KEY = (os.getenv("GOOGLE_STUDIO") or os.getenv("GEMINI_API_KEY") or "").strip()
-GEMINI_MODEL = (os.getenv("GEMINI_MODEL") or "gemini-3.5-flash").strip()
+raw_model = (os.getenv("GEMINI_MODEL") or "gemini-2.5-flash").strip()
+if "/" in raw_model:
+    raw_model = raw_model.split("/")[-1]
+GEMINI_MODEL = raw_model
 MOCK_MODE = os.getenv("MOCK_LLM", "false").lower() == "true"
 
 _engine = None
+
+def query_llm_text(prompt):
+    if LIGHTNING_API_KEY and not MOCK_MODE:
+        try:
+            import requests
+            headers = {
+                "Authorization": f"Bearer {LIGHTNING_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": LIGHTNING_MODEL,
+                "messages": [{"role": "user", "content": prompt}]
+            }
+            r = requests.post("https://lightning.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=25)
+            r.raise_for_status()
+            res_json = r.json()
+            return res_json["choices"][0]["message"]["content"].strip()
+        except Exception as err:
+            print(f"Lightning AI query failed: {err}", file=sys.stderr)
+            
+    if GEMINI_API_KEY and not MOCK_MODE:
+        try:
+            genai.configure(api_key=GEMINI_API_KEY)
+            model = genai.GenerativeModel(GEMINI_MODEL)
+            response = model.generate_content(prompt)
+            return response.text.strip()
+        except Exception as err:
+            print(f"Google Studio Gemini query failed: {err}", file=sys.stderr)
+            
+    return ""
 
 def get_engine():
     global _engine
@@ -96,17 +131,10 @@ Guidelines:
 """
 
 def generate_sql(user_query, customer_context=""):
-    if MOCK_MODE or not GEMINI_API_KEY:
-        # Simple heuristic fallback mock SQL
-        q = user_query.lower()
-        if "สินค้า" in q or "อะไหล่" in q or "มี" in q:
-            return "SELECT product_name, quantity, sale_price FROM products WHERE is_active = true ORDER BY quantity DESC LIMIT 5;"
+    if MOCK_MODE or (not LIGHTNING_API_KEY and not GEMINI_API_KEY):
         return ""
 
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel(GEMINI_MODEL)
-        
         prompt = f"""{SCHEMA_CONTEXT}
         
         Customer context (linked profile info): {customer_context}
@@ -114,16 +142,20 @@ def generate_sql(user_query, customer_context=""):
         
         Generate the read-only PostgreSQL query:"""
         
-        response = model.generate_content(prompt)
-        sql = response.text.strip()
-        # Clean up any generated markdown wrappers
+        sql = query_llm_text(prompt)
         sql = re.sub(r"```(sql)?", "", sql).strip()
         if sql.upper().startswith("SELECT"):
             return sql
-        return ""
     except Exception as e:
         print(f"Error generating SQL: {e}", file=sys.stderr)
-        return ""
+
+    keywords = re.findall(r'[A-Za-z0-9]+|[ก-๙]{3,}', user_query)
+    stop_words = {"สอบถาม", "ราคา", "ขอเช็ค", "เช็ค", "ครับ", "ค่ะ", "อยากได้", "มีไหม", "มีมั้ย", "เท่าไหร่", "ไหม"}
+    words = [w for w in keywords if w not in stop_words]
+    if words:
+        like_clauses = " OR ".join([f"product_name ILIKE '%{w}%'" for w in words])
+        return f"SELECT id, product_code, product_name, sale_price, quantity FROM products WHERE {like_clauses} LIMIT 10;"
+    return "SELECT id, product_code, product_name, sale_price, quantity FROM products LIMIT 5;"
 
 def execute_query(sql):
     try:
@@ -138,7 +170,7 @@ def execute_query(sql):
         return [{"error": str(e)}]
 
 def generate_natural_response(user_query, sql_used, query_results, customer_context=""):
-    if MOCK_MODE or not GEMINI_API_KEY:
+    if MOCK_MODE or (not LIGHTNING_API_KEY and not GEMINI_API_KEY):
         # Mock answers
         q = user_query.lower()
         if "สินค้า" in q or "อะไหล่" in q:
@@ -146,9 +178,6 @@ def generate_natural_response(user_query, sql_used, query_results, customer_cont
         return "สวัสดีค่ะ ยินดีต้อนรับสู่บริการเช็คอะไหล่รถยนต์ด่วน คุณสามารถพิมพ์สอบถามสถานะสินค้า ราคา หรือยอดเครดิตค้างชำระได้เลยนะคะ"
 
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel(GEMINI_MODEL)
-        
         prompt = f"""You are a helpful customer service AI representative for an Auto Parts Retail store.
         Translate database query results into a polite, professional, and clear Thai response answering the user's question.
         
@@ -166,15 +195,25 @@ def generate_natural_response(user_query, sql_used, query_results, customer_cont
         
         Write a beautiful response in Thai:"""
         
-        response = model.generate_content(prompt)
-        text_res = response.text.strip()
-        # Regex safety fallback to remove any lingering markdown asterisks or hash headers
-        text_res = re.sub(r"\*\*|__", "", text_res)
-        text_res = re.sub(r"###?\s*", "📌 ", text_res)
-        return text_res
+        text_res = query_llm_text(prompt)
+        if text_res:
+            text_res = re.sub(r"\*\*|__", "", text_res)
+            text_res = re.sub(r"###?\s*", "📌 ", text_res)
+            return text_res
     except Exception as e:
-        # Fallback to simple formatted output
-        return f"📌 ข้อมูลการค้นหาที่พบในระบบ:\n{json.dumps(query_results, ensure_ascii=False, default=str)}"
+        print(f"Error generating natural response: {e}", file=sys.stderr)
+
+    if query_results and len(query_results) > 0 and "error" not in query_results[0]:
+        lines = ["📌 ผลการค้นหาอะไหล่ในระบบ:"]
+        for r in query_results:
+            name = r.get("product_name") or r.get("name") or "อะไหล่"
+            code = r.get("product_code") or ""
+            price = r.get("sale_price") or r.get("retail_price") or r.get("price") or 0
+            stock = r.get("quantity") or r.get("stock_quantity") or r.get("stock") or 0
+            lines.append(f"\n📦 {name} (รหัส: {code})\n💰 ราคา: {price} บาท | 🔹 จำนวนคงเหลือ: {stock} ชิ้น")
+        lines.append("\nสนใจสั่งซื้อหรือสอบถามรายละเอียดเพิ่มเติม สามารถแจ้งผ่านแชทนี้ได้เลยครับ! 😊")
+        return "\n".join(lines)
+    return "สวัสดีครับ ยินดีต้อนรับสู่บริการเช็คอะไหล่รถยนต์ คุณสามารถพิมพ์สอบถามสินค้า ราคา หรือสต็อกสินค้ากับแอดมินได้เลยครับ 😊"
 
 def get_line_user_context(line_user_id):
     if not line_user_id:

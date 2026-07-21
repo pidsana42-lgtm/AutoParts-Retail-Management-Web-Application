@@ -22,14 +22,13 @@ type Product struct {
 	Import_DateTime time.Time `json:"import_datetime"`
 	Note            string    `json:"note"`
 
-	BrandID       uint  `json:"brand_id"`
 	UnitID        uint  `json:"unit_id"`
 	CategoryID    uint  `json:"category_id"`
 	SubCategoryID *uint `json:"sub_category_id" gorm:"default:null"`
 	GradeID       uint  `json:"grade_id"`
 	ShelfID       uint  `json:"shelf_id"`
 
-	Brand       *Brand       `gorm:"foreignKey:BrandID" json:"brand"`
+	Brands      []Brand      `gorm:"many2many:product_brands;" json:"brands"`
 	Unit        *Unit        `gorm:"foreignKey:UnitID" json:"unit"`
 	Category    *Category    `gorm:"foreignKey:CategoryID" json:"category"`
 	SubCategory *SubCategory `gorm:"foreignKey:SubCategoryID" json:"sub_category"`
