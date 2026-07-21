@@ -15,7 +15,7 @@ type ProductRequestDTO struct {
 	Cost_price     float64 `json:"cost_price" binding:"required,gt=0"`
 	Note           string  `json:"note"`
 
-	BrandIDs      []uint `json:"brand_ids" binding:"required"`
+	ModelIDs      []uint `json:"model_ids" binding:"required"`
 	UnitID        uint  `json:"unit_id" binding:"required"`
 	CategoryID    uint  `json:"category_id" binding:"required"`
 	SubCategoryID *uint `json:"sub_category_id"`
@@ -54,7 +54,11 @@ type ProductListResponseDTO struct {
 	Sale_price     float64 `json:"sale_price"`
 	Cost_price     float64 `json:"cost_price"`
 	Is_Active      bool    `json:"is_active"`
-	BrandName      string  `json:"brand_name"`
+	Models         []struct {
+		ID        uint   `json:"id"`
+		ModelName string `json:"model_name"`
+		BrandName string `json:"brand_name"`
+	} `json:"models"`
 	CategoryName   string  `json:"category_name"`
 	GradeName      string  `json:"grade_name"`
 	UnitName       string  `json:"unit_name"`
@@ -77,14 +81,26 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	d.Cost_price = p.Cost_price
 	d.Is_Active = p.Is_Active
 
-	brandNames := ""
-	for i, b := range p.Brands {
-		if i > 0 {
-			brandNames += ", "
+	d.Models = make([]struct {
+		ID        uint   `json:"id"`
+		ModelName string `json:"model_name"`
+		BrandName string `json:"brand_name"`
+	}, 0)
+	for _, m := range p.Models {
+		brandName := ""
+		if m.Brand != nil {
+			brandName = m.Brand.Brand_Name
 		}
-		brandNames += b.Brand_Name
+		d.Models = append(d.Models, struct {
+			ID        uint   `json:"id"`
+			ModelName string `json:"model_name"`
+			BrandName string `json:"brand_name"`
+		}{
+			ID:        m.ID,
+			ModelName: m.Model_Name,
+			BrandName: brandName,
+		})
 	}
-	d.BrandName = brandNames
 	d.CategoryName = p.Category.Category_Name
 	if p.Grade != nil {
 		d.GradeName = p.Grade.Grade_Name

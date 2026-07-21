@@ -118,7 +118,7 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 					Is_Active:      true,
 					Quantity:       items[i].OrderQuantity, // Set initial quantity from bill
 					Limit_Quantity: 5,
-					Brands:         []entity.Brand{{Model: gorm.Model{ID: 1}}}, // Default Brand ID
+					Models:         []entity.Models{{Model: gorm.Model{ID: 1}}}, // Default Model ID
 					UnitID:         1, // Default Unit ID
 					CategoryID:     catID,
 					SubCategoryID:  subCatID,

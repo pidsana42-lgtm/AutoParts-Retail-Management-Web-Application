@@ -72,15 +72,9 @@ function StockDataContent() {
       setShelves(shlvs);
       setSuppliers(sups);
 
-      // Load Brands from localStorage / Backend
+      // Load Brands from Backend
       const backendBrands = await stockDataService.getBrands();
-      const localBrandsStr = localStorage.getItem("local_brands");
-      if (localBrandsStr) {
-        setBrands(JSON.parse(localBrandsStr));
-      } else {
-        localStorage.setItem("local_brands", JSON.stringify(backendBrands));
-        setBrands(backendBrands);
-      }
+      setBrands(backendBrands);
     } catch (err) {
       console.error(err);
       toast({
@@ -97,10 +91,13 @@ function StockDataContent() {
     loadData();
   }, []);
 
-  // Save local brands utility for the brands tab
-  const saveLocalBrands = (newBrands: Brand[]) => {
-    setBrands(newBrands);
-    localStorage.setItem("local_brands", JSON.stringify(newBrands));
+  const reloadBrands = async () => {
+    try {
+      const backendBrands = await stockDataService.getBrands();
+      setBrands(backendBrands);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleTabChange = (tab: TabType) => {
@@ -244,7 +241,7 @@ function StockDataContent() {
             search={search}
             brandFilter={brandFilter}
             brands={brands}
-            saveLocalBrands={saveLocalBrands}
+            reloadBrands={reloadBrands}
           />
         )}
         {activeTab === "supplier" && (

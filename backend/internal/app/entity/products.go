@@ -28,7 +28,7 @@ type Product struct {
 	GradeID       uint  `json:"grade_id"`
 	ShelfID       uint  `json:"shelf_id"`
 
-	Brands      []Brand      `gorm:"many2many:product_brands;" json:"brands"`
+	Models      []Models     `gorm:"many2many:product_models;" json:"models"`
 	Unit        *Unit        `gorm:"foreignKey:UnitID" json:"unit"`
 	Category    *Category    `gorm:"foreignKey:CategoryID" json:"category"`
 	SubCategory *SubCategory `gorm:"foreignKey:SubCategoryID" json:"sub_category"`

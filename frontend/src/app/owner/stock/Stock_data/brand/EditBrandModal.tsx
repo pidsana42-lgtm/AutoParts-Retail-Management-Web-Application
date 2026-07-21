@@ -5,20 +5,20 @@ import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
 import type { Brand } from "../../../../../interface/wms/stock_data";
 
+import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
+
 interface EditBrandModalProps {
   isOpen: boolean;
   onClose: () => void;
-  brands: Brand[];
   brand: Brand | null;
-  saveLocalBrands: (brands: Brand[]) => void;
+  onSuccess: () => void;
 }
 
 export default function EditBrandModal({
   isOpen,
   onClose,
-  brands,
   brand,
-  saveLocalBrands
+  onSuccess
 }: EditBrandModalProps) {
   const { toast } = useToast();
   const [brandName, setBrandName] = useState("");
@@ -29,15 +29,18 @@ export default function EditBrandModal({
     }
   }, [brand]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!brand) return;
-    const updated = brands.map((b) =>
-      b.id === brand.id ? { ...b, brand_name: brandName } : b
-    );
-    saveLocalBrands(updated);
-    toast({ variant: "success", message: "แก้ไขแบรนด์รถสำเร็จ" });
-    onClose();
+    
+    try {
+      await stockDataService.updateBrand(brand.id, { brand_name: brandName });
+      onSuccess();
+      toast({ variant: "success", message: "แก้ไขแบรนด์รถสำเร็จ" });
+      onClose();
+    } catch (err) {
+      toast({ variant: "error", message: "ไม่สามารถแก้ไขแบรนด์รถได้" });
+    }
   };
 
   return (

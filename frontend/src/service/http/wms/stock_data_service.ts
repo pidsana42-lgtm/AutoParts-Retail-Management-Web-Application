@@ -140,6 +140,30 @@ export const stockDataService = {
     const res = await apiClient.get<any[]>("/wms/brands");
     return res.data || [];
   },
+  createBrand: async (data: { brand_name: string }): Promise<any> => {
+    const res = await apiClient.post("/wms/brands", data);
+    return res.data;
+  },
+  updateBrand: async (id: number, data: { brand_name: string }): Promise<any> => {
+    const res = await apiClient.put(`/wms/brands/${id}`, data);
+    return res.data;
+  },
+  deleteBrand: async (id: number): Promise<any> => {
+    const res = await apiClient.delete(`/wms/brands/${id}`);
+    return res.data;
+  },
+  createModel: async (data: { model_name: string; brand_id: number }): Promise<any> => {
+    const res = await apiClient.post("/wms/models", data);
+    return res.data;
+  },
+  updateModel: async (id: number, data: { model_name: string; brand_id: number }): Promise<any> => {
+    const res = await apiClient.put(`/wms/models/${id}`, data);
+    return res.data;
+  },
+  deleteModel: async (id: number): Promise<any> => {
+    const res = await apiClient.delete(`/wms/models/${id}`);
+    return res.data;
+  },
 
   // --- Supplier APIs ---
   getSuppliers: async (): Promise<Supplier[]> => {
