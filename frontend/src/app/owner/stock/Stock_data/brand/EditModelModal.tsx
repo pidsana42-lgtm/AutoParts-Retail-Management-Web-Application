@@ -6,12 +6,14 @@ import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
 import type { Brand, Model } from "../../../../../interface/wms/stock_data";
 
+import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
+
 interface EditModelModalProps {
   isOpen: boolean;
   onClose: () => void;
   brands: Brand[];
   model: Model | null;
-  saveLocalBrands: (brands: Brand[]) => void;
+  onSuccess: () => void;
 }
 
 export default function EditModelModal({
@@ -19,7 +21,7 @@ export default function EditModelModal({
   onClose,
   brands,
   model,
-  saveLocalBrands
+  onSuccess
 }: EditModelModalProps) {
   const { toast } = useToast();
   const [form, setForm] = useState({
@@ -36,49 +38,21 @@ export default function EditModelModal({
     }
   }, [model]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!model) return;
 
-    // Update model inside brand list
-    const updated = brands.map((b) => {
-      if (b.models) {
-        const updatedModels = b.models.map((m) =>
-          m.id === model.id
-            ? { ...m, model_name: form.model_name, brand_id: form.brand_id }
-            : m
-        );
-
-        // Handle moving to another brand
-        const modelToUpdate = updatedModels.find((m) => m.id === model.id);
-        if (modelToUpdate && b.id !== form.brand_id) {
-          // Remove from current brand
-          return {
-            ...b,
-            models: b.models.filter((m) => m.id !== model.id),
-          };
-        }
-        return { ...b, models: updatedModels };
-      }
-      return b;
-    });
-
-    const finalBrands = updated.map((b) => {
-      if (b.id === form.brand_id) {
-        const exists = b.models?.some((m) => m.id === model.id);
-        if (!exists) {
-          return {
-            ...b,
-            models: [...(b.models || []), { id: model.id, model_name: form.model_name, brand_id: form.brand_id }],
-          };
-        }
-      }
-      return b;
-    });
-
-    saveLocalBrands(finalBrands);
-    toast({ variant: "success", message: "แก้ไขรุ่นรถสำเร็จ" });
-    onClose();
+    try {
+      await stockDataService.updateModel(model.id, {
+        model_name: form.model_name,
+        brand_id: form.brand_id,
+      });
+      onSuccess();
+      toast({ variant: "success", message: "แก้ไขรุ่นรถสำเร็จ" });
+      onClose();
+    } catch (err) {
+      toast({ variant: "error", message: "ไม่สามารถแก้ไขรุ่นรถได้" });
+    }
   };
 
   return (

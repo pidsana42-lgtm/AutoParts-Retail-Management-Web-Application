@@ -8,14 +8,16 @@ import EditBrandModal from "./EditBrandModal";
 import EditModelModal from "./EditModelModal";
 import AddBrandModelModal from "./AddBrandModelModal";
 
+import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
+
 interface BrandTabProps {
   search: string;
   brandFilter: string;
   brands: Brand[];
-  saveLocalBrands: (brands: Brand[]) => void;
+  reloadBrands: () => void;
 }
 
-export default function BrandTab({ search, brandFilter, brands, saveLocalBrands }: BrandTabProps) {
+export default function BrandTab({ search, brandFilter, brands, reloadBrands }: BrandTabProps) {
   const { toast } = useToast();
 
   // Modals visibility state
@@ -29,21 +31,26 @@ export default function BrandTab({ search, brandFilter, brands, saveLocalBrands 
   const [selectedModel, setSelectedModel] = useState<Model | null>(null);
   const [initialBrandId, setInitialBrandId] = useState<number | undefined>(undefined);
 
-  const handleDeleteBrand = (id: number) => {
+  const handleDeleteBrand = async (id: number) => {
     if (!confirm("คุณแน่ใจว่าต้องการลบแบรนด์รถนี้?")) return;
-    const updated = brands.filter((b) => b.id !== id);
-    saveLocalBrands(updated);
-    toast({ variant: "success", message: "ลบแบรนด์รถสำเร็จ" });
+    try {
+      await stockDataService.deleteBrand(id);
+      reloadBrands();
+      toast({ variant: "success", message: "ลบแบรนด์รถสำเร็จ" });
+    } catch (err) {
+      toast({ variant: "error", message: "ไม่สามารถลบแบรนด์รถได้" });
+    }
   };
 
-  const handleDeleteModel = (modelId: number) => {
+  const handleDeleteModel = async (modelId: number) => {
     if (!confirm("คุณแน่ใจว่าต้องการลบรุ่นรถนี้?")) return;
-    const updated = brands.map((b) => ({
-      ...b,
-      models: b.models ? b.models.filter((m) => m.id !== modelId) : [],
-    }));
-    saveLocalBrands(updated);
-    toast({ variant: "success", message: "ลบรุ่นรถสำเร็จ" });
+    try {
+      await stockDataService.deleteModel(modelId);
+      reloadBrands();
+      toast({ variant: "success", message: "ลบรุ่นรถสำเร็จ" });
+    } catch (err) {
+      toast({ variant: "error", message: "ไม่สามารถลบรุ่นรถได้" });
+    }
   };
 
   // Openers
@@ -219,32 +226,25 @@ export default function BrandTab({ search, brandFilter, brands, saveLocalBrands 
       <AddBrandModelModal
         isOpen={addOpen}
         onClose={() => setAddOpen(false)}
-        brands={brands}
-        defaultMode={addMode}
+        initialMode={addMode}
         initialBrandId={initialBrandId}
-        saveLocalBrands={saveLocalBrands}
+        brands={brands}
+        onSuccess={reloadBrands}
       />
 
       <EditBrandModal
         isOpen={editBrandOpen}
-        onClose={() => {
-          setEditBrandOpen(false);
-          setSelectedBrand(null);
-        }}
-        brands={brands}
+        onClose={() => setEditBrandOpen(false)}
         brand={selectedBrand}
-        saveLocalBrands={saveLocalBrands}
+        onSuccess={reloadBrands}
       />
 
       <EditModelModal
         isOpen={editModelOpen}
-        onClose={() => {
-          setEditModelOpen(false);
-          setSelectedModel(null);
-        }}
-        brands={brands}
+        onClose={() => setEditModelOpen(false)}
         model={selectedModel}
-        saveLocalBrands={saveLocalBrands}
+        brands={brands}
+        onSuccess={reloadBrands}
       />
     </>
   );

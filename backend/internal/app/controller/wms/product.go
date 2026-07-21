@@ -107,3 +107,101 @@ func (ctrl *ProductController) ListGrades(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, res)
 }
+
+func (ctrl *ProductController) CreateBrand(c *gin.Context) {
+	var req wmsDto.BrandRequestDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	res, err := ctrl.service.CreateBrand(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, res)
+}
+
+func (ctrl *ProductController) UpdateBrand(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid brand ID format"})
+		return
+	}
+	var req wmsDto.BrandRequestDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := ctrl.service.UpdateBrand(uri.ID, &req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "brand updated successfully"})
+}
+
+func (ctrl *ProductController) DeleteBrand(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid brand ID format"})
+		return
+	}
+	if err := ctrl.service.DeleteBrand(uri.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "brand deleted successfully"})
+}
+
+func (ctrl *ProductController) CreateModel(c *gin.Context) {
+	var req wmsDto.ModelRequestDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	res, err := ctrl.service.CreateModel(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, res)
+}
+
+func (ctrl *ProductController) UpdateModel(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid model ID format"})
+		return
+	}
+	var req wmsDto.ModelRequestDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := ctrl.service.UpdateModel(uri.ID, &req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "model updated successfully"})
+}
+
+func (ctrl *ProductController) DeleteModel(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid model ID format"})
+		return
+	}
+	if err := ctrl.service.DeleteModel(uri.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "model deleted successfully"})
+}
