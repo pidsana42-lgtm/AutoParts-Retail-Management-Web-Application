@@ -718,7 +718,6 @@ export default function PosPage(): React.JSX.Element {
                 <button 
                   type="button" 
                   onClick={() => {
-                    // ยิงบันทึก Order ลงระบบเมื่อสแกนเสร็จ
                     paymentData.submitOrderToDatabase();
                   }} 
                   className="flex-1 py-3 bg-[#E51C23] text-white font-normal text-sm rounded-none hover:bg-red-700 transition-colors flex items-center justify-center gap-2"

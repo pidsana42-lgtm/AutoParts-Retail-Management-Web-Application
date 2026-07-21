@@ -327,6 +327,29 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     const targetCart = currentCart || cart;
     if (targetCart.length === 0) return alert("กรุณาเลือกสินค้าลงตะกร้า");
     if (!posSession.customer) return alert("กรุณาเลือกบัญชีลูกค้า");
+
+    // Payment Method ID ที่แท้จริง
+    let finalPaymentMethodId = posSession.paymentMethodId;
+    
+    // ถ้าผู้ใช้เลือกโหมด CASH ให้บังคับเป็น ID = 1
+    if (selectedPaymentType === "CASH") {
+      finalPaymentMethodId = 1; 
+    }
+
+    // ตรวจสอบเฉพาะเคสชำระเงินสด (ID = 1)
+    if (finalPaymentMethodId === 1) {
+      if (!receivedAmount || receivedAmount <= 0) {
+        alert("กรุณากรอกจำนวนเงินที่รับมา");
+        return null;
+      }
+
+      // เปลี่ยนจาก finalTotalAmount เป็น finalTotal
+      if (receivedAmount < finalTotal) {
+        alert(`จำนวนเงินที่รับมาไม่ครบ (รับมา ฿${receivedAmount.toLocaleString()} / ยอดชำระ ฿${finalTotal.toLocaleString()})`);
+        return null;
+      }
+    }
+
     setIsSubmitting(true);
 
     const totalSubtotalAfterLineDiscount = totalItemPrice - totalLineDiscount;
@@ -362,17 +385,12 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       };
     });
 
-    let finalPaymentMethodId = posSession.paymentMethodId;
-    if (selectedPaymentType === "CASH" || receivedAmount > 0) {
-      finalPaymentMethodId = 1; 
-    }
-
     const rawCustomerId = posSession.customer?.id || 0;
     const salePayload: CreateSaleOrderRequest = {
       customer_id: rawCustomerId && rawCustomerId > 0 ? rawCustomerId : (null as any),
       customer_name_temp: posSession.customer.customer_name,
       customer_phone_temp: posSession.customer.phone_number,
-      received_amount: receivedAmount, 
+      received_amount: finalPaymentMethodId === 1 ? receivedAmount : finalTotal, 
       payment_method_id: finalPaymentMethodId,
       bill_discount_type: posSession.billDiscountType,
       bill_discount_value: posSession.billDiscountValue,
@@ -384,7 +402,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       const response = await posApiService.createPOSOrder(salePayload);
       const createdOrderId = response?.data?.id || response?.id || response?.order_id;
 
-      // ถ้าเป็นเงินสด หรือ เงินเชื่อ ให้จบการขายทันที
+      // ถ้าเป็นเงินสด หรือ เงินเชื่อ ให้จบการขายทันที (ถ้าเป็น QR Code จะปิด Modal และเคลียร์ Cart หลังจากสแกนผ่าน)
       if (posSession.paymentMethodId !== 2) {
         alert("บันทึกข้อมูลการขายสำเร็จ!");
         setCart([]);
