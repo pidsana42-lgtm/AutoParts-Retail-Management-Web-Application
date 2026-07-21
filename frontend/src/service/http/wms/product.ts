@@ -10,7 +10,7 @@ export const getProductsList = async (): Promise<StockItem[]> => {
     Name: item.product_name || "",
     PartNo: item.part_number || "",
     Barcode: item.barcode || "",
-    Brand: item.brand_name || "",
+    Models: item.models || [],
     Category: item.category_name || "",
     Grade: item.grade_name || "A",
     Stock: item.quantity || 0,

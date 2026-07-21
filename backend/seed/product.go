@@ -23,7 +23,7 @@ func Product(db *gorm.DB) error {
 			Is_Active:       true,
 			Import_DateTime: time.Now(),
 			Note:            "เกรด: สูงสมรรถนะ | รุ่นรถที่รองรับ: TOYOTA HILUX REVO 2.8, FORD RANGER RAPTOR 2.0Bi",
-			Brands:          []entity.Brand{{Model: gorm.Model{ID: 1}}},
+			Models:          []entity.Models{{Model: gorm.Model{ID: 1}}},
 			UnitID:          1,
 			CategoryID:      1,
 			GradeID:         1,
@@ -42,7 +42,7 @@ func Product(db *gorm.DB) error {
 			Is_Active:       true,
 			Import_DateTime: time.Now(),
 			Note:            "เกรด: ซิลิโคนทนความร้อนสูง | รุ่นรถที่รองรับ: ISUZU D-MAX 1.9/3.0 (BLUE POWER), MITSUBISHI TRITON",
-			Brands:          []entity.Brand{{Model: gorm.Model{ID: 1}}},
+			Models:          []entity.Models{{Model: gorm.Model{ID: 1}}},
 			UnitID:          1,
 			CategoryID:      1,
 			GradeID:         1,
@@ -61,7 +61,7 @@ func Product(db *gorm.DB) error {
 			Is_Active:       true,
 			Import_DateTime: time.Now(),
 			Note:            "เกรด: สังเคราะห์แท้ | รุ่นรถที่รองรับ: TOYOTA CAMRY 2.5, HONDA CIVIC 1.5T, MAZDA 3 (SKYACTIV)",
-			Brands:          []entity.Brand{{Model: gorm.Model{ID: 1}}},
+			Models:          []entity.Models{{Model: gorm.Model{ID: 1}}},
 			UnitID:          1,
 			CategoryID:      1,
 			GradeID:         1,
@@ -86,8 +86,8 @@ func Product(db *gorm.DB) error {
 			if err := db.Model(&existing).Updates(r).Error; err != nil {
 				return fmt.Errorf("failed to update product %s: %w", r.Product_Name, err)
 			}
-			if err := db.Model(&existing).Association("Brands").Replace(r.Brands); err != nil {
-				return fmt.Errorf("failed to update product brands %s: %w", r.Product_Name, err)
+			if err := db.Model(&existing).Association("Models").Replace(r.Models); err != nil {
+				return fmt.Errorf("failed to update product models %s: %w", r.Product_Name, err)
 			}
 			fmt.Printf("Updated: %s\n", r.Product_Name)
 

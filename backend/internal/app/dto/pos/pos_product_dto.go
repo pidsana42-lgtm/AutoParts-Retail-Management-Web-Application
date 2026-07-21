@@ -29,20 +29,14 @@ func ToPOSProductResponseList(products []entity.Product) []POSProductResponse {
 		BrandName := ""
 		ModelName := ""
 
-		for i, b := range p.Brands {
+		for i, m := range p.Models {
 			if i > 0 {
+				ModelName += ", "
 				BrandName += ", "
 			}
-			BrandName += b.Brand_Name
-
-			// วนลูปดึงชื่อรุ่นทั้งหมดที่อยู่ใน Brand นี้มาต่อกันเป็น String
-			if len(b.Models) > 0 {
-				for _, m := range b.Models {
-					if ModelName != "" {
-						ModelName += ", "
-					}
-					ModelName += m.Model_Name
-				}
+			ModelName += m.Model_Name
+			if m.Brand != nil {
+				BrandName += m.Brand.Brand_Name
 			}
 		}
 

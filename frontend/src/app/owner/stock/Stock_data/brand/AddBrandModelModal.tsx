@@ -6,25 +6,27 @@ import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
 import type { Brand, Model } from "../../../../../interface/wms/stock_data";
 
+import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
+
 interface AddBrandModelModalProps {
   isOpen: boolean;
   onClose: () => void;
   brands: Brand[];
-  defaultMode?: "new_brand" | "existing_brand";
+  initialMode?: "new_brand" | "existing_brand";
   initialBrandId?: number;
-  saveLocalBrands: (brands: Brand[]) => void;
+  onSuccess: () => void;
 }
 
 export default function AddBrandModelModal({
   isOpen,
   onClose,
   brands,
-  defaultMode = "new_brand",
+  initialMode = "new_brand",
   initialBrandId,
-  saveLocalBrands
+  onSuccess
 }: AddBrandModelModalProps) {
   const { toast } = useToast();
-  const [mode, setMode] = useState<"new_brand" | "existing_brand">(defaultMode);
+  const [mode, setMode] = useState<"new_brand" | "existing_brand">(initialMode);
 
   // Brand Name
   const [brandName, setBrandName] = useState("");
@@ -36,8 +38,8 @@ export default function AddBrandModelModal({
   });
 
   useEffect(() => {
-    setMode(defaultMode);
-  }, [defaultMode, isOpen]);
+    setMode(initialMode);
+  }, [initialMode, isOpen]);
 
   useEffect(() => {
     setModelForm((prev) => ({
@@ -46,7 +48,7 @@ export default function AddBrandModelModal({
     }));
   }, [initialBrandId, brands, isOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mode === "new_brand") {
       if (!brandName.trim()) {
@@ -54,25 +56,22 @@ export default function AddBrandModelModal({
         return;
       }
 
-      const newBrandId = Date.now();
-      const newBrand: Brand = {
-        id: newBrandId,
-        brand_name: brandName,
-        models: [],
-      };
-
-      // If model is also filled, create it inside
-      if (modelForm.model_name.trim()) {
-        const newModel: Model = {
-          id: Date.now() + 1,
-          model_name: modelForm.model_name,
-          brand_id: newBrandId,
-        };
-        newBrand.models = [newModel];
+      try {
+        const newBrand = await stockDataService.createBrand({ brand_name: brandName });
+        
+        // If model is also filled, create it inside
+        if (modelForm.model_name.trim()) {
+           await stockDataService.createModel({
+             model_name: modelForm.model_name,
+             brand_id: newBrand.ID || newBrand.id,
+           });
+        }
+        
+        onSuccess();
+        toast({ variant: "success", message: "บันทึกข้อมูลแบรนด์รถสำเร็จ" });
+      } catch (err) {
+        toast({ variant: "error", message: "ไม่สามารถบันทึกข้อมูลแบรนด์รถได้" });
       }
-
-      saveLocalBrands([...brands, newBrand]);
-      toast({ variant: "success", message: "บันทึกข้อมูลแบรนด์รถสำเร็จ" });
     } else {
       // Adding model to existing brand
       if (!modelForm.brand_id) {
@@ -84,27 +83,20 @@ export default function AddBrandModelModal({
         return;
       }
 
-      const newModel: Model = {
-        id: Date.now(),
-        model_name: modelForm.model_name,
-        brand_id: modelForm.brand_id,
-      };
-
-      const updated = brands.map((b) => {
-        if (b.id === modelForm.brand_id) {
-          return {
-            ...b,
-            models: [...(b.models || []), newModel],
-          };
-        }
-        return b;
-      });
-
-      saveLocalBrands(updated);
-      toast({ variant: "success", message: "เพิ่มรุ่นรถสำเร็จ" });
+      try {
+        await stockDataService.createModel({
+          model_name: modelForm.model_name,
+          brand_id: Number(modelForm.brand_id),
+        });
+        
+        onSuccess();
+        toast({ variant: "success", message: "บันทึกรุ่นรถเข้าแบรนด์สำเร็จ" });
+      } catch (err) {
+        toast({ variant: "error", message: "ไม่สามารถบันทึกรุ่นรถได้" });
+      }
     }
-
-    // Reset
+    
+    // Clear forms and close
     setBrandName("");
     setModelForm({ model_name: "", brand_id: brands[0]?.id || 0 });
     onClose();
