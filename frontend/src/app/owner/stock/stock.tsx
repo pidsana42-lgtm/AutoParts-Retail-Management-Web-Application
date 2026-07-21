@@ -31,11 +31,11 @@ import {
   getProductsList,
   getCategoriesList,
   getSuppliersList,
-  getBrandsList,
   getGradesList,
   getUnitsList,
   getShelvesList,
 } from "../../../service/http/wms/product";
+import { stockDataService } from "../../../service/http/wms/stock_data_service";
 
 import type { StockItem } from "../../../interface/wms/product";
 
@@ -129,7 +129,7 @@ export default function StockPage() {
   // States สำหรับปุ่มและแบบฟอร์มเพิ่มสินค้า (Add Product)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [formCategories, setFormCategories] = useState<{ label: string; value: string }[]>([]);
-  const [brands, setBrands] = useState<{ label: string; value: string }[]>([]);
+  const [models, setModels] = useState<{ label: string; value: string }[]>([]);
   const [grades, setGrades] = useState<{ label: string; value: string }[]>([]);
   const [units, setUnits] = useState<{ label: string; value: string }[]>([]);
   const [shelves, setShelves] = useState<{ label: string; value: string }[]>([]);
@@ -168,8 +168,19 @@ export default function StockPage() {
         ]);
 
         // ดึงข้อมูลสำหรับฟอร์มเพิ่มสินค้า
-        const brandList = await getBrandsList();
-        setBrands(brandList.map((b) => ({ label: b.name, value: String(b.id) })));
+        const brandList = await stockDataService.getBrands();
+        const modelOptions: { label: string; value: string }[] = [];
+        brandList.forEach((b) => {
+          if (b.models && b.models.length > 0) {
+            b.models.forEach((m) => {
+              modelOptions.push({
+                label: `${b.brand_name} - ${m.model_name}`,
+                value: String((m as any).ID || m.id),
+              });
+            });
+          }
+        });
+        setModels(modelOptions);
 
         const gradeList = await getGradesList();
         setGrades(gradeList.map((g) => ({ label: g.name, value: String(g.id) })));
@@ -264,9 +275,15 @@ export default function StockPage() {
       ),
     },
     {
-      key: "Brand",
-      header: "แบรนด์",
-      render: (row) => <span className="font-semibold text-slate-700">{row.Brand || "-"}</span>,
+      key: "Models",
+      header: "แบรนด์ - รุ่นรถ",
+      render: (row) => (
+        <span className="font-semibold text-slate-700">
+          {row.Models && row.Models.length > 0
+            ? row.Models.map(m => `${m.brand_name} ${m.model_name}`).join(", ")
+            : "-"}
+        </span>
+      ),
     },
     {
       key: "Category",
@@ -423,7 +440,7 @@ export default function StockPage() {
           const updatedData = await getProductsList();
           setStockData(updatedData);
         }}
-        brands={brands}
+        models={models}
         formCategories={formCategories}
         grades={grades}
         units={units}
@@ -442,7 +459,7 @@ export default function StockPage() {
           setStockData(updatedData);
         }}
         product={selectedProduct}
-        brands={brands}
+        models={models}
         formCategories={formCategories}
         grades={grades}
         units={units}

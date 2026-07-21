@@ -15,7 +15,7 @@ interface AddDataStckProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  brands: SelectOption[];
+  models: SelectOption[];
   formCategories: SelectOption[];
   grades: SelectOption[];
   units: SelectOption[];
@@ -26,7 +26,7 @@ export default function AddDataStck({
   isOpen,
   onClose,
   onSuccess,
-  brands,
+  models,
   formCategories,
   grades,
   units,
@@ -42,7 +42,7 @@ export default function AddDataStck({
     sale_price: 0,
     cost_price: 0,
     note: "",
-    brand_ids: [] as string[],
+    model_ids: [] as string[],
     category_id: "",
     grade_id: "",
     unit_id: "",
@@ -57,7 +57,7 @@ export default function AddDataStck({
       if (
         !formData.product_code ||
         !formData.product_name ||
-        formData.brand_ids.length === 0 ||
+        formData.model_ids.length === 0 ||
         !formData.category_id ||
         !formData.grade_id ||
         !formData.unit_id ||
@@ -74,7 +74,7 @@ export default function AddDataStck({
         limit_quantity: Number(formData.limit_quantity),
         sale_price: Number(formData.sale_price),
         cost_price: Number(formData.cost_price),
-        brand_ids: formData.brand_ids.map(Number),
+        model_ids: formData.model_ids.map(Number),
         category_id: Number(formData.category_id),
         grade_id: Number(formData.grade_id),
         unit_id: Number(formData.unit_id),
@@ -93,7 +93,7 @@ export default function AddDataStck({
         sale_price: 0,
         cost_price: 0,
         note: "",
-        brand_ids: [],
+        model_ids: [],
         category_id: "",
         grade_id: "",
         unit_id: "",
@@ -181,14 +181,13 @@ export default function AddDataStck({
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <MultiSelect
-            label="แบรนด์สินค้า"
+            label="รุ่นรถ (Models)"
             required
-            options={brands}
-            placeholder="เลือกแบรนด์"
-            value={formData.brand_ids}
-            onChange={(values) => setFormData({ ...formData, brand_ids: values })}
-          />
-          <Select
+            options={models}
+            value={formData.model_ids}
+            onChange={(selected) => setFormData({ ...formData, model_ids: selected })}
+            placeholder="เลือกรุ่นรถที่รองรับ..."
+          /><Select
             label="ประเภทสินค้า"
             required
             options={formCategories}
