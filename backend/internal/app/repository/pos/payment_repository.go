@@ -33,6 +33,7 @@ func (r *paymentRepository) CreatePayment(payment *entity.Payment) error {
 	return r.db.Create(payment).Error
 }
 
+// ฟังก์ชันนี้จะแปลงข้อความใน PromptPay QR Code ไปเป็นตัวเลขฐานสิบหก 4 หลักสุดท้าย เพื่อแปะต่อท้ายสตริงตามฟอร์แมต ...6304XXXX นำไปสร้างเป็น QR Code ที่สมบูรณ์ตามมาตรฐานระบบการชำระเงิน
 func (r *paymentRepository) calculateCRC16(input string) string {
 	crc := uint16(0xFFFF)
 	data := []byte(input)
@@ -49,6 +50,7 @@ func (r *paymentRepository) calculateCRC16(input string) string {
 	return fmt.Sprintf("%04X", crc)
 }
 
+// ฟังก์ชันนี้ทำหน้าที่แปลง เบอร์โทรศัพท์/เลขบัตรประชาชน และ ยอดเงิน ให้กลายเป็น PromptPay QR Code (EMVCo Format) ในรูปแบบ Data URI (Base64 PNG) เพื่อส่งให้หน้าบ้านนำไปแสดงผลได้ทันที
 func (r *paymentRepository) GeneratePromptPayQR(target string, amount float64) (string, error) {
 	formattedTarget := target
 	targetType := "01"

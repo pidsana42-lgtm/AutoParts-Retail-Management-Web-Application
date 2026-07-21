@@ -602,10 +602,46 @@ export default function PosPage(): React.JSX.Element {
                 )}
 
                 {paymentData.paymentMethodId === 2 && (
-                  <div className="flex flex-col items-center py-4">
-                    <div className="w-48 h-48 border p-2 bg-gray-100 flex items-center justify-center"><QrCode size={120} className="text-gray-400" /></div>
-                    <p className="mt-4 font-medium text-gray-700">บจก. พี.เค. อะไหล่ยนต์</p>
-                    <p className="text-sm text-gray-500">สแกนเพื่อชำระเงินด้วย QR CODE</p>
+                  <div className="bg-[#FFFFFF] p-4 space-y-2 border border-[#E7BDB8]/50">
+                    <div className="flex flex-col items-center py-4">
+                      
+                      {/* กรอบแสดงภาพ QR Code */}
+                      <div className="relative w-52 h-52 border border-gray-200 p-2 bg-white flex items-center justify-center rounded-lg shadow-inner">
+                        {paymentData.isLoadingQR ? (
+                          <div className="flex flex-col items-center text-gray-400">
+                            <span className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#E51C23] mb-2"></span>
+                            <p className="text-xs">กำลังสร้าง QR Code...</p>
+                          </div>
+                        ) : paymentData.qrCodeData?.qrCode ? (
+                          <img 
+                            src={paymentData.qrCodeData.qrCode} 
+                            alt="PromptPay QR Code" 
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center text-gray-400 text-center p-2">
+                            <p className="text-xs text-red-500 mb-2">ไม่สามารถโหลด QR Code ได้</p>
+                            <button
+                              type="button"
+                              onClick={() => paymentData.handleGeneratePromptPayQR(0, 1)}
+                              className="px-3 py-1 bg-gray-100 text-gray-700 text-xs rounded border hover:bg-gray-200"
+                            >
+                              ลองใหม่อีกครั้ง
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <p className="mt-4 font-medium text-gray-700">บจก. พี.เค. อะไหล่ยนต์</p>
+                      <p className="text-sm text-gray-500">สแกนเพื่อชำระเงินด้วย PromptPay</p>
+
+                      {paymentData.qrCodeData?.refNo && (
+                        <p className="text-xs text-gray-400 mt-1 bg-gray-100 px-3 py-1 rounded font-mono">
+                          Ref No: <span className="text-gray-700 font-semibold">{paymentData.qrCodeData.refNo}</span>
+                        </p>
+                      )}
+
+                    </div>
                   </div>
                 )}
 
@@ -671,8 +707,22 @@ export default function PosPage(): React.JSX.Element {
 
               {/* 4. Footer */}
               <div className="flex p-6 gap-4">
-                <button type="button" onClick={() => paymentData.setIsPaymentModalOpen(false)} className="px-20 py-3 bg-[#E5E2E1] font-normal text-sm rounded-none hover:bg-[#E7E5E4] transition-colors">ยกเลิก</button>
-                <button type="button" onClick={() => paymentData.submitOrderToDatabase()} className="flex-1 py-3 bg-[#E51C23] text-white font-normal text-sm rounded-none hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
+                <button 
+                  type="button" 
+                  onClick={() => paymentData.setIsPaymentModalOpen(false)} 
+                  className="px-20 py-3 bg-[#E5E2E1] font-normal text-sm rounded-none hover:bg-[#E7E5E4] transition-colors"
+                >
+                  ยกเลิก
+                </button>
+                
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    // ยิงบันทึก Order ลงระบบเมื่อสแกนเสร็จ
+                    paymentData.submitOrderToDatabase();
+                  }} 
+                  className="flex-1 py-3 bg-[#E51C23] text-white font-normal text-sm rounded-none hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                >
                   <Printer className="w-4 h-4" />ยืนยันและพิมพ์ใบเสร็จ
                 </button>
               </div>
