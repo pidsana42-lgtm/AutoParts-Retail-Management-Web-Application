@@ -238,7 +238,7 @@ export default function PreOrderManager() {
       key: 'id',
       header: 'เลขที่ใบจอง',
       render: (po: PreOrder) => (
-        <span className="font-mono font-bold text-[#b32025]">
+        <span className="font-mono font-bold text-[#e51c23]">
           PRE-{String(po.id).padStart(5, '0')}
         </span>
       )
@@ -336,7 +336,7 @@ export default function PreOrderManager() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-5">
             <div>
               <Heading level="h1" className="mb-0 font-extrabold flex items-center gap-3">
-                <Package className="text-[#b32025]" size={36} />
+                <Package className="text-[#e51c23]" size={36} />
                 ระบบจัดการสั่งจองสินค้าล่วงหน้า (Pre-Orders)
               </Heading>
               <p className="text-sm text-slate-500 mt-1">บันทึก ติดตามสถานะสินค้าจองมัดจำอะไหล่ด่วนสำหรับลูกค้าและช่าง</p>
@@ -382,7 +382,7 @@ export default function PreOrderManager() {
           {/* Table List Section */}
           {loading ? (
             <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-slate-100 shadow-sm min-h-[300px]">
-              <Loader2 className="animate-spin text-[#b32025] mb-3" size={40} />
+              <Loader2 className="animate-spin text-[#e51c23] mb-3" size={40} />
               <span className="text-slate-500 font-medium">กำลังโหลดข้อมูลรายการจอง...</span>
             </div>
           ) : filteredOrders.length === 0 ? (
@@ -578,7 +578,7 @@ export default function PreOrderManager() {
                   
                   <div className="flex justify-between items-end">
                     <span className="text-slate-800 font-bold text-sm">ยอดรวมสุทธิ</span>
-                    <span className="text-3xl font-extrabold text-[#b32025]">฿{calculateTotal().toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-3xl font-extrabold text-[#e51c23]">฿{calculateTotal().toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               </Card>

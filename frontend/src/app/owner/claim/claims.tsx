@@ -239,7 +239,7 @@ export default function ClaimsPage(): React.JSX.Element {
       key: 'claim_no',
       header: 'เลขที่ใบเคลม',
       render: (row: ClaimItem) => (
-        <span className="font-mono font-bold text-[#b32025]">
+        <span className="font-mono font-bold text-[#e51c23]">
           {row.claim_no}
         </span>
       )
@@ -346,7 +346,7 @@ export default function ClaimsPage(): React.JSX.Element {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-5">
             <div>
               <Heading level="h1" className="mb-0 font-extrabold flex items-center gap-3">
-                <FileText className="text-[#b32025]" size={36} />
+                <FileText className="text-[#e51c23]" size={36} />
                 ระบบจัดการเคลมสินค้า
               </Heading>
               <p className="text-sm text-slate-500 mt-1">
@@ -357,7 +357,7 @@ export default function ClaimsPage(): React.JSX.Element {
             <div className="flex gap-2">
               <Button 
                 onClick={() => setView('claim-form')}
-                className="bg-[#b32025] hover:bg-[#9a1a1f] text-white flex items-center gap-2 shadow-sm font-bold h-10 px-5 rounded-lg text-sm"
+                className="bg-[#e51c23] hover:bg-[#c9181f] text-white flex items-center gap-2 shadow-sm font-bold h-10 px-5 rounded-lg text-sm"
               >
                 <Plus size={20} />
                 สร้างใบเคลมสินค้า
@@ -427,7 +427,7 @@ export default function ClaimsPage(): React.JSX.Element {
             <Button 
               type="submit"
               variant="primary" 
-              className="bg-[#b32025] hover:bg-[#9a1a1f] gap-2 shadow-sm font-bold"
+              className="bg-[#e51c23] hover:bg-[#c9181f] gap-2 shadow-sm font-bold"
             >
               <Send size={18} /> ส่งใบเคลมสินค้า
             </Button>
@@ -536,7 +536,7 @@ export default function ClaimsPage(): React.JSX.Element {
                                   value={item.claim_qty} 
                                   readOnly 
                                   className={`w-12 text-center border font-bold rounded py-1 focus:outline-none ${
-                                    item.claim_qty > 0 ? 'border-[#b32025] text-[#b32025]' : 'border-slate-200 text-slate-500 bg-slate-50'
+                                    item.claim_qty > 0 ? 'border-[#e51c23] text-[#e51c23]' : 'border-slate-200 text-slate-500 bg-slate-50'
                                   }`} 
                                 />
                                 <button 
@@ -597,7 +597,7 @@ export default function ClaimsPage(): React.JSX.Element {
                       onChange={(e) => setClaimNotes(e.target.value)}
                       rows={4}
                       placeholder="ใส่หมายเหตุเกี่ยวกับสภาพสินค้าหรือรายละเอียดความเสียหาย..."
-                      className="w-full text-sm border border-slate-200 bg-slate-50 rounded-lg p-3 focus:outline-none focus:border-[#b32025] font-semibold text-slate-700 placeholder-slate-400"
+                      className="w-full text-sm border border-slate-200 bg-slate-50 rounded-lg p-3 focus:outline-none focus:border-[#e51c23] font-semibold text-slate-700 placeholder-slate-400"
                     />
                   </div>
 
