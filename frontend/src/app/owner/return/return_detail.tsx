@@ -216,7 +216,7 @@ export default function ReturnDetailPage(): React.JSX.Element {
                 </div>
                 <div className="flex justify-between items-center border-t border-slate-100 pt-3">
                   <span className="text-slate-500 font-bold">ยอดรวมคืนเงินสุทธิ:</span>
-                  <span className="font-extrabold text-lg text-[#b32025]">฿{returnItem.amount.toLocaleString()}</span>
+                  <span className="font-extrabold text-lg text-[#e51c23]">฿{returnItem.amount.toLocaleString()}</span>
                 </div>
               </div>
             </CardContent>

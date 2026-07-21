@@ -975,7 +975,7 @@ export default function ImportBill() {
 
     return (
       <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">นำเข้าใบสั่งซื้อ</h1>
+      <h1 className="text-[36px] font-bold text-gray-900 mb-8">นำเข้าใบสั่งซื้อ</h1>
 
       {/* Cards Section */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
@@ -992,15 +992,15 @@ export default function ImportBill() {
             setErrorMsg(null);
             setBatchErrorMsg(null);
           }}
-          className="bg-[#b32025] hover:bg-[#9a1a1f] text-white p-8 rounded-xl flex items-center justify-between cursor-pointer transition-all shadow-md group"
+          className="bg-[#e51c23] hover:bg-[#c9181f] text-white p-8 rounded-none flex items-center justify-between cursor-pointer transition-all shadow-md group"
         >
           <div className="flex items-center gap-6">
-            <div className="bg-white/20 p-4 rounded-lg">
+            <div className="bg-white/20 p-4 rounded-none">
               <Camera size={32} className="text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold mb-1">สแกนบิลด้วยรูปภาพ / PDF</h2>
-              <p className="text-sm text-white/70">Scan Invoice using Image or PDF</p>
+              <h2 className="text-[32px] font-bold mb-1">สแกนบิลด้วยรูปภาพ / PDF</h2>
+              <p className="text-[20px] text-white/70">Scan Invoice using Image or PDF</p>
             </div>
           </div>
           <ArrowRight size={32} className="text-white/50 group-hover:text-white transition-colors" />
@@ -1009,15 +1009,15 @@ export default function ImportBill() {
         {/* Card 2: Excel */}
         <div 
           onClick={() => setCurrentView('excel')}
-          className="bg-[#1C1B1B] hover:bg-[#2a2929] text-white p-8 rounded-xl flex items-center justify-between cursor-pointer transition-all shadow-md group"
+          className="bg-[#1C1B1B] hover:bg-[#2a2929] text-white p-8 rounded-none flex items-center justify-between cursor-pointer transition-all shadow-md group"
         >
           <div className="flex items-center gap-6">
-            <div className="bg-white/10 p-4 rounded-lg">
+            <div className="bg-white/10 p-4 rounded-none">
               <FileUp size={32} className="text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold mb-1">อัปโหลดไฟล์ Excel</h2>
-              <p className="text-sm text-gray-400">Upload Excel File (.xlsx, .csv)</p>
+              <h2 className="text-[32px] font-bold mb-1">อัปโหลดไฟล์ Excel</h2>
+              <p className="text-[20px] text-gray-400">Upload Excel File (.xlsx, .csv)</p>
             </div>
           </div>
           <LayoutPanelLeft size={36} className="text-white/20" />
@@ -1029,12 +1029,12 @@ export default function ImportBill() {
             fetchPOsList();
             setCurrentView('po');
           }}
-          className="bg-[#2563EB] hover:bg-[#1d4ed8] text-white p-8 rounded-xl flex items-center justify-between cursor-pointer transition-all shadow-md group"
+          className="bg-[#2563EB] hover:bg-[#1d4ed8] text-white p-8 rounded-none flex items-center justify-between cursor-pointer transition-all shadow-md group"
         >
           <div className="flex items-center gap-6">
             <div>
-              <h2 className="text-2xl font-bold mb-1">นำเข้าจากใบสั่งซื้อ</h2>
-              <p className="text-sm text-white/70">Import from Purchase Order</p>
+              <h2 className="text-[32px] font-bold mb-1">นำเข้าจากใบสั่งซื้อ</h2>
+              <p className="text-[20px] text-white/70">Import from Purchase Order</p>
             </div>
           </div>
           <ArrowRight size={32} className="text-white/50 group-hover:text-white transition-colors" />
@@ -1083,15 +1083,15 @@ export default function ImportBill() {
             setErrorMsg(null);
             setBatchErrorMsg(null);
           }}
-          className="bg-gray-600 hover:bg-gray-700 text-white p-8 rounded-xl flex items-center justify-between cursor-pointer transition-all shadow-md group"
+          className="bg-gray-600 hover:bg-gray-700 text-white p-8 rounded-none flex items-center justify-between cursor-pointer transition-all shadow-md group"
         >
           <div className="flex items-center gap-6">
-            <div className="bg-white/20 p-4 rounded-lg">
+            <div className="bg-white/20 p-4 rounded-none">
               <History size={32} className="text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold mb-1">กรอกข้อมูลด้วยตนเอง</h2>
-              <p className="text-sm text-white/70">Manual Import Entry</p>
+              <h2 className="text-[32px] font-bold mb-1">กรอกข้อมูลด้วยตนเอง</h2>
+              <p className="text-[20px] text-white/70">Manual Import Entry</p>
             </div>
           </div>
           <ArrowRight size={32} className="text-white/50 group-hover:text-white transition-colors" />
@@ -1101,12 +1101,12 @@ export default function ImportBill() {
       {/* Recent Scans Table */}
       <Card className="overflow-hidden" noPadding>
         <div className="flex justify-between items-center p-6 border-b border-gray-100">
-          <div className="flex items-center gap-2 text-[#b32025] font-bold">
+          <div className="flex items-center gap-2 text-[#e51c23] font-bold">
             <History size={20} />
-            <span>รายการสแกนล่าสุด (Recent Scans)</span>
+            <span className="text-[24px] font-bold">รายการสแกนล่าสุด (Recent Scans)</span>
           </div>
           <div className="flex items-center gap-4">
-            <button onClick={fetchBills} className="text-gray-500 hover:text-gray-900 text-xs font-bold flex items-center gap-1.5 cursor-pointer bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg transition-all">
+            <button onClick={fetchBills} className="text-gray-500 hover:text-gray-900 text-[16px] font-bold flex items-center gap-1.5 cursor-pointer bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-none transition-all">
               รีเฟรชข้อมูล
             </button>
           </div>
@@ -1115,10 +1115,10 @@ export default function ImportBill() {
         {loadingBills ? (
           <div className="p-12 flex justify-center items-center">
             <Loader2 size={32} className="text-red-500 animate-spin" />
-            <span className="ml-3 text-sm text-gray-500 font-medium">กำลังโหลดรายการบิลจากระบบ...</span>
+            <span className="ml-3 text-[16px] text-gray-500 font-medium">กำลังโหลดรายการบิลจากระบบ...</span>
           </div>
         ) : bills.length === 0 ? (
-          <div className="p-12 text-center text-gray-400 text-sm font-medium">
+          <div className="p-12 text-center text-gray-400 text-[16px] font-medium">
             ยังไม่มีบิลนำเข้าที่ถูกยืนยันในฐานข้อมูล
           </div>
         ) : (
@@ -1151,7 +1151,7 @@ export default function ImportBill() {
                     <div className="flex items-center justify-center gap-3">
                       <button 
                         onClick={() => handleViewSavedBill(row)} 
-                        className="text-gray-400 hover:text-[#b32025] transition-colors cursor-pointer"
+                        className="text-gray-400 hover:text-[#e51c23] transition-colors cursor-pointer"
                         title="ดูและแก้ไขบิล"
                       >
                         <Eye size={20} />
@@ -1172,7 +1172,7 @@ export default function ImportBill() {
         )}
 
         {totalItems > 0 && (
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 p-6 border-t border-gray-100 text-xs text-gray-500 bg-gray-50">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 p-6 border-t border-gray-100 text-[16px] text-gray-500 bg-gray-50">
             <div className="flex items-center gap-4">
               <span>
                 แสดง {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} ถึง {Math.min(currentPage * itemsPerPage, totalItems)} จาก {totalItems} รายการบิล
@@ -1185,7 +1185,7 @@ export default function ImportBill() {
                     setItemsPerPage(Number(e.target.value));
                     setCurrentPage(1);
                   }}
-                  className="border border-gray-200 rounded px-2 py-1 text-gray-600 bg-white hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200 cursor-pointer"
+                  className="border border-gray-200 rounded-none px-2 py-1 text-gray-600 bg-white hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200 cursor-pointer"
                 >
                   <option value={5}>5</option>
                   <option value={10}>10</option>
@@ -1200,7 +1200,7 @@ export default function ImportBill() {
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(1)}
                 aria-label="หน้าแรก"
-                className="p-1.5 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
               >
                 <ChevronsLeft className="w-4 h-4" />
               </button>
@@ -1208,7 +1208,7 @@ export default function ImportBill() {
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage((prev) => prev - 1)}
                 aria-label="หน้าก่อนหน้า"
-                className="p-1.5 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -1217,9 +1217,9 @@ export default function ImportBill() {
                 <button
                   key={page}
                   onClick={() => setCurrentPage(page)}
-                  className={`px-3 py-1.5 rounded font-medium transition-colors cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-none font-medium transition-colors cursor-pointer ${
                     currentPage === page
-                      ? "bg-[#d61c24] text-white"
+                      ? "bg-[#e51c23] text-white"
                       : "text-gray-600 hover:bg-gray-100"
                   }`}
                 >
@@ -1231,7 +1231,7 @@ export default function ImportBill() {
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage((prev) => prev + 1)}
                 aria-label="หน้าถัดไป"
-                className="p-1.5 rounded text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -1239,7 +1239,7 @@ export default function ImportBill() {
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage(totalPages)}
                 aria-label="หน้าสุดท้าย"
-                className="p-1.5 rounded text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
               >
                 <ChevronsRight className="w-4 h-4" />
               </button>
@@ -1272,16 +1272,16 @@ export default function ImportBill() {
     return (
       <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
         <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+          <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-none transition-colors">
             <ChevronLeft size={24} className="text-gray-600" />
           </button>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-[36px] font-bold text-gray-900">
             {isManualEntry ? 'นำเข้าใบสั่งซื้อ (กรอกข้อมูลด้วยตนเอง)' : 'ระบบสแกนนำเข้าใบสั่งซื้อ'}
           </h1>
         </div>
 
         {errorMsg && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-center gap-3">
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 text-[16px] rounded-none flex items-center gap-3">
             <AlertCircle size={20} className="shrink-0 text-red-500" />
             <span>{errorMsg}</span>
           </div>
@@ -1293,17 +1293,17 @@ export default function ImportBill() {
             <>
               <div 
                 style={{ width: typeof window !== 'undefined' && window.innerWidth >= 1024 ? `${leftWidth}%` : '100%' }}
-                className="bg-[#e2e2e2] rounded-xl p-6 flex flex-col gap-4 min-h-[750px]"
+                className="bg-[#e2e2e2] rounded-none p-6 flex flex-col gap-4 min-h-[750px]"
               >
           {/* Top Bar: Zoom/Rotate and Change Image Button */}
           {previewUrl && (
-            <div className="flex items-center justify-between bg-white p-2 rounded shadow-sm w-full">
+            <div className="flex items-center justify-between bg-white p-2 rounded-none shadow-sm w-full">
               <div className="flex gap-1">
-                <button onClick={() => setZoom(prev => Math.min(prev + 0.2, 2.5))} className="bg-gray-100 p-2 rounded hover:bg-gray-200 text-gray-700 cursor-pointer" title="ขยาย"><ZoomIn size={18} /></button>
-                <button onClick={() => setZoom(prev => Math.max(prev - 0.2, 0.5))} className="bg-gray-100 p-2 rounded hover:bg-gray-200 text-gray-700 cursor-pointer" title="ย่อ"><ZoomOut size={18} /></button>
-                <button onClick={() => setRotate(prev => (prev + 90) % 360)} className="bg-gray-100 p-2 rounded hover:bg-gray-200 text-gray-700 cursor-pointer" title="หมุน"><RotateCw size={18} /></button>
+                <button onClick={() => setZoom(prev => Math.min(prev + 0.2, 2.5))} className="bg-gray-100 p-2 rounded-none hover:bg-gray-200 text-gray-700 cursor-pointer" title="ขยาย"><ZoomIn size={18} /></button>
+                <button onClick={() => setZoom(prev => Math.max(prev - 0.2, 0.5))} className="bg-gray-100 p-2 rounded-none hover:bg-gray-200 text-gray-700 cursor-pointer" title="ย่อ"><ZoomOut size={18} /></button>
+                <button onClick={() => setRotate(prev => (prev + 90) % 360)} className="bg-gray-100 p-2 rounded-none hover:bg-gray-200 text-gray-700 cursor-pointer" title="หมุน"><RotateCw size={18} /></button>
               </div>
-              <label className="cursor-pointer text-xs text-red-600 font-bold hover:underline py-2 px-4 bg-gray-50 rounded border border-gray-200">
+              <label className="cursor-pointer text-[16px] text-red-600 font-bold hover:underline py-2 px-4 bg-gray-50 rounded-none border border-gray-200">
                 เปลี่ยนไฟล์บิล (ภาพ/PDF)
                 <input type="file" className="hidden" accept="image/*,application/pdf" multiple onChange={handleFileChange} />
               </label>
@@ -1314,8 +1314,8 @@ export default function ImportBill() {
             <div className="w-full flex-1 flex flex-col items-center justify-center p-0">
               {/* Batch items tabs list */}
               {batchImages.length > 0 && (
-                <div className="w-full bg-white rounded-lg border border-gray-200 p-3 mb-4 max-h-[160px] overflow-y-auto">
-                  <h4 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wider">รายการสแกนบิลแบบกลุ่ม ({batchImages.length} ไฟล์)</h4>
+                <div className="w-full bg-white rounded-none border border-gray-200 p-3 mb-4 max-h-[160px] overflow-y-auto">
+                  <h4 className="text-[16px] font-bold text-gray-500 mb-2 uppercase tracking-wider">รายการสแกนบิลแบบกลุ่ม ({batchImages.length} ไฟล์)</h4>
                   <div className="flex flex-col gap-1">
                     {batchImages.map((file, idx) => {
                       const status = batchProgress[file.name];
@@ -1328,16 +1328,16 @@ export default function ImportBill() {
                           type="button"
                           disabled={matchedResultIndex === -1}
                           onClick={() => handleSelectBatchItem(matchedResultIndex)}
-                          className={`w-full flex items-center justify-between p-2 rounded text-left transition-all text-xs border ${
+                          className={`w-full flex items-center justify-between p-2 rounded-none text-left transition-all text-[16px] border ${
                             isSelected 
-                              ? 'border-[#b32025] bg-red-50 text-[#b32025] font-bold' 
+                              ? 'border-[#e51c23] bg-red-50 text-[#e51c23] font-bold' 
                               : matchedResultIndex !== -1
                                 ? 'border-gray-200 hover:border-gray-300 text-gray-700 bg-gray-50 cursor-pointer'
                                 : 'border-gray-100 text-gray-400 bg-gray-50/50'
                           }`}
                         >
                           <span className="truncate max-w-[220px] font-medium">{file.name}</span>
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                          <span className={`text-[16px] px-1.5 py-0.5 rounded-none font-bold uppercase ${
                             status === 'success' 
                               ? 'bg-green-100 text-green-700' 
                               : status === 'scanning'
@@ -1362,7 +1362,7 @@ export default function ImportBill() {
                     <button 
                       type="button"
                       onClick={handlePrevBatchItem} 
-                      className="absolute left-0 lg:left-[-15px] z-10 p-2.5 rounded-full bg-white/95 hover:bg-white text-gray-800 shadow-md border border-gray-150 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                      className="absolute left-0 lg:left-[-15px] z-10 p-2.5 rounded-none bg-white/95 hover:bg-white text-gray-800 shadow-md border border-gray-150 hover:scale-105 active:scale-95 transition-all cursor-pointer"
                       title="รูปภาพก่อนหน้า"
                     >
                       <ChevronLeft size={18} className="stroke-[3]" />
@@ -1371,7 +1371,7 @@ export default function ImportBill() {
                     <button 
                       type="button"
                       onClick={handleNextBatchItem} 
-                      className="absolute right-0 lg:right-[-15px] z-10 p-2.5 rounded-full bg-white/95 hover:bg-white text-gray-800 shadow-md border border-gray-150 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                      className="absolute right-0 lg:right-[-15px] z-10 p-2.5 rounded-none bg-white/95 hover:bg-white text-gray-800 shadow-md border border-gray-150 hover:scale-105 active:scale-95 transition-all cursor-pointer"
                       title="รูปภาพถัดไป"
                     >
                       <ChevronRight size={18} className="stroke-[3]" />
@@ -1380,7 +1380,7 @@ export default function ImportBill() {
                 )}
 
                 <div 
-                  className="w-full flex-1 min-h-0 overflow-auto flex items-center justify-center rounded-lg shadow-lg bg-white p-2"
+                  className="w-full flex-1 min-h-0 overflow-auto flex items-center justify-center rounded-none shadow-lg bg-white p-2"
                   style={{ transform: `rotate(${rotate}deg)`, transition: 'transform 0.3s' }}
                 >
                   <img 
@@ -1395,7 +1395,7 @@ export default function ImportBill() {
                 {/* Dot indicators */}
                 {batchImages.length > 1 && (
                   <div className="mt-4 flex flex-col items-center gap-1.5 w-full">
-                    <div className="text-[10px] font-bold text-gray-500 bg-white/85 px-3 py-1 rounded-full border border-gray-200 shadow-sm">
+                    <div className="text-[16px] font-bold text-gray-500 bg-white/85 px-3 py-1 rounded-none border border-gray-200 shadow-sm">
                       รูปที่ {activeBatchIndex + 1} จาก {batchImages.length}
                     </div>
                     <div className="flex gap-1.5 justify-center">
@@ -1411,9 +1411,9 @@ export default function ImportBill() {
                               setPreviewUrl(URL.createObjectURL(batchImages[idx]));
                             }
                           }}
-                          className={`w-1.5 h-1.5 rounded-full transition-all cursor-pointer ${
+                          className={`w-1.5 h-1.5 rounded-none transition-all cursor-pointer ${
                             activeBatchIndex === idx 
-                              ? 'bg-[#b32025] w-3.5' 
+                              ? 'bg-[#e51c23] w-3.5' 
                               : 'bg-gray-400 hover:bg-gray-500'
                           }`}
                         />
@@ -1427,7 +1427,7 @@ export default function ImportBill() {
                   type="button"
                   onClick={handleOcrProcess}
                   disabled={scanning}
-                  className="mt-6 cursor-pointer text-sm text-[#b32025] font-bold hover:bg-gray-50 bg-white py-2 px-6 rounded-full shadow-sm flex items-center gap-2 transition-all border border-gray-100 disabled:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="mt-6 cursor-pointer text-[16px] text-[#e51c23] font-bold hover:bg-gray-50 bg-white py-2 px-6 rounded-none shadow-sm flex items-center gap-2 transition-all border border-gray-100 disabled:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 >
                   {scanning ? (
                     <>
@@ -1444,14 +1444,14 @@ export default function ImportBill() {
               )}
             </div>
           ) : (
-            <div className="w-full flex-1 border-4 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center p-8 bg-gray-50 text-center">
+            <div className="w-full flex-1 border-4 border-dashed border-gray-300 rounded-none flex flex-col items-center justify-center p-8 bg-gray-50 text-center">
               <Camera size={64} className="text-gray-400 mb-4 animate-pulse" />
-              <p className="text-gray-600 font-bold mb-2">ลากไฟล์บิลของคุณวางที่นี่ หรือ</p>
-              <label className="cursor-pointer text-white bg-[#b32025] hover:bg-[#9a1a1f] px-6 py-2.5 rounded font-bold transition-all shadow-sm">
+              <p className="text-gray-600 font-bold text-[24px] mb-2">ลากไฟล์บิลของคุณวางที่นี่ หรือ</p>
+              <label className="cursor-pointer text-white bg-[#e51c23] hover:bg-[#c9181f] px-6 py-2.5 rounded-none font-bold transition-all shadow-sm">
                 อัปโหลดบิล (ภาพ/PDF)
                 <input type="file" className="hidden" accept="image/*,application/pdf" multiple onChange={handleFileChange} />
               </label>
-              <p className="text-xs text-gray-400 mt-3">รองรับการเลือกทีละหลายไฟล์สำหรับสแกนแบบกลุ่ม</p>
+              <p className="text-[16px] text-gray-400 mt-3">รองรับการเลือกทีละหลายไฟล์สำหรับสแกนแบบกลุ่ม</p>
             </div>
           )}
 
@@ -1464,8 +1464,8 @@ export default function ImportBill() {
             e.preventDefault();
             setIsResizing(true);
           }}
-          className={`hidden lg:flex w-2.5 hover:w-3.5 cursor-col-resize hover:bg-[#b32025]/50 bg-gray-200 border-l border-r border-gray-300 items-center justify-center relative select-none rounded-md transition-all group z-10 mx-2 ${
-            isResizing ? 'bg-[#b32025]/80 w-3.5' : ''
+          className={`hidden lg:flex w-2.5 hover:w-3.5 cursor-col-resize hover:bg-[#e51c23]/50 bg-gray-200 border-l border-r border-gray-300 items-center justify-center relative select-none rounded-none transition-all group z-10 mx-2 ${
+            isResizing ? 'bg-[#e51c23]/80 w-3.5' : ''
           }`}
           style={{ cursor: 'col-resize' }}
         >
@@ -1485,20 +1485,20 @@ export default function ImportBill() {
             ? (isManualEntry ? '100%' : `${100 - leftWidth}%`) 
             : '100%' 
         }}
-        className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[700px]"
+        className="bg-white rounded-none shadow-sm border border-gray-100 flex flex-col min-h-[700px]"
       >
           {!formData ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-gray-400">
               <FileUp size={48} className="text-gray-300 mb-4" />
-              <h3 className="font-bold text-lg text-gray-600 mb-2">รอการประมวลผลข้อมูล</h3>
-              <p className="text-sm max-w-md">กรุณาเลือกไฟล์บิลด้านซ้าย และกดปุ่มสแกนบิลเพื่อตรวจสอบวิเคราะห์ข้อมูล</p>
+              <h3 className="font-bold text-[24px] text-gray-600 mb-2">รอการประมวลผลข้อมูล</h3>
+              <p className="text-[16px] max-w-md">กรุณาเลือกไฟล์บิลด้านซ้าย และกดปุ่มสแกนบิลเพื่อตรวจสอบวิเคราะห์ข้อมูล</p>
             </div>
           ) : (
             <div className="flex flex-col flex-1 animate-in fade-in duration-300">
               {/* Form Fields */}
               <div className="p-6 grid grid-cols-2 gap-6 border-b border-gray-100">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-2">ซัพพลายเออร์ (SUPPLIER)</label>
+                  <label className="block text-[20px] font-bold text-gray-700 mb-2">ซัพพลายเออร์ (SUPPLIER)</label>
                   <input 
                     type="text" 
                     value={formData.supplier_name || ''} 
@@ -1512,41 +1512,41 @@ export default function ImportBill() {
                         supplier_id: matched ? matched.id : 0
                       });
                     }}
-                    className="w-full bg-[#f4f4f5] border-none rounded p-3 text-sm focus:ring-0 text-gray-800 font-medium" 
+                    className="w-full bg-[#f4f4f5] border-none rounded-none p-3 text-[16px] focus:ring-0 text-gray-800 font-medium" 
                     placeholder="พิมพ์ชื่อซัพพลายเออร์..."
                   />
                   {formData.supplier_name && !suppliers.some(s => 
                     s.supplier_name.toLowerCase().replace(/บริษัท|จำกัด|บจก\.|หจก\./g, '').trim() === formData.supplier_name!.toLowerCase().replace(/บริษัท|จำกัด|บจก\.|หจก\./g, '').trim()
                   ) && (
-                    <span className="text-[11px] text-amber-500 mt-1.5 block font-medium">
+                    <span className="text-[16px] text-amber-500 mt-1.5 block font-medium">
                       ⚠️ ซัพพลายเออร์นี้จะถูกลงทะเบียนเข้าสู่ระบบโดยอัตโนมัติเมื่อกดบันทึก
                     </span>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-2">เลขที่บิล (INVOICE NO.)</label>
+                  <label className="block text-[20px] font-bold text-gray-700 mb-2">เลขที่บิล (INVOICE NO.)</label>
                   <input 
                     type="text" 
                     value={formData.bill_no} 
                     onChange={(e) => updateFormState({ bill_no: e.target.value })}
-                    className="w-full bg-[#f4f4f5] border-none rounded p-3 text-sm focus:ring-0 text-gray-800 font-medium" 
+                    className="w-full bg-[#f4f4f5] border-none rounded-none p-3 text-[16px] focus:ring-0 text-gray-800 font-medium" 
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-2">วันที่ครบกำหนดในบิล (DUE DATE)</label>
+                  <label className="block text-[20px] font-bold text-gray-700 mb-2">วันที่ครบกำหนดในบิล (DUE DATE)</label>
                   <input 
                     type="date" 
                     value={formData.due_date} 
                     onChange={(e) => updateFormState({ due_date: e.target.value })}
-                    className="w-full bg-[#f4f4f5] border-none rounded p-3 text-sm focus:ring-0 text-gray-800 font-medium" 
+                    className="w-full bg-[#f4f4f5] border-none rounded-none p-3 text-[16px] focus:ring-0 text-gray-800 font-medium" 
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-2">อ้างอิงใบสั่งซื้อระบบ (PO ID)</label>
+                  <label className="block text-[20px] font-bold text-gray-700 mb-2">อ้างอิงใบสั่งซื้อระบบ (PO ID)</label>
                   <select
                     value={poReference}
                     onChange={(e) => setPoReference(e.target.value)}
-                    className="w-full bg-[#f4f4f5] border-none rounded p-3 text-sm focus:ring-0 text-gray-800 font-medium appearance-none"
+                    className="w-full bg-[#f4f4f5] border-none rounded-none p-3 text-[16px] focus:ring-0 text-gray-800 font-medium appearance-none"
                   >
                     <option value="">-- นำเข้าทั่วไป (ไม่มีอ้างอิง PO) --</option>
                     {poList.map((po) => (
@@ -1557,29 +1557,29 @@ export default function ImportBill() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-2">ขนส่งโดย (TRANSPORT BY)</label>
+                  <label className="block text-[20px] font-bold text-gray-700 mb-2">ขนส่งโดย (TRANSPORT BY)</label>
                   <input 
                     type="text" 
                     value={formData.transport_by} 
                     onChange={(e) => updateFormState({ transport_by: e.target.value })}
-                    className="w-full bg-[#f4f4f5] border-none rounded p-3 text-sm focus:ring-0 text-gray-800 font-medium" 
+                    className="w-full bg-[#f4f4f5] border-none rounded-none p-3 text-[16px] focus:ring-0 text-gray-800 font-medium" 
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-2">วันที่รับสินค้า (RECEIVE DATE)</label>
+                  <label className="block text-[20px] font-bold text-gray-700 mb-2">วันที่รับสินค้า (RECEIVE DATE)</label>
                   <input 
                     type="date" 
                     value={formData.receive_date ? formData.receive_date.split('T')[0] : ''} 
                     onChange={(e) => updateFormState({ receive_date: e.target.value })}
-                    className="w-full bg-[#f4f4f5] border-none rounded p-3 text-sm focus:ring-0 text-gray-800 font-medium" 
+                    className="w-full bg-[#f4f4f5] border-none rounded-none p-3 text-[16px] focus:ring-0 text-gray-800 font-medium" 
                   />
                 </div>
               </div>
 
               {/* Items Table */}
               <div className="flex-1 overflow-y-auto max-h-[350px]">
-                <Table className="min-w-[1200px] text-left text-sm border-collapse">
-                  <TableHeader className="bg-gray-100 text-gray-600 border-b border-gray-100 text-xs">
+                <Table className="min-w-[1200px] text-left text-[16px] border-collapse">
+                  <TableHeader className="bg-gray-100 text-gray-600 border-b border-gray-100 text-[16px]">
                     <TableRow>
                       <TableHead className="py-4 px-6 font-bold text-left text-gray-600 min-w-[120px]">สแกนรหัส (บิล)</TableHead>
                       <TableHead className="py-4 px-6 font-bold text-left text-gray-600 min-w-[280px]">ชื่อสินค้า (บิล)</TableHead>
@@ -1611,7 +1611,7 @@ export default function ImportBill() {
                                 el.style.height = `${el.scrollHeight}px`;
                               }
                             }}
-                            className="bg-transparent border-none border-b border-gray-200 focus:border-red-500 focus:ring-0 w-full text-xs font-mono text-gray-700 p-1 resize-none overflow-hidden min-h-[36px]"
+                            className="bg-transparent border-none border-b border-gray-200 focus:border-red-500 focus:ring-0 w-full text-[16px] font-mono text-gray-700 p-1 resize-none overflow-hidden min-h-[36px]"
                           />
                         </TableCell>
                         <TableCell className="py-2 px-4">
@@ -1630,7 +1630,7 @@ export default function ImportBill() {
                                 el.style.height = `${el.scrollHeight}px`;
                               }
                             }}
-                            className="bg-transparent border-none border-b border-gray-200 focus:border-red-500 focus:ring-0 w-full text-xs font-medium text-gray-900 p-1 resize-none overflow-hidden min-h-[36px]"
+                            className="bg-transparent border-none border-b border-gray-200 focus:border-red-500 focus:ring-0 w-full text-[16px] font-medium text-gray-900 p-1 resize-none overflow-hidden min-h-[36px]"
                           />
                         </TableCell>
                         <TableCell className="py-2 px-4">
@@ -1639,7 +1639,7 @@ export default function ImportBill() {
                             onChange={(e) => {
                               handleItemChange(idx, 'product_id', e.target.value ? Number(e.target.value) : null);
                             }}
-                            className="bg-white border border-gray-300 rounded p-1 text-[11px] w-full focus:ring-0 text-gray-700 font-semibold"
+                            className="bg-white border border-gray-300 rounded-none p-1 text-[16px] w-full focus:ring-0 text-gray-700 font-semibold"
                           >
                             <option value="">-- ไม่พบสินค้าที่คล้ายกัน --</option>
                             {products.map(p => (
@@ -1654,12 +1654,12 @@ export default function ImportBill() {
                               const prod = products.find(p => p.id === Number(item.product_id));
                               if (prod) {
                                 return (
-                                  <span className="text-[10px] text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded font-medium inline-block truncate max-w-[150px]" title={prod.category_name}>
+                                  <span className="text-[16px] text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded-none font-medium inline-block truncate max-w-[150px]" title={prod.category_name}>
                                     {prod.category_name || 'ไม่ระบุหมวดหมู่'}
                                   </span>
                                 );
                               }
-                              return <span className="text-gray-400 text-xs">-</span>;
+                              return <span className="text-gray-400 text-[16px]">-</span>;
                             })()
                           ) : (
                             <select
@@ -1669,7 +1669,7 @@ export default function ImportBill() {
                                 handleItemChange(idx, 'category_id', catId);
                                 handleItemChange(idx, 'sub_category_id', null); // Reset subcategory when category changes
                               }}
-                              className="bg-white border border-gray-200 rounded p-0.5 text-[10px] w-full focus:ring-0 text-gray-700 font-medium"
+                              className="bg-white border border-gray-200 rounded-none p-0.5 text-[16px] w-full focus:ring-0 text-gray-700 font-medium"
                             >
                               <option value="">-- หมวดหมู่หลัก --</option>
                               {categories.map((c: any) => (
@@ -1686,12 +1686,12 @@ export default function ImportBill() {
                               const prod = products.find(p => p.id === Number(item.product_id));
                               if (prod && prod.sub_category_name) {
                                 return (
-                                  <span className="text-[9px] text-gray-400 pl-1 truncate max-w-[150px]" title={prod.sub_category_name}>
+                                  <span className="text-[16px] text-gray-400 pl-1 truncate max-w-[150px]" title={prod.sub_category_name}>
                                     └─ {prod.sub_category_name}
                                   </span>
                                 );
                               }
-                              return <span className="text-gray-400 text-xs">-</span>;
+                              return <span className="text-gray-400 text-[16px]">-</span>;
                             })()
                           ) : (
                             <select
@@ -1700,7 +1700,7 @@ export default function ImportBill() {
                               onChange={(e) => {
                                 handleItemChange(idx, 'sub_category_id', e.target.value ? Number(e.target.value) : null);
                               }}
-                              className="bg-white border border-gray-200 rounded p-0.5 text-[10px] w-full focus:ring-0 text-gray-700 font-medium disabled:opacity-50"
+                              className="bg-white border border-gray-200 rounded-none p-0.5 text-[16px] w-full focus:ring-0 text-gray-700 font-medium disabled:opacity-50"
                             >
                               <option value="">-- หมวดหมู่ย่อย --</option>
                               {item.category_id ? ((categories.find((c: any) => c.ID === item.category_id))?.sub_categories || []).map((sc: any) => (
@@ -1715,13 +1715,13 @@ export default function ImportBill() {
                               type="number" 
                               value={item.order_quantity ?? 0}
                               onChange={(e) => handleItemChange(idx, 'order_quantity', e.target.value)}
-                              className="bg-transparent border-b border-gray-200 focus:border-red-500 focus:ring-0 w-12 text-right text-xs text-gray-700 p-1"
+                              className="bg-transparent border-b border-gray-200 focus:border-red-500 focus:ring-0 w-12 text-right text-[16px] text-gray-700 p-1"
                             />
                             <input 
                               type="text" 
                               value={item.unit || ''}
                               onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
-                              className="bg-transparent border-b border-gray-200 focus:border-red-500 focus:ring-0 w-8 text-left text-xs text-gray-500 p-1"
+                              className="bg-transparent border-b border-gray-200 focus:border-red-500 focus:ring-0 w-8 text-left text-[16px] text-gray-500 p-1"
                             />
                           </div>
                         </TableCell>
@@ -1731,10 +1731,10 @@ export default function ImportBill() {
                             step="0.01"
                             value={item.price_per_unit ?? 0}
                             onChange={(e) => handleItemChange(idx, 'price_per_unit', e.target.value)}
-                            className="bg-transparent border-b border-gray-200 focus:border-red-500 focus:ring-0 w-16 text-right text-xs text-gray-700 font-bold p-1"
+                            className="bg-transparent border-b border-gray-200 focus:border-red-500 focus:ring-0 w-16 text-right text-[16px] text-gray-700 font-bold p-1"
                           />
                         </TableCell>
-                        <TableCell className="py-2 px-4 text-right font-bold text-gray-900 text-xs">
+                        <TableCell className="py-2 px-4 text-right font-bold text-gray-900 text-[16px]">
                           ฿{((item.order_quantity || 0) * (item.price_per_unit || 0) - (item.discount_amount || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
                         </TableCell>
                         <TableCell className="py-2 px-4 text-center">
@@ -1759,7 +1759,7 @@ export default function ImportBill() {
                 <button
                   type="button"
                   onClick={handleAddRow}
-                  className="text-xs text-[#b32025] hover:text-[#9a1a1f] font-bold flex items-center gap-1 hover:underline cursor-pointer"
+                  className="text-[16px] text-[#e51c23] hover:text-[#c9181f] font-bold flex items-center gap-1 hover:underline cursor-pointer"
                 >
                   + เพิ่มรายการสินค้า (Add Row)
                 </button>
@@ -1767,10 +1767,10 @@ export default function ImportBill() {
 
               {/* ยอดรวมไม่ตรงกัน Warning Banner */}
               {isTotalMismatched && (
-                <div className="mx-6 my-4 p-4 bg-red-50 border border-red-200 text-[#b32025] text-sm rounded-lg flex items-start gap-3 animate-in slide-in-from-top-2 duration-200 shadow-sm text-left">
-                  <AlertCircle className="text-[#b32025] shrink-0 mt-0.5" size={20} />
-                  <div className="flex-1 text-xs">
-                    <p className="font-bold text-sm text-[#b32025] mb-1">ยอดเงินไม่ตรงกัน (Amount Mismatch)</p>
+                <div className="mx-6 my-4 p-4 bg-red-50 border border-red-200 text-[#e51c23] text-[16px] rounded-none flex items-start gap-3 animate-in slide-in-from-top-2 duration-200 shadow-sm text-left">
+                  <AlertCircle className="text-[#e51c23] shrink-0 mt-0.5" size={20} />
+                  <div className="flex-1 text-[16px]">
+                    <p className="font-bold text-[24px] text-[#e51c23] mb-1">ยอดเงินไม่ตรงกัน (Amount Mismatch)</p>
                     <p className="leading-relaxed text-red-700">
                       ยอดเงินสุทธิรวมในบิล (<span className="font-bold">฿{formData.total_amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>) 
                       ไม่ตรงกับผลรวมคำนวณจริงของรายการสินค้าทั้งหมดในตาราง (<span className="font-bold">฿{expectedGrandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>)
@@ -1779,7 +1779,7 @@ export default function ImportBill() {
                       <button
                         type="button"
                         onClick={() => updateFormState({ total_amount: expectedGrandTotal })}
-                        className="bg-[#b32025] hover:bg-[#9a1a1f] text-white font-bold px-3 py-1.5 rounded transition-all cursor-pointer text-[11px] shadow-sm"
+                        className="bg-[#e51c23] hover:bg-[#c9181f] text-white font-bold px-3 py-1.5 rounded-none transition-all cursor-pointer text-[16px] shadow-sm"
                       >
                         ปรับยอดบิลให้ตรงตามตาราง
                       </button>
@@ -1789,20 +1789,20 @@ export default function ImportBill() {
               )}
 
               {/* Summary & Submit */}
-              <div className="border-t border-gray-100 p-6 flex justify-between items-end bg-[#fafafa] rounded-b-xl mt-auto">
-                <div className="text-xs text-gray-600 space-y-2 text-left">
+              <div className="border-t border-gray-100 p-6 flex justify-between items-end bg-[#fafafa] rounded-none mt-auto">
+                <div className="text-[16px] text-gray-600 space-y-2 text-left">
                   <p>จำนวนรายการทั้งหมด : <span className="text-gray-900 font-bold">{formData.items.length} รายการ</span></p>
                   <p>มูลค่าสินค้า (SUBTOTAL) : <span className="text-gray-900 font-bold">฿{formData.subtotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span></p>
                 </div>
                 <div className="text-right flex items-end gap-4">
                   <div>
-                    <p className="text-xs text-[#b32025] font-bold mb-1 text-left">ยอดเงินสุทธิรวม:</p>
-                    <p className="text-3xl text-[#b32025] font-bold">{formData.total_amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</p>
+                    <p className="text-[16px] text-[#e51c23] font-bold mb-1 text-left">ยอดเงินสุทธิรวม:</p>
+                    <p className="text-[32px] text-[#e51c23] font-bold">{formData.total_amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</p>
                   </div>
                   <button 
                     type="button"
                     onClick={exportBillItemsToExcel}
-                    className="bg-[#1C1B1B] hover:bg-[#2a2929] text-white px-6 py-3 rounded text-sm font-bold flex items-center gap-2 transition-all shadow-sm cursor-pointer"
+                    className="bg-[#1C1B1B] hover:bg-[#2a2929] text-white px-6 py-3 rounded-none text-[16px] font-bold flex items-center gap-2 transition-all shadow-sm cursor-pointer"
                   >
                     <FileUp size={18} />
                     <span>ส่งออกเป็น Excel</span>
@@ -1810,7 +1810,7 @@ export default function ImportBill() {
                   <button 
                     onClick={() => batchResults.length > 0 ? handleSaveAllBatchBills(false) : handleSaveBill(false)}
                     disabled={saving}
-                    className="bg-[#b32025] hover:bg-[#9a1a1f] text-white px-8 py-3 rounded text-sm font-bold flex items-center gap-2 transition-all shadow-sm disabled:bg-gray-400 cursor-pointer"
+                    className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-[16px] font-bold flex items-center gap-2 transition-all shadow-sm disabled:bg-gray-400 cursor-pointer"
                   >
                     {saving ? (
                       <>
@@ -1972,24 +1972,24 @@ export default function ImportBill() {
     return (
       <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
         <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+          <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-none transition-colors">
             <ChevronLeft size={24} className="text-gray-600" />
           </button>
-          <h1 className="text-3xl font-bold text-gray-900">นำเข้าใบสั่งซื้อด้วย CSV / Excel</h1>
+          <h1 className="text-[36px] font-bold text-gray-900">นำเข้าใบสั่งซื้อด้วย CSV / Excel</h1>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 flex flex-col items-center justify-center text-center min-h-[500px]">
+        <div className="bg-white rounded-none shadow-sm border border-gray-100 p-12 flex flex-col items-center justify-center text-center min-h-[500px]">
           {/* Centered Icon Box styled consistently with Home View card */}
-          <div className="bg-[#1c1b1b] text-white p-5 rounded-xl mb-6 shadow-sm">
+          <div className="bg-[#1c1b1b] text-white p-5 rounded-none mb-6 shadow-sm">
             <FileUp size={48} className="text-white" />
           </div>
 
-          <h3 className="text-2xl font-bold text-gray-900 mb-2">นำเข้าไฟล์สั่งซื้ออะไหล่ (Excel / CSV)</h3>
-          <p className="text-gray-500 text-sm max-w-md mb-8 leading-relaxed">
+          <h3 className="text-[32px] font-bold text-gray-900 mb-2">นำเข้าไฟล์สั่งซื้ออะไหล่ (Excel / CSV)</h3>
+          <p className="text-gray-500 text-[16px] max-w-md mb-8 leading-relaxed">
             อัปโหลดไฟล์ในรูปแบบ Excel (.xlsx, .xls) หรือ CSV (.csv) เพื่อนำข้อมูลไปแปลงเป็นหน้าตารางและทำการตรวจสอบแก้ไขได้ทันที
           </p>
 
-          <label className="cursor-pointer text-white bg-[#b32025] hover:bg-[#9a1a1f] px-8 py-3 rounded-lg font-bold transition-all shadow-sm">
+          <label className="cursor-pointer text-white bg-[#e51c23] hover:bg-[#c9181f] px-8 py-3 rounded-none font-bold transition-all shadow-sm">
             เลือกไฟล์ Excel / CSV เพื่อนำเข้า
             <input 
               type="file" 
@@ -2017,25 +2017,25 @@ export default function ImportBill() {
       <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
         {/* Header Bar */}
         <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+          <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-none transition-colors">
             <ChevronLeft size={24} className="text-gray-600" />
           </button>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-[36px] font-bold text-gray-900 flex items-center gap-2">
             <span>นำเข้าสินค้าด้วยใบสั่งซื้อ</span>
           </h1>
         </div>
 
         {/* Content Box */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col min-h-[500px]">
+        <div className="bg-white rounded-none shadow-sm border border-gray-100 p-6 flex flex-col min-h-[500px]">
           {/* Search Box */}
           <div className="mb-6">
-            <label className="block text-xs font-bold text-gray-500 mb-2">ค้นหาใบสั่งซื้อ (SEARCH PURCHASE ORDER)</label>
+            <label className="block text-[20px] font-bold text-gray-700 mb-2">ค้นหาใบสั่งซื้อ (SEARCH PURCHASE ORDER)</label>
             <input 
               type="text"
               placeholder="พิมพ์ค้นหาเลขที่ PO หรือชื่อผู้จัดจำหน่าย..."
               value={poSearchQuery}
               onChange={(e) => setPoSearchQuery(e.target.value)}
-              className="w-full bg-[#f4f4f5] border-none rounded-lg p-3 text-sm focus:ring-1 focus:ring-blue-500 text-gray-800 font-medium"
+              className="w-full bg-[#f4f4f5] border-none rounded-none p-3 text-[16px] focus:ring-1 focus:ring-blue-500 text-gray-800 font-medium"
             />
           </div>
 
@@ -2044,13 +2044,13 @@ export default function ImportBill() {
             {loadingPOs ? (
               <div className="flex flex-col items-center justify-center py-12 text-gray-400">
                 <Loader2 size={36} className="animate-spin text-[#2563EB] mb-2" />
-                <span className="text-sm font-medium">กำลังโหลดรายการใบสั่งซื้อ...</span>
+                <span className="text-[16px] font-medium">กำลังโหลดรายการใบสั่งซื้อ...</span>
               </div>
             ) : filteredPOs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-gray-400">
                 <FileText size={48} className="text-gray-300 mb-2" />
-                <span className="text-sm font-bold text-gray-500">ไม่พบรายการใบสั่งซื้อที่ตรงกับเงื่อนไข</span>
-                <span className="text-xs text-gray-400 mt-1">กรุณาตรวจสอบชื่อค้นหา หรือสร้างใบสั่งซื้อ (PO) ก่อนในหน้าระบบสั่งซื้อ</span>
+                <span className="text-[16px] font-bold text-gray-500">ไม่พบรายการใบสั่งซื้อที่ตรงกับเงื่อนไข</span>
+                <span className="text-[16px] text-gray-400 mt-1">กรุณาตรวจสอบชื่อค้นหา หรือสร้างใบสั่งซื้อ (PO) ก่อนในหน้าระบบสั่งซื้อ</span>
               </div>
             ) : (
               <Card className="overflow-hidden" noPadding>
@@ -2070,7 +2070,7 @@ export default function ImportBill() {
                       <TableRow key={po.id} className="hover:bg-gray-50/70 transition-colors">
                         <TableCell className="pl-6 font-semibold text-gray-900">{po.order_number}</TableCell>
                         <TableCell>{po.supplier_name || 'ไม่ระบุ'}</TableCell>
-                        <TableCell className="text-xs text-gray-500">{formatDate(po.created_at)}</TableCell>
+                        <TableCell className="text-[16px] text-gray-500">{formatDate(po.created_at)}</TableCell>
                         <TableCell className="text-right font-medium text-gray-900">
                           ฿{po.total_amount?.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
                         </TableCell>
@@ -2122,24 +2122,24 @@ export default function ImportBill() {
       {/* Validation Warning Modal */}
       {showValidationModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-none shadow-xl max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
             {/* Header */}
             <div className="bg-[#fffbeb] border-b border-amber-200 px-6 py-4 flex items-center gap-3 text-amber-800">
               <AlertTriangle className="w-6 h-6 shrink-0 text-amber-600 animate-pulse" />
               <div>
-                <h3 className="font-bold text-lg">คำเตือน: ตรวจพบข้อมูลไม่สอดคล้องหรือน่าสงสัย</h3>
-                <p className="text-xs text-amber-700">กรุณาตรวจสอบรายละเอียดด้านล่างก่อนยืนยันบันทึกข้อมูล</p>
+                <h3 className="font-bold text-[24px]">คำเตือน: ตรวจพบข้อมูลไม่สอดคล้องหรือน่าสงสัย</h3>
+                <p className="text-[16px] text-amber-700">กรุณาตรวจสอบรายละเอียดด้านล่างก่อนยืนยันบันทึกข้อมูล</p>
               </div>
             </div>
             
             {/* Body */}
             <div className="p-6 overflow-y-auto space-y-3 flex-1">
-              <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded border border-gray-100">
+              <div className="text-[16px] text-gray-600 mb-4 bg-gray-50 p-3 rounded-none border border-gray-100">
                 ระบบวิเคราะห์ข้อมูลใบเสร็จของคุณแล้วพบจุดผิดพลาดหรือแจ้งเตือนที่อาจเกิดจากความไม่สอดคล้อง (เช่น ยอดผลรวมต่างกัน, จำนวน/ราคาไม่ตรงกับใบสั่งซื้อ PO หรือยังไม่ได้จับคู่สินค้า)
               </div>
               <div className="space-y-2">
                 {validationWarnings.map((w, idx) => (
-                  <div key={idx} className="flex gap-2 text-xs text-red-700 bg-red-50 p-2 rounded border border-red-100">
+                  <div key={idx} className="flex gap-2 text-[16px] text-red-700 bg-red-50 p-2 rounded-none border border-red-100">
                     <AlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
                     <span className="font-medium whitespace-pre-wrap">{w}</span>
                   </div>
@@ -2156,7 +2156,7 @@ export default function ImportBill() {
                   setValidationWarnings([]);
                   setOnConfirmAction(null);
                 }}
-                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                className="px-4 py-2 text-[16px] font-semibold text-gray-700 bg-white border border-gray-300 rounded-none hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300"
               >
                 ย้อนกลับไปแก้ไข
               </button>
@@ -2168,7 +2168,7 @@ export default function ImportBill() {
                     onConfirmAction();
                   }
                 }}
-                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="px-4 py-2 text-[16px] font-semibold text-white bg-red-600 rounded-none hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
               >
                 ยืนยันบันทึกข้อมูลต่อไป
               </button>

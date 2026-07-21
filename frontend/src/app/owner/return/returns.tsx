@@ -238,7 +238,7 @@ export default function ReturnsPage(): React.JSX.Element {
       key: 'return_no',
       header: 'เลขที่ใบรับคืน',
       render: (row: ReturnItem) => (
-        <span className="font-mono font-bold text-[#b32025]">
+        <span className="font-mono font-bold text-[#e51c23]">
           {row.return_no}
         </span>
       )
@@ -314,7 +314,7 @@ export default function ReturnsPage(): React.JSX.Element {
           onClick={() => navigate(`/owner/returns/detail/${row.id}`)}
           variant="outline" 
           size="sm"
-          className="font-bold text-xs border-[#b32025] text-[#b32025] hover:bg-[#b32025] hover:text-white"
+          className="font-bold text-xs border-[#e51c23] text-[#e51c23] hover:bg-[#e51c23] hover:text-white"
         >
           ตรวจบิลคืนเงิน
         </Button>
@@ -336,7 +336,7 @@ export default function ReturnsPage(): React.JSX.Element {
             <div>
               <Button 
                 onClick={() => setView('return-form')}
-                className="bg-[#b32025] hover:bg-[#9a1a1f] text-white flex items-center gap-2 shadow-sm font-bold h-10 px-5 rounded-lg text-sm"
+                className="bg-[#e51c23] hover:bg-[#c9181f] text-white flex items-center gap-2 shadow-sm font-bold h-10 px-5 rounded-lg text-sm"
               >
                 <Plus size={18} /> สร้างเอกสารการรับคืน
               </Button>
@@ -405,7 +405,7 @@ export default function ReturnsPage(): React.JSX.Element {
             <Button 
               type="submit"
               variant="primary" 
-              className="bg-[#b32025] hover:bg-[#9a1a1f] gap-2 shadow-sm font-bold"
+              className="bg-[#e51c23] hover:bg-[#c9181f] gap-2 shadow-sm font-bold"
             >
               <Upload size={18} /> ส่งใบคืนสินค้า
             </Button>
@@ -509,7 +509,7 @@ export default function ReturnsPage(): React.JSX.Element {
                                     };
                                     setReceiptItems(updated);
                                   }}
-                                  className="w-4 h-4 text-[#b32025] bg-gray-100 border-gray-300 rounded focus:ring-[#b32025] accent-[#b32025] cursor-pointer" 
+                                  className="w-4 h-4 text-[#e51c23] bg-gray-100 border-gray-300 rounded focus:ring-[#e51c23] accent-[#e51c23] cursor-pointer" 
                                 />
                               </td>
                               <td className="py-5 px-4">
@@ -570,7 +570,7 @@ export default function ReturnsPage(): React.JSX.Element {
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-slate-500 font-bold">รวมยอดเงินรับคืนสุทธิ</p>
-                        <p className="font-extrabold text-lg text-[#b32025]">
+                        <p className="font-extrabold text-lg text-[#e51c23]">
                           ฿{receiptItems.reduce((acc, curr) => acc + (curr.checked ? curr.return_qty * curr.price : 0), 0).toLocaleString()}
                         </p>
                       </div>
@@ -614,7 +614,7 @@ export default function ReturnsPage(): React.JSX.Element {
                       onChange={(e) => setReturnRemarks(e.target.value)}
                       rows={4}
                       placeholder="ใส่รายละเอียดเกี่ยวกับสินค้าหรือสาเหตุที่ต้องการคืนเพิ่มเติม..."
-                      className="w-full text-sm border border-slate-200 bg-slate-50 rounded-lg p-3 focus:outline-none focus:border-[#b32025] font-semibold text-slate-700 placeholder-slate-400"
+                      className="w-full text-sm border border-slate-200 bg-slate-50 rounded-lg p-3 focus:outline-none focus:border-[#e51c23] font-semibold text-slate-700 placeholder-slate-400"
                     />
                   </div>
                 </div>

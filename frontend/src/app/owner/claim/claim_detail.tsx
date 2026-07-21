@@ -204,7 +204,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
                     <tr>
                       <td className="py-4 px-2">
                         <div className="flex items-center gap-2">
-                          <Package className="text-[#b32025] shrink-0" size={18} />
+                          <Package className="text-[#e51c23] shrink-0" size={18} />
                           <span className="text-slate-800 text-sm font-bold">{claim.product_name}</span>
                         </div>
                       </td>
