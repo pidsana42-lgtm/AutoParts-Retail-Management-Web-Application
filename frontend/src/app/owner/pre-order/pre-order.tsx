@@ -247,7 +247,7 @@ export default function PreOrderManager() {
       key: 'order_date',
       header: 'วันที่จอง',
       render: (po: PreOrder) => (
-        <span className="text-gray-500 text-xs">
+        <span className="text-[#5F5E5E] text-xs">
           {po.order_date ? new Date(po.order_date).toLocaleDateString('th-TH', {
             year: 'numeric', month: 'long', day: 'numeric',
             hour: '2-digit', minute: '2-digit'
@@ -260,8 +260,8 @@ export default function PreOrderManager() {
       header: 'ชื่อลูกค้า',
       render: (po: PreOrder) => (
         <div>
-          <div className="font-bold text-slate-800">{po.customer_name}</div>
-          <div className="text-xs text-slate-400">{po.customer_phone}</div>
+          <div className="font-bold text-[#1C1B1B]">{po.customer_name}</div>
+          <div className="text-xs text-[#5F5E5E]/80">{po.customer_phone}</div>
         </div>
       )
     },
@@ -280,7 +280,7 @@ export default function PreOrderManager() {
       render: (po: PreOrder) => (
         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold ${
           po.status === 'COMPLETED' 
-            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+            ? 'bg-[#259b24]/10 text-[#259b24] border border-[#259b24]/30' 
             : po.status === 'CANCELLED' 
               ? 'bg-red-50 text-red-600 border border-red-100' 
               : 'bg-amber-50 text-amber-600 border border-amber-100'
@@ -339,7 +339,7 @@ export default function PreOrderManager() {
                 <Package className="text-[#e51c23]" size={36} />
                 ระบบจัดการสั่งจองสินค้าล่วงหน้า (Pre-Orders)
               </Heading>
-              <p className="text-sm text-slate-500 mt-1">บันทึก ติดตามสถานะสินค้าจองมัดจำอะไหล่ด่วนสำหรับลูกค้าและช่าง</p>
+              <p className="text-sm text-[#5F5E5E] mt-1">บันทึก ติดตามสถานะสินค้าจองมัดจำอะไหล่ด่วนสำหรับลูกค้าและช่าง</p>
             </div>
             <Button 
               onClick={handleCreateNew}
@@ -383,13 +383,13 @@ export default function PreOrderManager() {
           {loading ? (
             <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-slate-100 shadow-sm min-h-[300px]">
               <Loader2 className="animate-spin text-[#e51c23] mb-3" size={40} />
-              <span className="text-slate-500 font-medium">กำลังโหลดข้อมูลรายการจอง...</span>
+              <span className="text-[#5F5E5E] font-medium">กำลังโหลดข้อมูลรายการจอง...</span>
             </div>
           ) : filteredOrders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-slate-100 shadow-sm min-h-[300px] text-slate-400">
+            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-slate-100 shadow-sm min-h-[300px] text-[#5F5E5E]/80">
               <FileText size={48} className="mb-3 text-slate-300" />
               <span className="font-semibold text-lg text-slate-600">ไม่พบข้อมูลรายการจองล่วงหน้า</span>
-              <p className="text-xs text-slate-400 mt-1">ลองเปลี่ยนคำค้นหา หรือกดปุ่มบวกเพื่อเพิ่มใบสั่งจองใหม่</p>
+              <p className="text-xs text-[#5F5E5E]/80 mt-1">ลองเปลี่ยนคำค้นหา หรือกดปุ่มบวกเพื่อเพิ่มใบสั่งจองใหม่</p>
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden p-1">
@@ -415,7 +415,7 @@ export default function PreOrderManager() {
                 <ChevronLeft size={24} className="text-slate-600" />
               </button>
               <div>
-                <Heading level="h2" className="mb-0 font-extrabold text-slate-900">
+                <Heading level="h2" className="mb-0 font-extrabold text-[#1C1B1B]">
                   {editingId ? 'แก้ไขใบสั่งจองสินค้าล่วงหน้า' : 'สร้างใบสั่งจองสินค้าล่วงหน้า'}
                 </Heading>
               </div>
@@ -504,7 +504,7 @@ export default function PreOrderManager() {
                 <div className="p-5 overflow-x-auto">
                   <table className="w-full text-left text-sm border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-100 text-xs font-bold text-slate-400">
+                      <tr className="border-b border-slate-100 text-xs font-bold text-[#5F5E5E]/80">
                         <th className="py-2 w-1/2">เลือกสินค้า</th>
                         <th className="py-2 text-right w-1/5">จำนวน</th>
                         <th className="py-2 text-right w-1/5">ราคา/ชิ้น</th>
@@ -519,7 +519,7 @@ export default function PreOrderManager() {
                             <select
                               value={item.product_id}
                               onChange={(e) => handleItemChange(idx, 'product_id', e.target.value)}
-                              className="w-full border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
+                              className="w-full border border-slate-200 px-3 py-1.5 text-xs text-[#1C1B1B] focus:outline-none focus:border-indigo-500 font-semibold"
                             >
                               {products.map(p => (
                                 <option key={p.id} value={p.id}>[{p.product_code}] {p.product_name}</option>
@@ -532,7 +532,7 @@ export default function PreOrderManager() {
                               min={1}
                               value={item.quantity}
                               onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
-                              className="w-full border border-slate-200 p-1 text-xs text-right focus:outline-none focus:border-indigo-500 text-slate-800 font-semibold"
+                              className="w-full border border-slate-200 p-1 text-xs text-right focus:outline-none focus:border-indigo-500 text-[#1C1B1B] font-semibold"
                             />
                           </td>
                           <td className="py-3 px-2">
@@ -541,10 +541,10 @@ export default function PreOrderManager() {
                               min={0}
                               value={item.unit_price}
                               onChange={(e) => handleItemChange(idx, 'unit_price', e.target.value)}
-                              className="w-full border border-slate-200 p-1 text-xs text-right focus:outline-none focus:border-indigo-500 text-slate-800 font-semibold"
+                              className="w-full border border-slate-200 p-1 text-xs text-right focus:outline-none focus:border-indigo-500 text-[#1C1B1B] font-semibold"
                             />
                           </td>
-                          <td className="py-3 text-right font-bold text-gray-900 text-xs">
+                          <td className="py-3 text-right font-bold text-[#1C1B1B] text-xs">
                             ฿{(item.quantity * item.unit_price).toLocaleString()}
                           </td>
                           <td className="py-3 text-center">
@@ -569,15 +569,15 @@ export default function PreOrderManager() {
             <div className="lg:col-span-1 space-y-6 sticky top-24">
               <Card title="สรุปยอดใบสั่งจอง">
                 <div className="space-y-4">
-                  <div className="flex justify-between text-slate-500 text-sm">
+                  <div className="flex justify-between text-[#5F5E5E] text-sm">
                     <span>รวมราคาอะไหล่ทั้งสิ้น</span>
-                    <span className="font-bold text-slate-900 text-base">฿{calculateTotal().toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
+                    <span className="font-bold text-[#1C1B1B] text-base">฿{calculateTotal().toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
                   </div>
                   
                   <hr className="border-slate-100" />
                   
                   <div className="flex justify-between items-end">
-                    <span className="text-slate-800 font-bold text-sm">ยอดรวมสุทธิ</span>
+                    <span className="text-[#1C1B1B] font-bold text-sm">ยอดรวมสุทธิ</span>
                     <span className="text-3xl font-extrabold text-[#e51c23]">฿{calculateTotal().toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>

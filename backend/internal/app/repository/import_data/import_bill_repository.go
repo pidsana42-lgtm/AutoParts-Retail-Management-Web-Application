@@ -23,6 +23,8 @@ type BillRepository interface {
 	UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem) error
 	DeleteBill(id uint) error
 	FindOrCreateSupplierByName(name string) (uint, error)
+	ListPurchaseOrders() ([]entity.PO, error)
+	GetPurchaseOrderByID(id uint) (*entity.PO, error)
 }
 
 type billRepository struct {
@@ -87,8 +89,19 @@ func (r *billRepository) CreateBillItem(item *entity.BillItem) error {
 
 func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(bill).Error; err != nil {
-			return err
+		var existingBill entity.Bill
+		if errExist := tx.Where("bill_no = ?", bill.BillNo).First(&existingBill).Error; errExist == nil {
+			bill.ID = existingBill.ID
+			if err := tx.Model(&existingBill).Updates(bill).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("bill_id = ?", existingBill.ID).Delete(&entity.BillItem{}).Error; err != nil {
+				return err
+			}
+		} else {
+			if err := tx.Create(bill).Error; err != nil {
+				return err
+			}
 		}
 
 		for i := range items {
@@ -231,4 +244,24 @@ func (r *billRepository) FindOrCreateSupplierByName(name string) (uint, error) {
 		return 0, errCreate
 	}
 	return newSup.ID, nil
+}
+
+func (r *billRepository) ListPurchaseOrders() ([]entity.PO, error) {
+	var pos []entity.PO
+	err := r.db.Preload("Supplier").
+		Preload("PO_Items").
+		Order("created_at desc").
+		Find(&pos).Error
+	return pos, err
+}
+
+func (r *billRepository) GetPurchaseOrderByID(id uint) (*entity.PO, error) {
+	var po entity.PO
+	err := r.db.Preload("Supplier").
+		Preload("PO_Items").
+		First(&po, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &po, nil
 }

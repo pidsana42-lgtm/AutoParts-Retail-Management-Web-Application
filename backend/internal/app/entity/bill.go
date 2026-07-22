@@ -11,6 +11,7 @@ type Bill struct {
 	TotalAmount        float64    `gorm:"not null" json:"total_amount"`
 	BillNo             string     `gorm:"unique;not null" json:"bill_no"`
 	DueDate            time.Time  `gorm:"not null" json:"due_date"`
+	CreditTerm         string     `gorm:"type:varchar(50);not null;default:'30 Days'" json:"credit_term"`
 	TransportBy        string     `gorm:"not null" json:"transport_by"`
 	SupplierID         uint       `gorm:"not null;index" json:"supplier_id"`
 	Subtotal           float64    `gorm:"not null" json:"subtotal"`

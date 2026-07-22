@@ -15,6 +15,16 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      '/uploads': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/barcode': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+      },
       // FastAPI OCR server
       '/ocr': {
         target: 'http://localhost:8000',

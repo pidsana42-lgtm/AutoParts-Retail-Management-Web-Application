@@ -7,7 +7,7 @@ import (
 )
 
 type CreateBillItemDTO struct {
-	BillID             uint    `json:"bill_id" binding:"required"`
+	BillID             uint    `json:"bill_id"`
 	ItemSequence       uint    `json:"item_sequence" binding:"required"`
 	CompanyProductCode string  `json:"company_product_code" binding:"required"`
 	CompanyProductName string  `json:"company_product_name" binding:"required"`
@@ -21,7 +21,7 @@ type CreateBillItemDTO struct {
 	Remark             string  `json:"remark"`
 	AIProductCode      string  `json:"ai_product_code"`
 	AIProductName      string  `json:"ai_product_name"`
-	ProductID          uint    `json:"product_id" binding:"required"`
+	ProductID          uint    `json:"product_id"`
 	CategoryID         *uint   `json:"category_id"`
 	SubCategoryID      *uint   `json:"sub_category_id"`
 }
