@@ -456,8 +456,8 @@ export default function PosPage(): React.JSX.Element {
             if (paymentData.selectedPaymentType === "CASH" && paymentData.paymentMethodId === 3) {
               paymentData.updateSession("paymentMethodId", 1);
             }
-
-            paymentData.handleOpenPaymentModal(); 
+            // เรียกฟังก์ชันนี้เพื่อยิงสร้าง Order สภาพ pending/unpaid ลง DB + เปิด Modal
+            paymentData.handleConfirmSale(); 
           }} 
           variant="primary" 
           size="lg" 
@@ -753,20 +753,30 @@ export default function PosPage(): React.JSX.Element {
               <div className="flex p-6 gap-4">
                 <button 
                   type="button" 
+                  disabled={paymentData.isConfirming || paymentData.isSubmitting}
                   onClick={() => paymentData.setIsPaymentModalOpen(false)} 
-                  className="px-20 py-3 bg-[#E5E2E1] font-normal text-sm rounded-none hover:bg-[#E7E5E4] transition-colors"
+                  className="px-20 py-3 bg-[#E5E2E1] font-normal text-sm rounded-none hover:bg-[#E7E5E4] transition-colors disabled:opacity-50"
                 >
                   ยกเลิก
                 </button>
                 
                 <button 
                   type="button" 
-                  onClick={() => {
-                    paymentData.submitOrderToDatabase();
+                  disabled={paymentData.isConfirming} 
+                  onClick={async () => {
+                    // ทุกช่องทางชำระเงินจะมาจบการขายที่ฟังก์ชันนี้เท่านั้น
+                    await paymentData.handleFinalConfirmAndPrint();
                   }} 
-                  className="flex-1 py-3 bg-[#E51C23] text-white font-normal text-sm rounded-none hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-[#E51C23] text-white font-normal text-sm hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-400"
                 >
-                  <Printer className="w-4 h-4" />ยืนยันและพิมพ์ใบเสร็จ
+                  {paymentData.isConfirming ? (
+                    <span>กำลังทำรายการ...</span>
+                  ) : (
+                    <>
+                      <Printer className="w-4 h-4" />
+                      ยืนยันและพิมพ์ใบเสร็จ
+                    </>
+                  )}
                 </button>
               </div>
             </div>

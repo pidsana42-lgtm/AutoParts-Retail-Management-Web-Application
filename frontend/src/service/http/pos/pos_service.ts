@@ -3,6 +3,7 @@ import type { CreateSaleOrderRequest, SaleOrderItemRequest } from "../../../inte
 import type { POSProductResponse } from "../../../interface/pos/product_interface";
 import type { StoreConfigInterface } from "../../../interface/pos/store_config_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
+import type { ConfirmPaymentRequest } from "../../../interface/pos/payment_interface";
 
 // API Services 
 export const posApiService = {
@@ -32,6 +33,10 @@ export const posApiService = {
   /** สร้าง QR Code สำหรับชำระเงินผ่าน PromptPay */
   generatePromptPayQR: (orderId: number, receivedById: number): Promise<any> => 
     apiClient.post("/pos/payments/generate-qr", { order_id: orderId, received_by_id: receivedById }).then((res) => res.data),
+
+  confirmPayment: (payload: ConfirmPaymentRequest): Promise<any> =>
+    apiClient.patch("/pos/payments/confirm", payload).then((res) => res.data),
+  
 };
 
 // Business Logic 

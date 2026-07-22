@@ -11,8 +11,15 @@ import (
 
 type PaymentRepository interface {
 	GetOrderById(orderID uint) (*entity.SaleOrder, error)
+	GetPaymentByOrderId(orderID uint) (*entity.Payment, error)
+	GetPaymentByID(paymentID uint) (*entity.Payment, error)
 	CreatePayment(payment *entity.Payment) error
+	CreatePaymentWithTx(tx *gorm.DB, payment *entity.Payment) error 
+	UpdatePayment(payment *entity.Payment) error
+	UpdatePaymentWithTx(tx *gorm.DB, payment *entity.Payment) error
+	UpdateOrderWithTx(tx *gorm.DB, order *entity.SaleOrder) error
 	GeneratePromptPayQR(promptPayNo string, amount float64) (string, error)
+	BeginTransaction() *gorm.DB
 }
 
 type paymentRepository struct {
@@ -29,11 +36,42 @@ func (r *paymentRepository) GetOrderById(orderID uint) (*entity.SaleOrder, error
 	return &order, err
 }
 
+func (r *paymentRepository) GetPaymentByOrderId(orderID uint) (*entity.Payment, error) {
+	var payment entity.Payment
+	err := r.db.Where("order_id = ?", orderID).First(&payment).Error
+	return &payment, err
+}
+
+func (r *paymentRepository) GetPaymentByID(paymentID uint) (*entity.Payment, error) {
+	var payment entity.Payment
+	err := r.db.First(&payment, paymentID).Error
+	return &payment, err
+}
+
 func (r *paymentRepository) CreatePayment(payment *entity.Payment) error {
 	return r.db.Create(payment).Error
 }
 
-// ฟังก์ชันนี้จะแปลงข้อความใน PromptPay QR Code ไปเป็นตัวเลขฐานสิบหก 4 หลักสุดท้าย เพื่อแปะต่อท้ายสตริงตามฟอร์แมต ...6304XXXX นำไปสร้างเป็น QR Code ที่สมบูรณ์ตามมาตรฐานระบบการชำระเงิน
+func (r *paymentRepository) UpdatePayment(payment *entity.Payment) error {
+	return r.db.Save(payment).Error
+}
+
+func (r *paymentRepository) CreatePaymentWithTx(tx *gorm.DB, payment *entity.Payment) error {
+	return tx.Create(payment).Error
+}
+
+func (r *paymentRepository) UpdatePaymentWithTx(tx *gorm.DB, payment *entity.Payment) error {
+	return tx.Save(payment).Error
+}
+
+func (r *paymentRepository) UpdateOrderWithTx(tx *gorm.DB, order *entity.SaleOrder) error {
+	return tx.Save(order).Error
+}
+
+func (r *paymentRepository) BeginTransaction() *gorm.DB {
+	return r.db.Begin()
+}
+
 func (r *paymentRepository) calculateCRC16(input string) string {
 	crc := uint16(0xFFFF)
 	data := []byte(input)

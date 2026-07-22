@@ -272,7 +272,7 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
     totalAmount := orderSubtotalAfterItems - billDiscountAmount
 
     // -------------------------------------------------------------------------
-    // [จัดการระบบเครดิตเงินกู้ และอัปเดตสถานะบัญชีลูกค้า]
+    // [จัดการระบบเครดิตเงินกู้ และตั้งค่าสถานะบิลเริ่มต้น (Pending/Unpaid)]
     // -------------------------------------------------------------------------
     
     // paymentMethod คือออบเจกต์ตรวจสอบช่องทางชำระเงินที่เลือก (เช่น เงินสด โอน หรือเครดิตอู่)
@@ -286,13 +286,9 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         return nil, fmt.Errorf("ช่องทางการชำระเงิน %s ถูกปิดใช้งานในขณะนี้", paymentMethod.MethodName)
     }
 
-	var paymentStatus string // ใช้เก็บข้อความสถานะจ่ายเงิน ("paid" หรือ "unpaid")
-    var balanceDue float64   // ยอดหนี้คงค้างของบิลนี้
-    var paidAmount float64   //
-    var changeAmount float64  // ยอดเงินทอนลูกค้า (กรณีจ่ายเกิน)
-    var receivedAmount float64 // ยอดเงินที่ลูกค้าจ่ายเข้ามา (รวมทุกช่องทาง)
-    var dueDate *time.Time // กำหนดวันครบกำหนดชำระเงิน (สำหรับเครดิตอู่)
+    var dueDate *time.Time
 
+    // กรณีเป็น เงินเชื่อ (CREDIT) -> ตรวจสอบวงเงินและอัปเดตหนี้สะสม
     if paymentMethod.IsCredit {
         if customerIDForOrder == nil {
             tx.Rollback()
@@ -304,14 +300,11 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
             return nil, fmt.Errorf("วงเงินเครดิตไม่เพียงพอ! วงเงินคงเหลือขาดไป %.2f บาท", (customer.CurrentDebtAmount+totalAmount)-customer.CreditLimit)
         }
 
-		paymentStatus = "unpaid" // สถานะ: ยังค้างชำระ
-		balanceDue = totalAmount // ยอดค้างชำระ = ยอดสุทธิทั้งบิล
-		paidAmount = 0.00        // ยังไม่ได้รับเงิน
-
+        // คำนวณวันครบกำหนดชำระ
         storeConfig, err := s.repo.GetStoreConfig()
         if err == nil && storeConfig.MaxOverdueDays > 0 {
             calculatedDueDate := time.Now().AddDate(0, 0, storeConfig.MaxOverdueDays)
-            dueDate = &calculatedDueDate // ตั้งค่า DueDate สำหรับบิลเงินเชื่อ
+            dueDate = &calculatedDueDate
         } else {
             // Fallback กรณีหา config ไม่เจอ (เช่น ค่าตั้งต้น 30 วัน)
             defaultDueDate := time.Now().AddDate(0, 0, 30)
@@ -326,24 +319,10 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
             tx.Rollback()
             return nil, fmt.Errorf("อัปเดตยอดหนี้สะสมของลูกค้าล้มเหลว: %v", err)
         }
-    } else {
-        // กรณี: ชำระเงินสด / โอน (ปรับปรุง Logic จ่ายเกิน/เงินทอน ตรงนี้)
-        receivedAmount = req.ReceivedAmount
-        
-        // ถ้าหน้าบ้านไม่ได้ส่ง received_amount มา หรือส่งมาน้อยกว่ายอดที่ต้องจ่าย 
-        // ให้ fallback ไปเป็นจ่ายพอดี (ป้องกันระบบพัง/ติดลบ)
-        if receivedAmount < totalAmount {
-            receivedAmount = totalAmount
-        }
-
-        paymentStatus = "paid"   
-        balanceDue = 0.00        
-        paidAmount = totalAmount // เงินที่ร้านได้เข้ากระเป๋าจริง (หักทอนแล้ว) = ยอดสุทธิ
-        changeAmount = receivedAmount - totalAmount // คำนวณเงินทอน
     }
 
     // -------------------------------------------------------------------------
-    // [ประกอบ SaleOrder Entity เพื่อบันทึก]
+    // [ประกอบ SaleOrder Entity: ทุกบิลเริ่มต้นที่ Pending / Unpaid ทั้งหมด]
     // -------------------------------------------------------------------------
     order := &entity.SaleOrder{
         OrderNumber:        orderNumber,
@@ -352,9 +331,9 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         CustomerID:         customerIDForOrder, 
         CustomerNameTemp:   &savedName,
         CustomerPhoneTemp:  &savedPhone,
-        Customer:           entity.Customer{}, 
-        Status:             "completed",
-        PaymentStatus:      enum.PaymentStatus(paymentStatus),
+        // ตั้งสถานะเป็น รอชำระเงิน/รอการยืนยัน เสมอ
+        Status:             "pending",                  
+        PaymentStatus:      enum.PaymentStatus("unpaid"), 
         Subtotal:           orderSubtotalAfterItems,
         BillDiscountType:   req.BillDiscountType,
         BillDiscountValue:  req.BillDiscountValue,
@@ -362,45 +341,28 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         DiscountPercent:    billDiscountPercent,
         TotalDiscountItems: totalDiscountItems,
         TotalAmount:        totalAmount,
-        ReceivedAmount:     receivedAmount,
-        PaidAmount:         paidAmount,
-        BalanceDue:         balanceDue,
-        ChangeAmount:       changeAmount,
+        // ยอดชำระจริงจะเป็น 0.00 จนกว่าจะกด "ยืนยันและพิมพ์ใบเสร็จ"
+        ReceivedAmount:     0.0,
+        PaidAmount:         0.0,
+        BalanceDue:         totalAmount,
+        ChangeAmount:       0.0,
         Note:               req.Note,
         Items:              orderItems,
     }
 
-	// สั่งเซฟลงฐานข้อมูลผ่าน Repository ด้วยท่อ Transaction
+    // สั่งเซฟลงฐานข้อมูลเพียงรอบเดียว
     if err := s.repo.CreateOrderWithTx(tx, order); err != nil {
         tx.Rollback()
         return nil, err
     }
 
-	// บันทึกข้อมูลการชำระเงิน (Payment)
-    now := time.Now()
-    payment := &entity.Payment{
-        OrderID:         order.ID,
-        PaymentMethodID: req.PaymentMethodID,
-        Amount:          paidAmount,
-        ReceivedAmount:  receivedAmount,
-        ChangeAmount:    changeAmount,
-        ReferenceNumber: "",
-        PaidAt:          &now,
-        ReceivedByID:    userID,
-    }
-
-    if err := tx.Create(payment).Error; err != nil {
-        tx.Rollback()
-        return nil, fmt.Errorf("บันทึกข้อมูลการชำระเงินล้มเหลว: %v", err)
-    }
-
-    // ทำการ Commit
+    // ทำการ Commit Transaction
     if err := tx.Commit().Error; err != nil {
         tx.Rollback()
         return nil, fmt.Errorf("Commit Error: %v", err)
     }
 
-    // 3. บันทึกทุกอย่างสำเร็จ! ส่ง Object order ที่เพิ่งสร้างและมี order.ID ล่าสุดออกไป
+    // บันทึกสำเร็จ! ส่ง Object order ออกไป
     return order, nil 
 }
 
