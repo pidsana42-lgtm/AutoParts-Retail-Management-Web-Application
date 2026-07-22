@@ -21,6 +21,14 @@ type ProductService interface {
 	DeleteProduct(id uint) error
 	ListProducts() ([]wmsDto.ProductListResponseDTO, error)
 	ListBrands() ([]entity.Brand, error)
+	CreateBrand(req *wmsDto.BrandRequestDTO) (*entity.Brand, error)
+	UpdateBrand(id uint, req *wmsDto.BrandRequestDTO) error
+	DeleteBrand(id uint) error
+
+	CreateModel(req *wmsDto.ModelRequestDTO) (*entity.Models, error)
+	UpdateModel(id uint, req *wmsDto.ModelRequestDTO) error
+	DeleteModel(id uint) error
+
 	ListGrades() ([]entity.Grade, error)
 }
 
@@ -34,8 +42,8 @@ func NewProductService(repo wmsRepo.ProductRepository) ProductService {
 
 func (s *productService) CreateProduct(req *wmsDto.ProductRequestDTO) error {
 	product := req.ToEntity()
-	for _, id := range req.BrandIDs {
-		product.Brands = append(product.Brands, entity.Brand{
+	for _, id := range req.ModelIDs {
+		product.Models = append(product.Models, entity.Models{
 			Model: gorm.Model{ID: id},
 		})
 	}
@@ -63,9 +71,9 @@ func (s *productService) GetProductByID(id uint) (*wmsDto.ProductListResponseDTO
 func (s *productService) UpdateProduct(id uint, req *wmsDto.ProductRequestDTO) error {
 	product := req.ToEntity()
 	product.ID = id
-	for _, brandId := range req.BrandIDs {
-		product.Brands = append(product.Brands, entity.Brand{
-			Model: gorm.Model{ID: brandId},
+	for _, modelId := range req.ModelIDs {
+		product.Models = append(product.Models, entity.Models{
+			Model: gorm.Model{ID: modelId},
 		})
 	}
 	if product.Barcode == "" {
@@ -101,6 +109,48 @@ func (s *productService) ListBrands() ([]entity.Brand, error) {
 
 func (s *productService) ListGrades() ([]entity.Grade, error) {
 	return s.repo.ListGrades()
+}
+
+func (s *productService) CreateBrand(req *wmsDto.BrandRequestDTO) (*entity.Brand, error) {
+	brand := &entity.Brand{
+		Brand_Name: req.BrandName,
+	}
+	err := s.repo.CreateBrand(brand)
+	return brand, err
+}
+
+func (s *productService) UpdateBrand(id uint, req *wmsDto.BrandRequestDTO) error {
+	brand := &entity.Brand{
+		Model:      gorm.Model{ID: id},
+		Brand_Name: req.BrandName,
+	}
+	return s.repo.UpdateBrand(brand)
+}
+
+func (s *productService) DeleteBrand(id uint) error {
+	return s.repo.DeleteBrand(id)
+}
+
+func (s *productService) CreateModel(req *wmsDto.ModelRequestDTO) (*entity.Models, error) {
+	model := &entity.Models{
+		Model_Name: req.ModelName,
+		BrandID:    req.BrandID,
+	}
+	err := s.repo.CreateModel(model)
+	return model, err
+}
+
+func (s *productService) UpdateModel(id uint, req *wmsDto.ModelRequestDTO) error {
+	model := &entity.Models{
+		Model:      gorm.Model{ID: id},
+		Model_Name: req.ModelName,
+		BrandID:    req.BrandID,
+	}
+	return s.repo.UpdateModel(model)
+}
+
+func (s *productService) DeleteModel(id uint) error {
+	return s.repo.DeleteModel(id)
 }
 
 func triggerBarcodeGen(ids []uint) {
