@@ -22,7 +22,7 @@ func NewPOSProductRepository(db *gorm.DB) POSProductRepository {
 func (r *posProductRepository) SearchProducts(search string) ([]entity.Product, error) {
 	var products []entity.Product
 
-	query := r.db.Preload("Grade").Preload("Brands").Preload("Brands.Models").Where("is_active = ?", true)
+	query := r.db.Preload("Grade").Preload("Models").Preload("Models.Brand").Where("is_active = ?", true)
 	if search != "" {
 		likeSearch := "%" + search + "%"
 		query = query.Where("product_code LIKE ? OR barcode = ? OR product_name ILIKE ? OR part_number LIKE ?", likeSearch, search, likeSearch, likeSearch)
