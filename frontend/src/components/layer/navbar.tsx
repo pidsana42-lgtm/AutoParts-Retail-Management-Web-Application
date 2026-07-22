@@ -30,7 +30,7 @@ export default function Navbar(): React.JSX.Element {
         <Search className="w-4 h-4 text-[#6B7280] mr-2 shrink-0" />
         <input
           type="text"
-          placeholder="ค้นหาสินค้าด้วยเลขอะไหล่ หรือรุ่นรถ ..."
+          placeholder="ค้นหาสินค้าด้วยเลขอะไหล่ หรือรุ่นรถ"
           className="bg-transparent outline-none text-xs tracking-wider w-full text-[#6B7280] placeholder:text-[#6B7280]"
         />
       </div>
@@ -45,8 +45,7 @@ export default function Navbar(): React.JSX.Element {
         <div className="h-6 w-[1px] bg-gray-200"></div>
 
         {/* ข้อมูลผู้ใช้งาน */}
-        <div className="flex items-center space-x-2 text-xs min-w-[140px] max-w-[200px]">
-          <UserCircle className="w-6 h-6 text-gray-600 shrink-0" />
+        <div className="flex items-center space-x-2 text-xs min-w-[120px] max-w-[200px]">
           <div className="text-left flex flex-col justify-center min-w-0">
             <p className="text-[10px] text-gray-400 leading-none mb-0.5">บัญชีผู้ใช้</p>
             <p className=" text-gray-700 tracking-wide truncate pr-2" title={displayName}>

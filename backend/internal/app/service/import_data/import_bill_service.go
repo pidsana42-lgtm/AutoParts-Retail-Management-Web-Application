@@ -27,6 +27,8 @@ type ImportBillService interface {
 	CreateBillItem(input importDataDTO.CreateBillItemDTO) (importDataDTO.BillItemResponseDTO, error)
 	UpdateBill(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.BillResponseDTO, error)
 	DeleteBill(id uint) error
+	ListPurchaseOrders() ([]importDataDTO.PurchaseOrderImportDTO, error)
+	GetPurchaseOrderByID(id uint) (importDataDTO.PurchaseOrderImportDTO, error)
 }
 
 type importBillService struct {
@@ -39,6 +41,9 @@ func NewImportBillService(repo billRepo.BillRepository) ImportBillService {
 
 func (s *importBillService) CreateBill(input importDataDTO.CreateBillDTO) (importDataDTO.BillResponseDTO, error) {
 	bill := input.ToEntity()
+	if bill.VerifiedBy == 0 {
+		bill.VerifiedBy = 1
+	}
 	err := s.repo.CreateBill(&bill)
 	if err != nil {
 		return importDataDTO.BillResponseDTO{}, err
@@ -136,6 +141,9 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 
 	bill := input.Bill.ToEntity()
 	bill.SupplierID = supplierID
+	if bill.VerifiedBy == 0 {
+		bill.VerifiedBy = 1
+	}
 	billItems := make([]entity.BillItem, len(input.Items))
 	for i, itemInput := range input.Items {
 		billItems[i] = itemInput.ToEntity()
@@ -213,6 +221,9 @@ func (s *importBillService) UpdateBill(id uint, input importDataDTO.ConfirmBillI
 
 	bill := input.Bill.ToEntity()
 	bill.SupplierID = supplierID
+	if bill.VerifiedBy == 0 {
+		bill.VerifiedBy = 1
+	}
 	bill.ID = id
 	billItems := make([]entity.BillItem, len(input.Items))
 	for i, itemInput := range input.Items {
@@ -230,6 +241,26 @@ func (s *importBillService) UpdateBill(id uint, input importDataDTO.ConfirmBillI
 
 func (s *importBillService) DeleteBill(id uint) error {
 	return s.repo.DeleteBill(id)
+}
+
+func (s *importBillService) ListPurchaseOrders() ([]importDataDTO.PurchaseOrderImportDTO, error) {
+	pos, err := s.repo.ListPurchaseOrders()
+	if err != nil {
+		return nil, err
+	}
+	res := make([]importDataDTO.PurchaseOrderImportDTO, len(pos))
+	for i := range pos {
+		res[i] = importDataDTO.ToPurchaseOrderImportDTO(&pos[i])
+	}
+	return res, nil
+}
+
+func (s *importBillService) GetPurchaseOrderByID(id uint) (importDataDTO.PurchaseOrderImportDTO, error) {
+	po, err := s.repo.GetPurchaseOrderByID(id)
+	if err != nil {
+		return importDataDTO.PurchaseOrderImportDTO{}, err
+	}
+	return importDataDTO.ToPurchaseOrderImportDTO(po), nil
 }
 
 func (s *importBillService) processOCRInBackground(jobID uint, fileURL string) {

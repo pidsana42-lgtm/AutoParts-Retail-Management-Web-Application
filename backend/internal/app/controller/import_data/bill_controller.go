@@ -190,3 +190,29 @@ func (ctrl *BillController) CreateBillItem(c *gin.Context) {
 		"data":    res,
 	})
 }
+
+func (ctrl *BillController) ListPurchaseOrders(c *gin.Context) {
+	res, err := ctrl.svc.ListPurchaseOrders()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+func (ctrl *BillController) GetPurchaseOrderById(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	res, err := ctrl.svc.GetPurchaseOrderByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Purchase Order not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}

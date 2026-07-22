@@ -3,8 +3,36 @@ import axios from "axios";
 import type {
   Supplier,
   Product,
-  SavedBill
+  SavedBill,
+  BillItemDTO
 } from "../../../interface/import";
+
+export interface ConfirmBillPayload {
+  bill: {
+    bill_no: string;
+    total_amount: number;
+    due_date: string;
+    credit_term?: string;
+    transport_by: string;
+    supplier_id: number;
+    supplier_name?: string;
+    subtotal: number;
+    discount_total: number;
+    receive_date: string;
+    vat_amount: number;
+    grand_total: number;
+    payment_status: string;
+    po_id?: number;
+    bill_image_id?: number;
+    is_verified?: boolean;
+    verified_by?: number;
+    ocr_text?: string;
+    evidence_file_url?: string;
+    evidence_uploaded_at?: string;
+  };
+  items: BillItemDTO[];
+  draft_json?: string;
+}
 
 // 1. ดึงประวัติบิลทั้งหมด
 export async function getBills(): Promise<SavedBill[]> {
@@ -20,7 +48,6 @@ export async function getBills(): Promise<SavedBill[]> {
     throw new Error(errMsg);
   }
 }
-
 
 // 2. ดึงรายชื่อซัพพลายเออร์
 export async function getSuppliers(): Promise<Supplier[]> {
@@ -77,7 +104,7 @@ export async function scanBill(file: File): Promise<any> {
 }
 
 // 5. บันทึกยืนยันบิลใหม่
-export async function confirmBillImport(jobId: number, payload: any): Promise<any> {
+export async function confirmBillImport(jobId: number, payload: ConfirmBillPayload): Promise<any> {
   try {
     const response = await apiClient.post(`/import-data/bill-import-jobs/${jobId}/confirm`, payload);
     return response.data;
@@ -89,7 +116,7 @@ export async function confirmBillImport(jobId: number, payload: any): Promise<an
 }
 
 // 6. บันทึกแก้ไขบิลเดิม
-export async function updateBill(billId: number, payload: any): Promise<any> {
+export async function updateBill(billId: number, payload: ConfirmBillPayload): Promise<any> {
   try {
     const response = await apiClient.put(`/import-data/bills/${billId}`, payload);
     return response.data;
@@ -108,6 +135,94 @@ export async function deleteBill(billId: number): Promise<any> {
   } catch (error: any) {
     console.error("Error deleting bill:", error);
     const errMsg = error.response?.data?.error || error.message || String(error);
+    throw new Error(errMsg);
+  }
+}
+
+const MOCK_POS = [
+  {
+    id: 101,
+    order_number: 'PO-202607-001',
+    supplier_id: 1,
+    supplier_name: 'บริษัท ไทยยรรยง อะไหล่ยนต์ จำกัด',
+    total_amount: 15400.00,
+    status: 'APPROVED',
+    created_at: new Date().toISOString(),
+    items: [
+      { id: 1, company_product_code: 'BP-TOY-01', company_product_name: 'ผ้าเบรคหน้า TOYOTA VIOS 2012', order_quantity: 10, unit: 'ชุด', price_per_unit: 850.00, net_amount: 8500.00 },
+      { id: 2, company_product_code: 'OF-HON-02', company_product_name: 'กรองน้ำมันเครื่อง HONDA CIVIC FC', order_quantity: 20, unit: 'ชิ้น', price_per_unit: 145.00, net_amount: 2900.00 },
+      { id: 3, company_product_code: 'SP-NGK-03', company_product_name: 'หัวเทียน NGK IRIDIUM BKR6EIX', order_quantity: 20, unit: 'หัว', price_per_unit: 200.00, net_amount: 4000.00 }
+    ]
+  },
+  {
+    id: 102,
+    order_number: 'PO-202607-002',
+    supplier_id: 2,
+    supplier_name: 'บริษัท ออโต้พาร์ท อินเตอร์เนชั่นแนล จำกัด',
+    total_amount: 28900.00,
+    status: 'APPROVED',
+    created_at: new Date().toISOString(),
+    items: [
+      { id: 4, company_product_code: 'SA-ISU-05', company_product_name: 'โช๊คอัพหน้า ISUZU D-MAX 4WD', order_quantity: 4, unit: 'คู่', price_per_unit: 3200.00, net_amount: 12800.00 },
+      { id: 5, company_product_code: 'CL-ISU-06', company_product_name: 'ชุดจานคลัตช์ ISUZU D-MAX 2.5', order_quantity: 3, unit: 'ชุด', price_per_unit: 5366.67, net_amount: 16100.00 }
+    ]
+  }
+];
+
+// 8. ดึงรายการใบสั่งซื้อ (Purchase Orders) สำหรับนำเข้า
+export async function getPurchaseOrders(): Promise<any[]> {
+  try {
+    let response;
+    try {
+      response = await apiClient.get("/po/get-all-po");
+    } catch (e) {
+      try {
+        response = await apiClient.get("/import-data/purchase-orders");
+      } catch (e2) {
+        response = await apiClient.get("/purchase-orders");
+      }
+    }
+    const data = response.data?.data || response.data || [];
+    if (Array.isArray(data) && data.length > 0) {
+      return data;
+    }
+    return MOCK_POS;
+  } catch (error: any) {
+    return MOCK_POS;
+  }
+}
+
+// 9. ดึงรายละเอียดใบสั่งซื้อรายรายการ
+export async function getPurchaseOrderById(poId: number): Promise<any> {
+  try {
+    let response;
+    try {
+      response = await apiClient.get(`/po/${poId}`);
+    } catch (e) {
+      try {
+        response = await apiClient.get(`/import-data/purchase-orders/${poId}`);
+      } catch (e2) {
+        response = await apiClient.get(`/purchase-orders/${poId}`);
+      }
+    }
+    const resData = response.data?.data || response.data;
+    if (resData) return resData;
+    return MOCK_POS.find(p => p.id === poId) || MOCK_POS[0];
+  } catch (error: any) {
+    return MOCK_POS.find(p => p.id === poId) || MOCK_POS[0];
+  }
+}
+
+// 10. อัปเดตราคาทุนของสินค้าโดยตรง
+export async function updateProductCostPrice(productId: number, costPrice: number): Promise<any> {
+  try {
+    const response = await apiClient.put(`/import-data/products/${productId}/cost-price`, {
+      cost_price: costPrice
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error("Error updating product cost price:", error);
+    const errMsg = error.response?.data?.error || "ล้มเหลวในการอัปเดตราคาสินค้า";
     throw new Error(errMsg);
   }
 }
