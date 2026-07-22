@@ -581,7 +581,7 @@ export default function PosPage(): React.JSX.Element {
                             </button>
                           ))}
                         </div>
-                        {/*ฝั่งซ้าย วันที่, เวลา, ผู้ดำเนินการ */}
+                        {/*ฝั่งขวา วันที่, เวลา, ผู้ดำเนินการ */}
                         <div className="mt-4">
                           <div className="flex justify-between items-center">
                             <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">วันที่</Text>
@@ -602,15 +602,18 @@ export default function PosPage(): React.JSX.Element {
                 )}
 
                 {paymentData.paymentMethodId === 2 && (
-                  <div className="bg-[#FFFFFF] p-4 space-y-2 border border-[#E7BDB8]/50">
-                    <div className="flex flex-col items-center py-4">
-                      
-                      {/* กรอบแสดงภาพ QR Code */}
-                      <div className="relative w-52 h-52 border border-gray-200 p-2 bg-white flex items-center justify-center rounded-lg shadow-inner">
+                <div className="bg-white p-6 border border-[#E7BDB8]/50">
+                  {/* Grid หลัก */}
+                  <div className="grid grid-cols-2 gap-4">
+
+                    {/* ฝั่งซ้าย */}
+                    <div className="flex flex-col items-center justify-center space-y-3">
+                      {/* กรอบรูป QR Code */}
+                      <div className="relative w-52 h-52 p-2 flex items-center justify-center">
                         {paymentData.isLoadingQR ? (
                           <div className="flex flex-col items-center text-gray-400">
                             <span className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#E51C23] mb-2"></span>
-                            <p className="text-xs">กำลังสร้าง QR Code...</p>
+                            <Text variant="xs" className="text-xs">กำลังสร้าง QR Code...</Text>
                           </div>
                         ) : paymentData.qrCodeData?.qrCode ? (
                           <img 
@@ -624,7 +627,7 @@ export default function PosPage(): React.JSX.Element {
                             <button
                               type="button"
                               onClick={() => paymentData.handleGeneratePromptPayQR(0, 1)}
-                              className="px-3 py-1 bg-gray-100 text-gray-700 text-xs rounded border hover:bg-gray-200"
+                              className="px-3 py-1 bg-white text-gray-700 text-xs rounded border border-gray-200 hover:bg-gray-50 transition"
                             >
                               ลองใหม่อีกครั้ง
                             </button>
@@ -632,17 +635,58 @@ export default function PosPage(): React.JSX.Element {
                         )}
                       </div>
 
-                      <p className="mt-4 font-medium text-gray-700">บจก. พี.เค. อะไหล่ยนต์</p>
-                      <p className="text-sm text-gray-500">สแกนเพื่อชำระเงินด้วย PromptPay</p>
+                      {/* ข้อความใต้ QR Code */}
+                      <div className="text-center space-y-0.5">
+                        <Text variant="small" className="font-medium text-[#1C1B1B] leading-tight block">เจเจ อะไหล่ยนต์</Text>
+                        <Text variant="xs" className="font-normal text-[#6B7280] leading-tight block">ชื่อบัญชี เจเจ อะไหล่ยนต์</Text>
+                      </div>
+                    </div>
 
-                      {paymentData.qrCodeData?.refNo && (
-                        <p className="text-xs text-gray-400 mt-1 bg-gray-100 px-3 py-1 rounded font-mono">
-                          Ref No: <span className="text-gray-700 font-semibold">{paymentData.qrCodeData.refNo}</span>
-                        </p>
-                      )}
+                    {/* ---------------- ฝั่งขวา ---------------- */}
+                    <div className="flex flex-col justify-between">
+                    
+                      <div className="h-48 flex flex-col justify-end">
+                        
+                        {/* 1. กล่องยอดชำระสุทธิ */}
+                        <div className="border-l-3 border-[#E51C23] p-4 bg-[#F0EDEC]">
+                          <Text variant="xs" className="text-[#5F5E5E]">ยอดชำระสุทธิ</Text>
+                          <div className="flex justify-between items-baseline mt-2">
+                            <Text variant="fourxl">{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                            <Text variant="xs" className="text-[#1C1B1B]">บาท</Text>
+                          </div>
+                        </div>
 
+                        {/* 2. เส้นคั่น + รายละเอียด  */}
+                        <div className="pt-3 space-y-2">
+                          <div className="border-b border-[#E7BDB8]"></div>
+                          <div>
+                          <div className="flex justify-between items-center">
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">วันที่</Text>
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{formatDate}</Text>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">เวลา</Text>
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{formatTime}</Text>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">ผู้ดำเนินการ</Text>
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{currentStaff}</Text>
+                          </div>
+                        </div>
+                        </div>
+
+                      </div>
                     </div>
                   </div>
+
+                  {/* Ref No. ด้านล่างสุด */}
+                  {paymentData.qrCodeData?.refNo && (
+                    <div className="mt-5 pt-3 border-t border-gray-100 flex justify-between items-center">
+                      <Text variant="xs">PromptPay Reference</Text>
+                      <Text variant="xs">Ref No: <span className="text-[#1C1B1B] font-semibold">{paymentData.qrCodeData.refNo}</span></Text>
+                    </div>
+                  )}
+                </div>
                 )}
 
                 {paymentData.paymentMethodId === 3 && (

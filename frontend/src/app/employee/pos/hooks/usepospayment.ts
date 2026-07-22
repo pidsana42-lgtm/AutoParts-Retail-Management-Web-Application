@@ -35,7 +35,12 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const [tempPhone, setTempPhone] = useState<string>("");
   const [customerTypes, setCustomerTypes] = useState<CustomerTypeInterface[]>([]);
   const [activeTypeId, setActiveTypeId] = useState<number>(posSession.activeTypeId);
-  const [selectedPaymentType, setSelectedPaymentType] = useState<"CASH" | "QRCODE" | "CREDIT">("CASH");
+  // ให้ selectedPaymentType เริ่มต้นค่าตาม paymentMethodId ใน session เลย
+  const [selectedPaymentType, setSelectedPaymentType] = useState<"CASH" | "QRCODE" | "CREDIT">(() => {
+    if (posSession.paymentMethodId === 2) return "QRCODE";
+    if (posSession.paymentMethodId === 3) return "CREDIT";
+    return "CASH";
+  });
   const [paymentMethodId, setPaymentMethodId] = useState<number>(posSession.paymentMethodId);
   const [billDiscountValue, setBillDiscountValue] = useState<number>(posSession.billDiscountValue);
   const [billDiscountType, setBillDiscountType] = useState<"none" | "percentage" | "amount">(posSession.billDiscountType);
@@ -49,15 +54,14 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const [displayValue, setDisplayValue] = useState<string>("");
   const [qrCodeData, setQrCodeData] = useState<{ qrCode: string; refNo: string } | null>(null);
   const [isLoadingQR, setIsLoadingQR] = useState<boolean>(false);
-  const [hasAttemptedQR, setHasAttemptedQR] = useState<boolean>(false); // แฟล็กป้องกัน Infinite Loop
-
+  const [hasAttemptedQR, setHasAttemptedQR] = useState<boolean>(false);
 
   // บันทึกการเปลี่ยนแปลง Session ลงแคชเครื่องเสมอ
   useEffect(() => {
     localStorage.setItem("pos_session", JSON.stringify(posSession));
   }, [posSession]);
 
-  // ซิงค์ค่าจาก Session มาแจกจ่ายให้ Local State ทำงานสัมพันธ์กัน
+  // ซิงค์ selectedPaymentType ให้ตรงกับ paymentMethodId ใน session เสมอ
   useEffect(() => {
     setCustomer(posSession.customer);
     setActiveTypeId(posSession.activeTypeId);
@@ -67,6 +71,15 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     setReceivedAmount(posSession.receivedAmount);
     setReceiverName(posSession.receiverName);
     setSearchCustomerQuery(posSession.searchQuery || "");
+
+    // ซิงค์ Type ให้สัมพันธ์กับ ID
+    if (posSession.paymentMethodId === 2) {
+      setSelectedPaymentType("QRCODE");
+    } else if (posSession.paymentMethodId === 3) {
+      setSelectedPaymentType("CREDIT");
+    } else {
+      setSelectedPaymentType("CASH");
+    }
   }, [posSession]);
 
   // FETCH MASTER DATA
@@ -277,7 +290,6 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
 
   const handleOpenPaymentModal = () => {
     if (cart.length === 0) return alert("กรุณาเลือกสินค้าลงตะกร้า");
-    if (!customer) return alert("กรุณาเลือกบัญชีลูกค้า");
 
     let targetMethodId = paymentMethodId;
     if (selectedPaymentType === "CASH" && targetMethodId === 3) {
@@ -326,17 +338,11 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const submitOrderToDatabase = async (currentCart?: CartItem[]) => {
     const targetCart = currentCart || cart;
     if (targetCart.length === 0) return alert("กรุณาเลือกสินค้าลงตะกร้า");
-    if (!posSession.customer) return alert("กรุณาเลือกบัญชีลูกค้า");
 
-    // Payment Method ID ที่แท้จริง
-    let finalPaymentMethodId = posSession.paymentMethodId;
-    
-    // ถ้าผู้ใช้เลือกโหมด CASH ให้บังคับเป็น ID = 1
-    if (selectedPaymentType === "CASH") {
-      finalPaymentMethodId = 1; 
-    }
+    // ยึดตาม posSession.paymentMethodId เป็นหลัก
+    const finalPaymentMethodId = posSession.paymentMethodId;
 
-    // ตรวจสอบเฉพาะเคสชำระเงินสด (ID = 1)
+    // ตรวจสอบเฉพาะ "เงินสด" (ID = 1) เท่านั้น
     if (finalPaymentMethodId === 1) {
       if (!receivedAmount || receivedAmount <= 0) {
         alert("กรุณากรอกจำนวนเงินที่รับมา");
@@ -362,7 +368,6 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       
       let allocatedBillDiscount = 0;
 
-      // เรียกใช้ฟังก์ชันจากเครื่องคิดเลขส่วนลดตรงนี้
       if (totalSubtotalAfterLineDiscount > 0 && computedBillDiscount > 0) {
         if (index === targetCart.length - 1) {
           allocatedBillDiscount = computedBillDiscount - distributedBillDiscountAccumulator;
@@ -388,8 +393,8 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     const rawCustomerId = posSession.customer?.id || 0;
     const salePayload: CreateSaleOrderRequest = {
       customer_id: rawCustomerId && rawCustomerId > 0 ? rawCustomerId : (null as any),
-      customer_name_temp: posSession.customer.customer_name,
-      customer_phone_temp: posSession.customer.phone_number,
+      customer_name_temp: posSession.customer?.customer_name || "ลูกค้าทั่วไป",
+      customer_phone_temp: posSession.customer?.phone_number || "",
       received_amount: finalPaymentMethodId === 1 ? receivedAmount : finalTotal, 
       payment_method_id: finalPaymentMethodId,
       bill_discount_type: posSession.billDiscountType,
@@ -400,7 +405,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
 
     try {
       const response = await posApiService.createPOSOrder(salePayload);
-      const createdOrderId = response?.data?.id || response?.id || response?.order_id;
+      const createdOrderId = response?.data?.id || response?.data?.order_id || response?.id || response?.order_id;
 
       // ถ้าเป็นเงินสด หรือ เงินเชื่อ ให้จบการขายทันที (ถ้าเป็น QR Code จะปิด Modal และเคลียร์ Cart หลังจากสแกนผ่าน)
       if (posSession.paymentMethodId !== 2) {
@@ -411,7 +416,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         setIsPaymentModalOpen(false);
       }
 
-      return createdOrderId || 1; // Fallback ป้องกัน null
+      return createdOrderId || null;
     } catch (error: any) {
       alert(error.response?.data?.error || "เกิดปัญหาที่ระบบหลังบ้าน");
       return null;
