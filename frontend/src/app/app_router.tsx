@@ -4,6 +4,7 @@ import MainLayout from '../components/layer/main_layout';
 import Login from './login/Login';
 import Dashboard from './owner/dashboard/dashboard'; 
 import Pos from './employee/pos/pos'; 
+import SalesHistory from './employee/pos/sales_history';
 import { getMenuByRole } from '../config/menu'; 
 import { useAuth } from '../contexts/AuthContexts'; 
 import StoreConfig from './owner/storeconfig/storeconfig'; 
@@ -85,7 +86,8 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/owner/returns/detail/:id" element={<ReturnDetailPage />} />
         {/* ----------------------------------------------------------- */}
 
-        <Route path="/employee/pos" element={<Pos />} />
+        <Route path="/employee/pos/pos" element={<Pos />} />
+        <Route path="/employee/pos/sales_history" element={<SalesHistory />} />
         <Route path="/owner/orders" element={<PurchaseOrders />} />
         <Route path="/owner/new-orders" element={<CreatePurchaseOrders />} />
         <Route path="/owner/orders/:id" element={<OrderDetail />} />

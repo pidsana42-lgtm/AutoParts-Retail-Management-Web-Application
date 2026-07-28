@@ -94,12 +94,12 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     return Boolean(customer && customer.id > 0);
   }, [customer]);
 
-  useEffect(() => {
-    if (paymentMethodId === 3 && !isRegisteredCustomer) {
-      updateSession("paymentMethodId", 1);
-      setSelectedPaymentType("CASH");
-    }
-  }, [paymentMethodId, isRegisteredCustomer]);
+  // useEffect(() => {
+  //   if (paymentMethodId === 3 && !isRegisteredCustomer) {
+  //     updateSession("paymentMethodId", 1);
+  //     setSelectedPaymentType("CASH");
+  //   }
+  // }, [paymentMethodId, isRegisteredCustomer]);
 
   // ล้างค่าเมื่อปิด Modal
   useEffect(() => {
@@ -156,20 +156,24 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
 
   // ฟังก์ชันเลือกวิธีการชำระเงิน
   const selectPaymentMethod = (methodId: number) => {
-    if (methodId === 3 && !isRegisteredCustomer) {
-      alert("สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น กรุณาเลือกลูกค้า หรือลงทะเบียนสมัครสมาชิกก่อนทำรายการ");
-      return false;
-    }
-    updateSession("paymentMethodId", methodId);
-    // กำหนดประเภทการชำระเงินตาม ID ของวิธีการชำระเงิน
-    if (methodId === 1 ) {
-      setSelectedPaymentType("CASH");
-    }else if (methodId === 2) {
-      setSelectedPaymentType("QRCODE");
-    } else if (methodId === 3) {
-      setSelectedPaymentType("CREDIT");
-    }
-    return true;
+    const isCustomerSelected = Boolean(customer && customer.customer_name);
+      // เช็กเฉพาะกรณีเลือกลูกค้ามาแล้ว (มีลูกค้า) แต่ลูกค้าท่านนั้น " ไม่ได้เป็นสมาชิก "
+      if (methodId === 3 && isCustomerSelected && !isRegisteredCustomer) {
+        alert("สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น กรุณาเลือกลูกค้า หรือลงทะเบียนสมัครสมาชิกก่อนทำรายการ");
+        return false;
+      }
+      // อัปเดต Session และ State ตามปกติ
+      updateSession("paymentMethodId", methodId);
+
+      if (methodId === 1) {
+        setSelectedPaymentType("CASH");
+      } else if (methodId === 2) {
+        setSelectedPaymentType("QRCODE");
+      } else if (methodId === 3) {
+        setSelectedPaymentType("CREDIT");
+      }
+
+      return true;
   };
 
   const handleSearchCustomer = async (e: React.FormEvent) => {
@@ -297,6 +301,18 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
 // ─── 1. ฟังก์ชันกดปุ่ม "ยืนยันการขาย" หน้าร้าน ───
   const handleConfirmSale = async () => {
     if (cart.length === 0) return alert("กรุณาเลือกสินค้าลงตะกร้า");
+
+    // ล็อก/แจ้งเตือนเมื่อผู้ใช้ทำรายการด้วย "เงินเชื่อ" แต่ไม่เข้าเงื่อนไขสมาชิก
+    if (posSession.paymentMethodId === 3 && !isRegisteredCustomer) {
+      alert("สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น กรุณาเลือกลูกค้า หรือลงทะเบียนสมัครสมาชิกก่อนทำรายการ");
+      return;
+    }
+
+    // ล็อก/แจ้งเตือนหากวงเงินเครดิตไม่พอ
+    if (posSession.paymentMethodId === 3 && isExceedCreditLimit) {
+      alert("วงเงินเครดิตของลูกค้าไม่เพียงพอ ไม่สามารถทำรายการเงินเชื่อได้");
+      return;
+    }
 
     // สร้าง Order สถานะ pending สำหรับทุกวิธีชำระเงิน เพื่อเอา currentOrderId มาถือไว้ก่อนเปิด Modal
     const orderId = await submitOrderToDatabase();
@@ -488,6 +504,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     creditDueDate,
     formattedCreditDueDate,
     isExceedCreditLimit,
+    isCustomerSelected: Boolean(customer && customer.customer_name),
     isRegisteredCustomer,
     selectPaymentMethod,
     qrCodeData,
