@@ -107,8 +107,34 @@ export default function PosPage(): React.JSX.Element {
             </div>
           </div>
 
+          {/* --- ส่วนบนสุดของฝั่ง Cart --- */}
+          <div className="space-y-4">
+  
+            {/* ช่องแสกนบาร์โค้ด (ย้ายมาไว้ตรงนี้) */}
+            <form onSubmit={cartHook.handleAddProduct} className="mt-6 flex gap-2">
+              <div className="relative flex-1">
+                <QrCode className="absolute left-4 top-3.5 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  value={cartHook.searchQuery}
+                  onChange={(e) => cartHook.setSearchQuery(e.target.value)}
+                  placeholder="สแกนบาร์โค้ดสินค้า หรือพิมพ์เลขบาร์โค้ดที่นี่เพื่อเพิ่มรายการ..."
+                  className="w-full bg-white border border-gray-200 rounded-none pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-red-500 shadow-sm"
+                  autoFocus
+                />
+              </div>
+              <button
+                type="submit"
+                className="bg-[#1C1B1B] text-white px-8 py-3 rounded-none text-sm hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                เพิ่มรายการ
+              </button>
+            </form>
+
+          </div>
+
           {/* 2. กล่องดำจัดการส่วนลดบิล */}
-          <div className="bg-[#1C1B1B] text-gray-300 rounded-none p-4 mb-6 flex justify-between items-start border border-zinc-800 border-l-4 border-l-[#E51C23]">
+          <div className="bg-[#1C1B1B] text-gray-300 rounded-none p-4 mb-6 mt-6 flex justify-between items-start border border-zinc-800 border-l-4 border-l-[#E51C23]">
             <div className="flex flex-col items-start gap-2 w-2/3">
               <div className="flex items-center gap-2 text-sm shrink-0 mt-2">
                 <Percent size={16} className="text-[#E51C23]" />
@@ -281,26 +307,6 @@ export default function PosPage(): React.JSX.Element {
           </div>
         </div>
 
-        {/* 4. ช่องแสกนบาร์โค้ด */}
-        <form onSubmit={cartHook.handleAddProduct} className="mt-6 flex gap-2">
-          <div className="relative flex-1">
-            <QrCode className="absolute left-4 top-3.5 text-gray-400" size={18} />
-            <input
-              type="text"
-              value={cartHook.searchQuery}
-              onChange={(e) => cartHook.setSearchQuery(e.target.value)}
-              placeholder="สแกนบาร์โค้ดสินค้า หรือพิมพ์เลขบาร์โค้ดที่นี่เพื่อเพิ่มรายการ..."
-              className="w-full bg-white border border-gray-200 rounded pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-red-500 shadow-sm"
-              autoFocus
-            />
-          </div>
-          <button
-            type="submit"
-            className="bg-[#1C1B1B] text-white px-8 py-3 rounded-none text-sm hover:bg-zinc-800 transition-colors cursor-pointer"
-          >
-            เพิ่มรายการ
-          </button>
-        </form>
       </div>
 
       {/* ─── [โซนฝั่งขวา] : ข้อมูลลูกค้า และสรุปยอดเงิน ─── */}
@@ -424,22 +430,25 @@ export default function PosPage(): React.JSX.Element {
           <Text variant="small" className="text-[#6B7280] uppercase">เลือกวิธีการชำระเงิน</Text>
           <div className="grid grid-cols-3 gap-2">
             {paymentData.paymentMethods.map((method) => {
-              // 1. เช็กว่าเป็นปุ่มเงินเชื่อ และลูกค้ายังไม่ได้ลงทะเบียนสมาชิกหรือไม่
-              const isCreditMethod = method.id === 3;
-              const isCreditDisabled = isCreditMethod && !paymentData.isRegisteredCustomer;
+              const isProcessing = paymentData.isSubmitting || paymentData.isConfirming;
+              //ล็อกเฉพาะ: ปุ่มเงินเชื่อ (ID: 3) + มีการเลือกลูกค้าแล้ว + ลูกค้าไม่เป็นสมาชิก
+              const isCreditDisabled = method.id === 3 && paymentData.isCustomerSelected && !paymentData.isRegisteredCustomer;
+
+              const isDisabled = isProcessing || isCreditDisabled;
+              const isSelected = paymentData.paymentMethodId === method.id;
 
               return (
                 <button
                   key={method.id}
-                  // 2. เรียกใช้ฟังก์ชันที่เขียนไว้ใน Hook ได้เลย
-                  onClick={() => paymentData.selectPaymentMethod(method.id)} 
-                  // 3. ปรับ Style ให้ปุ่มดูทำรายการไม่ได้ถ้าโดน Disable
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => paymentData.selectPaymentMethod(method.id)}
                   className={`flex flex-col items-center justify-center py-3 border text-xs transition-all ${
-                    isCreditDisabled ? "opacity-50 cursor-not-allowed " : ""
-                  }${
-                    paymentData.paymentMethodId === method.id
-                      ? "border-red-600 bg-white text-red-600 border-b-4 shadow-sm"
-                      : "border-gray-200 bg-[#F9FAFB] text-gray-400 hover:text-zinc-600"
+                    isDisabled
+                      ? "opacity-50 bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed"
+                      : isSelected
+                        ? "border-red-600 bg-white text-red-600 border-b-4 shadow-sm"
+                        : "border-gray-200 bg-[#F9FAFB] text-gray-400 hover:text-zinc-600"
                   }`}
                 >
                   {getPaymentIcon(method.id)}
