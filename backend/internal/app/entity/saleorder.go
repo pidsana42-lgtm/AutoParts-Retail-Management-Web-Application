@@ -24,6 +24,9 @@ type SaleOrder struct {
 	Status        enum.OrderStatus   `gorm:"type:varchar(50);not null;default:pending" json:"status"`
 	PaymentStatus enum.PaymentStatus `gorm:"type:varchar(50);not null;default:unpaid" json:"payment_status"`
 
+	PaymentMethodID *uint          `gorm:"column:payment_method_id;default:null" json:"payment_method_id"`
+	PaymentMethod   *PaymentMethod `gorm:"foreignKey:PaymentMethodID" json:"payment_method"`
+
 	// ระบบคำนวณเอง + เติมฟิลด์จัดการส่วนลดท้ายบิล
 	Subtotal           float64 `gorm:"type:decimal(15,2);not null" json:"subtotal"`                          // ยอดรวมสินค้าทุกแถวก่อนหักส่วนลดท้ายบิล
 	BillDiscountType   string  `gorm:"type:varchar(20);not null;default:'none'" json:"bill_discount_type"`   // ประเภทส่วนลดท้ายบิล (none, amount, percent)

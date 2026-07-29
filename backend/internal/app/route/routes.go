@@ -27,6 +27,7 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	pos.SetupStoreConfigRoutes(r, db)
 	pos.SetupCustomerDiscountRoutes(r, db)
 	pos.SetupPaymentRoutes(r, db)
+	pos.SetupSalesHistoryRoutes(r, db)
 
 	//ของทุกคนก็เพิ่มเอาในนี้เลย comment ระบบตัวเองไว้ด้วยนะ ใน main มันจะได้ไ่ม่เยอะ
 

@@ -329,6 +329,8 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         OrderDate:          time.Now(),
         DueDate:            dueDate,
         CustomerID:         customerIDForOrder, 
+        // เพิ่มบรรทัดนี้ลงไปเพื่อบันทึก ID วิธีชำระเงิน
+        PaymentMethodID:    &req.PaymentMethodID,
         CustomerNameTemp:   &savedName,
         CustomerPhoneTemp:  &savedPhone,
         // ตั้งสถานะเป็น รอชำระเงิน/รอการยืนยัน เสมอ
