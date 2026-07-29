@@ -49,3 +49,56 @@ func ToPaymentMethodResponseList(methods []entity.PaymentMethod) []PaymentMethod
 	}
 	return list
 }
+
+// DTO สำหรับรายการสินค้าแต่ละชิ้นในบิล (Item Detail)
+type SaleHistoryItemDetail struct {
+	ID          uint   `json:"id"`
+	ProductID   uint   `json:"product_id"`
+	PartNumber  string `json:"part_number"`
+	ProductName string `json:"product_name"`
+	Qty         int    `json:"qty"`
+	Unit        string `json:"unit"`
+	//CostPrice             float64 `json:"cost_price"` น่าจะไม่ต้องใส่เพราะก็ไม่ควรมีใครเห็นรึเปล่า
+	UnitPrice             float64 `json:"unit_price"`
+	DiscountType          string  `json:"discount_type"`
+	DiscountValue         float64 `json:"discount_value"`
+	DiscountPercent       float64 `json:"discount_percent"`
+	DiscountAmount        float64 `json:"discount_amount"`
+	FinalUnitPrice        float64 `json:"final_unit_price"`
+	Subtotal              float64 `json:"subtotal"`
+	AllocatedBillDiscount float64 `json:"allocated_bill_discount"`
+	NetSubtotal           float64 `json:"net_subtotal"`
+	Note                  string  `json:"note"`
+}
+
+// DTO สำหรับตอบกลับภาพรวมทั้งบิลตาม ID
+type GetSaleHistoryByIDResponse struct {
+	ID          uint      `json:"id"`
+	OrderNumber string    `json:"order_number"`
+	OrderDate   time.Time `json:"order_date"`
+
+	CustomerID        *uint   `json:"customer_id"`
+	CustomerName      string  `json:"customer_name"`
+	CustomerNameTemp  *string `json:"customer_name_temp"`
+	CustomerPhoneTemp *string `json:"customer_phone_temp"`
+
+	Subtotal           float64 `json:"subtotal"`             // ยอดรวมก่อนหักส่วนลดบิล
+	BillDiscountType   string  `son:"bill_discount_type"`    // ประเภทส่วนลดท้ายบิล (none, amount, percent)
+	BillDiscountValue  float64 `json:"bill_discount_value"`  // ส่วนลดท้ายบิล
+	DiscountAmount     float64 `json:"discount_amount"`      // มูลค่าส่วนลดท้ายบิล (บาท)
+	DiscountPercent    float64 `json:"discount_percent"`     // มูลค่าส่วนลดท้ายบิล (%)
+	TotalDiscountItems float64 `json:"total_discount_items"` // เพิ่ม: ผลรวมส่วนลดรายชิ้นสะสมทั้งหมด
+	TotalAmount        float64 `json:"total_amount"`         // ยอดเน็ตสุทธิ (Subtotal - DiscountAmount)
+	ReceivedAmount     float64 `json:"received_amount"`      // ยอดเงินที่ลูกค้าจ่ายเข้ามา (รวมทุกช่องทาง)
+	PaidAmount         float64 `json:"paid_amount"`          // ยอดเงินสุทธิที่หักเงินทอนแล้วและเข้ากระเป๋าร้านจริง (สูงสุดไม่เกิน TotalAmount เช่น 870.00)
+	BalanceDue         float64 `json:"balance_due"`          // ยอดคงเหลือที่ลูกค้าต้องจ่ายเพิ่ม (TotalAmount - PaidAmount)
+	ChangeAmount       float64 `json:"change_amount"`        // ยอดเงินทอนลูกค้า (PaidAmount - TotalAmount)
+
+	DueDate  *time.Time `json:"due_date"`
+	PaidDate *time.Time `json:"paid_date"` // วันที่ลูกค้าจ่ายเงินครบถ้วน (PaidAmount >= TotalAmount) หรือจ่ายเงินบางส่วน (PaidAmount < TotalAmount) แต่ไม่เกิน DueDate
+	Note     string     `json:"note"`
+
+	PaymentMethodName string                  `json:"payment_method_name"`
+	PaymentStatus     string                  `json:"payment_status"`
+	Items             []SaleHistoryItemDetail `json:"items"`
+}
