@@ -6,6 +6,8 @@ import re
 import traceback
 from contextlib import asynccontextmanager
 from PIL import Image
+import pillow_heif
+pillow_heif.register_heif_opener()
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -507,7 +509,8 @@ def extract_text_via_typhoon(img, image_name_for_mock="image.jpg"):
     img_bytes = img_byte_arr.getvalue()
     
     url = "https://api.opentyphoon.ai/v1/ocr"
-    files = {'file': (image_name_for_mock, img_bytes, 'image/jpeg')}
+    typhoon_filename = os.path.splitext(image_name_for_mock)[0] + ".jpg"
+    files = {'file': (typhoon_filename, img_bytes, 'image/jpeg')}
     data = {
         'model': 'typhoon-ocr',
         'max_tokens': '16384',
@@ -858,24 +861,35 @@ Extract every line item. Use null for missing fields. Do not include any thinkin
                 try:
                     llm = get_local_llm()
                     import asyncio
-                    response = await asyncio.to_thread(
-                        llm.create_chat_completion,
-                        messages=[
-                            {
-                                "role": "user",
-                                "content": [
-                                    { "type": "text", "text": prompt_vision },
-                                    { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
-                                ]
-                            }
-                        ],
-                        temperature=0.1,
-                        max_tokens=8192
-                    )
+                    # If Typhoon already extracted text, use text-only to avoid multimodal crash
+                    if extracted_markdown:
+                        print("Mode 2 Fallback: Using text-only GGUF (Typhoon text available)...")
+                        response = await asyncio.to_thread(
+                            llm.create_chat_completion,
+                            messages=[{"role": "user", "content": prompt}],
+                            temperature=0.1,
+                            max_tokens=8192
+                        )
+                    else:
+                        print("Mode 2 Fallback: Using multimodal GGUF (no Typhoon text)...")
+                        response = await asyncio.to_thread(
+                            llm.create_chat_completion,
+                            messages=[
+                                {
+                                    "role": "user",
+                                    "content": [
+                                        { "type": "text", "text": prompt_vision },
+                                        { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
+                                    ]
+                                }
+                            ],
+                            temperature=0.1,
+                            max_tokens=8192
+                        )
                     local_vision_text = response['choices'][0]['message']['content']
                     if is_valid_structured_json(local_vision_text):
                         generated_text = local_vision_text
-                        print("Local vision model fallback completed successfully!")
+                        print("Local GGUF fallback completed successfully!")
                 except Exception as local_err:
                     print(f"Local model fallback failed: {local_err}")
 
@@ -1056,6 +1070,8 @@ async def extract_invoice_from_upload(file: UploadFile = File(...), job_id: int 
         contents = await file.read()
         is_pdf = file.filename.lower().endswith(".pdf") or file.content_type == "application/pdf"
         
+        is_heic = file.filename.lower().endswith((".heic", ".heif")) or file.content_type in ("image/heic", "image/heif")
+
         if is_pdf:
             print(f"Detecting PDF upload: {file.filename}. Converting first page to PNG...")
             doc = fitz.open(stream=contents, filetype="pdf")
@@ -1066,6 +1082,15 @@ async def extract_invoice_from_upload(file: UploadFile = File(...), job_id: int 
             file_to_save = pix.tobytes("png")
             img = Image.open(BytesIO(file_to_save))
             safe_filename = f"{int(time.time())}_{file.filename}.png"
+        elif is_heic:
+            print(f"Detecting HEIC/HEIF upload: {file.filename}. Converting to JPEG...")
+            img = Image.open(BytesIO(contents))
+            img = img.convert("RGB")
+            buf = BytesIO()
+            img.save(buf, format="JPEG", quality=95)
+            file_to_save = buf.getvalue()
+            base_name = os.path.splitext(file.filename)[0]
+            safe_filename = f"{int(time.time())}_{base_name}.jpg"
         else:
             img = Image.open(BytesIO(contents))
             file_to_save = contents

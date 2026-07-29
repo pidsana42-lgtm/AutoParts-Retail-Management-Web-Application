@@ -71,7 +71,7 @@ func (ctrl *SupplierClaimController) GetSupplierClaimByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *SupplierClaimController) ListSupplierClaims(c *gin.Context) {
@@ -81,7 +81,7 @@ func (ctrl *SupplierClaimController) ListSupplierClaims(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *SupplierClaimController) UpdateSupplierClaim(c *gin.Context) {

@@ -1,12 +1,15 @@
-import React from 'react';
-import { 
-  ChevronLeft, ChevronRight, AlertCircle, ZoomIn, ZoomOut, RotateCw, 
-  Camera, FileUp, Loader2, Trash2, Save 
+import React, { useState } from 'react';
+import {
+  ChevronLeft, ChevronRight, AlertCircle, ZoomIn, ZoomOut, RotateCw,
+  Camera, FileUp, Loader2, Trash2, Save, Smartphone, X
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import Heading from '../../../../components/elements/heading';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
 import type { ViewState, Supplier, Product, ScannedBillData } from '../../../../interface/import';
-import ProductSearchSelect from './ProductSearchSelect';
+import ProductSearchSelect from '../components/product_search_select';
+import InlineValidationAlertBanner from '../components/inline_validation_alert_banner';
+import type { PriceMismatchItem } from '../components/price_update_modal';
 
 interface ScanViewProps {
   setCurrentView: (view: ViewState) => void;
@@ -43,10 +46,19 @@ interface ScanViewProps {
   handleRemoveRow: (idx: number) => void;
   handleAddRow: () => void;
   exportBillItemsToExcel: () => void;
-  handleSaveBill: (skipCheck?: boolean) => void;
-  handleSaveAllBatchBills: (skipCheck?: boolean) => void;
+  handleSaveBill: (isDraft?: boolean, skipCheck?: boolean, skipPriceCheck?: boolean) => void;
+  handleSaveAllBatchBills: (isDraft?: boolean, skipCheck?: boolean, skipPriceCheck?: boolean) => void;
   handleMergeBatchResultsToSingleBill?: () => void;
   saving: boolean;
+  priceMismatchedItems?: PriceMismatchItem[];
+  handleConfirmUpdatePrices?: () => void;
+  handleSkipPriceUpdate?: () => void;
+  validationWarnings?: string[];
+  handleConfirmValidationSave?: () => void;
+  handleDismissValidation?: () => void;
+  isDraftMode?: boolean;
+  isEmployee?: boolean;
+  mobileSessionId?: string;
 }
 
 export default function ScanView({
@@ -87,7 +99,16 @@ export default function ScanView({
   handleSaveBill,
   handleSaveAllBatchBills,
   handleMergeBatchResultsToSingleBill,
-  saving
+  saving,
+  priceMismatchedItems = [],
+  handleConfirmUpdatePrices,
+  handleSkipPriceUpdate,
+  validationWarnings = [],
+  handleConfirmValidationSave,
+  handleDismissValidation,
+  isDraftMode = false,
+  isEmployee = false,
+  mobileSessionId = '',
 }: ScanViewProps) {
   let calcSubtotal = 0;
   if (formData && formData.items) {
@@ -102,15 +123,83 @@ export default function ScanView({
     ? Math.round((calcSubtotal - (Number(formData.discount_total) || 0) + (Number(formData.vat_amount) || 0)) * 100) / 100
     : 0;
 
+  const liveMismatchesCount = React.useMemo(() => {
+    if (!formData || !formData.items) return 0;
+    let count = 0;
+    formData.items.forEach((item: any) => {
+      if (item.product_id) {
+        const prod = products.find(p => p.id === Number(item.product_id));
+        if (prod && Number(item.price_per_unit) !== (prod.cost_price || 0)) {
+          count++;
+        }
+      } else if (item.company_product_name || Number(item.price_per_unit) > 0) {
+        count++;
+      }
+    });
+    return count;
+  }, [formData?.items, products]);
+
+  const showBanner = (validationWarnings.length > 0 || priceMismatchedItems.length > 0) && !!handleConfirmValidationSave && !!handleDismissValidation;
+
+  const [showQR, setShowQR] = useState(false);
+  const mobileUrl = mobileSessionId
+    ? `${window.location.origin}/mobile-scan?session=${mobileSessionId}`
+    : window.location.href;
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
   return (
     <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
+      {/* QR Modal */}
+      {showQR && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowQR(false)}>
+          <div className="bg-white shadow-2xl p-8 flex flex-col items-center gap-5 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between w-full">
+              <p className="font-extrabold text-[#1C1B1B] text-base flex items-center gap-2">
+                <Smartphone size={18} /> เปิดบนมือถือ
+              </p>
+              <button onClick={() => setShowQR(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+
+            {isLocalhost ? (
+              <div className="bg-amber-50 border border-amber-300 text-amber-800 text-xs p-3 w-full">
+                <p className="font-bold mb-1">⚠ เปิดเว็บด้วย IP Address ก่อน</p>
+                <p>มือถือไม่สามารถเข้า <code>localhost</code> ได้</p>
+                <p className="mt-1">ให้เปิดใน browser ด้วย:</p>
+                <p className="font-mono font-bold text-amber-900 mt-1 break-all">
+                  http://192.168.1.109:{window.location.port || '5173'}
+                </p>
+                <p className="mt-1 text-[10px] text-amber-600">แล้วคลิกปุ่ม "เปิดบนมือถือ" อีกครั้ง</p>
+              </div>
+            ) : (
+              <>
+                <QRCodeSVG value={mobileUrl} size={220} marginSize={2} />
+                <div className="bg-gray-50 border border-gray-200 text-gray-600 text-xs p-3 w-full text-center space-y-1">
+                  <p className="font-bold text-[#1C1B1B]">สแกนด้วยมือถือที่อยู่บน WiFi เดียวกัน</p>
+                  <p>มือถือจะเห็นหน้าส่งรูปอย่างง่าย — ถ่ายหรืออัปรูป แล้วรูปจะขึ้นบนคอมทันที</p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-none transition-colors">
+        <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-none transition-colors cursor-pointer" title="ย้อนกลับ">
           <ChevronLeft size={24} className="text-[#5F5E5E]" />
         </button>
         <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
           ระบบสแกนนำเข้าใบสั่งซื้อ (รูปภาพ / PDF)
         </Heading>
+        <button
+          onClick={() => setShowQR(true)}
+          className="ml-auto flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-bold rounded-none transition-colors cursor-pointer"
+          title="เปิดบนมือถือผ่าน QR Code"
+        >
+          <Smartphone size={16} />
+          เปิดบนมือถือ
+        </button>
       </div>
 
       {errorMsg && (
@@ -136,7 +225,7 @@ export default function ScanView({
               </div>
               <label className="cursor-pointer text-sm text-[#e51c23] font-bold hover:underline py-2 px-4 bg-gray-50 rounded-none border border-gray-200">
                 เปลี่ยนไฟล์บิล (ภาพ/PDF)
-                <input type="file" className="hidden" accept="image/*,application/pdf" multiple onChange={handleFileChange} />
+                <input type="file" className="hidden" accept="image/*,.heic,.heif,application/pdf" multiple onChange={handleFileChange} />
               </label>
             </div>
           )}
@@ -206,17 +295,25 @@ export default function ScanView({
                   </>
                 )}
 
-                <div 
+                <div
                   className="w-full flex-1 min-h-0 overflow-auto flex items-center justify-center rounded-none shadow-lg bg-white p-2"
                   style={{ transform: `rotate(${rotate}deg)`, transition: 'transform 0.3s' }}
                 >
-                  <img 
-                    src={previewUrl} 
-                    alt="Invoice Preview" 
-                    className="w-full h-full object-contain"
-                    style={{ scale: `${zoom}`, transition: 'scale 0.2s' }}
-                    crossOrigin="anonymous"
-                  />
+                  {previewUrl === 'heic-no-preview' ? (
+                    <div className="flex flex-col items-center justify-center gap-3 text-gray-400 p-8">
+                      <Camera size={64} className="text-gray-300" />
+                      <p className="text-sm font-bold text-gray-500">ไม่สามารถแสดงตัวอย่าง HEIC ได้</p>
+                      <p className="text-xs text-gray-400">ไฟล์ถูกเลือกแล้ว — กด "สแกนข้อมูลบิล" เพื่อประมวลผล</p>
+                    </div>
+                  ) : (
+                    <img
+                      src={previewUrl ?? ''}
+                      alt="Invoice Preview"
+                      className="w-full h-full object-contain"
+                      style={{ scale: `${zoom}`, transition: 'scale 0.2s' }}
+                      crossOrigin="anonymous"
+                    />
+                  )}
                 </div>
 
                 {/* Dot indicators */}
@@ -268,10 +365,16 @@ export default function ScanView({
               <Camera size={64} className="text-gray-400 mb-4 animate-pulse" />
               <p className="text-[#5F5E5E] font-bold text-sm mb-2">ลากไฟล์บิลของคุณวางที่นี่ หรือ</p>
               <label className="cursor-pointer text-white bg-[#e51c23] hover:bg-[#c9181f] px-6 py-2.5 rounded-none font-bold transition-all shadow-sm">
-                อัปโหลดบิล (ภาพ/PDF)
-                <input type="file" className="hidden" accept="image/*,application/pdf" multiple onChange={handleFileChange} />
+                อัปโหลดบิล (ภาพ/HEIC/PDF)
+                <input type="file" className="hidden" accept="image/*,.heic,.heif,application/pdf" multiple onChange={handleFileChange} />
               </label>
               <p className="text-sm text-gray-400 mt-3">รองรับการเลือกทีละหลายไฟล์สำหรับสแกนแบบกลุ่ม</p>
+              {mobileSessionId && (
+                <div className="mt-5 flex items-center gap-2 text-xs text-gray-400 border-t border-dashed border-gray-200 pt-4 w-full justify-center">
+                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
+                  กำลังรอรูปจากมือถือ — สแกน QR "เปิดบนมือถือ" แล้วถ่าย/ส่งรูป
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -476,7 +579,7 @@ export default function ScanView({
                           <TableCell className="py-2.5 px-3">
                             <ProductSearchSelect
                               value={item.product_id ? Number(item.product_id) : null}
-                              onChange={(newId) => handleItemChange(idx, 'product_id', newId)}
+                              onChange={(newId: number | null) => handleItemChange(idx, 'product_id', newId)}
                               products={products}
                               companyProductCode={item.company_product_code}
                               companyProductName={item.company_product_name}
@@ -511,7 +614,7 @@ export default function ScanView({
                                 );
                               })()
                             ) : (
-                              <span className="text-xs text-gray-400 italic">
+                              <span className="text-xs text-black">
                                 [สร้างให้อัตโนมัติ]
                               </span>
                             )}
@@ -533,9 +636,7 @@ export default function ScanView({
                               <select
                                 value={item.category_id || ''}
                                 onChange={(e) => {
-                                  const catId = e.target.value ? Number(e.target.value) : null;
-                                  handleItemChange(idx, 'category_id', catId);
-                                  handleItemChange(idx, 'sub_category_id', null);
+                                  handleItemChange(idx, 'category_id', e.target.value ? Number(e.target.value) : null);
                                 }}
                                 className="bg-white border border-gray-300 rounded-none p-1.5 text-sm w-full focus:ring-1 focus:ring-[#e51c23] focus:border-[#e51c23] text-gray-700 font-medium"
                               >
@@ -643,33 +744,18 @@ export default function ScanView({
                 </button>
               </div>
 
-              {/* ราคานำเข้าไม่ตรงกับในคลัง Warning Banner */}
-              {(() => {
-                const priceMismatchedItems = formData ? formData.items.filter(item => {
-                  if (item.product_id) {
-                    const matchedProduct = products.find(p => p.id === Number(item.product_id));
-                    if (matchedProduct) {
-                      return Number(item.price_per_unit) !== (matchedProduct.cost_price || 0);
-                    }
-                  }
-                  return false;
-                }) : [];
-                
-                if (priceMismatchedItems.length === 0) return null;
-
-                return (
-                  <div className="mx-6 my-4 p-4 bg-red-50 border border-red-200 text-[#e51c23] text-sm rounded-none flex items-start gap-3 animate-in slide-in-from-top-2 duration-200 shadow-sm text-left">
-                    <AlertCircle className="text-[#e51c23] shrink-0 mt-0.5" size={20} />
-                    <div className="flex-1 text-sm">
-                      <p className="font-bold text-sm text-[#e51c23] mb-1">ตรวจพบราคานำเข้าไม่ตรงกับฐานข้อมูลคลัง (Price Mismatch)</p>
-                      <p className="leading-relaxed text-red-700">
-                        มีสินค้าจำนวน <span className="font-bold">{priceMismatchedItems.length} รายการ</span> ที่มีราคานำเข้าไม่ตรงกับราคาทุนปัจจุบันในฐานข้อมูล 
-                        ระบบจะแสดงหน้าต่างยืนยันการอัปเดตราคาทุนในระบบคลังเมื่อกดปุ่มยืนยันบันทึกบิล
-                      </p>
-                    </div>
-                  </div>
-                );
-              })()}
+              {/* Single Unified Alert Banner */}
+              {(validationWarnings.length > 0 || priceMismatchedItems.length > 0) && handleConfirmValidationSave && handleDismissValidation && (
+                <div className="px-6 pt-4">
+                  <InlineValidationAlertBanner
+                    warnings={validationWarnings}
+                    mismatchedItems={priceMismatchedItems}
+                    onDismiss={handleDismissValidation}
+                    isDraftMode={isDraftMode}
+                    isEmployee={isEmployee}
+                  />
+                </div>
+              )}
 
               {/* Summary & Submit */}
               <div className="border-t border-gray-100 p-6 flex justify-between items-end bg-[#fafafa] rounded-none mt-auto">
@@ -682,31 +768,110 @@ export default function ScanView({
                     <p className="text-sm text-[#e51c23] font-bold mb-1 text-left">ยอดเงินสุทธิรวม:</p>
                     <p className="text-xl text-[#e51c23] font-bold">{(formData.total_amount || calcTotalAmount).toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</p>
                   </div>
-                  <button 
-                    type="button"
-                    onClick={exportBillItemsToExcel}
-                    className="bg-[#1C1B1B] hover:bg-[#2a2929] text-white px-6 py-3 rounded-none text-sm font-bold flex items-center gap-2 transition-all shadow-sm cursor-pointer"
-                  >
-                    <FileUp size={18} />
-                    <span>ส่งออกเป็น Excel</span>
-                  </button>
-                  <button 
-                    onClick={() => batchResults.length > 0 ? handleSaveAllBatchBills(false) : handleSaveBill(false)}
-                    disabled={saving || formData.items.length === 0}
-                    className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-sm font-bold flex items-center gap-2 transition-all shadow-sm disabled:bg-gray-400 cursor-pointer"
-                  >
-                    {saving ? (
-                      <>
-                        <Loader2 size={18} className="animate-spin" />
-                        <span>กำลังบันทึกบิล...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save size={18} />
-                        <span>{batchResults.length > 0 ? `บันทึกบิลทั้งหมด (${batchResults.length} บิล)` : 'ยืนยันบันทึกบิล'}</span>
-                      </>
-                    )}
-                  </button>
+                  {/* Footer buttons — change context when banner is active */}
+                  {showBanner ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleDismissValidation}
+                        disabled={saving}
+                        className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                      >
+                        ยกเลิก
+                      </button>
+                      {priceMismatchedItems.length > 0 && !isEmployee && !isDraftMode && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleSkipPriceUpdate}
+                            disabled={saving}
+                            className="bg-[#1C1B1B] hover:bg-gray-800 text-white px-6 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+                          >
+                            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                            <span>บันทึกโดยไม่อัปเดตราคาทุน</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleConfirmUpdatePrices}
+                            disabled={saving}
+                            className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+                          >
+                            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                            <span>อัปเดตราคาทุนและบันทึก</span>
+                          </button>
+                        </>
+                      )}
+                      {(priceMismatchedItems.length === 0 || isEmployee) && (
+                        <button
+                          type="button"
+                          onClick={handleConfirmValidationSave}
+                          disabled={saving}
+                          className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+                        >
+                          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                          <span>
+                            {isDraftMode
+                              ? 'ยืนยันบันทึกเป็นแบบร่าง'
+                              : isEmployee
+                                ? 'ยืนยันส่งให้ Owner ตรวจสอบ'
+                                : 'ยืนยันบันทึก'}
+                          </span>
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentView('home')}
+                        disabled={saving}
+                        className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer"
+                      >
+                        ยกเลิก
+                      </button>
+                      {!isDraftMode && (
+                        <button
+                          type="button"
+                          onClick={() => batchResults.length > 0 ? handleSaveAllBatchBills(true) : handleSaveBill(true)}
+                          disabled={saving || formData.items.length === 0}
+                          className="bg-[#1C1B1B] hover:bg-gray-800 text-white px-6 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+                        >
+                          <Save size={16} />
+                          <span>บันทึกเป็นแบบร่าง</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (batchResults.length > 0) {
+                            handleSaveAllBatchBills(isDraftMode);
+                          } else {
+                            handleSaveBill(isDraftMode);
+                          }
+                        }}
+                        disabled={saving || formData.items.length === 0}
+                        className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+                      >
+                        {saving ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            <span>กำลังบันทึก...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save size={16} />
+                            <span>
+                              {isDraftMode
+                                ? 'บันทึกเป็นแบบร่าง'
+                                : batchResults.length > 0
+                                  ? `บันทึกข้อมูลทั้งหมด (${batchResults.length} บิล)`
+                                  : 'บันทึกบิลต่อไป'}
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

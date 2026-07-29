@@ -30,9 +30,9 @@ func Bill(db *gorm.DB) error {
 
 			// --- Mapping Foreign Keys ---
 			SupplierID:  1, // สมมติ ID ของ Supplier เป็น 99
-			BillImageID: 1, // ตรงกับ BillImage IDด้านบน
+			BillImageID: func() *uint { id := uint(1); return &id }(),
 			VerifiedBy:  1, // ตรงกับ User ID ด้านบน
-			POID:        2, // ตรงกับ PO ID ด้านบน
+			POID:        func() *uint { id := uint(2); return &id }(),
 		},
 	}
 
@@ -50,13 +50,13 @@ func Bill(db *gorm.DB) error {
 				b.SupplierID = supplier.ID
 			}
 			if err := db.Where("id = ?", 1).First(&billImage).Error; err == nil {
-				b.BillImageID = billImage.ID
+				b.BillImageID = &billImage.ID
 			}
 			if err := db.Where("username = ?", "boss").First(&ownerUser).Error; err == nil {
 				b.VerifiedBy = ownerUser.ID
 			}
 			if err := db.Where("po_number = ?", "PO-2026-0002").First(&po).Error; err == nil {
-				b.POID = po.ID
+				b.POID = &po.ID
 			}
 
 			if err := db.Create(&b).Error; err != nil {

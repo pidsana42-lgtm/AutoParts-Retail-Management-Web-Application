@@ -29,13 +29,14 @@ type ImportBillService interface {
 	DeleteBill(id uint) error
 	ListPurchaseOrders() ([]importDataDTO.PurchaseOrderImportDTO, error)
 	GetPurchaseOrderByID(id uint) (importDataDTO.PurchaseOrderImportDTO, error)
+	UpdateProduct(id uint, input importDataDTO.UpdateImportProductDTO) error
 }
 
 type importBillService struct {
-	repo billRepo.BillRepository
+	repo billRepo.ImportBillRepository
 }
 
-func NewImportBillService(repo billRepo.BillRepository) ImportBillService {
+func NewImportBillService(repo billRepo.ImportBillRepository) ImportBillService {
 	return &importBillService{repo: repo}
 }
 
@@ -354,4 +355,23 @@ func (s *importBillService) processOCRInBackground(jobID uint, fileURL string) {
 	} else {
 		log.Printf("[OCR] Job %d successfully processed\n", jobID)
 	}
+}
+
+func (s *importBillService) UpdateProduct(id uint, input importDataDTO.UpdateImportProductDTO) error {
+	prod := entity.Product{
+		Product_Code:   input.ProductCode,
+		Part_Number:    input.PartNumber,
+		Product_Name:   input.ProductName,
+		Barcode:        input.Barcode,
+		Quantity:       input.Quantity,
+		Limit_Quantity: input.LimitQuantity,
+		Cost_price:     input.CostPrice,
+		Sale_price:     input.SalePrice,
+		Note:           input.Note,
+		CategoryID:     input.CategoryID,
+		GradeID:        input.GradeID,
+		UnitID:         input.UnitID,
+		ShelfID:        input.ShelfID,
+	}
+	return s.repo.UpdateImportProduct(id, &prod, input.ModelIDs)
 }

@@ -1,9 +1,14 @@
-export type ViewState = 'home' | 'scan' | 'excel' | 'po' | 'manual';
+export type ViewState = 'home' | 'scan' | 'excel' | 'po' | 'manual' | 'approve';
 
 export interface Supplier {
   id: number;
   supplier_name: string;
   short_supplier_name: string;
+  supplier_address?: string;
+  contact_line_sale?: string;
+  phone_number_sale?: string;
+  email_sale?: string;
+  bank_account_number?: string;
 }
 
 export interface Product {
@@ -13,6 +18,7 @@ export interface Product {
   category_name?: string;
   sub_category_name?: string;
   cost_price?: number;
+  barcode?: string;
 }
 
 export interface BillItemDTO {

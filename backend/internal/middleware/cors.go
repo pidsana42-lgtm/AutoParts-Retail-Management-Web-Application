@@ -7,8 +7,9 @@ func CORSMiddleware() gin.HandlerFunc {
 		origin := c.Request.Header.Get("Origin")
 
 		allowedOrigins := map[string]bool{
-			"http://localhost:3000": true, // สำหรับ Next.js / React ทั่วไป
-			"http://localhost:5173": true, // เผื่อใครในทีมใช้ Vite
+			"http://localhost:3000":       true,
+			"http://localhost:5173":       true,
+			"http://192.168.1.109:5173":   true,
 		}
 
 		if allowedOrigins[origin] {

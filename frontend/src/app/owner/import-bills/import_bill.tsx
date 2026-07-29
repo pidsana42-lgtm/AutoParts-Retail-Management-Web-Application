@@ -1,12 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import apiClient from '../../../service/http/apiClient';
 import * as XLSX from 'xlsx';
+import heic2any from 'heic2any';
 
-import { 
+import {
   scanBill,
   confirmBillImport,
   updateBill,
   deleteBill,
+  approveBill,
   getPurchaseOrders,
   getPurchaseOrderById,
   updateProductCostPrice
@@ -21,14 +25,15 @@ import type {
   SavedBill 
 } from '../../../interface/import';
 
-import HomeView from './components/HomeView';
-import ScanView from './components/ScanView';
-import ExcelView from './components/ExcelView';
-import POView from './components/POView';
-import ManualEntryView from './components/ManualEntryView';
-import ValidationModal from './components/ValidationModal';
-import PriceUpdateModal from './components/PriceUpdateModal';
-import type { PriceMismatchItem } from './components/PriceUpdateModal';
+import HomeView from './views/home_view';
+import ScanView from './views/scan_view';
+import ExcelView from './views/excel_view';
+import POView from './views/po_view';
+import ManualEntryView from './views/manual_entry_view';
+import ApproveView from './views/approve_view';
+import ValidationModal from './components/validation_modal';
+import PriceUpdateModal from './components/price_update_modal';
+import type { PriceMismatchItem } from './components/price_update_modal';
 
 const isPlaceholder = (val: any): boolean => {
   if (!val) return true;
@@ -45,9 +50,44 @@ const isPlaceholder = (val: any): boolean => {
   );
 };
 
-export default function ImportBill() {
-  const [currentView, setCurrentView] = useState<ViewState>('home');
+interface ImportBillProps {
+  isEmployee?: boolean;
+}
+
+export default function ImportBill({ isEmployee = false }: ImportBillProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const basePath = isEmployee ? '/employee/import' : '/owner/import-bills';
+
+  const getViewFromPath = (path: string): ViewState => {
+    if (path.endsWith('/scan')) return 'scan';
+    if (path.endsWith('/excel')) return 'excel';
+    if (path.endsWith('/manual')) return 'manual';
+    if (path.endsWith('/po')) return 'po';
+    return 'home';
+  };
+
+  const [currentView, setCurrentViewInternal] = useState<ViewState>(() => getViewFromPath(location.pathname));
+
+  useEffect(() => {
+    const v = getViewFromPath(location.pathname);
+    setCurrentViewInternal(v);
+  }, [location.pathname]);
+
+  const setCurrentView = (view: ViewState) => {
+    setCurrentViewInternal(view);
+    let targetPath = basePath;
+    if (view === 'scan') targetPath = `${basePath}/scan`;
+    else if (view === 'excel') targetPath = `${basePath}/excel`;
+    else if (view === 'manual') targetPath = `${basePath}/manual`;
+    else if (view === 'po') targetPath = `${basePath}/po`;
+    
+    if (location.pathname !== targetPath) {
+      navigate(targetPath);
+    }
+  };
   const [editingBillId, setEditingBillId] = useState<number | null>(null);
+  const [approvingBill, setApprovingBill] = useState<SavedBill | null>(null);
   const [bills, setBills] = useState<SavedBill[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -84,6 +124,14 @@ export default function ImportBill() {
   const batchResultsRef = useRef<ScannedBillData[]>([]);
   const formDataRef = useRef<ScannedBillData | null>(null);
 
+  // Mobile Upload Session
+  const [mobileSessionId] = useState<string>(
+    () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
+  );
+  const loadedMobileUrlsRef = useRef<Set<string>>(new Set());
+  const batchImagesRef = useRef<File[]>([]);
+  const batchPreviewUrlsRef = useRef<string[]>([]);
+
   // Split Pane Resizing State
   const [leftWidth, setLeftWidth] = useState<number>(45);
   const [isResizing, setIsResizing] = useState<boolean>(false);
@@ -96,17 +144,11 @@ export default function ImportBill() {
 
   const [formData, setFormData] = useState<ScannedBillData | null>(null);
 
-  useEffect(() => {
-    activeBatchIndexRef.current = activeBatchIndex;
-  }, [activeBatchIndex]);
-
-  useEffect(() => {
-    batchResultsRef.current = batchResults;
-  }, [batchResults]);
-
-  useEffect(() => {
-    formDataRef.current = formData;
-  }, [formData]);
+  useEffect(() => { activeBatchIndexRef.current = activeBatchIndex; }, [activeBatchIndex]);
+  useEffect(() => { batchResultsRef.current = batchResults; }, [batchResults]);
+  useEffect(() => { formDataRef.current = formData; }, [formData]);
+  useEffect(() => { batchImagesRef.current = batchImages; }, [batchImages]);
+  useEffect(() => { batchPreviewUrlsRef.current = batchPreviewUrls; }, [batchPreviewUrls]);
 
   // PO Import Mode States
   const [poList, setPoList] = useState<any[]>([]);
@@ -152,6 +194,28 @@ export default function ImportBill() {
       // noop
     }
   }, []);
+
+  // เปิด approve view คืนหลังจากกลับจาก edit-stock-bill
+  useEffect(() => {
+    const targetBillId = location.state?.openApproveForBill;
+    if (!targetBillId) return;
+    // clear state เพื่อไม่ให้ loop
+    window.history.replaceState({}, '');
+    const open = async () => {
+      let billList = bills;
+      if (billList.length === 0) {
+        const resp = await apiClient.get('/import-data/bills');
+        billList = resp.data?.data || resp.data || [];
+        setBills(billList);
+      }
+      const found = billList.find((b: SavedBill) => b.id === targetBillId);
+      if (found) {
+        setApprovingBill(found);
+        setCurrentView('approve');
+      }
+    };
+    open();
+  }, [location.state]);
 
   const fetchBills = async () => {
     setLoadingBills(true);
@@ -202,7 +266,28 @@ export default function ImportBill() {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const isHeicFile = (file: File) =>
+    file.name.toLowerCase().endsWith('.heic') ||
+    file.name.toLowerCase().endsWith('.heif') ||
+    file.type === 'image/heic' ||
+    file.type === 'image/heif';
+
+  const HEIC_NO_PREVIEW = 'heic-no-preview';
+
+  const toPreviewUrl = async (file: File): Promise<string> => {
+    if (isHeicFile(file)) {
+      try {
+        const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+        const blob = Array.isArray(converted) ? converted[0] : converted;
+        return URL.createObjectURL(blob);
+      } catch {
+        return HEIC_NO_PREVIEW;
+      }
+    }
+    return URL.createObjectURL(file);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
@@ -211,7 +296,7 @@ export default function ImportBill() {
 
     if (files.length === 1) {
       const singleFile = files[0];
-      const singleUrl = URL.createObjectURL(singleFile);
+      const singleUrl = await toPreviewUrl(singleFile);
       setBillImage(singleFile);
       setPreviewUrl(singleUrl);
       setBatchImages([]);
@@ -222,14 +307,14 @@ export default function ImportBill() {
       setFormData(null);
     } else {
       const fileList = Array.from(files);
-      const urls = fileList.map(f => URL.createObjectURL(f));
+      const urls = await Promise.all(fileList.map(toPreviewUrl));
       setBatchImages(fileList);
       setBatchPreviewUrls(urls);
       setBatchResults([]);
       setActiveBatchIndex(0);
       setBillImage(fileList[0]);
       setPreviewUrl(urls[0]);
-      
+
       const initialProgress: { [key: string]: 'pending' | 'scanning' | 'success' | 'failed' } = {};
       fileList.forEach(f => {
         initialProgress[f.name] = 'pending';
@@ -238,6 +323,62 @@ export default function ImportBill() {
       setFormData(null);
     }
   };
+
+  const handleLoadMobileFiles = useCallback(async (allUrls: string[]) => {
+    const newUrls = allUrls.filter(url => !loadedMobileUrlsRef.current.has(url));
+    if (newUrls.length === 0) return;
+
+    const newFiles: File[] = await Promise.all(
+      newUrls.map(async (url) => {
+        const resp = await fetch(url);
+        const blob = await resp.blob();
+        const fileName = `mobile_${url.split('/').pop() || 'image.jpg'}`;
+        return new File([blob], fileName, { type: blob.type || 'image/jpeg' });
+      })
+    );
+
+    newUrls.forEach(url => loadedMobileUrlsRef.current.add(url));
+
+    const combined = [...batchImagesRef.current, ...newFiles];
+    const combinedUrls = [...batchPreviewUrlsRef.current, ...await Promise.all(newFiles.map(toPreviewUrl))];
+
+    if (combined.length === 1) {
+      setBillImage(combined[0]);
+      setPreviewUrl(combinedUrls[0]);
+      setBatchImages([]);
+      setBatchPreviewUrls([]);
+      setActiveBatchIndex(0);
+      setBatchProgress({});
+    } else {
+      setBatchImages(combined);
+      setBatchPreviewUrls(combinedUrls);
+      setBillImage(combined[0]);
+      setPreviewUrl(combinedUrls[0]);
+      setActiveBatchIndex(combined.length - newFiles.length);
+      const progress: { [key: string]: 'pending' } = {};
+      combined.forEach(f => { progress[f.name] = 'pending'; });
+      setBatchProgress(progress);
+    }
+    setFormData(null);
+    setBatchResults([]);
+    setErrorMsg(null);
+    setCurrentView('scan');
+  }, []);
+
+  // Poll for mobile-uploaded images when in scan view
+  useEffect(() => {
+    if (currentView !== 'scan') return;
+    const intervalId = setInterval(async () => {
+      try {
+        const resp = await axios.get(`/api/mobile/images?session=${mobileSessionId}`);
+        const urls: string[] = resp.data?.images || [];
+        if (urls.length > 0) await handleLoadMobileFiles(urls);
+      } catch {
+        // ignore polling errors silently
+      }
+    }, 2000);
+    return () => clearInterval(intervalId);
+  }, [currentView, mobileSessionId, handleLoadMobileFiles]);
 
   const handleOcrProcess = async () => {
     if (batchImages.length > 0) {
@@ -317,7 +458,7 @@ export default function ImportBill() {
           };
         });
 
-      const calcSubtotal = mappedScannedItems.reduce((sum, item) => sum + item.net_amount, 0);
+      const calcSubtotal = mappedScannedItems.reduce((sum: number, item: { net_amount: number }) => sum + item.net_amount, 0);
       const vatAmount = Number(scannedResult.vat_amount) || 0;
       const discountTotal = Number(scannedResult.discount_total) || 0;
       const calcTotalAmount = mappedScannedItems.length > 0
@@ -430,7 +571,7 @@ export default function ImportBill() {
             };
           });
 
-        const calcSubtotal = mappedScannedItems.reduce((sum, item) => sum + item.net_amount, 0);
+        const calcSubtotal = mappedScannedItems.reduce((sum: number, item: { net_amount: number }) => sum + item.net_amount, 0);
         const vatAmount = Number(scannedResult.vat_amount) || 0;
         const discountTotal = Number(scannedResult.discount_total) || 0;
         const calcTotalAmount = mappedScannedItems.length > 0
@@ -588,6 +729,10 @@ export default function ImportBill() {
       }
     }
 
+    if (field === 'category_id') {
+      targetItem.sub_category_id = null;
+    }
+
     if (field === 'order_quantity' || field === 'price_per_unit' || field === 'discount_amount') {
       const qty = Number(field === 'order_quantity' ? value : targetItem.order_quantity) || 0;
       const price = Number(field === 'price_per_unit' ? value : targetItem.price_per_unit) || 0;
@@ -720,6 +865,63 @@ export default function ImportBill() {
     }
   };
 
+  const handleOpenApprove = (bill: SavedBill) => {
+    setApprovingBill(bill);
+    setCurrentView('approve');
+  };
+
+  const handleApproveBill = async (billId: number) => {
+    const bill = approvingBill;
+    if (!bill) return;
+    // approveBill sets is_verified=true; backend UpdateBill auto-updates cost_price for all items
+    await approveBill(billId, bill);
+    await fetchBills();
+    setApprovingBill(null);
+    setCurrentView('home');
+  };
+
+  const handleRejectBill = async (billId: number) => {
+    try {
+      await updateBill(billId, {
+        bill: {
+          bill_no: approvingBill!.bill_no,
+          total_amount: approvingBill!.total_amount,
+          due_date: approvingBill!.due_date,
+          credit_term: approvingBill!.credit_term,
+          transport_by: approvingBill!.transport_by,
+          supplier_id: approvingBill!.supplier_id,
+          subtotal: approvingBill!.subtotal,
+          discount_total: approvingBill!.discount_total,
+          receive_date: approvingBill!.receive_date,
+          vat_amount: approvingBill!.vat_amount,
+          grand_total: approvingBill!.grand_total,
+          payment_status: 'Draft',
+          is_verified: false,
+          bill_image_id: approvingBill!.bill_image?.id,
+        },
+        items: (approvingBill!.bill_items || []).map(item => ({
+          item_sequence: item.item_sequence,
+          company_product_code: item.company_product_code,
+          company_product_name: item.company_product_name,
+          order_quantity: item.order_quantity,
+          unit: item.unit,
+          conversion_factor: item.conversion_factor,
+          price_per_unit: item.price_per_unit,
+          discount_amount: item.discount_amount,
+          net_amount: item.net_amount,
+          is_freebie: item.is_freebie,
+          remark: item.remark,
+          product_id: item.product_id,
+        })),
+      });
+      await fetchBills();
+      setApprovingBill(null);
+      setCurrentView('home');
+    } catch (err: any) {
+      alert('ส่งกลับไม่สำเร็จ: ' + (err.message || err));
+    }
+  };
+
   const handleViewSavedBill = (bill: SavedBill) => {
     setEditingBillId(bill.id);
     setErrorMsg(null);
@@ -772,8 +974,23 @@ export default function ImportBill() {
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(worksheet);
-        
+
+        // ตรวจหา header row จริง — รองรับไฟล์ที่มีข้อมูลบริษัทอยู่บนสุด
+        const colKeywords = [
+          'code', 'name', 'qty', 'quantity', 'price', 'unit', 'uom', 'amount',
+          'รหัส', 'ชื่อ', 'จำนวน', 'ราคา', 'หน่วย', 'ลำดับ', 'part', 'item', 'description', 'sku',
+        ];
+        const rawRows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+        const headerRowIdx = rawRows.findIndex(row => {
+          const rowText = row.map((c: any) => String(c ?? '').toLowerCase()).join(' ');
+          return colKeywords.some(kw => rowText.includes(kw));
+        });
+
+        const rows = XLSX.utils.sheet_to_json(worksheet, {
+          range: headerRowIdx >= 0 ? headerRowIdx : 0,
+          defval: '',
+        });
+
         if (rows.length === 0) {
           alert('ไม่พบข้อมูลในไฟล์ หรือรูปแบบไฟล์ไม่ถูกต้อง');
           return;
@@ -946,34 +1163,105 @@ export default function ImportBill() {
   const exportBillItemsToExcel = () => {
     if (!formData || !formData.items || formData.items.length === 0) return;
     try {
-      const exportData = formData.items.map((item, idx) => {
+      const supplier = suppliers.find(s => s.id === formData.supplier_id);
+      const supplierName = supplier ? supplier.supplier_name : `ซัพพลายเออร์ ID: ${formData.supplier_id}`;
+      const fmtDate = (d: string) => d ? formatDate(d) : '-';
+
+      // ── Section 1: Bill header metadata ──────────────────────────────
+      const headerRows: (string | number)[][] = [
+        ['ใบนำเข้าสินค้า (Import Bill)'],
+        [],
+        ['เลขที่บิล (Bill No)',              formData.bill_no || '-'],
+        [],
+        ['── ข้อมูลผู้จัดจำหน่าย ──────────────────────'],
+        ['ชื่อบริษัท (Supplier)',            supplierName],
+        ['ชื่อย่อ (Short Name)',             supplier?.short_supplier_name || '-'],
+        ['ที่อยู่ (Address)',                supplier?.supplier_address || '-'],
+        ['เบอร์โทรฝ่ายขาย (Phone Sale)',    supplier?.phone_number_sale || '-'],
+        ['Line ฝ่ายขาย (Line Sale)',         supplier?.contact_line_sale || '-'],
+        ['อีเมลฝ่ายขาย (Email Sale)',        supplier?.email_sale || '-'],
+        [],
+        ['── ข้อมูลบิล ────────────────────────────────'],
+        ['วันที่รับสินค้า (Receive Date)',   fmtDate(formData.receive_date)],
+        ['ครบกำหนดชำระ (Due Date)',          fmtDate(formData.due_date)],
+        ['เครดิต (Credit Term)',              formData.credit_term || '-'],
+        ['ขนส่งโดย (Transport By)',          formData.transport_by || '-'],
+        ['สถานะ (Payment Status)',            formData.payment_status || '-'],
+        [],
+      ];
+
+      // ── Section 2: Items table ────────────────────────────────────────
+      const itemHeaders = [
+        'ลำดับ', 'รหัสสินค้าคู่ค้า', 'ชื่อสินค้าคู่ค้า',
+        'รหัสในระบบ', 'ชื่อในระบบ',
+        'หมวดหมู่หลัก', 'หมวดหมู่ย่อย',
+        'จำนวน', 'หน่วย', 'ราคาต่อหน่วย', 'ส่วนลด', 'ยอดสุทธิ', 'สินค้าแถม',
+      ];
+
+      const itemRows = formData.items.map((item, idx) => {
         const matchingProd = products.find(p => p.id === Number(item.product_id));
-        const matchingCat = categories.find(c => c.ID === Number(item.category_id));
+        const matchingCat  = categories.find((c: any) => c.ID === Number(item.category_id));
         const subCategories = matchingCat?.sub_categories || [];
         const matchingSubCat = subCategories.find((sc: any) => sc.ID === Number(item.sub_category_id));
-        
-        return {
-          "ลำดับ (Seq)": item.item_sequence || (idx + 1),
-          "รหัสสินค้าของคู่ค้า (Supplier Code)": item.company_product_code,
-          "ชื่อสินค้าของคู่ค้า (Supplier Product Name)": item.company_product_name,
-          "เทียบสินค้าในระบบ (Matched Code)": matchingProd ? matchingProd.product_code : '-',
-          "ชื่อสินค้าในระบบ (Matched Name)": matchingProd ? matchingProd.product_name : '-',
-          "หมวดหมู่หลัก (Category)": matchingCat ? matchingCat.category_name : '-',
-          "หมวดหมู่ย่อย (Sub Category)": matchingSubCat ? matchingSubCat.sub_category_name : '-',
-          "จำนวน (Quantity)": item.order_quantity,
-          "หน่วย (Unit)": item.unit,
-          "ราคาต่อหน่วย (Unit Price)": item.price_per_unit,
-          "รวมเงิน (Net Amount)": item.net_amount
-        };
+        return [
+          item.item_sequence || (idx + 1),
+          item.company_product_code || '-',
+          item.company_product_name || '-',
+          matchingProd ? matchingProd.product_code : '-',
+          matchingProd ? matchingProd.product_name : '-',
+          matchingCat   ? (matchingCat as any).category_name : '-',
+          matchingSubCat ? (matchingSubCat as any).sub_category_name : '-',
+          item.order_quantity,
+          item.unit,
+          item.price_per_unit,
+          item.discount_amount || 0,
+          item.net_amount,
+          item.is_freebie ? 'ใช่' : '-',
+        ];
       });
-      const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+      // ── Section 3: Summary totals ─────────────────────────────────────
+      const summaryRows: (string | number)[][] = [
+        [],
+        ['', '', '', '', '', '', '', '', '', '', 'Subtotal',   formData.subtotal || 0],
+        ['', '', '', '', '', '', '', '', '', '', 'ส่วนลดรวม',  formData.discount_total || 0],
+        ['', '', '', '', '', '', '', '', '', '', 'VAT',        formData.vat_amount || 0],
+        ['', '', '', '', '', '', '', '', '', '', 'ยอดรวมสุทธิ', formData.grand_total || 0],
+      ];
+
+      // ── Combine all sections ─────────────────────────────────────────
+      const aoa: (string | number)[][] = [
+        ...headerRows,
+        itemHeaders,
+        ...itemRows,
+        ...summaryRows,
+      ];
+
+      const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+
+      // Column widths
+      worksheet['!cols'] = [
+        { wch: 8 },  // ลำดับ
+        { wch: 22 }, // รหัสคู่ค้า
+        { wch: 36 }, // ชื่อคู่ค้า
+        { wch: 18 }, // รหัสในระบบ
+        { wch: 36 }, // ชื่อในระบบ
+        { wch: 20 }, // หมวดหมู่หลัก
+        { wch: 20 }, // หมวดหมู่ย่อย
+        { wch: 10 }, // จำนวน
+        { wch: 10 }, // หน่วย
+        { wch: 16 }, // ราคาต่อหน่วย
+        { wch: 12 }, // ส่วนลด
+        { wch: 16 }, // ยอดสุทธิ
+        { wch: 12 }, // สินค้าแถม
+      ];
+
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "รายการในบิล");
-      const filename = `bill_${formData.bill_no || 'import'}.xlsx`;
-      XLSX.writeFile(workbook, filename);
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'รายการในบิล');
+      XLSX.writeFile(workbook, `bill_${formData.bill_no || 'import'}.xlsx`);
     } catch (err) {
       console.error(err);
-      alert("เกิดข้อผิดพลาดในการส่งออกไฟล์ Excel: " + String(err));
+      alert('เกิดข้อผิดพลาดในการส่งออกไฟล์ Excel: ' + String(err));
     }
   };
 
@@ -983,14 +1271,12 @@ export default function ImportBill() {
 
     let calcSubtotal = 0;
     formData.items.forEach(item => {
-      const qty = Number(item.order_quantity) || 0;
-      const price = Number(item.price_per_unit) || 0;
-      const disc = Number(item.discount_amount) || 0;
-      calcSubtotal += (qty * price) - disc;
+      calcSubtotal += Number(item.net_amount) || 0;
     });
 
-    if (Math.abs(calcSubtotal - formData.total_amount) > 1.0) {
-      warnings.push(`ยอดเงินสุทธิในบิล (฿${formData.total_amount.toLocaleString()}) ไม่ตรงกับยอดรวมคำนวณจริงของสินค้าในตาราง (฿${calcSubtotal.toLocaleString()})`);
+    const billSubtotal = Number(formData.subtotal) || Number(formData.total_amount) || 0;
+    if (billSubtotal > 0 && Math.abs(calcSubtotal - billSubtotal) > 1.0) {
+      warnings.push(`ยอดรวมสินค้าในตาราง (฿${calcSubtotal.toLocaleString()}) ไม่ตรงกับ Subtotal ในบิล (฿${billSubtotal.toLocaleString()}) — ยอด VAT แยกต่างหาก`);
     }
 
     const unmappedItems = formData.items.filter(item => !item.product_id);
@@ -1032,39 +1318,76 @@ export default function ImportBill() {
     return items;
   };
 
-  const handleSaveBill = async (skipCheck = false, skipPriceCheck = false) => {
+  const handleConfirmUpdatePrices = async () => {
+    if (priceMismatchedItems.length === 0) return;
+    setSaving(true);
+    try {
+      for (const item of priceMismatchedItems) {
+        await updateProductCostPrice(item.productId, item.billPrice);
+      }
+      await fetchSuppliersAndProducts();
+    } catch (err) {
+      console.error("Error updating product cost price:", err);
+    } finally {
+      setSaving(false);
+    }
+    setPriceMismatchedItems([]);
+    await handleSaveBill(false, true);
+  };
+
+  const handleSkipPriceUpdate = async () => {
+    setPriceMismatchedItems([]);
+    await handleSaveBill(false, true);
+  };
+
+  const [isDraftMode, setIsDraftMode] = useState<boolean>(false);
+
+  const handleConfirmValidationSave = async () => {
+    setValidationWarnings([]);
+    const draftState = isDraftMode;
+    setIsDraftMode(false);
+    await handleSaveBill(draftState, true, true);
+  };
+
+  const handleDismissValidation = () => {
+    setValidationWarnings([]);
+    setIsDraftMode(false);
+  };
+
+  const handleSaveBill = async (isDraft = false, skipCheck = false, skipPriceCheck = false) => {
     if (!formData) return;
 
-    if (!skipPriceCheck) {
+    if (!skipPriceCheck && !isDraft) {
       const mismatches = getPriceMismatchedItems(formData);
       if (mismatches.length > 0) {
         setPriceMismatchedItems(mismatches);
-        setOnConfirmPriceUpdateAction(() => async (selectedIds: number[]) => {
-          setSaving(true);
-          try {
-            for (const prodId of selectedIds) {
-              const item = mismatches.find(m => m.productId === prodId);
-              if (item) {
-                await updateProductCostPrice(prodId, item.billPrice);
-              }
-            }
-            await fetchSuppliersAndProducts();
-          } catch (err) {
-            console.error("Error updating product cost price:", err);
-          }
-          await handleSaveBill(skipCheck, true);
-        });
-        setShowPriceUpdateModal(true);
-        return;
       }
     }
 
-    if (!skipCheck) {
+    if (isDraft && !skipCheck) {
+      setIsDraftMode(true);
       const warnings = validateBillBeforeSave();
       if (warnings.length > 0) {
-        setValidationWarnings(warnings);
-        setOnConfirmAction(() => () => handleSaveBill(true, true));
-        setShowValidationModal(true);
+        setValidationWarnings(['คุณยืนยันจะบันทึกข้อมูลบิลนี้เป็นแบบร่างใช่หรือไม่?', ...warnings]);
+      } else {
+        setValidationWarnings(['คุณยืนยันจะบันทึกข้อมูลบิลนี้เป็นแบบร่างใช่หรือไม่?']);
+      }
+      setSaving(false);
+      return;
+    }
+
+    if (!skipCheck && !isDraft) {
+      setIsDraftMode(false);
+      const warnings = validateBillBeforeSave();
+      const mismatches = getPriceMismatchedItems(formData);
+
+      if (warnings.length > 0 || mismatches.length > 0) {
+        if (warnings.length > 0) {
+          setValidationWarnings(warnings);
+        } else {
+          setValidationWarnings(['ตรวจพบราคานำเข้าในบิลไม่ตรงกับราคาทุนในคลังสินค้า']);
+        }
+        setSaving(false);
         return;
       }
     }
@@ -1088,35 +1411,35 @@ export default function ImportBill() {
 
       const payload = {
         bill: {
-          bill_no: formData.bill_no,
-          total_amount: formData.total_amount,
+          bill_no: String(formData.bill_no || ''),
+          total_amount: Number(formData.total_amount || 0),
           due_date: formatToRFC3339(formData.due_date),
-          credit_term: formData.credit_term || '30 Days',
-          transport_by: formData.transport_by,
-          supplier_id: formData.supplier_id,
-          supplier_name: formData.supplier_name || '',
-          subtotal: formData.subtotal,
-          discount_total: formData.discount_total,
+          credit_term: String(formData.credit_term || '30 Days'),
+          transport_by: String(formData.transport_by || ''),
+          supplier_id: Number(formData.supplier_id || 0),
+          supplier_name: String(formData.supplier_name || ''),
+          subtotal: Number(formData.subtotal || 0),
+          discount_total: Number(formData.discount_total || 0),
           receive_date: formatToRFC3339(formData.receive_date),
-          vat_amount: formData.vat_amount,
-          grand_total: formData.grand_total,
-          payment_status: formData.payment_status,
+          vat_amount: Number(formData.vat_amount || 0),
+          grand_total: Number(formData.grand_total || 0),
+          payment_status: isDraft ? 'Draft' : String(formData.payment_status || 'Completed'),
           po_id: poReference ? Number(poReference) : undefined,
-          bill_image_id: formData.bill_image_id || undefined,
+          bill_image_id: formData.bill_image_id ? Number(formData.bill_image_id) : undefined,
           verified_by: 1
         },
         items: formData.items.map((item, idx) => ({
           item_sequence: idx + 1,
-          company_product_code: item.company_product_code,
-          company_product_name: item.company_product_name,
-          order_quantity: item.order_quantity,
-          unit: item.unit,
-          conversion_factor: item.conversion_factor,
-          price_per_unit: item.price_per_unit,
-          discount_amount: item.discount_amount,
-          net_amount: item.net_amount,
-          is_freebie: item.is_freebie,
-          remark: item.remark,
+          company_product_code: String(item.company_product_code || ''),
+          company_product_name: String(item.company_product_name || ''),
+          order_quantity: Number(item.order_quantity || 0),
+          unit: String(item.unit || 'ชิ้น'),
+          conversion_factor: Number(item.conversion_factor || 1),
+          price_per_unit: Number(item.price_per_unit || 0),
+          discount_amount: Number(item.discount_amount || 0),
+          net_amount: Number(item.net_amount || 0),
+          is_freebie: Boolean(item.is_freebie),
+          remark: String(item.remark || ''),
           product_id: item.product_id ? Number(item.product_id) : 0,
           category_id: item.category_id ? Number(item.category_id) : undefined,
           sub_category_id: item.sub_category_id ? Number(item.sub_category_id) : undefined
@@ -1143,55 +1466,29 @@ export default function ImportBill() {
     }
   };
 
-  const handleSaveAllBatchBills = async (skipCheck = false, skipPriceCheck = false) => {
+  const handleSaveAllBatchBills = async (isDraft = false, skipCheck = false, _skipPriceCheck = false) => {
     if (batchResults.length === 0) return;
 
-    if (!skipPriceCheck) {
-      const allMismatches: PriceMismatchItem[] = [];
-      batchResults.forEach(bill => {
-        const mismatches = getPriceMismatchedItems(bill);
-        mismatches.forEach(m => {
-          if (!allMismatches.some(am => am.productId === m.productId)) {
-            allMismatches.push(m);
-          }
-        });
-      });
-
-      if (allMismatches.length > 0) {
-        setPriceMismatchedItems(allMismatches);
-        setOnConfirmPriceUpdateAction(() => async (selectedIds: number[]) => {
-          setSaving(true);
-          try {
-            for (const prodId of selectedIds) {
-              const item = allMismatches.find(m => m.productId === prodId);
-              if (item) {
-                await updateProductCostPrice(prodId, item.billPrice);
-              }
-            }
-            await fetchSuppliersAndProducts();
-          } catch (err) {
-            console.error("Error updating product cost price:", err);
-          }
-          await handleSaveAllBatchBills(skipCheck, true);
-        });
-        setShowPriceUpdateModal(true);
-        return;
-      }
+    if (isDraft && !skipCheck) {
+      setIsDraftMode(true);
+      setValidationWarnings([`คุณยืนยันจะบันทึกข้อมูลแบบกลุ่มทั้งหมด (${batchResults.length} บิล) เป็นแบบร่างใช่หรือไม่?`]);
+      setSaving(false);
+      return;
     }
 
-    if (!skipCheck) {
+    if (!skipCheck && !isDraft) {
+      setIsDraftMode(false);
       const allWarnings: string[] = [];
       batchResults.forEach((bill, idx) => {
         const unmapped = bill.items.filter(item => !item.product_id);
         if (unmapped.length > 0) {
-          allWarnings.push(`⚠️ บิลไฟล์ที่ ${idx + 1} (${bill.filename || bill.bill_no}): มีสินค้า ${unmapped.length} รายการยังไม่ได้เทียบรหัสสินค้า`);
+          allWarnings.push(`บิลไฟล์ที่ ${idx + 1} (${bill.filename || bill.bill_no}): มีสินค้า ${unmapped.length} รายการยังไม่ได้เทียบรหัสสินค้า`);
         }
       });
 
       if (allWarnings.length > 0) {
         setValidationWarnings(allWarnings);
-        setOnConfirmAction(() => () => handleSaveAllBatchBills(true, true));
-        setShowValidationModal(true);
+        setSaving(false);
         return;
       }
     }
@@ -1229,7 +1526,7 @@ export default function ImportBill() {
             receive_date: formatToRFC3339(bill.receive_date),
             vat_amount: bill.vat_amount,
             grand_total: bill.grand_total,
-            payment_status: bill.payment_status,
+            payment_status: isDraft ? 'Draft' : String(bill.payment_status || 'Completed'),
             bill_image_id: bill.bill_image_id || undefined,
             verified_by: 1
           },
@@ -1303,7 +1600,9 @@ export default function ImportBill() {
           formatDate={formatDate}
           handleViewSavedBill={handleViewSavedBill}
           handleDeleteBill={handleDeleteBill}
+          handleOpenApprove={handleOpenApprove}
           fetchPOsList={fetchPOsList}
+          isEmployee={isEmployee}
         />
       )}
 
@@ -1347,6 +1646,15 @@ export default function ImportBill() {
           handleSaveAllBatchBills={handleSaveAllBatchBills}
           handleMergeBatchResultsToSingleBill={handleMergeBatchResultsToSingleBill}
           saving={saving}
+          priceMismatchedItems={priceMismatchedItems}
+          handleConfirmUpdatePrices={handleConfirmUpdatePrices}
+          handleSkipPriceUpdate={handleSkipPriceUpdate}
+          validationWarnings={validationWarnings}
+          handleConfirmValidationSave={handleConfirmValidationSave}
+          handleDismissValidation={handleDismissValidation}
+          isDraftMode={isDraftMode}
+          isEmployee={isEmployee}
+          mobileSessionId={mobileSessionId}
         />
       )}
 
@@ -1368,6 +1676,27 @@ export default function ImportBill() {
           exportBillItemsToExcel={exportBillItemsToExcel}
           handleSaveBill={handleSaveBill}
           saving={saving}
+          priceMismatchedItems={priceMismatchedItems}
+          handleConfirmUpdatePrices={handleConfirmUpdatePrices}
+          handleSkipPriceUpdate={handleSkipPriceUpdate}
+          validationWarnings={validationWarnings}
+          handleConfirmValidationSave={handleConfirmValidationSave}
+          handleDismissValidation={handleDismissValidation}
+          isDraftMode={isDraftMode}
+          isEmployee={isEmployee}
+        />
+      )}
+
+      {currentView === 'approve' && approvingBill && (
+        <ApproveView
+          bill={approvingBill}
+          suppliers={suppliers}
+          products={products}
+          onApprove={handleApproveBill}
+          onReject={handleRejectBill}
+          onBack={() => { setApprovingBill(null); setCurrentView('home'); }}
+          formatDate={formatDate}
+          getSupplierName={getSupplierName}
         />
       )}
 

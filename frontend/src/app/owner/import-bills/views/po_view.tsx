@@ -107,7 +107,7 @@ export default function POView({
                     <TableHead>ผู้จัดจำหน่าย (SUPPLIER)</TableHead>
                     <TableHead>วันที่ออกเอกสาร (DATE)</TableHead>
                     <TableHead className="text-right">ยอดเงินรวม (TOTAL)</TableHead>
-                    <TableHead className="text-center">สถานะ (STATUS)</TableHead>
+                    <TableHead className="text-center">สถานะบิล (BILL STATUS)</TableHead>
                     <TableHead className="text-center pr-6">ดำเนินการ (ACTION)</TableHead>
                   </TableRow>
                 </TableHeader>

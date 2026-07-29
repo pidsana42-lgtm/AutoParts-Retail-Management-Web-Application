@@ -1,9 +1,11 @@
 import React from 'react';
-import { ChevronLeft, Save, Trash2, FileUp, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Save, Trash2, AlertCircle } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
 import type { ViewState, Supplier, Product, ScannedBillData } from '../../../../interface/import';
-import ProductSearchSelect from './ProductSearchSelect';
+import ProductSearchSelect from '../components/product_search_select';
+import InlineValidationAlertBanner from '../components/inline_validation_alert_banner';
+import type { PriceMismatchItem } from '../components/price_update_modal';
 
 interface ManualEntryViewProps {
   setCurrentView: (view: ViewState) => void;
@@ -20,8 +22,16 @@ interface ManualEntryViewProps {
   handleRemoveRow: (idx: number) => void;
   handleAddRow: () => void;
   exportBillItemsToExcel: () => void;
-  handleSaveBill: (skipCheck?: boolean) => void;
+  handleSaveBill: (isDraft?: boolean, skipCheck?: boolean, skipPriceCheck?: boolean) => void;
   saving: boolean;
+  priceMismatchedItems?: PriceMismatchItem[];
+  handleConfirmUpdatePrices?: () => void;
+  handleSkipPriceUpdate?: () => void;
+  validationWarnings?: string[];
+  handleConfirmValidationSave?: () => void;
+  handleDismissValidation?: () => void;
+  isDraftMode?: boolean;
+  isEmployee?: boolean;
 }
 
 export default function ManualEntryView({
@@ -40,7 +50,15 @@ export default function ManualEntryView({
   handleAddRow,
   exportBillItemsToExcel,
   handleSaveBill,
-  saving
+  saving,
+  priceMismatchedItems = [],
+  handleConfirmUpdatePrices,
+  handleSkipPriceUpdate,
+  validationWarnings = [],
+  handleConfirmValidationSave,
+  handleDismissValidation,
+  isDraftMode = false,
+  isEmployee = false,
 }: ManualEntryViewProps) {
   if (!formData) return null;
 
@@ -57,10 +75,28 @@ export default function ManualEntryView({
     ? Math.round((calcSubtotal - (Number(formData.discount_total) || 0) + (Number(formData.vat_amount) || 0)) * 100) / 100
     : 0;
 
+  const liveMismatchesCount = React.useMemo(() => {
+    if (!formData || !formData.items) return 0;
+    let count = 0;
+    formData.items.forEach(item => {
+      if (item.product_id) {
+        const prod = products.find(p => p.id === Number(item.product_id));
+        if (prod && Number(item.price_per_unit) !== (prod.cost_price || 0)) {
+          count++;
+        }
+      } else if (item.company_product_name || Number(item.price_per_unit) > 0) {
+        count++;
+      }
+    });
+    return count;
+  }, [formData?.items, products]);
+
+  const showBanner = (validationWarnings.length > 0 || priceMismatchedItems.length > 0) && !!handleConfirmValidationSave && !!handleDismissValidation;
+
   return (
     <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
       <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-none transition-colors">
+        <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-none transition-colors cursor-pointer" title="ย้อนกลับ">
           <ChevronLeft size={24} className="text-[#5F5E5E]" />
         </button>
         <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
@@ -221,7 +257,7 @@ export default function ManualEntryView({
                       <TableCell className="py-2.5 px-3">
                         <ProductSearchSelect
                           value={item.product_id ? Number(item.product_id) : null}
-                          onChange={(newId) => handleItemChange(idx, 'product_id', newId)}
+                          onChange={(newId: number | null) => handleItemChange(idx, 'product_id', newId)}
                           products={products}
                           companyProductCode={item.company_product_code}
                           companyProductName={item.company_product_name}
@@ -256,7 +292,7 @@ export default function ManualEntryView({
                             );
                           })()
                         ) : (
-                          <span className="text-xs text-gray-400 italic">
+                          <span className="text-xs text-black">
                             [สร้างให้อัตโนมัติ]
                           </span>
                         )}
@@ -278,16 +314,17 @@ export default function ManualEntryView({
                            <select
                              value={item.category_id || ''}
                              onChange={(e) => {
-                               const catId = e.target.value ? Number(e.target.value) : null;
-                               handleItemChange(idx, 'category_id', catId);
-                               handleItemChange(idx, 'sub_category_id', null);
+                               handleItemChange(idx, 'category_id', e.target.value ? Number(e.target.value) : null);
                              }}
                              className="bg-white border border-gray-300 rounded-none p-1.5 text-sm w-full focus:ring-1 focus:ring-[#e51c23] focus:border-[#e51c23] text-gray-700 font-medium"
                            >
                              <option value="">-- หมวดหมู่หลัก --</option>
-                             {categories.map((c: any) => (
-                               <option key={c.ID} value={c.ID}>{c.category_name}</option>
-                             ))}
+                             {categories.map((c: any, cIdx: number) => {
+                               const catId = c.id ?? c.ID ?? cIdx;
+                               return (
+                                 <option key={catId} value={catId}>{c.category_name || c.name}</option>
+                               );
+                             })}
                            </select>
                          )}
                       </TableCell>
@@ -314,9 +351,12 @@ export default function ManualEntryView({
                             className="bg-white border border-gray-300 rounded-none p-1.5 text-sm w-full focus:ring-1 focus:ring-[#e51c23] focus:border-[#e51c23] text-gray-700 font-medium disabled:opacity-50"
                           >
                             <option value="">-- หมวดหมู่ย่อย --</option>
-                            {item.category_id ? ((categories.find((c: any) => c.ID === item.category_id))?.sub_categories || []).map((sc: any) => (
-                              <option key={sc.ID} value={sc.ID}>{sc.sub_category_name}</option>
-                            )) : null}
+                            {item.category_id ? ((categories.find((c: any) => (c.id ?? c.ID) === item.category_id))?.sub_categories || []).map((sc: any, scIdx: number) => {
+                              const subCatId = sc.id ?? sc.ID ?? scIdx;
+                              return (
+                                <option key={subCatId} value={subCatId}>{sc.sub_category_name || sc.name}</option>
+                              );
+                            }) : null}
                           </select>
                         )}
                       </TableCell>
@@ -384,33 +424,20 @@ export default function ManualEntryView({
             </button>
           </div>
 
-          {/* ราคานำเข้าไม่ตรงกับในคลัง Warning Banner */}
-          {(() => {
-            const priceMismatchedItems = formData ? formData.items.filter(item => {
-              if (item.product_id) {
-                const matchedProduct = products.find(p => p.id === Number(item.product_id));
-                if (matchedProduct) {
-                  return Number(item.price_per_unit) !== (matchedProduct.cost_price || 0);
-                }
-              }
-              return false;
-            }) : [];
-            
-            if (priceMismatchedItems.length === 0) return null;
 
-            return (
-              <div className="mx-6 my-4 p-4 bg-red-50 border border-red-200 text-[#e51c23] text-sm rounded-none flex items-start gap-3 animate-in slide-in-from-top-2 duration-200 shadow-sm text-left">
-                <AlertCircle className="text-[#e51c23] shrink-0 mt-0.5" size={20} />
-                <div className="flex-1 text-sm">
-                  <p className="font-bold text-sm text-[#e51c23] mb-1">ตรวจพบราคานำเข้าไม่ตรงกับฐานข้อมูลคลัง (Price Mismatch)</p>
-                  <p className="leading-relaxed text-red-700">
-                    มีสินค้าจำนวน <span className="font-bold">{priceMismatchedItems.length} รายการ</span> ที่มีราคานำเข้าไม่ตรงกับราคาทุนปัจจุบันในฐานข้อมูล 
-                    ระบบจะแสดงหน้าต่างยืนยันการอัปเดตราคาทุนในระบบคลังเมื่อกดปุ่มยืนยันบันทึกบิล
-                  </p>
-                </div>
-              </div>
-            );
-          })()}
+
+          {/* Inline Alert Banner — informational only, action buttons stay in footer */}
+          {(validationWarnings.length > 0 || priceMismatchedItems.length > 0) && (
+            <div className="px-6 pt-4">
+              <InlineValidationAlertBanner
+                warnings={validationWarnings}
+                mismatchedItems={priceMismatchedItems}
+                onDismiss={handleDismissValidation}
+                isDraftMode={isDraftMode}
+                isEmployee={isEmployee}
+              />
+            </div>
+          )}
 
           {/* Summary & Submit */}
           <div className="border-t border-gray-100 p-6 flex justify-between items-end bg-[#fafafa] rounded-none mt-auto">
@@ -423,28 +450,101 @@ export default function ManualEntryView({
                 <p className="text-sm text-[#e51c23] font-bold mb-1 text-left">ยอดเงินสุทธิรวม:</p>
                 <p className="text-xl text-[#e51c23] font-bold">{(formData.total_amount || calcTotalAmount).toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</p>
               </div>
-              <button 
-                type="button"
-                onClick={exportBillItemsToExcel}
-                className="bg-[#1C1B1B] hover:bg-[#2a2929] text-white px-6 py-3 rounded-none text-sm font-bold flex items-center gap-2 transition-all shadow-sm cursor-pointer"
-              >
-                <FileUp size={18} />
-                <span>ส่งออกเป็น Excel</span>
-              </button>
-              <button 
-                onClick={() => handleSaveBill(false)}
-                disabled={saving || formData.items.length === 0}
-                className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-sm font-bold flex items-center gap-2 transition-all shadow-sm disabled:bg-gray-400 cursor-pointer"
-              >
-                {saving ? (
-                  <span>กำลังบันทึกบิล...</span>
-                ) : (
-                  <>
-                    <Save size={18} />
-                    <span>ยืนยันบันทึกบิล</span>
-                  </>
-                )}
-              </button>
+              {/* Footer buttons — change context when banner is active */}
+              {showBanner ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleDismissValidation}
+                    disabled={saving}
+                    className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    ยกเลิก
+                  </button>
+                  {priceMismatchedItems.length > 0 && !isEmployee && !isDraftMode && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleSkipPriceUpdate}
+                        disabled={saving}
+                        className="bg-[#1C1B1B] hover:bg-gray-800 text-white px-6 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+                      >
+                        <Save size={16} />
+                        <span>บันทึกโดยไม่อัปเดตราคาทุน</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmUpdatePrices}
+                        disabled={saving}
+                        className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+                      >
+                        <Save size={16} />
+                        <span>อัปเดตราคาทุนและบันทึก</span>
+                      </button>
+                    </>
+                  )}
+                  {(priceMismatchedItems.length === 0 || isEmployee) && (
+                    <button
+                      type="button"
+                      onClick={handleConfirmValidationSave}
+                      disabled={saving}
+                      className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+                    >
+                      {saving ? (
+                        <span>กำลังบันทึก...</span>
+                      ) : (
+                        <>
+                          <Save size={16} />
+                          <span>
+                            {isDraftMode
+                              ? 'ยืนยันบันทึกเป็นแบบร่าง'
+                              : isEmployee
+                                ? 'ยืนยันส่งให้ Owner ตรวจสอบ'
+                                : 'ยืนยันบันทึก'}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('home')}
+                    disabled={saving}
+                    className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    ยกเลิก
+                  </button>
+                  {!isDraftMode && (
+                    <button
+                      type="button"
+                      onClick={() => handleSaveBill(true)}
+                      disabled={saving || formData.items.length === 0}
+                      className="bg-[#1C1B1B] hover:bg-gray-800 text-white px-6 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+                    >
+                      <Save size={16} />
+                      <span>บันทึกเป็นแบบร่าง</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleSaveBill(isDraftMode)}
+                    disabled={saving || formData.items.length === 0}
+                    className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+                  >
+                    {saving ? (
+                      <span>กำลังบันทึก...</span>
+                    ) : (
+                      <>
+                        <Save size={16} />
+                        <span>{isDraftMode ? 'บันทึกเป็นแบบร่าง' : 'บันทึกบิลต่อไป'}</span>
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

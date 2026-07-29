@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  Camera, FileUp, ArrowRight, Eye, History, Trash2, 
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, LayoutPanelLeft, Loader2 
+import {
+  Camera, FileUp, ArrowRight, Eye, History, Trash2,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, LayoutPanelLeft, Loader2, CheckCircle2
 } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import Card from '../../../../components/elements/card';
@@ -26,7 +26,9 @@ interface HomeViewProps {
   formatDate: (dateStr: string) => string;
   handleViewSavedBill: (bill: SavedBill) => void;
   handleDeleteBill: (id: number) => void;
+  handleOpenApprove: (bill: SavedBill) => void;
   fetchPOsList: () => void;
+  isEmployee?: boolean;
 }
 
 export default function HomeView({
@@ -46,15 +48,30 @@ export default function HomeView({
   formatDate,
   handleViewSavedBill,
   handleDeleteBill,
-  fetchPOsList
+  handleOpenApprove,
+  fetchPOsList,
+  isEmployee = false,
 }: HomeViewProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [statusTabFilter, setStatusTabFilter] = useState<'ALL' | 'PENDING_REVIEW' | 'APPROVED' | 'DRAFT'>('ALL');
 
-  const totalItems = bills.length;
+  const needsApproval = (row: SavedBill) =>
+    row.payment_status !== 'Draft' && row.payment_status !== 'approved' && !row.is_verified;
+
+  const filteredBills = bills.filter(row => {
+    if (statusTabFilter === 'PENDING_REVIEW') return needsApproval(row);
+    if (statusTabFilter === 'APPROVED') return row.is_verified === true;
+    if (statusTabFilter === 'DRAFT') return row.payment_status === 'Draft';
+    return true;
+  });
+
+  const totalItems = filteredBills.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
-  const paginatedBills = bills.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const paginatedBills = filteredBills.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
+
+  const pendingCount = bills.filter(needsApproval).length;
 
   return (
     <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
@@ -71,9 +88,9 @@ export default function HomeView({
             setPreviewUrl(null);
             setFormData(null);
             setEditingBillId(null);
-            setCurrentView('scan');
             setErrorMsg(null);
             setBatchErrorMsg(null);
+            setCurrentView('scan');
           }}
           className="bg-[#e51c23] hover:bg-[#c9181f] text-white p-8 rounded-none flex items-center justify-between cursor-pointer transition-all shadow-md group"
         >
@@ -159,22 +176,19 @@ export default function HomeView({
                 }
               ],
               db_job_id: 0,
-              bill_image_id: 1
+              bill_image_id: 0
             });
             setEditingBillId(null);
-            setCurrentView('manual');
             setErrorMsg(null);
             setBatchErrorMsg(null);
+            setCurrentView('manual');
           }}
-          className="bg-gray-600 hover:bg-gray-700 text-white p-8 rounded-none flex items-center justify-between cursor-pointer transition-all shadow-md group"
+          className="bg-[#059669] hover:bg-[#047857] text-white p-8 rounded-none flex items-center justify-between cursor-pointer transition-all shadow-md group"
         >
           <div className="flex items-center gap-6">
-            <div className="bg-white/20 p-4 rounded-none">
-              <History size={32} className="text-white" />
-            </div>
             <div>
               <h2 className="text-xl font-bold mb-1">กรอกข้อมูลด้วยตนเอง</h2>
-              <p className="text-xs text-white/70">Manual Import Entry</p>
+              <p className="text-xs text-white/70">Manual Entry</p>
             </div>
           </div>
           <ArrowRight size={32} className="text-white/50 group-hover:text-white transition-colors" />
@@ -183,10 +197,41 @@ export default function HomeView({
 
       {/* Recent Scans Table */}
       <Card className="overflow-hidden" noPadding>
-        <div className="flex justify-between items-center p-6 border-b border-gray-100">
+        <div className="flex flex-col md:flex-row md:items-center justify-between p-6 border-b border-gray-100 gap-4">
           <div className="flex items-center gap-2 text-[#e51c23] font-bold">
             <History size={20} />
             <span className="text-sm font-bold">รายการนำเข้าสินค้าล่าสุด (Recent Product Imports)</span>
+          </div>
+
+          {/* Status Filter Tabs */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {(
+              [
+                { key: 'ALL',            label: `ทั้งหมด (${bills.length})`,  activeClass: 'bg-[#1C1B1B] text-white' },
+                ...(!isEmployee ? [{ key: 'PENDING_REVIEW', label: 'รอเจ้าของอนุมัติ', activeClass: 'bg-[#e51c23] text-white', count: pendingCount }] : []),
+                { key: 'APPROVED',       label: 'อนุมัติแล้ว',               activeClass: 'bg-[#1C1B1B] text-white' },
+                { key: 'DRAFT',          label: 'แบบร่าง',                   activeClass: 'bg-[#1C1B1B] text-white' },
+              ] as { key: string; label: string; activeClass: string; count?: number }[]
+            ).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => { setStatusTabFilter(tab.key as typeof statusTabFilter); setCurrentPage(1); }}
+                className={`px-3 py-1.5 text-xs font-bold rounded-none transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  statusTabFilter === tab.key
+                    ? tab.activeClass
+                    : 'bg-gray-100 text-[#5F5E5E] hover:bg-gray-200'
+                }`}
+              >
+                {tab.label}
+                {tab.count !== undefined && tab.count > 0 && (
+                  <span className={`px-1.5 py-0.5 text-[10px] font-extrabold rounded-none leading-none ${
+                    statusTabFilter === tab.key ? 'bg-white text-[#e51c23]' : 'bg-[#e51c23] text-white'
+                  }`}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
         
@@ -195,9 +240,9 @@ export default function HomeView({
             <Loader2 size={32} className="text-red-500 animate-spin" />
             <span className="ml-3 text-sm text-[#5F5E5E] font-medium">กำลังโหลดรายการบิลจากระบบ</span>
           </div>
-        ) : bills.length === 0 ? (
+        ) : filteredBills.length === 0 ? (
           <div className="p-12 text-center text-gray-400 text-sm font-medium">
-            ยังไม่มีบิลนำเข้าที่ถูกยืนยันในฐานข้อมูล
+            ไม่พบบิลนำเข้าตรงตามเงื่อนไขที่เลือก
           </div>
         ) : (
           <Table>
@@ -207,7 +252,7 @@ export default function HomeView({
                 <TableHead>วันที่นำเข้า (IMPORT DATE)</TableHead>
                 <TableHead>ผู้จัดจำหน่าย (SUPPLIER)</TableHead>
                 <TableHead className="text-right">ยอดรวมสุทธิ (TOTAL)</TableHead>
-                <TableHead className="text-center">สถานะ (STATUS)</TableHead>
+                <TableHead className="text-center">สถานะบิล (BILL STATUS)</TableHead>
                 <TableHead className="text-center pr-6 w-24">การจัดการ</TableHead>
               </TableRow>
             </TableHeader>
@@ -221,21 +266,36 @@ export default function HomeView({
                     ฿{row.total_amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="success" size="md">
-                      บันทึกแล้ว
-                    </Badge>
+                    {needsApproval(row) ? (
+                      <Badge variant="warning" size="md">รอเจ้าของอนุมัติ</Badge>
+                    ) : row.payment_status === 'Draft' ? (
+                      <Badge variant="neutral" size="md">แบบร่าง</Badge>
+                    ) : (
+                      <Badge variant="success" size="md">อนุมัติแล้ว</Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-center pr-6">
                     <div className="flex items-center justify-center gap-3">
-                      <button 
-                        onClick={() => handleViewSavedBill(row)} 
+                      <div className="w-5 flex items-center justify-center">
+                        {needsApproval(row) && !isEmployee && (
+                          <button
+                            onClick={() => handleOpenApprove(row)}
+                            className="text-emerald-600 hover:text-emerald-800 transition-colors cursor-pointer"
+                            title="อนุมัติบิล"
+                          >
+                            <CheckCircle2 size={20} />
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => needsApproval(row) && !isEmployee ? handleOpenApprove(row) : handleViewSavedBill(row)}
                         className="text-gray-400 hover:text-[#e51c23] transition-colors cursor-pointer"
-                        title="ดูและแก้ไขบิล"
+                        title={needsApproval(row) && !isEmployee ? "ดูรายละเอียดและอนุมัติบิล" : "ดูและแก้ไขบิล"}
                       >
                         <Eye size={20} />
                       </button>
-                      <button 
-                        onClick={() => handleDeleteBill(row.id)} 
+                      <button
+                        onClick={() => handleDeleteBill(row.id)}
                         className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
                         title="ลบบิล"
                       >
