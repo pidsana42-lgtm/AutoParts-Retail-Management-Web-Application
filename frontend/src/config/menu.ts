@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, FileText, Boxes, MonitorSmartphone,
-  ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight 
+  ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -40,18 +40,29 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   },
 
   // เมนูอื่น ๆ ล็อกสิทธิ์ตามที่วางโครงสร้างไว้
-  { icon: FileText, label: "นำเข้าสินค้าจากบิล", path: "/owner/import-bills", roles: ["OWNER", "ADMIN"] },
+  { 
+    icon: FileText, 
+    label: "นำเข้าสินค้าจากบิล", 
+    path: "/owner/import-bills", 
+    roles: ["OWNER", "ADMIN"]
+  },
+  { 
+    icon: FileText, 
+    label: "นำเข้าสินค้าจากบิล", 
+    path: "/employee/import", 
+    roles: ["EMPLOYEE", "STAFF"]
+  },
   { icon: Boxes, label: "คลังสินค้า", path: "/owner/stock", roles: ["OWNER", "ADMIN"], 
     subs: [
       { icon: ArrowLeftRight, path: "/owner/stock/stock-movement", label: "การเคลื่อนไหวของคลังสินค้า" },
       { icon: FolderPlus, path: "/owner/stock/stock-data", label: "สร้างข้อมูลสินค้า" },
-
     ],
   },
   { icon: MonitorSmartphone, label: "ระบบขาย POS", path: "/employee/pos", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"] },
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/owner/orders", roles: ["OWNER", "ADMIN"] },
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/employee/orders", roles: ["EMPLOYEE"] },
-  { icon: FileClock, label: "พรีออเดอร์", path: "/owner/pre-orders", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"] },
+  { icon: FileClock, label: "พรีออเดอร์", path: "/owner/pre-orders", roles: ["OWNER", "ADMIN"] },
+  { icon: FileClock, label: "พรีออเดอร์", path: "/employee/pre-orders", roles: ["EMPLOYEE", "STAFF"] },
   { 
     icon: RefreshCw, 
     label: "คืน และ เคลมสินค้า", 

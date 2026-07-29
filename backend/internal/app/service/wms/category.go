@@ -69,12 +69,24 @@ func (s *categoryService) Update(id uint, req *wmsDto.CategoryUpdateDTO) error {
 }
 
 func toCategoryResponse(cat *entity.Category) *wmsDto.CategoryResponseDTO {
+	subs := make([]wmsDto.SubCategoryResponseDTO, 0, len(cat.SubCategories))
+	for _, sc := range cat.SubCategories {
+		subs = append(subs, wmsDto.SubCategoryResponseDTO{
+			ID:                      sc.ID,
+			Sub_Category_Name:       sc.Sub_Category_Name,
+			Sub_Category_Short_Name: sc.Sub_Category_Short_Name,
+			Description:             sc.Description,
+			CategoryID:              sc.CategoryID,
+			CreatedAt:               sc.CreatedAt,
+		})
+	}
 	return &wmsDto.CategoryResponseDTO{
 		ID:                  cat.ID,
 		Category_Name:       cat.Category_Name,
 		Category_Short_Name: cat.Category_Short_Name,
 		Description:         cat.Description,
 		CreatedAt:           cat.CreatedAt,
+		SubCategories:       subs,
 	}
 }
 

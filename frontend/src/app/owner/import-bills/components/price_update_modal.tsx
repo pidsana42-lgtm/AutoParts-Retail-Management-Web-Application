@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { AlertCircle, Edit } from 'lucide-react';
 
 export interface PriceMismatchItem {
   index: number;
@@ -24,6 +25,7 @@ export default function PriceUpdateModal({
   mismatchedItems,
   onConfirm
 }: PriceUpdateModalProps) {
+  const navigate = useNavigate();
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   useEffect(() => {
@@ -49,22 +51,34 @@ export default function PriceUpdateModal({
     }
   };
 
+  const handleGoToEditStockBill = () => {
+    onClose();
+    try {
+      sessionStorage.setItem('temp_import_bill_items', JSON.stringify(mismatchedItems));
+    } catch (e) {
+      console.error('Failed to set sessionStorage:', e);
+    }
+    navigate('/owner/import-bills/edit-stock-bill', { 
+      state: { mismatchedItems, isFromImportBill: true } 
+    });
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-none shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200 border border-gray-300">
+      <div className="bg-white rounded-none shadow-xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200 border border-gray-300">
         {/* Header */}
         <div className="bg-red-50 border-b border-red-200 px-6 py-4 flex items-center gap-3 text-red-800">
           <AlertCircle className="w-6 h-6 shrink-0 text-[#e51c23]" />
           <div>
-            <h3 className="font-bold text-lg text-[#1C1B1B]">ตรวจพบราคาสินค้าไม่ตรงกับฐานข้อมูลคลัง</h3>
-            <p className="text-xs text-red-700 font-medium">กรุณาเลือกรายการที่ต้องการอัปเดตราคาทุนในระบบหลังบ้าน</p>
+            <h3 className="font-bold text-lg text-[#1C1B1B]">ตรวจพบราคาสินค้าอัปเดต / ไม่ตรงกับในคลังสินค้า</h3>
+            <p className="text-xs text-red-700 font-medium">มีสินค้าในบิลนี้ที่มีการเปลี่ยนแปลงราคา ท่านสามารถเลือกย้อนกลับไปแก้ไข ไปยังหน้าจัดการสินค้าเพื่อแก้ไขรายรายการ หรืออัปเดตราคาทุนตามบิล</p>
           </div>
         </div>
 
         {/* Body */}
         <div className="p-6 overflow-y-auto space-y-4 flex-1">
-          <p className="text-sm text-[#5F5E5E] leading-relaxed">
-            รายการสินค้าต่อไปนี้มีราคานำเข้าในบิลไม่ตรงกับราคาทุนปัจจุบันในฐานข้อมูลคลังสินค้า ท่านต้องการอัปเดตราคาทุนของสินค้าเหล่านี้ให้ตรงตามบิลนี้ด้วยหรือไม่?
+          <p className="text-xs text-[#5F5E5E] leading-relaxed">
+            รายการสินค้าด้านล่างมีราคานำเข้าในบิลต่างจากราคาทุนปัจจุบันในฐานข้อมูลคลังสินค้า:
           </p>
 
           <div className="border border-gray-200 rounded-none overflow-hidden">
@@ -80,8 +94,8 @@ export default function PriceUpdateModal({
                     />
                   </th>
                   <th className="p-3">สินค้า</th>
-                  <th className="p-3 text-right">ราคาทุนในคลัง</th>
-                  <th className="p-3 text-right">ราคานำเข้าใหม่</th>
+                  <th className="p-3 text-right">ราคาทุนในคลังเดิม</th>
+                  <th className="p-3 text-right text-red-700 font-bold">ราคานำเข้าใหม่ (บิล)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -117,22 +131,34 @@ export default function PriceUpdateModal({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-3 shrink-0">
+        {/* Footer Action Buttons */}
+        <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-none hover:bg-gray-105 cursor-pointer"
+            className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-none hover:bg-gray-100 cursor-pointer flex items-center gap-1.5"
           >
-            ยกเลิก
+            ← ย้อนกลับไปแก้ไขบิล
           </button>
-          <button
-            type="button"
-            onClick={() => onConfirm(selectedIds)}
-            className="px-5 py-2 text-xs font-semibold text-white bg-[#e51c23] hover:bg-[#c9181f] rounded-none cursor-pointer"
-          >
-            ยืนยันนำเข้าและอัปเดตราคา
-          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleGoToEditStockBill}
+              className="px-4 py-2 text-xs font-bold text-white bg-[#1C1B1B] hover:bg-gray-800 rounded-none cursor-pointer flex items-center gap-1.5 shadow-sm"
+            >
+              <Edit className="w-3.5 h-3.5 text-[#e51c23]" />
+              ไปยังหน้าจัดการสินค้า (แก้ไขรายสินค้า)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onConfirm(selectedIds)}
+              className="px-5 py-2 text-xs font-bold text-white bg-[#e51c23] hover:bg-[#c9181f] rounded-none cursor-pointer shadow-sm"
+            >
+              ยืนยันนำเข้าและอัปเดตราคา
+            </button>
+          </div>
         </div>
       </div>
     </div>

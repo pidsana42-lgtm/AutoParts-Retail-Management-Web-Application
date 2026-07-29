@@ -127,7 +127,44 @@ export async function updateBill(billId: number, payload: ConfirmBillPayload): P
   }
 }
 
-// 7. ลบบิลย้อนหลัง
+// 7. อนุมัติบิล (เจ้าของ)
+export async function approveBill(billId: number, bill: SavedBill): Promise<any> {
+  const payload: ConfirmBillPayload = {
+    bill: {
+      bill_no: bill.bill_no,
+      total_amount: bill.total_amount,
+      due_date: bill.due_date,
+      credit_term: bill.credit_term,
+      transport_by: bill.transport_by,
+      supplier_id: bill.supplier_id,
+      subtotal: bill.subtotal,
+      discount_total: bill.discount_total,
+      receive_date: bill.receive_date,
+      vat_amount: bill.vat_amount,
+      grand_total: bill.grand_total,
+      payment_status: 'approved',
+      is_verified: true,
+      bill_image_id: bill.bill_image?.id,
+    },
+    items: (bill.bill_items || []).map(item => ({
+      item_sequence: item.item_sequence,
+      company_product_code: item.company_product_code,
+      company_product_name: item.company_product_name,
+      order_quantity: item.order_quantity,
+      unit: item.unit,
+      conversion_factor: item.conversion_factor,
+      price_per_unit: item.price_per_unit,
+      discount_amount: item.discount_amount,
+      net_amount: item.net_amount,
+      is_freebie: item.is_freebie,
+      remark: item.remark,
+      product_id: item.product_id,
+    })),
+  };
+  return updateBill(billId, payload);
+}
+
+// 8. ลบบิลย้อนหลัง
 export async function deleteBill(billId: number): Promise<any> {
   try {
     const response = await apiClient.delete(`/import-data/bills/${billId}`);
@@ -171,46 +208,32 @@ const MOCK_POS = [
 
 // 8. ดึงรายการใบสั่งซื้อ (Purchase Orders) สำหรับนำเข้า
 export async function getPurchaseOrders(): Promise<any[]> {
-  try {
-    let response;
+  const endpoints = ["/po/get-all-po", "/import-data/purchase-orders", "/purchase-orders"];
+  for (const endpoint of endpoints) {
     try {
-      response = await apiClient.get("/po/get-all-po");
-    } catch (e) {
-      try {
-        response = await apiClient.get("/import-data/purchase-orders");
-      } catch (e2) {
-        response = await apiClient.get("/purchase-orders");
-      }
+      const response = await apiClient.get(endpoint);
+      const data = response.data?.data || response.data || [];
+      if (Array.isArray(data)) return data;
+    } catch {
+      // try next endpoint
     }
-    const data = response.data?.data || response.data || [];
-    if (Array.isArray(data) && data.length > 0) {
-      return data;
-    }
-    return MOCK_POS;
-  } catch (error: any) {
-    return MOCK_POS;
   }
+  return [];
 }
 
 // 9. ดึงรายละเอียดใบสั่งซื้อรายรายการ
 export async function getPurchaseOrderById(poId: number): Promise<any> {
-  try {
-    let response;
+  const endpoints = [`/po/${poId}`, `/import-data/purchase-orders/${poId}`, `/purchase-orders/${poId}`];
+  for (const endpoint of endpoints) {
     try {
-      response = await apiClient.get(`/po/${poId}`);
-    } catch (e) {
-      try {
-        response = await apiClient.get(`/import-data/purchase-orders/${poId}`);
-      } catch (e2) {
-        response = await apiClient.get(`/purchase-orders/${poId}`);
-      }
+      const response = await apiClient.get(endpoint);
+      const resData = response.data?.data || response.data;
+      if (resData) return resData;
+    } catch {
+      // try next endpoint
     }
-    const resData = response.data?.data || response.data;
-    if (resData) return resData;
-    return MOCK_POS.find(p => p.id === poId) || MOCK_POS[0];
-  } catch (error: any) {
-    return MOCK_POS.find(p => p.id === poId) || MOCK_POS[0];
   }
+  return null;
 }
 
 // 10. อัปเดตราคาทุนของสินค้าโดยตรง
@@ -223,6 +246,18 @@ export async function updateProductCostPrice(productId: number, costPrice: numbe
   } catch (error: any) {
     console.error("Error updating product cost price:", error);
     const errMsg = error.response?.data?.error || "ล้มเหลวในการอัปเดตราคาสินค้า";
+    throw new Error(errMsg);
+  }
+}
+
+// 11. อัปเดตรายละเอียดสินค้าจากหน้านำเข้าบิล
+export async function updateImportProduct(productId: number, payload: any): Promise<any> {
+  try {
+    const response = await apiClient.put(`/import-data/products/${productId}`, payload);
+    return response.data;
+  } catch (error: any) {
+    console.error("Error updating import product:", error);
+    const errMsg = error.response?.data?.error || error.message || String(error);
     throw new Error(errMsg);
   }
 }

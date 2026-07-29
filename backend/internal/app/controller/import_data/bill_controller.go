@@ -1,13 +1,20 @@
 package import_data
 
 import (
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
+	"time"
 
 	importDataDTO "backend/internal/app/dto/import_data"
 	importDataSvc "backend/internal/app/service/import_data"
 	"github.com/gin-gonic/gin"
 )
+
+var validSession = regexp.MustCompile(`^[a-zA-Z0-9_-]{6,64}$`)
 
 type BillController struct {
 	svc importDataSvc.ImportBillService
@@ -215,4 +222,101 @@ func (ctrl *BillController) GetPurchaseOrderById(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+// UploadMobileImage - no auth, session token acts as access control
+func (ctrl *BillController) UploadMobileImage(c *gin.Context) {
+	session := c.Query("session")
+	if !validSession.MatchString(session) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session"})
+		return
+	}
+
+	fileHeader, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no image file provided"})
+		return
+	}
+
+	dir := filepath.Join("uploads", "mobile-tmp", session)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create directory"})
+		return
+	}
+
+	// Sanitize filename and prefix with nanosecond timestamp for unique ordering
+	safeName := regexp.MustCompile(`[^a-zA-Z0-9._-]`).ReplaceAllString(fileHeader.Filename, "_")
+	filename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), safeName)
+
+	if err := c.SaveUploadedFile(fileHeader, filepath.Join(dir, filename)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "uploaded",
+		"url":     fmt.Sprintf("/uploads/mobile-tmp/%s/%s", session, filename),
+	})
+}
+
+// GetMobileImages - returns list of image URLs uploaded for a session
+func (ctrl *BillController) GetMobileImages(c *gin.Context) {
+	session := c.Query("session")
+	if !validSession.MatchString(session) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session"})
+		return
+	}
+
+	dir := filepath.Join("uploads", "mobile-tmp", session)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"images": []string{}})
+		return
+	}
+
+	urls := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			urls = append(urls, fmt.Sprintf("/uploads/mobile-tmp/%s/%s", session, entry.Name()))
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"images": urls})
+}
+
+// ClearMobileImages - deletes all images for a session (called when desktop is done)
+func (ctrl *BillController) ClearMobileImages(c *gin.Context) {
+	session := c.Query("session")
+	if !validSession.MatchString(session) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session"})
+		return
+	}
+
+	os.RemoveAll(filepath.Join("uploads", "mobile-tmp", session))
+	c.JSON(http.StatusOK, gin.H{"message": "cleared"})
+}
+
+func (ctrl *BillController) UpdateProduct(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid product ID"})
+		return
+	}
+
+	var input importDataDTO.UpdateImportProductDTO
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid product data: " + err.Error()})
+		return
+	}
+
+	if err := ctrl.svc.UpdateProduct(uint(id), input); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update product: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Product updated successfully",
+		"status":  "success",
+	})
 }

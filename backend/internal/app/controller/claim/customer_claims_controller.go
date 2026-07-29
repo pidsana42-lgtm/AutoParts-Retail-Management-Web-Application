@@ -71,7 +71,7 @@ func (ctrl *CustomerClaimController) GetCustomerClaimByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *CustomerClaimController) ListCustomerClaims(c *gin.Context) {
@@ -81,7 +81,7 @@ func (ctrl *CustomerClaimController) ListCustomerClaims(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *CustomerClaimController) UpdateCustomerClaim(c *gin.Context) {

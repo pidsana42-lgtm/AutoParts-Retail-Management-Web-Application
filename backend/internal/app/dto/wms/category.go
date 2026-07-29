@@ -15,9 +15,10 @@ type CategoryUpdateDTO struct {
 }
 
 type CategoryResponseDTO struct {
-	ID                  uint      `json:"id"`
-	Category_Name       string    `json:"category_name"`
-	Category_Short_Name string    `json:"category_short_name"`
-	Description         string    `json:"description"`
-	CreatedAt           time.Time `json:"created_at"`
+	ID                  uint                     `json:"id"`
+	Category_Name       string                   `json:"category_name"`
+	Category_Short_Name string                   `json:"category_short_name"`
+	Description         string                   `json:"description"`
+	CreatedAt           time.Time                `json:"created_at"`
+	SubCategories       []SubCategoryResponseDTO `json:"sub_categories"`
 }

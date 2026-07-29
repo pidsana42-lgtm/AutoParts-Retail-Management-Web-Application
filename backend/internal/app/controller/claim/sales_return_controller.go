@@ -71,7 +71,7 @@ func (ctrl *SalesReturnController) GetSalesReturnByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *SalesReturnController) ListSalesReturns(c *gin.Context) {
@@ -81,7 +81,7 @@ func (ctrl *SalesReturnController) ListSalesReturns(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *SalesReturnController) UpdateSalesReturn(c *gin.Context) {

@@ -95,7 +95,7 @@ type BillResponseDTO struct {
 	TransportBy        string                `json:"transport_by"`
 	SupplierID         uint                  `json:"supplier_id"`
 	Subtotal           float64               `json:"subtotal"`
-	BillImageID        uint                  `json:"bill_image_id"`
+	BillImageID        *uint                 `json:"bill_image_id"`
 	DiscountTotal      float64               `json:"discount_total"`
 	ReceiveDate        time.Time             `json:"receive_date"`
 	VatAmount          float64               `json:"vat_amount"`
@@ -104,7 +104,7 @@ type BillResponseDTO struct {
 	IsVerified         bool                  `json:"is_verified"`
 	VerifiedBy         uint                  `json:"verified_by"`
 	OCRText            string                `json:"ocr_text"`
-	POID               uint                  `json:"po_id"`
+	POID               *uint                 `json:"po_id"`
 	EvidenceFileURL    string                `json:"evidence_file_url"`
 	EvidenceUploadedAt time.Time             `json:"evidence_uploaded_at"`
 	CreatedAt          time.Time             `json:"created_at"`
@@ -119,6 +119,19 @@ func (d *CreateBillDTO) ToEntity() entity.Bill {
 	if creditTerm == "" {
 		creditTerm = "30 Days"
 	}
+
+	var billImageID *uint
+	if d.BillImageID > 0 {
+		id := d.BillImageID
+		billImageID = &id
+	}
+
+	var poID *uint
+	if d.POID > 0 {
+		id := d.POID
+		poID = &id
+	}
+
 	return entity.Bill{
 		TotalAmount:        d.TotalAmount,
 		BillNo:             d.BillNo,
@@ -127,7 +140,7 @@ func (d *CreateBillDTO) ToEntity() entity.Bill {
 		TransportBy:        d.TransportBy,
 		SupplierID:         d.SupplierID,
 		Subtotal:           d.Subtotal,
-		BillImageID:        d.BillImageID,
+		BillImageID:        billImageID,
 		DiscountTotal:      d.DiscountTotal,
 		ReceiveDate:        d.ReceiveDate.Time,
 		VatAmount:          d.VatAmount,
@@ -136,7 +149,7 @@ func (d *CreateBillDTO) ToEntity() entity.Bill {
 		IsVerified:         d.IsVerified,
 		VerifiedBy:         d.VerifiedBy,
 		OCRText:            d.OCRText,
-		POID:               d.POID,
+		POID:               poID,
 		EvidenceFileURL:    d.EvidenceFileURL,
 		EvidenceUploadedAt: d.EvidenceUploadedAt.Time,
 	}
@@ -203,7 +216,7 @@ func ToBillResponseDTO(m *entity.Bill) BillResponseDTO {
 		TransportBy:        m.TransportBy,
 		SupplierID:         m.SupplierID,
 		Subtotal:           m.Subtotal,
-		BillImageID:        m.BillImageID,
+		BillImageID: m.BillImageID,
 		DiscountTotal:      m.DiscountTotal,
 		ReceiveDate:        m.ReceiveDate,
 		VatAmount:          m.VatAmount,
@@ -212,7 +225,7 @@ func ToBillResponseDTO(m *entity.Bill) BillResponseDTO {
 		IsVerified:         m.IsVerified,
 		VerifiedBy:         m.VerifiedBy,
 		OCRText:            m.OCRText,
-		POID:               m.POID,
+		POID: m.POID,
 		EvidenceFileURL:    m.EvidenceFileURL,
 		EvidenceUploadedAt: m.EvidenceUploadedAt,
 		CreatedAt:          m.CreatedAt,

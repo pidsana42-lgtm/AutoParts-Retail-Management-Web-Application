@@ -14,7 +14,7 @@ import (
 
 func SetupBillRoutes(r *gin.Engine, db *gorm.DB) {
 	// 1. Repository
-	repo := billRepo.NewBillRepository(db)
+	repo := billRepo.NewImportBillRepository(db)
 
 	// 2. Service
 	svc := billSvc.NewImportBillService(repo)
@@ -40,6 +40,7 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB) {
 		importDataGroup.POST("/bill-items", ctrl.CreateBillItem)
 		importDataGroup.GET("/purchase-orders", ctrl.ListPurchaseOrders)
 		importDataGroup.GET("/purchase-orders/:id", ctrl.GetPurchaseOrderById)
+		importDataGroup.PUT("/products/:id", ctrl.UpdateProduct)
 
 		// Custom route for WMS Import Bill flow to fetch categories with preloaded subcategories (Keeps friend's files untouched)
 		importDataGroup.GET("/categories-tree", func(c *gin.Context) {
@@ -73,6 +74,14 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB) {
 			}
 			c.JSON(200, gin.H{"message": "product cost price updated successfully"})
 		})
+	}
+
+	// Mobile image upload routes (no auth — session token acts as access control)
+	mobileGroup := r.Group("/api/mobile")
+	{
+		mobileGroup.POST("/upload-image", ctrl.UploadMobileImage)
+		mobileGroup.GET("/images", ctrl.GetMobileImages)
+		mobileGroup.DELETE("/images", ctrl.ClearMobileImages)
 	}
 
 	// Fallback route alias for purchase-orders directly under /api/
