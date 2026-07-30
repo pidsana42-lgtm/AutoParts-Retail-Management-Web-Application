@@ -4,10 +4,12 @@ import (
 	"backend/internal/app/dto/pos"
 	salesHistoryRepo "backend/internal/app/repository/pos"
 	"math"
+	"context"
 )
 
 type SalesHistoryService interface {
 	GetSalesHistory(req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
+	GetSaleHistoryByID(ctx context.Context, identifier string) (*pos.GetSaleHistoryByIDResponse, error)
 }
 
 type salesHistoryService struct {
@@ -48,4 +50,18 @@ func (s *salesHistoryService) GetSalesHistory(req pos.SalesHistoryFilterRequest)
 		TotalRows:  totalRows,
 		TotalPages: totalPages,
 	}, nil
+}
+
+func (s *salesHistoryService) GetSaleHistoryByID(ctx context.Context, identifier string) (*pos.GetSaleHistoryByIDResponse, error) {
+	// เรียก Repository ดึงข้อมูล SaleOrder + Relations (Preload) โดยส่ง identifier (string)
+	order, err := s.salesHistoryRepo.GetSaleHistoryByID(identifier)
+	if err != nil {
+		return nil, err
+	}
+
+	// แปลง Entity -> DTO Response โดยใช้ Mapper Function ที่เตรียมไว้ (*order เพื่อ Dereference Pointer)
+	response := pos.ToGetSaleHistoryByIDResponse(*order)
+
+	// ส่ง Pointer ของ DTO Response กลับไป
+	return &response, nil
 }

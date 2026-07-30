@@ -41,3 +41,29 @@ func (c *SalesHistoryController) GetSalesHistory(ctx *gin.Context) {
 		"data":    result,
 	})
 }
+
+func (c *SalesHistoryController) GetSaleHistoryByID(ctx *gin.Context) {
+    identifier := ctx.Param("id")
+    if identifier == "" {
+        ctx.JSON(http.StatusBadRequest, gin.H{
+            "message": "กรุณาระบุรหัสรายการขายหรือเลขที่ใบเสร็จ",
+            "error":   "Identifier parameter is required",
+        })
+        return
+    }
+
+    reqCtx := ctx.Request.Context()
+    result, err := c.salesHistoryService.GetSaleHistoryByID(reqCtx, identifier)
+    if err != nil {
+        ctx.JSON(http.StatusInternalServerError, gin.H{
+            "message": "ไม่สามารถดึงข้อมูลรายละเอียดรายการขายได้",
+            "error":   err.Error(),
+        })
+        return
+    }
+
+    ctx.JSON(http.StatusOK, gin.H{
+        "message": "ดึงข้อมูลรายละเอียดรายการขายสำเร็จ",
+        "data":    result,
+    })
+}

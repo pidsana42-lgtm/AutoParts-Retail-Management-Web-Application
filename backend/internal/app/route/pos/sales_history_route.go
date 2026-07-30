@@ -23,5 +23,6 @@ func SetupSalesHistoryRoutes(r *gin.Engine, db *gorm.DB) {
 	)
 	{
 		salesGroup.GET("/sales/history", ctrl.GetSalesHistory)
+		salesGroup.GET("/sales-history/:id", ctrl.GetSaleHistoryByID)
 	}
 }
