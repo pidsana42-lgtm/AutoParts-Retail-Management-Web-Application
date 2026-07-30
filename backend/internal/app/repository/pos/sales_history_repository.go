@@ -5,10 +5,12 @@ import (
     "backend/internal/app/entity"
 
     "gorm.io/gorm"
+    "strconv" 
 )
 
 type SalesHistoryRepository interface {
     GetSalesHistory(req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error)
+    	GetSaleHistoryByID(identifier string) (*entity.SaleOrder, error)
 }
 
 type salesHistoryRepository struct {
@@ -74,4 +76,30 @@ func (r *salesHistoryRepository) GetSalesHistory(req pos.SalesHistoryFilterReque
     }
 
     return orders, totalRows, nil
+}
+
+func (r *salesHistoryRepository) GetSaleHistoryByID(identifier string) (*entity.SaleOrder, error) {
+	var order entity.SaleOrder
+
+	// เช็คว่าถ้าสามารถแปลงเป็น uint ได้ แสดงว่าเป็น ID แต่ถ้าแปลงไม่ได้ แสดงว่าเป็น Order Number
+	query := r.db.Model(&entity.SaleOrder{}).
+		Preload("Customer").
+		Preload("PaymentMethod").
+		Preload("Payments").
+		Preload("Items")
+
+	id, err := strconv.ParseUint(identifier, 10, 64)
+	if err == nil && id > 0 {
+		// ค้นหาด้วย Primary Key ID
+		err = query.Where("id = ?", id).First(&order).Error
+	} else {
+		// ค้นหาด้วย Order Number
+		err = query.Where("order_number = ?", identifier).First(&order).Error
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &order, nil
 }
