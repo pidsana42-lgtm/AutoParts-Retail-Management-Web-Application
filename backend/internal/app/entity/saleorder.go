@@ -52,4 +52,10 @@ type SaleOrder struct {
 
 	// Toto WMS
 	StockMovements []StockMovement `gorm:"foreignKey:SaleOrderID" json:"stock_movements"`
+
+	// เพิ่ม Field สำหรับระบบ Cancel Workflow
+	CancelReason    *string    `gorm:"type:varchar(255)" json:"cancel_reason"`    // เหตุผลที่พนักงานขอยกเลิก
+	CancelRequestedAt *time.Time `gorm:"type:timestamp" json:"cancel_requested_at"` // เวลาที่ส่งคำขอยกเลิก
+	CancelRemark    *string    `gorm:"type:varchar(255)" json:"cancel_remark"`    // หมายเหตุอนุมัติ/ปฏิเสธจากเจ้าของร้าน
+	CancelProcessedAt *time.Time `gorm:"type:timestamp" json:"cancel_processed_at"` // เวลาที่เจ้าของร้านกดจัดการ
 }

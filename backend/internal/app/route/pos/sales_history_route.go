@@ -24,5 +24,14 @@ func SetupSalesHistoryRoutes(r *gin.Engine, db *gorm.DB) {
 	{
 		salesGroup.GET("/sales/history", ctrl.GetSalesHistory)
 		salesGroup.GET("/sales-history/:id", ctrl.GetSaleHistoryByID)
+		salesGroup.POST("/sales-history/:id/request-cancel", ctrl.RequestCancelSale)
+
+		// ส่วนสิทธิ์ของ Owner/Admin ค่อยแตก Group ย่อยออกมาจาก salesGroup อีกที
+		ownerOnly := salesGroup.Group("")
+		ownerOnly.Use(middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)))
+		{
+			ownerOnly.POST("/sales-history/:id/approve-cancel", ctrl.ApproveCancelSale)
+			ownerOnly.POST("/sales-history/:id/reject-cancel", ctrl.RejectCancelSale)
+		}
 	}
 }
