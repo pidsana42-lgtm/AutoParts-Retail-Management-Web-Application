@@ -5,12 +5,22 @@ import (
 	"time"
 )
 
+// Request DTO สำหรับพนักงานส่งคำขอยกเลิก
+type RequestCancelOrderRequest struct {
+	Reason string `json:"reason" binding:"required"`
+}
+
+// Request DTO สำหรับเจ้าของร้านอนุมัติหรือปฏิเสธ
+type ProcessCancelOrderRequest struct {
+	Remark string `json:"remark"`
+}
+
 // SalesHistoryFilterRequest โครงสร้างข้อมูลที่รับมาจาก Query String หน้าเว็บ
 type SalesHistoryFilterRequest struct {
-	Search          string `form:"search"`           
-	StartDate       string `form:"start_date"`      
-	EndDate         string `form:"end_date"`       
-	CustomerTypeID  uint   `form:"customer_type_id"` 
+	Search          string `form:"search"`
+	StartDate       string `form:"start_date"`
+	EndDate         string `form:"end_date"`
+	CustomerTypeID  uint   `form:"customer_type_id"`
 	PaymentMethodID uint   `form:"payment_method_id"`
 	Page            int    `form:"page,default=1"`
 	Limit           int    `form:"limit,default=15"`
@@ -18,90 +28,90 @@ type SalesHistoryFilterRequest struct {
 
 // โครงสร้างข้อมูลประวัติการขาย 1 รายการ ที่จะส่งกลับไปแสดงผลที่ Frontend
 type SalesHistoryItemResponse struct {
-	ID                uint      `json:"id"`
-	OrderNumber       string    `json:"order_number"`
-	OrderDate         time.Time `json:"order_date"`
-	CreatedAt         time.Time `json:"created_at"`
-	
+	ID          uint      `json:"id"`
+	OrderNumber string    `json:"order_number"`
+	OrderDate   time.Time `json:"order_date"`
+	CreatedAt   time.Time `json:"created_at"`
+
 	// ลูกค้าในตาราง
-	CustomerID        *uint   `json:"customer_id"`
-	CustomerName      string  `json:"customer_name"`
-	PhoneNumber       string  `json:"phone_number"`
+	CustomerID   *uint  `json:"customer_id"`
+	CustomerName string `json:"customer_name"`
+	PhoneNumber  string `json:"phone_number"`
 
 	// ขาจร
 	CustomerNameTemp  *string `json:"customer_name_temp"`
 	CustomerPhoneTemp *string `json:"customer_phone_temp"`
-	
-	Subtotal          float64 `json:"subtotal"`
-	DiscountAmount    float64 `json:"discount_amount"`
-	TotalAmount       float64 `json:"total_amount"`
-	PaidAmount        float64 `json:"paid_amount"`
-	BalanceDue        float64 `json:"balance_due"`
-	
-	PaymentMethodName string  `json:"payment_method_name"`
-	Status            string  `json:"status"`
-	PaymentStatus     string  `json:"payment_status"`
+
+	Subtotal       float64 `json:"subtotal"`
+	DiscountAmount float64 `json:"discount_amount"`
+	TotalAmount    float64 `json:"total_amount"`
+	PaidAmount     float64 `json:"paid_amount"`
+	BalanceDue     float64 `json:"balance_due"`
+
+	PaymentMethodName string `json:"payment_method_name"`
+	Status            string `json:"status"`
+	PaymentStatus     string `json:"payment_status"`
 }
 
 // SalesHistoryPaginationResponse โครงสร้างข้อมูลครอบทั้งหมดที่มีข้อมูล Pagination แปะไปด้วย
 type SalesHistoryPaginationResponse struct {
-    Items      []SalesHistoryItemResponse `json:"items"`       // items: Array ของรายการประวัติการขาย
-    Page       int                        `json:"page"`        // page: เลขหน้าปัจจุบัน
-    Limit      int                        `json:"limit"`       // limit: จำนวนรายการต่อหน้าที่ตั้งไว้
-    TotalRows  int64                      `json:"total_rows"`  // total_rows: จำนวนรายการทั้งหมดในระบบที่ตรงเงื่อนไข
-    TotalPages int                        `json:"total_pages"` // total_pages: จำนวนหน้าทั้งหมด
+	Items      []SalesHistoryItemResponse `json:"items"`       // items: Array ของรายการประวัติการขาย
+	Page       int                        `json:"page"`        // page: เลขหน้าปัจจุบัน
+	Limit      int                        `json:"limit"`       // limit: จำนวนรายการต่อหน้าที่ตั้งไว้
+	TotalRows  int64                      `json:"total_rows"`  // total_rows: จำนวนรายการทั้งหมดในระบบที่ตรงเงื่อนไข
+	TotalPages int                        `json:"total_pages"` // total_pages: จำนวนหน้าทั้งหมด
 }
 
 func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse {
-    var customerName string
-    var phoneNumber string
-    var customerNameTemp *string
-    var customerPhoneTemp *string
+	var customerName string
+	var phoneNumber string
+	var customerNameTemp *string
+	var customerPhoneTemp *string
 
-    // เช็คว่าเป็นลูกค้าสมาชิกหรือไม่
-    if order.CustomerID != nil && order.Customer.ID != 0 {
-        // [สมาชิก]
-        customerName = order.Customer.CustomerName
-        phoneNumber = order.Customer.PhoneNumber
-        customerNameTemp = nil
-        customerPhoneTemp = nil
-    } else {
-        // [ลูกค้าทั่วไป / Walk-in]
-        customerName = ""
-        phoneNumber = ""
-        customerNameTemp = order.CustomerNameTemp
-        customerPhoneTemp = order.CustomerPhoneTemp
-    }
+	// เช็คว่าเป็นลูกค้าสมาชิกหรือไม่
+	if order.CustomerID != nil && order.Customer.ID != 0 {
+		// [สมาชิก]
+		customerName = order.Customer.CustomerName
+		phoneNumber = order.Customer.PhoneNumber
+		customerNameTemp = nil
+		customerPhoneTemp = nil
+	} else {
+		// [ลูกค้าทั่วไป / Walk-in]
+		customerName = ""
+		phoneNumber = ""
+		customerNameTemp = order.CustomerNameTemp
+		customerPhoneTemp = order.CustomerPhoneTemp
+	}
 
-    paymentMethodName := "-"
-    
-    // 1. เช็คจาก PaymentMethod ที่ผูกไว้ที่หัวบิลก่อน (ครอบคลุมบิลเงินเชื่อที่ระบุไว้ตอนสร้างออเดอร์)
-    if order.PaymentMethod != nil && order.PaymentMethod.MethodName != "" {
-        paymentMethodName = order.PaymentMethod.MethodName
-    } else if len(order.Payments) > 0 && order.Payments[0].PaymentMethod.MethodName != "" {
-        // 2. Fallback: ถ้าที่หัวบิลไม่ได้ลงไว้ ให้ดึงจากรายการชำระเงิน Payment ตัวแรก
-        paymentMethodName = order.Payments[0].PaymentMethod.MethodName
-    }
+	paymentMethodName := "-"
 
-    return SalesHistoryItemResponse{
-        ID:                order.ID,
-        OrderNumber:       order.OrderNumber,
-        OrderDate:         order.OrderDate,
-        CreatedAt:         order.CreatedAt,
-        CustomerID:        order.CustomerID,
-        CustomerName:      customerName,
-        PhoneNumber:       phoneNumber,
-        CustomerNameTemp:  customerNameTemp,
-        CustomerPhoneTemp: customerPhoneTemp,
-        Subtotal:          order.Subtotal,
-        DiscountAmount:    order.DiscountAmount,
-        TotalAmount:       order.TotalAmount,
-        PaidAmount:        order.PaidAmount,
-        BalanceDue:        order.BalanceDue,
-        PaymentMethodName: paymentMethodName,
-        Status:            string(order.Status),
-        PaymentStatus:     string(order.PaymentStatus),
-    }
+	// 1. เช็คจาก PaymentMethod ที่ผูกไว้ที่หัวบิลก่อน (ครอบคลุมบิลเงินเชื่อที่ระบุไว้ตอนสร้างออเดอร์)
+	if order.PaymentMethod != nil && order.PaymentMethod.MethodName != "" {
+		paymentMethodName = order.PaymentMethod.MethodName
+	} else if len(order.Payments) > 0 && order.Payments[0].PaymentMethod.MethodName != "" {
+		// 2. Fallback: ถ้าที่หัวบิลไม่ได้ลงไว้ ให้ดึงจากรายการชำระเงิน Payment ตัวแรก
+		paymentMethodName = order.Payments[0].PaymentMethod.MethodName
+	}
+
+	return SalesHistoryItemResponse{
+		ID:                order.ID,
+		OrderNumber:       order.OrderNumber,
+		OrderDate:         order.OrderDate,
+		CreatedAt:         order.CreatedAt,
+		CustomerID:        order.CustomerID,
+		CustomerName:      customerName,
+		PhoneNumber:       phoneNumber,
+		CustomerNameTemp:  customerNameTemp,
+		CustomerPhoneTemp: customerPhoneTemp,
+		Subtotal:          order.Subtotal,
+		DiscountAmount:    order.DiscountAmount,
+		TotalAmount:       order.TotalAmount,
+		PaidAmount:        order.PaidAmount,
+		BalanceDue:        order.BalanceDue,
+		PaymentMethodName: paymentMethodName,
+		Status:            string(order.Status),
+		PaymentStatus:     string(order.PaymentStatus),
+	}
 }
 
 func ToSalesHistoryItemResponseList(orders []entity.SaleOrder) []SalesHistoryItemResponse {
@@ -112,15 +122,13 @@ func ToSalesHistoryItemResponseList(orders []entity.SaleOrder) []SalesHistoryIte
 	return list
 }
 
-// DTO สำหรับรายการสินค้าแต่ละชิ้นในบิล (Item Detail)
 type SaleHistoryItemDetail struct {
-	ID          uint   `json:"id"`
-	ProductID   uint   `json:"product_id"`
-	PartNumber  string `json:"part_number"`
-	ProductName string `json:"product_name"`
-	Qty         int    `json:"qty"`
-	Unit        string `json:"unit"`
-	//CostPrice             float64 `json:"cost_price"` น่าจะไม่ต้องใส่เพราะก็ไม่ควรมีใครเห็นรึเปล่า
+	ID                    uint    `json:"id"`
+	ProductID             uint    `json:"product_id"`
+	PartNumber            string  `json:"part_number"`
+	ProductName           string  `json:"product_name"`
+	Qty                   int     `json:"qty"`
+	Unit                  string  `json:"unit"`
 	UnitPrice             float64 `json:"unit_price"`
 	DiscountType          string  `json:"discount_type"`
 	DiscountValue         float64 `json:"discount_value"`
@@ -140,16 +148,16 @@ type GetSaleHistoryByIDResponse struct {
 	OrderDate   time.Time `json:"order_date"`
 
 	// ลูกค้าในตาราง
-	CustomerID        *uint   `json:"customer_id"`
-	CustomerName      string  `json:"customer_name"`
-	PhoneNumber       string  `json:"phone_number"`
+	CustomerID   *uint  `json:"customer_id"`
+	CustomerName string `json:"customer_name"`
+	PhoneNumber  string `json:"phone_number"`
 
 	// ขาจร
 	CustomerNameTemp  *string `json:"customer_name_temp"`
 	CustomerPhoneTemp *string `json:"customer_phone_temp"`
 
 	Subtotal           float64 `json:"subtotal"`             // ยอดรวมก่อนหักส่วนลดบิล
-	BillDiscountType   string  `json:"bill_discount_type"`    // ประเภทส่วนลดท้ายบิล (none, amount, percent)
+	BillDiscountType   string  `json:"bill_discount_type"`   // ประเภทส่วนลดท้ายบิล (none, amount, percent)
 	BillDiscountValue  float64 `json:"bill_discount_value"`  // ส่วนลดท้ายบิล
 	DiscountAmount     float64 `json:"discount_amount"`      // มูลค่าส่วนลดท้ายบิล (บาท)
 	DiscountPercent    float64 `json:"discount_percent"`     // มูลค่าส่วนลดท้ายบิล (%)
@@ -166,10 +174,16 @@ type GetSaleHistoryByIDResponse struct {
 
 	PaymentMethodName string                  `json:"payment_method_name"`
 	PaymentStatus     string                  `json:"payment_status"`
+	Status            string                  `json:"status"`
 	Items             []SaleHistoryItemDetail `json:"items"`
+
+	// ฟิลด์ข้อมูล Cancellation
+	CancelReason      *string    `json:"cancel_reason,omitempty"`
+	CancelRequestedAt *time.Time `json:"cancel_requested_at,omitempty"`
+	CancelRemark      *string    `json:"cancel_remark,omitempty"`
+	CancelProcessedAt *time.Time `json:"cancel_processed_at,omitempty"`
 }
 
-// Mapper สำหรับแปลง SaleOrderItem เป็น DTO รายการสินค้า ฟังก์ชันแปลงข้อมูลสำหรับ รายการสินค้าแต่ละชิ้นในบิล 
 func ToSaleHistoryItemDetail(item entity.SaleOrderItem) SaleHistoryItemDetail {
 	return SaleHistoryItemDetail{
 		ID:                    item.ID,
@@ -193,68 +207,73 @@ func ToSaleHistoryItemDetail(item entity.SaleOrderItem) SaleHistoryItemDetail {
 
 // Mapper สำหรับแปลง SaleOrder (entity หลัก) เป็น GetSaleHistoryByIDResponse DTO ฟังก์ชันแปลงข้อมูลสำหรับ หน้าดูรายละเอียดบิลแบบเจาะจง (Detail View by ID)
 func ToGetSaleHistoryByIDResponse(order entity.SaleOrder) GetSaleHistoryByIDResponse {
-    var customerName string
-    var phoneNumber string
-    var customerNameTemp *string
-    var customerPhoneTemp *string
+	var customerName string
+	var phoneNumber string
+	var customerNameTemp *string
+	var customerPhoneTemp *string
 
-    // เช็คว่าเป็นลูกค้าสมาชิกหรือไม่
-    if order.CustomerID != nil && order.Customer.ID != 0 {
-        // [สมาชิก]
-        customerName = order.Customer.CustomerName
-        phoneNumber = order.Customer.PhoneNumber
-        customerNameTemp = nil
-        customerPhoneTemp = nil
-    } else {
-        // [ลูกค้าทั่วไป / Walk-in]
-        customerName = ""
-        phoneNumber = ""
-        customerNameTemp = order.CustomerNameTemp
-        customerPhoneTemp = order.CustomerPhoneTemp
-    }
+	// เช็คว่าเป็นลูกค้าสมาชิกหรือไม่
+	if order.CustomerID != nil && order.Customer.ID != 0 {
+		// [สมาชิก]
+		customerName = order.Customer.CustomerName
+		phoneNumber = order.Customer.PhoneNumber
+		customerNameTemp = nil
+		customerPhoneTemp = nil
+	} else {
+		// [ลูกค้าทั่วไป / Walk-in]
+		customerName = ""
+		phoneNumber = ""
+		customerNameTemp = order.CustomerNameTemp
+		customerPhoneTemp = order.CustomerPhoneTemp
+	}
 
-    // 2. จัดการช่องทางชำระเงิน
-    paymentMethodName := "-"
-    if order.PaymentMethod != nil && order.PaymentMethod.MethodName != "" {
-        paymentMethodName = order.PaymentMethod.MethodName
-    } else if len(order.Payments) > 0 {
-        if order.Payments[0].PaymentMethod.ID != 0 && order.Payments[0].PaymentMethod.MethodName != "" {
-            paymentMethodName = order.Payments[0].PaymentMethod.MethodName
-        }
-    }
+	// 2. จัดการช่องทางชำระเงิน
+	paymentMethodName := "-"
+	if order.PaymentMethod != nil && order.PaymentMethod.MethodName != "" {
+		paymentMethodName = order.PaymentMethod.MethodName
+	} else if len(order.Payments) > 0 {
+		if order.Payments[0].PaymentMethod.ID != 0 && order.Payments[0].PaymentMethod.MethodName != "" {
+			paymentMethodName = order.Payments[0].PaymentMethod.MethodName
+		}
+	}
 
-    // 3. แปลงรายการสินค้า (Items)
-    items := make([]SaleHistoryItemDetail, 0, len(order.Items))
-    for _, item := range order.Items {
-        items = append(items, ToSaleHistoryItemDetail(item))
-    }
+	// 3. แปลงรายการสินค้า (Items)
+	items := make([]SaleHistoryItemDetail, 0, len(order.Items))
+	for _, item := range order.Items {
+		items = append(items, ToSaleHistoryItemDetail(item))
+	}
 
-    // 4. Return DTO
-    return GetSaleHistoryByIDResponse{
-        ID:                 order.ID,
-        OrderNumber:        order.OrderNumber,
-        OrderDate:          order.OrderDate,
-        CustomerID:         order.CustomerID,
-        CustomerName:       customerName,
-        PhoneNumber:        phoneNumber,
-        CustomerNameTemp:   customerNameTemp,
-        CustomerPhoneTemp:  customerPhoneTemp,
-        Subtotal:           order.Subtotal,
-        BillDiscountType:   string(order.BillDiscountType),
-        BillDiscountValue:  order.BillDiscountValue,
-        DiscountAmount:     order.DiscountAmount,
-        DiscountPercent:    order.DiscountPercent,
-        TotalDiscountItems: order.TotalDiscountItems,
-        TotalAmount:        order.TotalAmount,
-        ReceivedAmount:     order.ReceivedAmount,
-        PaidAmount:         order.PaidAmount,
-        BalanceDue:         order.BalanceDue,
-        ChangeAmount:       order.ChangeAmount,
-        DueDate:            order.DueDate,
-        PaidDate:           order.PaidDate,
-        Note:               order.Note,
-        PaymentMethodName:  paymentMethodName,
-        PaymentStatus:      string(order.PaymentStatus),
-        Items:              items,
-    }
+	// 4. Return DTO
+	return GetSaleHistoryByIDResponse{
+		ID:                 order.ID,
+		OrderNumber:        order.OrderNumber,
+		OrderDate:          order.OrderDate,
+		CustomerID:         order.CustomerID,
+		CustomerName:       customerName,
+		PhoneNumber:        phoneNumber,
+		CustomerNameTemp:   customerNameTemp,
+		CustomerPhoneTemp:  customerPhoneTemp,
+		Subtotal:           order.Subtotal,
+		BillDiscountType:   string(order.BillDiscountType),
+		BillDiscountValue:  order.BillDiscountValue,
+		DiscountAmount:     order.DiscountAmount,
+		DiscountPercent:    order.DiscountPercent,
+		TotalDiscountItems: order.TotalDiscountItems,
+		TotalAmount:        order.TotalAmount,
+		ReceivedAmount:     order.ReceivedAmount,
+		PaidAmount:         order.PaidAmount,
+		BalanceDue:         order.BalanceDue,
+		ChangeAmount:       order.ChangeAmount,
+		DueDate:            order.DueDate,
+		PaidDate:           order.PaidDate,
+		Note:               order.Note,
+		PaymentMethodName:  paymentMethodName,
+		PaymentStatus:      string(order.PaymentStatus),
+		Items:              items,
+		Status:             string(order.Status),
+		CancelReason:       order.CancelReason,
+		CancelRequestedAt:  order.CancelRequestedAt,
+		CancelRemark:       order.CancelRemark,
+		CancelProcessedAt:  order.CancelProcessedAt,
+	}
 }

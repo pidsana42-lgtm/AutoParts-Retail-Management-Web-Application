@@ -5,11 +5,16 @@ import (
 	salesHistoryRepo "backend/internal/app/repository/pos"
 	"math"
 	"context"
+	"backend/internal/app/enum"
+	"errors"
 )
 
 type SalesHistoryService interface {
 	GetSalesHistory(req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
 	GetSaleHistoryByID(ctx context.Context, identifier string) (*pos.GetSaleHistoryByIDResponse, error)
+	RequestCancelSale(ctx context.Context, identifier string, req pos.RequestCancelOrderRequest) error
+	ApproveCancelSale(ctx context.Context, identifier string, req pos.ProcessCancelOrderRequest) error
+	RejectCancelSale(ctx context.Context, identifier string, req pos.ProcessCancelOrderRequest) error
 }
 
 type salesHistoryService struct {
@@ -64,4 +69,49 @@ func (s *salesHistoryService) GetSaleHistoryByID(ctx context.Context, identifier
 
 	// ส่ง Pointer ของ DTO Response กลับไป
 	return &response, nil
+}
+
+// ส่งคำขอยกเลิก
+func (s *salesHistoryService) RequestCancelSale(ctx context.Context, identifier string, req pos.RequestCancelOrderRequest) error {
+	order, err := s.salesHistoryRepo.GetSaleHistoryByID(identifier)
+	if err != nil {
+		return err
+	}
+
+	if order.Status == enum.OrderCancelled {
+		return errors.New("รายการนี้ถูกยกเลิกไปแล้ว")
+	}
+	if order.Status == enum.OrderPendingCancel {
+		return errors.New("รายการนี้อยู่ระหว่างรออนุมัติการยกเลิกอยู่แล้ว")
+	}
+
+	return s.salesHistoryRepo.RequestCancelOrder(order.ID, req.Reason)
+}
+
+// เจ้าของร้านอนุมัติ
+func (s *salesHistoryService) ApproveCancelSale(ctx context.Context, identifier string, req pos.ProcessCancelOrderRequest) error {
+	order, err := s.salesHistoryRepo.GetSaleHistoryByID(identifier)
+	if err != nil {
+		return err
+	}
+
+	if order.Status != enum.OrderPendingCancel {
+		return errors.New("รายการนี้ไม่ได้อยู่ในสถานะรออนุมัติการยกเลิก")
+	}
+
+	return s.salesHistoryRepo.ApproveCancelOrder(order, req.Remark)
+}
+
+// เจ้าของร้านปฏิเสธ
+func (s *salesHistoryService) RejectCancelSale(ctx context.Context, identifier string, req pos.ProcessCancelOrderRequest) error {
+	order, err := s.salesHistoryRepo.GetSaleHistoryByID(identifier)
+	if err != nil {
+		return err
+	}
+
+	if order.Status != enum.OrderPendingCancel {
+		return errors.New("รายการนี้ไม่ได้อยู่ในสถานะรออนุมัติการยกเลิก")
+	}
+
+	return s.salesHistoryRepo.RejectCancelOrder(order.ID, req.Remark)
 }
