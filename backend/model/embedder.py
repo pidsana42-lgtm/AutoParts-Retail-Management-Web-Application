@@ -247,8 +247,8 @@ class ProductMatcher:
                             best_prod_score = score
                             best_prod_idx = idx
                             
-                # Check user corrections with 0.80 threshold first
-                if best_corr_idx != -1 and best_corr_score >= 0.80:
+                # Check user corrections with threshold first
+                if best_corr_idx != -1 and best_corr_score >= threshold:
                     return self.combined_data[best_corr_idx].get("id"), best_corr_score
                 if best_prod_idx != -1 and best_prod_score >= threshold:
                     return self.combined_data[best_prod_idx].get("id"), best_prod_score
@@ -284,7 +284,7 @@ class ProductMatcher:
                             best_prod_score = score
                             best_prod_idx = idx
                             
-                if best_corr_idx != -1 and best_corr_score >= 0.80:
+                if best_corr_idx != -1 and best_corr_score >= threshold:
                     return self.combined_data[best_corr_idx].get("id"), best_corr_score
                 if best_prod_idx != -1 and best_prod_score >= threshold:
                     return self.combined_data[best_prod_idx].get("id"), best_prod_score
@@ -309,7 +309,7 @@ class ProductMatcher:
                         best_prod_score = score
                         best_prod_idx = idx
                         
-            if best_corr_idx != -1 and best_corr_score >= 0.80:
+            if best_corr_idx != -1 and best_corr_score >= threshold:
                 print(f"[Embedding Match] Found correction match: '{self.combined_data[best_corr_idx].get('name')}' with score: {best_corr_score:.4f}")
                 return self.combined_data[best_corr_idx].get("id"), best_corr_score
             if best_prod_idx != -1 and best_prod_score >= threshold:

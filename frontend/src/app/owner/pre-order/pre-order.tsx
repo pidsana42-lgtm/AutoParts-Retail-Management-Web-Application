@@ -23,11 +23,6 @@ interface Customer {
   customer_phone: string;
 }
 
-interface Supplier {
-  id: number;
-  supplier_name: string;
-}
-
 interface Product {
   id: number;
   product_name: string;
@@ -38,7 +33,6 @@ interface Product {
 export default function PreOrderManager() {
   const [preOrders, setPreOrders] = useState<PreOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   
   // UI Views & states
@@ -53,8 +47,6 @@ export default function PreOrderManager() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formType, setFormType] = useState<string>('WALK_IN');
   const [formCustomerId, setFormCustomerId] = useState<number>(0);
-  const [formSupplierId, setFormSupplierId] = useState<number>(0);
-  const [formDepositAmount, setFormDepositAmount] = useState<number>(0);
   const [formStatus, setFormStatus] = useState<string>('PENDING');
   const [formItems, setFormItems] = useState<PreOrderItem[]>([]);
 
@@ -84,14 +76,12 @@ export default function PreOrderManager() {
 
   const fetchSupportData = async () => {
     try {
-      const [custRes, suppRes, prodRes] = await Promise.all([
+      const [custRes, prodRes] = await Promise.all([
         apiClient.get('/customers'),
-        apiClient.get('/wms/suppliers'),
         apiClient.get('/wms/products'),
       ]);
       
       setCustomers(Array.isArray(custRes.data) ? custRes.data : (custRes.data.data || []));
-      setSuppliers(Array.isArray(suppRes.data) ? suppRes.data : (suppRes.data.data || []));
       setProducts(Array.isArray(prodRes.data) ? prodRes.data : (prodRes.data.data || []));
     } catch (err) {
       console.error('Error fetching dropdown helper data:', err);
@@ -102,8 +92,6 @@ export default function PreOrderManager() {
     setEditingId(null);
     setFormType('WALK_IN');
     setFormCustomerId(customers[0]?.id || 0);
-    setFormSupplierId(suppliers[0]?.id || 0);
-    setFormDepositAmount(0);
     setFormStatus('PENDING');
     setFormItems([]);
     setView('form');
@@ -119,8 +107,6 @@ export default function PreOrderManager() {
         setEditingId(id);
         setFormType(data.pre_order_type);
         setFormCustomerId(data.customer_id);
-        setFormSupplierId(data.supplier_id);
-        setFormDepositAmount(data.deposit_amount);
         setFormStatus(data.status);
         setFormItems(data.pre_order_items || []);
         setView('form');
@@ -150,7 +136,7 @@ export default function PreOrderManager() {
     const newItem: PreOrderItem = {
       product_id: defaultProduct.id,
       quantity: 1,
-      unit_price: defaultProduct.sale_price || 0
+      unit_price: 0
     };
     setFormItems(prev => [...prev, newItem]);
   };
@@ -163,33 +149,21 @@ export default function PreOrderManager() {
     setFormItems(prev => {
       const updated = [...prev];
       if (field === 'product_id') {
-        const prod = products.find(p => p.id === Number(value));
         updated[index] = {
           ...updated[index],
-          product_id: Number(value),
-          unit_price: prod ? prod.sale_price : updated[index].unit_price
+          product_id: Number(value)
         };
       } else if (field === 'quantity') {
         updated[index] = { ...updated[index], quantity: Number(value) || 1 };
-      } else if (field === 'unit_price') {
-        updated[index] = { ...updated[index], unit_price: Number(value) || 0 };
       }
       return updated;
     });
-  };
-
-  const calculateTotal = () => {
-    return formItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formCustomerId === 0) {
       setErrorMsg('กรุณาเลือกข้อมูลลูกค้า');
-      return;
-    }
-    if (formSupplierId === 0) {
-      setErrorMsg('กรุณาเลือกผู้ผลิต/ซัพพลายเออร์');
       return;
     }
     if (formItems.length === 0) {
@@ -203,10 +177,14 @@ export default function PreOrderManager() {
     const payload: PreOrder = {
       pre_order_type: formType,
       customer_id: formCustomerId,
-      deposit_amount: formDepositAmount,
+      deposit_amount: 0,
       status: formStatus,
-      supplier_id: formSupplierId,
-      pre_order_items: formItems,
+      supplier_id: 1,
+      pre_order_items: formItems.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: 0
+      })),
       order_date: new Date().toISOString()
     };
 
@@ -238,7 +216,7 @@ export default function PreOrderManager() {
       key: 'id',
       header: 'เลขที่ใบจอง',
       render: (po: PreOrder) => (
-        <span className="font-mono font-bold text-[#b32025]">
+        <span className="font-mono font-bold text-[#e51c23]">
           PRE-{String(po.id).padStart(5, '0')}
         </span>
       )
@@ -247,7 +225,7 @@ export default function PreOrderManager() {
       key: 'order_date',
       header: 'วันที่จอง',
       render: (po: PreOrder) => (
-        <span className="text-gray-500 text-xs">
+        <span className="text-[#5F5E5E] text-xs">
           {po.order_date ? new Date(po.order_date).toLocaleDateString('th-TH', {
             year: 'numeric', month: 'long', day: 'numeric',
             hour: '2-digit', minute: '2-digit'
@@ -260,8 +238,8 @@ export default function PreOrderManager() {
       header: 'ชื่อลูกค้า',
       render: (po: PreOrder) => (
         <div>
-          <div className="font-bold text-slate-800">{po.customer_name}</div>
-          <div className="text-xs text-slate-400">{po.customer_phone}</div>
+          <div className="font-bold text-[#1C1B1B]">{po.customer_name}</div>
+          <div className="text-xs text-[#5F5E5E]/80">{po.customer_phone}</div>
         </div>
       )
     },
@@ -280,7 +258,7 @@ export default function PreOrderManager() {
       render: (po: PreOrder) => (
         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold ${
           po.status === 'COMPLETED' 
-            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+            ? 'bg-[#259b24]/10 text-[#259b24] border border-[#259b24]/30' 
             : po.status === 'CANCELLED' 
               ? 'bg-red-50 text-red-600 border border-red-100' 
               : 'bg-amber-50 text-amber-600 border border-amber-100'
@@ -336,10 +314,10 @@ export default function PreOrderManager() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-5">
             <div>
               <Heading level="h1" className="mb-0 font-extrabold flex items-center gap-3">
-                <Package className="text-[#b32025]" size={36} />
+                <Package className="text-[#e51c23]" size={36} />
                 ระบบจัดการสั่งจองสินค้าล่วงหน้า (Pre-Orders)
               </Heading>
-              <p className="text-sm text-slate-500 mt-1">บันทึก ติดตามสถานะสินค้าจองมัดจำอะไหล่ด่วนสำหรับลูกค้าและช่าง</p>
+              <p className="text-sm text-[#5F5E5E] mt-1">บันทึก ติดตามสถานะสินค้าจองมัดจำอะไหล่ด่วนสำหรับลูกค้าและช่าง</p>
             </div>
             <Button 
               onClick={handleCreateNew}
@@ -382,14 +360,14 @@ export default function PreOrderManager() {
           {/* Table List Section */}
           {loading ? (
             <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-slate-100 shadow-sm min-h-[300px]">
-              <Loader2 className="animate-spin text-[#b32025] mb-3" size={40} />
-              <span className="text-slate-500 font-medium">กำลังโหลดข้อมูลรายการจอง...</span>
+              <Loader2 className="animate-spin text-[#e51c23] mb-3" size={40} />
+              <span className="text-[#5F5E5E] font-medium">กำลังโหลดข้อมูลรายการจอง...</span>
             </div>
           ) : filteredOrders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-slate-100 shadow-sm min-h-[300px] text-slate-400">
+            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-slate-100 shadow-sm min-h-[300px] text-[#5F5E5E]/80">
               <FileText size={48} className="mb-3 text-slate-300" />
               <span className="font-semibold text-lg text-slate-600">ไม่พบข้อมูลรายการจองล่วงหน้า</span>
-              <p className="text-xs text-slate-400 mt-1">ลองเปลี่ยนคำค้นหา หรือกดปุ่มบวกเพื่อเพิ่มใบสั่งจองใหม่</p>
+              <p className="text-xs text-[#5F5E5E]/80 mt-1">ลองเปลี่ยนคำค้นหา หรือกดปุ่มบวกเพื่อเพิ่มใบสั่งจองใหม่</p>
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden p-1">
@@ -415,7 +393,7 @@ export default function PreOrderManager() {
                 <ChevronLeft size={24} className="text-slate-600" />
               </button>
               <div>
-                <Heading level="h2" className="mb-0 font-extrabold text-slate-900">
+                <Heading level="h2" className="mb-0 font-extrabold text-[#1C1B1B]">
                   {editingId ? 'แก้ไขใบสั่งจองสินค้าล่วงหน้า' : 'สร้างใบสั่งจองสินค้าล่วงหน้า'}
                 </Heading>
               </div>
@@ -437,7 +415,7 @@ export default function PreOrderManager() {
               
               {/* Card: ข้อมูลการสั่งจอง */}
               <Card title="ข้อมูลการสั่งจอง">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Select 
                     label="ช่องทางการจอง" 
                     value={formType}
@@ -457,18 +435,6 @@ export default function PreOrderManager() {
                       ...customers.map(c => ({
                         label: `${c.customer_name} (${c.customer_phone})`,
                         value: String(c.id)
-                      }))
-                    ]} 
-                  />
-                  <Select 
-                    label="สั่งของกับผู้ผลิต / ซัพพลายเออร์" 
-                    value={String(formSupplierId)}
-                    onChange={(e) => setFormSupplierId(Number(e.target.value))}
-                    options={[
-                      { label: '-- เลือกซัพพลายเออร์ --', value: '0' },
-                      ...suppliers.map(s => ({
-                        label: s.supplier_name,
-                        value: String(s.id)
                       }))
                     ]} 
                   />
@@ -504,11 +470,9 @@ export default function PreOrderManager() {
                 <div className="p-5 overflow-x-auto">
                   <table className="w-full text-left text-sm border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-100 text-xs font-bold text-slate-400">
-                        <th className="py-2 w-1/2">เลือกสินค้า</th>
-                        <th className="py-2 text-right w-1/5">จำนวน</th>
-                        <th className="py-2 text-right w-1/5">ราคา/ชิ้น</th>
-                        <th className="py-2 text-right">รวมเงิน</th>
+                      <tr className="border-b border-slate-100 text-xs font-bold text-[#5F5E5E]/80">
+                        <th className="py-2 w-3/4">เลือกสินค้า</th>
+                        <th className="py-2 text-right w-1/4">จำนวน</th>
                         <th className="py-2 text-center w-12">ลบ</th>
                       </tr>
                     </thead>
@@ -519,7 +483,7 @@ export default function PreOrderManager() {
                             <select
                               value={item.product_id}
                               onChange={(e) => handleItemChange(idx, 'product_id', e.target.value)}
-                              className="w-full border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
+                              className="w-full border border-slate-200 px-3 py-1.5 text-xs text-[#1C1B1B] focus:outline-none focus:border-indigo-500 font-semibold"
                             >
                               {products.map(p => (
                                 <option key={p.id} value={p.id}>[{p.product_code}] {p.product_name}</option>
@@ -532,20 +496,8 @@ export default function PreOrderManager() {
                               min={1}
                               value={item.quantity}
                               onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
-                              className="w-full border border-slate-200 p-1 text-xs text-right focus:outline-none focus:border-indigo-500 text-slate-800 font-semibold"
+                              className="w-full border border-slate-200 p-1 text-xs text-right focus:outline-none focus:border-indigo-500 text-[#1C1B1B] font-semibold"
                             />
-                          </td>
-                          <td className="py-3 px-2">
-                            <input
-                              type="number"
-                              min={0}
-                              value={item.unit_price}
-                              onChange={(e) => handleItemChange(idx, 'unit_price', e.target.value)}
-                              className="w-full border border-slate-200 p-1 text-xs text-right focus:outline-none focus:border-indigo-500 text-slate-800 font-semibold"
-                            />
-                          </td>
-                          <td className="py-3 text-right font-bold text-gray-900 text-xs">
-                            ฿{(item.quantity * item.unit_price).toLocaleString()}
                           </td>
                           <td className="py-3 text-center">
                             <button
@@ -565,25 +517,22 @@ export default function PreOrderManager() {
 
             </div>
 
-            {/* เลนขวา: สรุปยอด */}
+            {/* เลนขวา: การดำเนินการ */}
             <div className="lg:col-span-1 space-y-6 sticky top-24">
-              <Card title="สรุปยอดใบสั่งจอง">
-                <div className="space-y-4">
-                  <div className="flex justify-between text-slate-500 text-sm">
-                    <span>รวมราคาอะไหล่ทั้งสิ้น</span>
-                    <span className="font-bold text-slate-900 text-base">฿{calculateTotal().toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
+              <Card title="สรุปใบสั่งจอง">
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between text-[#5F5E5E]">
+                    <span>จำนวนรายการสินค้า:</span>
+                    <span className="font-bold text-[#1C1B1B]">{formItems.length} รายการ</span>
                   </div>
-                  
-                  <hr className="border-slate-100" />
-                  
-                  <div className="flex justify-between items-end">
-                    <span className="text-slate-800 font-bold text-sm">ยอดรวมสุทธิ</span>
-                    <span className="text-3xl font-extrabold text-[#b32025]">฿{calculateTotal().toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
+                  <div className="flex justify-between text-[#5F5E5E]">
+                    <span>รวมจำนวนอะไหล่ทั้งสิ้น:</span>
+                    <span className="font-bold text-[#e51c23]">{formItems.reduce((s, i) => s + i.quantity, 0)} ชิ้น</span>
                   </div>
                 </div>
               </Card>
 
-              {/* Action Buttons กลุ่มไว้ใต้สรุปยอด */}
+              {/* Action Buttons กลุ่มไว้ใต้สรุป */}
               <div className="flex flex-col gap-3">
                 <Button 
                   type="submit" 

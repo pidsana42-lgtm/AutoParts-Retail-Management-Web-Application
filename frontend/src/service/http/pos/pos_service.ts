@@ -28,7 +28,7 @@ export const posApiService = {
     apiClient.get<{ id: number; type_name: string }[]>("/pos/customer-types").then((res) => res.data),
 
   /** ดึงรายการวิธีชำระเงินทั้งหมด */
-  getPaymentMethods: (): Promise<{ id: number; method_name: string }[]> => 
+  getPaymentMethods: (): Promise<{ id: number; method_name: string }[]> =>
     apiClient.get<{ id: number; method_name: string }[]>("/pos/payment-methods").then((res) => res.data),
 
   /** สร้าง QR Code สำหรับชำระเงินผ่าน PromptPay */
@@ -43,6 +43,24 @@ export const posApiService = {
     apiClient
       .get<{ data: SalesHistoryPaginationResponse; message: string }>("/pos/sales/history", { params })
       .then((res) => res.data.data), 
+  /** ค้นหาใบสั่งซื้อขายด้วยหมายเลข invoice */
+  getSaleOrderByNumber: async (orderNumber: string): Promise<any | null> => {
+    const endpoints = [
+      `/claims/sale-orders/number/${orderNumber}`,
+      `/pos/orders/number/${orderNumber}`,
+      `/pos/orders?number=${orderNumber}`,
+    ];
+    for (const endpoint of endpoints) {
+      try {
+        const res = await apiClient.get(endpoint);
+        const data = res.data?.data || res.data;
+        if (data) return data;
+      } catch {
+        // try next endpoint
+      }
+    }
+    return null;
+  },
 };
 
 // Business Logic 

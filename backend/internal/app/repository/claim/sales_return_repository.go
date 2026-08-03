@@ -40,7 +40,6 @@ func (r *salesReturnRepository) GetSalesReturnByID(id uint) (*entity.SalesReturn
 	
 	// ใช้ Preload อ้างอิงจาก Foreign Key ที่มีใน entity.CustomerClaim
 	err := r.db.Preload("OriginalOrder").
-		Preload("Return").
 		Preload("CreatedByUser").
 		Preload("ApprovedByUser").
 		First(&returnItem, id).Error
@@ -53,11 +52,10 @@ func (r *salesReturnRepository) GetSalesReturnByID(id uint) (*entity.SalesReturn
 
 // 6. Implement Method: ดึงรายการเคลมของลูกค้าทั้งหมด
 func (r *salesReturnRepository) ListSalesReturns() ([]entity.SalesReturn, error) {
-	var returnItems []entity.SalesReturn
+	returnItems := make([]entity.SalesReturn, 0)
 	
 	// ใช้ Preload เพื่อให้ข้อมูลที่เกี่ยวข้องทั้งหมดแนบมาด้วย
 	err := r.db.Preload("OriginalOrder").
-		Preload("Return").
 		Preload("CreatedByUser").
 		Preload("ApprovedByUser").
 		Find(&returnItems).Error

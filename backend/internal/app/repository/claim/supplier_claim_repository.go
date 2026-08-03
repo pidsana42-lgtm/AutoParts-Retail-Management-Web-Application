@@ -53,7 +53,7 @@ func (r *supplierClaimRepository) GetSupplierClaimByID(id uint) (*entity.Supplie
 
 // 6. Implement Method: ดึงรายการเคลมซัพพลายเออร์ทั้งหมด
 func (r *supplierClaimRepository) ListSupplierClaims() ([]entity.SupplierClaim, error) {
-	var claims []entity.SupplierClaim
+	claims := make([]entity.SupplierClaim, 0)
 	
 	// ใช้ Preload เพื่อให้ข้อมูลพนักงาน, ใบสั่งซื้อ, และซัพพลายเออร์แนบมาด้วย
 	err := r.db.Preload("ApproveBy").

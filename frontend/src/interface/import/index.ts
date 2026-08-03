@@ -1,21 +1,32 @@
-export type ViewState = 'home' | 'scan' | 'excel';
+export type ViewState = 'home' | 'scan' | 'excel' | 'po' | 'manual' | 'approve';
 
 export interface Supplier {
   id: number;
   supplier_name: string;
   short_supplier_name: string;
+  supplier_address?: string;
+  contact_line_sale?: string;
+  phone_number_sale?: string;
+  email_sale?: string;
+  bank_account_number?: string;
 }
 
 export interface Product {
   id: number;
   product_name: string;
   product_code: string;
+  category_name?: string;
+  sub_category_name?: string;
+  cost_price?: number;
+  barcode?: string;
 }
 
 export interface BillItemDTO {
   item_sequence: number;
   company_product_code: string;
   company_product_name: string;
+  ai_product_code?: string;
+  ai_product_name?: string;
   order_quantity: number;
   unit: string;
   conversion_factor: number;
@@ -25,14 +36,18 @@ export interface BillItemDTO {
   is_freebie: boolean;
   remark: string;
   product_id: number | null;
+  category_id?: number | null;
+  sub_category_id?: number | null;
 }
 
 export interface ScannedBillData {
   bill_no: string;
   total_amount: number;
   due_date: string;
+  credit_term?: string;
   transport_by: string;
   supplier_id: number;
+  supplier_name?: string;
   subtotal: number;
   discount_total: number;
   receive_date: string;
@@ -50,6 +65,7 @@ export interface SavedBill {
   bill_no: string;
   total_amount: number;
   due_date: string;
+  credit_term?: string;
   transport_by: string;
   supplier_id: number;
   subtotal: number;
