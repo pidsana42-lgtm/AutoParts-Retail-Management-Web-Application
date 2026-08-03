@@ -1,4 +1,3 @@
-import React from "react";
 import {
   Eye,
   ChevronLeft,
@@ -51,14 +50,12 @@ export default function TransactionHistoryPage() {
     customerType,
     paymentMethod,
     startDate,
-    endDate,
     page,
     limit,
     setSearch,
     setCustomerType,
     setPaymentMethod,
     setStartDate,
-    setEndDate,
     setPage,
     setLimit,
     handleApplyFilter,
