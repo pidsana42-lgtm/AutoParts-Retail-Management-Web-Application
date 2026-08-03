@@ -329,7 +329,10 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
 
     const newFiles: File[] = await Promise.all(
       newUrls.map(async (url) => {
-        const resp = await fetch(url);
+        const fullUrl = url.startsWith('http')
+          ? url
+          : `${window.location.protocol}//${window.location.hostname}:8080${url.startsWith('/') ? '' : '/'}${url}`;
+        const resp = await fetch(fullUrl);
         const blob = await resp.blob();
         const fileName = `mobile_${url.split('/').pop() || 'image.jpg'}`;
         return new File([blob], fileName, { type: blob.type || 'image/jpeg' });
