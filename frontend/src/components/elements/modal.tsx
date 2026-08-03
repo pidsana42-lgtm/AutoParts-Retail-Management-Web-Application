@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 
 const modalPanelVariants = cva(
   [
-    "relative z-10 w-full rounded-sm bg-white shadow-xl",
+    "relative z-10 w-full rounded-none bg-white shadow-xl",
     "animate-in fade-in zoom-in-95 duration-150",
   ],
   {
@@ -93,7 +93,7 @@ export default function Modal({
               onClick={onClose}
               aria-label="ปิด"
               className={cn(
-                "rounded-md p-1 text-slate-400 transition-colors",
+                "rounded-none p-1 text-slate-400 transition-colors",
                 "hover:bg-slate-100 hover:text-slate-600",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               )}

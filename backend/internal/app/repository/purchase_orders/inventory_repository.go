@@ -85,12 +85,13 @@ func (r *inventoryRepository) GetProductBySupplierID(ctx context.Context, suppli
 // *** unit_id เป็นชื่อ FK ที่เดาไว้ตาม pattern ปกติ ถ้า error อีกให้เช็ค entity Product จริง ***
 func (r *inventoryRepository) SearchProducts(ctx context.Context, supplierID string, keyword string) ([]poDto.ProductSearchResponse, error) {
 	var products []poDto.ProductSearchResponse
- 
+
 	err := r.db.WithContext(ctx).
 		Table("inventories").
 		Select(`DISTINCT
 			products.id AS id,
 			products.product_code AS code,
+			products.barcode AS barcode,
 			products.product_name AS name,
 			products.cost_price AS price,
 			units.unit_name AS unit,
@@ -98,13 +99,16 @@ func (r *inventoryRepository) SearchProducts(ctx context.Context, supplierID str
 		Joins("JOIN products ON products.id = inventories.product_id").
 		Joins("LEFT JOIN units ON units.id = products.unit_id").
 		Where("inventories.supplier_id = ?", supplierID).
-		Where("products.product_name LIKE ? OR products.product_code LIKE ?", "%"+keyword+"%", "%"+keyword+"%").
+		Where(
+			"products.product_name LIKE ? OR products.product_code LIKE ? OR products.barcode LIKE ?",
+			"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%",
+		).
 		Limit(20).
 		Find(&products).Error
- 
+
 	if err != nil {
 		return nil, err
 	}
- 
+
 	return products, nil
 }

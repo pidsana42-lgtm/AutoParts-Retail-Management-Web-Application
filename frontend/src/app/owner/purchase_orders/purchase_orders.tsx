@@ -1,24 +1,26 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { ShoppingBasket, CircleCheck, PenLine, Eye, Printer, Trash2, Info,
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
-  RotateCcw, } from "lucide-react";
-
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RotateCcw, } from "lucide-react";
+// Components
 import Heading from "../../../components/elements/heading";
 import Input   from "../../../components/elements/input";
-import Select  from "../../../components/elements/select";
+import Select , { type SelectOption }  from "../../../components/elements/select";
 import Button  from "../../../components/elements/button";
 import { Badge } from "../../../components/elements/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../components/elements/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../components/elements/table";
-
-import { cn } from "../../../utils/component";
-import { useNavigate } from "react-router-dom";
-
-import type { POResponse, POSummaryResponse } from "../../../interface/purchase_orders/po_interface";
-import { formatDate } from "../../../utils/formatdate";
 import { useRejectedBreakdownModal } from "./hooks/useRejectedBreakdownModal";
 import { RejectedBreakdownModal } from "./components/RejectedBreakdownModal";
+// Interface
+import type { POResponse, POSummaryResponse } from "../../../interface/purchase_orders/po_interface";
+// Service
 import { poService } from "../../../service/http/purchase_orders/po_service";
+// Utils
+import { cn } from "../../../utils/component";
+import { formatDate } from "../../../utils/formatdate";
+import { generateLocalId } from "../../../utils/generateId";
+import { usePathBasePrefix  } from "../../../utils/usePathBasePrefix";
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "DRAFT")
@@ -27,26 +29,45 @@ function StatusBadge({ status }: { status: string }) {
     return <Badge variant="outline" className="bg-yellow-100 border-none text-yellow-700">รออนุมัติ</Badge>;
   if (status === "APPROVED")
     return <Badge variant="success">อนุมัติแล้ว</Badge>;
-  if (status === "REJECTED")
-    return <Badge variant="destructive">ไม่อนุมัติ</Badge>;
+  if (status === "RESUBMITTED")
+    return <Badge variant="outline" className="bg-orange-100 border-none text-orange-700">รอส่งอนุมัติใหม่</Badge>;
   if (status === "EXPIRED")
-    return <Badge variant="outline">หมดอายุ</Badge>;
+    return <Badge variant="outline">หมดอายุกู้คืน</Badge>;
+  if (status === "DELETED")
+    return <Badge variant="destructive">อยู่ในถังขยะ</Badge>;
   return <Badge variant="outline">{status}</Badge>;
 }
 
 function ActionButtons({ id, status }: { id: number; status: string }) {
   const navigate = useNavigate();
+  const userRole = localStorage.getItem('role');
+  const basePath = usePathBasePrefix();
+  const [isPrinting, setIsPrinting] = useState(false);
 
-  const handlePrint = async () => {
+  const printOptions: SelectOption[] = [
+    { label: "พิมพ์พร้อมรหัสสินค้า", value: "with_code" },
+    { label: "พิมพ์ไม่เอารหัสสินค้า", value: "without_code" },
+  ];
+  const handlePrint = async (includeCode: boolean) => {
+    setIsPrinting(true);
     try {
-      const blob = await poService.printPurchaseOrder(id);
-      // สร้าง URL จำลองสำหรับไฟล์ PDF แล้วสั่งเปิดในแท็บใหม่
-      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-      window.open(url, '_blank'); 
-      setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+      const blob = await poService.printPurchaseOrder(id, includeCode);
+      const url = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+      const fileNameId = generateLocalId();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `PO_${fileNameId}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("พิมพ์ไม่สำเร็จ:", err);
+      console.error(err);
+    } finally {
+      setIsPrinting(false);
     }
+  };
+
+  const handleSelectPrintOption = (e: { target: { value: string } }) => {
+    handlePrint(e.target.value === "with_code");
   };
 
   const handleApprove = async () => {
@@ -67,7 +88,7 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
     const confirmed = window.confirm('คุณต้องการลบใบสั่งซื้อนี้ใช่หรือไม่? และสามารถกู้คืนได้ภายใน 7 วัน')
     if (!confirmed) return;
     try {
-      await poService.updatePOStatus(id, 'DELETED');
+      await poService.deletePurchaseOrder(id);
       alert('ลบใบสั่งซื้อสำเร็จ')
       window.location.reload()
     } catch {
@@ -88,11 +109,11 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
     }
   };
 
-  // สถานะ: ฉบับร่าง
-  if (status === "DRAFT") {
+  // สถานะ: ฉบับร่าง หรือไม่ผ่านอนุมัติ รอส่งพิจารณาใหม่
+  if (status === "DRAFT" || status === "RESUBMITTED") {
     return (
       <div className="flex items-start justify-center gap-3">
-        <button onClick={() => navigate(`/owner/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
+        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
           <PenLine className="w-4 h-4"/>
         </button>
         <button onClick={handleDelete} className="text-red-600 hover:text-red-700 transition cursor-pointer">
@@ -103,10 +124,10 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
   }
 
   // สถานะ: รออนุมัติ
-  if (status === "PENDING") {
+  if (status === "PENDING" && userRole === 'Owner') {
     return (
       <div className="flex items-center justify-center gap-3">
-        <button onClick={() => navigate(`/owner/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
+        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
           <Eye className="w-4 h-4" />
         </button>
         <button onClick={handleApprove} className="text-emerald-600 hover:text-emerald-700 rounded transition cursor-pointer">
@@ -116,16 +137,26 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
     );
   }
 
+  if (status === "PENDING") {
+    return (
+      <div className="flex items-center justify-center gap-3">
+        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
+          <Eye className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
   // สถานะ: หมดอายุ
-  if (status === "EXPIRED") {
+  if (status === "EXPIRED" || status === "DELETED") {
     return (
       <div className="flex items-center justify-center gap-3">
         {/* ปุ่มรูปตา: นำทางไปหน้าดูรายละเอียด */}
-        <button onClick={() => navigate(`/owner/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
+        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
           <Eye className="w-4 h-4" />
         </button>
 
-        {/* ปุ่มกู้คืน: รอใส่ฟังก์ชันสำหรับกู้คืน */}
+        {/* ปุ่มกู้คืน: ฟังก์ชันสำหรับกู้คืน */}
         <button onClick={handleRestore} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
           <RotateCcw className="w-4 h-4" />
         </button>
@@ -133,24 +164,34 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
     );
   }
 
-  // สถานะอื่นๆ: อนุมัติแล้ว (APPROVED) หรือ ไม่อนุมัติ (REJECTED)
+  // สถานะอื่นๆ: อนุมัติแล้ว (APPROVED)
   return (
     <div className="flex items-center justify-center gap-3">
       {/* ปุ่มรูปตา: นำทางไปหน้าดูรายละเอียด */}
-      <button onClick={() => navigate(`/owner/orders/${id}`)} className="text-gray-600 hover:text-gray-700 transition cursor-pointer">
+      <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-700 transition cursor-pointer">
         <Eye className="w-4 h-4" />
       </button>
       
       {/* ปุ่มเครื่องพิมพ์: เรียกฟังก์ชัน Generate PDF */}
-      {status === "APPROVED" ? (
-        <button onClick={handlePrint} className="text-gray-600 hover:text-gray-700 transition cursor-pointer">
-          <Printer className="w-4 h-4" />
-        </button>
-      ) : (
-        <button onClick={handleDelete} className="text-red-600 hover:text-red-600 transition cursor-pointer">
-          <Trash2 className="w-4 h-4" />
-        </button>
-      )}
+      <Select
+        options={printOptions}
+        onChange={handleSelectPrintOption}
+        disabled={isPrinting}
+        menuAlign="right"
+        renderTrigger={({ toggle, disabled }) => (
+          <button
+            type="button"
+            onClick={toggle}
+            disabled={disabled}
+            className={cn(
+              "flex items-center gap-1 text-gray-600 hover:text-gray-700 transition cursor-pointer",
+              "disabled:opacity-60 disabled:cursor-not-allowed"
+            )}
+          >
+            <Printer className="w-4 h-4" />
+          </button>
+        )}
+      />
     </div>
   );
 }
@@ -175,13 +216,14 @@ const PO_STATUS_OPTIONS = [
   { label: "ฉบับร่าง", value: "DRAFT" },
   { label: "รออนุมัติ", value: "PENDING" },
   { label: "อนุมัติแล้ว", value: "APPROVED" },
-  { label: "ไม่อนุมัติ", value: "REJECTED" },
+  { label: "รอส่งอนุมัติใหม่", value: "RESUBMITTED" },
   { label: "หมดอายุ", value: "EXPIRED"}
 ];
 
 // ─── Page ──────────
 const PurchaseOrders: React.FC = () => {
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   // 0. Hook
   const { isOpen, modalData, openModal, closeModal } = useRejectedBreakdownModal();
   
@@ -281,7 +323,7 @@ const PurchaseOrders: React.FC = () => {
         <Heading level="h1" weight="semibold" className="m-0 text-black">
           จัดการใบสั่งซื้อ
         </Heading>
-        <Button leftIcon={<ShoppingBasket className="h-5 w-5" />} size="md" onClick={() => navigate("/owner/new-orders")}>
+        <Button leftIcon={<ShoppingBasket className="h-5 w-5" />} size="md" onClick={() => navigate(`${basePath}/new-orders`)}>
           สร้างใบสั่งซื้อใหม่
         </Button>
       </div>
@@ -327,7 +369,7 @@ const PurchaseOrders: React.FC = () => {
         </Card>
 
         {/* Monthly Stats Card */}
-        <div className="bg-[#22252a] text-white rounded-md p-6 w-1/4 flex flex-col justify-between shadow-sm relative overflow-hidden">
+        <div className="bg-[#22252a] text-white rounded-none p-6 w-1/4 flex flex-col justify-between shadow-sm relative overflow-hidden">
           <div>
             <p className="text-sm text-gray-400 font-light">ใบสั่งซื้อที่อนุมัติในเดือนนี้</p>
             <p className="text-4xl font-bold mt-2 flex items-baseline gap-2">
@@ -361,7 +403,7 @@ const PurchaseOrders: React.FC = () => {
           >
             <div className="flex justify-between items-center w-full">
               <p className="text-sm text-[#6B7280] font-medium">ไม่อนุมัติ (MTD)</p>
-              <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-sm flex items-center gap-1">
+              <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-none flex items-center gap-1">
                 <Info className="w-3 h-3" /> ดูรายละเอียดแยกบริษัท
               </span>
             </div>
@@ -426,7 +468,9 @@ const PurchaseOrders: React.FC = () => {
                       ฿{Number(po.total_amount).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </TableCell>
                     <TableCell className="text-center">
-                      <StatusBadge status={po.status} />
+                      <div className="flex justify-center">
+                        <StatusBadge status={po.status} />
+                      </div>
                     </TableCell>
                     <TableCell className="text-center">
                       <ActionButtons id={po.id} status={po.status} />
@@ -456,7 +500,7 @@ const PurchaseOrders: React.FC = () => {
                 <select
                   value={itemsPerPage}
                   onChange={(e) => setItemsPerPage(Number(e.target.value))}
-                  className="border border-gray-200 rounded px-2 py-1 text-gray-600 bg-white hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200 cursor-pointer"
+                  className="border border-gray-200 rounded-none px-2 py-1 text-gray-600 bg-white hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200 cursor-pointer"
                 >
                   <option value={5}>5</option>
                   <option value={10}>10</option>
@@ -471,7 +515,7 @@ const PurchaseOrders: React.FC = () => {
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(1)}
                 aria-label="หน้าแรก"
-                className="p-1.5 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
               >
                 <ChevronsLeft className="w-4 h-4" />
               </button>
@@ -479,7 +523,7 @@ const PurchaseOrders: React.FC = () => {
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage((prev) => prev - 1)}
                 aria-label="หน้าก่อนหน้า"
-                className="p-1.5 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -493,7 +537,7 @@ const PurchaseOrders: React.FC = () => {
                     onClick={() => setCurrentPage(page)}
                     aria-current={currentPage === page ? "page" : undefined}
                     className={cn(
-                      "px-3 py-1.5 rounded font-medium transition-colors cursor-pointer",
+                      "px-3 py-1.5 rounded-none font-medium transition-colors cursor-pointer",
                       currentPage === page ? "bg-[#d61c24] text-white" : "text-gray-600 hover:bg-gray-100"
                     )}
                   >
@@ -506,7 +550,7 @@ const PurchaseOrders: React.FC = () => {
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage((prev) => prev + 1)}
                 aria-label="หน้าถัดไป"
-                className="p-1.5 rounded text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -514,7 +558,7 @@ const PurchaseOrders: React.FC = () => {
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage(totalPages)}
                 aria-label="หน้าสุดท้าย"
-                className="p-1.5 rounded text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
               >
                 <ChevronsRight className="w-4 h-4" />
               </button>

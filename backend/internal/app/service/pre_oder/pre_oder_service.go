@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"context"
 
 	preOrderDTO "backend/internal/app/dto/pre_oder"
 	"backend/internal/app/entity"
@@ -23,6 +24,7 @@ type PreOrderService interface {
 	ListPreOrders() ([]preOrderDTO.PreOrderResponseDTO, error)
 	UpdatePreOrder(id uint, input preOrderDTO.UpdatePreOrderDTO) (preOrderDTO.PreOrderResponseDTO, error)
 	DeletePreOrder(id uint) error
+	ListPreOrdersForPOSelection(ctx context.Context) ([]preOrderDTO.PreOrderForPODTO, error)
 }
 
 type preOrderService struct {
@@ -191,4 +193,17 @@ func (s *preOrderService) UpdatePreOrder(id uint, input preOrderDTO.UpdatePreOrd
 
 func (s *preOrderService) DeletePreOrder(id uint) error {
 	return s.repo.DeletePreOrder(id)
+}
+
+func (s *preOrderService) ListPreOrdersForPOSelection(ctx context.Context) ([]preOrderDTO.PreOrderForPODTO, error) {
+	entities, err := s.repo.ListByStatus(ctx, "PENDING") // ฟังก์ชันนี้เราเขียน Preload ครบแล้ว
+	if err != nil {
+		return nil, err
+	}
+	
+	res := make([]preOrderDTO.PreOrderForPODTO, len(entities))
+	for i := range entities {
+		res[i] = preOrderDTO.ToPreOrderForPODTO(&entities[i]) // เปลี่ยนมาใช้ To ตัวใหม่
+	}
+	return res, nil
 }

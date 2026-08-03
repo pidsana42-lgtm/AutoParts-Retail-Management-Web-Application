@@ -112,6 +112,9 @@ func SetupDatabase() {
 		// LINE OA system
 		&entity.LineUser{},
 		&entity.LineMessage{},
+
+		// Company Setting
+		&entity.CompanySetting{},
 	); err != nil {
 		log.Fatalf("failed to migrate schema: %v", err)
 	}
@@ -120,18 +123,13 @@ func SetupDatabase() {
 	db.Exec("SET session_replication_role = 'origin';")
 
 	// Looktao
-
 	seed.Supplier(db)
-	
-	
-  
-  seed.Role(db)
-  seed.CustomerType(db)
-  seed.PaymentMethod(db)
-  seed.StoreConfig(db)
+	seed.Role(db)
+	seed.CustomerType(db)
+	seed.PaymentMethod(db)
+	seed.StoreConfig(db)
     
 	// Toto WMS
-
 	seed.Zone(db)
     seed.Unit(db)
     seed.Category(db)
@@ -147,9 +145,12 @@ func SetupDatabase() {
     seed.Customer(db)
     seed.Product(db)
 	
+	// Chompoo
 	seed.PurchaseOrdersType(db)
 	seed.PurchaseOrders(db)
 	seed.PurchaseOrdersItems(db)
+	
+	// Siri
 	seed.BillImage(db)
 	seed.Bill(db)
 	seed.SaleOrder(db)

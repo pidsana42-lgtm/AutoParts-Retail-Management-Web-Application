@@ -12,6 +12,7 @@ export interface SupplierResponse {
 export interface ProductSearchResponse {
     id: number;
     code: string;
+    barcode: string;
     name: string;
     price: number;
     unit: string;
@@ -90,6 +91,7 @@ export interface CreatePOResponse {
 
 export interface PreorderItem {
     id: number;
+    pre_order_id?: number;
     product_id: number;
     product_name: string;
     product_code: string;
@@ -100,7 +102,7 @@ export interface PreorderItem {
 }
 
 // -----------------------------------------
-// // PO MANAGEMENT & SUMMARIES (ส่วนการจัดการและสรุปข้อมูล)
+// PO MANAGEMENT & SUMMARIES (ส่วนการจัดการและสรุปข้อมูล)
 // -----------------------------------------
 
 export interface POResponse {
@@ -110,7 +112,7 @@ export interface POResponse {
     supplier_name: string;
     total_amount: number;
     notes?: string;
-    status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'DELETED';
+    status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'RESUBMITTED' | 'EXPIRED' | 'DELETED';
     creator_name: string;
     created_at: string;
     last_updated_by?: number;
@@ -165,7 +167,7 @@ export interface UpdatePOResponse {
   id: number;
   po_number: string;
   supplier_name: string;
-  status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'DELETED';
+  status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'RESUBMITTED' | 'EXPIRED' | 'DELETED';
   total_amount: number;
   notes?: string;
   last_updated_by?: number;
@@ -185,4 +187,32 @@ export interface POAnalyticsResponse {
     has_enough_data: boolean;
     estimated_days: number;
     accuracy_rate: number;
+}
+
+// -----------------------------------------
+// PRE - ORDER
+// -----------------------------------------
+interface ProductRaw {
+  product_code?: string;
+  product_name?: string;
+  unit?: {
+    unit_name?: string;
+  };
+}
+
+export interface PreOrderItemRaw {
+  id: number;
+  product_id: number;
+  product?: ProductRaw;
+  product_code?: string;
+  product_name?: string;
+  quantity: number;
+  unit_price: number;
+  unit?: string;
+}
+
+export interface PreOrderRaw {
+  id: number;
+  status: string;
+  pre_order_items?: PreOrderItemRaw[];
 }

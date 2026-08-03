@@ -124,3 +124,13 @@ func (ctrl *PreOrderController) DeletePreOrder(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
 }
+
+func (ctrl *PreOrderController) ListPreOrdersForPOSelection(c *gin.Context) {
+	res, err := ctrl.svc.ListPreOrdersForPOSelection(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve pre-orders: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}
