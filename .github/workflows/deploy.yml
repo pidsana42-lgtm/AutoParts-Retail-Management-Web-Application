@@ -3,7 +3,7 @@ name: Deploy Next.js App
 on:
   push:
     branches:
-      - import # 📍 ทำงานเมื่อมีการ Push เข้า Branch: import
+      - test-deploy-noto # 📍 1. ทำงานเมื่อ Push เข้า Branch นี้
 
 jobs:
   deploy:
@@ -21,12 +21,14 @@ jobs:
           script: |
             cd /var/www/AutoParts-Retail-Management-Web-Application
             
-            # ตรวจสอบและดึงโค้ดจาก Branch import
+            # ตรวจสอบและดึงโค้ด
             if [ ! -d ".git" ]; then
-              git clone -b import git@github.com:pidsana42-lgtm/AutoParts-Retail-Management-Web-Application.git .
+              git clone -b test-deploy-noto git@github.com:pidsana42-lgtm/AutoParts-Retail-Management-Web-Application.git .
             else
-              git checkout import
-              git pull origin import
+              # 📍 2. อัปเดตรายชื่อ Branch จาก GitHub และสลับมาใช้ Branch นี้
+              git fetch origin
+              git checkout test-deploy-noto
+              git pull origin test-deploy-noto
             fi
 
             # เข้าไปที่โฟลเดอร์ frontend เพื่อ Build โปรเจกต์
