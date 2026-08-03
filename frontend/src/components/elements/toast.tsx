@@ -37,7 +37,7 @@ const toastVariants = cva(
   // Base styles
   [
     "relative flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 overflow-hidden",
-    "rounded-sm px-4 py-3 shadow-lg",
+    "rounded-none px-4 py-3 shadow-lg",
     "animate-in slide-in-from-right-5 fade-in duration-200",
     "border-l-4 bg-white text-slate-800",
   ],
@@ -183,7 +183,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         onClick={() => onDismiss(toast.id)}
         aria-label="ปิดการแจ้งเตือน"
         className={cn(
-          "mt-0.5 shrink-0 rounded p-0.5",
+          "mt-0.5 shrink-0 rounded-none p-0.5",
           "text-slate-400 transition-colors",
           "hover:bg-slate-100 hover:text-slate-600",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"

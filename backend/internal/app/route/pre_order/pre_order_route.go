@@ -32,5 +32,7 @@ func SetupPreOrderRoutes(r *gin.Engine, db *gorm.DB) {
 		preOrderGroup.GET("/:id", ctrl.GetPreOrderByID)
 		preOrderGroup.PUT("/:id", ctrl.UpdatePreOrder)
 		preOrderGroup.DELETE("/:id", ctrl.DeletePreOrder)
+		// PO
+		preOrderGroup.GET("/for-po-selection", ctrl.ListPreOrdersForPOSelection)
 	}
 }

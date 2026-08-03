@@ -5,7 +5,7 @@ import { type HTMLAttributes } from "react";
 const badgeVariants = cva(
   [
     "inline-flex items-center justify-center gap-1",
-    "font-medium leading-none rounded-sm",
+    "font-medium leading-none rounded-none whitespace-nowrap",
   ],
   {
     variants: {
@@ -20,9 +20,9 @@ const badgeVariants = cva(
         outline:     "border border-current bg-transparent text-slate-600",
       },
       size: {
-        sm: "min-w-[4rem] px-1.5 py-0.5 text-xs",
-        md: "min-w-[5rem] px-2 py-0.5 text-xs",
-        lg: "min-w-[6rem] px-2.5 py-1 text-sm",
+        sm: "w-20 px-1.5 py-0.5 text-xs",
+        md: "w-28 px-2 py-0.5 text-xs",
+        lg: "w-32 px-2.5 py-1 text-sm",
       },
     },
     defaultVariants: {

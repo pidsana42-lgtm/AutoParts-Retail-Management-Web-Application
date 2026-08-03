@@ -4,12 +4,16 @@ import (
 	poCtrl "backend/internal/app/controller/purchase_orders"
 	poRepo "backend/internal/app/repository/purchase_orders"
 	poSvc "backend/internal/app/service/purchase_orders" 
+	preOrderRepo "backend/internal/app/repository/pre_oder"
 
 	"backend/internal/app/enum"
 	"backend/internal/middleware"
+	"github.com/robfig/cron/v3"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"strconv"
+	"context"
+	"log"
 	"os"
 )
 
@@ -28,15 +32,42 @@ func SetupPORoutes(r *gin.Engine, db *gorm.DB) {
 	supplierRepository := poRepo.NewSupplierRepository(db)
 	userRepository := poRepo.NewUserRepository(db)
 	inventoryRepository := poRepo.NewInventoryRepository(db)
+	preOrderRepository := preOrderRepo.NewPreOrderRepository(db)
 	draftExpiryDays := getPODraftExpiryDays()
 	poService := poSvc.NewPOService(
 		poRepository,       // 1. PO Repo
     	productRepository,  // 2. Product Repo
 		inventoryRepository,// 3. Inventory Repo
    		supplierRepository, // 4. Supplier Repo
-    	userRepository,     // 5. User Repo
+		preOrderRepository,	// 5. PreOrder Repo
+    	userRepository,     // 6. User Repo
 		draftExpiryDays,
 	)
+
+	// สำหรับ ล้างข้อมูลใบสั่งซื้อหมดอายุ
+	c := cron.New()
+	// Job 1: รันทุกเที่ยงคืน (0 0 * * *) 
+	// หน้าที่: ตรวจสอบและดันสถานะ DELETED/RESUBMITTED ไปเป็น EXPIRED
+	c.AddFunc("0 0 * * *", func() {
+		ctx := context.Background()
+		err := poRepository.UpdateStatusToExpired(ctx)
+		if err != nil {
+			log.Printf("[Cron-Daily] Failed to update status to EXPIRED: %v", err)
+		}
+	})
+	// Job 2: รันตอนเที่ยงคืนของวันที่ 30 ทุกเดือน (0 0 30 * *)
+	// หน้าที่: กวาดล้างขยะ EXPIRED ที่หมดเวลากู้คืนแล้วออกจากระบบ
+	c.AddFunc("0 0 30 * *", func() {
+		ctx := context.Background()
+		err := poRepository.HardDeleteExpiredPOs(ctx)
+		if err != nil {
+			log.Printf("[Cron-Monthly] Failed to hard delete EXPIRED POs: %v", err)
+		} else {
+			log.Println("[Cron-Monthly] Hard delete cleanup completed")
+		}
+	})
+	c.Start()
+
 	poController := poCtrl.NewPOController(poService)
 
 	poGroup := r.Group("/api/po")
@@ -46,7 +77,7 @@ func SetupPORoutes(r *gin.Engine, db *gorm.DB) {
 	)
 	{
 		// CRUD
-		poGroup.POST("/new-purchase-orders", poController.CreatePO)
+		poGroup.POST("/new-po", poController.CreatePO)
 		poGroup.PUT("/:id", poController.UpdatePO)
 		poGroup.PATCH("/:id/status", poController.UpdateStatus)
 		poGroup.DELETE("/:id", poController.DeletePO)

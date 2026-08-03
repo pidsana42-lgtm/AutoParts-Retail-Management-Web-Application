@@ -86,13 +86,13 @@ func (ctrl *PurchaseOrderController) GetByID(c *gin.Context) {
 
 // for ตอนที่อัพเดตสถานะที่เจ้าของร้าน
 type UpdateStatusInput struct {
-	Status poEnum.POStatus `json:"status" binding:"required,oneof=DRAFT PENDING APPROVED REJECTED"`
+	Status          poEnum.POStatus `json:"status" binding:"required,oneof=DRAFT PENDING APPROVED REJECTED EXPIRED RESUBMITTED"`
+	RejectionReason string          `json:"rejection_reason"`
 }
 
-// อัพเดตสถานะ PO 
 func (ctrl *PurchaseOrderController) UpdateStatus(c *gin.Context) {
 	var uri struct {
-		ID 		uint	`uri:"id" binding:"required"`
+		ID uint `uri:"id" binding:"required"`
 	}
 	if err := c.ShouldBindUri(&uri); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
@@ -105,7 +105,7 @@ func (ctrl *PurchaseOrderController) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	err := ctrl.poService.UpdatePOStatus(c.Request.Context(), uri.ID, input.Status)
+	err := ctrl.poService.UpdatePOStatus(c.Request.Context(), uri.ID, input.Status, input.RejectionReason)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -176,8 +176,9 @@ func (c *PurchaseOrderController) PrintPO(ctx *gin.Context) {
         return
     }
 
+	includeCode, _ := strconv.ParseBool(ctx.DefaultQuery("include_code", "false"))
     // เรียก Service เพื่อ Gen PDF (คืนค่ากลับมาเป็น []byte)
-    pdfBytes, err := c.poService.GeneratePOPDF(ctx.Request.Context(), uint(id))
+    pdfBytes, err := c.poService.GeneratePOPDF(ctx.Request.Context(), uint(id), includeCode)
     if err != nil {
 		fmt.Println("PDF Generation Error:", err)
         ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate PDF"})

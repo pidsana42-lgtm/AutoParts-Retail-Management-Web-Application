@@ -118,7 +118,7 @@ export function GenericTable<T>({
   className,
 }: GenericTableProps<T>) {
   return (
-    <div className={cn("overflow-x-auto rounded-sm border border-slate-200", className)}>
+    <div className={cn("overflow-x-auto rounded-none border border-slate-200", className)}>
       <table className="w-full min-w-max text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50">

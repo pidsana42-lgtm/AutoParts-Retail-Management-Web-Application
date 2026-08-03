@@ -10,4 +10,5 @@ type PreOrderItem struct {
 	Product    *Product  `gorm:"foreignKey:ProductID" json:"product,omitempty"`
 	Quantity   int       `gorm:"not null" json:"quantity"`
 	UnitPrice  float64   `gorm:"not null" json:"unit_price"`
+	Status     string    `gorm:"not null;default:'PENDING'" json:"status"`
 }

@@ -5,7 +5,7 @@ import React from "react";
 const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 font-medium cursor-pointer",
-    "rounded-sm transition-colors ",
+    "rounded-none transition-colors ",
     "focus:outline-none",
     "disabled:opacity-60 disabled:cursor-not-allowed",
   ],
