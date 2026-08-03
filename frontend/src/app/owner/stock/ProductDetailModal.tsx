@@ -1,4 +1,3 @@
-import React from "react";
 import Modal from "../../../components/elements/modal";
 import Button from "../../../components/elements/button";
 import type { StockItem } from "../../../interface/wms/product";
