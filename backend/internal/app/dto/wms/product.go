@@ -15,35 +15,35 @@ type ProductRequestDTO struct {
 	Cost_price     float64 `json:"cost_price" binding:"required,gt=0"`
 	Note           string  `json:"note"`
 
-	ModelIDs      []uint `json:"model_ids" binding:"required"`
-	UnitID        uint  `json:"unit_id" binding:"required"`
-	CategoryID    uint  `json:"category_id" binding:"required"`
-	SubCategoryID *uint `json:"sub_category_id"`
-	SubSubCategoryID *uint `json:"sub_sub_category_id"`
-	GradeID       uint  `json:"grade_id" binding:"required"`
-	ShelfID       uint  `json:"shelf_id" binding:"required"`
-	ShelfLevelID  *uint `json:"shelf_level_id"`
+	ModelIDs         []uint `json:"model_ids" binding:"required"`
+	UnitID           uint   `json:"unit_id" binding:"required"`
+	CategoryID       uint   `json:"category_id" binding:"required"`
+	SubCategoryID    *uint  `json:"sub_category_id"`
+	SubSubCategoryID *uint  `json:"sub_sub_category_id"`
+	GradeID          uint   `json:"grade_id" binding:"required"`
+	ShelfID          uint   `json:"shelf_id" binding:"required"`
+	ShelfLevelID     *uint  `json:"shelf_level_id"`
 }
 
 func (r *ProductRequestDTO) ToEntity() entity.Product {
 	return entity.Product{
-		Product_Code:   r.Product_Code,
-		Part_Number:    r.Part_Number,
-		Product_Name:   r.Product_Name,
-		Barcode:        r.Barcode,
-		Quantity:       r.Quantity,
-		Limit_Quantity: r.Limit_Quantity,
-		Sale_price:     r.Sale_price,
-		Cost_price:     r.Cost_price,
-		Is_Active:      true, // กำหนดค่าเริ่มต้นให้เปิดใช้งานทันที
-		Note:           r.Note,
-		UnitID:         r.UnitID,
-		CategoryID:     r.CategoryID,
-		SubCategoryID:  r.SubCategoryID,
+		Product_Code:     r.Product_Code,
+		Part_Number:      r.Part_Number,
+		Product_Name:     r.Product_Name,
+		Barcode:          r.Barcode,
+		Quantity:         r.Quantity,
+		Limit_Quantity:   r.Limit_Quantity,
+		Sale_price:       r.Sale_price,
+		Cost_price:       r.Cost_price,
+		Is_Active:        true, // กำหนดค่าเริ่มต้นให้เปิดใช้งานทันที
+		Note:             r.Note,
+		UnitID:           r.UnitID,
+		CategoryID:       r.CategoryID,
+		SubCategoryID:    r.SubCategoryID,
 		SubSubCategoryID: r.SubSubCategoryID,
-		GradeID:        r.GradeID,
-		ShelfID:        r.ShelfID,
-		ShelfLevelID:   r.ShelfLevelID,
+		GradeID:          r.GradeID,
+		ShelfID:          r.ShelfID,
+		ShelfLevelID:     r.ShelfLevelID,
 	}
 }
 
@@ -63,16 +63,22 @@ type ProductListResponseDTO struct {
 		ModelName string `json:"model_name"`
 		BrandName string `json:"brand_name"`
 	} `json:"models"`
-	CategoryName   string  `json:"category_name"`
-	SubCategoryName string `json:"sub_category_name"`
+	CategoryName       string `json:"category_name"`
+	SubCategoryName    string `json:"sub_category_name"`
 	SubSubCategoryName string `json:"sub_sub_category_name"`
-	GradeName      string  `json:"grade_name"`
-	UnitName       string  `json:"unit_name"`
-	ShelfName      string  `json:"shelf_name"`
-	ShelfLevelName string  `json:"shelf_level_name"`
-	ThumbnailUrl   string  `json:"thumbnail_url"`
-	SupplierName   string  `json:"supplier_name"`
-	Note           string  `json:"note"`
+	GradeName          string `json:"grade_name"`
+	UnitName           string `json:"unit_name"`
+	ShelfName          string `json:"shelf_name"`
+	ShelfLevelName     string `json:"shelf_level_name"`
+	ThumbnailUrl       string `json:"thumbnail_url"`
+	SupplierName       string `json:"supplier_name"`
+	Note               string `json:"note"`
+}
+
+type ProductImageResponseDTO struct {
+	ID        uint   `json:"id"`
+	ProductID uint   `json:"product_id"`
+	ImageURL  string `json:"image_url"`
 }
 
 // Helper function ใน DTO สำหรับแปลงข้อมูลยกชุด

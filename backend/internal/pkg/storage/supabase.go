@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/joho/godotenv"
 )
 
 const claimEvidenceBucket = "G03-Capstone"
+const productImageBucket = "G03-Capstone"
 
 // UploadToSupabase uploads raw bytes to a Supabase Storage bucket and returns the public URL.
 func UploadToSupabase(bucket, filename, mimeType string, data []byte) (string, error) {
@@ -50,6 +52,9 @@ func UploadToSupabase(bucket, filename, mimeType string, data []byte) (string, e
 		return "", fmt.Errorf("สร้างโฟลเดอร์ uploads ไม่ได้: %w", err)
 	}
 	filePath := "./uploads/" + filename
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		return "", fmt.Errorf("สร้างโฟลเดอร์ปลายทางไม่ได้: %w", err)
+	}
 	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		return "", fmt.Errorf("บันทึกไฟล์ภาพไม่สำเร็จ: %w", err)
 	}
@@ -59,4 +64,9 @@ func UploadToSupabase(bucket, filename, mimeType string, data []byte) (string, e
 // UploadClaimEvidence is a convenience wrapper for the claim-evidence bucket.
 func UploadClaimEvidence(filename, mimeType string, data []byte) (string, error) {
 	return UploadToSupabase(claimEvidenceBucket, filename, mimeType, data)
+}
+
+// UploadProductImage stores WMS product images under the shared Supabase bucket.
+func UploadProductImage(filename, mimeType string, data []byte) (string, error) {
+	return UploadToSupabase(productImageBucket, filename, mimeType, data)
 }
