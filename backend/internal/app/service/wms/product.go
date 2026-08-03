@@ -3,23 +3,29 @@ package wms
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	wmsDto "backend/internal/app/dto/wms"
 	"backend/internal/app/entity"
 	wmsRepo "backend/internal/app/repository/wms"
+	"backend/internal/pkg/storage"
 
 	"gorm.io/gorm"
 )
 
 type ProductService interface {
-	CreateProduct(req *wmsDto.ProductRequestDTO) error
+	CreateProduct(req *wmsDto.ProductRequestDTO) (*wmsDto.ProductListResponseDTO, error)
 	GetProductByID(id uint) (*wmsDto.ProductListResponseDTO, error)
 	UpdateProduct(id uint, req *wmsDto.ProductRequestDTO) error
 	DeleteProduct(id uint) error
+	UploadProductImage(productID uint, originalFilename, mimeType string, data []byte) (*wmsDto.ProductImageResponseDTO, error)
 	ListProducts() ([]wmsDto.ProductListResponseDTO, error)
 	ListBrands() ([]entity.Brand, error)
 	CreateBrand(req *wmsDto.BrandRequestDTO) (*entity.Brand, error)
@@ -39,7 +45,7 @@ func NewProductService(repo wmsRepo.ProductRepository) ProductService {
 	return &productService{repo: repo}
 }
 
-func (s *productService) CreateProduct(req *wmsDto.ProductRequestDTO) error {
+func (s *productService) CreateProduct(req *wmsDto.ProductRequestDTO) (*wmsDto.ProductListResponseDTO, error) {
 	product := req.ToEntity()
 	for _, id := range req.ModelIDs {
 		product.Models = append(product.Models, entity.Models{
@@ -51,10 +57,15 @@ func (s *productService) CreateProduct(req *wmsDto.ProductRequestDTO) error {
 	}
 	err := s.repo.CreateProduct(&product)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	triggerBarcodeGen([]uint{product.ID})
-	return nil
+
+	created, err := s.GetProductByID(product.ID)
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
 }
 
 func (s *productService) GetProductByID(id uint) (*wmsDto.ProductListResponseDTO, error) {
@@ -88,6 +99,47 @@ func (s *productService) UpdateProduct(id uint, req *wmsDto.ProductRequestDTO) e
 
 func (s *productService) DeleteProduct(id uint) error {
 	return s.repo.DeleteProduct(id)
+}
+
+func (s *productService) UploadProductImage(productID uint, originalFilename, mimeType string, data []byte) (*wmsDto.ProductImageResponseDTO, error) {
+	if _, err := s.repo.GetProductByID(productID); err != nil {
+		return nil, fmt.Errorf("product not found: %w", err)
+	}
+
+	safeName := sanitizeStorageFilename(originalFilename)
+	storageFilename := fmt.Sprintf("product-images/%d/%d_%s", productID, time.Now().UnixNano(), safeName)
+	publicURL, err := storage.UploadProductImage(storageFilename, mimeType, data)
+	if err != nil {
+		return nil, err
+	}
+
+	image := entity.ProductImage{
+		ProductID: productID,
+		Image_URL: publicURL,
+	}
+	if err := s.repo.CreateProductImage(&image); err != nil {
+		return nil, err
+	}
+
+	return &wmsDto.ProductImageResponseDTO{
+		ID:        image.ID,
+		ProductID: productID,
+		ImageURL:  publicURL,
+	}, nil
+}
+
+func sanitizeStorageFilename(name string) string {
+	ext := strings.ToLower(filepath.Ext(name))
+	base := strings.TrimSuffix(filepath.Base(name), ext)
+	base = regexp.MustCompile(`[^a-zA-Z0-9_-]`).ReplaceAllString(base, "_")
+	base = strings.Trim(base, "_")
+	if base == "" {
+		base = "product"
+	}
+	if ext == "" {
+		ext = ".jpg"
+	}
+	return base + ext
 }
 
 func (s *productService) ListProducts() ([]wmsDto.ProductListResponseDTO, error) {

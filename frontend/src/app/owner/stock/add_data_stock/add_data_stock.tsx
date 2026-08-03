@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Modal from "../../../../components/elements/modal";
 import Input from "../../../../components/elements/input";
 import Select from "../../../../components/elements/select";
 import MultiSelect from "../../../../components/elements/multiselect";
 import Cascader, { type CascaderOption } from "../../../../components/elements/cascader";
 import Button from "../../../../components/elements/button";
-import { createProduct } from "../../../../service/http/wms/product";
+import { createProduct, uploadProductImage } from "../../../../service/http/wms/product";
 
 interface SelectOption {
   label: string;
@@ -51,6 +51,21 @@ export default function AddDataStck({
   });
 
   const [submitting, setSubmitting] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
+
+  useEffect(() => {
+    if (!imageFile) return;
+    const previewUrl = URL.createObjectURL(imageFile);
+    setImagePreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [imageFile]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setImageFile(file);
+    if (!file) setImagePreview("");
+  };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,8 +102,18 @@ export default function AddDataStck({
         shelf_level_id: formData.zone_path[2] ? Number(formData.zone_path[2]) : null,
       };
 
-      await createProduct(payload);
-      alert("เพิ่มข้อมูลสินค้าสำเร็จ");
+      const created = await createProduct(payload);
+      const createdProductId = Number(created?.data?.id || created?.id || 0);
+      let imageUploadFailed = false;
+      if (imageFile && createdProductId) {
+        try {
+          await uploadProductImage(createdProductId, imageFile);
+        } catch (uploadErr) {
+          imageUploadFailed = true;
+          console.error("Error uploading product image:", uploadErr);
+        }
+      }
+      alert(imageUploadFailed ? "เพิ่มข้อมูลสินค้าสำเร็จ แต่อัปโหลดรูปสินค้าไม่สำเร็จ" : "เพิ่มข้อมูลสินค้าสำเร็จ");
       setFormData({
         product_code: "",
         part_number: "",
@@ -105,6 +130,8 @@ export default function AddDataStck({
         unit_id: "",
         zone_path: [],
       });
+      setImageFile(null);
+      setImagePreview("");
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -223,6 +250,24 @@ export default function AddDataStck({
           onChange={(e) => setFormData({ ...formData, note: e.target.value })}
           placeholder="เช่น รุ่นรถที่รองรับ หรือรายละเอียดเพิ่มเติม"
         />
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[160px_1fr] sm:items-center">
+          <div className="h-32 w-full overflow-hidden rounded-md border border-slate-200 bg-slate-50 sm:h-28">
+            {imagePreview ? (
+              <img src={imagePreview} alt="ตัวอย่างรูปสินค้า" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-slate-400">
+                รูปสินค้า
+              </div>
+            )}
+          </div>
+          <Input
+            label="อัปโหลดรูปสินค้า"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={handleImageChange}
+          />
+        </div>
 
         <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
           <Button

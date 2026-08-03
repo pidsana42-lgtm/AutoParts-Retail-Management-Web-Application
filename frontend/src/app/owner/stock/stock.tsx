@@ -334,9 +334,17 @@ export default function StockPage() {
         const catConfig = CATEGORY_ICON[row.Category?.toUpperCase()] || { icon: Cog, className: "bg-slate-800" };
         const Icon = catConfig.icon;
         return (
-          <div className={["flex h-9 w-9 items-center justify-center rounded-md", catConfig.className].join(" ")}>
-            <Icon className="h-4 w-4 text-white" />
-          </div>
+          row.ThumbnailUrl ? (
+            <img
+              src={row.ThumbnailUrl}
+              alt={row.Name || row.ProductCode}
+              className="h-9 w-9 rounded-md object-cover"
+            />
+          ) : (
+            <div className={["flex h-9 w-9 items-center justify-center rounded-md", catConfig.className].join(" ")}>
+              <Icon className="h-4 w-4 text-white" />
+            </div>
+          )
         );
       },
     },

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useId } from "react";
+import { useState, useRef, useEffect, useId } from "react";
 import { cn } from "../../../../utils/component";
 
 export interface SelectOption {

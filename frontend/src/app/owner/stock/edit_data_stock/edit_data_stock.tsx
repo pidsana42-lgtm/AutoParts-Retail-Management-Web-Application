@@ -5,7 +5,7 @@ import Select from "../../../../components/elements/select";
 import MultiSelect from "../../../../components/elements/multiselect";
 import Cascader, { type CascaderOption } from "../../../../components/elements/cascader";
 import Button from "../../../../components/elements/button";
-import { updateProduct } from "../../../../service/http/wms/product";
+import { updateProduct, uploadProductImage } from "../../../../service/http/wms/product";
 import type { StockItem } from "../../../../interface/wms/product";
 
 interface SelectOption {
@@ -54,6 +54,23 @@ export default function EditDataStock({
   });
 
   const [submitting, setSubmitting] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
+
+  useEffect(() => {
+    if (!imageFile) return;
+    const previewUrl = URL.createObjectURL(imageFile);
+    setImagePreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [imageFile]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setImageFile(file);
+    if (!file) {
+      setImagePreview(product?.ThumbnailUrl || "");
+    }
+  };
 
   useEffect(() => {
     if (isOpen && product) {
@@ -116,6 +133,8 @@ export default function EditDataStock({
         unit_id: matchedUnit ? matchedUnit.value : "",
         zone_path: zonePath,
       });
+      setImageFile(null);
+      setImagePreview(product.ThumbnailUrl || "");
     }
   }, [isOpen, product, models, categories, grades, units, zones]);
 
@@ -156,7 +175,16 @@ export default function EditDataStock({
       };
 
       await updateProduct(product.ID, payload);
-      alert("แก้ไขข้อมูลสินค้าสำเร็จ");
+      let imageUploadFailed = false;
+      if (imageFile) {
+        try {
+          await uploadProductImage(product.ID, imageFile);
+        } catch (uploadErr) {
+          imageUploadFailed = true;
+          console.error("Error uploading product image:", uploadErr);
+        }
+      }
+      alert(imageUploadFailed ? "แก้ไขข้อมูลสินค้าสำเร็จ แต่อัปโหลดรูปสินค้าไม่สำเร็จ" : "แก้ไขข้อมูลสินค้าสำเร็จ");
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -288,6 +316,24 @@ export default function EditDataStock({
           onChange={(e) => setFormData({ ...formData, note: e.target.value })}
           placeholder="เช่น รุ่นรถที่รองรับ หรือรายละเอียดเพิ่มเติม"
         />
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[160px_1fr] sm:items-center">
+          <div className="h-32 w-full overflow-hidden rounded-md border border-slate-200 bg-slate-50 sm:h-28">
+            {imagePreview ? (
+              <img src={imagePreview} alt="ตัวอย่างรูปสินค้า" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-slate-400">
+                รูปสินค้า
+              </div>
+            )}
+          </div>
+          <Input
+            label="อัปโหลดรูปสินค้า"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={handleImageChange}
+          />
+        </div>
 
         <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
           <Button
