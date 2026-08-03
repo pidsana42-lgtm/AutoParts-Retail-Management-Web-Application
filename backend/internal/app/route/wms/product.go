@@ -30,6 +30,5 @@ func SetupProductRoutes(r *gin.Engine, db *gorm.DB) {
 		wms.PUT("/models/:id", controller.UpdateModel)
 		wms.DELETE("/models/:id", controller.DeleteModel)
 
-		wms.GET("/grades", controller.ListGrades)
 	}
 }

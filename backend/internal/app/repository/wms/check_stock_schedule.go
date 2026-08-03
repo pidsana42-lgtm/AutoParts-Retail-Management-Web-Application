@@ -10,6 +10,7 @@ type CheckStockScheduleRepository interface {
 	Create(schedule *entity.CheckStockSchedule) error
 	GetByID(id uint) (*entity.CheckStockSchedule, error)
 	UpdateStatus(id uint, status string) error
+	Update(schedule *entity.CheckStockSchedule) error
 	Delete(id uint) error
 	List(status string) ([]entity.CheckStockSchedule, error)
 }
@@ -28,7 +29,7 @@ func (r *checkStockScheduleRepository) Create(schedule *entity.CheckStockSchedul
 
 func (r *checkStockScheduleRepository) GetByID(id uint) (*entity.CheckStockSchedule, error) {
 	var s entity.CheckStockSchedule
-	err := r.db.First(&s, id).Error
+	err := r.db.Preload("User").First(&s, id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -37,6 +38,10 @@ func (r *checkStockScheduleRepository) GetByID(id uint) (*entity.CheckStockSched
 
 func (r *checkStockScheduleRepository) UpdateStatus(id uint, status string) error {
 	return r.db.Model(&entity.CheckStockSchedule{}).Where("id = ?", id).Update("status", status).Error
+}
+
+func (r *checkStockScheduleRepository) Update(schedule *entity.CheckStockSchedule) error {
+	return r.db.Save(schedule).Error
 }
 
 func (r *checkStockScheduleRepository) Delete(id uint) error {
@@ -49,5 +54,5 @@ func (r *checkStockScheduleRepository) List(status string) ([]entity.CheckStockS
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
-	return schedules, query.Order("scheduled_date_time asc").Find(&schedules).Error
+	return schedules, query.Preload("User").Order("scheduled_date_time asc").Find(&schedules).Error
 }

@@ -1,6 +1,7 @@
 package wms
 
 import (
+	"log"
 	"backend/internal/app/entity"
 
 	"gorm.io/gorm"
@@ -21,7 +22,7 @@ type ProductRepository interface {
 	UpdateModel(model *entity.Models) error
 	DeleteModel(id uint) error
 
-	ListGrades() ([]entity.Grade, error)
+
 }
 
 type productRepository struct {
@@ -33,12 +34,12 @@ func NewProductRepository(db *gorm.DB) ProductRepository {
 }
 
 func (r *productRepository) CreateProduct(product *entity.Product) error {
-	return r.db.Create(product).Error
+	return r.db.Omit("Category", "SubCategory", "SubSubCategory", "Grade", "Unit", "Shelf", "ShelfLevel").Create(product).Error
 }
 
 func (r *productRepository) GetProductByID(id uint) (*entity.Product, error) {
 	var product entity.Product
-	err := r.db.Preload("Models").Preload("Models.Brand").Preload("Category").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ProductImages").Preload("Inventories.Supplier").
+	err := r.db.Preload("Models").Preload("Models.Brand").Preload("Category").Preload("SubCategory").Preload("SubSubCategory").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ProductImages").Preload("Inventories.Supplier").
 		First(&product, id).Error
 	if err != nil {
 		return nil, err
@@ -47,7 +48,13 @@ func (r *productRepository) GetProductByID(id uint) (*entity.Product, error) {
 }
 
 func (r *productRepository) UpdateProduct(product *entity.Product) error {
-	err := r.db.Save(product).Error
+	if product.SubCategoryID != nil {
+		log.Printf("[DEBUG] Repo UpdateProduct: SubCategoryID is: %d", *product.SubCategoryID)
+	} else {
+		log.Printf("[DEBUG] Repo UpdateProduct: SubCategoryID is nil!")
+	}
+	// Omit relationships so GORM does not set foreign keys to NULL if the association struct is nil
+	err := r.db.Omit("Category", "SubCategory", "SubSubCategory", "Grade", "Unit", "Shelf", "ShelfLevel", "Models", "ProductImages").Save(product).Error
 	if err != nil {
 		return err
 	}
@@ -60,7 +67,7 @@ func (r *productRepository) DeleteProduct(id uint) error {
 
 func (r *productRepository) ListProducts() ([]entity.Product, error) {
 	var products []entity.Product
-	err := r.db.Preload("Models").Preload("Models.Brand").Preload("Category").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ProductImages").Preload("Inventories.Supplier").
+	err := r.db.Preload("Models").Preload("Models.Brand").Preload("Category").Preload("SubCategory").Preload("SubSubCategory").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ShelfLevel").Preload("ProductImages").Preload("Inventories.Supplier").
 		Find(&products).Error
 	return products, err
 }
@@ -69,12 +76,6 @@ func (r *productRepository) ListBrands() ([]entity.Brand, error) {
 	var brands []entity.Brand
 	err := r.db.Preload("Models").Order("brand_name asc").Find(&brands).Error
 	return brands, err
-}
-
-func (r *productRepository) ListGrades() ([]entity.Grade, error) {
-	var grades []entity.Grade
-	err := r.db.Order("grade_name asc").Find(&grades).Error
-	return grades, err
 }
 
 func (r *productRepository) CreateBrand(brand *entity.Brand) error {

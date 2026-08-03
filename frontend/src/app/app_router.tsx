@@ -11,6 +11,7 @@ import EmployeeDashboard from './employee/dashboard/dashboard';
 import Stock from './owner/stock/stock';
 import StockMovement from './owner/stock/stock_movement/stock_movement';
 import Stockdata from './owner/stock/Stock_data/stock_data';
+import StockCheck from './owner/stock/stock_check/stock_check';
 import ImportBill from './owner/import-bills/import_bill';
 import PreOrder from './owner/pre-order/pre-order';
 import ClaimsPage from './owner/claim/claims';
@@ -65,6 +66,10 @@ export default function AppRouter(): React.JSX.Element {
 
         <Route path="/owner/stock/stock-movement" element={
           isAdminOrOwner ? <StockMovement /> : <Navigate to={firstMenuPath} replace />
+        } />
+
+        <Route path="/owner/stock/stock-check" element={
+          isAdminOrOwner ? <StockCheck /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/owner/stock/stock-data" element={

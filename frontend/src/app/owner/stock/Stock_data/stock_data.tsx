@@ -15,7 +15,8 @@ import type {
   Zone,
   Shelf,
   Brand,
-  Supplier
+  Supplier,
+  Grade,
 } from "../../../../interface/wms/stock_data";
 
 // Sub-tab Components
@@ -24,8 +25,9 @@ import UnitTab from "./unit/UnitTab";
 import ZoneTab from "./zone/ZoneTab";
 import BrandTab from "./brand/BrandTab";
 import SupplierTab from "./supplier/SupplierTab";
+import GradeTab from "./grade/GradeTab";
 
-type TabType = "category" | "unit" | "zone" | "brand" | "supplier";
+type TabType = "category" | "unit" | "zone" | "brand" | "supplier" | "grade";
 
 const TAB_CONFIGS = [
   { value: "category", label: "ประเภทสินค้า" },
@@ -33,6 +35,7 @@ const TAB_CONFIGS = [
   { value: "zone", label: "โซน/ชั้นวางสินค้า" },
   { value: "brand", label: "แบรนด์รถ/โมเดล" },
   { value: "supplier", label: "บริษัทสั่งซื้อ" },
+  { value: "grade", label: "เกรดสินค้า" },
 ];
 
 function StockDataContent() {
@@ -53,17 +56,19 @@ function StockDataContent() {
   const [shelves, setShelves] = useState<Shelf[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [grades, setGrades] = useState<Grade[]>([]);
 
   // Load all data
   const loadData = async () => {
     try {
       setLoading(true);
-      const [cats, unts, zns, shlvs, sups] = await Promise.all([
+      const [cats, unts, zns, shlvs, sups, grds] = await Promise.all([
         stockDataService.getCategories(),
         stockDataService.getUnits(),
         stockDataService.getZones(),
         stockDataService.getShelves(),
         stockDataService.getSuppliers(),
+        stockDataService.getGrades(),
       ]);
 
       setCategories(cats);
@@ -71,6 +76,7 @@ function StockDataContent() {
       setZones(zns);
       setShelves(shlvs);
       setSuppliers(sups);
+      setGrades(grds);
 
       // Load Brands from Backend
       const backendBrands = await stockDataService.getBrands();
@@ -165,7 +171,9 @@ function StockDataContent() {
                       ? "ค้นหาด้วยชื่อโซน หรือชั้นวาง..."
                       : activeTab === "brand"
                         ? "ค้นหาด้วยแบรนด์ หรือรุ่นรถ..."
-                        : "ค้นหาชื่อบริษัท ตัวย่อ หรือเบอร์โทร..."
+                        : activeTab === "grade"
+                          ? "ค้นหาด้วยชื่อเกรดสินค้า..."
+                          : "ค้นหาชื่อบริษัท ตัวย่อ หรือเบอร์โทร..."
               }
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -248,6 +256,13 @@ function StockDataContent() {
           <SupplierTab
             search={search}
             suppliers={suppliers}
+            loadData={loadData}
+          />
+        )}
+        {activeTab === "grade" && (
+          <GradeTab
+            search={search}
+            grades={grades}
             loadData={loadData}
           />
         )}

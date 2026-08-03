@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, FileText, Boxes, MonitorSmartphone,
-  ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight 
+  ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight, CircleCheck 
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -45,7 +45,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
     subs: [
       { icon: ArrowLeftRight, path: "/owner/stock/stock-movement", label: "การเคลื่อนไหวของคลังสินค้า" },
       { icon: FolderPlus, path: "/owner/stock/stock-data", label: "สร้างข้อมูลสินค้า" },
-
+      { icon: CircleCheck, path: "/owner/stock/stock-check", label: "ตรวจสอบสินค้า"},
     ],
   },
   { icon: MonitorSmartphone, label: "ระบบขาย POS", path: "/employee/pos", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"] },

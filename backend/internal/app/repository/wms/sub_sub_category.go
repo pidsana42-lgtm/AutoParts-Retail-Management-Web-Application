@@ -28,7 +28,7 @@ func (r *subSubCategoryRepository) Create(subSubCat *entity.SubSubCategory) erro
 
 func (r *subSubCategoryRepository) GetByID(id uint) (*entity.SubSubCategory, error) {
 	var subSubCat entity.SubSubCategory
-	err := r.db.Preload("SubCategory").First(&subSubCat, id).Error
+	err := r.db.Preload("SubCategory").Preload("SubCategory.Category").First(&subSubCat, id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +37,7 @@ func (r *subSubCategoryRepository) GetByID(id uint) (*entity.SubSubCategory, err
 
 func (r *subSubCategoryRepository) List(subCategoryID *uint) ([]entity.SubSubCategory, error) {
 	var list []entity.SubSubCategory
-	query := r.db.Preload("SubCategory")
+	query := r.db.Preload("SubCategory").Preload("SubCategory.Category")
 	if subCategoryID != nil {
 		query = query.Where("sub_category_id = ?", *subCategoryID)
 	}
