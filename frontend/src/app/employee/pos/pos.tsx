@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, User,} from "lucide-react";
+import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, User,ScanBarcode,} from "lucide-react";
 import Button from "../../../components/elements/button";
 import { usePosPayment } from "./hooks/usepospayment";
 import { usePosCart } from "./hooks/useposcart";
@@ -116,7 +116,7 @@ export default function PosPage(): React.JSX.Element {
             {/* ช่องแสกนบาร์โค้ด (ย้ายมาไว้ตรงนี้) */}
             <form onSubmit={cartHook.handleAddProduct} className="mt-6 flex gap-2">
               <div className="relative flex-1">
-                <QrCode className="absolute left-4 top-3.5 text-gray-400" size={18} />
+                <ScanBarcode className="absolute left-4 top-3.5 text-gray-400" size={18} />
                 <input
                   type="text"
                   value={cartHook.searchQuery}

@@ -40,8 +40,9 @@ export const posApiService = {
 
   /** ดึงประวัติการขายสินค้า (Sales History) */
   getSalesHistory: (params: SalesHistoryFilterRequest): Promise<SalesHistoryPaginationResponse> =>
-    apiClient.get<SalesHistoryPaginationResponse>("/sales/history", { params }).then((res) => res.data),
-  
+    apiClient
+      .get<{ data: SalesHistoryPaginationResponse; message: string }>("/pos/sales/history", { params })
+      .then((res) => res.data.data), 
 };
 
 // Business Logic 
