@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  Eye,
 } from "lucide-react";
 
 import Card from "../../../components/elements/card";
@@ -26,6 +27,7 @@ import Button from "../../../components/elements/button";
 import TreeSelect from "../../../components/elements/tree_select";
 import AddDataStock from "./add_data_stock/add_data_stock";
 import EditDataStock from "./edit_data_stock/edit_data_stock";
+import ProductDetailModal from "./ProductDetailModal";
 import type { CascaderOption } from "../../../components/elements/cascader";
 
 // นำเข้า API service สำหรับดึงข้อมูลสินค้า
@@ -134,13 +136,19 @@ export default function StockPage() {
   const [grades, setGrades] = useState<{ label: string; value: string }[]>([]);
   const [units, setUnits] = useState<{ label: string; value: string }[]>([]);
 
-  // States สำหรับแก้ไขสินค้า (Edit Product)
+  // States สำหรับแก้ไข/ดูสินค้า
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<StockItem | null>(null);
 
   const handleEditClick = (product: StockItem) => {
     setSelectedProduct(product);
     setIsEditModalOpen(true);
+  };
+
+  const handleViewClick = (product: StockItem) => {
+    setSelectedProduct(product);
+    setIsViewModalOpen(true);
   };
 
 
@@ -418,6 +426,13 @@ export default function StockPage() {
       render: (row) => (
         <div className="flex items-center justify-end gap-3 text-slate-400">
           <button
+            onClick={() => handleViewClick(row)}
+            className="hover:text-blue-600"
+            aria-label="ดูรายละเอียด"
+          >
+            <Eye className="h-4 w-4" />
+          </button>
+          <button
             onClick={() => handleEditClick(row)}
             className="hover:text-slate-700"
             aria-label="แก้ไข"
@@ -568,6 +583,13 @@ export default function StockPage() {
         grades={grades}
         units={units}
         zones={zoneCascaderOptions}
+      />
+
+      {/* Modal ดูรายละเอียดสินค้า (View Product) */}
+      <ProductDetailModal
+        isOpen={isViewModalOpen}
+        onClose={() => setIsViewModalOpen(false)}
+        product={selectedProduct}
       />
     </div>
   );
