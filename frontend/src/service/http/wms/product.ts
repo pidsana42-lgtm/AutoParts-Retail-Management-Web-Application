@@ -101,9 +101,7 @@ export const createProduct = async (data: any): Promise<any> => {
 export const uploadProductImage = async (productId: number, file: File): Promise<any> => {
   const formData = new FormData();
   formData.append("image", file);
-  const response = await apiClient.post(`/wms/products/${productId}/images`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  const response = await apiClient.post(`/wms/products/${productId}/images`, formData);
   return response.data;
 };
 
