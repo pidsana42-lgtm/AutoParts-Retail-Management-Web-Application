@@ -110,6 +110,46 @@ func (ctrl *CustomerClaimController) UpdateCustomerClaim(c *gin.Context) {
 	})
 }
 
+func (ctrl *CustomerClaimController) UpdateCustomerClaimItem(c *gin.Context) {
+	idStr := c.Param("itemId")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+	var input claimDTO.UpdateCustomerClaimItemDTO
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: " + err.Error()})
+		return
+	}
+	res, err := ctrl.svc.UpdateCustomerClaimItem(uint(id), input)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update item: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Updated successfully", "data": res})
+}
+
+func (ctrl *CustomerClaimController) UpdateCustomerClaimItemStatus(c *gin.Context) {
+	idStr := c.Param("itemId")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+	var input claimDTO.UpdateClaimItemStatusDTO
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: " + err.Error()})
+		return
+	}
+	res, err := ctrl.svc.UpdateCustomerClaimItemStatus(uint(id), input.Status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update item status: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Status updated successfully", "data": res})
+}
+
 func (ctrl *CustomerClaimController) DeleteCustomerClaim(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

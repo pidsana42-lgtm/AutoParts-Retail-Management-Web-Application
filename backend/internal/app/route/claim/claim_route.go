@@ -15,16 +15,21 @@ func SetupClaimRoutes(r *gin.Engine, db *gorm.DB) {
 	salesReturnRepo := claimRepo.NewSalesReturnRepository(db)
 	supplierClaimRepo := claimRepo.NewSupplierClaimRepository(db)
 	customerClaimRepo := claimRepo.NewCustomerClaimRepository(db)
+	saleOrderLookupRepo := claimRepo.NewSaleOrderLookupRepository(db)
+	poLookupRepo := claimRepo.NewPOLookupRepository(db)
 
 	// 2. Services
 	salesReturnSvc := claimSvc.NewSalesReturnService(salesReturnRepo)
 	supplierClaimSvc := claimSvc.NewSupplierClaimService(supplierClaimRepo)
-	customerClaimSvc := claimSvc.NewCustomerClaimService(customerClaimRepo)
+	customerClaimSvc := claimSvc.NewCustomerClaimService(customerClaimRepo, saleOrderLookupRepo)
 
 	// 3. Controllers
 	salesReturnCtrl := claimCtrl.NewSalesReturnController(salesReturnSvc)
 	supplierClaimCtrl := claimCtrl.NewSupplierClaimController(supplierClaimSvc)
 	customerClaimCtrl := claimCtrl.NewCustomerClaimController(customerClaimSvc)
+	saleOrderLookupCtrl := claimCtrl.NewSaleOrderLookupController(saleOrderLookupRepo)
+	poLookupCtrl := claimCtrl.NewPOLookupController(poLookupRepo)
+	evidenceUploadCtrl := claimCtrl.NewEvidenceUploadController()
 
 
 	claimsGroup := r.Group("/api/claims")
@@ -52,6 +57,18 @@ func SetupClaimRoutes(r *gin.Engine, db *gorm.DB) {
 		claimsGroup.GET("/customer-claims/:id", customerClaimCtrl.GetCustomerClaimByID)
 		claimsGroup.GET("/customer-claims", customerClaimCtrl.ListCustomerClaims)
 		claimsGroup.PUT("/customer-claims/:id", customerClaimCtrl.UpdateCustomerClaim)
+		claimsGroup.PUT("/customer-claims/items/:itemId", customerClaimCtrl.UpdateCustomerClaimItem)
+		claimsGroup.PUT("/customer-claims/items/:itemId/status", customerClaimCtrl.UpdateCustomerClaimItemStatus)
 		claimsGroup.DELETE("/customer-claims/:id", customerClaimCtrl.DeleteCustomerClaim)
+
+		// Sale Order Lookup (for customer claim form)
+		claimsGroup.GET("/sale-orders/search", saleOrderLookupCtrl.SearchSaleOrders)
+		claimsGroup.GET("/sale-orders/number/:number", saleOrderLookupCtrl.GetByOrderNumber)
+
+		// PO Lookup (for supplier claim form)
+		claimsGroup.GET("/purchase-orders/number/:number", poLookupCtrl.GetByPONumber)
+
+		// Evidence image upload → Supabase Storage
+		claimsGroup.POST("/evidence/upload", evidenceUploadCtrl.UploadEvidence)
 	}
 }

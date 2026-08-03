@@ -1,5 +1,4 @@
-import React from "react";
-import { Search, Bell, UserCircle } from "lucide-react";
+import { Search, Bell } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContexts";
 
 export default function Navbar(): React.JSX.Element {

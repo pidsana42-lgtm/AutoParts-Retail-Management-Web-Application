@@ -1,6 +1,7 @@
 package claim
 
 import (
+	"strings"
 	"time"
 
 	"backend/internal/app/entity"
@@ -26,7 +27,9 @@ type UpdateCustomerClaimDTO struct {
 // CustomerClaimResponseDTO ใช้สำหรับส่งข้อมูล Customer Claim กลับไปแสดงผล
 type CustomerClaimResponseDTO struct {
 	ID              uint                           `json:"id"`
+	ClaimNo         string                         `json:"claim_no"`
 	OriginalOrderID uint                           `json:"original_order_id"`
+	CustomerName    string                         `json:"customer_name"`
 	ReturnID        *uint                          `json:"return_id"`
 	Status          string                         `json:"status"`
 	Notes           string                         `json:"notes"`
@@ -38,13 +41,9 @@ type CustomerClaimResponseDTO struct {
 }
 
 func (d *CreateCustomerClaimDTO) ToEntity() entity.CustomerClaim {
-	var returnID uint
-	if d.ReturnID != nil {
-		returnID = *d.ReturnID
-	}
 	return entity.CustomerClaim{
 		OriginalOrderID: d.OriginalOrderID,
-		ReturnID:        returnID,
+		ReturnID:        d.ReturnID,
 		Note:            d.Notes,
 		Status:          "Pending",
 		ClaimDate:       time.Now(),
@@ -65,19 +64,41 @@ func (d *UpdateCustomerClaimDTO) ToEntity(existing entity.CustomerClaim) entity.
 }
 
 func ToCustomerClaimResponseDTO(m *entity.CustomerClaim) CustomerClaimResponseDTO {
-	var returnID *uint
-	if m.ReturnID != 0 {
-		returnID = &m.ReturnID
+	items := make([]CustomerClaimItemResponseDTO, 0, len(m.Items))
+	for i := range m.Items {
+		items = append(items, ToCustomerClaimItemResponseDTO(&m.Items[i]))
 	}
+	customerName := "-"
+	if m.OriginalOrder != nil {
+		if m.OriginalOrder.Customer.CustomerName != "" {
+			customerName = m.OriginalOrder.Customer.CustomerName
+		} else if m.OriginalOrder.CustomerNameTemp != nil && *m.OriginalOrder.CustomerNameTemp != "" {
+			customerName = *m.OriginalOrder.CustomerNameTemp
+		}
+	}
+	if customerName == "-" && m.Note != "" {
+		for _, part := range strings.Split(m.Note, "|") {
+			part = strings.TrimSpace(part)
+			if strings.HasPrefix(part, "ลูกค้า:") {
+				parsed := strings.TrimSpace(strings.TrimPrefix(part, "ลูกค้า:"))
+				if parsed != "" {
+					customerName = parsed
+				}
+			}
+		}
+	}
+
 	return CustomerClaimResponseDTO{
 		ID:              m.ID,
+		ClaimNo:         m.ClaimNo,
 		OriginalOrderID: m.OriginalOrderID,
-		ReturnID:        returnID,
+		CustomerName:    customerName,
+		ReturnID:        m.ReturnID,
 		Status:          m.Status,
 		Notes:           m.Note,
 		ClaimDate:       m.ClaimDate,
 		CreatedBy:       m.CreatedBy,
 		ApprovedBy:      m.ApprovedBy,
-		Items:           []CustomerClaimItemResponseDTO{},
+		Items:           items,
 	}
 }

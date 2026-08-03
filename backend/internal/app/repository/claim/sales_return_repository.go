@@ -52,7 +52,7 @@ func (r *salesReturnRepository) GetSalesReturnByID(id uint) (*entity.SalesReturn
 
 // 6. Implement Method: ดึงรายการเคลมของลูกค้าทั้งหมด
 func (r *salesReturnRepository) ListSalesReturns() ([]entity.SalesReturn, error) {
-	var returnItems []entity.SalesReturn
+	returnItems := make([]entity.SalesReturn, 0)
 	
 	// ใช้ Preload เพื่อให้ข้อมูลที่เกี่ยวข้องทั้งหมดแนบมาด้วย
 	err := r.db.Preload("OriginalOrder").

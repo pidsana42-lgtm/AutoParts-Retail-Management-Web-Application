@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, Edit3, CheckCircle2 } from 'lucide-react';
 import type { PriceMismatchItem } from './price_update_modal';

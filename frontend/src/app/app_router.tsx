@@ -16,6 +16,7 @@ import EditStockBillPage from './owner/import-bills/edit-stock-bill';
 import PreOrder from './owner/pre-order/pre-order';
 import ClaimsPage from './owner/claim/claims';
 import ClaimDetailPage from './owner/claim/claim_detail';
+import ClaimEditPage from './owner/claim/claim_edit';
 import ReturnsPage from './owner/return/returns';
 import ReturnDetailPage from './owner/return/return_detail';
 import PurchaseOrders from './owner/purchase_orders/purchase_orders';
@@ -23,6 +24,7 @@ import CreatePurchaseOrders from './owner/purchase_orders/create_po';
 import OrderDetail from './owner/purchase_orders/po_detail';
 import EmployeeImport from './employee/import';
 import EmployeePreOrder from './employee/pre-order';
+import EmployeeClaimsPage from './employee/claim/claims';
 import MobileScanPage from './mobile-scan/mobile_scan_page';
 
 export default function AppRouter(): React.JSX.Element {
@@ -92,6 +94,7 @@ export default function AppRouter(): React.JSX.Element {
         {/* -------- เพิ่ม Route สำหรับหน้าคืนเเละเคลมสินค้าตรงนี้ครับ -------- */}
         <Route path="/owner/claims" element={<ClaimsPage />} />
         <Route path="/owner/claims/detail/:id" element={<ClaimDetailPage />} />
+        <Route path="/owner/claims/edit/:id" element={<ClaimEditPage canApprove={true} />} />
         <Route path="/owner/returns" element={<ReturnsPage />} />
         <Route path="/owner/returns/detail/:id" element={<ReturnDetailPage />} />
         {/* ----------------------------------------------------------- */}
@@ -117,6 +120,9 @@ export default function AppRouter(): React.JSX.Element {
         {/* หน้าพรีออเดอร์สำหรับพนักงาน */}
         <Route path="/employee/pre-orders" element={<EmployeePreOrder />} />
         <Route path="/employee/pre-order" element={<EmployeePreOrder />} />
+        <Route path="/employee/claims" element={<EmployeeClaimsPage />} />
+        <Route path="/employee/claims/detail/:id" element={<ClaimDetailPage />} />
+        <Route path="/employee/claims/edit/:id" element={<ClaimEditPage canApprove={false} />} />
 
       </Route>
 
