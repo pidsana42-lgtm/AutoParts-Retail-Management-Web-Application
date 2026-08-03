@@ -5,7 +5,7 @@ import "backend/internal/app/entity"
 type CustomerTypeInfoResponse struct {
     ID        uint   `json:"id"`
     TypeName  string `json:"type_name"`
-    TypeLabel string `json:"customer_type_label"`
+    TypeLabel string `json:"type_label"`
 }
 
 type GetCustomerDiscountResponse struct {

@@ -27,7 +27,45 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
     localStorage.setItem("pos_cart", JSON.stringify(cart));
   }, [cart]);
 
-  // ตัวดักจับเมื่อพนักงานสั่งสลับกลุ่มสิทธิ์ลูกค้า (เช่น จากทั่วไป -> อู่ซ่อมรถ)จะทำการ Map อัปเดตประเภทส่วนลดและมูลค่าลดราคาอัตโนมัติยกตะกร้าทันที 
+  // Auto-Sync ข้อมูลสินค้าในตะกร้ากับระบบคลังหลังบ้านเมื่อโหลดหน้า POS ขึ้นมา
+  useEffect(() => {
+    const syncCartWithLatestData = async () => {
+      const savedCartStr = localStorage.getItem("pos_cart");
+      if (!savedCartStr) return;
+
+      try {
+        const savedCart: CartItem[] = JSON.parse(savedCartStr);
+        if (savedCart.length === 0) return;
+
+        const updatedCart = await Promise.all(
+          savedCart.map(async (item) => {
+            const products = await posApiService.searchProducts(item.product_code);
+            const latestProduct = products?.find((p) => p.id === item.product_id) || products?.[0];
+
+            if (!latestProduct) return item;
+
+            return {
+              ...item,
+              model_name: latestProduct.model_name,
+              brand_name: latestProduct.brand_name,
+              grade_name: latestProduct.grade_name,
+              unit_price: latestProduct.sale_price,
+              quantity: latestProduct.quantity,
+              note: latestProduct.note,
+            };
+          })
+        );
+
+        setCart(updatedCart);
+      } catch (error) {
+        console.error("Failed to sync cart data with database:", error);
+      }
+    };
+
+    syncCartWithLatestData();
+  }, []);
+
+  // ตัวดักจับเมื่อพนักงานสั่งสลับกลุ่มสิทธิ์ลูกค้า 
   useEffect(() => {
     // ทำงานเฉพาะเมื่อ ID ลูกค้า หรือ ประเภทลูกค้าเปลี่ยนจริงๆ เท่านั้น
     if (
@@ -119,7 +157,19 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
       if (existingIndex > -1) {
         // เคส 1: สินค้าเดิมมีอยู่แล้ว ทำการบวกจำนวนชิ้นเพิ่มขึ้น 1
         const newCart = [...cart];
-        newCart[existingIndex].qty += 1;
+        const item = newCart[existingIndex];
+
+        newCart[existingIndex] = {
+          ...item,
+          qty: item.qty + 1,
+          model_name: product.model_name, 
+          brand_name: product.brand_name, 
+          grade_name: product.grade_name, 
+          unit_price: product.sale_price, 
+          quantity: product.quantity,     
+          note: product.note,
+        };
+
         setCart(newCart);
       } else {
         // สินค้าใหม่เอี่ยม ยัด Object ลงอาร์เรย์ตะกร้า พร้อมแนบค่าพาร์ท เกรด และสิทธิ์ส่วนลดเริ่มต้น
@@ -131,11 +181,11 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
             product_name: product.product_name,
             part_number: product.part_number,
             qty: 1,
-            quantity: product.quantity,
-            unit_price: product.sale_price,
-            grade_name: product.grade_name,
-            brand_name: product.brand_name,
             model_name: product.model_name,
+            brand_name: product.brand_name,
+            grade_name: product.grade_name,
+            unit_price: product.sale_price,
+            quantity: product.quantity,
             note: product.note,
             max_discount_rate: product.max_discount_rate,
             discount_type: discountConfig.type,
@@ -208,15 +258,44 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
   //เพื่อสลับเปิดให้ลดราคา/ปิดราคาเต็ม โดยดึงยอดลดมาตรฐานมาใส่ หรือปรับค่าให้คืนเป็น 0 เสมอ
   const handleDiscountToggle = (index: number, isChecked: boolean) => {
     setCart((prev) =>
-      prev.map((item, i) =>
-        i === index
-          ? {
-              ...item,
-              discount_type: isChecked ? "percentage" : "none",
-              discount_value: isChecked ? customer?.standard_discount_rate || 0 : 0,
-            }
-          : item
-      )
+      prev.map((item, i) => {
+        if (i !== index) return item;
+
+        if (!isChecked) {
+          // ถ้าเอาติ๊กออก ให้ปิดส่วนลดเป็น 0
+          return {
+            ...item,
+            discount_type: "none",
+            discount_value: 0,
+          };
+        }
+
+        // ถ้าติ๊กกลับเข้ามา ให้คำนวณส่วนลดเริ่มต้นตามสิทธิ์ลูกค้า/ประเภทอู่ซ่อมรถอีกครั้ง
+        const mockProduct = {
+          id: item.product_id,
+          product_code: item.product_code,
+          product_name: item.product_name,
+          part_number: item.part_number,
+          sale_price: item.unit_price,
+          max_discount_rate: item.max_discount_rate,
+          grade_name: item.grade_name,
+          brand_name: item.brand_name,
+          model_name: item.model_name,
+          note: item.note,
+        };
+
+        const discountConfig = getDefaultProductDiscount(
+          mockProduct as any,
+          customer,
+          activeTypeId
+        );
+
+        return {
+          ...item,
+          discount_type: discountConfig.type,
+          discount_value: discountConfig.value,
+        };
+      })
     );
   };
 

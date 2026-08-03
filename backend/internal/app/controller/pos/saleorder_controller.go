@@ -20,42 +20,46 @@ func NewSaleController(svc posService.SaleService) *SaleController {
 }
 
 func (ctrl *SaleController) CreateOrderHandler(ctx *gin.Context) {
-	var req pos.CreateSaleOrderRequest
+    var req pos.CreateSaleOrderRequest
 
-	//// 1. Bind JSON 
+    // 1. Bind JSON 
     if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "ข้อมูลใบสั่งซื้อไม่ถูกต้องหรือส่งฟิลด์มาไม่ครบ",
-			"error":   err.Error(),
-		})
-		return
-	}
+        ctx.JSON(http.StatusBadRequest, gin.H{
+            "status":  "error",
+            "message": "ข้อมูลใบสั่งซื้อไม่ถูกต้องหรือส่งฟิลด์มาไม่ครบ",
+            "error":   err.Error(),
+        })
+        return
+    }
 
-    // 2. ดึง user_id จาก Middleware (ค่านี้มาจาก JWT)
+    // 2. ดึง user_id จาก Middleware
     userIDFloat, exists := ctx.Get("user_id")
     if !exists {
         ctx.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "ไม่พบข้อมูลพนักงานในระบบ"})
         return
     }
     
-    // แปลง float64 (จาก jwt.MapClaims) เป็น uint
     userID := uint(userIDFloat.(float64))
 
-    // 3. ส่ง req และ userID เข้าไปใน Service
-    if err := ctrl.svc.CreatePOSOrder(&req, userID); err != nil {
-		fmt.Println("บันทึกออเดอร์พังเพราะสาเหตุนี้:", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": err.Error(),
-		})
-		return
-	}
+    // 3. เรียกใช้ Service (รับทั้ง createdOrder และ err)
+    createdOrder, err := ctrl.svc.CreatePOSOrder(&req, userID)
+    if err != nil {
+        fmt.Println("บันทึกออเดอร์พังเพราะสาเหตุนี้:", err)
+        ctx.JSON(http.StatusBadRequest, gin.H{
+            "status":  "error",
+            "message": err.Error(),
+        })
+        return
+    }
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"message": "บันทึกใบสั่งซื้อและอัปเดตสต็อกเรียบร้อยแล้ว",
-	})
+    // 4. ส่ง id ของ Order ที่สร้างขึ้นใหม่กลับไปด้วย
+    ctx.JSON(http.StatusOK, gin.H{
+        "status":  "success",
+        "message": "บันทึกใบสั่งซื้อและอัปเดตสต็อกเรียบร้อยแล้ว",
+        "data": gin.H{
+            "id": createdOrder.ID, // 👈 ใช้งาน createdOrder.ID ได้สมบูรณ์แล้ว!
+        },
+    })
 }
 
 func (ctrl *SaleController) GetCustomerTypes(c *gin.Context) {

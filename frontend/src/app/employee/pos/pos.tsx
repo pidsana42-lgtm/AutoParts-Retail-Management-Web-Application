@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, User,} from "lucide-react";
+import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, User,ScanBarcode,} from "lucide-react";
 import Button from "../../../components/elements/button";
 import { usePosPayment } from "./hooks/usepospayment";
 import { usePosCart } from "./hooks/useposcart";
@@ -12,6 +12,7 @@ import { TableHead, TableHeader, TableRow } from "../../../components/elements/t
 import Input from "../../../components/elements/input";
 import { usePosSessionMeta } from "./hooks/usePosSessionMeta";
 import {useCustomerFinancials} from "./hooks/useCustomerFinancials";
+import Heading from "../../../components/elements/heading"
 
 export default function PosPage(): React.JSX.Element {
   // ─── STATE & HOOK SETUP ───
@@ -63,6 +64,7 @@ export default function PosPage(): React.JSX.Element {
     WHOLESALE: "SPECIAL",
   };
 
+
   return (
     <div className="flex flex-col lg:flex-row bg-white min-h-[calc(100vh-4rem)] text-gray-800 antialiased overflow-x-hidden">
       
@@ -76,7 +78,9 @@ export default function PosPage(): React.JSX.Element {
               <Text variant="xs" className="text-[#E51C23] uppercase tracking-wider mb-0 ">
                 รายการที่กำลังขาย
               </Text>
-              <h1 className="text-4xl text-zinc-900 ">POS</h1>
+              <Heading level="h1" weight="normal" className="mb-0 text-[#1C1B1B]">
+                POS
+              </Heading>
             </div>
             <div className="text-right flex flex-col items-end gap-1.5">
               <Text variant="xs" className="text-[#6B7280] mb-0">
@@ -106,8 +110,34 @@ export default function PosPage(): React.JSX.Element {
             </div>
           </div>
 
+          {/* --- ส่วนบนสุดของฝั่ง Cart --- */}
+          <div className="space-y-4">
+  
+            {/* ช่องแสกนบาร์โค้ด (ย้ายมาไว้ตรงนี้) */}
+            <form onSubmit={cartHook.handleAddProduct} className="mt-6 flex gap-2">
+              <div className="relative flex-1">
+                <ScanBarcode className="absolute left-4 top-3.5 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  value={cartHook.searchQuery}
+                  onChange={(e) => cartHook.setSearchQuery(e.target.value)}
+                  placeholder="สแกนบาร์โค้ดสินค้า หรือพิมพ์เลขบาร์โค้ดที่นี่เพื่อเพิ่มรายการ..."
+                  className="w-full bg-white border border-gray-200 rounded-none pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-red-500 shadow-sm"
+                  autoFocus
+                />
+              </div>
+              <button
+                type="submit"
+                className="bg-[#1C1B1B] text-white px-8 py-3 rounded-none text-sm hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                เพิ่มรายการ
+              </button>
+            </form>
+
+          </div>
+
           {/* 2. กล่องดำจัดการส่วนลดบิล */}
-          <div className="bg-[#1C1B1B] text-gray-300 rounded-none p-4 mb-6 flex justify-between items-start border border-zinc-800 border-l-4 border-l-[#E51C23]">
+          <div className="bg-[#1C1B1B] text-gray-300 rounded-none p-4 mb-6 mt-6 flex justify-between items-start border border-zinc-800 border-l-4 border-l-[#E51C23]">
             <div className="flex flex-col items-start gap-2 w-2/3">
               <div className="flex items-center gap-2 text-sm shrink-0 mt-2">
                 <Percent size={16} className="text-[#E51C23]" />
@@ -204,9 +234,9 @@ export default function PosPage(): React.JSX.Element {
                         <td className="py-4 px-4">
                           <Text variant="body" className="text-[#1C1B1B] mb-0 ">{item.product_name}</Text>
                           <Text variant="small" className="text-[11px] text-[#6B7280] mt-0.5 mb-0">PN: {item.part_number || "—"}</Text>
-                          {(item.grade_name || item.model_name) && (
+                          {(item.brand_name || item.grade_name || item.model_name) && (
                             <Text variant="small" className="text-[11px] text-[#6B7280] mt-1 inline-block py-0.5 rounded-sm mb-0">
-                              เกรด: {item.grade_name || "ทั่วไป"} | รุ่นรถที่รองรับ: {item.model_name || "ทุกรุ่น"}
+                              แบรนด์: {item.brand_name || "ไม่ระบุ"} | เกรด: {item.grade_name || "ทั่วไป"} | รุ่นรถที่รองรับ: {item.model_name || "ทุกรุ่น"}
                             </Text>
                           )}
                         </td>
@@ -280,26 +310,6 @@ export default function PosPage(): React.JSX.Element {
           </div>
         </div>
 
-        {/* 4. ช่องแสกนบาร์โค้ด */}
-        <form onSubmit={cartHook.handleAddProduct} className="mt-6 flex gap-2">
-          <div className="relative flex-1">
-            <QrCode className="absolute left-4 top-3.5 text-gray-400" size={18} />
-            <input
-              type="text"
-              value={cartHook.searchQuery}
-              onChange={(e) => cartHook.setSearchQuery(e.target.value)}
-              placeholder="สแกนบาร์โค้ดสินค้า หรือพิมพ์เลขบาร์โค้ดที่นี่เพื่อเพิ่มรายการ..."
-              className="w-full bg-white border border-gray-200 rounded pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-red-500 shadow-sm"
-              autoFocus
-            />
-          </div>
-          <button
-            type="submit"
-            className="bg-[#1C1B1B] text-white px-8 py-3 rounded-none text-sm hover:bg-zinc-800 transition-colors cursor-pointer"
-          >
-            เพิ่มรายการ
-          </button>
-        </form>
       </div>
 
       {/* ─── [โซนฝั่งขวา] : ข้อมูลลูกค้า และสรุปยอดเงิน ─── */}
@@ -422,29 +432,33 @@ export default function PosPage(): React.JSX.Element {
 
           <Text variant="small" className="text-[#6B7280] uppercase">เลือกวิธีการชำระเงิน</Text>
           <div className="grid grid-cols-3 gap-2">
-          {paymentData.paymentMethods.map((method) => (
-            <button
-              key={method.id}
-              onClick={() => {
-                if (method.id === 3) {
-                  const currentActiveType = paymentData.customerTypes.find((t) => t.id === paymentData.activeTypeId);
-                  if (!paymentData.customer && currentActiveType?.type_name === "GENERAL") return alert("ลูกค้าทั่วไปไม่สามารถชำระด้วยเงินเชื่อได้");
-                }
-                paymentData.updateSession("paymentMethodId", method.id);
-                if (method.id === 1 || method.id === 2) {
-                  paymentData.setSelectedPaymentType("CASH");
-                } else if (method.id === 3) {
-                  paymentData.setSelectedPaymentType("CREDIT");
-                }
-              }}
-              className={`flex flex-col items-center justify-center py-3 border text-xs transition-all ${
-                paymentData.paymentMethodId === method.id ? "border-red-600 bg-white text-red-600 border-b-4 shadow-sm" : "border-gray-200 bg-[#F9FAFB] text-gray-400 hover:text-zinc-600"
-              }`}
-            >
-              {getPaymentIcon(method.id)} 
-              <span>{method.method_name}</span>
-            </button>
-          ))}
+            {paymentData.paymentMethods.map((method) => {
+              const isProcessing = paymentData.isSubmitting || paymentData.isConfirming;
+              //ล็อกเฉพาะ: ปุ่มเงินเชื่อ (ID: 3) + มีการเลือกลูกค้าแล้ว + ลูกค้าไม่เป็นสมาชิก
+              const isCreditDisabled = method.id === 3 && paymentData.isCustomerSelected && !paymentData.isRegisteredCustomer;
+
+              const isDisabled = isProcessing || isCreditDisabled;
+              const isSelected = paymentData.paymentMethodId === method.id;
+
+              return (
+                <button
+                  key={method.id}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => paymentData.selectPaymentMethod(method.id)}
+                  className={`flex flex-col items-center justify-center py-3 border text-xs transition-all ${
+                    isDisabled
+                      ? "opacity-50 bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed"
+                      : isSelected
+                        ? "border-red-600 bg-white text-red-600 border-b-4 shadow-sm"
+                        : "border-gray-200 bg-[#F9FAFB] text-gray-400 hover:text-zinc-600"
+                  }`}
+                >
+                  {getPaymentIcon(method.id)}
+                  <span>{method.method_name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -454,8 +468,8 @@ export default function PosPage(): React.JSX.Element {
             if (paymentData.selectedPaymentType === "CASH" && paymentData.paymentMethodId === 3) {
               paymentData.updateSession("paymentMethodId", 1);
             }
-
-            paymentData.handleOpenPaymentModal(); 
+            // เรียกฟังก์ชันนี้เพื่อยิงสร้าง Order สภาพ pending/unpaid ลง DB + เปิด Modal
+            paymentData.handleConfirmSale(); 
           }} 
           variant="primary" 
           size="lg" 
@@ -502,6 +516,18 @@ export default function PosPage(): React.JSX.Element {
                     <Text variant="xs" className="text-[#259B24]">ส่วนลดรวมทั้งสิ้น</Text>
                     <Text variant="xs" className="text-[#259B24]">-{(paymentData.totalItemPrice - paymentData.finalTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท</Text>
                   </div>
+                  {paymentData.selectedPaymentType === "CREDIT" && (
+                    <>
+                    <div className="flex justify-between">
+                      <Text variant="xs" className="text-[#1C1B1B]">ระยะเวลาเครดิต</Text>
+                      <Text variant="xs" className="text-[#1C1B1B]">{paymentData.storeConfig?.max_overdue_days ?? 30} วัน</Text>
+                    </div>
+                    <div className="flex justify-between">
+                      <Text variant="xs" className="text-[#1C1B1B]">กำหนดชำระ</Text>
+                      <Text variant="xs" className="text-[#1C1B1B]">{paymentData.formattedCreditDueDate}</Text>
+                    </div>
+                    </>
+                  )}
                   <div className="flex justify-between border-t pt-2 border-[#E7BDB8]/50">
                     <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">ยอดชำระสุทธิ</Text>
                     <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท</Text>
@@ -567,7 +593,7 @@ export default function PosPage(): React.JSX.Element {
                             </button>
                           ))}
                         </div>
-                        {/*ฝั่งซ้าย วันที่, เวลา, ผู้ดำเนินการ */}
+                        {/*ฝั่งขวา วันที่, เวลา, ผู้ดำเนินการ */}
                         <div className="mt-4">
                           <div className="flex justify-between items-center">
                             <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">วันที่</Text>
@@ -588,11 +614,91 @@ export default function PosPage(): React.JSX.Element {
                 )}
 
                 {paymentData.paymentMethodId === 2 && (
-                  <div className="flex flex-col items-center py-4">
-                    <div className="w-48 h-48 border p-2 bg-gray-100 flex items-center justify-center"><QrCode size={120} className="text-gray-400" /></div>
-                    <p className="mt-4 font-medium text-gray-700">บจก. พี.เค. อะไหล่ยนต์</p>
-                    <p className="text-sm text-gray-500">สแกนเพื่อชำระเงินด้วย QR CODE</p>
+                <div className="bg-white p-6 border border-[#E7BDB8]/50">
+                  {/* Grid หลัก */}
+                  <div className="grid grid-cols-2 gap-4">
+
+                    {/* ฝั่งซ้าย */}
+                    <div className="flex flex-col items-center justify-center space-y-3">
+                      {/* กรอบรูป QR Code */}
+                      <div className="relative w-52 h-52 p-2 flex items-center justify-center">
+                        {paymentData.isLoadingQR ? (
+                          <div className="flex flex-col items-center text-gray-400">
+                            <span className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#E51C23] mb-2"></span>
+                            <Text variant="xs" className="text-xs">กำลังสร้าง QR Code...</Text>
+                          </div>
+                        ) : paymentData.qrCodeData?.qrCode ? (
+                          <img 
+                            src={paymentData.qrCodeData.qrCode} 
+                            alt="PromptPay QR Code" 
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center text-gray-400 text-center p-2">
+                            <p className="text-xs text-red-500 mb-2">ไม่สามารถโหลด QR Code ได้</p>
+                            <button
+                              type="button"
+                              onClick={() => paymentData.handleGeneratePromptPayQR(0, 1)}
+                              className="px-3 py-1 bg-white text-gray-700 text-xs rounded border border-gray-200 hover:bg-gray-50 transition"
+                            >
+                              ลองใหม่อีกครั้ง
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ข้อความใต้ QR Code */}
+                      <div className="text-center space-y-0.5">
+                        <Text variant="small" className="font-medium text-[#1C1B1B] leading-tight block">เจเจ อะไหล่ยนต์</Text>
+                        <Text variant="xs" className="font-normal text-[#6B7280] leading-tight block">ชื่อบัญชี เจเจ อะไหล่ยนต์</Text>
+                      </div>
+                    </div>
+
+                    {/* ---------------- ฝั่งขวา ---------------- */}
+                    <div className="flex flex-col justify-between">
+                    
+                      <div className="h-48 flex flex-col justify-end">
+                        
+                        {/* 1. กล่องยอดชำระสุทธิ */}
+                        <div className="border-l-3 border-[#E51C23] p-4 bg-[#F0EDEC]">
+                          <Text variant="xs" className="text-[#5F5E5E]">ยอดชำระสุทธิ</Text>
+                          <div className="flex justify-between items-baseline mt-2">
+                            <Text variant="fourxl">{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                            <Text variant="xs" className="text-[#1C1B1B]">บาท</Text>
+                          </div>
+                        </div>
+
+                        {/* 2. เส้นคั่น + รายละเอียด  */}
+                        <div className="pt-3 space-y-2">
+                          <div className="border-b border-[#E7BDB8]"></div>
+                          <div>
+                          <div className="flex justify-between items-center">
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">วันที่</Text>
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{formatDate}</Text>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">เวลา</Text>
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{formatTime}</Text>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">ผู้ดำเนินการ</Text>
+                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{currentStaff}</Text>
+                          </div>
+                        </div>
+                        </div>
+
+                      </div>
+                    </div>
                   </div>
+
+                  {/* Ref No. ด้านล่างสุด */}
+                  {paymentData.qrCodeData?.refNo && (
+                    <div className="mt-5 pt-3 border-t border-gray-100 flex justify-between items-center">
+                      <Text variant="xs">PromptPay Reference</Text>
+                      <Text variant="xs">Ref No: <span className="text-[#1C1B1B] font-semibold">{paymentData.qrCodeData.refNo}</span></Text>
+                    </div>
+                  )}
+                </div>
                 )}
 
                 {paymentData.paymentMethodId === 3 && (
@@ -657,9 +763,32 @@ export default function PosPage(): React.JSX.Element {
 
               {/* 4. Footer */}
               <div className="flex p-6 gap-4">
-                <button type="button" onClick={() => paymentData.setIsPaymentModalOpen(false)} className="px-20 py-3 bg-[#E5E2E1] font-normal text-sm rounded-none hover:bg-[#E7E5E4] transition-colors">ยกเลิก</button>
-                <button type="button" onClick={() => paymentData.submitOrderToDatabase()} className="flex-1 py-3 bg-[#E51C23] text-white font-normal text-sm rounded-none hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
-                  <Printer className="w-4 h-4" />ยืนยันและพิมพ์ใบเสร็จ
+                <button 
+                  type="button" 
+                  disabled={paymentData.isConfirming || paymentData.isSubmitting}
+                  onClick={() => paymentData.setIsPaymentModalOpen(false)} 
+                  className="px-20 py-3 bg-[#E5E2E1] font-normal text-sm rounded-none hover:bg-[#E7E5E4] transition-colors disabled:opacity-50"
+                >
+                  ยกเลิก
+                </button>
+                
+                <button 
+                  type="button" 
+                  disabled={paymentData.isConfirming} 
+                  onClick={async () => {
+                    // ทุกช่องทางชำระเงินจะมาจบการขายที่ฟังก์ชันนี้เท่านั้น
+                    await paymentData.handleFinalConfirmAndPrint();
+                  }} 
+                  className="flex-1 py-3 bg-[#E51C23] text-white font-normal text-sm hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-400"
+                >
+                  {paymentData.isConfirming ? (
+                    <span>กำลังทำรายการ...</span>
+                  ) : (
+                    <>
+                      <Printer className="w-4 h-4" />
+                      ยืนยันและพิมพ์ใบเสร็จ
+                    </>
+                  )}
                 </button>
               </div>
             </div>

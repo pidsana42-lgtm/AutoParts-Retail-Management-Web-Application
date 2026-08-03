@@ -32,3 +32,9 @@ export interface PaymentMethodResponse {
   id: number;
   method_name: string;
 }
+
+export interface GenerateQRResponse {
+  qr_code: string;
+  reference_number: string;
+  transaction_ref?: string;
+}
