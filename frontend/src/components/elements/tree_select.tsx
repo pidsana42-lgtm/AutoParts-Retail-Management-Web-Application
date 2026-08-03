@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { ChevronRight, ChevronDown, Check } from "lucide-react";
 import type { CascaderOption } from "./cascader";
 import { cn } from "../../utils/component";
