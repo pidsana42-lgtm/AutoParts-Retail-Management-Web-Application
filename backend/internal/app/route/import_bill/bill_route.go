@@ -100,8 +100,7 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB) {
 	}
 
 	// OCR Proxy route: forwards frontend requests through port 8080 backend to internal 127.0.0.1:8000
-	ocrGroup := r.Group("/api/ocr")
-	ocrGroup.POST("/extract-invoice/upload", func(c *gin.Context) {
+	ocrProxyHandler := func(c *gin.Context) {
 		proxyReq, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:8000/api/extract-invoice/upload", c.Request.Body)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create proxy request: " + err.Error()})
@@ -124,5 +123,9 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB) {
 		}
 
 		c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
-	})
+	}
+
+	r.POST("/api/ocr/extract-invoice/upload", ocrProxyHandler)
+	r.POST("/api/ocr/api/extract-invoice/upload", ocrProxyHandler)
+	r.POST("/ocr/api/extract-invoice/upload", ocrProxyHandler)
 }
