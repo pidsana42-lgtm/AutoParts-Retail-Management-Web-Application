@@ -4,6 +4,7 @@ import type { POSProductResponse } from "../../../interface/pos/product_interfac
 import type { StoreConfigInterface } from "../../../interface/pos/store_config_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
 import type { ConfirmPaymentRequest } from "../../../interface/pos/payment_interface";
+import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse } from "../../../interface/pos/sales_history_interface";
 
 // API Services 
 export const posApiService = {
@@ -36,6 +37,10 @@ export const posApiService = {
 
   confirmPayment: (payload: ConfirmPaymentRequest): Promise<any> =>
     apiClient.patch("/pos/payments/confirm", payload).then((res) => res.data),
+
+  /** ดึงประวัติการขายสินค้า (Sales History) */
+  getSalesHistory: (params: SalesHistoryFilterRequest): Promise<SalesHistoryPaginationResponse> =>
+    apiClient.get<SalesHistoryPaginationResponse>("/sales/history", { params }).then((res) => res.data),
   
 };
 
