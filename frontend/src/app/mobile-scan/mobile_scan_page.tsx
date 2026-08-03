@@ -54,8 +54,10 @@ export default function MobileScanPage() {
       setUploadCount(prev => prev + 1);
       setSelectedFile(null);
       setPreviewUrl(null);
-    } catch {
-      setError('อัปโหลดไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      const serverErr = err?.response?.data?.error || err?.message || '';
+      setError(`อัปโหลดไม่สำเร็จ: ${serverErr || 'กรุณาลองใหม่อีกครั้ง'}`);
     } finally {
       setUploading(false);
     }
