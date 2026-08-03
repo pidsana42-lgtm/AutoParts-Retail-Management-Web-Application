@@ -1,5 +1,4 @@
 import apiClient from "../apiClient";
-import axios from "axios";
 import type {
   Supplier,
   Product,
@@ -79,23 +78,13 @@ export async function getProducts(): Promise<Product[]> {
   }
 }
 
-// 4. ส่งรูปบิลไปสแกนด้วย AI OCR (FastAPI Server)
+// 4. ส่งรูปบิลไปสแกนด้วย AI OCR (ผ่าน Go Backend Proxy ไปยัง FastAPI Server)
 export async function scanBill(file: File): Promise<any> {
   const uploadData = new FormData();
   uploadData.append("file", file);
 
-  const getFastApiUploadUrl = () => {
-    if (typeof window !== 'undefined') {
-      const { hostname, protocol } = window.location;
-      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-        return `${protocol}//${hostname}:8000/api/extract-invoice/upload`;
-      }
-    }
-    return "/ocr/api/extract-invoice/upload";
-  };
-
   try {
-    const response = await axios.post(getFastApiUploadUrl(), uploadData, {
+    const response = await apiClient.post("/ocr/extract-invoice/upload", uploadData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },

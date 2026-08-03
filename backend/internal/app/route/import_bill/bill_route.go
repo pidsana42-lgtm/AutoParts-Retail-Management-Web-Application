@@ -1,6 +1,10 @@
 package import_bill
 
 import (
+	"io"
+	"net/http"
+	"time"
+
 	billCtrl "backend/internal/app/controller/import_data"
 	billRepo "backend/internal/app/repository/import_data"
 	billSvc "backend/internal/app/service/import_data"
@@ -94,4 +98,31 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB) {
 		apiGroup.GET("/purchase-orders", ctrl.ListPurchaseOrders)
 		apiGroup.GET("/purchase-orders/:id", ctrl.GetPurchaseOrderById)
 	}
+
+	// OCR Proxy route: forwards frontend requests through port 8080 backend to internal 127.0.0.1:8000
+	ocrGroup := r.Group("/api/ocr")
+	ocrGroup.POST("/extract-invoice/upload", func(c *gin.Context) {
+		proxyReq, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:8000/api/extract-invoice/upload", c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create proxy request: " + err.Error()})
+			return
+		}
+		proxyReq.Header = c.Request.Header.Clone()
+
+		client := &http.Client{Timeout: 300 * time.Second}
+		resp, err := client.Do(proxyReq)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect to OCR service: " + err.Error()})
+			return
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read OCR response: " + err.Error()})
+			return
+		}
+
+		c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
+	})
 }
