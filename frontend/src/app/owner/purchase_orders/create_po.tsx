@@ -1,11 +1,7 @@
 // React Libraries
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Building2, ChartNoAxesCombined, Info, ScanBarcode, ShoppingBag, 
-    ChevronRight, ShoppingCart, 
-    Plus,
-    Minus,
-    Trash2} from 'lucide-react';
+import { Building2, ChartNoAxesCombined, Info, ScanBarcode, ShoppingBag, ChevronRight, ShoppingCart, Plus, Minus, Trash2} from 'lucide-react';
 // Components
 import Heading from '../../../components/elements/heading';
 import Button from '../../../components/elements/button';
@@ -24,9 +20,12 @@ import { generateLocalId } from '../../../utils/generateId';
 // Hooks
 import { usePoScanner } from './hooks/usePOScanner'; 
 import { usePreorders } from './hooks/usePreorder';
+// Utils
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 const CreatePurchaseOrders: React.FC = () => {
     const navigate = useNavigate();
+    const basePath = usePathBasePrefix();
     // States ของ API
     const [item, setItem] = useState<LocalPOItem[]>([]);
     const [totalItems, setTotalItems] = useState(0);
@@ -38,8 +37,9 @@ const CreatePurchaseOrders: React.FC = () => {
     const [supplierOptions, setSupplierOptions] = useState<{label: string, value: string}[]>([]);
     // Hook การสแกนและค้นหาสินค้า
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const quantityInputRef = useRef<HTMLInputElement>(null);
     const { searchInput, addQuantity, setAddQuantity, searchResults, handleSearchInput, handleSelectProduct,
-        handleAddItem, handleSearchKeyDown, highlightedIndex, setHighlightedIndex, } = usePoScanner(listsSupplier, setItem);
+        handleAddItem, handleSearchKeyDown, highlightedIndex, setHighlightedIndex, selectedProduct } = usePoScanner(listsSupplier, item, setItem);
     // ดึงข้อมูลจาก Hook เรียกรายการพรีออเดอร์
     const { preorders, totalPreorders, isLoading: isPreordersLoading } = usePreorders(item, setItem, setIsPreorderModalOpen);
     // สำหรับดึงข้อมูลคาดการณ์ระยะเวลาจัดส่ง
@@ -127,6 +127,13 @@ const CreatePurchaseOrders: React.FC = () => {
 
         fetchDeliveryEstimate();
     }, [listsSupplier]);
+
+    // เมื่อมีการเลือกสินค้า (จาก Enter ในช่องค้นหา หรือคลิก dropdown) ให้เด้งไปช่องจำนวน
+    useEffect(() => {
+        if (selectedProduct) {
+            quantityInputRef.current?.focus();
+        }
+    }, [selectedProduct]);
 
     // Function เตือนก่อนว่ามีของในใบสั่งซื้ออยู่ ถ้าเปลี่ยนบริษัทจะดึง Stock Alert ชุดใหม่มาทับตะกร้าเดิม
     const handleSupplierChange = (newSupplierId: string) => {
@@ -228,7 +235,7 @@ const CreatePurchaseOrders: React.FC = () => {
                 : `ส่งใบสั่งซื้อ ${createdPoNumber} เพื่อขออนุมัติเรียบร้อยแล้ว`;
             
             alert(message);
-            navigate('/owner/orders'); // กลับไปหน้ารวม
+            navigate(`${basePath}/orders`); // กลับไปหน้ารวม
 
         } catch (error: any) {
             const backendMessage = error?.response?.data?.message || error?.message;
@@ -272,7 +279,7 @@ const CreatePurchaseOrders: React.FC = () => {
             <div className="flex items-center justify-between">
                 <div className='flex-col space-y-2'>
                     <nav className="flex items-center text-sm text-gray-500 gap-2 font-light">
-                        <Link to="/owner/orders" className="hover:text-gray-900 transition-colors cursor-pointer">
+                        <Link to={`${basePath}/orders`} className="hover:text-gray-900 transition-colors cursor-pointer">
                             จัดการใบสั่งซื้อ
                         </Link>
                         <ChevronRight className="w-4 h-4 text-gray-400" />                        
@@ -437,12 +444,21 @@ const CreatePurchaseOrders: React.FC = () => {
                         <div className="w-px h-8 bg-gray-300/60 mx-1"></div>
 
                         <Input
+                            ref={quantityInputRef}
                             type="number"
                             min={1}
                             value={addQuantity}
                             onChange={(e) => {
                                 const val = e.target.value;
                                 setAddQuantity(val === "" ? "" : Math.max(0, Number(val)));
+                            }}
+                            onKeyDown={(e) => {
+                                // เมื่ออยู่ช่องจำนวน แล้วกด Enter -> เพิ่มลงบิล -> เด้งกลับช่องค้นหา
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const isSuccess = handleAddItem();
+                                    if (isSuccess) searchInputRef.current?.focus();
+                                }
                             }}
                             containerClassName="w-32 shrink-0"
                             className="bg-transparent border-none shadow-none text-center px-1 focus:outline-none"
@@ -487,9 +503,10 @@ const CreatePurchaseOrders: React.FC = () => {
                                             <TableCell>{row.product_name_code_snapshot}</TableCell>
                                             <TableCell>{row.product_name_snapshot}</TableCell>
                                             <TableCell className="text-center">
-                                                <div className='inline-flex items-center border border-gray-200 rounded-md overflow-hidden'>
+                                                <div className='inline-flex items-center border border-gray-300 rounded-none bg-[#F6F3F2]'>
                                                     <button
                                                         type='button'
+                                                        disabled={row.order_type === 'พรีออเดอร์'}
                                                         onClick={() => {
                                                             setQtyDrafts(prev => {
                                                                 const next = { ...prev };
@@ -503,13 +520,14 @@ const CreatePurchaseOrders: React.FC = () => {
                                                             }
                                                             handleUpdateItem(row.id, 'quantity', String(row.quantity - 1));
                                                         }}
-                                                        className='w-8 h-8 flex items-center justify-center text-gray-400 hover:bg-gray-50 border-r border-gray-200 transition-colors'
+                                                        className={`p-1.5 px-2 text-gray-600 transition-colors ${row.order_type === 'พรีออเดอร์' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:text-black'}`}
                                                     >
-                                                        <Minus className='w-3.5 h-3.5' />
+                                                        <Minus size={14} />
                                                     </button>
                                                     <input
                                                         type='text'
                                                         inputMode='numeric'
+                                                        disabled={row.order_type === 'พรีออเดอร์'}
                                                         value={qtyDrafts[row.id] !== undefined ? qtyDrafts[row.id] : String(row.quantity)}
                                                         onChange={(e) => {
                                                             const raw = e.target.value;
@@ -520,10 +538,12 @@ const CreatePurchaseOrders: React.FC = () => {
                                                         onKeyDown={(e) => {
                                                             if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                                                         }}
-                                                        className='w-11 h-8 text-center text-black font-medium outline-none'
+                                                        className={`w-10 text-center bg-transparent border-none focus:outline-none focus:ring-0 text-sm p-0 m-0 font-medium text-black [appearance:textfield] 
+                                                            [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${row.order_type === 'พรีออเดอร์' ? 'cursor-not-allowed text-gray-400' : ''}`}
                                                     />
                                                     <button
                                                         type='button'
+                                                        disabled={row.order_type === 'พรีออเดอร์'}
                                                         onClick={() => {
                                                             setQtyDrafts(prev => {
                                                                 const next = { ...prev };
@@ -532,15 +552,15 @@ const CreatePurchaseOrders: React.FC = () => {
                                                             });
                                                             handleUpdateItem(row.id, 'quantity', String(row.quantity + 1));
                                                         }}
-                                                        className='w-8 h-8 flex items-center justify-center text-gray-400 hover:bg-gray-50 border-l border-gray-200 transition-colors'
+                                                        className={`p-1.5 px-2 text-gray-600 transition-colors ${row.order_type === 'พรีออเดอร์' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:text-black'}`}
                                                     >
-                                                        <Plus className='w-3.5 h-3.5' />
+                                                        <Plus size={14} />
                                                     </button>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-center">{row.unit}</TableCell>
                                             <TableCell className="text-right pr-10">{row.unit_price.toLocaleString()} ฿</TableCell>
-                                            <TableCell className="text-right pr-6">{row.sub_total} ฿</TableCell>
+                                            <TableCell className="text-right pr-6">{row.sub_total.toLocaleString()} ฿</TableCell>
                                             <TableCell className="text-center">
                                                 <button 
                                                     onClick={() => handleRemoveItem(row.id.toString())}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Plus } from 'lucide-react';
+import { X, CircleFadingPlus } from 'lucide-react';
 import type { PreorderItem } from '../../../../interface/purchase_orders/po_interface';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../../components/elements/table";
 
@@ -21,7 +21,7 @@ export const PreorderSelectionModal: React.FC<PreorderSelectionModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       {/* ปรับขนาดให้กว้างขึ้นเพื่อแสดงตารางได้สวยงาม */}
-      <div className="bg-white rounded-md shadow-xl w-full max-w-4xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
+      <div className="bg-white rounded-none shadow-xl w-full max-w-4xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 shrink-0">
@@ -31,7 +31,7 @@ export const PreorderSelectionModal: React.FC<PreorderSelectionModalProps> = ({
           </div>
           <button 
             onClick={onClose} 
-            className="text-gray-400 hover:text-gray-600 p-1.5 rounded hover:bg-gray-200 transition cursor-pointer"
+            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-none hover:bg-gray-200 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -42,9 +42,11 @@ export const PreorderSelectionModal: React.FC<PreorderSelectionModalProps> = ({
           <Table>
             <TableHeader className="bg-gray-100 text-gray-600">
               <TableRow>
+                <TableHead className="pl-4">ลำดับ</TableHead>
                 <TableHead className="pl-4">รหัสสินค้า</TableHead>
                 <TableHead>ชื่อสินค้า</TableHead>
-                <TableHead className="text-center">จำนวนที่ลูกค้าสั่ง</TableHead>
+                <TableHead className="text-center">จำนวนที่สั่ง</TableHead>
+                <TableHead className="text-right pr-6">ราคาคาดการณ์</TableHead>
                 <TableHead className="text-center">จัดการ</TableHead>
               </TableRow>
             </TableHeader>
@@ -52,15 +54,17 @@ export const PreorderSelectionModal: React.FC<PreorderSelectionModalProps> = ({
               {preorders.length > 0 ? (
                 preorders.map((order, index) => (
                   <TableRow key={order.id || index} className="hover:bg-gray-50/70 transition-colors">
-                    <TableCell className="pl-4 font-medium text-gray-900">{order.product_code}</TableCell>
-                    <TableCell className="text-gray-700">{order.product_name}</TableCell>
-                    <TableCell className="text-center font-medium text-gray-900">{order.quantity}</TableCell>
+                    <TableCell className="pl-4 text-black">{index + 1}</TableCell>
+                    <TableCell className="pl-4 text-black">{order.product_code}</TableCell>
+                    <TableCell className="text-black">{order.product_name}</TableCell>
+                    <TableCell className="text-center text-black">{order.quantity}</TableCell>
+                    <TableCell className="text-right pr-6 text-black">{order.unit_price.toLocaleString()} ฿</TableCell>
                     <TableCell className="text-center">
                       <button
                         onClick={() => onSelectPreorder(order)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-red-700 hover:text-red-800 transition-colors cursor-pointer"
                       >
-                        <Plus className="w-4 h-4" /> เพิ่ม
+                        <CircleFadingPlus size={12} /> เพิ่ม
                       </button>
                     </TableCell>
                   </TableRow>

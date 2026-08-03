@@ -3,7 +3,7 @@ import { cn } from "../../utils/component";
 import { type HTMLAttributes, type ReactNode } from "react";
 
 const cardVariants = cva(
-  "rounded-sm border border-slate-200 bg-white shadow-sm"
+  "rounded-none border border-slate-200 bg-white shadow-sm"
 );
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {

@@ -4,7 +4,7 @@ import { type InputHTMLAttributes, type ReactNode, forwardRef, useId } from "rea
 
 const inputVariants = cva(
   [
-    "h-10 w-full rounded-sm bg-gray-100 px-3 text-sm text-slate-800",
+    "h-10 w-full rounded-none bg-gray-100 px-3 text-sm text-slate-800",
     "placeholder:text-slate-400",
     "transition-colors duration-150 ease-out",
     "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",

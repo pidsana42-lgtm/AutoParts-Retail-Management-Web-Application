@@ -20,13 +20,15 @@ import { formatDate } from '../../../utils/formatdate';
 // Hook
 import { usePoScanner } from './hooks/usePOScanner';
 import { usePreorders } from './hooks/usePreorder';
+// Utils
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 // Map Status Eng -> Thai
 const STATUS_LABEL: Record<string, string> = {
     DRAFT: 'ฉบับร่าง',
     PENDING: 'รออนุมัติ',
     APPROVED: 'อนุมัติแล้ว',
-    REJECTED: 'ไม่อนุมัติ',
+    RESUBMITTED: 'รอส่งอนุมัติใหม่',
     EXPIRED: 'หมดอายุ'
 };
 
@@ -42,7 +44,7 @@ const getPageTitle = (status: string, role: string | null): string => {
         DRAFT: 'รายละเอียดใบสั่งซื้อ',
         PENDING: 'ตรวจสอบและอนุมัติใบสั่งซื้อ',
         APPROVED: 'รายละเอียดใบสั่งซื้อ',
-        REJECTED: 'แก้ไขใบสั่งซื้อที่ไม่อนุมัติ',
+        RESUBMITTED: 'แก้ไขใบสั่งซื้อเพื่อส่งอนุมัติใหม่',
         EXPIRED: 'รายละเอียดใบสั่งซื้อ',
     };
     return titles[status] || 'รายละเอียดใบสั่งซื้อ';
@@ -60,14 +62,16 @@ const getPageSubtitle = (status: string, role: string | null): string => {
         DRAFT: 'ใบสั่งซื้อนี้เป็นฉบับร่าง',
         PENDING: 'กรุณาตรวจสอบรายการสินค้าและยอดประเมินก่อนทำการอนุมัติ',
         APPROVED: 'ใบสั่งซื้อนี้ได้รับการอนุมัติเรียบร้อยแล้ว',
-        REJECTED: 'ใบสั่งซื้อนี้ถูกปฏิเสธ คุณสามารถแก้ไขรายการและส่งอนุมัติใหม่ได้',
+        RESUBMITTED: 'ใบสั่งซื้อนี้ถูกตีกลับ คุณสามารถแก้ไขรายการและส่งอนุมัติใหม่ได้',
         EXPIRED: 'ใบสั่งซื้อนี้หมดอายุแล้ว',
+        DELETED: 'ใบสั่งซื้อนี้อยู่ในถังขยะ คุณสามารถกู้คืนเพื่อแก้ไขรายการและส่งอนุมัติใหม่ได้'
     };
     return subtitles[status] || '';
 };
 
 function OrderDetail() {
     const navigate = useNavigate();
+    const basePath = usePathBasePrefix();
     // ดึง id จาก URL มาใช้งาน (เช่น เอาไป Fetch API ต่อ)
     const { id } = useParams();
     const userRole = localStorage.getItem('role');
@@ -76,8 +80,7 @@ function OrderDetail() {
     const [error, setError] = useState<string | null>(null);
     const [notes, setNotes] = useState('');
     const [items, setItems] = useState<LocalPOItem[]>([]);
-    const [activeAction, setActiveAction] = useState<'draft' | 'submit' | 'approve' | 'reject' | 'restore' | null>(null);
-
+    const [activeAction, setActiveAction] = useState<'draft' | 'submit' | 'approve' | 'resubmitted' | 'restore' | null>(null);
     // เก็บค่าที่ผู้ใช้กำลังพิมพ์อยู่ (ระหว่างลบเลขเดิมทิ้งแล้วยังพิมพ์ไม่เสร็จ) แยกจาก items จริง
     const [qtyDrafts, setQtyDrafts] = useState<Record<string | number, string>>({});
     // เก็บ id ของรายการที่ "มีอยู่แล้วจริงใน DB" ตอนโหลดหน้ามาครั้งแรก
@@ -91,13 +94,12 @@ function OrderDetail() {
     // State สำหรับข้อมูลวิเคราะห์จากระบบ
     const [deliveryEstimate, setDeliveryEstimate] = useState<POAnalyticsResponse | null>(null);
     const [isEstimateLoading, setIsEstimateLoading] = useState(false);
-    
     // เรียกใช้งาน Hook
     const searchInputRef = useRef<HTMLInputElement>(null);
     const supplierId = po?.supplier_id ? String(po.supplier_id) : '';
     const { searchInput, addQuantity, setAddQuantity, searchResults, isSearching,
         handleSearchInput, handleSelectProduct, handleAddItem, handleScannerEnter } =
-        usePoScanner(supplierId, setItems);
+        usePoScanner(supplierId, items, setItems);
     const { preorders, handleAddPreorderToPO } = usePreorders(items, setItems, setIsPreorderModalOpen);
     
     useEffect(() => {
@@ -133,8 +135,8 @@ function OrderDetail() {
     if (error || !po) return <div>{error ?? 'ไม่พบใบสั่งซื้อ'}</div>;
 
     const canApprove = po.status === 'PENDING' && userRole === 'Owner'; // เจ้าของร้านพิจารณา
-    const canEditDraft = po.status === 'DRAFT' || po.status === 'REJECTED';  // พนักงานยังแก้ไขร่างได้อยู่
-    const canRestore = po.status === 'EXPIRED';
+    const canEditDraft = po.status === 'DRAFT' || po.status === 'RESUBMITTED';  // พนักงานยังแก้ไขร่างได้อยู่
+    const canRestore = po.status === 'EXPIRED' || po.status === 'DELETED';
     const isEditable = canApprove || canEditDraft;
 
     // คำนวณจาก items ปัจจุบัน (ไม่ใช้ po.total_amount ตรงๆ เพราะผู้ใช้อาจแก้ไขจำนวน/ราคาแล้วยังไม่ได้กดบันทึก)
@@ -147,7 +149,7 @@ function OrderDetail() {
         try {
             await poService.updatePOStatus(id, 'APPROVED');
             alert('อนุมัติใบสั่งซื้อสำเร็จ');
-            navigate('/owner/orders');
+            navigate('${basePath}/orders');
         } catch {
             setError('อนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
         } finally {
@@ -157,32 +159,14 @@ function OrderDetail() {
 
     const handleReject = async () => {
         if (!id) return;
-        const rejectReason = window.prompt('กรุณาระบุเหตุผลที่ไม่อนุมัติ (ข้อความนี้จะถูกเพิ่มต่อท้ายหมายเหตุเดิม):');
+        const rejectReason = window.prompt('กรุณาระบุเหตุผลที่ไม่อนุมัติ:');
         if (rejectReason === null) return; 
-        setActiveAction('reject');
+        setActiveAction('resubmitted');
         try {
-            // 2. ถ้ามีการพิมพ์เหตุผลมา ให้เอาไปต่อท้ายหมายเหตุเดิม
-            if (rejectReason.trim() !== '') {
-                const updatedNotes = notes 
-                    ? `${notes}\n\n[เจ้าของร้านไม่อนุมัติ]: ${rejectReason}` 
-                    : `[เจ้าของร้านไม่อนุมัติ]: ${rejectReason}`;
-                
-                const payload = {
-                    notes: updatedNotes,
-                    items: items.map(item => ({
-                        id: initialItemIds.has(Number(item.id)) ? Number(item.id) : undefined,
-                        product_id: Number(item.product_id),
-                        quantity: Number(item.quantity),
-                        unit_price: Number(item.unit_price),
-                        pre_order_item_id: item.pre_order_item_id ? Number(item.pre_order_item_id) : undefined,
-                        alert_id: item.alert_id ? Number(item.alert_id) : undefined
-                    }))
-                };
-                await poService.updatePurchaseOrder(id, payload);
-            }
-            await poService.updatePOStatus(id, 'REJECTED');
+            await poService.updatePOStatus(id, 'RESUBMITTED', rejectReason);
+            
             alert('ปฏิเสธใบสั่งซื้อสำเร็จ');
-            navigate('/owner/orders');
+            navigate(`${basePath}/orders`);
         } catch {
             setError('ไม่สามารถปฏิเสธใบสั่งซื้อได้');
         } finally {
@@ -192,10 +176,8 @@ function OrderDetail() {
 
     const handleRestore = async () => {
         if (!id) return;
-        
-        const confirmed = window.confirm('คุณต้องการกู้คืนใบสั่งซื้อที่หมดอายุนี้ใช่หรือไม่? (ระบบจะเปลี่ยนสถานะกลับเป็นฉบับร่าง)');
+        const confirmed = window.confirm('คุณต้องการกู้คืนใบสั่งซื้อนี้ใช่หรือไม่? (ระบบจะเปลี่ยนสถานะกลับเป็นฉบับร่าง)');
         if (!confirmed) return;
-
         setActiveAction('restore');
         try {
             // สมมติว่าต้องการให้กลับไปเป็นฉบับร่าง (DRAFT) เมื่อกดกู้คืน
@@ -235,7 +217,6 @@ function OrderDetail() {
     const handleQtyBlur = (key: number | string) => {
         const raw = qtyDrafts[key];
         if (raw === undefined) return; // ไม่ได้แก้ไขอะไร ไม่ต้องทำอะไรต่อ
-
         const trimmed = raw.trim();
         // พิมพ์ไม่เสร็จ/ลบจนว่างแล้วไม่พิมพ์ต่อ -> เอาค่าตัวเลขเดิมกลับไปเลย ไม่ต้องเตือน
         if (trimmed === '' || isNaN(Number(trimmed))) {
@@ -246,7 +227,6 @@ function OrderDetail() {
             });
             return;
         }
-
         const value = Number(trimmed);
         if (value <= 0) {
             const confirmed = window.confirm('จำนวนสินค้าจะเหลือ 0 ต้องการลบรายการนี้ออกจากรายการหรือไม่?');
@@ -261,7 +241,6 @@ function OrderDetail() {
             });
             return;
         }
-
         handleItemChange(key, 'quantity', value);
         setQtyDrafts(prev => {
             const next = { ...prev };
@@ -292,14 +271,11 @@ function OrderDetail() {
                 };
             }),
         };
-
         const updated = await poService.updatePurchaseOrder(id!, payload);
-
         const formattedUpdatedItems = updated.po_items.map((item: any) => ({
             ...item,
             order_type: item.order_type || 'สั่งซื้อ'
         }));
-
         setPo(prev => prev ? { ...prev, ...updated, po_items: formattedUpdatedItems } : prev);
         setItems(formattedUpdatedItems);
         setInitialItemIds(new Set(formattedUpdatedItems.map((item: LocalPOItem) => item.id)));
@@ -328,7 +304,7 @@ function OrderDetail() {
             await savePOChanges();
             await poService.updatePOStatus(id, 'PENDING');
             alert('ส่งใบสั่งซื้อเพื่อขออนุมัติเรียบร้อยแล้ว');
-            navigate('/owner/orders');
+            navigate(`${basePath}/orders`);
         } catch (err: any) {
             console.error("Submit Error:", err.response?.data || err);
             setError('ส่งอนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
@@ -343,7 +319,7 @@ function OrderDetail() {
             <div className='flex items-center justify-between'>
                 <div className='flex-col space-y-2'>
                     <nav className='flex items-center text-sm text-gray-500 gap-2 font-light'>
-                        <Link to='/owner/orders' className='...'>จัดการใบสั่งซื้อ</Link>
+                        <Link to={`${basePath}/orders`} className='...'>จัดการใบสั่งซื้อ</Link>
                         <ChevronRight className='w-4 h-4 text-gray-400' />
                         <span className="text-black font-normal">{isEditable ? 'ตรวจสอบใบสั่งซื้อสินค้า' : 'รายละเอียดใบสั่งซื้อสินค้า'}</span>
                     </nav>
@@ -355,9 +331,9 @@ function OrderDetail() {
                     </Heading>
                 </div>
                 <div className='flex items-end gap-4 justify-end'>
-                    <Badge variant='outline' size='lg' className='gap-2 p-2'>
-                        <ClipboardClock className='w-4 h-4'/>
-                        สถานะ: {STATUS_LABEL[po.status]}
+                    <Badge variant='outline' size='lg' className='w-fit gap-2 p-2'>
+                        <ClipboardClock size={14}/>
+                        สถานะ : {STATUS_LABEL[po.status]}
                     </Badge>
                 </div>
             </div>
@@ -577,7 +553,7 @@ function OrderDetail() {
                                 <TableCell className='text-black'>{item.product_name_snapshot}</TableCell>
                                 <TableCell className='text-center'>
                                     {isEditable ? (
-                                        <div className='inline-flex items-center border border-gray-200 rounded-md overflow-hidden'>
+                                        <div className='inline-flex items-center border border-gray-300 rounded-none bg-[#F6F3F2]'>
                                             <button
                                                 type='button'
                                                 onClick={() => {
@@ -593,9 +569,9 @@ function OrderDetail() {
                                                     }
                                                     handleItemChange(itemKey, 'quantity', item.quantity - 1);
                                                 }}
-                                                className='w-8 h-8 flex items-center justify-center text-gray-400 hover:bg-gray-50 border-r border-gray-200 transition-colors'
+                                                className='p-1.5 px-2 cursor-pointer text-gray-600 hover:text-black transition-colors'
                                             >
-                                                <Minus className='w-3.5 h-3.5' />
+                                                <Minus size={14} />
                                             </button>
                                             <input
                                                 type='text'
@@ -611,7 +587,7 @@ function OrderDetail() {
                                                 onKeyDown={(e) => {
                                                     if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                                                 }}
-                                                className='w-11 h-8 text-center text-black font-medium outline-none'
+                                                className='w-10 text-center bg-transparent border-none focus:outline-none focus:ring-0 text-sm p-0 m-0 font-medium text-black [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
                                             />
                                             <button
                                                 type='button'
@@ -623,9 +599,9 @@ function OrderDetail() {
                                                     });
                                                     handleItemChange(itemKey, 'quantity', item.quantity + 1);
                                                 }}
-                                                className='w-8 h-8 flex items-center justify-center text-gray-400 hover:bg-gray-50 border-l border-gray-200 transition-colors'
+                                                className='p-1.5 px-2 cursor-pointer text-gray-600 hover:text-black transition-colors'
                                             >
-                                                <Plus className='w-3.5 h-3.5' />
+                                                <Plus size={14} />
                                             </button>
                                         </div>
                                     ) : (
@@ -676,7 +652,7 @@ function OrderDetail() {
             { /* Button Actions */ }
             {canEditDraft && (
                 <div className='sticky bottom-0 z-20 bg-gray-50 py-4 border-t border-gray-200 flex justify-between'>
-                    <Button variant='outline' className='w-40' onClick={() => navigate('/owner/orders')} disabled={!!activeAction}>
+                    <Button variant='outline' className='w-40' onClick={() => navigate(`${basePath}/orders`)} disabled={!!activeAction}>
                         ยกเลิก
                     </Button>
                     <div className='flex gap-4'>
@@ -693,7 +669,7 @@ function OrderDetail() {
             {canApprove && (
                 <div className='sticky bottom-0 z-20 bg-gray-50 py-4 border-t border-gray-200 flex justify-between'>
                     <Button variant='outline' className='w-40' onClick={handleReject} disabled={!!activeAction}>
-                        {activeAction === 'reject' ? 'กำลังดำเนินการ...' : 'ไม่อนุมัติ'}
+                        {activeAction === 'resubmitted' ? 'กำลังดำเนินการ...' : 'ไม่อนุมัติ'}
                     </Button>
                     <div className='flex gap-4'>
                         <Button variant='secondary' className='w-40' onClick={handleSaveEdit} disabled={!!activeAction}>
@@ -708,7 +684,7 @@ function OrderDetail() {
 
             {canRestore && (
                 <div className='sticky bottom-0 z-20 bg-gray-50 py-4 border-t border-gray-200 flex justify-between'>
-                    <Button variant='outline' className='w-40' onClick={() => navigate('/owner/orders')} disabled={!!activeAction}>
+                    <Button variant='outline' className='w-40' onClick={() => navigate(`${basePath}/orders`)} disabled={!!activeAction}>
                         ย้อนกลับ
                     </Button>
                     <div className='flex gap-4'>

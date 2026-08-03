@@ -18,7 +18,7 @@ export const RejectedBreakdownModal: React.FC<RejectedBreakdownModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-sm shadow-xl w-full max-w-md overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-none shadow-xl w-full max-w-md overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
           <h3 className="text-base font-semibold text-gray-800">ยอดไม่อนุมัติแยกตามบริษัท (MTD)</h3>

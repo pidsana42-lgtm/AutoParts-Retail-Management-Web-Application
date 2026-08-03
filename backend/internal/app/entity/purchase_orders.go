@@ -15,6 +15,7 @@ type PO struct {
 	Pdf_url          string     `gorm:"type:text" json:"pdf_url"`
 	Pdf_generated_at *time.Time `json:"pdf_generated_at"`
 	Notes            *string    `gorm:"type:text" json:"notes"`
+	RejectionReason  *string    `gorm:"type:text;column:rejection_reason" json:"rejection_reason,omitempty"`
 
 	LastUpdatedBy 	 *uint      `gorm:"column:last_updated_by" json:"last_updated_by,omitempty"`
 	UpdatedByUser 	 *User      `gorm:"foreignKey:LastUpdatedBy" json:"updated_by_user,omitempty"`
