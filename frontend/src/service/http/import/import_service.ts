@@ -84,8 +84,18 @@ export async function scanBill(file: File): Promise<any> {
   const uploadData = new FormData();
   uploadData.append("file", file);
 
+  const getFastApiUploadUrl = () => {
+    if (typeof window !== 'undefined') {
+      const { hostname, protocol } = window.location;
+      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        return `${protocol}//${hostname}:8000/api/extract-invoice/upload`;
+      }
+    }
+    return "/ocr/api/extract-invoice/upload";
+  };
+
   try {
-    const response = await axios.post("/ocr/api/extract-invoice/upload", uploadData, {
+    const response = await axios.post(getFastApiUploadUrl(), uploadData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
