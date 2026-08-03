@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { Camera, ImageUp, CheckCircle2, RotateCcw, X, Loader2, AlertCircle } from 'lucide-react';
-import axios from 'axios';
+import apiClient from '../../service/http/apiClient';
 
 export default function MobileScanPage() {
   const session = new URLSearchParams(window.location.search).get('session') || '';
@@ -47,7 +47,7 @@ export default function MobileScanPage() {
     try {
       const form = new FormData();
       form.append('image', selectedFile);
-      await axios.post(`/api/mobile/upload-image?session=${session}`, form, {
+      await apiClient.post(`/mobile/upload-image?session=${session}`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setUploaded(true);

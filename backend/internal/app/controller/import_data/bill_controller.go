@@ -2,15 +2,18 @@ package import_data
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	importDataDTO "backend/internal/app/dto/import_data"
 	importDataSvc "backend/internal/app/service/import_data"
+	"backend/internal/pkg/storage"
 	"github.com/gin-gonic/gin"
 )
 
@@ -238,24 +241,46 @@ func (ctrl *BillController) UploadMobileImage(c *gin.Context) {
 		return
 	}
 
-	dir := filepath.Join("uploads", "mobile-tmp", session)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create directory"})
+	file, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to open image file"})
+		return
+	}
+	defer file.Close()
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read image file"})
 		return
 	}
 
-	// Sanitize filename and prefix with nanosecond timestamp for unique ordering
 	safeName := regexp.MustCompile(`[^a-zA-Z0-9._-]`).ReplaceAllString(fileHeader.Filename, "_")
-	filename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), safeName)
+	rawFilename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), safeName)
+	storageFilename := fmt.Sprintf("mobile-tmp/%s/%s", session, rawFilename)
 
-	if err := c.SaveUploadedFile(fileHeader, filepath.Join(dir, filename)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
+	mimeType := fileHeader.Header.Get("Content-Type")
+	if mimeType == "" {
+		mimeType = "image/jpeg"
+	}
+
+	publicURL, errUpload := storage.UploadToSupabase("G03-Capstone", storageFilename, mimeType, fileBytes)
+	if errUpload != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload image: " + errUpload.Error()})
 		return
+	}
+
+	dir := filepath.Join("uploads", "mobile-tmp", session)
+	_ = os.MkdirAll(dir, 0755)
+	urlListPath := filepath.Join(dir, "urls.txt")
+	f, errOpen := os.OpenFile(urlListPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if errOpen == nil {
+		_, _ = f.WriteString(publicURL + "\n")
+		f.Close()
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "uploaded",
-		"url":     fmt.Sprintf("/uploads/mobile-tmp/%s/%s", session, filename),
+		"url":     publicURL,
 	})
 }
 
@@ -268,17 +293,30 @@ func (ctrl *BillController) GetMobileImages(c *gin.Context) {
 	}
 
 	dir := filepath.Join("uploads", "mobile-tmp", session)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"images": []string{}})
-		return
+	urlListPath := filepath.Join(dir, "urls.txt")
+
+	var urls []string
+	if b, err := os.ReadFile(urlListPath); err == nil {
+		lines := strings.Split(string(b), "\n")
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed != "" {
+				urls = append(urls, trimmed)
+			}
+		}
+	} else {
+		entries, errDir := os.ReadDir(dir)
+		if errDir == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() && entry.Name() != "urls.txt" {
+					urls = append(urls, fmt.Sprintf("/uploads/mobile-tmp/%s/%s", session, entry.Name()))
+				}
+			}
+		}
 	}
 
-	urls := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			urls = append(urls, fmt.Sprintf("/uploads/mobile-tmp/%s/%s", session, entry.Name()))
-		}
+	if urls == nil {
+		urls = []string{}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"images": urls})
