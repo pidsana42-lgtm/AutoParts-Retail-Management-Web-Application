@@ -41,7 +41,7 @@ export default function Select({
   const generatedId = useId();
   const selectId = id ?? generatedId;
 
-  const [isOpen,   setIsOpen]   = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [selected, setSelected] = useState(value ?? defaultValue);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -63,7 +63,7 @@ export default function Select({
 
   // keyboard support
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Escape")  setIsOpen(false);
+    if (e.key === "Escape") setIsOpen(false);
     if (e.key === "Enter" || e.key === " ") setIsOpen((prev) => !prev);
   }
 

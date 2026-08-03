@@ -23,17 +23,17 @@ import Input from "../../../components/elements/input";
 import Select from "../../../components/elements/select";
 import Table, { type TableColumn } from "../../../components/elements/table";
 import Button from "../../../components/elements/button";
+import TreeSelect from "../../../components/elements/tree_select";
 import AddDataStock from "./add_data_stock/add_data_stock";
 import EditDataStock from "./edit_data_stock/edit_data_stock";
+import type { CascaderOption } from "../../../components/elements/cascader";
 
 // นำเข้า API service สำหรับดึงข้อมูลสินค้า
 import {
   getProductsList,
-  getCategoriesList,
   getSuppliersList,
   getGradesList,
   getUnitsList,
-  getShelvesList,
 } from "../../../service/http/wms/product";
 import { stockDataService } from "../../../service/http/wms/stock_data_service";
 
@@ -119,20 +119,20 @@ export default function StockPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [categoryNames, setCategoryNames] = useState<string[]>([]);
   const [supplier, setSupplier] = useState("");
   const [page, setPage] = useState(1);
 
-  const [categories, setCategories] = useState<{ label: string; value: string }[]>([]);
   const [suppliers, setSuppliers] = useState<{ label: string; value: string }[]>([]);
 
   // States สำหรับปุ่มและแบบฟอร์มเพิ่มสินค้า (Add Product)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [formCategories, setFormCategories] = useState<{ label: string; value: string }[]>([]);
+  const [formCascaderOptions, setFormCascaderOptions] = useState<CascaderOption[]>([]);
+  const [zoneCascaderOptions, setZoneCascaderOptions] = useState<CascaderOption[]>([]);
   const [models, setModels] = useState<{ label: string; value: string }[]>([]);
   const [grades, setGrades] = useState<{ label: string; value: string }[]>([]);
   const [units, setUnits] = useState<{ label: string; value: string }[]>([]);
-  const [shelves, setShelves] = useState<{ label: string; value: string }[]>([]);
 
   // States สำหรับแก้ไขสินค้า (Edit Product)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -145,60 +145,139 @@ export default function StockPage() {
 
 
 
+  const fetchStock = async () => {
+    try {
+      setLoading(true);
+      const data = await getProductsList();
+      setStockData(data);
+
+      // Fetch and build the Cascader Tree for Category -> SubCategory -> SubSubCategory
+
+      const allCats = await stockDataService.getCategories();
+      const allSubs = await stockDataService.getSubCategories();
+      const allSubSubs = await stockDataService.getSubSubCategories();
+
+      const catMap = new Map<number, CascaderOption>();
+
+      // 1. นำประเภทหลักทั้งหมดมาใส่ใน Map
+      allCats.forEach(cat => {
+        catMap.set(cat.id, {
+          value: String(cat.id),
+          label: cat.category_name,
+          children: []
+        });
+      });
+
+      // 2. นำประเภทย่อยมาต่อในประเภทหลัก
+      allSubs.forEach(sub => {
+        const parentCat = catMap.get(sub.category_id);
+        if (parentCat) {
+          if (!parentCat.children) parentCat.children = [];
+          parentCat.children.push({
+            value: String(sub.id),
+            label: sub.sub_category_name,
+            children: []
+          });
+        }
+      });
+
+      // 3. นำประเภทย่อยย่อยมาต่อในประเภทย่อย
+      allSubSubs.forEach(ssc => {
+        for (const cat of catMap.values()) {
+          const parentSub = cat.children?.find(c => c.value === String(ssc.sub_category_id));
+          if (parentSub) {
+            if (!parentSub.children) parentSub.children = [];
+            parentSub.children.push({
+              value: String(ssc.id),
+              label: ssc.sub_sub_category_name
+            });
+            break;
+          }
+        }
+      });
+
+      // กรองเอาเฉพาะข้อมูลที่มีอยู่
+      setFormCascaderOptions(Array.from(catMap.values()));
+
+      const sups = await getSuppliersList();
+      setSuppliers([
+        { label: "บริษัททั้งหมด", value: "" },
+        ...sups.map((s) => ({ label: s.name, value: s.name })),
+      ]);
+
+      const brandList = await stockDataService.getBrands();
+      const modelOptions: { label: string; value: string }[] = [];
+      brandList.forEach((b) => {
+        if (b.models && b.models.length > 0) {
+          b.models.forEach((m) => {
+            modelOptions.push({
+              label: `${b.brand_name} - ${m.model_name}`,
+              value: String((m as any).ID || m.id),
+            });
+          });
+        }
+      });
+      setModels(modelOptions);
+
+      const gradeList = await getGradesList();
+      setGrades(gradeList.map((g) => ({ label: g.name, value: String(g.id) })));
+
+      const unitList = await getUnitsList();
+      setUnits(unitList.map((u) => ({ label: u.name, value: String(u.id) })));
+
+      const shelfList = await stockDataService.getShelves();
+
+      const zoneList = await stockDataService.getZones();
+      const zMap = new Map<number, CascaderOption>();
+      zoneList.forEach(z => {
+        zMap.set(z.id, {
+          value: String(z.id),
+          label: z.zone_name,
+          children: []
+        });
+      });
+      shelfList.forEach(s => {
+        const pz = zMap.get(s.zone_id);
+        if (pz) {
+          if (!pz.children) pz.children = [];
+          const sNode: CascaderOption = { value: String(s.id), label: s.shelf_name };
+          if (s.shelf_levels && s.shelf_levels.length > 0) {
+            sNode.children = s.shelf_levels.map(l => ({
+              value: String(l.id),
+              label: l.level_name
+            }));
+          }
+          pz.children.push(sNode);
+        }
+      });
+      setZoneCascaderOptions(Array.from(zMap.values()));
+    } catch (err) {
+      console.error("Failed to load products from API:", err);
+      setError("ไม่สามารถดึงข้อมูลสินค้าจากระบบคลังได้");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ดึงข้อมูลจริงจาก Go Backend (เรียกผ่าน ListProducts Controller)
   useEffect(() => {
-    const fetchStock = async () => {
-      try {
-        setLoading(true);
-        const data = await getProductsList();
-        setStockData(data);
-
-        // ดึงข้อมูลประเภทสินค้าและผู้ขายแบบไดนามิก
-        const cats = await getCategoriesList();
-        setCategories([
-          { label: "ทั้งหมด", value: "" },
-          ...cats.map((c) => ({ label: c.name, value: c.name })),
-        ]);
-        setFormCategories(cats.map((c) => ({ label: c.name, value: String(c.id) })));
-
-        const sups = await getSuppliersList();
-        setSuppliers([
-          { label: "ทั้งหมด", value: "" },
-          ...sups.map((s) => ({ label: s.name, value: s.name })),
-        ]);
-
-        // ดึงข้อมูลสำหรับฟอร์มเพิ่มสินค้า
-        const brandList = await stockDataService.getBrands();
-        const modelOptions: { label: string; value: string }[] = [];
-        brandList.forEach((b) => {
-          if (b.models && b.models.length > 0) {
-            b.models.forEach((m) => {
-              modelOptions.push({
-                label: `${b.brand_name} - ${m.model_name}`,
-                value: String((m as any).ID || m.id),
-              });
-            });
-          }
-        });
-        setModels(modelOptions);
-
-        const gradeList = await getGradesList();
-        setGrades(gradeList.map((g) => ({ label: g.name, value: String(g.id) })));
-
-        const unitList = await getUnitsList();
-        setUnits(unitList.map((u) => ({ label: u.name, value: String(u.id) })));
-
-        const shelfList = await getShelvesList();
-        setShelves(shelfList.map((s) => ({ label: s.name, value: String(s.id) })));
-      } catch (err) {
-        console.error("Failed to load products from API:", err);
-        setError("ไม่สามารถดึงข้อมูลสินค้าจากระบบคลังได้");
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchStock();
   }, []);
+
+  // สร้าง options สำหรับ TreeSelect โดยทำให้ value ไม่ซ้ำกัน (ป้องกันบัค ID ชนกันระหว่าง Table)
+  const treeSelectOptions = useMemo(() => {
+    const mapUnique = (options: CascaderOption[], parentValue = ""): CascaderOption[] => {
+      return options.map((opt) => {
+        const uniqueValue = parentValue ? `${parentValue}-${opt.value}` : opt.value;
+        return {
+          ...opt,
+          value: uniqueValue,
+          children: opt.children ? mapUnique(opt.children, uniqueValue) : undefined,
+        };
+      });
+    };
+    return [{ label: "ประเภททั้งหมด", value: "" }, ...mapUnique(formCascaderOptions)];
+  }, [formCascaderOptions]);
 
   // ระบบค้นหาและกรองข้อมูล (Filter & Search)
   const filteredData = useMemo(() => {
@@ -207,18 +286,30 @@ export default function StockPage() {
         !search ||
         (item.Name && item.Name.toLowerCase().includes(search.toLowerCase())) ||
         (item.ProductCode && item.ProductCode.toLowerCase().includes(search.toLowerCase()));
-      
-      const matchesCategory = !category || (item.Category && item.Category.toUpperCase() === category.toUpperCase());
+
+      let matchesCategory = true;
+      if (categoryNames.length > 0) {
+        if (categoryNames[0]) {
+          matchesCategory = matchesCategory && !!(item.Category && item.Category.toUpperCase() === categoryNames[0].toUpperCase());
+        }
+        if (categoryNames[1]) {
+          matchesCategory = matchesCategory && !!(item.SubCategory && item.SubCategory.toUpperCase() === categoryNames[1].toUpperCase());
+        }
+        if (categoryNames[2]) {
+          matchesCategory = matchesCategory && !!(item.SubSubCategory && item.SubSubCategory.toUpperCase() === categoryNames[2].toUpperCase());
+        }
+      }
+
       const matchesSupplier = !supplier || (item.Supplier && item.Supplier.toUpperCase() === supplier.toUpperCase());
-      
+
       return matchesSearch && matchesCategory && matchesSupplier;
     });
-  }, [stockData, search, category, supplier]);
+  }, [stockData, search, categoryNames, supplier]);
 
   // คำนวณ Summary การ์ดด้านบนจาก Database จริง
   const totalSkus = stockData.length;
   const lowStockCount = stockData.filter((item) => item.Stock <= item.MinStock).length;
-  
+
   // คำนวณมูลค่าสินทรัพย์รวมในคลัง (Stock * Price)
   const totalAssetValue = useMemo(() => {
     const total = stockData.reduce((acc, item) => acc + (item.Stock * (item.Price || 0)), 0);
@@ -373,13 +464,21 @@ export default function StockPage() {
             />
           </div>
           <div className="flex gap-3">
-            <Select
-              options={categories}
-              placeholder="เลือกประเภท"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              containerClassName="w-48"
-            />
+            <div className="w-full sm:w-56 relative z-50">
+              <TreeSelect
+                options={treeSelectOptions}
+                placeholder="เลือกประเภท"
+                value={categoryId}
+                onChange={(val, path) => {
+                  setCategoryId(val);
+                  if (!val) {
+                    setCategoryNames([]);
+                  } else {
+                    setCategoryNames(path.map(p => p.label));
+                  }
+                }}
+              />
+            </div>
             <Select
               options={suppliers}
               placeholder="เลือกซัพพลายเออร์"
@@ -436,15 +535,15 @@ export default function StockPage() {
       <AddDataStock
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onSuccess={async () => {
-          const updatedData = await getProductsList();
-          setStockData(updatedData);
+        onSuccess={() => {
+          setIsAddModalOpen(false);
+          fetchStock();
         }}
         models={models}
-        formCategories={formCategories}
+        categories={treeSelectOptions.filter(o => o.value !== "")}
         grades={grades}
         units={units}
-        shelves={shelves}
+        zones={zoneCascaderOptions}
       />
 
       {/* Modal สำหรับแก้ไขสินค้า (ดึงแยกไฟล์) */}
@@ -454,16 +553,13 @@ export default function StockPage() {
           setIsEditModalOpen(false);
           setSelectedProduct(null);
         }}
-        onSuccess={async () => {
-          const updatedData = await getProductsList();
-          setStockData(updatedData);
-        }}
-        product={selectedProduct}
+        onSuccess={fetchStock}
+        categories={treeSelectOptions.filter(o => o.value !== "")}
         models={models}
-        formCategories={formCategories}
+        product={selectedProduct}
         grades={grades}
         units={units}
-        shelves={shelves}
+        zones={zoneCascaderOptions}
       />
     </div>
   );

@@ -27,6 +27,9 @@ export default function EditSupplierModal({
     contact_line_sale: "",
     phone_number_sale: "",
     email_sale: "",
+    contact_line_sale_2: "",
+    phone_number_sale_2: "",
+    email_sale_2: "",
     bank_account_number: "",
   });
 
@@ -39,6 +42,9 @@ export default function EditSupplierModal({
         contact_line_sale: supplier.contact_line_sale || "",
         phone_number_sale: supplier.phone_number_sale || "",
         email_sale: supplier.email_sale || "",
+        contact_line_sale_2: supplier.contact_line_sale_2 || "",
+        phone_number_sale_2: supplier.phone_number_sale_2 || "",
+        email_sale_2: supplier.email_sale_2 || "",
         bank_account_number: supplier.bank_account_number || "",
       });
     }
@@ -82,7 +88,7 @@ export default function EditSupplierModal({
           containerClassName="col-span-2 sm:col-span-1"
         />
         <Input
-          label="เบอร์โทรติดต่อ (ฝ่ายขาย)"
+          label="เบอร์โทรติดต่อ (ตัวแทน)"
           required
           value={form.phone_number_sale}
           onChange={(e) => setForm({ ...form, phone_number_sale: e.target.value })}
@@ -90,7 +96,7 @@ export default function EditSupplierModal({
           containerClassName="col-span-2 sm:col-span-1"
         />
         <Input
-          label="Line ID ฝ่ายขาย"
+          label="Line ID ตัวแทน"
           required
           value={form.contact_line_sale}
           onChange={(e) => setForm({ ...form, contact_line_sale: e.target.value })}
@@ -98,7 +104,7 @@ export default function EditSupplierModal({
           containerClassName="col-span-2 sm:col-span-1"
         />
         <Input
-          label="อีเมลฝ่ายขาย"
+          label="อีเมลตัวแทน"
           required
           type="email"
           value={form.email_sale}
@@ -112,6 +118,32 @@ export default function EditSupplierModal({
           value={form.bank_account_number}
           onChange={(e) => setForm({ ...form, bank_account_number: e.target.value })}
           placeholder="เช่น 123-4-56789-0 (กสิกรไทย)..."
+          containerClassName="col-span-2 sm:col-span-1"
+        />
+
+        <div className="col-span-2 mt-4 pt-4 border-t border-slate-100">
+          <h4 className="text-sm font-semibold text-slate-700 mb-2">ข้อมูลตัวแทนคนที่ 2 (ตัวเลือก)</h4>
+        </div>
+        <Input
+          label="เบอร์โทรติดต่อ (ตัวแทน 2)"
+          value={form.phone_number_sale_2}
+          onChange={(e) => setForm({ ...form, phone_number_sale_2: e.target.value })}
+          placeholder="เช่น 081-9999999..."
+          containerClassName="col-span-2 sm:col-span-1"
+        />
+        <Input
+          label="Line ID ตัวแทน 2"
+          value={form.contact_line_sale_2}
+          onChange={(e) => setForm({ ...form, contact_line_sale_2: e.target.value })}
+          placeholder="เช่น @somchai..."
+          containerClassName="col-span-2 sm:col-span-1"
+        />
+        <Input
+          label="อีเมลตัวแทน 2"
+          type="email"
+          value={form.email_sale_2}
+          onChange={(e) => setForm({ ...form, email_sale_2: e.target.value })}
+          placeholder="เช่น somchai@yingcharoen.com..."
           containerClassName="col-span-2 sm:col-span-1"
         />
         <Input

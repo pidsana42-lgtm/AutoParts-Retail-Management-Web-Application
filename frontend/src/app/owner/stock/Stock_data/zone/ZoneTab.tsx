@@ -3,12 +3,11 @@ import { Plus, Trash2, SquarePen } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
-import type { Zone, Shelf } from "../../../../../interface/wms/stock_data";
+import type { Zone, Shelf, ShelfLevel } from "../../../../../interface/wms/stock_data";
 
 // Extracted Modals
-import EditZoneModal from "./EditZoneModal";
-import EditShelfModal from "./EditShelfModal";
 import AddZoneShelfModal from "./AddZoneShelfModal";
+import EditRowModal from "./EditRowModal";
 
 interface ZoneTabProps {
   search: string;
@@ -24,13 +23,12 @@ export default function ZoneTab({ search, zoneFilter, zones, shelves, loadData }
   // Modals visibility state
   const [addOpen, setAddOpen] = useState(false);
   const [addMode, setAddMode] = useState<"new_zone" | "existing_zone">("new_zone");
-  const [editZoneOpen, setEditZoneOpen] = useState(false);
-  const [editShelfOpen, setEditShelfOpen] = useState(false);
+  const [editRowOpen, setEditRowOpen] = useState(false);
 
   // Selected records
   const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
   const [selectedShelf, setSelectedShelf] = useState<Shelf | null>(null);
-  const [initialZoneId, setInitialZoneId] = useState<number | undefined>(undefined);
+  const [selectedLevel, setSelectedLevel] = useState<ShelfLevel | null>(null);
 
   const handleDeleteZone = async (id: number) => {
     if (!confirm("คุณแน่ใจว่าต้องการลบโซนนี้? (ชั้นวางทั้งหมดในโซนนี้จะถูกลบด้วย)")) return;
@@ -44,35 +42,36 @@ export default function ZoneTab({ search, zoneFilter, zones, shelves, loadData }
   };
 
   const handleDeleteShelf = async (id: number) => {
-    if (!confirm("คุณแน่ใจว่าต้องการลบชั้นวางนี้?")) return;
+    if (!confirm("คุณแน่ใจว่าต้องการลบตู้วางสินค้านี้?")) return;
     try {
       await stockDataService.deleteShelf(id);
-      toast({ variant: "success", message: "ลบชั้นวางสำเร็จ" });
+      toast({ variant: "success", message: "ลบตู้วางสินค้าสำเร็จ" });
       loadData();
     } catch (err) {
-      toast({ variant: "error", message: "เกิดข้อผิดพลาดในการลบชั้นวาง" });
+      toast({ variant: "error", message: "เกิดข้อผิดพลาดในการลบตู้วางสินค้า" });
+    }
+  };
+
+  const handleDeleteLevel = async (id: number) => {
+    if (!confirm("คุณแน่ใจว่าต้องการลบชั้นระดับนี้?")) return;
+    try {
+      await stockDataService.deleteShelfLevel(id);
+      toast({ variant: "success", message: "ลบชั้นระดับสำเร็จ" });
+      loadData();
+    } catch (err) {
+      toast({ variant: "error", message: "เกิดข้อผิดพลาดในการลบชั้นระดับ" });
     }
   };
 
   // Openers
-  const openEditZone = (zone: Zone) => {
+  const openEditRow = (zone: Zone, shelf?: Shelf, level?: ShelfLevel) => {
     setSelectedZone(zone);
-    setEditZoneOpen(true);
+    setSelectedShelf(shelf || null);
+    setSelectedLevel(level || null);
+    setEditRowOpen(true);
   };
 
-  const openAddShelfInline = (zoneId?: number) => {
-    setInitialZoneId(zoneId);
-    setAddMode("existing_zone");
-    setAddOpen(true);
-  };
-
-  const openEditShelf = (shelf: Shelf) => {
-    setSelectedShelf(shelf);
-    setEditShelfOpen(true);
-  };
-
-  const openAddZoneButton = () => {
-    setInitialZoneId(undefined);
+  const openAddModal = () => {
     setAddMode("new_zone");
     setAddOpen(true);
   };
@@ -85,8 +84,12 @@ export default function ZoneTab({ search, zoneFilter, zones, shelves, loadData }
       shelfCount: number;
     }[] = [];
 
-    zones.forEach((zone) => {
-      const shlvs = shelves.filter((sh) => sh.zone_id === zone.id);
+    const sortedZones = [...zones].sort((a, b) => a.id - b.id);
+
+    sortedZones.forEach((zone) => {
+      const shlvs = shelves
+        .filter((sh) => sh.zone_id === zone.id)
+        .sort((a, b) => a.id - b.id);
 
       if (zoneFilter && String(zone.id) !== zoneFilter) {
         return;
@@ -95,12 +98,22 @@ export default function ZoneTab({ search, zoneFilter, zones, shelves, loadData }
       const matchesSearch = (text: string) =>
         text.toLowerCase().includes(search.toLowerCase());
 
-      const filteredShlvs = shlvs.filter(
-        (sh) =>
-          !search ||
-          matchesSearch(sh.shelf_name) ||
-          matchesSearch(zone.zone_name)
-      );
+      const filteredShlvs = shlvs
+        .filter(
+          (sh) =>
+            !search ||
+            matchesSearch(sh.shelf_name) ||
+            matchesSearch(zone.zone_name)
+        )
+        .map((sh) => {
+          if (sh.shelf_levels) {
+            return {
+              ...sh,
+              shelf_levels: [...sh.shelf_levels].sort((a, b) => a.id - b.id),
+            };
+          }
+          return sh;
+        });
 
       if (filteredShlvs.length > 0) {
         filteredShlvs.forEach((sh, index) => {
@@ -132,78 +145,113 @@ export default function ZoneTab({ search, zoneFilter, zones, shelves, loadData }
         <table className="w-full text-sm text-left border-collapse">
           <thead>
             <tr className="bg-[#F2ECE9] border-b border-slate-200">
-              <th className="px-6 py-3.5 font-semibold text-slate-700 w-1/3">โซนสินค้า</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700 w-1/2">ชั้นวางสินค้า</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700 text-right w-1/6">จัดการ</th>
+              <th className="px-6 py-3.5 font-semibold text-slate-700 w-1/4">โซนสินค้า</th>
+              <th className="px-6 py-3.5 font-semibold text-slate-700 w-1/4">ตู้วางสินค้า</th>
+              <th className="px-6 py-3.5 font-semibold text-slate-700 w-1/3">ชั้นระดับ</th>
+              <th className="px-6 py-3.5 font-semibold text-slate-700 text-right w-28">จัดการ</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-6 py-10 text-center text-slate-400">
+                <td colSpan={4} className="px-6 py-10 text-center text-slate-400">
                   ไม่พบข้อมูลโซน/ชั้นวางสินค้า
                 </td>
               </tr>
             ) : (
               filteredRows.map((row, index) => (
                 <tr key={index} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-3 text-slate-800 font-medium">
+                  <td className="px-6 py-3 text-slate-800 font-medium align-top">
                     {row.isFirst && (
-                      <div className="flex items-center gap-2 group">
-                        <span>{row.zone.zone_name}</span>
-                        <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-1">
-                          <button
-                            onClick={() => openEditZone(row.zone)}
-                            className="text-slate-400 hover:text-slate-700 p-0.5"
-                            title="แก้ไขโซนหลัก"
-                          >
-                            <SquarePen className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteZone(row.zone.id)}
-                            className="text-slate-400 hover:text-red-600 p-0.5"
-                            title="ลบโซนหลัก"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
+                      <span>{row.zone.zone_name}</span>
                     )}
                   </td>
-                  <td className="px-6 py-3 text-slate-700">
+                  <td className="px-6 py-3 text-slate-700 align-top">
                     {row.shelf ? (
-                      row.shelf.shelf_name
+                      <span className="font-medium text-slate-800">{row.shelf.shelf_name}</span>
                     ) : (
-                      <span className="text-slate-300 italic text-xs">ไม่มีชั้นวาง</span>
+                      <span className="text-slate-300 italic text-xs">-</span>
                     )}
                   </td>
-                  <td className="px-6 py-3 text-right">
-                    {row.shelf ? (
-                      <div className="flex items-center justify-end gap-3 text-slate-400">
-                        <button
-                          onClick={() => openEditShelf(row.shelf!)}
-                          className="hover:text-slate-700 transition-colors"
-                          title="แก้ไขชั้นวาง"
-                        >
-                          <SquarePen className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteShelf(row.shelf!.id)}
-                          className="hover:text-red-600 transition-colors"
-                          title="ลบชั้นวาง"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+
+                  {/* ชั้นระดับ (Rendered as sub-rows) */}
+                  <td className="p-0 align-top border-none w-1/3">
+                    {row.shelf && row.shelf.shelf_levels && row.shelf.shelf_levels.length > 0 ? (
+                      <div className="flex flex-col">
+                        {row.shelf.shelf_levels.map((lvl, idx, arr) => (
+                          <div key={lvl.id} className={`px-6 py-3 text-slate-600 ${idx !== arr.length - 1 ? 'border-b border-slate-100' : ''}`}>
+                            {lvl.level_name}
+                          </div>
+                        ))}
                       </div>
                     ) : (
-                      row.isFirst && (
-                        <button
-                          onClick={() => openAddShelfInline(row.zone.id)}
-                          className="text-xs text-[#B70011] hover:underline"
-                        >
-                          + เพิ่มชั้นวาง
-                        </button>
-                      )
+                      <div className="px-6 py-3 text-slate-300 italic text-xs">-</div>
+                    )}
+                  </td>
+
+                  {/* จัดการ (Actions for levels) */}
+                  <td className="p-0 align-top border-none w-28">
+                    {row.shelf && row.shelf.shelf_levels && row.shelf.shelf_levels.length > 0 ? (
+                      <div className="flex flex-col">
+                        {row.shelf.shelf_levels.map((lvl, idx, arr) => (
+                          <div key={lvl.id} className={`px-6 py-3 flex items-center justify-end gap-3 text-slate-400 ${idx !== arr.length - 1 ? 'border-b border-slate-100' : ''}`}>
+                            <button
+                              onClick={() => openEditRow(row.zone, row.shelf, lvl)}
+                              className="hover:text-slate-700 transition-colors"
+                              title="แก้ไขข้อมูลแถวนี้"
+                            >
+                              <SquarePen className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteLevel(lvl.id)}
+                              className="hover:text-red-600 transition-colors"
+                              title="ลบชั้นระดับ"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="px-6 py-3 flex items-center justify-end">
+                        {row.shelf ? (
+                          <div className="flex items-center gap-3 text-slate-400">
+                            <button
+                              onClick={() => openEditRow(row.zone, row.shelf)}
+                              className="hover:text-slate-700 transition-colors"
+                              title="แก้ไขข้อมูลแถวนี้"
+                            >
+                              <SquarePen className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteShelf(row.shelf!.id)}
+                              className="hover:text-red-600 transition-colors"
+                              title="ลบตู้วางสินค้า"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          row.isFirst && (
+                            <div className="flex items-center gap-4 text-slate-400">
+                              <button
+                                onClick={() => openEditRow(row.zone)}
+                                className="hover:text-slate-700 transition-colors"
+                                title="แก้ไขข้อมูลแถวนี้"
+                              >
+                                <SquarePen className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteZone(row.zone.id)}
+                                className="hover:text-red-600 transition-colors"
+                                title="ลบโซนหลัก"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )
+                        )}
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -213,13 +261,13 @@ export default function ZoneTab({ search, zoneFilter, zones, shelves, loadData }
         </table>
       </div>
 
-      <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4 flex gap-4">
+      <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4 flex gap-6">
         <button
-          onClick={openAddZoneButton}
-          className="flex items-center gap-1.5 text-sm font-semibold text-[#B70011] hover:text-[#9e0010] cursor-pointer"
+          onClick={openAddModal}
+          className="flex items-center gap-1.5 text-sm font-semibold text-[#B70011] hover:text-[#9e0010] cursor-pointer transition-colors"
         >
           <Plus className="h-4 w-4" />
-          เพิ่มโซนสินค้า
+          เพิ่มโซนสินค้า / ตู้วางสินค้า / ชั้นระดับ
         </button>
       </div>
 
@@ -229,28 +277,17 @@ export default function ZoneTab({ search, zoneFilter, zones, shelves, loadData }
         onClose={() => setAddOpen(false)}
         zones={zones}
         defaultMode={addMode}
-        initialZoneId={initialZoneId}
         onSuccess={loadData}
       />
 
-      <EditZoneModal
-        isOpen={editZoneOpen}
-        onClose={() => {
-          setEditZoneOpen(false);
-          setSelectedZone(null);
-        }}
+      <EditRowModal
+        isOpen={editRowOpen}
+        onClose={() => setEditRowOpen(false)}
         zone={selectedZone}
-        onSuccess={loadData}
-      />
-
-      <EditShelfModal
-        isOpen={editShelfOpen}
-        onClose={() => {
-          setEditShelfOpen(false);
-          setSelectedShelf(null);
-        }}
-        zones={zones}
         shelf={selectedShelf}
+        level={selectedLevel}
+        zones={zones}
+        shelves={shelves}
         onSuccess={loadData}
       />
     </>

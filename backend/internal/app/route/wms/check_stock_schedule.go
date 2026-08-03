@@ -11,14 +11,18 @@ import (
 
 func SetupCheckStockScheduleRoutes(r *gin.Engine, db *gorm.DB) {
 	repo       := wmsRepo.NewCheckStockScheduleRepository(db)
-	service    := wmsSvc.NewCheckStockScheduleService(repo)
+	service    := wmsSvc.NewCheckStockScheduleService(repo, db)
 	controller := wmsCtrl.NewCheckStockScheduleController(service)
 
 	wms := r.Group("/api/wms/check-stock-schedules")
 	{
 		wms.POST("", controller.CreateSchedule)
 		wms.GET("", controller.List)
+		wms.GET("/employees", controller.ListEmployees)
+		wms.GET("/options/zone-tree", controller.GetZoneTree)
+		wms.GET("/options/category-tree", controller.GetCategoryTree)
 		wms.GET("/:id", controller.GetByID)
+		wms.PUT("/:id", controller.UpdateSchedule)
 		wms.PATCH("/:id/status", controller.UpdateStatus)
 		wms.DELETE("/:id", controller.Delete)
 	}

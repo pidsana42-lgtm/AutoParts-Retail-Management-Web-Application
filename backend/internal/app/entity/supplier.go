@@ -9,6 +9,9 @@ type Supplier struct {
 	ContactLineSale   string `gorm:"type:varchar(100);not null;" json:"contact_line_sale" binding:"required"`
 	PhoneNumberSale   string `gorm:"type:varchar(20);not null;" json:"phone_number_sale" binding:"required"`
 	EmailSale         string `gorm:"type:varchar(100);not null;uniqueindex" json:"email_sale" binding:"required"`
+	ContactLineSale2  string `gorm:"type:varchar(100);" json:"contact_line_sale_2"`
+	PhoneNumberSale2  string `gorm:"type:varchar(20);" json:"phone_number_sale_2"`
+	EmailSale2        string `gorm:"type:varchar(100);" json:"email_sale_2"`
 	BankAccountNumber string `gorm:"type:varchar(50);not null;" json:"bank_account_number" binding:"required"`
 	ShortSupplierName string `gorm:"type:varchar(50);not null;" json:"short_supplier_name" binding:"required"`
 

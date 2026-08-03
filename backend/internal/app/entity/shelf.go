@@ -9,5 +9,6 @@ type Shelf struct {
 
 	Zone *Zone `gorm:"foreignKey:ZoneID" json:"zone"`
 
-	Products []Product `gorm:"foreignKey:ShelfID" json:"products"`
+	ShelfLevels []ShelfLevel `gorm:"foreignKey:ShelfID" json:"shelf_levels"`
+	Products    []Product    `gorm:"foreignKey:ShelfID" json:"products"`
 }

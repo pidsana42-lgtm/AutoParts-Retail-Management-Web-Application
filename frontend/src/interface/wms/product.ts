@@ -6,6 +6,8 @@ export interface StockItem {
   Barcode: string;
   Models?: { id: number; model_name: string; brand_name: string }[];
   Category: string; // ดึงมาจากฟิลด์ Category หลังบ้าน
+  SubCategory?: string;
+  SubSubCategory?: string;
   Grade: string;    // ดึงมาจากฟิลด์ Grade หลังบ้าน
   Stock: number;
   MinStock: number;
@@ -14,5 +16,6 @@ export interface StockItem {
   Note: string;
   Unit?: string;
   Shelf?: string;
+  ShelfLevel?: string;
   Supplier?: string;
 }

@@ -8,6 +8,9 @@ type SupplierRequestDTO struct {
 	ContactLineSale   string `json:"contact_line_sale" binding:"required"`
 	PhoneNumberSale   string `json:"phone_number_sale" binding:"required"`
 	EmailSale         string `json:"email_sale" binding:"required,email"`
+	ContactLineSale2  string `json:"contact_line_sale_2"`
+	PhoneNumberSale2  string `json:"phone_number_sale_2"`
+	EmailSale2        string `json:"email_sale_2"`
 	BankAccountNumber string `json:"bank_account_number" binding:"required"`
 	ShortSupplierName string `json:"short_supplier_name" binding:"required"`
 }
@@ -19,6 +22,9 @@ type SupplierResponseDTO struct {
 	ContactLineSale   string    `json:"contact_line_sale"`
 	PhoneNumberSale   string    `json:"phone_number_sale"`
 	EmailSale         string    `json:"email_sale"`
+	ContactLineSale2  string    `json:"contact_line_sale_2"`
+	PhoneNumberSale2  string    `json:"phone_number_sale_2"`
+	EmailSale2        string    `json:"email_sale_2"`
 	BankAccountNumber string    `json:"bank_account_number"`
 	ShortSupplierName string    `json:"short_supplier_name"`
 	CreatedAt         time.Time `json:"created_at"`
