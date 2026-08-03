@@ -741,12 +741,12 @@ export default function ScanView({
               <div className="border-t border-gray-100 p-6 flex justify-between items-end bg-[#fafafa] rounded-none mt-auto">
                 <div className="text-sm text-[#5F5E5E] space-y-2 text-left">
                   <p>จำนวนรายการทั้งหมด : <span className="text-[#1C1B1B] font-bold">{formData.items.length} รายการ</span></p>
-                  <p>มูลค่าสินค้า (SUBTOTAL) : <span className="text-[#1C1B1B] font-bold">฿{(formData.subtotal || calcSubtotal).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span></p>
+                  <p>มูลค่าสินค้า (SUBTOTAL) : <span className="text-[#1C1B1B] font-bold">฿{(calcSubtotal > 0 ? calcSubtotal : (formData.subtotal || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span></p>
                 </div>
                 <div className="text-right flex items-end gap-4">
                   <div>
                     <p className="text-sm text-[#e51c23] font-bold mb-1 text-left">ยอดเงินสุทธิรวม:</p>
-                    <p className="text-xl text-[#e51c23] font-bold">{(formData.total_amount || calcTotalAmount).toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</p>
+                    <p className="text-xl text-[#e51c23] font-bold">{(calcTotalAmount > 0 ? calcTotalAmount : (formData.total_amount || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</p>
                   </div>
                   {/* Footer buttons — change context when banner is active */}
                   {showBanner ? (
