@@ -258,15 +258,44 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
   //เพื่อสลับเปิดให้ลดราคา/ปิดราคาเต็ม โดยดึงยอดลดมาตรฐานมาใส่ หรือปรับค่าให้คืนเป็น 0 เสมอ
   const handleDiscountToggle = (index: number, isChecked: boolean) => {
     setCart((prev) =>
-      prev.map((item, i) =>
-        i === index
-          ? {
-              ...item,
-              discount_type: isChecked ? "percentage" : "none",
-              discount_value: isChecked ? customer?.standard_discount_rate || 0 : 0,
-            }
-          : item
-      )
+      prev.map((item, i) => {
+        if (i !== index) return item;
+
+        if (!isChecked) {
+          // ถ้าเอาติ๊กออก ให้ปิดส่วนลดเป็น 0
+          return {
+            ...item,
+            discount_type: "none",
+            discount_value: 0,
+          };
+        }
+
+        // ถ้าติ๊กกลับเข้ามา ให้คำนวณส่วนลดเริ่มต้นตามสิทธิ์ลูกค้า/ประเภทอู่ซ่อมรถอีกครั้ง
+        const mockProduct = {
+          id: item.product_id,
+          product_code: item.product_code,
+          product_name: item.product_name,
+          part_number: item.part_number,
+          sale_price: item.unit_price,
+          max_discount_rate: item.max_discount_rate,
+          grade_name: item.grade_name,
+          brand_name: item.brand_name,
+          model_name: item.model_name,
+          note: item.note,
+        };
+
+        const discountConfig = getDefaultProductDiscount(
+          mockProduct as any,
+          customer,
+          activeTypeId
+        );
+
+        return {
+          ...item,
+          discount_type: discountConfig.type,
+          discount_value: discountConfig.value,
+        };
+      })
     );
   };
 

@@ -12,6 +12,7 @@ import { TableHead, TableHeader, TableRow } from "../../../components/elements/t
 import Input from "../../../components/elements/input";
 import { usePosSessionMeta } from "./hooks/usePosSessionMeta";
 import {useCustomerFinancials} from "./hooks/useCustomerFinancials";
+import Heading from "../../../components/elements/heading"
 
 export default function PosPage(): React.JSX.Element {
   // ─── STATE & HOOK SETUP ───
@@ -77,7 +78,9 @@ export default function PosPage(): React.JSX.Element {
               <Text variant="xs" className="text-[#E51C23] uppercase tracking-wider mb-0 ">
                 รายการที่กำลังขาย
               </Text>
-              <h1 className="text-4xl text-zinc-900 ">POS</h1>
+              <Heading level="h1" weight="normal" className="mb-0 text-[#1C1B1B]">
+                POS
+              </Heading>
             </div>
             <div className="text-right flex flex-col items-end gap-1.5">
               <Text variant="xs" className="text-[#6B7280] mb-0">
