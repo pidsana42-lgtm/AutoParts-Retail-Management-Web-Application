@@ -1,7 +1,7 @@
 export interface CustomerTypeInterface {
   id: number;
   type_name: string;   // เช่น "GENERAL", "GARAGE", "WHOLESALE"
-  type_label?: string;  // เช่น "ลูกค้าทั่วไป", "ลูกค้าอู่ซ่อมรถ", "ลูกค้าบริษัท"
+  type_label?: string; // เช่น "ลูกค้าทั่วไป", "ลูกค้าอู่ซ่อมรถ", "ลูกค้าบริษัท"
 }
 
 /**

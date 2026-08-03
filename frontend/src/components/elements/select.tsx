@@ -103,14 +103,14 @@ export default function Select({
           className={cn(
             "h-10 w-full rounded-sm border bg-white px-3 pr-9 text-sm text-left",
             "transition-colors duration-150 ease-out",
-            "focus:outline-none focus:ring-2 focus:ring-offset-0",
+            "focus:outline-none focus:ring-1 focus:ring-offset-0",
             "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
             isPlaceholder ? "text-slate-400" : "text-slate-800",
             error
               ? "border-red-400 focus:border-red-500 focus:ring-red-200"
               // ✅ focus สีแดง
               : "border-slate-300 focus:border-[#B70011] focus:ring-red-200",
-            isOpen && "border-[#B70011] ring-2 ring-red-200",
+            isOpen && "border-[#E51C23] ring-2 ring-red-200",
             className
           )}
         >
@@ -155,7 +155,7 @@ export default function Select({
                     "px-3 py-2 text-sm cursor-pointer transition-colors",
                     // ✅ selected สีแดง
                     isSelected
-                      ? "bg-[#B70011] text-white font-medium"
+                      ? "bg-[#E51C23] text-white font-normal"
                       : "text-slate-800 hover:bg-red-50 hover:text-[#B70011]",
                     opt.disabled && "cursor-not-allowed opacity-40"
                   )}

@@ -17,6 +17,7 @@ type Payment struct {
 
 	Amount          float64 `gorm:"type:decimal(15,2);not null" json:"amount" binding:"required"` // ยอดเงินที่ระบบบันทึกตัดชำระจริง (ไม่เกินยอดค้างของบิล)
 	ReferenceNumber string  `gorm:"type:varchar(100);" json:"reference_number"`
+	TransactionRef  *string  `gorm:"type:varchar(100);" json:"transaction_ref"` // รหัสอ้างอิงจากธนาคาร หรือ Payment Gateway (ถ้ามี)
 
 	// เพิ่ม 2 ฟิลด์นี้ เพื่อบันทึกว่ารายการนี้รับมาเท่าไหร่ ทอนเท่าไหร่
     ReceivedAmount  float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"received_amount"` 
