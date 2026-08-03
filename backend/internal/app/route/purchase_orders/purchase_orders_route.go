@@ -80,6 +80,7 @@ func SetupPORoutes(r *gin.Engine, db *gorm.DB) {
 		poGroup.POST("/new-po", poController.CreatePO)
 		poGroup.PUT("/:id", poController.UpdatePO)
 		poGroup.PATCH("/:id/status", poController.UpdateStatus)
+		poGroup.PATCH("/:id/restore", poController.RestorePO)
 		poGroup.DELETE("/:id", poController.DeletePO)
 		poGroup.GET("/:id", poController.GetByID)
 		// PO Management

@@ -1,7 +1,7 @@
 // React Libraries
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Building2, ChartNoAxesCombined, Info, ScanBarcode, ShoppingBag, ChevronRight, ShoppingCart, Plus, Minus, Trash2} from 'lucide-react';
+import { Building2, ChartNoAxesCombined, Info, ScanBarcode, ShoppingBag, ChevronRight, ShoppingCart, Plus, Minus, Trash2, MessageSquareMore} from 'lucide-react';
 // Components
 import Heading from '../../../components/elements/heading';
 import Button from '../../../components/elements/button';
@@ -30,6 +30,7 @@ const CreatePurchaseOrders: React.FC = () => {
     const [item, setItem] = useState<LocalPOItem[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [date, setDate] = useState<string>(getTodayDateString());
+    const [notes, setNotes] = useState("")
     const [isPreorderModalOpen, setIsPreorderModalOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     // States สำหรับ Supplier (ตัวเลือก Dropdown)
@@ -148,13 +149,6 @@ const CreatePurchaseOrders: React.FC = () => {
 
     // 3. ฟังก์ชันสำหรับรับรายการพรีออเดอร์ที่ถูกกด "เพิ่ม" มาแปลงใส่ลงตารางใบสั่งซื้อ (item)
     const handleAddPreorderToPO = (selectedPreorder: PreorderItem) => {
-        const isDuplicate = item.some(existingItem => existingItem.product_id === selectedPreorder.product_id);
-        
-        if (isDuplicate) {
-            alert(`มีรายการ "${selectedPreorder.product_name}" อยู่ในใบสั่งซื้อแล้ว`);
-            return;
-        }
-
         // ใช้ราคาที่ตกลงกันไว้ตอนสร้างพรีออเดอร์ (ไม่ใช่ 0) แล้วให้แก้ไขได้ทีหลังในตาราง
         const unitCost = Number(selectedPreorder.unit_price || 0);
         
@@ -167,8 +161,19 @@ const CreatePurchaseOrders: React.FC = () => {
             unit: selectedPreorder.unit || "ชิ้น",
             unit_price: unitCost,
             sub_total: unitCost * selectedPreorder.quantity,
-            order_type: 'พรีออเดอร์' // มาจากพรีออเดอร์ ราคาแก้ไขได้ในตาราง
+            order_type: 'พรีออเดอร์', // มาจากพรีออเดอร์ ราคาแก้ไขได้ในตาราง
+            pre_order_item_id: selectedPreorder.id
         };
+
+        const isDuplicate = item.some(existingItem =>
+            existingItem.pre_order_item_id === selectedPreorder.id &&
+            existingItem.order_type === newItem.order_type
+        );
+
+        if (isDuplicate) {
+            alert(`มีรายการ "${selectedPreorder.product_name}" ประเภท ${newItem.order_type} อยู่ในใบสั่งซื้อแล้ว`);
+            return;
+        }
 
         // เพิ่มเข้าตะกร้าหลัก (ตารางด้านล่างของจอ)
         setItem(prev => [...prev, newItem]);
@@ -216,12 +221,14 @@ const CreatePurchaseOrders: React.FC = () => {
                 product_id: p.product_id,
                 quantity: p.quantity,
                 unit_price: p.unit_price,
+                alert_id: p.alert_id,
+                pre_order_item_id: p.pre_order_item_id,
             }));
 
             // สร้าง Payload และแนบ status ตามที่ปุ่มส่งมา
             const payload: CreatePORequest = {
-                supplier_id: Number(listsSupplier),
-                po_type_id: 1, 
+                supplier_id: Number(listsSupplier), 
+                notes: notes,
                 status: submitStatus, // ส่งสถานะ DRAFT หรือ PENDING ไปที่ Backend
                 po_items: poItemsPayload,
             };
@@ -236,7 +243,6 @@ const CreatePurchaseOrders: React.FC = () => {
             
             alert(message);
             navigate(`${basePath}/orders`); // กลับไปหน้ารวม
-
         } catch (error: any) {
             const backendMessage = error?.response?.data?.message || error?.message;
             alert(backendMessage || "เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง");
@@ -386,6 +392,19 @@ const CreatePurchaseOrders: React.FC = () => {
                             </div>
                         </div>
                     )}
+                    <Card>
+                        <CardHeader className='items-center justify-start gap-4 mt-2 mb-2'>
+                            <CardTitle className='text-base text-black'><MessageSquareMore className="h-6 w-6" /></CardTitle>
+                            <CardTitle className='text-lg text-black'>ข้อความถึงเจ้าของร้าน</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <Input
+                                placeholder="ฝากข้อความถึงเจ้าของร้านที่นี่..."
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value)}
+                            />
+                        </CardContent>
+                    </Card>
                 </div>
 
                 { /* Right Side */ }

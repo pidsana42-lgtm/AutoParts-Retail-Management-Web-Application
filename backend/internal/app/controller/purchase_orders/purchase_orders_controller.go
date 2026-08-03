@@ -168,7 +168,7 @@ func (ctrl *PurchaseOrderController) GetSummary(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-func (c *PurchaseOrderController) PrintPO(ctx *gin.Context) {
+func (ctrl *PurchaseOrderController) PrintPO(ctx *gin.Context) {
     idStr := ctx.Param("id")
     id, err := strconv.ParseUint(idStr, 10, 32)
     if err != nil {
@@ -178,7 +178,7 @@ func (c *PurchaseOrderController) PrintPO(ctx *gin.Context) {
 
 	includeCode, _ := strconv.ParseBool(ctx.DefaultQuery("include_code", "false"))
     // เรียก Service เพื่อ Gen PDF (คืนค่ากลับมาเป็น []byte)
-    pdfBytes, err := c.poService.GeneratePOPDF(ctx.Request.Context(), uint(id), includeCode)
+    pdfBytes, err := ctrl.poService.GeneratePOPDF(ctx.Request.Context(), uint(id), includeCode)
     if err != nil {
 		fmt.Println("PDF Generation Error:", err)
         ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate PDF"})
@@ -220,7 +220,7 @@ func (ctrl *PurchaseOrderController) DeletePO(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "purchase order deleted successfully"})
 }
 
-func (c *PurchaseOrderController) SearchProducts(ctx *gin.Context) {
+func (ctrl *PurchaseOrderController) SearchProducts(ctx *gin.Context) {
 	var query poDto.ProductSearchQuery
 
 	if err := ctx.ShouldBindQuery(&query); err != nil {
@@ -231,7 +231,7 @@ func (c *PurchaseOrderController) SearchProducts(ctx *gin.Context) {
 	}
 
 	// 2. เรียกใช้ Service
-	products, err := c.poService.SearchProducts(ctx.Request.Context(), query)
+	products, err := ctrl.poService.SearchProducts(ctx.Request.Context(), query)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "Internal Server Error",
@@ -310,4 +310,19 @@ func (ctrl *PurchaseOrderController) GetMonthlyCount(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"total_count": count})
+}
+
+func (ctrl *PurchaseOrderController) RestorePO(ctx *gin.Context) {
+	poID, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid PO id"})
+		return
+	}
+
+	if err := ctrl.poService.RestorePO(ctx, uint(poID)); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "กู้คืนใบสั่งซื้อสำเร็จ"})
 }

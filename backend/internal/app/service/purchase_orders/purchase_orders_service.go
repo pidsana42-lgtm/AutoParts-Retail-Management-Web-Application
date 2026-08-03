@@ -30,6 +30,7 @@ type PurchaseOrderService interface {
 	UpdatePO(ctx context.Context, id uint, req *poDto.UpdatePurchaseOrderRequest, updatedBy uint) (*poEntity.PO, error)
 	GetSupplierDeliveryEstimate(ctx context.Context, supplierID int) (*poDto.POAnalyticsResponse, error)
 	GetMonthlyPOCount(ctx context.Context) (int64, error)
+	RestorePO(ctx context.Context, poID uint) error
 }
 
 // purchaseOrderService ตัว Struct หลักที่จะทำงานจริง (Implement Interface ด้านบน)
@@ -72,30 +73,6 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 	if supplier == nil {
 		return nil, errors.New("supplier not found")
 	}
-
-	currentYear := time.Now().Format("2006") // ดึงปี ค.ศ. ปัจจุบัน
-	prefix := fmt.Sprintf("PO-%s-", currentYear)
-	nextSequence := 1 // ค่าเริ่มต้นคือ 1
-
-	// ดึงเลข PO ล่าสุดของปีนี้จาก Repository
-	latestPONumber, err := s.poRepository.GetLatestPONumberByYear(ctx, currentYear)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get latest PO number: %w", err)
-	}
-
-	// ถ้ามีเลขล่าสุดอยู่แล้ว (เช่น "PO-2026-0015") ให้เอามาตัดแล้วบวก 1
-	if latestPONumber != "" {
-		parts := strings.Split(latestPONumber, "-")
-		if len(parts) == 3 {
-			lastSeq, err := strconv.Atoi(parts[2])
-			if err == nil {
-				nextSequence = lastSeq + 1
-			}
-		}
-	}
-
-	// เติม 0 ให้ครบ 4 หลัก
-	generatedPONumber := fmt.Sprintf("%s%04d", prefix, nextSequence)
 
 	hasPurchase := false
     hasPreOrder := false
@@ -151,11 +128,11 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
     }
 
 	poData := &poEntity.PO{
-		PO_number:  generatedPONumber, // ใช้เลขที่ Generate ใหม่
 		SupplierID: req.SupplierID,
 		PO_type_id: poTypeID,
 		Created_by: creatorID,
 		Status:     req.Status,
+		Notes:      req.Notes,
 		PO_Items:   poItems,
         Total_amount: totalAmount,
 	}
@@ -171,7 +148,7 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 		return nil, fmt.Errorf("failed to save purchase order: %w", err)
 	}
 
-	// === [เพิ่มโค้ดส่วนนี้] จองไอเทม PreOrder ===
+	// จองไอเทม PreOrder
 	var preOrderItemIDs []uint
 	for _, item := range req.POItems {
 		if item.PreOrderItemID != nil {
@@ -191,6 +168,11 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 			notesStr = *item.Notes
 		}
 
+		orderType := "สั่งซื้อ"
+		if item.PreOrderItemID != nil {
+			orderType = "พรีออเดอร์"
+		}
+
 		poItemResponses = append(poItemResponses, poDto.POItemResponse{
 			ID:                        item.ID,
 			ProductID:                 item.ProductID,
@@ -203,6 +185,7 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 			Notes:                     notesStr,
 			AlertID:                   item.AlertID,
 			PreOrderItemID:            item.PreOrderItemID,
+			OrderType:                 orderType,
 		})
 	}
 
@@ -212,6 +195,7 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 		SupplierID:   	poData.SupplierID,
 		SupplierName: 	supplier.SupplierName, 
 		POTypeID:     	poData.PO_type_id,
+		Notes: 			poData.Notes,
 		TotalAmount:  	totalAmount,
 		Status:       	poData.Status,
 		Expires_at:    	expiresAt,
@@ -288,6 +272,10 @@ func (s *purchaseOrderService) GetPOByID(ctx context.Context, id uint) (*poDto.P
 }
 
 func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus, rejectionReason string) error {
+	if status == poEnum.StatusDeleted || status == poEnum.StatusExpired {
+		return errors.New("ไม่สามารถตั้งสถานะนี้โดยตรง กรุณาใช้ฟังก์ชันลบ/กู้คืน")
+	}
+
 	po, err := s.poRepository.GetPOByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -296,35 +284,29 @@ func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, stat
 		return err
 	}
 
-	// กันไว้: PO ที่อนุมัติไปแล้ว ไม่ควรเปลี่ยนสถานะซ้ำได้อีก
 	if po.Status == poEnum.StatusApproved {
 		return ErrPOCannotUpdate
 	}
 
-	if status == "RESUBMITTED" || status == "REJECTED" {
-		// 1. รวบรวม ID ของพรีออเดอร์ไอเทมจาก PO ใบนี้ (po ตัวนี้ได้มาจาก GetPOByID ด้านบนแล้ว)
+	if status == poEnum.StatusResubmitted || status == poEnum.StatusRejected {
 		var preOrderItemIDs []uint
 		for _, item := range po.PO_Items {
 			if item.PreOrderItemID != nil {
 				preOrderItemIDs = append(preOrderItemIDs, *item.PreOrderItemID)
 			}
 		}
-		// 2. ปลดล็อกกลับเป็น PENDING
 		if len(preOrderItemIDs) > 0 {
-			_ = s.preOrderRepo.UpdateItemsStatusByIDs(ctx, preOrderItemIDs, "PENDING")
+			_ = s.preOrderRepo.UpdateItemsStatusByIDs(ctx, preOrderItemIDs, string(poEnum.StatusPending))
 		}
-		// 3. จัดการสถานะ PO ต่อตาม Logic เดิม
-		if status == "RESUBMITTED" {
+		if status == poEnum.StatusResubmitted {
 			return s.poRepository.UpdateStatusAndRejection(ctx, id, status, rejectionReason)
 		}
 	}
 
-	// 2. กรณีพนักงานส่งอนุมัติใหม่ (PENDING) หรือเปลี่ยนกลับเป็นร่าง (DRAFT)
-    if status == "PENDING" || status == "DRAFT" {
-        po.RejectionReason = nil
-    }
+	if status == poEnum.StatusPending || status == poEnum.StatusDraft {
+		po.RejectionReason = nil
+	}
 
-    // ถ้าไม่ใช่ REJECTED ให้จัดการแบบเดิม
 	po.Status = status
 	return s.poRepository.UpdatePO(ctx, po)
 }
@@ -640,4 +622,8 @@ func getPODraftExpiryDays() int {
 		return 7 // ค่า default ถ้าไม่ได้ตั้ง env หรือตั้งค่าผิด
 	}
 	return days
+}
+
+func (s *purchaseOrderService) RestorePO(ctx context.Context, poID uint) error {
+	return s.poRepository.RestorePOByID(ctx, poID)
 }

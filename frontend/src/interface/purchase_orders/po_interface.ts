@@ -37,7 +37,8 @@ export interface POItemResponse {
 
 // ข้อมูลที่เพิ่ม type เพื่อใช้จัดการ State ภายในหน้าเว็บ
 export type LocalPOItem = POItemResponse & { 
-    order_type: 'สั่งซื้อ' | 'พรีออเดอร์' 
+    order_type: 'สั่งซื้อ' | 'พรีออเดอร์';
+    pre_order_item_id?: number;
 };
 
 // -----------------------------------------
@@ -55,7 +56,7 @@ export interface CreatePOItemRequest {
 
 export interface CreatePORequest {
     supplier_id: number;
-    po_type_id: number;
+    notes?: string;
     status: 'DRAFT' | 'PENDING';
     po_items: CreatePOItemRequest[];
 }
@@ -126,7 +127,7 @@ export interface GetPOsParams {
     limit: number;
     status?: string;
     search?: string;
-    date?: string;
+    month?: string;
 }
 
 export interface GetPOsResponse {
