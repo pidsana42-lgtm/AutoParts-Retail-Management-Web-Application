@@ -37,7 +37,7 @@ func (r *categoryRepository) GetByID(id uint) (*entity.Category, error) {
 
 func (r *categoryRepository) List() ([]entity.Category, error) {
 	var list []entity.Category
-	return list, r.db.Order("created_at desc").Find(&list).Error
+	return list, r.db.Preload("SubCategories").Order("created_at desc").Find(&list).Error
 }
 
 func (r *categoryRepository) Update(cat *entity.Category) error {

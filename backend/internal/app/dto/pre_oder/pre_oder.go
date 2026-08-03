@@ -12,7 +12,7 @@ type CreatePreOrderDTO struct {
 	DepositAmount float64                 `json:"deposit_amount"`
 	Status        string                  `json:"status" binding:"required"`
 	OrderDate     time.Time               `json:"order_date" binding:"required"`
-	SupplierID    uint                    `json:"supplier_id" binding:"required"`
+	SupplierID    uint                    `json:"supplier_id"`
 	PreOrderItems []CreatePreOrderItemDTO `json:"pre_order_items"`
 }
 
@@ -49,13 +49,18 @@ func (d *CreatePreOrderDTO) ToEntity() entity.PreOrder {
 		})
 	}
 
+	supplierID := d.SupplierID
+	if supplierID == 0 {
+		supplierID = 1
+	}
+
 	return entity.PreOrder{
 		PreOrderType:  d.PreOrderType,
 		CustomerID:    d.CustomerID,
 		DepositAmount: d.DepositAmount,
 		Status:        d.Status,
 		OrderDate:     d.OrderDate,
-		SupplierID:    d.SupplierID,
+		SupplierID:    supplierID,
 		PreOrderItems: items,
 	}
 }

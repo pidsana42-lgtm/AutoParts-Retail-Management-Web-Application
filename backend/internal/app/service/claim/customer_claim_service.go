@@ -1,6 +1,7 @@
 package claim
 
 import (
+	"fmt"
 	"time"
 
 	claimDTO "backend/internal/app/dto/claim"
@@ -13,29 +14,44 @@ type CustomerClaimService interface {
 	GetCustomerClaimByID(id uint) (claimDTO.CustomerClaimResponseDTO, error)
 	ListCustomerClaims() ([]claimDTO.CustomerClaimResponseDTO, error)
 	UpdateCustomerClaim(id uint, input claimDTO.UpdateCustomerClaimDTO) (claimDTO.CustomerClaimResponseDTO, error)
+	UpdateCustomerClaimItem(id uint, input claimDTO.UpdateCustomerClaimItemDTO) (claimDTO.CustomerClaimItemResponseDTO, error)
+	UpdateCustomerClaimItemStatus(id uint, status string) (claimDTO.CustomerClaimItemResponseDTO, error)
 	DeleteCustomerClaim(id uint) error
 }
 
 type customerClaimService struct {
-	repo claimRepo.CustomerClaimRepository
+	repo   claimRepo.CustomerClaimRepository
+	soRepo claimRepo.SaleOrderLookupRepository
 }
 
-func NewCustomerClaimService(repo claimRepo.CustomerClaimRepository) CustomerClaimService {
-	return &customerClaimService{repo: repo}
+func NewCustomerClaimService(repo claimRepo.CustomerClaimRepository, soRepo claimRepo.SaleOrderLookupRepository) CustomerClaimService {
+	return &customerClaimService{repo: repo, soRepo: soRepo}
 }
 
 func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomerClaimDTO) (claimDTO.CustomerClaimResponseDTO, error) {
 	claimEntity := input.ToEntity()
-	// กำหนดค่าเริ่มต้น
 	claimEntity.Status = "Pending"
 	claimEntity.ClaimDate = time.Now()
-	// หากมีระบบ Login ให้ใช้ ID พนักงานจริง ตอนนี้กำหนด default = 1 ไปก่อน
 	claimEntity.CreatedBy = 1
 
-	// บันทึก Entity
-	err := s.repo.CreateCustomerClaim(&claimEntity)
-	if err != nil {
+	// ตั้ง ClaimNo = CLM-{order_number}
+	if order, err := s.soRepo.GetSaleOrderByID(input.OriginalOrderID); err == nil {
+		claimEntity.ClaimNo = "CLM-" + order.OrderNumber
+	} else {
+		claimEntity.ClaimNo = fmt.Sprintf("CLM-%d", input.OriginalOrderID)
+	}
+
+	if err := s.repo.CreateCustomerClaim(&claimEntity); err != nil {
 		return claimDTO.CustomerClaimResponseDTO{}, err
+	}
+
+	// สร้าง items พร้อมกันหลัง claim header ถูกสร้างแล้ว
+	for _, itemInput := range input.Items {
+		itemEntity := itemInput.ToEntity()
+		itemEntity.CustomerClaimID = claimEntity.ID
+		if err := s.repo.CreateCustomerClaimItem(&itemEntity); err != nil {
+			return claimDTO.CustomerClaimResponseDTO{}, err
+		}
 	}
 
 	return claimDTO.ToCustomerClaimResponseDTO(&claimEntity), nil
@@ -81,6 +97,41 @@ func (s *customerClaimService) UpdateCustomerClaim(id uint, input claimDTO.Updat
 		return claimDTO.CustomerClaimResponseDTO{}, err
 	}
 	return claimDTO.ToCustomerClaimResponseDTO(&updated), nil
+}
+
+func (s *customerClaimService) UpdateCustomerClaimItem(id uint, input claimDTO.UpdateCustomerClaimItemDTO) (claimDTO.CustomerClaimItemResponseDTO, error) {
+	existing, err := s.repo.GetCustomerClaimItemByID(id)
+	if err != nil {
+		return claimDTO.CustomerClaimItemResponseDTO{}, err
+	}
+	if input.Qty > 0 {
+		existing.Qty = uint(input.Qty)
+	}
+	if input.Reason != "" {
+		existing.Reason = input.Reason
+	}
+	if input.Resolution != "" {
+		existing.Resolution = input.Resolution
+	}
+	if input.EvidenceURL != "" {
+		existing.EvidenceURL = input.EvidenceURL
+	}
+	if err := s.repo.UpdateCustomerClaimItem(existing); err != nil {
+		return claimDTO.CustomerClaimItemResponseDTO{}, err
+	}
+	return claimDTO.ToCustomerClaimItemResponseDTO(existing), nil
+}
+
+func (s *customerClaimService) UpdateCustomerClaimItemStatus(id uint, status string) (claimDTO.CustomerClaimItemResponseDTO, error) {
+	existing, err := s.repo.GetCustomerClaimItemByID(id)
+	if err != nil {
+		return claimDTO.CustomerClaimItemResponseDTO{}, err
+	}
+	existing.Status = status
+	if err := s.repo.UpdateCustomerClaimItem(existing); err != nil {
+		return claimDTO.CustomerClaimItemResponseDTO{}, err
+	}
+	return claimDTO.ToCustomerClaimItemResponseDTO(existing), nil
 }
 
 func (s *customerClaimService) DeleteCustomerClaim(id uint) error {
