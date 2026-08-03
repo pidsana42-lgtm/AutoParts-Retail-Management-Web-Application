@@ -17,6 +17,12 @@ func UploadToSupabase(bucket, filename, mimeType string, data []byte) (string, e
 
 	supabaseURL := os.Getenv("SUPABASE_URL")
 	serviceKey := os.Getenv("SUPABASE_SECRET_KEY")
+	if serviceKey == "" {
+		serviceKey = os.Getenv("SUPABASE_KEY")
+	}
+	if serviceKey == "" {
+		serviceKey = os.Getenv("api_key")
+	}
 
 	if supabaseURL != "" && serviceKey != "" {
 		uploadURL := fmt.Sprintf("%s/storage/v1/object/%s/%s", supabaseURL, bucket, filename)

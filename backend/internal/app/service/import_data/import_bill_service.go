@@ -266,7 +266,9 @@ func (s *importBillService) GetPurchaseOrderByID(id uint) (importDataDTO.Purchas
 
 func (s *importBillService) processOCRInBackground(jobID uint, fileURL string) {
 	localPath := fileURL
-	if strings.Contains(fileURL, "/uploads/") {
+	if strings.HasPrefix(fileURL, "http://") || strings.HasPrefix(fileURL, "https://") {
+		localPath = fileURL
+	} else if strings.Contains(fileURL, "/uploads/") {
 		parts := strings.Split(fileURL, "/uploads/")
 		if len(parts) > 1 {
 			localPath = filepath.Join("uploads", parts[1])

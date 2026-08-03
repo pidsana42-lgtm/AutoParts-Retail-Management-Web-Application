@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import apiClient from '../../../service/http/apiClient';
 import * as XLSX from 'xlsx';
 import heic2any from 'heic2any';
@@ -370,7 +369,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
     if (currentView !== 'scan') return;
     const intervalId = setInterval(async () => {
       try {
-        const resp = await axios.get(`/api/mobile/images?session=${mobileSessionId}`);
+        const resp = await apiClient.get(`/mobile/images?session=${mobileSessionId}`);
         const urls: string[] = resp.data?.images || [];
         if (urls.length > 0) await handleLoadMobileFiles(urls);
       } catch {
