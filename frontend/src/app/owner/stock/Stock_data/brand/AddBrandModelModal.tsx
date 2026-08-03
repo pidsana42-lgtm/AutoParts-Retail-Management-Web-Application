@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Input from "../../../../../components/elements/input";
 import Select from "../../../../../components/elements/select";
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
-import type { Brand, Model } from "../../../../../interface/wms/stock_data";
+import type { Brand } from "../../../../../interface/wms/stock_data";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 
