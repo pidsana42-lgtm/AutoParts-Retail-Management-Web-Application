@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Camera, FileUp, ArrowRight, Eye, History, Trash2,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, LayoutPanelLeft, Loader2, CheckCircle2

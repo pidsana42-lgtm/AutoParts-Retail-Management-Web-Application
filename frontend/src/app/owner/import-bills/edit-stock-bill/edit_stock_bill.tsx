@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
-  AlertCircle, ChevronLeft, ChevronRight, Save, Search, RefreshCw, 
-  Edit3, CheckCircle2, ArrowUpRight, ArrowDownRight, Package,
-  DollarSign, Tag
+  AlertCircle, ChevronLeft, ChevronRight, Search, RefreshCw, 
+  Edit3, CheckCircle2, DollarSign, Tag
 } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import Card from '../../../../components/elements/card';
@@ -53,8 +52,8 @@ export default function EditStockBillPage() {
   const [products, setProducts] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'mismatched' | 'increase' | 'decrease'>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [statusFilter] = useState<'all' | 'mismatched' | 'increase' | 'decrease'>('all');
+  const [categoryFilter] = useState<string>('all');
 
   // Options for Edit Form
   const [categories, setCategories] = useState<SelectOption[]>([]);
@@ -546,15 +545,30 @@ export default function EditStockBillPage() {
                       onChange={(e) => setFormData({ ...formData, cost_price: Number(e.target.value) })}
                       placeholder="เช่น 600"
                     />
-                    <Input
-                      label="ราคาขายตั้งใหม่ (Sale Price ฿)"
-                      type="number"
-                      step="any"
-                      required
-                      value={formData.sale_price || ''}
-                      onChange={(e) => setFormData({ ...formData, sale_price: Number(e.target.value) })}
-                      placeholder="เช่น 900"
-                    />
+                    <div>
+                      <Input
+                        label="ราคาขายตั้งใหม่ (Sale Price ฿)"
+                        type="number"
+                        step="any"
+                        required
+                        value={formData.sale_price || ''}
+                        onChange={(e) => setFormData({ ...formData, sale_price: Number(e.target.value) })}
+                        placeholder="เช่น 900"
+                      />
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <span className="text-[10px] text-gray-500 font-bold">คำนวณกำไร:</span>
+                        {[15, 20, 30, 50].map(pct => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => applyMarkup(pct)}
+                            className="px-1.5 py-0.5 bg-gray-100 hover:bg-gray-200 text-[#1C1B1B] text-[10px] font-bold border border-gray-300 cursor-pointer"
+                          >
+                            +{pct}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
 

@@ -1,4 +1,3 @@
-import React from 'react';
 import { ChevronLeft, Loader2, FileText } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import Card from '../../../../components/elements/card';

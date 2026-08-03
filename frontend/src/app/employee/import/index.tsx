@@ -1,4 +1,3 @@
-import React from 'react';
 import ImportBill from '../../owner/import-bills/import_bill';
 
 export default function EmployeeImport() {

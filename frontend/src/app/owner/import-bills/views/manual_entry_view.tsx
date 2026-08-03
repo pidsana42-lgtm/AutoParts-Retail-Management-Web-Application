@@ -1,4 +1,3 @@
-import React from 'react';
 import { ChevronLeft, Save, Trash2, AlertCircle } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
@@ -48,7 +47,6 @@ export default function ManualEntryView({
   handleItemChange,
   handleRemoveRow,
   handleAddRow,
-  exportBillItemsToExcel,
   handleSaveBill,
   saving,
   priceMismatchedItems = [],
@@ -75,21 +73,6 @@ export default function ManualEntryView({
     ? Math.round((calcSubtotal - (Number(formData.discount_total) || 0) + (Number(formData.vat_amount) || 0)) * 100) / 100
     : 0;
 
-  const liveMismatchesCount = React.useMemo(() => {
-    if (!formData || !formData.items) return 0;
-    let count = 0;
-    formData.items.forEach(item => {
-      if (item.product_id) {
-        const prod = products.find(p => p.id === Number(item.product_id));
-        if (prod && Number(item.price_per_unit) !== (prod.cost_price || 0)) {
-          count++;
-        }
-      } else if (item.company_product_name || Number(item.price_per_unit) > 0) {
-        count++;
-      }
-    });
-    return count;
-  }, [formData?.items, products]);
 
   const showBanner = (validationWarnings.length > 0 || priceMismatchedItems.length > 0) && !!handleConfirmValidationSave && !!handleDismissValidation;
 
@@ -233,7 +216,6 @@ export default function ManualEntryView({
                   </TableRow>
                 ) : (
                   formData.items.map((item, idx) => {
-                    const matchedProduct = products.find(p => p.id === Number(item.product_id));
                     return (
                       <TableRow key={idx} className="hover:bg-gray-50/80 align-top transition-colors">
                       <TableCell className="py-2.5 px-3">

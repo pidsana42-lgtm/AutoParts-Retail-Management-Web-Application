@@ -79,8 +79,6 @@ export default function ScanView({
   handleSelectBatchItem,
   handlePrevBatchItem,
   handleNextBatchItem,
-  setActiveBatchIndex,
-  setPreviewUrl,
   handleOcrProcess,
   scanning,
   isResizing,
@@ -95,7 +93,6 @@ export default function ScanView({
   handleItemChange,
   handleRemoveRow,
   handleAddRow,
-  exportBillItemsToExcel,
   handleSaveBill,
   handleSaveAllBatchBills,
   handleMergeBatchResultsToSingleBill,
@@ -122,22 +119,6 @@ export default function ScanView({
   const calcTotalAmount = formData
     ? Math.round((calcSubtotal - (Number(formData.discount_total) || 0) + (Number(formData.vat_amount) || 0)) * 100) / 100
     : 0;
-
-  const liveMismatchesCount = React.useMemo(() => {
-    if (!formData || !formData.items) return 0;
-    let count = 0;
-    formData.items.forEach((item: any) => {
-      if (item.product_id) {
-        const prod = products.find(p => p.id === Number(item.product_id));
-        if (prod && Number(item.price_per_unit) !== (prod.cost_price || 0)) {
-          count++;
-        }
-      } else if (item.company_product_name || Number(item.price_per_unit) > 0) {
-        count++;
-      }
-    });
-    return count;
-  }, [formData?.items, products]);
 
   const showBanner = (validationWarnings.length > 0 || priceMismatchedItems.length > 0) && !!handleConfirmValidationSave && !!handleDismissValidation;
 
@@ -555,7 +536,6 @@ export default function ScanView({
                       </TableRow>
                     ) : (
                       formData.items.map((item, idx) => {
-                        const matchedProduct = products.find(p => p.id === Number(item.product_id));
                         return (
                           <TableRow key={`item-${activeBatchIndex}-${idx}-${item.company_product_code || ''}-${item.company_product_name || ''}`} className="hover:bg-gray-50/80 align-top transition-colors">
                           <TableCell className="py-2.5 px-3">

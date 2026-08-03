@@ -150,6 +150,7 @@ func SetupDatabase() {
 	seed.BillImage(db)
 	seed.Bill(db)
 	seed.SaleOrder(db)
+	seed.SaleOrderItems(db)
 
     log.Println("Database migration complete! Server Ready.")
 }

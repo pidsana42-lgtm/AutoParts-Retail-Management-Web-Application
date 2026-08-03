@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ArrowLeft, CheckCircle2, RotateCcw, Loader2, FileImage, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Heading from '../../../../components/elements/heading';
@@ -18,7 +18,6 @@ interface ApproveViewProps {
 
 export default function ApproveView({
   bill,
-  suppliers,
   products,
   onApprove,
   onReject,

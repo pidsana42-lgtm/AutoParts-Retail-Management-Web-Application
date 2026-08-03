@@ -6,22 +6,27 @@ import (
 
 // CreateCustomerClaimItemDTO ใช้สำหรับรับข้อมูลสินค้า 1 ชิ้นที่จะเคลม
 type CreateCustomerClaimItemDTO struct {
-	// CustomerClaimID ไม่ต้อง `binding:"required"` เพราะถ้าส่งมาพร้อม CreateCustomerClaimDTO จะยังไม่มี ID
-	CustomerClaimID *uint   `json:"customer_claim_id"` 
-	ReturnItemID    *uint   `json:"return_item_id"`                  // โยงกับรายการที่รับคืน
-	ProductID       uint    `json:"product_id" binding:"required"`   // รหัสสินค้าที่พัง/ต้องการเคลม
-	Qty             float64 `json:"qty" binding:"required,gt=0"`     // จำนวนที่เคลม (ต้องมากกว่า 0)
-	Reason          string  `json:"reason" binding:"required"`       // เหตุผล เช่น "เปิดไม่ติด", "ชำรุดจากการขนส่ง"
-	Resolution      string  `json:"resolution"`                      // ข้อเสนอการแก้ปัญหา เช่น "เปลี่ยนสินค้า", "คืนเงิน"
+	CustomerClaimID *uint   `json:"customer_claim_id"`
+	ReturnItemID    *uint   `json:"return_item_id"`
+	ProductID       uint    `json:"product_id" binding:"required"`
+	Qty             float64 `json:"qty" binding:"required,gt=0"`
+	Reason          string  `json:"reason" binding:"required"`
+	Resolution      string  `json:"resolution"`
+	EvidenceURL     string  `json:"evidence_url"`
 }
 
-// UpdateCustomerClaimItemDTO ใช้สำหรับอัปเดตรายการสินค้า (เช่น แก้ไขจำนวน หรือสรุปวิธีแก้ปัญหา)
+// UpdateCustomerClaimItemDTO ใช้สำหรับอัปเดตรายการสินค้า
 type UpdateCustomerClaimItemDTO struct {
-	Qty        float64 `json:"qty"`
-	Reason     string  `json:"reason"`
-	Resolution string  `json:"resolution"` // พนักงานอาจจะเป็นคนมาอัปเดตฟิลด์นี้ภายหลัง
+	Qty         float64 `json:"qty"`
+	Reason      string  `json:"reason"`
+	Resolution  string  `json:"resolution"`
+	EvidenceURL string  `json:"evidence_url"`
 }
 
+// UpdateClaimItemStatusDTO ใช้สำหรับอนุมัติ/ปฏิเสธรายการสินค้ารายชิ้น
+type UpdateClaimItemStatusDTO struct {
+	Status string `json:"status" binding:"required"`
+}
 
 // CustomerClaimItemResponseDTO ใช้แสดงผลรายการเคลม
 type CustomerClaimItemResponseDTO struct {
@@ -29,39 +34,40 @@ type CustomerClaimItemResponseDTO struct {
 	CustomerClaimID uint    `json:"customer_claim_id"`
 	ReturnItemID    *uint   `json:"return_item_id"`
 	ProductID       uint    `json:"product_id"`
-	ProductName     string  `json:"product_name"` // มักจะ Join เพื่อดึงชื่อสินค้ามาแสดงให้ User ดูง่ายๆ
+	ProductName     string  `json:"product_name"`
 	Qty             float64 `json:"qty"`
 	Reason          string  `json:"reason"`
 	Resolution      string  `json:"resolution"`
+	Status          string  `json:"status"`
+	EvidenceURL     string  `json:"evidence_url"`
 }
 
 func (d *CreateCustomerClaimItemDTO) ToEntity() entity.CustomerClaimItem {
-	var returnedItemID uint
-	if d.ReturnItemID != nil {
-		returnedItemID = *d.ReturnItemID
-	}
 	var customerClaimID uint
 	if d.CustomerClaimID != nil {
 		customerClaimID = *d.CustomerClaimID
 	}
 	return entity.CustomerClaimItem{
 		CustomerClaimID: customerClaimID,
-		ReturnedItemID:  returnedItemID,
+		ReturnedItemID:  d.ReturnItemID,
 		ProductID:       d.ProductID,
 		Qty:             uint(d.Qty),
 		Reason:          d.Reason,
 		Resolution:      d.Resolution,
+		Status:          "Pending",
+		EvidenceURL:     d.EvidenceURL,
 	}
 }
 
 func ToCustomerClaimItemResponseDTO(m *entity.CustomerClaimItem) CustomerClaimItemResponseDTO {
-	var returnedItemID *uint
-	if m.ReturnedItemID != 0 {
-		returnedItemID = &m.ReturnedItemID
-	}
+	returnedItemID := m.ReturnedItemID
 	var productName string
 	if m.Product != nil {
 		productName = m.Product.Product_Name
+	}
+	status := m.Status
+	if status == "" {
+		status = "Pending"
 	}
 	return CustomerClaimItemResponseDTO{
 		ID:              m.ID,
@@ -72,5 +78,7 @@ func ToCustomerClaimItemResponseDTO(m *entity.CustomerClaimItem) CustomerClaimIt
 		Qty:             float64(m.Qty),
 		Reason:          m.Reason,
 		Resolution:      m.Resolution,
+		Status:          status,
+		EvidenceURL:     m.EvidenceURL,
 	}
 }

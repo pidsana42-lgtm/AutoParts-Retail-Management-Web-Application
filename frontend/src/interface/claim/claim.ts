@@ -27,11 +27,14 @@ export interface SalesReturn {
 export interface CustomerClaimItem {
   id?: number;
   customer_claim_id?: number;
-  returned_item_id: number;
+  returned_item_id?: number;
   product_id: number;
+  product_name?: string;
   qty: number;
   reason: string;
   resolution: string;
+  status?: string;
+  evidence_url?: string;
 }
 
 export interface CustomerClaim {
@@ -39,12 +42,15 @@ export interface CustomerClaim {
   claim_no?: string;
   claim_date: string;
   original_order_id: number;
+  customer_name?: string;
   return_id: number;
   created_by: number;
   approved_by?: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  note: string;
-  customer_claim_items?: CustomerClaimItem[];
+  approved_at?: string;
+  status: string;
+  notes?: string;
+  note?: string;
+  items?: CustomerClaimItem[];
 }
 
 export interface SupplierClaimItem {

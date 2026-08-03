@@ -1,308 +1,294 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ChevronLeft, CheckCircle, Clock, XCircle, 
-  Calendar, Phone, User, Package, Camera, Lock
+import {
+  ChevronLeft, CheckCircle2, XCircle,
+  Calendar, Hash, User, Package, Camera, Loader2
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContexts';
 import Heading from '../../../components/elements/heading';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../components/elements/card';
+import Badge from '../../../components/elements/badge';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import Button from '../../../components/elements/button';
+import { getCustomerClaimById, updateClaimItemStatus } from '../../../service/http/claim/claim';
+import type { CustomerClaim } from '../../../interface/claim/claim';
 
-interface ClaimItem {
-  id: number;
-  claim_no: string;
-  claim_date: string;
-  customer_name: string;
-  customer_phone: string;
-  product_name: string;
-  quantity: number;
-  amount: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-}
+const parseNote = (note: string | undefined, key: string): string => {
+  if (!note) return '-';
+  const match = note.match(new RegExp(`${key}:\\s*([^|]+)`));
+  return match ? match[1].trim() : '-';
+};
 
-const DEFAULT_CLAIMS: ClaimItem[] = [
-  {
-    id: 1,
-    claim_no: 'CLM-2026-0001',
-    claim_date: '2026-07-02T10:30:00Z',
-    customer_name: 'คุณสมชาย สายช่าง',
-    customer_phone: '081-234-5678',
-    product_name: 'กรองอากาศ เบอร์ 24',
-    quantity: 2,
-    amount: 1000,
-    status: 'PENDING',
-  },
-  {
-    id: 2,
-    claim_no: 'CLM-2026-0002',
-    claim_date: '2026-07-04T14:15:00Z',
-    customer_name: 'อู่สงวนอะไหล่ยนต์',
-    customer_phone: '089-876-5432',
-    product_name: 'โช้คอัพหลัง ยี่ห้อ TOKI',
-    quantity: 1,
-    amount: 2500,
-    status: 'APPROVED',
-  },
-];
+
+const extractEvidenceImages = (claim: CustomerClaim | null): { url: string; productName: string }[] => {
+  if (!claim?.items) return [];
+  return claim.items
+    .filter(item => item.evidence_url && item.evidence_url.trim() !== '')
+    .map(item => ({
+      url: item.evidence_url!,
+      productName: item.product_name || `#${item.product_id}`,
+    }));
+};
 
 export default function ClaimDetailPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { role } = useAuth() as any;
-  const isManager = role === 'OWNER' || role === 'ADMIN';
+  const isManager = role?.toUpperCase() === 'OWNER' || role?.toUpperCase() === 'ADMIN';
 
-  const [claims, setClaims] = useState<ClaimItem[]>([]);
-  const [claim, setClaim] = useState<ClaimItem | null>(null);
+  const [claim, setClaim] = useState<CustomerClaim | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
 
-  // Load claims from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('mock_claims');
-    let loadedClaims = DEFAULT_CLAIMS;
-    if (saved) {
+    if (!id) return;
+    const load = async () => {
       try {
-        loadedClaims = JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
+        setLoading(true);
+        const data = await getCustomerClaimById(Number(id));
+        setClaim(data);
+      } catch (err) {
+        console.error('Failed to load claim:', err);
+      } finally {
+        setLoading(false);
       }
-    } else {
-      localStorage.setItem('mock_claims', JSON.stringify(DEFAULT_CLAIMS));
-    }
-    setClaims(loadedClaims);
-
-    const found = loadedClaims.find(c => c.id === Number(id));
-    if (found) {
-      setClaim(found);
-    }
+    };
+    load();
   }, [id]);
 
-  // Handle status update
-  const handleStatusUpdate = (newStatus: 'APPROVED' | 'REJECTED') => {
-    if (!claim) return;
-    const updatedClaims = claims.map(c => 
-      c.id === claim.id ? { ...c, status: newStatus } : c
-    );
-    setClaims(updatedClaims);
-    localStorage.setItem('mock_claims', JSON.stringify(updatedClaims));
-    setClaim({ ...claim, status: newStatus });
-    
-    alert(`ดำเนินการ ${newStatus === 'APPROVED' ? 'อนุมัติผ่านเคลม' : 'ปฏิเสธคำขอ'} เรียบร้อยแล้ว`);
-    navigate('/owner/claims');
+  const handleItemStatusUpdate = async (itemId: number, newStatus: 'Approved' | 'Rejected') => {
+    if (!itemId) return;
+    try {
+      setUpdatingItemId(itemId);
+      await updateClaimItemStatus(itemId, newStatus);
+      setClaim(prev => prev ? {
+        ...prev,
+        items: prev.items?.map(item =>
+          item.id === itemId ? { ...item, status: newStatus } : item
+        ),
+      } : prev);
+    } catch (err) {
+      console.error('Failed to update item status:', err);
+      alert('เกิดข้อผิดพลาดในการอัปเดตสถานะสินค้า กรุณาลองใหม่');
+    } finally {
+      setUpdatingItemId(null);
+    }
   };
 
-  if (!claim) {
+  if (loading) {
     return (
-      <div className="p-8 text-center space-y-4">
-        <p className="text-slate-500 font-bold">ไม่พบข้อมูลใบเคลมสินค้าที่คุณระบุ</p>
-        <Button onClick={() => navigate('/owner/claims')} variant="outline">กลับหน้าหลัก</Button>
+      <div className="p-8 flex justify-center items-center min-h-[300px]">
+        <Loader2 size={28} className="text-[#e51c23] animate-spin" />
+        <span className="ml-3 text-sm text-[#5F5E5E] font-medium">กำลังโหลดข้อมูลใบเคลม...</span>
       </div>
     );
   }
 
+  if (!claim) {
+    return (
+      <div className="p-8 text-center space-y-4">
+        <p className="text-[#5F5E5E] font-bold">ไม่พบข้อมูลใบเคลมสินค้าที่คุณระบุ</p>
+        <Button onClick={() => navigate('/owner/claims')} variant="outline" className="rounded-none">กลับหน้าหลัก</Button>
+      </div>
+    );
+  }
+
+  const totalQty  = claim.items?.reduce((s, i) => s + i.qty, 0) ?? 0;
+  const claimNo   = claim.claim_no ?? `CLM-${claim.id}`;
+  const orderRef  = claimNo.startsWith('CLM-') ? claimNo.replace('CLM-', '') : `#${claim.original_order_id}`;
+  const basePath       = window.location.pathname.startsWith('/employee') ? '/employee/claims' : '/owner/claims';
+  const evidenceImages = extractEvidenceImages(claim);
+
   return (
-    <div className="p-8 space-y-6 bg-gray-50 min-h-screen font-sans">
-      
-      {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-        <div className="flex items-center gap-4">
-          <button 
-            type="button" 
-            onClick={() => navigate('/owner/claims')} 
-            className="p-2 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
+    <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
+
+      {/* Page header */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate(basePath)}
+            className="p-1.5 hover:bg-gray-100 transition-colors cursor-pointer rounded-none"
           >
-            <ChevronLeft size={24} className="text-slate-600" />
+            <ChevronLeft size={22} className="text-[#5F5E5E]" />
           </button>
           <div>
-            <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
+            <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
               รายละเอียดใบเคลมสินค้า
             </Heading>
-            <Heading level="h6" weight="light" className="m-0 text-slate-500 mt-1">
-              เลขที่ใบเคลม: {claim.claim_no}
-            </Heading>
+            <p className="text-sm text-[#5F5E5E] mt-0.5 font-mono">{claimNo}</p>
           </div>
         </div>
-        
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${
-          claim.status === 'APPROVED' 
-            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
-            : claim.status === 'REJECTED' 
-              ? 'bg-red-50 text-red-600 border border-red-100' 
-              : 'bg-amber-50 text-amber-600 border border-amber-100'
-        }`}>
-          {claim.status === 'APPROVED' ? (
-            <CheckCircle size={14} />
-          ) : claim.status === 'REJECTED' ? (
-            <XCircle size={14} />
-          ) : (
-            <Clock size={14} />
-          )}
-          {claim.status === 'APPROVED' ? 'อนุมัติแล้ว' : claim.status === 'REJECTED' ? 'ปฏิเสธ' : 'รอดำเนินการ'}
-        </span>
+
+        <div />
       </div>
 
-      {/* Grid Layout */}
-      <div className="flex flex-col lg:flex-row gap-6 items-stretch">
-        
-        {/* Left Side: Main Info (2/3) */}
-        <div className="w-full lg:w-3/4 flex flex-col gap-6">
-          
-          {/* Card: Customer Details */}
-          <Card className="border-l-[5px] border-l-red-800">
-            <CardHeader className="items-center justify-start gap-4">
-              <CardTitle className="text-lg">ข้อมูลผู้ยื่นคำขอเคลม</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
-                <div className="flex items-center gap-3">
-                  <User className="text-slate-400" size={18} />
-                  <div>
-                    <p className="text-xs text-slate-400 font-bold">ชื่อลูกค้า</p>
-                    <p className="font-bold text-slate-800">{claim.customer_name}</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  <Phone className="text-slate-400" size={18} />
-                  <div>
-                    <p className="text-xs text-slate-400 font-bold">เบอร์โทรศัพท์</p>
-                    <p className="font-bold text-slate-800">{claim.customer_phone}</p>
-                  </div>
-                </div>
+      <div className="space-y-5">
 
-                <div className="flex items-center gap-3 sm:col-span-2 border-t border-slate-100 pt-3">
-                  <Calendar className="text-slate-400" size={18} />
-                  <div>
-                    <p className="text-xs text-slate-400 font-bold">วันที่ยื่นขอเคลม</p>
-                    <p className="font-semibold text-slate-600 text-xs">
-                      {new Date(claim.claim_date).toLocaleDateString('th-TH', {
-                        year: 'numeric', month: 'long', day: 'numeric',
-                        hour: '2-digit', minute: '2-digit'
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Card: Claimed Items */}
-          <Card className="border-l-[5px] border-l-black overflow-hidden">
-            <CardHeader className="items-center justify-start gap-4 bg-slate-50/50">
-              <CardTitle className="text-lg">สินค้าที่ต้องการเคลม</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto px-5 py-4">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-slate-500 text-xs border-b border-slate-150">
-                    <tr>
-                      <th className="py-2.5 px-2 font-bold text-slate-500">ชื่อสินค้า</th>
-                      <th className="py-2.5 px-2 text-center font-bold text-slate-500">จำนวนเคลม</th>
-                      <th className="py-2.5 px-2 text-right font-bold text-slate-500">มูลค่ารวม</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 text-slate-700 font-semibold">
-                    <tr>
-                      <td className="py-4 px-2">
-                        <div className="flex items-center gap-2">
-                          <Package className="text-[#e51c23] shrink-0" size={18} />
-                          <span className="text-slate-800 text-sm font-bold">{claim.product_name}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-2 text-center text-slate-600">{claim.quantity} ชิ้น</td>
-                      <td className="py-4 px-2 text-right text-slate-900 font-extrabold">฿{claim.amount.toLocaleString()}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Card: Damaged Details & Notes */}
-          <Card className="border-l-[5px] border-l-slate-400">
-            <CardHeader className="items-center justify-start gap-4">
-              <CardTitle className="text-lg">รายละเอียดสาเหตุการชำรุดเสียหาย</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4 py-2 text-sm">
-                <div className="text-slate-700 bg-slate-100 p-4 rounded border border-slate-200 font-semibold italic">
-                  "{claim.id === 1 ? 'ซีลยางกรองอากาศฉีกขาดหลังจากติดตั้งใช้งานได้ 1 วัน' : claim.id === 2 ? 'แกนโช้คอัพคดงอและมีคราบน้ำมันซึมออกมาด้านข้าง' : 'กรองอากาศบิดเบี้ยวผิดรูป'}"
-                </div>
-                
+          {/* Claim meta info */}
+          <div className="bg-white border border-gray-200">
+            <div className="bg-gray-100 px-5 py-3 border-b border-gray-200">
+              <p className="text-xs font-bold text-[#5F5E5E] uppercase tracking-wider">ข้อมูลใบเคลม</p>
+            </div>
+            <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+              <div className="flex items-start gap-2">
+                <Hash size={16} className="text-[#e51c23] mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-xs text-slate-400 font-bold mb-2">รูปภาพหลักฐานที่ส่งประกอบคำขอ</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="h-28 bg-slate-100 rounded border border-slate-200 flex items-center justify-center text-slate-400 text-xs font-semibold relative overflow-hidden group">
-                      <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                        <Camera size={14} /> รูปถ่ายรอยฉีกขาด.jpg
-                      </span>
-                    </div>
-                    <div className="h-28 bg-slate-100 rounded border border-slate-200 flex items-center justify-center text-slate-400 text-xs font-semibold relative overflow-hidden group">
-                      <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                        <Camera size={14} /> รูปซีลยางอะไหล่.png
-                      </span>
-                    </div>
-                  </div>
+                  <p className="text-xs text-[#5F5E5E] font-bold">เลขที่ใบเคลม</p>
+                  <p className="font-bold text-[#1C1B1B] font-mono">{claimNo}</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-
-        </div>
-
-        {/* Right Side: Approval Panel (1/3) */}
-        <div className="w-full lg:w-1/4 flex flex-col gap-6">
-          <Card className="border-t-[5px] border-t-red-800">
-            <CardHeader className="items-center justify-start gap-4">
-              <CardTitle className="text-lg">ดำเนินการโดยระบบ</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4 text-xs">
-                <div className="text-slate-500 font-bold">
-                  * ใบเคลมนี้อยู่ในขั้นตอนการตรวจสอบสิทธิ์และสภาพอะไหล่
+              <div className="flex items-start gap-2">
+                <Calendar size={16} className="text-[#e51c23] mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs text-[#5F5E5E] font-bold">วันที่เคลม</p>
+                  <p className="font-semibold text-[#1C1B1B] text-xs">
+                    {new Date(claim.claim_date).toLocaleDateString('th-TH', {
+                      year: 'numeric', month: 'long', day: 'numeric'
+                    })}
+                  </p>
                 </div>
-
-                {claim.status === 'PENDING' ? (
-                  <div className="space-y-3 pt-2">
-                    {isManager ? (
-                      <>
-                        <Button
-                          type="button"
-                          onClick={() => handleStatusUpdate('APPROVED')}
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 justify-center shadow-sm flex items-center gap-2"
-                        >
-                          <CheckCircle size={18} /> อนุมัติผ่านเคลม
-                        </Button>
-                        <Button
-                          type="button"
-                          onClick={() => handleStatusUpdate('REJECTED')}
-                          className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 justify-center shadow-sm flex items-center gap-2"
-                        >
-                          <XCircle size={18} /> ปฏิเสธคำขอเคลม
-                        </Button>
-                      </>
-                    ) : (
-                      <div className="bg-slate-100 p-3 rounded text-center text-xs text-slate-400 font-bold flex items-center justify-center gap-1.5">
-                        <Lock size={14} /> สิทธิ์การอนุมัติเฉพาะผู้จัดการหรือเจ้าของร้าน
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="bg-slate-50 p-4 rounded border border-slate-150 text-center space-y-2">
-                    <p className="text-xs text-slate-400 font-bold">ดำเนินการตรวจสอบเสร็จสิ้น</p>
-                    <p className={`font-extrabold text-sm ${
-                      claim.status === 'APPROVED' ? 'text-emerald-600' : 'text-red-600'
-                    }`}>
-                      {claim.status === 'APPROVED' ? 'อนุมัติเรียบร้อย' : 'ปฏิเสธคำขอเรียบร้อย'}
-                    </p>
-                  </div>
-                )}
               </div>
-            </CardContent>
-          </Card>
-        </div>
+              <div className="flex items-start gap-2">
+                <User size={16} className="text-[#e51c23] mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs text-[#5F5E5E] font-bold">ลูกค้า</p>
+                  <p className="font-bold text-[#1C1B1B]">
+                    {claim.customer_name && claim.customer_name !== '-'
+                      ? claim.customer_name
+                      : parseNote(claim.notes || claim.note, 'ลูกค้า')}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <Package size={16} className="text-[#e51c23] mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs text-[#5F5E5E] font-bold">Order อ้างอิง</p>
+                  <p className="font-bold text-[#1C1B1B] font-mono">{orderRef}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Items table */}
+          <div className="bg-white border border-gray-200 overflow-hidden">
+            <div className="bg-gray-100 px-5 py-3 border-b border-gray-200 flex items-center justify-between">
+              <p className="text-xs font-bold text-[#5F5E5E] uppercase tracking-wider">สินค้าที่เคลม</p>
+              <span className="text-xs font-bold text-[#1C1B1B]">รวม {totalQty} ชิ้น</span>
+            </div>
+
+            {(claim.items?.length ?? 0) > 0 ? (
+              <Table>
+                <TableHeader className="bg-gray-50 text-[#5F5E5E]">
+                  <TableRow>
+                    <TableHead className="pl-5">สินค้า</TableHead>
+                    <TableHead className="text-center w-24">จำนวน</TableHead>
+                    <TableHead>สาเหตุ</TableHead>
+                    <TableHead className="text-center w-32">สถานะ</TableHead>
+                    {isManager && <TableHead className="text-center pr-5 w-28">จัดการ</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="text-gray-700">
+                  {claim.items!.map((item, idx) => {
+                    const itemStatus = (item.status ?? 'Pending');
+                    const itemStatusUp = itemStatus.toUpperCase();
+                    const isUpdating = updatingItemId === item.id;
+                    return (
+                      <TableRow key={idx} className="hover:bg-gray-50/70">
+                        <TableCell className="pl-5 font-bold text-[#1C1B1B]">
+                          {item.product_name || `#${item.product_id}`}
+                        </TableCell>
+                        <TableCell className="text-center font-bold text-[#e51c23]">{item.qty} ชิ้น</TableCell>
+                        <TableCell className="text-[#5F5E5E] text-sm">{item.reason}</TableCell>
+                        <TableCell className="text-center">
+                          {itemStatusUp === 'APPROVED' ? (
+                            <Badge variant="success" size="sm">อนุมัติแล้ว</Badge>
+                          ) : itemStatusUp === 'REJECTED' ? (
+                            <Badge variant="error" size="sm">ปฏิเสธ</Badge>
+                          ) : (
+                            <Badge variant="warning" size="sm">รอดำเนินการ</Badge>
+                          )}
+                        </TableCell>
+                        {isManager && (
+                          <TableCell className="text-center pr-5">
+                            {itemStatusUp === 'PENDING' ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => item.id && handleItemStatusUpdate(item.id, 'Approved')}
+                                  disabled={isUpdating}
+                                  className="text-emerald-600 hover:text-emerald-800 disabled:opacity-40 transition-colors cursor-pointer"
+                                  title="อนุมัติ"
+                                >
+                                  {isUpdating ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                                </button>
+                                <button
+                                  onClick={() => item.id && handleItemStatusUpdate(item.id, 'Rejected')}
+                                  disabled={isUpdating}
+                                  className="text-gray-400 hover:text-red-600 disabled:opacity-40 transition-colors cursor-pointer"
+                                  title="ปฏิเสธ"
+                                >
+                                  <XCircle size={18} />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-[#5F5E5E]">—</span>
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="p-8 text-center text-[#5F5E5E]">
+                <Package size={28} className="mx-auto mb-2 text-gray-300" />
+                <p className="text-xs text-[#5F5E5E] mt-1">ไม่มีรายการสินค้า</p>
+              </div>
+            )}
+          </div>
+
+          {/* Notes / damage description */}
+          <div className="bg-white border border-gray-200 p-5">
+            <p className="text-xs font-bold text-[#5F5E5E] uppercase tracking-wider mb-3">หมายเหตุ / สาเหตุความเสียหาย</p>
+            <div className="bg-gray-50 border border-gray-200 p-4 text-sm text-[#1C1B1B] font-medium italic">
+              "{claim.notes || claim.note || 'ไม่มีหมายเหตุเพิ่มเติม'}"
+            </div>
+
+            <div className="mt-4">
+              <p className="text-xs text-[#5F5E5E] font-bold mb-2">รูปภาพหลักฐาน ({evidenceImages.length})</p>
+              {evidenceImages.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {evidenceImages.map((img, idx) => (
+                    <a
+                      key={idx}
+                      href={img.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block group border border-gray-200 overflow-hidden bg-black/5"
+                    >
+                      <img
+                        src={img.url}
+                        alt={`หลักฐาน ${img.productName}`}
+                        className="h-28 w-full object-cover group-hover:scale-105 transition-transform"
+                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                      <p className="text-[10px] text-[#5F5E5E] font-medium px-1.5 py-1 truncate bg-gray-50">
+                        {img.productName}
+                      </p>
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <div className="h-24 bg-gray-50 border border-gray-200 flex items-center justify-center text-[#5F5E5E] w-40">
+                  <span className="text-[10px] flex items-center gap-1 font-medium">
+                    <Camera size={13} /> ยังไม่มีรูปภาพแนบ
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
 
       </div>
-
     </div>
   );
 }

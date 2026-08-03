@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, Check, ChevronDown, X } from 'lucide-react';
 import type { Product } from '../../../../interface/import';
@@ -226,9 +226,8 @@ export default function ProductSearchSelect({
               </div>
             )}
 
-            {filteredList.map(({ product, score }) => {
+            {filteredList.map(({ product }) => {
               const isSelected = value === product.id;
-              const isHighMatch = score >= 0.4;
 
               return (
                 <div

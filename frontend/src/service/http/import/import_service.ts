@@ -176,7 +176,7 @@ export async function deleteBill(billId: number): Promise<any> {
   }
 }
 
-const MOCK_POS = [
+export const MOCK_POS = [
   {
     id: 101,
     order_number: 'PO-202607-001',

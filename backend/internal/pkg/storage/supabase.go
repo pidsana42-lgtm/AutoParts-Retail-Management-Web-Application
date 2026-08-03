@@ -1,0 +1,56 @@
+package storage
+
+import (
+	"bytes"
+	"fmt"
+	"net/http"
+	"os"
+
+	"github.com/joho/godotenv"
+)
+
+const claimEvidenceBucket = "G03-Capstone"
+
+// UploadToSupabase uploads raw bytes to a Supabase Storage bucket and returns the public URL.
+func UploadToSupabase(bucket, filename, mimeType string, data []byte) (string, error) {
+	_ = godotenv.Overload(".env", "../.env", "backend/.env")
+
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	serviceKey := os.Getenv("SUPABASE_SECRET_KEY")
+
+	if supabaseURL != "" && serviceKey != "" {
+		uploadURL := fmt.Sprintf("%s/storage/v1/object/%s/%s", supabaseURL, bucket, filename)
+
+		req, err := http.NewRequest(http.MethodPost, uploadURL, bytes.NewReader(data))
+		if err == nil {
+			req.Header.Set("Authorization", "Bearer "+serviceKey)
+			req.Header.Set("apikey", serviceKey)
+			req.Header.Set("Content-Type", mimeType)
+			req.Header.Set("x-upsert", "true")
+
+			resp, err := http.DefaultClient.Do(req)
+			if err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode < 400 {
+					publicURL := fmt.Sprintf("%s/storage/v1/object/public/%s/%s", supabaseURL, bucket, filename)
+					return publicURL, nil
+				}
+			}
+		}
+	}
+
+	// Fallback to local storage in ./uploads
+	if err := os.MkdirAll("./uploads", 0755); err != nil {
+		return "", fmt.Errorf("สร้างโฟลเดอร์ uploads ไม่ได้: %w", err)
+	}
+	filePath := "./uploads/" + filename
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return "", fmt.Errorf("บันทึกไฟล์ภาพไม่สำเร็จ: %w", err)
+	}
+	return "/uploads/" + filename, nil
+}
+
+// UploadClaimEvidence is a convenience wrapper for the claim-evidence bucket.
+func UploadClaimEvidence(filename, mimeType string, data []byte) (string, error) {
+	return UploadToSupabase(claimEvidenceBucket, filename, mimeType, data)
+}
