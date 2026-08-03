@@ -1,7 +1,15 @@
-import barcode
-from barcode.writer import ImageWriter
 import os
 import re
+
+try:
+    import barcode
+    from barcode.writer import ImageWriter
+except ImportError as exc:
+    raise ImportError(
+        "Barcode image generation requires the 'python-barcode[images]' package. "
+        "If the unrelated 'barcode' package is installed, uninstall it first: "
+        "python -m pip uninstall barcode; python -m pip install \"python-barcode[images]\""
+    ) from exc
 
 def generate_barcode(prod_id: int, wms_code: str, output_dir: str) -> str:
     """

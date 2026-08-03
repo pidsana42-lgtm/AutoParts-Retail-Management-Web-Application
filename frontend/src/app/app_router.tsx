@@ -28,6 +28,7 @@ import EmployeeImport from './employee/import';
 import EmployeePreOrder from './employee/pre-order';
 import EmployeeClaimsPage from './employee/claim/claims';
 import MobileScanPage from './mobile-scan/mobile_scan_page';
+import PublicProductPage from './public-product/public_product_page';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -137,6 +138,7 @@ export default function AppRouter(): React.JSX.Element {
 
       {/* หน้ามือถือสำหรับส่งรูปบิล — ไม่ต้อง login */}
       <Route path="/mobile-scan" element={<MobileScanPage />} />
+      <Route path="/product/:id" element={<PublicProductPage />} />
 
       {/* ถ้าพิมพ์ URL มั่ว ให้ดีดกลับหน้าล็อกอิน */}
       <Route path="*" element={<Navigate to="/login" replace />} />
