@@ -5,8 +5,10 @@ import type {
   SubCategory,
   SubSubCategory,
   Unit,
+  Grade,
   Zone,
   Shelf,
+  ShelfLevel,
   Brand,
   Model,
   Supplier
@@ -19,6 +21,7 @@ export type {
   Unit,
   Zone,
   Shelf,
+  ShelfLevel,
   Brand,
   Model,
   Supplier
@@ -99,6 +102,24 @@ export const stockDataService = {
     return res.data;
   },
 
+  // --- Grade APIs ---
+  getGrades: async (): Promise<Grade[]> => {
+    const res = await apiClient.get<any[]>("/wms/grades");
+    return res.data || [];
+  },
+  createGrade: async (data: Omit<Grade, "id">): Promise<any> => {
+    const res = await apiClient.post("/wms/grades", data);
+    return res.data;
+  },
+  updateGrade: async (id: number, data: Partial<Grade>): Promise<any> => {
+    const res = await apiClient.put(`/wms/grades/${id}`, data);
+    return res.data;
+  },
+  deleteGrade: async (id: number): Promise<any> => {
+    const res = await apiClient.delete(`/wms/grades/${id}`);
+    return res.data;
+  },
+
   // --- Zone APIs ---
   getZones: async (): Promise<Zone[]> => {
     const res = await apiClient.get<any[]>("/wms/zones");
@@ -132,6 +153,20 @@ export const stockDataService = {
   },
   deleteShelf: async (id: number): Promise<any> => {
     const res = await apiClient.delete(`/wms/shelves/${id}`);
+    return res.data;
+  },
+
+  // --- ShelfLevel APIs ---
+  createShelfLevel: async (data: Omit<ShelfLevel, "id">): Promise<any> => {
+    const res = await apiClient.post("/wms/shelf-levels", data);
+    return res.data;
+  },
+  updateShelfLevel: async (id: number, data: Partial<ShelfLevel>): Promise<any> => {
+    const res = await apiClient.put(`/wms/shelf-levels/${id}`, data);
+    return res.data;
+  },
+  deleteShelfLevel: async (id: number): Promise<any> => {
+    const res = await apiClient.delete(`/wms/shelf-levels/${id}`);
     return res.data;
   },
 
@@ -173,7 +208,7 @@ export const stockDataService = {
   createSupplier: async (data: Omit<Supplier, "id">): Promise<any> => {
     const res = await apiClient.post("/wms/suppliers", data);
     return res.data;
-  },
+  }, 
   updateSupplier: async (id: number, data: Partial<Supplier>): Promise<any> => {
     const res = await apiClient.put(`/wms/suppliers/${id}`, data);
     return res.data;

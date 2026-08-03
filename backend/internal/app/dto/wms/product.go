@@ -19,8 +19,10 @@ type ProductRequestDTO struct {
 	UnitID        uint  `json:"unit_id" binding:"required"`
 	CategoryID    uint  `json:"category_id" binding:"required"`
 	SubCategoryID *uint `json:"sub_category_id"`
+	SubSubCategoryID *uint `json:"sub_sub_category_id"`
 	GradeID       uint  `json:"grade_id" binding:"required"`
 	ShelfID       uint  `json:"shelf_id" binding:"required"`
+	ShelfLevelID  *uint `json:"shelf_level_id"`
 }
 
 func (r *ProductRequestDTO) ToEntity() entity.Product {
@@ -38,8 +40,10 @@ func (r *ProductRequestDTO) ToEntity() entity.Product {
 		UnitID:         r.UnitID,
 		CategoryID:     r.CategoryID,
 		SubCategoryID:  r.SubCategoryID,
+		SubSubCategoryID: r.SubSubCategoryID,
 		GradeID:        r.GradeID,
 		ShelfID:        r.ShelfID,
+		ShelfLevelID:   r.ShelfLevelID,
 	}
 }
 
@@ -60,9 +64,12 @@ type ProductListResponseDTO struct {
 		BrandName string `json:"brand_name"`
 	} `json:"models"`
 	CategoryName   string  `json:"category_name"`
+	SubCategoryName string `json:"sub_category_name"`
+	SubSubCategoryName string `json:"sub_sub_category_name"`
 	GradeName      string  `json:"grade_name"`
 	UnitName       string  `json:"unit_name"`
 	ShelfName      string  `json:"shelf_name"`
+	ShelfLevelName string  `json:"shelf_level_name"`
 	ThumbnailUrl   string  `json:"thumbnail_url"`
 	SupplierName   string  `json:"supplier_name"`
 	Note           string  `json:"note"`
@@ -101,12 +108,32 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 			BrandName: brandName,
 		})
 	}
-	d.CategoryName = p.Category.Category_Name
+	d.CategoryName = ""
+	if p.Category != nil {
+		d.CategoryName = p.Category.Category_Name
+	}
+	d.SubCategoryName = ""
+	if p.SubCategory != nil {
+		d.SubCategoryName = p.SubCategory.Sub_Category_Name
+	}
+	d.SubSubCategoryName = ""
+	if p.SubSubCategory != nil {
+		d.SubSubCategoryName = p.SubSubCategory.Sub_Sub_Category_Name
+	}
+
+	d.GradeName = ""
 	if p.Grade != nil {
 		d.GradeName = p.Grade.Grade_Name
 	}
 	d.UnitName = p.Unit.Unit_Name
-	d.ShelfName = p.Shelf.Shelf_Name
+	d.ShelfName = ""
+	if p.Shelf != nil {
+		d.ShelfName = p.Shelf.Shelf_Name
+	}
+	d.ShelfLevelName = ""
+	if p.ShelfLevel != nil {
+		d.ShelfLevelName = p.ShelfLevel.Level_Name
+	}
 	d.Note = p.Note
 
 	if len(p.ProductImages) > 0 {

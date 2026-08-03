@@ -3,6 +3,7 @@ import Modal from "../../../../components/elements/modal";
 import Input from "../../../../components/elements/input";
 import Select from "../../../../components/elements/select";
 import MultiSelect from "../../../../components/elements/multiselect";
+import Cascader, { type CascaderOption } from "../../../../components/elements/cascader";
 import Button from "../../../../components/elements/button";
 import { updateProduct } from "../../../../service/http/wms/product";
 import type { StockItem } from "../../../../interface/wms/product";
@@ -18,10 +19,10 @@ interface EditDataStockProps {
   onSuccess: () => void;
   product: StockItem | null;
   models: SelectOption[];
-  formCategories: SelectOption[];
+  categories: CascaderOption[];
   grades: SelectOption[];
   units: SelectOption[];
-  shelves: SelectOption[];
+  zones: CascaderOption[];
 }
 
 export default function EditDataStock({
@@ -30,10 +31,10 @@ export default function EditDataStock({
   onSuccess,
   product,
   models,
-  formCategories,
+  categories,
   grades,
   units,
-  shelves,
+  zones,
 }: EditDataStockProps) {
   const [formData, setFormData] = useState({
     product_code: "",
@@ -46,10 +47,10 @@ export default function EditDataStock({
     cost_price: 0,
     note: "",
     model_ids: [] as string[],
-    category_id: "",
+    category_path: [] as string[],
     grade_id: "",
     unit_id: "",
-    shelf_id: "",
+    zone_path: [] as string[],
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -69,10 +70,35 @@ export default function EditDataStock({
         });
       }
       
-      const matchedCategory = formCategories.find((c) => c.label.toUpperCase() === product.Category?.toUpperCase());
+      const categoryPath: string[] = [];
+      const matchedCat = categories.find(c => c.label.toUpperCase() === product.Category?.toUpperCase());
+      if (matchedCat) {
+        categoryPath.push(matchedCat.value);
+        const matchedSub = matchedCat.children?.find(c => c.label.toUpperCase() === product.SubCategory?.toUpperCase());
+        if (matchedSub) {
+          categoryPath.push(matchedSub.value);
+          const matchedSubSub = matchedSub.children?.find(c => c.label.toUpperCase() === product.SubSubCategory?.toUpperCase());
+          if (matchedSubSub) {
+            categoryPath.push(matchedSubSub.value);
+          }
+        }
+      }
+
       const matchedGrade = grades.find((g) => g.label.toUpperCase() === product.Grade?.toUpperCase());
       const matchedUnit = units.find((u) => u.label.toUpperCase() === product.Unit?.toUpperCase());
-      const matchedShelf = shelves.find((s) => s.label.toUpperCase() === product.Shelf?.toUpperCase());
+      const zonePath: string[] = [];
+      for (const z of zones) {
+        const matchedShelfNode = z.children?.find(s => s.label.toUpperCase() === product.Shelf?.toUpperCase());
+        if (matchedShelfNode) {
+          zonePath.push(z.value);
+          zonePath.push(matchedShelfNode.value);
+          const matchedLevelNode = matchedShelfNode.children?.find(l => l.label.toUpperCase() === product.ShelfLevel?.toUpperCase());
+          if (matchedLevelNode) {
+            zonePath.push(matchedLevelNode.value);
+          }
+          break;
+        }
+      }
 
       setFormData({
         product_code: product.ProductCode || "",
@@ -85,29 +111,30 @@ export default function EditDataStock({
         cost_price: product.CostPrice || 0,
         note: product.Note || "",
         model_ids: matchedModelIds,
-        category_id: matchedCategory ? matchedCategory.value : "",
+        category_path: categoryPath,
         grade_id: matchedGrade ? matchedGrade.value : "",
         unit_id: matchedUnit ? matchedUnit.value : "",
-        shelf_id: matchedShelf ? matchedShelf.value : "",
+        zone_path: zonePath,
       });
     }
-  }, [isOpen, product, models, formCategories, grades, units, shelves]);
+  }, [isOpen, product, models, categories, grades, units, zones]);
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!product) return;
 
     try {
-      if (
-        !formData.product_code ||
-        !formData.product_name ||
-        formData.model_ids.length === 0 ||
-        !formData.category_id ||
-        !formData.grade_id ||
-        !formData.unit_id ||
-        !formData.shelf_id
-      ) {
-        alert("กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน");
+      const missingFields: string[] = [];
+      if (!formData.product_code) missingFields.push("รหัสสินค้า (Code)");
+      if (!formData.product_name) missingFields.push("ชื่อสินค้า (Name)");
+      if (formData.model_ids.length === 0) missingFields.push("รุ่นรถ (Models)");
+      if (formData.category_path.length < 2) missingFields.push("หมวดหมู่สินค้า (ระบุให้ครบ 3 ระดับ)");
+      if (!formData.grade_id) missingFields.push("เกรดสินค้า");
+      if (!formData.unit_id) missingFields.push("หน่วยนับ");
+      if (formData.zone_path.length < 2) missingFields.push("ตำแหน่งจัดเก็บ (เลือกอย่างน้อยถึงระดับตู้)");
+
+      if (missingFields.length > 0) {
+        alert("กรุณากรอกข้อมูลหรือเลือกรายการต่อไปนี้ให้ครบถ้วน:\n- " + missingFields.join("\n- "));
         return;
       }
 
@@ -119,10 +146,13 @@ export default function EditDataStock({
         sale_price: Number(formData.sale_price),
         cost_price: Number(formData.cost_price),
         model_ids: formData.model_ids.map(Number),
-        category_id: Number(formData.category_id),
+        category_id: formData.category_path[0] ? Number(formData.category_path[0].split("-").pop()) : 0,
+        sub_category_id: formData.category_path[1] ? Number(formData.category_path[1].split("-").pop()) : null,
+        sub_sub_category_id: formData.category_path[2] ? Number(formData.category_path[2].split("-").pop()) : null,
         grade_id: Number(formData.grade_id),
         unit_id: Number(formData.unit_id),
-        shelf_id: Number(formData.shelf_id),
+        shelf_id: Number(formData.zone_path[1]),
+        shelf_level_id: formData.zone_path[2] ? Number(formData.zone_path[2]) : null,
       };
 
       await updateProduct(product.ID, payload);
@@ -192,7 +222,7 @@ export default function EditDataStock({
             placeholder="เช่น 870"
           />
           <Input
-            label="จำนวนเริ่มต้น (Quantity)"
+            label="จำนวนสินค้า (Quantity)"
             type="number"
             value={formData.quantity || ""}
             onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
@@ -216,13 +246,14 @@ export default function EditDataStock({
             value={formData.model_ids}
             onChange={(values) => setFormData({ ...formData, model_ids: values })}
           />
-          <Select
-            label="ประเภทสินค้า"
+          <Cascader
+            label="หมวดหมู่สินค้า"
             required
-            options={formCategories}
-            placeholder="เลือกประเภท"
-            value={formData.category_id}
-            onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+            options={categories}
+            placeholder="เลือกหมวดหมู่ย่อย"
+            value={formData.category_path}
+            onChange={(val) => setFormData({ ...formData, category_path: val })}
+            changeOnSelect={true}
           />
           <Select
             label="เกรดสินค้า"
@@ -240,13 +271,14 @@ export default function EditDataStock({
             value={formData.unit_id}
             onChange={(e) => setFormData({ ...formData, unit_id: e.target.value })}
           />
-          <Select
-            label="ชั้นวาง (Shelf)"
+          <Cascader
+            label="ตำแหน่งจัดเก็บ (โซน > ตู้ > ชั้นระดับ)"
             required
-            options={shelves}
-            placeholder="เลือกชั้นวาง"
-            value={formData.shelf_id}
-            onChange={(e) => setFormData({ ...formData, shelf_id: e.target.value })}
+            options={zones}
+            placeholder="เลือกโซน/ตู้/ชั้นระดับ"
+            value={formData.zone_path}
+            onChange={(val) => setFormData({ ...formData, zone_path: val })}
+            changeOnSelect={true}
           />
         </div>
 

@@ -27,7 +27,7 @@ func (r *shelfRepository) Create(shelf *entity.Shelf) error {
 
 func (r *shelfRepository) GetByID(id uint) (*entity.Shelf, error) {
 	var shelf entity.Shelf
-	err := r.db.First(&shelf, id).Error
+	err := r.db.Preload("ShelfLevels").First(&shelf, id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func (r *shelfRepository) GetByID(id uint) (*entity.Shelf, error) {
 
 func (r *shelfRepository) List() ([]entity.Shelf, error) {
 	var list []entity.Shelf
-	return list, r.db.Order("created_at desc").Find(&list).Error
+	return list, r.db.Preload("ShelfLevels").Order("created_at desc").Find(&list).Error
 }
 
 func (r *shelfRepository) Update(shelf *entity.Shelf) error {

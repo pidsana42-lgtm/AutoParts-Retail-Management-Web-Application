@@ -65,10 +65,22 @@ func (s *shelfService) Update(id uint, req *wmsDto.ShelfUpdateDTO) error {
 }
 
 func toShelfResponse(shelf *entity.Shelf) *wmsDto.ShelfResponseDTO {
+	var levels []wmsDto.ShelfLevelResponseDTO
+	for _, l := range shelf.ShelfLevels {
+		levels = append(levels, wmsDto.ShelfLevelResponseDTO{
+			ID:         l.ID,
+			Level_Name: l.Level_Name,
+			ShelfID:    l.ShelfID,
+		})
+	}
+	if levels == nil {
+		levels = []wmsDto.ShelfLevelResponseDTO{}
+	}
 	return &wmsDto.ShelfResponseDTO{
-		ID:         shelf.ID,
-		Shelf_Name: shelf.Shelf_Name,
-		ZoneID:     shelf.ZoneID,
+		ID:          shelf.ID,
+		Shelf_Name:  shelf.Shelf_Name,
+		ZoneID:      shelf.ZoneID,
+		ShelfLevels: levels,
 	}
 }
 

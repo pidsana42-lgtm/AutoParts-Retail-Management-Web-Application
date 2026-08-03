@@ -5,7 +5,7 @@ import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
-import type { Zone } from "../../../../../interface/wms/stock_data";
+import type { Zone, Shelf } from "../../../../../interface/wms/stock_data";
 
 interface AddZoneShelfModalProps {
   isOpen: boolean;
@@ -26,6 +26,7 @@ export default function AddZoneShelfModal({
 }: AddZoneShelfModalProps) {
   const { toast } = useToast();
   const [mode, setMode] = useState<"new_zone" | "existing_zone">(defaultMode);
+  const [shelvesList, setShelvesList] = useState<Shelf[]>([]);
 
   // Zone input
   const [zoneName, setZoneName] = useState("");
@@ -34,6 +35,12 @@ export default function AddZoneShelfModal({
   const [shelfForm, setShelfForm] = useState({
     shelf_name: "",
     zone_id: 0,
+  });
+
+  // Level inputs
+  const [levelForm, setLevelForm] = useState({
+    level_name: "",
+    shelf_id: 0,
   });
 
   useEffect(() => {
@@ -46,6 +53,30 @@ export default function AddZoneShelfModal({
       zone_id: initialZoneId || (zones[0]?.id || 0),
     }));
   }, [initialZoneId, zones, isOpen]);
+
+  // Load shelves for the "existing_zone" mode to populate level dropdown
+  useEffect(() => {
+    const loadShelves = async () => {
+      try {
+        const shlvs = await stockDataService.getShelves();
+        setShelvesList(shlvs);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    if (isOpen) loadShelves();
+  }, [isOpen]);
+
+  // When zone_id changes in existing_zone mode, reset shelf_id for level
+  useEffect(() => {
+    if (mode === "existing_zone") {
+      const availableShelves = shelvesList.filter(s => s.zone_id === shelfForm.zone_id);
+      setLevelForm(prev => ({
+        ...prev,
+        shelf_id: availableShelves[0]?.id || 0,
+      }));
+    }
+  }, [shelfForm.zone_id, shelvesList, mode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,28 +103,68 @@ export default function AddZoneShelfModal({
               shelf_name: shelfForm.shelf_name,
               zone_id: newZone.id,
             });
+
+            // If level is also filled, create it
+            if (levelForm.level_name.trim()) {
+              const updatedShelves = await stockDataService.getShelves();
+              const newShelf = updatedShelves.find(
+                (s) => s.shelf_name.trim().toLowerCase() === shelfForm.shelf_name.trim().toLowerCase()
+                  && s.zone_id === newZone.id
+              );
+              if (newShelf) {
+                await stockDataService.createShelfLevel({
+                  level_name: levelForm.level_name,
+                  shelf_id: newShelf.id,
+                });
+              }
+            }
           }
         }
 
         toast({ variant: "success", message: "บันทึกข้อมูลโซนสินค้าสำเร็จ" });
       } else {
-        // Adding shelf to existing zone
+        // Adding shelf/level to existing zone
         if (!shelfForm.zone_id) {
           toast({ variant: "error", message: "กรุณาเลือกโซนสินค้าหลัก" });
           return;
         }
-        if (!shelfForm.shelf_name.trim()) {
-          toast({ variant: "error", message: "กรุณากรอกชื่อชั้นวาง" });
+
+        // If shelf name is filled, create shelf
+        if (shelfForm.shelf_name.trim()) {
+          await stockDataService.createShelf(shelfForm);
+
+          // If level is also filled, create it under the new shelf
+          if (levelForm.level_name.trim()) {
+            const updatedShelves = await stockDataService.getShelves();
+            const newShelf = updatedShelves.find(
+              (s) => s.shelf_name.trim().toLowerCase() === shelfForm.shelf_name.trim().toLowerCase()
+                && s.zone_id === shelfForm.zone_id
+            );
+            if (newShelf) {
+              await stockDataService.createShelfLevel({
+                level_name: levelForm.level_name,
+                shelf_id: newShelf.id,
+              });
+            }
+          }
+          toast({ variant: "success", message: "เพิ่มตู้วางสินค้าสำเร็จ" });
+        } else if (levelForm.level_name.trim() && levelForm.shelf_id) {
+          // Only adding level to existing shelf
+          await stockDataService.createShelfLevel({
+            level_name: levelForm.level_name,
+            shelf_id: levelForm.shelf_id,
+          });
+          toast({ variant: "success", message: "เพิ่มชั้นระดับสำเร็จ" });
+        } else {
+          toast({ variant: "error", message: "กรุณากรอกข้อมูลอย่างน้อย 1 รายการ" });
           return;
         }
-
-        await stockDataService.createShelf(shelfForm);
-        toast({ variant: "success", message: "เพิ่มชั้นวางสินค้าสำเร็จ" });
       }
 
-      // Reset
+      // Reset forms
       setZoneName("");
       setShelfForm({ shelf_name: "", zone_id: zones[0]?.id || 0 });
+      setLevelForm({ level_name: "", shelf_id: 0 });
       onSuccess();
       onClose();
     } catch (err) {
@@ -101,8 +172,12 @@ export default function AddZoneShelfModal({
     }
   };
 
+  const availableShelves = shelvesList.filter(
+    (s) => s.zone_id === shelfForm.zone_id
+  );
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="จัดการโซน & ชั้นวางสินค้า">
+    <Modal isOpen={isOpen} onClose={onClose} title="จัดการโซน & ตู้ & ชั้นระดับ">
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Toggle Mode */}
         <div className="flex bg-slate-100 p-1 rounded-sm border border-slate-200">
@@ -151,17 +226,42 @@ export default function AddZoneShelfModal({
           </div>
         )}
 
-        {/* Shelf Fields (Optional for new zone, Required for existing zone) */}
         <div className="space-y-4 pt-2">
           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            ข้อมูลชั้นวางสินค้า {mode === "new_zone" && "(ไม่บังคับใส่)"}
+            ตู้วางสินค้า {mode === "existing_zone" ? "(กรอกเมื่อต้องการสร้างตู้ใหม่)" : "(ไม่บังคับใส่)"}
           </h4>
           <Input
-            label="ชื่อชั้นวาง/ตำแหน่ง"
-            required={mode === "existing_zone"}
+            label="ชื่อตู้วางสินค้า"
             value={shelfForm.shelf_name}
             onChange={(e) => setShelfForm({ ...shelfForm, shelf_name: e.target.value })}
             placeholder="เช่น A-01, A-02..."
+          />
+        </div>
+
+        {mode === "existing_zone" && !shelfForm.shelf_name.trim() && (
+          <div className="space-y-4 pt-4 border-t border-slate-100">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              เพิ่มชั้นระดับลงในตู้ที่มีอยู่แล้ว
+            </h4>
+            <Select
+              label="เลือกตู้วางสินค้า"
+              options={availableShelves.map((s) => ({ label: s.shelf_name, value: String(s.id) }))}
+              value={String(levelForm.shelf_id)}
+              onChange={(e) => setLevelForm({ ...levelForm, shelf_id: Number(e.target.value) })}
+              disabled={availableShelves.length === 0}
+            />
+          </div>
+        )}
+
+        <div className="space-y-4 pt-2">
+          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            ชั้นระดับ {mode === "existing_zone" && !shelfForm.shelf_name.trim() ? "" : "(ไม่บังคับใส่)"}
+          </h4>
+          <Input
+            label="ชื่อชั้นระดับ"
+            value={levelForm.level_name}
+            onChange={(e) => setLevelForm({ ...levelForm, level_name: e.target.value })}
+            placeholder="เช่น ชั้นที่ 1, L1..."
           />
         </div>
 

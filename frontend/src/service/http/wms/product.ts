@@ -12,6 +12,8 @@ export const getProductsList = async (): Promise<StockItem[]> => {
     Barcode: item.barcode || "",
     Models: item.models || [],
     Category: item.category_name || "",
+    SubCategory: item.sub_category_name || "",
+    SubSubCategory: item.sub_sub_category_name || "",
     Grade: item.grade_name || "A",
     Stock: item.quantity || 0,
     MinStock: item.limit_quantity || 0,
@@ -20,6 +22,7 @@ export const getProductsList = async (): Promise<StockItem[]> => {
     Note: item.note || "",
     Unit: item.unit_name || "",
     Shelf: item.shelf_name || "",
+    ShelfLevel: item.shelf_level_name || "",
     Supplier: item.supplier_name || "",
   }));
 };
