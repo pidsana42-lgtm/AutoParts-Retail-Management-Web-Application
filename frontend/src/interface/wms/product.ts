@@ -13,6 +13,7 @@ export interface StockItem {
   MinStock: number;
   Price: number;
   CostPrice: number;
+  ThumbnailUrl?: string;
   Note: string;
   Unit?: string;
   Shelf?: string;

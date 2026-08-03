@@ -1,8 +1,8 @@
 package wms
 
 import (
-	"log"
 	"backend/internal/app/entity"
+	"log"
 
 	"gorm.io/gorm"
 )
@@ -12,6 +12,7 @@ type ProductRepository interface {
 	GetProductByID(id uint) (*entity.Product, error)
 	UpdateProduct(product *entity.Product) error
 	DeleteProduct(id uint) error
+	CreateProductImage(image *entity.ProductImage) error
 	ListProducts() ([]entity.Product, error)
 	ListBrands() ([]entity.Brand, error)
 	CreateBrand(brand *entity.Brand) error
@@ -21,8 +22,6 @@ type ProductRepository interface {
 	CreateModel(model *entity.Models) error
 	UpdateModel(model *entity.Models) error
 	DeleteModel(id uint) error
-
-
 }
 
 type productRepository struct {
@@ -39,7 +38,11 @@ func (r *productRepository) CreateProduct(product *entity.Product) error {
 
 func (r *productRepository) GetProductByID(id uint) (*entity.Product, error) {
 	var product entity.Product
-	err := r.db.Preload("Models").Preload("Models.Brand").Preload("Category").Preload("SubCategory").Preload("SubSubCategory").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ProductImages").Preload("Inventories.Supplier").
+	err := r.db.Preload("Models").Preload("Models.Brand").Preload("Category").Preload("SubCategory").Preload("SubSubCategory").Preload("Grade").Preload("Unit").Preload("Shelf").
+		Preload("ProductImages", func(db *gorm.DB) *gorm.DB {
+			return db.Order("product_images.created_at DESC")
+		}).
+		Preload("Inventories.Supplier").
 		First(&product, id).Error
 	if err != nil {
 		return nil, err
@@ -65,9 +68,17 @@ func (r *productRepository) DeleteProduct(id uint) error {
 	return r.db.Delete(&entity.Product{}, id).Error
 }
 
+func (r *productRepository) CreateProductImage(image *entity.ProductImage) error {
+	return r.db.Create(image).Error
+}
+
 func (r *productRepository) ListProducts() ([]entity.Product, error) {
 	var products []entity.Product
-	err := r.db.Preload("Models").Preload("Models.Brand").Preload("Category").Preload("SubCategory").Preload("SubSubCategory").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ShelfLevel").Preload("ProductImages").Preload("Inventories.Supplier").
+	err := r.db.Preload("Models").Preload("Models.Brand").Preload("Category").Preload("SubCategory").Preload("SubSubCategory").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ShelfLevel").
+		Preload("ProductImages", func(db *gorm.DB) *gorm.DB {
+			return db.Order("product_images.created_at DESC")
+		}).
+		Preload("Inventories.Supplier").
 		Find(&products).Error
 	return products, err
 }
