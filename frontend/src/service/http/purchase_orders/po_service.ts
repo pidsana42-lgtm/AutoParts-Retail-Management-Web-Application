@@ -11,7 +11,7 @@ export const poService = {
       const queryParams: Record<string, any> = { page: params.page, limit: params.limit };
       if (params.status && params.status !== "all") queryParams.status = params.status;
       if (params.search) queryParams.search = params.search;
-      if (params.date) queryParams.date = params.date;
+      if (params.month) queryParams.month = params.month;
       const response = await apiClient.get<GetPOsResponse>('/po/get-all-po', { params: queryParams });
       return response.data;
     } catch (error) {

@@ -18,7 +18,7 @@ import type { POResponse, POSummaryResponse } from "../../../interface/purchase_
 import { poService } from "../../../service/http/purchase_orders/po_service";
 // Utils
 import { cn } from "../../../utils/component";
-import { formatDate } from "../../../utils/formatdate";
+import { formatDate, getThaiMonthOptions, getYearOptions } from "../../../utils/formatdate";
 import { generateLocalId } from "../../../utils/generateId";
 import { usePathBasePrefix  } from "../../../utils/usePathBasePrefix";
 
@@ -243,7 +243,10 @@ const PurchaseOrders: React.FC = () => {
   // 2. States สำหรับ Filter
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchId, setSearchId] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
+  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
+  const [monthFilter, setMonthFilter] = useState(`${selectedYear}-${selectedMonth}`);
 
   // 3. States สำหรับ Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -252,6 +255,11 @@ const PurchaseOrders: React.FC = () => {
   // 4. States สำหรับเช็คสิทธิ์ดู Summary Card
   const userRole = localStorage.getItem('role');
   const isOwner = userRole === 'Owner';
+
+  // Dropdown เดือนหรือปีเปลี่ยน ให้อัปเดต monthFilter
+  useEffect(() => {
+    setMonthFilter(`${selectedYear}-${selectedMonth}`);
+  }, [selectedMonth, selectedYear]);
 
   // ดึงข้อมูล PO ทั้งหมดของ User
   useEffect(() => {
@@ -265,7 +273,7 @@ const PurchaseOrders: React.FC = () => {
           limit: itemsPerPage,
           status: statusFilter,
           search: searchId,
-          date: dateFilter,
+          month: monthFilter,
         });
 
         setOrders(response.data || []);
@@ -284,7 +292,7 @@ const PurchaseOrders: React.FC = () => {
     }, searchId ? 400 : 0);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [currentPage, itemsPerPage, statusFilter, searchId, dateFilter]);
+  }, [currentPage, itemsPerPage, statusFilter, searchId, monthFilter]);
 
   // ดึงจำนวน PO เดือนนี้ — ทุก role เห็นได้ ไม่ขึ้นกับ isOwner
   useEffect(() => {
@@ -336,8 +344,9 @@ const PurchaseOrders: React.FC = () => {
             <CardTitle className="text-base text-black">ค้นหาใบสั่งซื้อด้วย</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-4 items-end">
-              <Input
+            <div className="grid grid-cols-5 gap-4 items-end">
+              <div className="col-span-2">
+                <Input
                   label="หมายเลขใบสั่งซื้อ"
                   placeholder="PO-XXXX-XXXX"
                   value={searchId}
@@ -346,24 +355,34 @@ const PurchaseOrders: React.FC = () => {
                     setCurrentPage(1);
                   }}
                 />
-                <Select
-                  label="สถานะใบสั่งซื้อ"
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  options={PO_STATUS_OPTIONS}
-                />
-                <Input
-                  type="date"
-                  label="วันที่สั่งซื้อ"
-                  value={dateFilter}
-                  onChange={(e) => {
-                    setDateFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                />
+              </div>
+              <Select
+                label="สถานะใบสั่งซื้อ"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                options={PO_STATUS_OPTIONS}
+              />
+              <Select
+                label="เดือนที่สั่งซื้อ"
+                value={selectedMonth}
+                onChange={(e) => {
+                  setSelectedMonth(e.target.value);
+                  setCurrentPage(1);
+                }}
+                options={getThaiMonthOptions()}
+              />
+              <Select
+                label="ปีที่สั่งซื้อ"
+                value={selectedYear}
+                onChange={(e) => {
+                  setSelectedYear(e.target.value);
+                  setCurrentPage(1);
+                }}
+                options={getYearOptions()}
+              />
             </div>
           </CardContent>
         </Card>

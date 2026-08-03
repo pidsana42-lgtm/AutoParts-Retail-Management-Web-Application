@@ -101,10 +101,17 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 	// หัวตาราง
 	m.Row(8, func() {
 		m.Col(1, func() { m.Text("ลำดับ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Center}) })
-		m.Col(1, func() { m.Text("ประเภท", props.Text{Size: 11, Style: consts.Bold, Align: consts.Center})})
-		m.Col(4, func() { m.Text("ชื่อสินค้า", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left}) })
+		if includeCode {
+			m.Col(1, func() { m.Text("รหัสสินค้า", props.Text{Size: 11, Style: consts.Bold, Align: consts.Center}) })
+		}
+		m.Col(1, func() { m.Text("ประเภท", props.Text{Size: 11, Style: consts.Bold, Align: consts.Center}) })
+		var colName uint = 4
+		if includeCode {
+			colName = 3
+		}
+		m.Col(colName, func() { m.Text("ชื่อสินค้า", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left}) })
 		m.Col(1, func() { m.Text("จำนวนต่อหน่วย", props.Text{Size: 11, Style: consts.Bold, Align: consts.Right}) })
-		m.Col(1, func() { m.Text("หน่วย", props.Text{Size: 11, Style: consts.Bold, Align: consts.Right})})
+		m.Col(1, func() { m.Text("หน่วย", props.Text{Size: 11, Style: consts.Bold, Align: consts.Right}) })
 		m.Col(2, func() { m.Text("ราคาต่อหน่วย", props.Text{Size: 11, Style: consts.Bold, Align: consts.Right}) })
 		m.Col(2, func() { m.Text("มูลค่ารวม", props.Text{Size: 11, Style: consts.Bold, Align: consts.Right}) })
 	})

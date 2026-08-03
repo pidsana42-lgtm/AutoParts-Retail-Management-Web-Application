@@ -9,4 +9,5 @@ const (
 	StatusRejected POStatus = "REJECTED"
 	StatusExpired  POStatus = "EXPIRED"
 	StatusDeleted  POStatus = "DELETED"
+	StatusResubmitted POStatus = "RESUBMITTED"
 )

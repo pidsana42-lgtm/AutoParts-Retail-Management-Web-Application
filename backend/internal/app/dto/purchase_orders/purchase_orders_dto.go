@@ -16,7 +16,7 @@ type POItemDTO struct {
 
 type CreatePurchaseOrderRequest struct {
 	SupplierID			uint			`json:"supplier_id" binding:"required"`
-	POTypeID 			uint			`json:"po_type_id" binding:"required"`
+	Notes				*string			`json:"notes" binding:"required"`
 	Status				poEnum.POStatus	`json:"status" binding:"required,oneof=DRAFT PENDING"`
 	POItems				[]POItemDTO 	`json:"po_items" binding:"required,gt=0"`
 }
@@ -73,7 +73,8 @@ type ListPOQuery struct {
 	Limit  int    `form:"limit"`
 	Status string `form:"status"` // เช่น PENDING, APPROVED
 	Search string `form:"search"` // ค้นหาด้วย po_number
-	Date   string `form:"date"`   // ค้นหาด้วยวันที่สร้าง
+	Month  string `form:"month"`  // ค้นหาด้วยเดือน
+	Year   string `form:"year"`	  // ค้นหาด้วยปี
 }
 
 // Struct สำหรับตอบกลับ (ตรงกับที่ Frontend รอรับ)

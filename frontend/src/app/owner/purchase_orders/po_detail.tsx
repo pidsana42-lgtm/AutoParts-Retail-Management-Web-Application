@@ -9,6 +9,7 @@ import { Building2, ChevronRight, ClipboardClock, FileText, User, Trash2, Minus,
 import Heading from '../../../components/elements/heading';
 import Badge from '../../../components/elements/badge';
 import Card from '../../../components/elements/card';
+import Input from '../../../components/elements/input';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '../../../components/elements/table';
 import Button from '../../../components/elements/button';
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
@@ -78,6 +79,7 @@ function OrderDetail() {
     const [po, setPo] = useState<POResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isEditingNotes, setIsEditingNotes] = useState(false);
     const [notes, setNotes] = useState('');
     const [items, setItems] = useState<LocalPOItem[]>([]);
     const [activeAction, setActiveAction] = useState<'draft' | 'submit' | 'approve' | 'resubmitted' | 'restore' | null>(null);
@@ -104,19 +106,19 @@ function OrderDetail() {
     
     useEffect(() => {
         if (po) {
-        setNotes(po.notes ?? '');
-        setItems(po.po_items as LocalPOItem[]);
-        setInitialItemIds(new Set(po.po_items.map(item => item.id)));
+            setNotes(po.notes ?? '');
+            setItems(po.po_items as LocalPOItem[]);
+            setInitialItemIds(new Set(po.po_items.map(item => item.id)));
         }
     }, [po]);
 
     useEffect(() => {
         if (!id) return;
-        setLoading(true);
-        poService.getPurchaseOrderById(id)
-        .then(setPo)
-        .catch(() => setError('ไม่สามารถโหลดข้อมูลใบสั่งซื้อได้'))
-        .finally(() => setLoading(false));
+            setLoading(true);
+            poService.getPurchaseOrderById(id)
+            .then(setPo)
+            .catch(() => setError('ไม่สามารถโหลดข้อมูลใบสั่งซื้อได้'))
+            .finally(() => setLoading(false));
     }, [id]);
 
     useEffect(() => {
@@ -402,10 +404,32 @@ function OrderDetail() {
                         </div>
                         <div>
                             <Heading level='p' weight='normal'>หมายเหตุจากพนักงาน</Heading>
-                            <div className='bg-[#E5E2E1] px-3'>
-                                <Heading level='p' className='leading-relaxed'>
-                                    {notes ? `" ${notes} "` : '-'}
-                                </Heading>
+                            <div className='bg-[#E5E2E1] px-3 flex items-center justify-between rounded-sm min-h-10'>
+                                {!isEditingNotes ? (
+                                    <>
+                                        <Heading level='p' className="truncate mr-2">
+                                            {notes || '-'}
+                                        </Heading>                                        
+                                        {(po.status === 'DRAFT' || po.status === 'RESUBMITTED') && (
+                                            <span 
+                                                className='text-[#6B7280] hover:text-black cursor-pointer text-sm font-medium shrink-0'
+                                                onClick={() => setIsEditingNotes(true)}
+                                            >
+                                                แก้ไข
+                                            </span>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className='w-full flex-1 p-0'>
+                                        <Input
+                                            value={notes}
+                                            onChange={(e) => setNotes(e.target.value)}
+                                            placeholder='พิมพ์ข้อความหมายเหตุที่นี่..'
+                                            className='bg-transparent'
+                                            min={255}
+                                        />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
