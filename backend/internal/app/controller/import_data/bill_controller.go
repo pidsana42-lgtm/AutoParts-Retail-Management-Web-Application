@@ -271,6 +271,11 @@ func (ctrl *BillController) UploadMobileImage(c *gin.Context) {
 
 	dir := filepath.Join("uploads", "mobile-tmp", session)
 	_ = os.MkdirAll(dir, 0755)
+
+	// Save local backup file copy
+	localFilePath := filepath.Join(dir, rawFilename)
+	_ = os.WriteFile(localFilePath, fileBytes, 0644)
+
 	urlListPath := filepath.Join(dir, "urls.txt")
 	f, errOpen := os.OpenFile(urlListPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if errOpen == nil {
@@ -304,7 +309,9 @@ func (ctrl *BillController) GetMobileImages(c *gin.Context) {
 				urls = append(urls, trimmed)
 			}
 		}
-	} else {
+	}
+
+	if len(urls) == 0 {
 		entries, errDir := os.ReadDir(dir)
 		if errDir == nil {
 			for _, entry := range entries {
