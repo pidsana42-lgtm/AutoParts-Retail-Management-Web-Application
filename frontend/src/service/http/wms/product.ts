@@ -101,8 +101,24 @@ export const createProduct = async (data: any): Promise<any> => {
 export const uploadProductImage = async (productId: number, file: File): Promise<any> => {
   const formData = new FormData();
   formData.append("image", file);
-  const response = await apiClient.post(`/wms/products/${productId}/images`, formData);
-  return response.data;
+
+  // ใช้ fetch แทน Axios เพื่อให้บราวเซอร์ตั้งค่า multipart/form-data boundary ให้อัตโนมัติ
+  // ใช้ baseURL จาก apiClient เพื่อรองรับทั้ง local (ผ่าน Vite proxy) และบน cloud (port 8080 ตรงๆ)
+  const token = localStorage.getItem("token");
+  const baseURL = apiClient.defaults.baseURL || "http://localhost:8080/api";
+  const url = `${baseURL}/wms/products/${productId}/images`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: "Upload failed" }));
+    throw new Error(err.error || "Upload failed");
+  }
+  return response.json();
 };
 
 export const updateProduct = async (id: number, data: any): Promise<any> => {

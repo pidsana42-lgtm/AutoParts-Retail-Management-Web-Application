@@ -5,6 +5,7 @@ import Select from "../../../../components/elements/select";
 import MultiSelect from "../../../../components/elements/multiselect";
 import Cascader, { type CascaderOption } from "../../../../components/elements/cascader";
 import Button from "../../../../components/elements/button";
+import ImageUploader from "../../../../components/elements/image_uploader";
 import { updateProduct, uploadProductImage } from "../../../../service/http/wms/product";
 import type { StockItem } from "../../../../interface/wms/product";
 
@@ -64,12 +65,13 @@ export default function EditDataStock({
     return () => URL.revokeObjectURL(previewUrl);
   }, [imageFile]);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
+  const handleImageChange = (file: File) => {
     setImageFile(file);
-    if (!file) {
-      setImagePreview(product?.ThumbnailUrl || "");
-    }
+  };
+
+  const handleImageClear = () => {
+    setImageFile(null);
+    setImagePreview(product?.ThumbnailUrl || "");
   };
 
   useEffect(() => {
@@ -317,23 +319,11 @@ export default function EditDataStock({
           placeholder="เช่น รุ่นรถที่รองรับ หรือรายละเอียดเพิ่มเติม"
         />
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[160px_1fr] sm:items-center">
-          <div className="h-32 w-full overflow-hidden rounded-md border border-slate-200 bg-slate-50 sm:h-28">
-            {imagePreview ? (
-              <img src={imagePreview} alt="ตัวอย่างรูปสินค้า" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full items-center justify-center text-xs text-slate-400">
-                รูปสินค้า
-              </div>
-            )}
-          </div>
-          <Input
-            label="อัปโหลดรูปสินค้า"
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
-            onChange={handleImageChange}
-          />
-        </div>
+        <ImageUploader
+          preview={imagePreview}
+          onChange={handleImageChange}
+          onClear={handleImageClear}
+        />
 
         <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
           <Button
