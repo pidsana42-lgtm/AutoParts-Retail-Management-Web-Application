@@ -12,4 +12,5 @@ type SubCategory struct {
 
 	Category *Category `gorm:"foreignKey:CategoryID" json:"category"`
 
+	SubSubCategories []SubSubCategory `gorm:"foreignKey:SubCategoryID" json:"sub_sub_categories"`
 }

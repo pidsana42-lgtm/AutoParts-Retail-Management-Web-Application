@@ -3,7 +3,8 @@ package wms
 type ShelfResponseDTO struct {
 	ID         uint   `json:"id"`
 	Shelf_Name string `json:"shelf_name"`
-	ZoneID     uint   `json:"zone_id"`
+	ZoneID     uint                    `json:"zone_id"`
+	ShelfLevels []ShelfLevelResponseDTO `json:"shelf_levels"`
 }
 
 type ShelfRequestDTO struct {

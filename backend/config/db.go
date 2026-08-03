@@ -89,6 +89,7 @@ func SetupDatabase() {
 		&entity.SubSubCategory{},
 		&entity.Grade{},
 		&entity.Shelf{},
+		&entity.ShelfLevel{},
 		&entity.Zone{},
 		&entity.Brand{},
 		&entity.Models{},

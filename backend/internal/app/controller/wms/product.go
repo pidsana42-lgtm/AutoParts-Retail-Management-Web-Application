@@ -1,6 +1,7 @@
 package wms
 
 import (
+	"log"
 	"net/http"
 
 	wmsDto "backend/internal/app/dto/wms"
@@ -59,6 +60,14 @@ func (ctrl *ProductController) UpdateProduct(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	log.Printf("[DEBUG] UpdateProduct Controller - Received payload: %+v", req)
+	if req.SubCategoryID != nil {
+		log.Printf("[DEBUG] SubCategoryID is: %d", *req.SubCategoryID)
+	} else {
+		log.Printf("[DEBUG] SubCategoryID is nil!")
+	}
+
 	if err := ctrl.service.UpdateProduct(uri.ID, &req); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -99,14 +108,6 @@ func (ctrl *ProductController) ListBrands(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-func (ctrl *ProductController) ListGrades(c *gin.Context) {
-	res, err := ctrl.service.ListGrades()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, res)
-}
 
 func (ctrl *ProductController) CreateBrand(c *gin.Context) {
 	var req wmsDto.BrandRequestDTO

@@ -29,7 +29,7 @@ type ProductService interface {
 	UpdateModel(id uint, req *wmsDto.ModelRequestDTO) error
 	DeleteModel(id uint) error
 
-	ListGrades() ([]entity.Grade, error)
+
 }
 
 type productService struct {
@@ -107,9 +107,7 @@ func (s *productService) ListBrands() ([]entity.Brand, error) {
 	return s.repo.ListBrands()
 }
 
-func (s *productService) ListGrades() ([]entity.Grade, error) {
-	return s.repo.ListGrades()
-}
+
 
 func (s *productService) CreateBrand(req *wmsDto.BrandRequestDTO) (*entity.Brand, error) {
 	brand := &entity.Brand{

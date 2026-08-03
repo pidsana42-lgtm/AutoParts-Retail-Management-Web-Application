@@ -29,10 +29,21 @@ export interface Unit {
   unit_name: string;
 }
 
+export interface Grade {
+  id: number;
+  grade_name: string;
+}
+
 export interface Zone {
   id: number;
   zone_name: string;
   shelves?: Shelf[];
+}
+
+export interface ShelfLevel {
+  id: number;
+  level_name: string;
+  shelf_id: number;
 }
 
 export interface Shelf {
@@ -40,6 +51,7 @@ export interface Shelf {
   shelf_name: string;
   zone_id: number;
   zone?: Zone;
+  shelf_levels?: ShelfLevel[];
 }
 
 export interface Brand {
@@ -62,5 +74,8 @@ export interface Supplier {
   contact_line_sale: string;
   phone_number_sale: string;
   email_sale: string;
+  contact_line_sale_2?: string;
+  phone_number_sale_2?: string;
+  email_sale_2?: string;
   bank_account_number: string;
 }

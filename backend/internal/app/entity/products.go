@@ -25,15 +25,19 @@ type Product struct {
 	UnitID        uint  `json:"unit_id"`
 	CategoryID    uint  `json:"category_id"`
 	SubCategoryID *uint `json:"sub_category_id" gorm:"default:null"`
+	SubSubCategoryID *uint `json:"sub_sub_category_id" gorm:"default:null"`
 	GradeID       uint  `json:"grade_id"`
 	ShelfID       uint  `json:"shelf_id"`
+	ShelfLevelID  *uint `json:"shelf_level_id" gorm:"default:null"`
 
 	Models      []Models     `gorm:"many2many:product_models;" json:"models"`
 	Unit        *Unit        `gorm:"foreignKey:UnitID" json:"unit"`
 	Category    *Category    `gorm:"foreignKey:CategoryID" json:"category"`
 	SubCategory *SubCategory `gorm:"foreignKey:SubCategoryID" json:"sub_category"`
+	SubSubCategory *SubSubCategory `gorm:"foreignKey:SubSubCategoryID" json:"sub_sub_category"`
 	Grade       *Grade       `gorm:"foreignKey:GradeID" json:"grade"`
 	Shelf       *Shelf       `gorm:"foreignKey:ShelfID" json:"shelf"`
+	ShelfLevel  *ShelfLevel  `gorm:"foreignKey:ShelfLevelID" json:"shelf_level"`
 
 	StockAlerts    []StockAlert    `gorm:"foreignKey:ProductID" json:"stock_alerts"`
 	Inventories    []Inventory     `gorm:"foreignKey:ProductID" json:"inventories"`
@@ -41,6 +45,7 @@ type Product struct {
 	ProductImages  []ProductImage  `gorm:"foreignKey:ProductID" json:"product_images"`
 	StockMovements []StockMovement `gorm:"foreignKey:ProductID" json:"stock_movements"`
 	BillItems      []BillItem      `gorm:"foreignKey:ProductID" json:"bill_items"`
+	QRCodes        []ProductQRCode `gorm:"foreignKey:ProductID" json:"qr_codes"`
 
 	// เพิ่มฟิลด์นี้เพื่อให้ Product เซ็ตเพดานส่วนลดของแต่ละชิ้น
 	MaxDiscountRate float64 `gorm:"type:decimal(5,2);not null;default:0.00" json:"max_discount_rate"`
@@ -89,13 +94,35 @@ func (p *Product) BeforeCreate(tx *gorm.DB) error {
 		}
 	}
 
-	// 3. Count products in the same category & subcategory to get the sequential index
+	// 3. Fetch SubSubCategory details (if SubSubCategoryID is provided)
+	subSubPrefix := ""
+	if p.SubSubCategoryID != nil && *p.SubSubCategoryID > 0 {
+		var subSubCategory SubSubCategory
+		if err := tx.First(&subSubCategory, *p.SubSubCategoryID).Error; err == nil {
+			subSubPrefix = strings.ToUpper(strings.TrimSpace(subSubCategory.Sub_Sub_Category_Short_Name))
+			if subSubPrefix == "" {
+				cleanSubSubName := strings.ReplaceAll(subSubCategory.Sub_Sub_Category_Name, " ", "")
+				if len(cleanSubSubName) >= 3 {
+					subSubPrefix = strings.ToUpper(cleanSubSubName[:3])
+				} else {
+					subSubPrefix = "SSUB"
+				}
+			}
+		}
+	}
+
+	// 4. Count products in the same category & subcategory to get the sequential index
 	var count int64
 	query := tx.Model(&Product{}).Where("category_id = ?", p.CategoryID)
 	if p.SubCategoryID != nil && *p.SubCategoryID > 0 {
 		query = query.Where("sub_category_id = ?", *p.SubCategoryID)
 	} else {
 		query = query.Where("sub_category_id IS NULL OR sub_category_id = 0")
+	}
+	if p.SubSubCategoryID != nil && *p.SubSubCategoryID > 0 {
+		query = query.Where("sub_sub_category_id = ?", *p.SubSubCategoryID)
+	} else {
+		query = query.Where("sub_sub_category_id IS NULL OR sub_sub_category_id = 0")
 	}
 
 	if err := query.Count(&count).Error; err != nil {
@@ -105,10 +132,10 @@ func (p *Product) BeforeCreate(tx *gorm.DB) error {
 	// Next sequential running number
 	runningNumber := count + 1
 
-	// 4. Combine into final product code
-	p.Product_Code = fmt.Sprintf("%s%s-%05d", catPrefix, subPrefix, runningNumber)
+	// 5. Combine into final product code
+	p.Product_Code = fmt.Sprintf("%s%s%s-%05d", catPrefix, subPrefix, subSubPrefix, runningNumber)
 
-	// 5. Fallback barcode to product code if empty
+	// 6. Fallback barcode to product code if empty
 	if p.Barcode == "" {
 		p.Barcode = p.Product_Code
 	}
