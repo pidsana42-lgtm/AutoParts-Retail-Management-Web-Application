@@ -6,14 +6,10 @@ func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
 
-		allowedOrigins := map[string]bool{
-			"http://localhost:3000":       true,
-			"http://localhost:5173":       true,
-			"http://192.168.1.109:5173":   true,
-		}
-
-		if allowedOrigins[origin] {
+		if origin != "" {
 			c.Header("Access-Control-Allow-Origin", origin)
+		} else {
+			c.Header("Access-Control-Allow-Origin", "*")
 		}
 
 		c.Header("Access-Control-Allow-Credentials", "true")
