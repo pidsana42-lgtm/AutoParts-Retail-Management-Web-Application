@@ -56,7 +56,6 @@ export default function AddDataStck({
     e.preventDefault();
     try {
       const missingFields: string[] = [];
-      if (!formData.product_code) missingFields.push("รหัสสินค้า (Code)");
       if (!formData.product_name) missingFields.push("ชื่อสินค้า (Name)");
       if (formData.model_ids.length === 0) missingFields.push("รุ่นรถ (Models)");
       if (formData.category_path.length < 1) missingFields.push("หมวดหมู่สินค้า (ระบุให้ครบ 3 ระดับ)");
@@ -72,6 +71,8 @@ export default function AddDataStck({
       setSubmitting(true);
       const payload = {
         ...formData,
+        product_code: "",
+        barcode: "",
         quantity: Number(formData.quantity),
         limit_quantity: Number(formData.limit_quantity),
         sale_price: Number(formData.sale_price),
@@ -125,13 +126,6 @@ export default function AddDataStck({
       <form onSubmit={handleAddSubmit} className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
-            label="รหัสสินค้า"
-            required
-            value={formData.product_code}
-            onChange={(e) => setFormData({ ...formData, product_code: e.target.value })}
-            placeholder="เช่น BR-900X"
-          />
-          <Input
             label="ชื่อสินค้า"
             required
             value={formData.product_name}
@@ -143,12 +137,6 @@ export default function AddDataStck({
             value={formData.part_number}
             onChange={(e) => setFormData({ ...formData, part_number: e.target.value })}
             placeholder="เช่น PT-TURBO-01"
-          />
-          <Input
-            label="บาร์โค้ด"
-            value={formData.barcode}
-            onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-            placeholder="เช่น 8850000000001"
           />
           <Input
             label="ราคาทุน (Cost Price)"

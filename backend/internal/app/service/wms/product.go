@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	wmsDto "backend/internal/app/dto/wms"
@@ -28,8 +29,6 @@ type ProductService interface {
 	CreateModel(req *wmsDto.ModelRequestDTO) (*entity.Models, error)
 	UpdateModel(id uint, req *wmsDto.ModelRequestDTO) error
 	DeleteModel(id uint) error
-
-
 }
 
 type productService struct {
@@ -107,8 +106,6 @@ func (s *productService) ListBrands() ([]entity.Brand, error) {
 	return s.repo.ListBrands()
 }
 
-
-
 func (s *productService) CreateBrand(req *wmsDto.BrandRequestDTO) (*entity.Brand, error) {
 	brand := &entity.Brand{
 		Brand_Name: req.BrandName,
@@ -167,7 +164,10 @@ func triggerBarcodeGen(ids []uint) {
 		client := http.Client{
 			Timeout: 15 * time.Second,
 		}
-		fastAPIURL := "http://127.0.0.1:8000/api/products/generate-codes"
+		fastAPIURL := os.Getenv("FASTAPI_GENERATE_CODES_URL")
+		if fastAPIURL == "" {
+			fastAPIURL = "http://127.0.0.1:8000/api/products/generate-codes"
+		}
 		resp, errReq := client.Post(fastAPIURL, "application/json", bytes.NewBuffer(jsonPayload))
 		if errReq != nil {
 			log.Printf("[WMS] Error calling FastAPI to generate product codes: %v\n", errReq)
