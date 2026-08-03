@@ -130,7 +130,11 @@ export default function PublicProductPage() {
                 {product.product_name}
               </h1>
               <p className="mt-2 text-sm text-gray-600">
-                {product.category_name || "-"} {product.sub_category_name ? `/ ${product.sub_category_name}` : ""}
+                หมวดหมู่: {[
+                  product.category_name,
+                  product.sub_category_name,
+                  product.sub_sub_category_name
+                ].filter(Boolean).join(" > ") || "-"}
               </p>
             </div>
             <div className="rounded-md border border-gray-200 px-4 py-3 text-left sm:text-right">
@@ -160,7 +164,7 @@ export default function PublicProductPage() {
               <InfoItem icon={<Barcode />} label="Barcode" value={product.barcode || "-"} />
               <InfoItem icon={<Tag />} label="Part No." value={product.part_number || "-"} />
               <InfoItem icon={<Boxes />} label="คงเหลือ" value={`${product.quantity || 0} ${product.unit_name || ""}`} />
-              <InfoItem icon={<CircleDollarSign />} label="สถานะ" value={product.is_active ? "พร้อมใช้งาน" : "ปิดใช้งาน"} />
+              <InfoItem icon={<CircleDollarSign />} label="เกรดสินค้า" value={product.grade_name || "-"} />
               <InfoItem icon={<MapPin />} label="ตำแหน่งจัดเก็บ" value={[product.shelf_name, product.shelf_level_name].filter(Boolean).join(" / ") || "-"} />
               <InfoItem icon={<Car />} label="รุ่นที่ใช้ได้" value={modelText} />
             </div>

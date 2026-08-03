@@ -1,6 +1,18 @@
 import apiClient from "../apiClient";
 import type { StockItem } from "../../../interface/wms/product";
 
+const resolveAssetUrl = (url: string): string => {
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url)) return url;
+  const normalized = url.startsWith("/") ? url : `/${url}`;
+  try {
+    const apiOrigin = new URL(apiClient.defaults.baseURL || "").origin;
+    return `${apiOrigin}${normalized}`;
+  } catch {
+    return normalized;
+  }
+};
+
 export const getProductsList = async (): Promise<StockItem[]> => {
   // เติม /wms นำหน้า /products ให้ตรงกับระบบหลังบ้าน
   const response = await apiClient.get<any[]>("/wms/products"); 
@@ -19,6 +31,7 @@ export const getProductsList = async (): Promise<StockItem[]> => {
     MinStock: item.limit_quantity || 0,
     Price: item.sale_price || 0,
     CostPrice: item.cost_price || 0,
+    ThumbnailUrl: resolveAssetUrl(item.thumbnail_url || ""),
     Note: item.note || "",
     Unit: item.unit_name || "",
     Shelf: item.shelf_name || "",
@@ -82,6 +95,15 @@ export const getShelvesList = async (): Promise<WmsOption[]> => {
 
 export const createProduct = async (data: any): Promise<any> => {
   const response = await apiClient.post("/wms/products", data);
+  return response.data;
+};
+
+export const uploadProductImage = async (productId: number, file: File): Promise<any> => {
+  const formData = new FormData();
+  formData.append("image", file);
+  const response = await apiClient.post(`/wms/products/${productId}/images`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
   return response.data;
 };
 
