@@ -3,6 +3,7 @@ package pre_oder
 import (
 	"backend/internal/app/entity"
 	"gorm.io/gorm"
+	"context"
 )
 
 // 1. กำหนด Interface สำหรับ PreOrder Repository
@@ -14,6 +15,8 @@ type PreOrderRepository interface {
 	UpdatePreOrder(preOrder *entity.PreOrder) error
 	DeletePreOrder(id uint) error
 	GetLineUserIDByCustomerID(customerID uint) (string, error)
+	ListByStatus(ctx context.Context, status string) ([]entity.PreOrder, error)
+	UpdateItemsStatusByIDs(ctx context.Context, ids []uint, status string) error
 }
 
 // 2. สร้าง Struct สำหรับ Implement Interface
@@ -95,4 +98,32 @@ func (r *preOrderRepository) DeletePreOrder(id uint) error {
 		// ลบใบจองตัวหลัก
 		return tx.Delete(&entity.PreOrder{}, id).Error
 	})
+}
+
+// 9. Implement Method: ค้นหา PreOrder ตามสถานะของ Item
+func (r *preOrderRepository) ListByStatus(ctx context.Context, status string) ([]entity.PreOrder, error) {
+	var preOrders []entity.PreOrder
+	
+	err := r.db.WithContext(ctx).
+		Preload("Customer").
+		Preload("Supplier").
+		Preload("PreOrderItems", "status = ?", status).
+		Preload("PreOrderItems.Product").
+		Preload("PreOrderItems.Product.Unit").
+		Where("EXISTS (SELECT 1 FROM pre_order_items WHERE pre_order_items.pre_order_id = pre_orders.id AND pre_order_items.status = ?)", status).
+		Find(&preOrders).Error
+		
+	return preOrders, err
+}
+
+// 10. Implement Method: อัปเดตสถานะของ PreOrderItem แบบ Bulk
+func (r *preOrderRepository) UpdateItemsStatusByIDs(ctx context.Context, ids []uint, status string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	
+	return r.db.WithContext(ctx).
+		Model(&entity.PreOrderItem{}).
+		Where("id IN ?", ids).
+		Update("status", status).Error
 }

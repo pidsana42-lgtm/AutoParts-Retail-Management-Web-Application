@@ -66,3 +66,44 @@ func ToPreOrderItemResponseDTO(m *entity.PreOrderItem) PreOrderItemResponseDTO {
 		UpdatedAt:  m.UpdatedAt,
 	}
 }
+
+// แยก Struct ใหม่มาใช้เฉพาะหน้าเลือก PreOrder เข้า PO
+type PreOrderItemForPODTO struct {
+	ID          uint      `json:"id"`
+	PreOrderID  uint      `json:"pre_order_id"`
+	ProductID   uint      `json:"product_id"`
+	ProductCode string    `json:"product_code"`
+	ProductName string    `json:"product_name"`
+	Unit        string    `json:"unit"`
+	Quantity    int       `json:"quantity"`
+	UnitPrice   float64   `json:"unit_price"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// ฟังก์ชัน Map สำหรับ DTO ตัวใหม่
+func ToPreOrderItemForPODTO(m *entity.PreOrderItem) PreOrderItemForPODTO {
+	var pCode, pName, pUnit string
+	if m.Product != nil {
+		pCode = m.Product.Product_Code
+		pName = m.Product.Product_Name
+		if m.Product.Unit != nil {
+			pUnit = m.Product.Unit.Unit_Name
+		}
+	}
+
+	return PreOrderItemForPODTO{
+		ID:          m.ID,
+		PreOrderID:  m.PreOrderID,
+		ProductID:   m.ProductID,
+		ProductCode: pCode,
+		ProductName: pName,
+		Unit:        pUnit,
+		Quantity:    m.Quantity,
+		UnitPrice:   m.UnitPrice,
+		Status:      m.Status,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
+	}
+}

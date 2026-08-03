@@ -112,3 +112,22 @@ func ToPreOrderResponseDTO(m *entity.PreOrder) PreOrderResponseDTO {
 		UpdatedAt:     m.UpdatedAt,
 	}
 }
+
+type PreOrderForPODTO struct {
+	ID            uint                   `json:"id"`
+	Status        string                 `json:"status"`
+	PreOrderItems []PreOrderItemForPODTO `json:"pre_order_items"` 
+}
+
+func ToPreOrderForPODTO(m *entity.PreOrder) PreOrderForPODTO {
+	var items []PreOrderItemForPODTO
+	for _, item := range m.PreOrderItems {
+		items = append(items, ToPreOrderItemForPODTO(&item))
+	}
+
+	return PreOrderForPODTO{
+		ID:            m.ID,
+		Status:        m.Status,
+		PreOrderItems: items,
+	}
+}

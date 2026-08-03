@@ -30,6 +30,8 @@ type PurchaseOrderResponse struct {
 	POTypeID			uint 			`json:"po_type_id"`
 	TotalAmount			float64 		`json:"total_amount"`
 	Status				poEnum.POStatus   `json:"status"`
+	Notes				*string			`json:"notes"`
+	RejectionReason  	*string 		`json:"rejection_reason"`
 	CreatorID    		uint            `json:"creator_id"`
 	CreatorName  		string          `json:"creator_name"`
 	CreatedAt    		time.Time       `json:"created_at"`
@@ -49,7 +51,6 @@ type POItemResponse struct {
 	Notes                     	string   `json:"notes,omitempty"`
 	AlertID                   	*uint    `json:"alert_id,omitempty"`
 	PreOrderItemID            	*uint    `json:"pre_order_item_id,omitempty"`
-
 	OrderType                   string   `json:"order_type"`
 }
 
@@ -95,6 +96,7 @@ type ProductSearchQuery struct {
 type ProductSearchResponse struct {
 	ID       int     `json:"id"`
 	Code     string  `json:"code"`
+	Barcode  string  `json:"barcode"`
 	Name     string  `json:"name"`
 	Price    float64 `json:"price"`
 	Unit     string  `json:"unit"`

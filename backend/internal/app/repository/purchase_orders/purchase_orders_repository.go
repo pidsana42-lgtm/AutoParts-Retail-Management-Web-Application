@@ -7,6 +7,7 @@ import (
 	"context"
 	"gorm.io/gorm"
 	poEntity "backend/internal/app/entity"
+	poEnum "backend/internal/app/enum"
 	poDto "backend/internal/app/dto/purchase_orders"
 )
 
@@ -15,7 +16,7 @@ type PurchaseOrderRepository interface {
 	GetLatestPONumberByYear(ctx context.Context, year string) (string, error)
 	SavePO(ctx context.Context, po *poEntity.PO) error
 	FindAll(ctx context.Context, query poDto.ListPOQuery) ([]poEntity.PO, int64, error)
-	DeletePOByID(ctx context.Context, id uint) error
+	DeletePOByID(ctx context.Context, id uint, status string, expiredAt time.Time) error
 	GetPOByID(ctx context.Context, id uint) (*poEntity.PO, error)
 	GetPOForPDF(ctx context.Context, id uint) (*poEntity.PO, error)
 	GetPOSummary(ctx context.Context) (*poDto.POSummaryResponse, error)
@@ -24,6 +25,10 @@ type PurchaseOrderRepository interface {
 	UpdatePO(ctx context.Context, po *poEntity.PO) error
 	GetSupplierDeliveryHistory(ctx context.Context, supplierID int) ([]POHistory, error)
 	GetMonthlyPOCount(ctx context.Context) (int64, error)
+	GetCompanySetting(ctx context.Context) (*poEntity.CompanySetting, error)
+	UpdateStatusAndRejection(ctx context.Context, id uint, status poEnum.POStatus, reason string) error
+	UpdateStatusToExpired(ctx context.Context) error
+	HardDeleteExpiredPOs(ctx context.Context) error
 }
 
 type purchaseOrderRepository struct {
@@ -164,28 +169,86 @@ func (r *purchaseOrderRepository) GetPOByID(ctx context.Context, id uint) (*poEn
 	return &po, nil
 }
 
-// ลบแบบ Soft Delete เก็บไว้ 14 วัน
-func (r *purchaseOrderRepository) DeletePOByID(ctx context.Context, id uint) error {
+// ลบแบบ Soft Delete เก็บไว้ 7 วัน
+func (r *purchaseOrderRepository) DeletePOByID(ctx context.Context, id uint, status string, expiredAt time.Time) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 
-		// 1. Soft delete items ก่อน
-		if err := tx.Where("po_id = ?", id).
-			Delete(&poEntity.POItems{}).Error; err != nil {
-			return err
-		}
+		// อัปเดตตาราง PO ให้เปลี่ยน Status เป็น "DELETED" และเซ็ต ExpiredAt ใหม่
+        result := tx.Model(&poEntity.PO{}).
+            Where("id = ?", id).
+            Updates(map[string]interface{}{
+                "status":     "DELETED",
+                "expires_at": expiredAt,
+            })
 
-		// 2. Soft delete PO
-		result := tx.Delete(&poEntity.PO{}, id)
-		if result.Error != nil {
-			return result.Error
-		}
+        if result.Error != nil {
+            return result.Error
+        }
 
-		if result.RowsAffected == 0 {
-			return errors.New("purchase order not found")
-		}
+        if result.RowsAffected == 0 {
+            return errors.New("purchase order not found")
+        }
+
+		// หมายเหตุเรื่อง POItems:
+        // ในเมื่อเราใช้ status ของ PO เป็นตัวบอกว่าถูกทิ้งลงถังขยะแล้ว
+        // เราจึงไม่จำเป็นต้องลบ POItems ทิ้ง (เอาโค้ด Delete POItems ออกได้เลย)
+        // เพราะถ้าผู้ใช้กด "กู้คืน (Restore)" ตัว POItems ก็จะกลับมาพร้อมใช้งานทันทีโดยไม่ต้องไปตามกู้คืนแยกครับ
 
 		return nil
 	})
+}
+
+// 1. ฟังก์ชันอัปเดตสถานะ (รันทุกวัน) จาก DELETED/RESUBMITTED เป็น EXPIRED
+func (r *purchaseOrderRepository) UpdateStatusToExpired(ctx context.Context) error {
+    // หาเวลาเมื่อ 7 วันที่แล้ว
+    sevenDaysAgo := time.Now().AddDate(0, 0, -7)
+    
+    // ตั้งเวลาหมดอายุสำหรับการกู้คืน เป็นอีก 7 วันนับจากตอนที่เปลี่ยนสถานะเป็น EXPIRED
+    restoreDeadline := time.Now().AddDate(0, 0, 7)
+
+    // ค้นหา PO ที่ถูก DELETED/RESUBMITTED มาแล้วเกิน 7 วัน (เช็กจาก updated_at) 
+    // แล้วจับเปลี่ยนเป็น EXPIRED พร้อมตั้งค่า expired_at
+    return r.db.WithContext(ctx).
+        Model(&poEntity.PO{}).
+        Where("status IN ? AND updated_at < ?", []string{"DELETED", "RESUBMITTED"}, sevenDaysAgo).
+        Updates(map[string]interface{}{
+            "status":     "EXPIRED",
+            "expired_at": restoreDeadline,
+        }).Error
+}
+
+// 2. ฟังก์ชันลบถาวร (รันทุกวันที่ 30)
+func (r *purchaseOrderRepository) HardDeleteExpiredPOs(ctx context.Context) error {
+    return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+        var expiredPOIds []uint
+        
+        // ค้นหา PO ที่สถานะ EXPIRED และเลยกำหนดเวลากู้คืน (expired_at) ไปแล้ว
+        if err := tx.Model(&poEntity.PO{}).
+            Where("status = ? AND expires_at < ?", "EXPIRED", time.Now()).
+            Pluck("id", &expiredPOIds).Error; err != nil {
+            return err
+        }
+
+        if len(expiredPOIds) == 0 {
+            return nil // ไม่มีข้อมูลให้ลบ
+        }
+
+        // ลบ Items ถาวร
+        if err := tx.Unscoped().
+            Where("po_id IN ?", expiredPOIds).
+            Delete(&poEntity.POItems{}).Error; err != nil {
+            return err
+        }
+
+        // ลบ PO ถาวร
+        if err := tx.Unscoped().
+            Where("id IN ?", expiredPOIds).
+            Delete(&poEntity.PO{}).Error; err != nil {
+            return err
+        }
+
+        return nil
+    })
 }
 
 // Get เพื่อไปทำ PDF
@@ -296,11 +359,11 @@ func (r *purchaseOrderRepository) GetSupplierDeliveryHistory(ctx context.Context
 
     err := r.db.WithContext(ctx).
         Table("purchase_orders").
-        Select("purchase_orders.created_at, bills.received_at").
+        Select("purchase_orders.created_at, bills.receive_date").
         Joins("INNER JOIN bills ON bills.po_id = purchase_orders.id").
         Where("purchase_orders.supplier_id = ?", supplierID).
         Where("purchase_orders.status = ?", "APPROVED").
-        Where("bills.received_at IS NOT NULL").
+        Where("bills.receive_date IS NOT NULL").
         Order("purchase_orders.created_at DESC").
         Scan(&history).Error
 
@@ -323,4 +386,29 @@ func (r *purchaseOrderRepository) GetMonthlyPOCount(ctx context.Context) (int64,
 		return 0, fmt.Errorf("count monthly po: %w", err)
 	}
 	return count, nil
+}
+
+func (r *purchaseOrderRepository) GetCompanySetting(ctx context.Context) (*poEntity.CompanySetting, error) {
+	var setting poEntity.CompanySetting
+
+	if err := r.db.WithContext(ctx).First(&setting).Error; err != nil {
+		return nil, err
+	}
+
+	return &setting, nil
+}
+
+func (r *purchaseOrderRepository) UpdateStatusAndRejection(ctx context.Context, id uint, status poEnum.POStatus, reason string) error {
+	var reasonPtr *string
+	if reason != "" {
+		reasonPtr = &reason
+	}
+
+	return r.db.WithContext(ctx).
+		Model(&poEntity.PO{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"status":           status,
+			"rejection_reason": reasonPtr,
+		}).Error
 }

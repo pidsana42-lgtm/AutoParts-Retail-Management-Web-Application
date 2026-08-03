@@ -102,6 +102,8 @@ export default function AppRouter(): React.JSX.Element {
         } />
 
         <Route path="/employee/orders" element={<PurchaseOrders />} />
+        <Route path="/employee/new-orders" element={<CreatePurchaseOrders />} />
+        <Route path="/employee/orders/:id" element={<OrderDetail />} />
 
       </Route>
 
