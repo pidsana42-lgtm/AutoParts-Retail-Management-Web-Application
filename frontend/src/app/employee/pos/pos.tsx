@@ -434,8 +434,8 @@ export default function PosPage(): React.JSX.Element {
           <div className="grid grid-cols-3 gap-2">
             {paymentData.paymentMethods.map((method) => {
               const isProcessing = paymentData.isSubmitting || paymentData.isConfirming;
-              //ล็อกเฉพาะ: ปุ่มเงินเชื่อ (ID: 3) + มีการเลือกลูกค้าแล้ว + ลูกค้าไม่เป็นสมาชิก
-              const isCreditDisabled = method.id === 3 && paymentData.isCustomerSelected && !paymentData.isRegisteredCustomer;
+              // ล็อกเฉพาะปุ่มเงินเชื่อ (ID: 3) ถ้าลูกค้าไม่ได้เป็นสมาชิกที่ลงทะเบียนไว้
+              const isCreditDisabled = method.id === 3 && !paymentData.isRegisteredCustomer;
 
               const isDisabled = isProcessing || isCreditDisabled;
               const isSelected = paymentData.paymentMethodId === method.id;
