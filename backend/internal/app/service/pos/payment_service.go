@@ -100,6 +100,11 @@ func (s *paymentService) ConfirmPayment(req posDto.ConfirmPaymentRequest) (*posD
 		return nil, fmt.Errorf("ไม่พบออเดอร์ที่เกี่ยวข้อง: %v", err)
 	}
 
+    
+    if req.PaymentMethodID > 0 {
+        order.PaymentMethodID = &req.PaymentMethodID
+    }
+
 	// ---------------------------------------------------------------------
 	// เคสที่ 1: ชำระด้วย "เงินเชื่อ" (CREDIT - PaymentMethodID == 3)
 	// ---------------------------------------------------------------------
@@ -112,15 +117,23 @@ func (s *paymentService) ConfirmPayment(req posDto.ConfirmPaymentRequest) (*posD
 		order.BalanceDue = order.TotalAmount // ยอดค้างชำระเท่ากับยอดรวมบิล
 		order.ChangeAmount = 0.00
 
-		if err := s.paymentRepo.UpdateOrderWithTx(tx, order); err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("อัปเดตสถานะออเดอร์เงินเชื่อล้มเหลว: %v", err)
-		}
+        if err := s.paymentRepo.UpdateOrderWithTx(tx, order); err != nil {
+            tx.Rollback()
+            return nil, fmt.Errorf("อัปเดตสถานะออเดอร์เงินเชื่อล้มเหลว: %v", err)
+        }
 
-		if err := tx.Commit().Error; err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("Commit Transaction ล้มเหลว: %v", err)
-		}
+        // หากเคยสร้าง Record ใน payments ไว้ (เช่น กดดู QR Code ก่อนสลับมาเงินเชื่อ) 
+        // ให้อัปเดต PaymentMethodID ให้ตรงกันด้วย
+        existingPayment, err := s.paymentRepo.GetPaymentByOrderId(req.OrderID)
+        if err == nil && existingPayment != nil {
+            existingPayment.PaymentMethodID = req.PaymentMethodID
+            _ = s.paymentRepo.UpdatePaymentWithTx(tx, existingPayment)
+        }
+
+        if err := tx.Commit().Error; err != nil {
+            tx.Rollback()
+            return nil, fmt.Errorf("Commit Transaction ล้มเหลว: %v", err)
+        }
 
 		return &posDto.ConfirmPaymentResponse{
 			Message: "บันทึกรายการขายเชื่อสำเร็จ",
@@ -166,10 +179,15 @@ func (s *paymentService) ConfirmPayment(req posDto.ConfirmPaymentRequest) (*posD
 		}
 	}
 
-	if payment.PaidAt != nil {
-		tx.Rollback()
-		return nil, fmt.Errorf("รายการชำระเงินนี้ได้รับการยืนยันไปแล้ว")
-	}
+    if payment.PaidAt != nil {
+        tx.Rollback()
+        return nil, fmt.Errorf("รายการชำระเงินนี้ได้รับการยืนยันไปแล้ว")
+    }
+
+    // บังคับอัปเดต PaymentMethodID ของ Payment Record เป็นวิธีชำระเงินล่าสุดเสมอ
+    if req.PaymentMethodID > 0 {
+        payment.PaymentMethodID = req.PaymentMethodID
+    }
 
 	now := time.Now()
 	payment.PaidAt = &now

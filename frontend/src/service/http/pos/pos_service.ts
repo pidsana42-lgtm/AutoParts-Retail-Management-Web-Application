@@ -1,5 +1,5 @@
 import apiClient from "../apiClient";
-import type { CreateSaleOrderRequest, SaleOrderItemRequest } from "../../../interface/pos/pos_interface";
+import type { CreateSaleOrderRequest, SaleOrderItemRequest, UpdateSaleOrderRequest } from "../../../interface/pos/pos_interface";
 import type { POSProductResponse } from "../../../interface/pos/product_interface";
 import type { StoreConfigInterface } from "../../../interface/pos/store_config_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
@@ -23,6 +23,10 @@ export const posApiService = {
   /** บันทึกคำสั่งซื้อออเดอร์ขาย POS */
   createPOSOrder: (payload: CreateSaleOrderRequest): Promise<any> => 
     apiClient.post("/pos/orders", payload).then((res) => res.data),
+
+  /** อัปเดตคำสั่งซื้อออเดอร์ขาย POS (ตาม orderNumber) */
+  updatePOSOrder: (orderNumber: string, payload: UpdateSaleOrderRequest): Promise<any> =>
+    apiClient.put(`/pos/orders/${orderNumber}`, payload).then((res) => res.data),
 
   getCustomerTypes: (): Promise<{ id: number; type_name: string }[]> => 
     apiClient.get<{ id: number; type_name: string }[]>("/pos/customer-types").then((res) => res.data),
