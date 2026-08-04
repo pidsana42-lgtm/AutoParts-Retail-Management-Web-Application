@@ -487,7 +487,7 @@ export default function PosPage(): React.JSX.Element {
               {/* Header */}
               <div className="bg-[#1C1B1B] px-6 py-4 flex justify-between items-center">
                 <Text variant="lead" className="text-white mb-0 font-medium">ชำระเงิน ({paymentData.paymentMethodId === 1 ? "เงินสด" : paymentData.paymentMethodId === 2 ? "QR CODE" : "เงินเชื่อ"})</Text>
-                <button onClick={() => paymentData.setIsPaymentModalOpen(false)} className="text-[#9CA3AF] hover:text-white text-xl">✕</button>
+                <button onClick={() => paymentData.closePaymentModal()} className="text-[#9CA3AF] hover:text-white text-xl">✕</button>
               </div>
 
               {/* 2. Body */}

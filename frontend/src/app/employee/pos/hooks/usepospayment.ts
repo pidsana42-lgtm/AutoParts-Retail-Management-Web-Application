@@ -655,6 +655,12 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     updateSession("billDiscountType", "none");
   };
 
+  //ปิดจริงๆ ทั้งหน้าจอและในความจำของระบบ
+  const closePaymentModal = () => {
+    setIsPaymentModalOpen(false); // สั่งให้ React ซ่อน Modal หน้าร้านทันที
+    updateSession("isPaymentModalOpen", false); // บันทึกลง Storage/Session ว่าปิดแล้วนะ
+  };
+
   return {
     posSession, setPosSession, updateSession,
     customer, setCustomer, paymentMethods, setPaymentMethods,
@@ -682,5 +688,6 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     handleGeneratePromptPayQR,
     handleConfirmSale,              
     handleFinalConfirmAndPrint,   
+    closePaymentModal,
   };
 }
