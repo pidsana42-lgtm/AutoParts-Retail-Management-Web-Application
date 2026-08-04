@@ -46,7 +46,7 @@ export default function PosPage(): React.JSX.Element {
   }
 }
 
-  const { customerName } = useCustomerFinancials(paymentData.customer);
+  const { customerName, remainingCreditStr } = useCustomerFinancials(paymentData.customer);
 
   // ซิงค์ข้อมูลสิทธิ์ลูกค้าระหว่าง 2 Hooks เวลาเปลี่ยนลูกค้าใหม่หรือเปลี่ยนประเภทลูกค้า (Active Type) 
   React.useEffect(() => {
@@ -719,7 +719,7 @@ export default function PosPage(): React.JSX.Element {
                         <Text variant="xs" className="text-[#2563EB]">เครดิตคงเหลือ</Text>
                         <div className="flex justify-between items-baseline mt-2">
                           <Text variant="fourxl" className={`text-[#2563EB] truncate ${Math.max(0, paymentData.receivedAmount - paymentData.finalTotal) > 999999 ? "text-2xl" : "text-4xl"}`}>
-                            {paymentData.customer?.max_credit_limit?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}
+                            {remainingCreditStr || "0.00"}
                           </Text>
                           <Text variant="xs" className="text-[#2563EB]">บาท</Text>
                         </div>
