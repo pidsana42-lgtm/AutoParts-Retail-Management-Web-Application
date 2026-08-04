@@ -21,7 +21,9 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   // 1. โครงสร้างการดึง Session เริ่มต้นจาก LocalStorage
   const [posSession, setPosSession] = useState<PosSession>(() => {
     if (typeof window !== "undefined") {
+      // ไปเปิดตู้เซฟเบราว์เซอร์ดูว่ามีคีย์ "pos_session" ค้างไว้ไหม
       const saved = localStorage.getItem("pos_session");
+      //  ถ้ามี ให้แปลงข้อความ JSON กลับมาเป็น Object แล้วใส่เข้า posSession State ทันที!
       return saved ? JSON.parse(saved) : {
         customer: null, activeTypeId: 1, paymentMethodId: 1, billDiscountValue: 0, billDiscountType: "none", receivedAmount: 0, receiverName: "", searchQuery: "", currentOrderId: null, currentOrderNumber: null, isPaymentModalOpen: false
       };
@@ -104,10 +106,18 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   // Auto-fetch QR Code เมื่อเปิด Modal หรือสลับมา QR Code
   useEffect(() => {
     const activeMethod = paymentMethodId || posSession.paymentMethodId;
-    const activeOrderId = currentOrderId || posSession.currentOrderId || currentOrderIdRef.current;
 
-    if (isPaymentModalOpen && activeMethod === 2 && activeOrderId && !qrCodeData && !isLoadingQR) {
-      handleGeneratePromptPayQR(activeOrderId, 1);
+    if (isPaymentModalOpen && activeMethod === 2 && !qrCodeData && !isLoadingQR) {
+      const fetchQR = async () => {
+        let activeOrderId = currentOrderId || posSession.currentOrderId || currentOrderIdRef.current;
+        if (!activeOrderId) {
+          activeOrderId = await submitOrderToDatabase();
+        }
+        if (activeOrderId) {
+          await handleGeneratePromptPayQR(activeOrderId, 1);
+        }
+      };
+      fetchQR();
     }
   }, [isPaymentModalOpen, paymentMethodId, posSession.paymentMethodId, currentOrderId, posSession.currentOrderId, qrCodeData, isLoadingQR]);
 
@@ -438,7 +448,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
             ));
             
           if (isNotFoundError) {
-            console.warn("⚠️ Stored order not found in DB. Fallback to creating a new one...");
+            console.warn("Stored order not found in DB. Fallback to creating a new one...");
             currentOrderNumberRef.current = null;
             currentOrderIdRef.current = null;
             setCurrentOrderId(null);
@@ -454,11 +464,11 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
           throw error;
         }
       } else {
-        // 🆕 ยังไม่มี -> ยิง POST สร้างบิลใหม่
+        //  ยังไม่มี -> ยิง POST สร้างบิลใหม่
         console.log("✨ CREATING NEW ORDER...");
         const response = await posApiService.createPOSOrder(salePayload);
         
-        // 💡 3. ทะลวงแกะ API Response ให้ลึก 3 ชั้น
+        //  3. ทะลวงแกะ API Response ให้ลึก 3 ชั้น
         const res1 = response?.data;
         const res2 = res1?.data;
         const res3 = res2?.data;
@@ -482,14 +492,14 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
 
         console.log("🎯 EXTRACTED FROM API:", { orderNumber, orderId, rawResponse: response });
 
-        // 💡 4. บันทึกเข้า Ref และ State
+        //  4. บันทึกเข้า Ref และ State
         if (orderNumber) currentOrderNumberRef.current = orderNumber;
         if (orderId) {
           currentOrderIdRef.current = orderId;
           setCurrentOrderId(orderId);
         }
 
-        // 💡 5. บันทึกลง localStorage ทันที synchronous
+        //  5. บันทึกลง localStorage ทันที synchronous
         if (orderNumber || orderId) {
           const currentSessionRaw = localStorage.getItem("pos_session");
           const currentSession = currentSessionRaw ? JSON.parse(currentSessionRaw) : {};
@@ -503,7 +513,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
           localStorage.setItem("pos_session", JSON.stringify(nextSession));
           setPosSession(nextSession);
         } else {
-          console.error("⚠️ CRITICAL: Could not extract orderNumber or orderId from backend response!");
+          console.error("CRITICAL: Could not extract orderNumber or orderId from backend response!");
         }
 
         if (posSession.customer?.phone_number) {
@@ -524,7 +534,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const handleConfirmSale = async () => {
     if (cart.length === 0) return alert("กรุณาเลือกสินค้าลงตะกร้า");
 
-    // 💡 1. จัดการ Overwrite paymentMethodId กรณี CASH + CREDIT ให้เสร็จก่อน
+    // 1. จัดการ Overwrite paymentMethodId กรณี CASH + CREDIT ให้เสร็จก่อน
     let activePaymentMethod = paymentMethodId || posSession.paymentMethodId;
     if (selectedPaymentType === "CASH" && activePaymentMethod === 3) {
       activePaymentMethod = 1;
@@ -541,17 +551,9 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       return;
     }
 
-    // 💡 2. ยิง Submit (ซึ่งจะเช็ก localStorage Real-time ว่ามี order_number เดิมหรือไม่)
-    const orderId = await submitOrderToDatabase();
-    if (!orderId) return;
-
-    // 💡 3. เปิด Modal
+    // 2. เปิด Modal ทันที (ยังไม่เซฟลง DB)
     setIsPaymentModalOpen(true);
     updateSession("isPaymentModalOpen", true);
-
-    if (activePaymentMethod === 2) {
-      await handleGeneratePromptPayQR(orderId, 1);
-    }
   };
 
   // ─── 2. กดปุ่ม "ยืนยันและพิมพ์ใบเสร็จ" ใน Modal ───
@@ -582,8 +584,23 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
 
     setIsConfirming(true);
     try {
-      let orderId = currentOrderId || posSession.currentOrderId || currentOrderIdRef.current;
+      if (activePaymentMethodId === 1 || activePaymentMethodId === 3) {
+        //  CASH & CREDIT: ยิง DB ทีเดียวจบ (ไม่ผ่าน pending)
+        const orderId = await submitOrderToDatabase();
+        if (!orderId) {
+          setIsConfirming(false);
+          return false;
+        }
+        alert("ยืนยันการชำระเงินและจบการขายสำเร็จ!");
+        resetPaymentState();
+        setCart([]);
+        localStorage.removeItem("pos_cart");
+        setIsPaymentModalOpen(false);
+        return true;
+      }
 
+      // QRCODE (TRANSFER): ยืนยันรายการชำระเงินของ Order เดิมที่เคยยิงจองไว้ (pending)
+      let orderId = currentOrderId || posSession.currentOrderId || currentOrderIdRef.current;
       if (!orderId) {
         orderId = await submitOrderToDatabase();
         if (!orderId) {
@@ -596,7 +613,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         payment_id: qrCodeData?.paymentId || 0,
         order_id: orderId,
         payment_method_id: activePaymentMethodId,
-        received_amount: activePaymentMethodId === 1 ? receivedAmount : finalTotal,
+        received_amount: finalTotal,
         received_by_id: 1, 
       });
 
