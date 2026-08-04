@@ -489,37 +489,49 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
 		return nil, fmt.Errorf("ลบรายการสินค้าเดิมล้มเหลว: %w", err)
 	}
 
-	// 4. จัดการข้อมูลลูกค้า (สมาชิก vs ขาจร)
+	// 4. จัดการข้อมูลลูกค้า (สมาชิก vs ขาจร) จาก request ชุดใหม่ (req)
     var customer *entity.Customer
-    var customerIDForOrder *uint = existingOrder.CustomerID
+    var customerIDForOrder *uint
     
-    // ตั้งค่า Default สำหรับชื่อและเบอร์โทรเดิม
     var savedName string
-    if existingOrder.CustomerNameTemp != nil {
-        savedName = *existingOrder.CustomerNameTemp
-    }
-    
     var savedPhone string
-    if existingOrder.CustomerPhoneTemp != nil {
-        savedPhone = *existingOrder.CustomerPhoneTemp
-    }
 
-    if customerIDForOrder != nil && *customerIDForOrder > 0 {
-        // เป็นสมาชิกร้าน: ดึงข้อมูลเพื่อเอาประเภทลูกค้า/เพดานส่วนลดมาใช้คำนวณ
+    if req.CustomerID > 0 {
         customer = &entity.Customer{}
-        if err := tx.Preload("CustomerType").First(customer, *customerIDForOrder).Error; err != nil {
+        if err := tx.Preload("CustomerType").First(customer, req.CustomerID).Error; err != nil {
             tx.Rollback()
-            return nil, errors.New("ไม่พบข้อมูลลูกค้าดั้งเดิมของออเดอร์นี้ในระบบ")
+            return nil, errors.New("ไม่พบข้อมูลลูกค้าชุดใหม่ในระบบ")
+        }
+        
+        customerIDForOrder = &req.CustomerID
+        
+        savedName = customer.CustomerName
+        if req.CustomerNameTemp != "" {
+            savedName = req.CustomerNameTemp
+        }
+        
+        savedPhone = customer.PhoneNumber
+        if req.CustomerPhoneTemp != "" {
+            savedPhone = req.CustomerPhoneTemp
         }
     } else {
         // เป็นลูกค้าทั่วไป/ขาจร
+        customerIDForOrder = nil
         customer = &entity.Customer{
             IsDiscountEnabled: false,
             CustomerType:      entity.CustomerType{TypeName: "GENERAL"},
         }
+        savedName = req.CustomerNameTemp
         if savedName == "" {
             savedName = "ลูกค้าทั่วไป (หน้าร้าน)"
         }
+        savedPhone = req.CustomerPhoneTemp
+    }
+
+	// ตัดความยาวเบอร์โทรไม่ให้เกิน 20 ตัวอักษร
+    runesPhone := []rune(savedPhone)
+    if len(runesPhone) > 20 {
+        savedPhone = string(runesPhone[:20])
     }
 
 	// 5. วนลูปคำนวณ Items ชุดใหม่ + ตรวจสอบส่วนลด + ตัดสต็อกรอบใหม่
