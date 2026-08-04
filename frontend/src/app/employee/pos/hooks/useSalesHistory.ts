@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { posApiService } from "../../../../service/http/pos/pos_service"; 
-import type { SalesHistoryFilterRequest, SalesHistoryItemResponse, } from "../../../../interface/pos/sales_history_interface";
+import type { SalesHistoryFilterRequest, SalesHistoryItemResponse, GetSaleHistoryByIDResponse } from "../../../../interface/pos/sales_history_interface";
 
 export const useSalesHistory = () => {
   // --- States สำหรับ Query Filter ---
@@ -19,13 +19,21 @@ export const useSalesHistory = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // States สำหรับจัดการ Drawer Detail
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const [orderDetail, setOrderDetail] = useState<GetSaleHistoryByIDResponse | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+
   // --- Fetch Function ---
-  const fetchSalesHistory = useCallback(async () => {
+  const fetchSalesHistory = useCallback(async (overrideSearch?: string) => {
     setIsLoading(true);
     setError(null);
 
+    const activeSearch = overrideSearch !== undefined ? overrideSearch : search;
+
     const payload: SalesHistoryFilterRequest = {
-      search: search.trim() || undefined,
+      search: activeSearch.trim() || undefined,
       start_date: startDate || undefined,
       end_date: endDate || undefined,
       customer_type: customerType || undefined,
@@ -47,10 +55,46 @@ export const useSalesHistory = () => {
     }
   }, [search, startDate, endDate, customerType, paymentMethod, page, limit]);
 
+  // เพิ่ม: Effect ดึงข้อมูลรายละเอียดออเดอร์เมื่อ selectedOrderId เปลี่ยนแปลง
+  useEffect(() => {
+    if (!selectedOrderId) {
+      setOrderDetail(null);
+      setCancelReason("");
+      return;
+    }
+
+    const fetchDetail = async () => {
+      setIsDetailLoading(true);
+      try {
+        const data = await posApiService.getSalesHistoryById(selectedOrderId);
+        setOrderDetail(data);
+        if (data.cancel_reason) {
+          setCancelReason(data.cancel_reason);
+        }
+      } catch (err) {
+        console.error("Failed to fetch order detail:", err);
+      } finally {
+        setIsDetailLoading(false);
+      }
+    };
+
+    fetchDetail();
+  }, [selectedOrderId]);
+
+  // เพิ่ม Live Search / Auto Search เมื่อยิงบาร์โค้ดหรือพิมพ์ในช่องค้นหา
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      fetchSalesHistory(search);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [search]); // ดักจับเมื่อ search เปลี่ยนแปลง
+
   // ดึงข้อมูลใหม่ทุกครั้งที่ page หรือ limit เปลี่ยนแปลง
   useEffect(() => {
     fetchSalesHistory();
-  }, [page, limit]);
+  }, [startDate, endDate, customerType, paymentMethod, page, limit]);
 
   // Handler เมื่อกดปุ่ม "ใช้ตัวกรอง"
   const handleApplyFilter = () => {
@@ -95,5 +139,13 @@ export const useSalesHistory = () => {
     fetchSalesHistory,
     handleApplyFilter,
     handleResetFilter,
+    
+    // ส่ง States และ Setters สำหรับ Detail ออกไปใช้งาน
+    selectedOrderId,
+    setSelectedOrderId,
+    orderDetail,
+    isDetailLoading,
+    cancelReason,
+    setCancelReason,
   };
 };

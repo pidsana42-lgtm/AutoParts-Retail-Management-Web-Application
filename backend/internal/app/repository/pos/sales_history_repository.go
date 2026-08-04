@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 	"strconv"
 	"time"
+	"strings"
 )
 
 type SalesHistoryRepository interface {
@@ -27,60 +28,113 @@ func NewSalesHistoryRepository(db *gorm.DB) SalesHistoryRepository {
 }
 
 func (r *salesHistoryRepository) GetSalesHistory(req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error) {
-	var orders []entity.SaleOrder
-	var totalRows int64
+    var orders []entity.SaleOrder
+    var totalRows int64
 
-	query := r.db.Model(&entity.SaleOrder{}).
-		Preload("Customer").
-		Preload("PaymentMethod").
-		Preload("Payments.PaymentMethod")
+    query := r.db.Model(&entity.SaleOrder{}).
+        Preload("Customer").
+        Preload("PaymentMethod").
+        Preload("Payments.PaymentMethod")
 
-	if req.Search != "" {
-		query = query.Joins("LEFT JOIN customers ON customers.id = sale_orders.customer_id").
-			Where("sale_orders.order_number LIKE ? OR sale_orders.customer_name_temp LIKE ? OR customers.customer_name LIKE ?",
-				"%"+req.Search+"%", "%"+req.Search+"%", "%"+req.Search+"%")
-	}
+    // 1. ค้นหาบาร์โค้ด / เลข Order / ชื่อลูกค้า
+    if req.Search != "" {
+        query = query.Joins("LEFT JOIN customers ON customers.id = sale_orders.customer_id").
+            Where("sale_orders.order_number LIKE ? OR sale_orders.customer_name_temp LIKE ? OR customers.customer_name LIKE ?",
+                "%"+req.Search+"%", "%"+req.Search+"%", "%"+req.Search+"%")
+    }
 
-	if req.StartDate != "" && req.EndDate != "" {
-		query = query.Where("sale_orders.created_at BETWEEN ? AND ?", req.StartDate+" 00:00:00", req.EndDate+" 23:59:59")
-	}
+    // 2. กรองตามวันที่ (รองรับทั้งใส่วันเดียว หรือใส่ครบช่วง)
+    if req.StartDate != "" && req.EndDate != "" {
+        // ตัด T23:59:59 ฝั่ง Frontend ออกถ้ามี ป้องกัน String ต่อซ้ำ
+        startDate := strings.Split(req.StartDate, "T")[0]
+        endDate := strings.Split(req.EndDate, "T")[0]
+        query = query.Where("sale_orders.created_at BETWEEN ? AND ?", startDate+" 00:00:00", endDate+" 23:59:59")
+    } else if req.StartDate != "" {
+        startDate := strings.Split(req.StartDate, "T")[0]
+        query = query.Where("sale_orders.created_at >= ?", startDate+" 00:00:00")
+    } else if req.EndDate != "" {
+        endDate := strings.Split(req.EndDate, "T")[0]
+        query = query.Where("sale_orders.created_at <= ?", endDate+" 23:59:59")
+    }
 
-	if req.CustomerTypeID != 0 {
-		query = query.Joins("LEFT JOIN customers ON customers.id = sale_orders.customer_id").
-			Where("customers.customer_type_id = ?", req.CustomerTypeID)
-	}
+    // 3. กรองประเภทลูกค้า (Customer Type)
+    // รองรับทั้ง CustomerTypeID (int) หรือ CustomerType Code (string)
+    if req.CustomerType != "" || req.CustomerTypeID != 0 {
+        if req.CustomerType == "GENERAL" {
+            // ลูกค้าขาจร: ไม่มี customer_id หรือผูกกับ type_id = 1
+            query = query.Where("sale_orders.customer_id IS NULL OR sale_orders.customer_id IN (SELECT id FROM customers WHERE customer_type_id = 1)")
+        } else {
+            query = query.Joins("LEFT JOIN customers ON customers.id = sale_orders.customer_id").
+                Joins("LEFT JOIN customer_types ON customer_types.id = customers.customer_type_id")
 
-	if req.PaymentMethodID != 0 {
-		query = query.Joins("LEFT JOIN payments ON payments.order_id = sale_orders.id").
-			Where("sale_orders.payment_method_id = ? OR payments.payment_method_id = ?",
-				req.PaymentMethodID, req.PaymentMethodID).
-			Group("sale_orders.id")
-	}
+            if req.CustomerType != "" {
+                query = query.Where("customer_types.type_name = ?", req.CustomerType)
+            } else {
+                query = query.Where("customers.customer_type_id = ?", req.CustomerTypeID)
+            }
+        }
+    }
 
-	// นับจำนวนรายการทั้งหมดก่อนทำ Pagination
-	if err := query.Count(&totalRows).Error; err != nil {
-		return nil, 0, err
-	}
+    // 4. กรองวิธีการชำระเงิน (Payment Method)
+    // รองรับทั้ง PaymentMethodID (int) หรือ PaymentMethod Code (string: "CASH", "TRANSFER")
+    if req.PaymentMethod != "" || req.PaymentMethodID != 0 {
+        query = query.Joins("LEFT JOIN payment_methods ON payment_methods.id = sale_orders.payment_method_id").
+            Joins("LEFT JOIN payments ON payments.order_id = sale_orders.id").
+            Joins("LEFT JOIN payment_methods pm2 ON pm2.id = payments.payment_method_id")
 
-	// เช็คเงื่อนไข Limit (ถ้าส่ง Limit มา > 0 ให้ทำ Pagination แต่ถ้า <= 0 จะดึงทั้งหมด)
-	if req.Limit > 0 {
-		// กันไว้ถ้าส่ง page มา <= 0 ให้ใช้หน้า 1
-		page := req.Page
-		if page <= 0 {
-			page = 1
-		}
-		offset := (page - 1) * req.Limit
-		query = query.Limit(req.Limit).Offset(offset)
-	}
+        if req.PaymentMethod != "" {
+            var targetID int
+            var keyword string
 
-	query = query.Order("sale_orders.created_at DESC")
+            switch req.PaymentMethod {
+            case "CASH":
+                targetID = 1
+                keyword = "เงินสด"
+            case "QR", "TRANSFER", "PaymentMethodQR":
+                targetID = 2
+                keyword = "เงินโอน"
+            case "CREDIT", "PaymentMethodCredit":
+                targetID = 3
+                keyword = "เงินเชื่อ"
+            default:
+                keyword = req.PaymentMethod
+            }
 
-	// Query ข้อมูลออกไปใส่ตัวแปร orders
-	if err := query.Find(&orders).Error; err != nil {
-		return nil, 0, err
-	}
+            if targetID > 0 {
+                // กรองด้วย ID ตรงๆ ชัวร์และเร็วกว่า
+                query = query.Where("sale_orders.payment_method_id = ? OR payments.payment_method_id = ?", targetID, targetID)
+            } else {
+                // เผื่อกรณี ค้นหาด้วย keyword
+                query = query.Where("payment_methods.method_name LIKE ? OR pm2.method_name LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+            }
+        } else {
+            query = query.Where("sale_orders.payment_method_id = ? OR payments.payment_method_id = ?", req.PaymentMethodID, req.PaymentMethodID)
+        }
+        query = query.Group("sale_orders.id")
+    }
 
-	return orders, totalRows, nil
+    // นับจำนวนรายการทั้งหมดก่อนทำ Pagination
+    if err := query.Count(&totalRows).Error; err != nil {
+        return nil, 0, err
+    }
+
+    // Pagination
+    if req.Limit > 0 {
+        page := req.Page
+        if page <= 0 {
+            page = 1
+        }
+        offset := (page - 1) * req.Limit
+        query = query.Limit(req.Limit).Offset(offset)
+    }
+
+    query = query.Order("sale_orders.created_at DESC")
+
+    if err := query.Find(&orders).Error; err != nil {
+        return nil, 0, err
+    }
+
+    return orders, totalRows, nil
 }
 
 func (r *salesHistoryRepository) GetSaleHistoryByID(identifier string) (*entity.SaleOrder, error) {

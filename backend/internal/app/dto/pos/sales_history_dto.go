@@ -20,8 +20,10 @@ type SalesHistoryFilterRequest struct {
 	Search          string `form:"search"`
 	StartDate       string `form:"start_date"`
 	EndDate         string `form:"end_date"`
+	CustomerType    string `form:"customer_type" json:"customer_type"`
 	CustomerTypeID  uint   `form:"customer_type_id"`
 	PaymentMethodID uint   `form:"payment_method_id"`
+	PaymentMethod   string `form:"payment_method" json:"payment_method"`
 	Page            int    `form:"page,default=1"`
 	Limit           int    `form:"limit,default=15"`
 }

@@ -10,7 +10,7 @@ type SaleOrder struct {
 	gorm.Model
 	// User ส่งมา
 	OrderNumber string    `gorm:"type:varchar(100);not null;unique" json:"order_number" binding:"required"`
-	OrderDate   time.Time `gorm:"type:date;not null" json:"order_date" binding:"required"`
+	OrderDate   time.Time `gorm:"type:timestamptz;not null" json:"order_date" binding:"required"`
 
 	// FK
 	CustomerID *uint    `gorm:"column:customer_id;default:null" json:"customer_id"`
