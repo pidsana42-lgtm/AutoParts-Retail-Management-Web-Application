@@ -9,4 +9,7 @@ export interface PosSession {
   receivedAmount: number;
   receiverName: string;
   searchQuery: string;
+  currentOrderId?: number | null;
+  currentOrderNumber?: string | null;
+  isPaymentModalOpen?: boolean;
 }

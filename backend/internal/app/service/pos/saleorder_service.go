@@ -21,6 +21,7 @@ type SaleService interface {
     GetCustomerTypes() ([]entity.CustomerType, error)
     SearchCustomers(searchQuery string) ([]customerDto.CustomerResponse, error)
     GetPaymentMethods() ([]pos.PaymentMethodResponse, error)
+    UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrderRequest, userID uint) (*entity.SaleOrder, error)
 }
 
 type saleService struct {
@@ -423,4 +424,282 @@ func (s *saleService) GetPaymentMethods() ([]pos.PaymentMethodResponse, error) {
         return nil, err
     }
     return pos.ToPaymentMethodResponseList(methods), nil
+}
+
+func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrderRequest, userID uint) (*entity.SaleOrder, error) {
+	loc, err := time.LoadLocation("Asia/Bangkok")
+	if err != nil {
+		loc = time.Local
+	}
+	now := time.Now().In(loc)
+
+	tx := s.repo.BeginTransaction()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 1.  ค้นหา Order เดิมด้วย orderNumber แทน ID
+	existingOrder, err := s.repo.GetOrderByOrderNumber(orderNumber) // หรือใช้ tx ดึงใน repo
+	if err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("ไม่พบรายการสั่งซื้อเลขที่ %s", orderNumber)
+	}
+
+	// Guard: ป้องกันการแก้ Order ที่ไม่ได้อยู่ในสถานะ pending
+	if existingOrder.Status != "pending" {
+		tx.Rollback()
+		return nil, errors.New("ไม่สามารถแก้ไขรายการสั่งซื้อที่ทำรายการสำเร็จไปแล้วได้")
+	}
+
+	// -------------------------------------------------------------------------
+	//  คืนยอดหนี้สะสมเก่า (ถ้า Order เดิมเคยเลือกชำระแบบซื้อเชื่อ CREDIT ไว้)
+	// -------------------------------------------------------------------------
+	if existingOrder.PaymentMethod != nil && existingOrder.PaymentMethod.IsCredit && existingOrder.CustomerID != nil {
+		var prevCustomer entity.Customer
+		if err := tx.First(&prevCustomer, *existingOrder.CustomerID).Error; err == nil {
+			if prevCustomer.CurrentDebtAmount >= existingOrder.TotalAmount {
+				prevCustomer.CurrentDebtAmount -= existingOrder.TotalAmount
+			} else {
+				prevCustomer.CurrentDebtAmount = 0
+			}
+			if err := tx.Session(&gorm.Session{}).Save(&prevCustomer).Error; err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("คืนยอดหนี้สะสมเดิมล้มเหลว: %w", err)
+			}
+		}
+	}
+
+	// 2.  คืนสต็อกสินค้า (Revert Stock) จากรายการเก่าใน Order นี้ก่อน!
+	for _, oldItem := range existingOrder.Items {
+		product, err := s.productRepo.GetProductByID(oldItem.ProductID)
+		if err == nil {
+			product.Quantity += oldItem.Qty // คืนจำนวนกลับเข้าคลัง
+			if err := s.productRepo.UpdateProductWithTx(tx, product); err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("คืนสต็อกสินค้า %s ล้มเหลว", product.Product_Name)
+			}
+		}
+	}
+
+	// 3. ลบ OrderItems รายการเก่าออกทั้งหมดใน DB
+	if err := s.repo.DeleteOrderItemsWithTx(tx, existingOrder.ID); err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("ลบรายการสินค้าเดิมล้มเหลว: %w", err)
+	}
+
+	// 4. จัดการข้อมูลลูกค้า (สมาชิก vs ขาจร)
+    var customer *entity.Customer
+    var customerIDForOrder *uint = existingOrder.CustomerID
+    
+    // ตั้งค่า Default สำหรับชื่อและเบอร์โทรเดิม
+    var savedName string
+    if existingOrder.CustomerNameTemp != nil {
+        savedName = *existingOrder.CustomerNameTemp
+    }
+    
+    var savedPhone string
+    if existingOrder.CustomerPhoneTemp != nil {
+        savedPhone = *existingOrder.CustomerPhoneTemp
+    }
+
+    if customerIDForOrder != nil && *customerIDForOrder > 0 {
+        // เป็นสมาชิกร้าน: ดึงข้อมูลเพื่อเอาประเภทลูกค้า/เพดานส่วนลดมาใช้คำนวณ
+        customer = &entity.Customer{}
+        if err := tx.Preload("CustomerType").First(customer, *customerIDForOrder).Error; err != nil {
+            tx.Rollback()
+            return nil, errors.New("ไม่พบข้อมูลลูกค้าดั้งเดิมของออเดอร์นี้ในระบบ")
+        }
+    } else {
+        // เป็นลูกค้าทั่วไป/ขาจร
+        customer = &entity.Customer{
+            IsDiscountEnabled: false,
+            CustomerType:      entity.CustomerType{TypeName: "GENERAL"},
+        }
+        if savedName == "" {
+            savedName = "ลูกค้าทั่วไป (หน้าร้าน)"
+        }
+    }
+
+	// 5. วนลูปคำนวณ Items ชุดใหม่ + ตรวจสอบส่วนลด + ตัดสต็อกรอบใหม่
+	var subtotalAmount, totalDiscountItems float64
+    var newOrderItems []entity.SaleOrderItem
+
+    for _, itemReq := range req.Items {
+        product, err := s.productRepo.GetProductByID(itemReq.ProductID)
+        if err != nil {
+            tx.Rollback()
+            return nil, fmt.Errorf("ไม่พบสินค้า ID %d", itemReq.ProductID)
+        }
+
+
+        unitPrice := product.Sale_price 
+
+        // เช็กสต็อกล่าสุด (หลังคืนสต็อกแล้ว)
+        if product.Quantity < itemReq.Qty {
+            tx.Rollback()
+            return nil, fmt.Errorf("สินค้า %s สต็อกไม่พอขาย (เหลือ %d ชิ้น)", product.Product_Name, product.Quantity)
+        }
+
+        // คำนวณส่วนลด & เช็กเพดานส่วนลด (เปลี่ยน itemReq.UnitPrice -> unitPrice)
+        var itemDiscountPercent float64
+        if itemReq.DiscountType == "percentage" {
+            itemDiscountPercent = itemReq.DiscountValue
+        } else if itemReq.DiscountType == "amount" && unitPrice > 0 {
+            itemDiscountPercent = (itemReq.DiscountValue / unitPrice) * 100
+        }
+
+        allowedMaxDiscount := product.MaxDiscountRate
+        if customer.CustomerType.TypeName == "GARAGE" && customer.IsDiscountEnabled {
+            allowedMaxDiscount += customer.OntopDiscountRate
+        }
+
+        if itemDiscountPercent > allowedMaxDiscount {
+            tx.Rollback()
+            return nil, fmt.Errorf("สินค้า %s มีส่วนลดต่อชิ้น %.2f%% ซึ่งเกินกว่าเกณฑ์สูงสุด (สูงสุด %.2f%%)",
+                product.Product_Name, itemDiscountPercent, allowedMaxDiscount)
+        }
+
+        // คำนวณราคาสุทธิโดยอิงจาก unitPrice จริงจาก DB
+        itemDiscountAmount := (unitPrice * itemDiscountPercent / 100) * float64(itemReq.Qty)
+        finalUnitPrice := unitPrice - (itemDiscountAmount / float64(itemReq.Qty))
+        itemSubtotal := finalUnitPrice * float64(itemReq.Qty)
+
+        subtotalAmount += unitPrice * float64(itemReq.Qty)
+        totalDiscountItems += itemDiscountAmount
+
+        newOrderItems = append(newOrderItems, entity.SaleOrderItem{
+            OrderNumber:     existingOrder.OrderNumber,
+            ProductID:       itemReq.ProductID,
+            PartNumber:      product.Part_Number,
+            ProductName:     product.Product_Name,
+            Qty:             itemReq.Qty,
+            Unit:            product.Unit.Unit_Name,
+            UnitPrice:       unitPrice, // บันทึกราคาจริงลง DB
+            CostPrice:       product.Cost_price,
+            DiscountType:    itemReq.DiscountType,
+            DiscountValue:   itemReq.DiscountValue,
+            DiscountPercent: itemDiscountPercent,
+            DiscountAmount:  itemDiscountAmount,
+            FinalUnitPrice:  finalUnitPrice,
+            Subtotal:        itemSubtotal,
+        })
+
+        // ตัดสต็อกใหม่
+        product.Quantity -= itemReq.Qty
+        if err := s.productRepo.UpdateProductWithTx(tx, product); err != nil {
+            tx.Rollback()
+            return nil, fmt.Errorf("หักสต็อกสินค้า %s ล้มเหลว", product.Product_Name)
+        }
+    }
+
+	// 6. คำนวณส่วนลดท้ายบิลใหม่
+	var billDiscountAmount, billDiscountPercent float64
+	orderSubtotalAfterItems := subtotalAmount - totalDiscountItems
+
+	if req.BillDiscountType == "percentage" && orderSubtotalAfterItems > 0 {
+		billDiscountPercent = req.BillDiscountValue
+		billDiscountAmount = orderSubtotalAfterItems * billDiscountPercent / 100
+	} else if req.BillDiscountType == "amount" {
+		billDiscountAmount = req.BillDiscountValue
+		if orderSubtotalAfterItems > 0 {
+			billDiscountPercent = (billDiscountAmount / orderSubtotalAfterItems) * 100
+		}
+	}
+
+	// เฉลี่ยส่วนลดลง Items
+	var distributedBillDiscount float64
+	for i := range newOrderItems {
+		if orderSubtotalAfterItems > 0 {
+			if i == len(newOrderItems)-1 {
+				newOrderItems[i].AllocatedBillDiscount = billDiscountAmount - distributedBillDiscount
+			} else {
+				weight := newOrderItems[i].Subtotal / orderSubtotalAfterItems
+				allocatedAmount := billDiscountAmount * weight
+				allocatedAmount = float64(int(allocatedAmount*100+0.5)) / 100
+				newOrderItems[i].AllocatedBillDiscount = allocatedAmount
+				distributedBillDiscount += allocatedAmount
+			}
+		}
+		newOrderItems[i].NetSubtotal = newOrderItems[i].Subtotal - newOrderItems[i].AllocatedBillDiscount
+	}
+
+	totalAmount := orderSubtotalAfterItems - billDiscountAmount
+
+	// -------------------------------------------------------------------------
+	// จัดการเช็กวิธีชำระเงิน และคำนวณเครดิต / DueDate
+	// -------------------------------------------------------------------------
+	paymentMethod, err := s.repo.GetPaymentMethodByID(req.PaymentMethodID)
+	if err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("ไม่พบช่องทางการชำระเงินในระบบ: %w", err)
+	}
+	if !paymentMethod.IsActive {
+		tx.Rollback()
+		return nil, fmt.Errorf("ช่องทางการชำระเงิน %s ถูกปิดใช้งานในขณะนี้", paymentMethod.MethodName)
+	}
+
+	var dueDate *time.Time
+
+	if paymentMethod.IsCredit {
+		if customerIDForOrder == nil {
+			tx.Rollback()
+			return nil, errors.New("ลูกค้าทั่วไป/ขาจร ไม่สามารถเลือกชำระแบบซื้อเชื่อได้")
+		}
+
+		if customer.CurrentDebtAmount+totalAmount > customer.CreditLimit {
+			tx.Rollback()
+			return nil, fmt.Errorf("วงเงินเครดิตไม่เพียงพอ! วงเงินคงเหลือขาดไป %.2f บาท", (customer.CurrentDebtAmount+totalAmount)-customer.CreditLimit)
+		}
+
+		// คำนวณวันครบกำหนดชำระ
+		storeConfig, err := s.repo.GetStoreConfig()
+		if err == nil && storeConfig.MaxOverdueDays > 0 {
+			calculatedDueDate := now.AddDate(0, 0, storeConfig.MaxOverdueDays)
+			dueDate = &calculatedDueDate
+		} else {
+			defaultDueDate := now.AddDate(0, 0, 30)
+			dueDate = &defaultDueDate
+		}
+
+		// บวกยอดหนี้สะสมใหม่เพิ่มเข้าบัญชีลูกค้า
+		customer.CurrentDebtAmount += totalAmount
+
+		// UPDATE ยอดหนี้สะสมลง DB
+		if err := tx.Session(&gorm.Session{}).Save(customer).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("อัปเดตยอดหนี้สะสมของลูกค้าล้มเหลว: %v", err)
+		}
+	}
+
+	// 7. อัปเดตค่ากลับเข้า Structural Object ตัวเดิม
+	existingOrder.CustomerID = customerIDForOrder
+	existingOrder.PaymentMethodID = &req.PaymentMethodID
+	existingOrder.DueDate = dueDate
+	existingOrder.CustomerNameTemp = &savedName
+	existingOrder.CustomerPhoneTemp = &savedPhone
+	existingOrder.Subtotal = orderSubtotalAfterItems
+	existingOrder.BillDiscountType = req.BillDiscountType
+	existingOrder.BillDiscountValue = req.BillDiscountValue
+	existingOrder.DiscountAmount = billDiscountAmount
+	existingOrder.DiscountPercent = billDiscountPercent
+	existingOrder.TotalDiscountItems = totalDiscountItems
+	existingOrder.TotalAmount = totalAmount
+	existingOrder.BalanceDue = totalAmount
+	existingOrder.Note = req.Note
+	existingOrder.Items = newOrderItems
+
+	// 8. Save ลง DB
+	if err := s.repo.UpdateOrderWithTx(tx, existingOrder); err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("อัปเดตข้อมูลออเดอร์ล้มเหลว: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("Commit Error: %v", err)
+	}
+
+	return existingOrder, nil
 }

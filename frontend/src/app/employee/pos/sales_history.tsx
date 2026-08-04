@@ -118,6 +118,18 @@ export default function TransactionHistoryPage() {
         });
   };
 
+  const getPaymentBadgeColor = (methodName?: string) => {
+    switch (methodName) {
+      case "เงินเชื่อ":
+        return "bg-blue-500"; 
+      case "เงินโอน/สแกน QR":
+        return "bg-gray-500"; 
+      case "เงินสด":
+      default:
+        return "bg-[#259B24]"; 
+    }
+  };
+
   return (
     <div className="relative flex min-h-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
@@ -559,7 +571,10 @@ export default function TransactionHistoryPage() {
 
                       {/* แถววิธีชำระเงิน */}
                       <div className="pt-2 flex justify-end items-center gap-2">
-                        <Badge variant="info" className="rounded-none font-normal text-xs bg-[#259B24] text-white border-none">
+                        <Badge 
+                          variant="info" 
+                          className={`rounded-none font-normal text-xs text-white border-none ${getPaymentBadgeColor(orderDetail.payment_method_name)}`}
+                        >
                           {orderDetail.payment_method_name || "เงินสด"}
                         </Badge>
                       </div>
