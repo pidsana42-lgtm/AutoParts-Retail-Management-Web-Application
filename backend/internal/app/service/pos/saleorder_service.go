@@ -329,20 +329,43 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
     }
 
     // -------------------------------------------------------------------------
-    // [ประกอบ SaleOrder Entity: ทุกบิลเริ่มต้นที่ Pending / Unpaid ทั้งหมด]
+    // [กำหนดสถานะและยอดชำระตามช่องทางการชำระเงิน]
     // -------------------------------------------------------------------------
+    var orderStatus string = "pending"
+    var paymentStatus string = "unpaid"
+    var receivedAmount float64 = 0.0
+    var paidAmount float64 = 0.0
+    var balanceDue float64 = totalAmount
+    var changeAmount float64 = 0.0
+
+    if req.PaymentMethodID == 1 { // Cash
+        orderStatus = "completed"
+        paymentStatus = "paid"
+        receivedAmount = req.ReceivedAmount
+        paidAmount = totalAmount
+        balanceDue = 0.0
+        if req.ReceivedAmount > totalAmount {
+            changeAmount = req.ReceivedAmount - totalAmount
+        }
+    } else if req.PaymentMethodID == 3 { // Credit
+        orderStatus = "completed"
+        paymentStatus = "unpaid"
+        receivedAmount = 0.0
+        paidAmount = 0.0
+        balanceDue = totalAmount
+        changeAmount = 0.0
+    }
+
     order := &entity.SaleOrder{
         OrderNumber:        orderNumber,
         OrderDate:          now,
         DueDate:            dueDate,
         CustomerID:         customerIDForOrder, 
-        // เพิ่มบรรทัดนี้ลงไปเพื่อบันทึก ID วิธีชำระเงิน
         PaymentMethodID:    &req.PaymentMethodID,
         CustomerNameTemp:   &savedName,
         CustomerPhoneTemp:  &savedPhone,
-        // ตั้งสถานะเป็น รอชำระเงิน/รอการยืนยัน เสมอ
-        Status:             "pending",                  
-        PaymentStatus:      enum.PaymentStatus("unpaid"), 
+        Status:             enum.OrderStatus(orderStatus),                  
+        PaymentStatus:      enum.PaymentStatus(paymentStatus), 
         Subtotal:           orderSubtotalAfterItems,
         BillDiscountType:   req.BillDiscountType,
         BillDiscountValue:  req.BillDiscountValue,
@@ -350,11 +373,10 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         DiscountPercent:    billDiscountPercent,
         TotalDiscountItems: totalDiscountItems,
         TotalAmount:        totalAmount,
-        // ยอดชำระจริงจะเป็น 0.00 จนกว่าจะกด "ยืนยันและพิมพ์ใบเสร็จ"
-        ReceivedAmount:     0.0,
-        PaidAmount:         0.0,
-        BalanceDue:         totalAmount,
-        ChangeAmount:       0.0,
+        ReceivedAmount:     receivedAmount,
+        PaidAmount:         paidAmount,
+        BalanceDue:         balanceDue,
+        ChangeAmount:       changeAmount,
         Note:               req.Note,
         Items:              orderItems,
     }
@@ -363,6 +385,24 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
     if err := s.repo.CreateOrderWithTx(tx, order); err != nil {
         tx.Rollback()
         return nil, err
+    }
+
+    // สร้าง Payment Record สำหรับกรณีชำระเงินสดทันที
+    if req.PaymentMethodID == 1 {
+        payment := &entity.Payment{
+            OrderID:         order.ID,
+            PaymentMethodID: req.PaymentMethodID,
+            Amount:          totalAmount,
+            ReceivedAmount:  req.ReceivedAmount,
+            ChangeAmount:    changeAmount,
+            ReferenceNumber: fmt.Sprintf("PAY-%s-%d", order.OrderNumber, now.Unix()),
+            ReceivedByID:    userID,
+            PaidAt:          &now,
+        }
+        if err := tx.Session(&gorm.Session{}).Create(payment).Error; err != nil {
+            tx.Rollback()
+            return nil, fmt.Errorf("สร้างรายการชำระเงินสดล้มเหลว: %w", err)
+        }
     }
 
     // ทำการ Commit Transaction
@@ -685,12 +725,39 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
 		}
 	}
 
-	// 7. อัปเดตค่ากลับเข้า Structural Object ตัวเดิม
+	// 7. กำหนดสถานะและยอดชำระตามช่องทางการชำระเงิน
+	var orderStatus string = "pending"
+	var paymentStatus string = "unpaid"
+	var receivedAmount float64 = 0.0
+	var paidAmount float64 = 0.0
+	var balanceDue float64 = totalAmount
+	var changeAmount float64 = 0.0
+
+	if req.PaymentMethodID == 1 { // Cash
+		orderStatus = "completed"
+		paymentStatus = "paid"
+		receivedAmount = req.ReceivedAmount
+		paidAmount = totalAmount
+		balanceDue = 0.0
+		if req.ReceivedAmount > totalAmount {
+			changeAmount = req.ReceivedAmount - totalAmount
+		}
+	} else if req.PaymentMethodID == 3 { // Credit
+		orderStatus = "completed"
+		paymentStatus = "unpaid"
+		receivedAmount = 0.0
+		paidAmount = 0.0
+		balanceDue = totalAmount
+		changeAmount = 0.0
+	}
+
 	existingOrder.CustomerID = customerIDForOrder
 	existingOrder.PaymentMethodID = &req.PaymentMethodID
 	existingOrder.DueDate = dueDate
 	existingOrder.CustomerNameTemp = &savedName
 	existingOrder.CustomerPhoneTemp = &savedPhone
+	existingOrder.Status = enum.OrderStatus(orderStatus)
+	existingOrder.PaymentStatus = enum.PaymentStatus(paymentStatus)
 	existingOrder.Subtotal = orderSubtotalAfterItems
 	existingOrder.BillDiscountType = req.BillDiscountType
 	existingOrder.BillDiscountValue = req.BillDiscountValue
@@ -698,7 +765,10 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
 	existingOrder.DiscountPercent = billDiscountPercent
 	existingOrder.TotalDiscountItems = totalDiscountItems
 	existingOrder.TotalAmount = totalAmount
-	existingOrder.BalanceDue = totalAmount
+	existingOrder.ReceivedAmount = receivedAmount
+	existingOrder.PaidAmount = paidAmount
+	existingOrder.BalanceDue = balanceDue
+	existingOrder.ChangeAmount = changeAmount
 	existingOrder.Note = req.Note
 	existingOrder.Items = newOrderItems
 
@@ -706,6 +776,40 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
 	if err := s.repo.UpdateOrderWithTx(tx, existingOrder); err != nil {
 		tx.Rollback()
 		return nil, fmt.Errorf("อัปเดตข้อมูลออเดอร์ล้มเหลว: %w", err)
+	}
+
+	// สร้างหรืออัปเดต Payment Record สำหรับกรณีชำระเงินสดทันที
+	if req.PaymentMethodID == 1 {
+		var payment entity.Payment
+		err := tx.Where("order_id = ?", existingOrder.ID).First(&payment).Error
+		if err != nil {
+			// สร้างใหม่
+			payment = entity.Payment{
+				OrderID:         existingOrder.ID,
+				PaymentMethodID: req.PaymentMethodID,
+				Amount:          totalAmount,
+				ReceivedAmount:  req.ReceivedAmount,
+				ChangeAmount:    changeAmount,
+				ReferenceNumber: fmt.Sprintf("PAY-%s-%d", existingOrder.OrderNumber, now.Unix()),
+				ReceivedByID:    userID,
+				PaidAt:          &now,
+			}
+			if err := tx.Create(&payment).Error; err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("สร้างรายการชำระเงินสดล้มเหลว: %w", err)
+			}
+		} else {
+			// อัปเดตของเดิม
+			payment.PaymentMethodID = req.PaymentMethodID
+			payment.Amount = totalAmount
+			payment.ReceivedAmount = req.ReceivedAmount
+			payment.ChangeAmount = changeAmount
+			payment.PaidAt = &now
+			if err := tx.Save(&payment).Error; err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("อัปเดตรายการชำระเงินสดล้มเหลว: %w", err)
+			}
+		}
 	}
 
 	if err := tx.Commit().Error; err != nil {

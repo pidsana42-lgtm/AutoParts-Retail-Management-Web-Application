@@ -638,9 +638,13 @@ export default function PosPage(): React.JSX.Element {
                             <p className="text-xs text-red-500 mb-2">ไม่สามารถโหลด QR Code ได้</p>
                             <button
                               type="button"
-                              onClick={() => {
-                                if (paymentData.currentOrderId) {
-                                  paymentData.handleGeneratePromptPayQR(paymentData.currentOrderId, 1);
+                              onClick={async () => {
+                                let targetOrderId = paymentData.currentOrderId || paymentData.posSession.currentOrderId;
+                                if (!targetOrderId) {
+                                  targetOrderId = await paymentData.submitOrderToDatabase();
+                                }
+                                if (targetOrderId) {
+                                  paymentData.handleGeneratePromptPayQR(targetOrderId, 1);
                                 }
                               }}
                               className="px-3 py-1 bg-white text-gray-700 text-xs rounded border border-gray-200 hover:bg-gray-50 transition"
