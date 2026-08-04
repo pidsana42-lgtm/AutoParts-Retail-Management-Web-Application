@@ -76,9 +76,10 @@ export default function TransactionHistoryPage() {
 
   // --- Helper Render Status Badge ---
   const renderStatusBadge = (status: string, paymentStatus: string) => {
-    const billStatus = (status || "").toUpperCase();
-    const payStatus = (paymentStatus || "").toUpperCase();
+    const billStatus = (status || "").trim().toUpperCase();
+    const payStatus = (paymentStatus || "").trim().toUpperCase();
 
+    // 1. เช็กการยกเลิกก่อน
     if (billStatus === "PENDING_CANCEL") {
       return <Badge variant="error" className="rounded-none whitespace-nowrap">ส่งคำขอยกเลิกแล้ว</Badge>;
     }
@@ -87,20 +88,27 @@ export default function TransactionHistoryPage() {
       return <Badge variant="error" className="rounded-none whitespace-nowrap">ยกเลิกแล้ว</Badge>;
     }
 
-    switch (payStatus || billStatus) {
-      case "COMPLETED":
-      case "PAID":
-      case "ชำระแล้ว":
-        return <Badge variant="success" className="rounded-none whitespace-nowrap">ชำระแล้ว</Badge>;
-      case "OVERDUE":
-      case "เกินกำหนด":
-        return <Badge variant="error" className="rounded-none whitespace-nowrap">เกินกำหนด</Badge>;
-      case "PENDING":
-      case "รอชำระ":
-        return <Badge variant="info" className="rounded-none whitespace-nowrap">รอชำระ</Badge>;
-      default:
-        return <Badge variant="info" className="rounded-none whitespace-nowrap">{status || "ไม่ทราบสถานะ"}</Badge>;
+    // 2. ถ้าชำระเงินครบถ้วนแล้ว (paid) -> แสดง "ชำระแล้ว"
+    if (payStatus === "PAID" || payStatus === "ชำระแล้ว") {
+      return <Badge variant="success" className="rounded-none whitespace-nowrap">ชำระแล้ว</Badge>;
     }
+
+    // 3. ถ้าเป็นบิลเงินเชื่อที่ทำรายการเสร็จแล้ว แต่ยังไม่ชำระ (completed + unpaid/partial)
+    if (billStatus === "COMPLETED") {
+      return <Badge variant="info" className="rounded-none whitespace-nowrap">ทำรายการแล้ว</Badge>;
+    }
+
+    // 4. สถานะรอดำเนินการ / รอตอบรับ
+    if (billStatus === "PENDING") {
+      return <Badge variant="neutral" className="rounded-none whitespace-nowrap">รอดำเนินการ</Badge>;
+    }
+
+    if (billStatus === "OVERDUE" || payStatus === "OVERDUE") {
+      return <Badge variant="error" className="rounded-none whitespace-nowrap">เกินกำหนด</Badge>;
+    }
+
+    // default สำรองกรณีค่าอื่น
+    return <Badge variant="info" className="rounded-none whitespace-nowrap">{status || "ไม่ทราบสถานะ"}</Badge>;
   };
 
   // Helper สำหรับแปลงวันที่
@@ -127,6 +135,19 @@ export default function TransactionHistoryPage() {
       case "เงินสด":
       default:
         return "bg-[#259B24]"; 
+    }
+  };
+
+  const getPaymentVariant = (methodName?: string) => {
+    switch (methodName) {
+      case "เงินเชื่อ":
+        return "credit";
+      case "เงินโอน/สแกน QR":
+        return "transfer";
+      case "เงินสด":
+        return "cash";
+      default:
+        return "neutral"; // คืนค่าสีเทาไว้กรณีเป็นค่า null หรือ "-"
     }
   };
 
@@ -308,11 +329,9 @@ export default function TransactionHistoryPage() {
 
                       {/* 5. วิธีการชำระเงิน */}
                       <TableCell className="py-3.5 px-4 text-center">
-                        <span className="inline-block px-2 py-0.5 bg-[#F0EDEC] rounded-none">
-                          <Text variant="xs" className="font-normal text-[#1C1B1B] tracking-wide mb-0">
-                            {item.payment_method_name || "-"}
-                          </Text>
-                        </span>
+                        <Badge variant={getPaymentVariant(item.payment_method_name)}>
+                          {item.payment_method_name || "-"}
+                        </Badge>
                       </TableCell>
 
                       {/* 6. สถานะ */}
@@ -571,10 +590,7 @@ export default function TransactionHistoryPage() {
 
                       {/* แถววิธีชำระเงิน */}
                       <div className="pt-2 flex justify-end items-center gap-2">
-                        <Badge 
-                          variant="info" 
-                          className={`rounded-none font-normal text-xs text-white border-none ${getPaymentBadgeColor(orderDetail.payment_method_name)}`}
-                        >
+                        <Badge variant={getPaymentVariant(orderDetail.payment_method_name)}>
                           {orderDetail.payment_method_name || "เงินสด"}
                         </Badge>
                       </div>

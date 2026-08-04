@@ -242,6 +242,27 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     }
   };
 
+  const refreshCustomerFinancials = async (customerPhone: string) => {
+    if (!customerPhone || customerPhone.includes("ลูกค้าทั่วไป")) return;
+    try {
+      const response = await apiClient.get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${customerPhone}`);
+      const dataList = response.data;
+      if (dataList && dataList.length > 0) {
+        const matched = dataList.find((c) => c.phone_number === customerPhone || c.customer_name === customerPhone);
+        if (matched) {
+          setPosSession((prev) => ({
+            ...prev,
+            customer: matched,
+            activeTypeId: matched.customer_type?.id || 1
+          }));
+          setCustomer(matched);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to refresh customer financials:", error);
+    }
+  };
+
   const triggerLiveSearch = async (query: string) => {
     const cleaned = query.trim();
     updateSession("searchQuery", query);
@@ -404,6 +425,9 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
           const updatedData = resData?.data || resData || response;
           
           const orderId = updatedData?.id || storedOrderId || currentOrderId;
+          if (posSession.customer?.phone_number) {
+            refreshCustomerFinancials(posSession.customer.phone_number);
+          }
           return orderId || null;
         } catch (error: any) {
           const isNotFoundError = 
@@ -482,6 +506,9 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
           console.error("⚠️ CRITICAL: Could not extract orderNumber or orderId from backend response!");
         }
 
+        if (posSession.customer?.phone_number) {
+          refreshCustomerFinancials(posSession.customer.phone_number);
+        }
         return orderId || null;
       }
     } catch (error: any) {

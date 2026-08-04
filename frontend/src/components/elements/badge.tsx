@@ -18,6 +18,11 @@ const badgeVariants = cva(
         info:        "bg-blue-100 text-blue-700",
         neutral:     "bg-slate-100 text-slate-600",
         outline:     "border border-current bg-transparent text-slate-600",
+        
+        //เพิ่มประเภทการชำระเงิน
+        credit:      "bg-[#2563EB] text-white font-light",         // เงินเชื่อ
+        transfer:    "bg-gray-400 text-white font-light",         // เงินโอน/สแกน QR
+        cash:        "bg-[#259B24] text-white font-light",        // เงินสด
       },
       size: {
         sm: "w-20 px-1.5 py-0.5 text-xs",
@@ -43,6 +48,10 @@ const dotVariants = cva("rounded-full shrink-0", {
       info:        "bg-blue-500",
       neutral:     "bg-slate-400",
       outline:     "bg-slate-400",
+
+      credit:      "bg-white",
+      transfer:    "bg-white",
+      cash:        "bg-white",
     },
     size: {
       sm: "h-1 w-1",
