@@ -7,8 +7,6 @@ import {
   ChevronsRight,
   ScanBarcode,
   X,
-  PackageCheck,
-  AlertCircle,
 } from "lucide-react";
 
 // นำเข้า Components
@@ -428,196 +426,189 @@ export default function TransactionHistoryPage() {
         </main>
       </div>
 
-      {/* ==================== SLIDE-OVER DRAWER (MOCK DATA) ==================== */}
-      {selectedOrder && (
+      {/* ==================== SLIDE-OVER DRAWER (REAL DATA) ==================== */}
+      {selectedOrderId && (
         <div className="fixed inset-0 z-50 flex justify-end">
           {/* Backdrop ฉากหลังมืด */}
           <div
             className="fixed inset-0 bg-black/60 backdrop-blur-none transition-opacity cursor-pointer"
-            onClick={() => setSelectedOrder(null)}
+            onClick={() => setSelectedOrderId(null)}
           />
 
           {/* Drawer Panel */}
           <aside className="relative z-10 w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200">
             
             {/* Header Drawer */}
-            <div className="flex-1 overflow-y-auto">
-
-              {/* Header */}
-              <div className="p-5 border-b border-[#E7BDB8] flex items-start justify-between bg-white">
-                <div>
-                  <Heading level="h3" weight="normal" className="text-xl text-[#1C1B1B] mb-0.5">
-                    รายละเอียดออเดอร์
-                  </Heading>
-                  <Text variant="xs" className="text-[#6B7280]">
-                    หมายเลขบิล: <span className="font-semibold text-[#1C1B1B]">{selectedOrder.order_number}</span>
-                  </Text>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedOrder(null)}
-                  className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+            {isDetailLoading ? (
+              <div className="flex-1 flex items-center justify-center p-6">
+                <Text variant="small" className="text-gray-500">กำลังโหลดข้อมูลออเดอร์...</Text>
               </div>
+            ) : orderDetail ? (
+              <div className="flex-1 overflow-y-auto">
+                {/* Header */}
+                <div className="p-5 border-b border-[#E7BDB8] flex items-start justify-between bg-white">
+                  <div>
+                    <Heading level="h3" weight="normal" className="text-xl text-[#1C1B1B] mb-0.5">
+                      รายละเอียดออเดอร์
+                    </Heading>
+                    <Text variant="xs" className="text-[#6B7280]">
+                      หมายเลขบิล: <span className="font-semibold text-[#1C1B1B]">{orderDetail.order_number}</span>
+                    </Text>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrderId(null)}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
 
-              {/* Scrollable Body Content */}
-              <div className="p-6 space-y-6">
-                
-                {/* ข้อมูลลูกค้า */}
-                <div>
-                  <Text variant="xs" className="font-normal text-[#E51C23] mb-2">
-                    ข้อมูลลูกค้า
-                  </Text>
-                  <Card className="bg-[#F6F3F2] rounded-none border border-gray-100 shadow-none">
-                    <CardContent className="p-4 space-y-1">
-                      <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
-                        {getDisplayCustomerName(selectedOrder)}
-                      </Text>
-                      <Text variant="small" className="text-[#6B7280] mb-0">
-                        {selectedOrder.phone_number || selectedOrder.customer_phone_temp || "โทร: 02-123-4567"}
-                      </Text>
-                      <Text variant="xs" className="text-[#6B7280] mb-0">
-                        123/45 ถนนนวมินทร์ เขตบึงกุ่ม กรุงเทพฯ 10230
-                      </Text>
+                {/* Scrollable Body Content */}
+                <div className="p-6 space-y-6">
+                  {/* ข้อมูลลูกค้า */}
+                  <div>
+                    <Text variant="xs" className="font-normal text-[#E51C23] mb-2">
+                      ข้อมูลลูกค้า
+                    </Text>
+                    <Card className="bg-[#F6F3F2] rounded-none border border-gray-100 shadow-none">
+                      <CardContent className="p-4 space-y-1">
+                        <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
+                          {getDisplayCustomerName(orderDetail as unknown as SalesHistoryItemResponse)}
+                        </Text>
+                        <Text variant="small" className="text-[#6B7280] mb-0">
+                          {orderDetail.phone_number || orderDetail.customer_phone_temp || "-"}
+                        </Text>
+                        {orderDetail.note && (
+                          <Text variant="xs" className="text-[#6B7280] mb-0">
+                            {orderDetail.note}
+                          </Text>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* รายการสินค้าจริง */}
+                  <div>
+                    <Text variant="xs" className="font-normal text-[#E51C23] mb-3">
+                      รายการสินค้า ({orderDetail.items?.length || 0})
+                    </Text>
+                    <div className="divide-y divide-gray-100">
+                      {orderDetail.items && orderDetail.items.map((prod) => (
+                        <div key={prod.id} className="flex items-center justify-between py-3 first:pt-0">
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
+                                {prod.product_name}
+                              </Text>
+                              <Text variant="xs" className="font-normal text-[#6B7280] mb-0">
+                                QTY: {prod.qty} {prod.unit} | {prod.unit_price.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                              </Text>
+                            </div>
+                          </div>
+                          <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
+                            {(prod.subtotal || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </Text>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* สรุปยอดเงิน */}
+                  <Card className="bg-[#1C1B1B] rounded-none border-none shadow-none">
+                    <CardContent className="p-4 space-y-2.5">
+                      {/* แถวราคารวมสินค้า */}
+                      <div className="flex justify-between text-white">
+                        <Text variant="xs" className="text-[#9CA3AF] mb-0">
+                          ราคารวมสินค้า
+                        </Text>
+                        <Text variant="xs" className="font-normal text-white mb-0">
+                          {(orderDetail.subtotal || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        </Text>
+                      </div>
+
+                      {/* แถวส่วนลดท้ายบิล */}
+                      <div className="flex justify-between text-white">
+                        <Text variant="xs" className="text-[#9CA3AF] mb-0">
+                          ส่วนลดท้ายบิล
+                        </Text>
+                        <Text variant="xs" className="font-normal text-white mb-0">
+                          {(orderDetail.discount_amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        </Text>
+                      </div>
+
+                      {/* แถวส่วนลดรวมทั้งสิ้น*/}
+                      <div className="flex justify-between text-white">
+                        <Text variant="xs" className="text-[#9CA3AF] mb-0">
+                          ส่วนลดรวมทั้งสิ้น
+                        </Text>
+                        <Text variant="xs" className="font-normal text-white mb-0">
+                          {(orderDetail.total_discount_items || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        </Text>
+                      </div>
+
+                      {/* แถวยอดชำระสุทธิ */}
+                      <div className="border-t border-[#9CA3AF] pt-2.5 flex justify-between">
+                        <Text variant="small" className="font-normal text-white mb-0">
+                          ยอดชำระสุทธิ
+                        </Text>
+                        <Text variant="small" className="font-normal text-white mb-0">
+                          {(orderDetail.total_amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        </Text>
+                      </div>
+
+                      {/* แถววิธีชำระเงิน */}
+                      <div className="pt-2 flex justify-end items-center gap-2">
+                        <Badge variant="info" className="rounded-none font-normal text-xs bg-[#259B24] text-white border-none">
+                          {orderDetail.payment_method_name || "เงินสด"}
+                        </Badge>
+                      </div>
                     </CardContent>
                   </Card>
-                </div>
 
-                {/* รายการสินค้า (Mock Data ตามรูปแบบจริง) */}
-                <div>
-                  <Text variant="xs" className="font-normal text-[#E51C23] mb-3">
-                    รายการสินค้า
-                  </Text>
-                  <div className="divide-y divide-gray-100">
-                    {/* รายการที่ 1 */}
-                    <div className="flex items-center justify-between py-3 first:pt-0">
-                      <div className="flex items-center gap-3">
-                        <div>
-                          <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
-                            ชุดเกียร์ออโต้ T-Series
-                          </Text>
-                          <Text variant="xs" className="font-normal text-[#6B7280] mb-0">
-                            QTY: 1 | 8,500.00
-                          </Text>
-                        </div>
-                      </div>
-                      <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
-                        8,500.00
-                      </Text>
-                    </div>
-
-                    {/* รายการที่ 2 */}
-                    <div className="flex items-center justify-between py-3">
-                      <div className="flex items-center gap-3">
-                        <div>
-                          <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
-                            ผ้าเบรคเซรามิค คู่หน้า
-                          </Text>
-                          <Text variant="xs" className="font-normal text-[#6B7280] mb-0">
-                            QTY: 2 | 1,975.00
-                          </Text>
-                        </div>
-                      </div>
-                      <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
-                        3,950.00
-                      </Text>
-                    </div>
-                  </div>
-                </div>
-
-                {/* สรุปยอดเงิน */}
-                <Card className="bg-[#1C1B1B] rounded-none border-none shadow-none">
-                  <CardContent className="p-4 space-y-2.5">
-                    <div className="flex justify-between text-white">
-                      <Text variant="xs" className="text-[#9CA3AF] mb-0">
-                        ราคารวมสินค้า
-                      </Text>
-                      <Text variant="xs" className="font-normal text-white mb-0">
-                        {(selectedOrder.total_amount || 12450).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                      </Text>
-                    </div>
-
-                    {/* แถวที่ 2: VAT (ปรับสีเทาให้อ่านออกบนพื้นหลังดำ) */}
-                    <div className="flex justify-between text-white">
-                      <Text variant="xs" className="text-[#9CA3AF] mb-0">
-                        ส่วนลดท้ายบิล
-                      </Text>
-                      <Text variant="xs" className="font-normal text-white mb-0">
-                        0.00
-                      </Text>
-                    </div>
-
-                    {/* แถวที่ 2: VAT (ปรับสีเทาให้อ่านออกบนพื้นหลังดำ) */}
-                    <div className="flex justify-between text-white">
-                      <Text variant="xs" className="text-[#9CA3AF] mb-0">
-                        ส่วนลดรวมทั้งสิ้น
-                      </Text>
-                      <Text variant="xs" className="font-normal text-white mb-0">
-                        0.00
-                      </Text>
-                    </div>
-
-                    {/* แถวที่ 3: ยอดสุทธิ (เน้นตัวหนา สีขาว + ตัวเลขสีแดงแบรนด์) */}
-                    <div className="border-t border-[#9CA3AF] pt-2.5 flex justify-between">
-                      <Text variant="small" className="font-normal text-white mb-0">
-                        ยอดชำระสุทธิ 
-                      </Text>
-                      <Text variant="small" className="font-normal text-white mb-0">
-                        {(selectedOrder.total_amount || 12450).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                      </Text>
-                    </div>
-
-                    {/* แถวที่ 4: วิธีชำระเงิน */}
-                    <div className="pt-2 flex justify-end items-center gap-2">
-                      <Badge variant="info" className="rounded-none font-normal text-xs bg-[#259B24] text-white border-none">
-                        {selectedOrder.payment_method_name || "Credit Card (ชำระแล้ว)"}
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* ฟอร์มระบุเหตุผลในการยกเลิก */}
-                <div className="space-y-3">
-                  <Text variant="xs" className="font-normal text-[#E51C23] mb-3">
-                    ระบุเหตุผลในการยกเลิก
-                  </Text>
-                  
-                  <textarea
-                    rows={3}
-                    //value={cancelReason}
-                    //onChange={(e) => setCancelReason(e.target.value)}
-                    placeholder="ตัวอย่าง: ลูกค้าขอยกเลิกออเดอร์เนื่องจากเปลี่ยนใจ..."
-                    className="w-full p-2.5 text-sm font-light bg-[#F6F3F2] border border-[#E51C23] rounded-none focus:outline-none text-[#1C1B1B] placeholder-[#6B7280] resize-none"
-                  />
-
-                 <div className="flex gap-3 pt-1">
-                    {/* ปุ่มยืนยันการขออนุมัติยกเลิก */}
-                    <Button
-                      type="button"
-                      variant="solid-red"
-                      //onClick={handleConfirmCancel}
-                      className="flex-1 text-sm   "
-                    >
-                      ยืนยันการขออนุมัติยกเลิก
-                    </Button>
+                  {/* ฟอร์มระบุเหตุผลในการยกเลิก */}
+                  <div className="space-y-3">
+                    <Text variant="xs" className="font-normal text-[#E51C23] mb-3">
+                      ระบุเหตุผลในการยกเลิก
+                    </Text>
                     
-                    {/* ปุ่มยกเลิก */}
-                    <Button
-                      type="button"
-                      variant="outline-cancel"
-                      onClick={() => setSelectedOrder(null)}
-                      className="text-sm px-6"
-                    >
-                      ยกเลิก
-                    </Button>
+                    <textarea
+                      rows={3}
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                      placeholder="ตัวอย่าง: ลูกค้าขอยกเลิกออเดอร์เนื่องจากเปลี่ยนใจ..."
+                      className="w-full p-2.5 text-sm font-light bg-[#F6F3F2] border border-[#E51C23] rounded-none focus:outline-none text-[#1C1B1B] placeholder-[#6B7280] resize-none"
+                    />
+
+                    <div className="flex gap-3 pt-1">
+                       {/* ปุ่มยืนยันการขออนุมัติยกเลิก */}
+                      <Button
+                        type="button"
+                        variant="solid-red"
+                        className="flex-1 text-sm"
+                      >
+                        ยืนยันการขออนุมัติยกเลิก
+                      </Button>
+                      
+                      {/* ปุ่มยกเลิก */}
+                      <Button
+                        type="button"
+                        variant="outline-cancel"
+                        onClick={() => setSelectedOrderId(null)}
+                        className="text-sm px-6"
+                      >
+                        ยกเลิก
+                      </Button>
+                    </div>
                   </div>
+
                 </div>
-
               </div>
-            </div>
-
+            ) : (
+              <div className="flex-1 flex items-center justify-center p-6">
+                <Text variant="small" className="text-red-500">ไม่พบข้อมูลออเดอร์</Text>
+              </div>
+            )}
           </aside>
         </div>
       )}
