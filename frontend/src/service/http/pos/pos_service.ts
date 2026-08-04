@@ -4,7 +4,7 @@ import type { POSProductResponse } from "../../../interface/pos/product_interfac
 import type { StoreConfigInterface } from "../../../interface/pos/store_config_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
 import type { ConfirmPaymentRequest } from "../../../interface/pos/payment_interface";
-import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse } from "../../../interface/pos/sales_history_interface";
+import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, GetSaleHistoryByIDResponse } from "../../../interface/pos/sales_history_interface";
 
 // API Services 
 export const posApiService = {
@@ -43,6 +43,13 @@ export const posApiService = {
     apiClient
       .get<{ data: SalesHistoryPaginationResponse; message: string }>("/pos/sales/history", { params })
       .then((res) => res.data.data), 
+  
+  /** ดึงประวัติการขายสินค้าตาม ID (รายละเอียดบิล) */
+  getSalesHistoryById: (id: number): Promise<GetSaleHistoryByIDResponse> =>
+    apiClient
+      .get<{ data: GetSaleHistoryByIDResponse; message: string }>(`/pos/sales-history/${id}`)
+      .then((res) => res.data.data),
+
   /** ค้นหาใบสั่งซื้อขายด้วยหมายเลข invoice */
   getSaleOrderByNumber: async (orderNumber: string): Promise<any | null> => {
     const endpoints = [

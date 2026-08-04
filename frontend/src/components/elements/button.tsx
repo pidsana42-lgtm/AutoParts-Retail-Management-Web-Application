@@ -16,14 +16,24 @@ const buttonVariants = cva(
           "bg-gradient-to-r from-[#B70011] to-[#E51C23] text-white",
           "hover:from-[#9e0010] hover:to-[#c9181f]",
         ],
+        //สีแดงทึบ ไม่ไล่สี
+        "solid-red": [
+          "bg-[#D32F2F] text-white border border-[#D32F2F]",
+          "hover:bg-[#C62828] hover:border-[#C62828]",
+        ],
         secondary: "bg-black text-white hover:bg-gray-800",
         tertiary:  "bg-[#E5E2E1] text-black hover:bg-[#D4D0CE]",
         danger:    "bg-red-700 text-white hover:bg-red-800",
         outline:   "border-2 border-red-600 text-red-600 hover:bg-red-50",
+        // ขอบแดงอ่อน พื้นขาว (สำหรับปุ่มยกเลิก)
+        "outline-cancel": [
+          "bg-white border border-[#FFCDD2] text-gray-700",
+          "hover:bg-gray-50",
+        ],
       },
       size: {
         sm: "px-3 py-1.5 text-sm",
-        md: "px-4 py-2 text-base",
+        md: "px-4 py-2 text-base font-normal tracking-wide",
         lg: "px-6 py-3 text-lg",
       },
     },

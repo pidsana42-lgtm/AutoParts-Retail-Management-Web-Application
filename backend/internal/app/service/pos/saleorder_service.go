@@ -39,6 +39,12 @@ func NewSaleService(repo posRepo.SaleRepository, cRepo customerRepo.CustomerRepo
 
 // ปรับ Signature ให้ส่งคืน (*entity.SaleOrder, error)
 func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uint) (*entity.SaleOrder, error) {
+
+    loc, err := time.LoadLocation("Asia/Bangkok")
+    if err != nil {
+        loc = time.Local
+    }
+    now := time.Now().In(loc)
     // -------------------------------------------------------------------------
     // [เตรียมระบบฐานข้อมูลและดึงข้อมูลตั้งต้น]
     // -------------------------------------------------------------------------
@@ -303,11 +309,11 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         // คำนวณวันครบกำหนดชำระ
         storeConfig, err := s.repo.GetStoreConfig()
         if err == nil && storeConfig.MaxOverdueDays > 0 {
-            calculatedDueDate := time.Now().AddDate(0, 0, storeConfig.MaxOverdueDays)
+            calculatedDueDate := now.AddDate(0, 0, storeConfig.MaxOverdueDays)
             dueDate = &calculatedDueDate
         } else {
             // Fallback กรณีหา config ไม่เจอ (เช่น ค่าตั้งต้น 30 วัน)
-            defaultDueDate := time.Now().AddDate(0, 0, 30)
+            defaultDueDate := now.AddDate(0, 0, 30)
             dueDate = &defaultDueDate
         }
 
@@ -326,7 +332,7 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
     // -------------------------------------------------------------------------
     order := &entity.SaleOrder{
         OrderNumber:        orderNumber,
-        OrderDate:          time.Now(),
+        OrderDate:          now,
         DueDate:            dueDate,
         CustomerID:         customerIDForOrder, 
         // เพิ่มบรรทัดนี้ลงไปเพื่อบันทึก ID วิธีชำระเงิน
