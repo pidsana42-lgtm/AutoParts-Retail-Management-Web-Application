@@ -33,6 +33,7 @@ func (r *salesHistoryRepository) GetSalesHistory(req pos.SalesHistoryFilterReque
 
     query := r.db.Model(&entity.SaleOrder{}).
         Preload("Customer").
+        Preload("Customer.CustomerType").
         Preload("PaymentMethod").
         Preload("Payments.PaymentMethod")
 
@@ -144,6 +145,7 @@ func (r *salesHistoryRepository) GetSaleHistoryByID(identifier string) (*entity.
 	query := r.db.Model(&entity.SaleOrder{}).
 		Preload("Customer").
 		Preload("PaymentMethod").
+        Preload("Customer.CustomerType").
 		Preload("Payments").
 		Preload("Items")
 

@@ -43,6 +43,8 @@ type SalesHistoryItemResponse struct {
 	// ขาจร
 	CustomerNameTemp  *string `json:"customer_name_temp"`
 	CustomerPhoneTemp *string `json:"customer_phone_temp"`
+	CustomerTypeName string `json:"customer_type_name"` 
+    Address          string `json:"address"` 
 
 	Subtotal       float64 `json:"subtotal"`
 	DiscountAmount float64 `json:"discount_amount"`
@@ -67,6 +69,8 @@ type SalesHistoryPaginationResponse struct {
 func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse {
 	var customerName string
 	var phoneNumber string
+	var customerTypeName string
+    var address string
 	var customerNameTemp *string
 	var customerPhoneTemp *string
 
@@ -75,12 +79,15 @@ func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse
 		// [สมาชิก]
 		customerName = order.Customer.CustomerName
 		phoneNumber = order.Customer.PhoneNumber
+		customerTypeName = order.Customer.CustomerType.TypeLabel // 👈 ดึงชื่อประเภทลูกค้าภาษาไทย (หรือใช้ TypeName ก็ได้)
+        address = order.Customer.ShippingAddress          
 		customerNameTemp = nil
 		customerPhoneTemp = nil
 	} else {
 		// [ลูกค้าทั่วไป / Walk-in]
 		customerName = ""
 		phoneNumber = ""
+		customerTypeName = "ลูกค้าทั่วไป" // 👈 Default ให้ขาจร
 		customerNameTemp = order.CustomerNameTemp
 		customerPhoneTemp = order.CustomerPhoneTemp
 	}
@@ -103,6 +110,8 @@ func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse
 		CustomerID:        order.CustomerID,
 		CustomerName:      customerName,
 		PhoneNumber:       phoneNumber,
+		CustomerTypeName:   customerTypeName, 
+        Address:            address,  
 		CustomerNameTemp:  customerNameTemp,
 		CustomerPhoneTemp: customerPhoneTemp,
 		Subtotal:          order.Subtotal,
@@ -158,6 +167,9 @@ type GetSaleHistoryByIDResponse struct {
 	CustomerNameTemp  *string `json:"customer_name_temp"`
 	CustomerPhoneTemp *string `json:"customer_phone_temp"`
 
+	CustomerTypeName string `json:"customer_type_name"` 
+    Address          string `json:"address"`           
+
 	Subtotal           float64 `json:"subtotal"`             // ยอดรวมก่อนหักส่วนลดบิล
 	BillDiscountType   string  `json:"bill_discount_type"`   // ประเภทส่วนลดท้ายบิล (none, amount, percent)
 	BillDiscountValue  float64 `json:"bill_discount_value"`  // ส่วนลดท้ายบิล
@@ -211,6 +223,8 @@ func ToSaleHistoryItemDetail(item entity.SaleOrderItem) SaleHistoryItemDetail {
 func ToGetSaleHistoryByIDResponse(order entity.SaleOrder) GetSaleHistoryByIDResponse {
 	var customerName string
 	var phoneNumber string
+	var customerTypeName string
+    var address string
 	var customerNameTemp *string
 	var customerPhoneTemp *string
 
@@ -219,12 +233,15 @@ func ToGetSaleHistoryByIDResponse(order entity.SaleOrder) GetSaleHistoryByIDResp
 		// [สมาชิก]
 		customerName = order.Customer.CustomerName
 		phoneNumber = order.Customer.PhoneNumber
+		customerTypeName = order.Customer.CustomerType.TypeLabel // 👈 ดึงชื่อประเภทลูกค้าภาษาไทย (หรือใช้ TypeName ก็ได้)
+        address = order.Customer.ShippingAddress                // 👈 ดึงที่อยู่จัดส่ง
 		customerNameTemp = nil
 		customerPhoneTemp = nil
 	} else {
 		// [ลูกค้าทั่วไป / Walk-in]
 		customerName = ""
 		phoneNumber = ""
+		customerTypeName = "ลูกค้าทั่วไป" // 👈 Default ให้ขาจร
 		customerNameTemp = order.CustomerNameTemp
 		customerPhoneTemp = order.CustomerPhoneTemp
 	}
@@ -255,6 +272,8 @@ func ToGetSaleHistoryByIDResponse(order entity.SaleOrder) GetSaleHistoryByIDResp
 		PhoneNumber:        phoneNumber,
 		CustomerNameTemp:   customerNameTemp,
 		CustomerPhoneTemp:  customerPhoneTemp,
+		CustomerTypeName:   customerTypeName, 
+        Address:            address,          
 		Subtotal:           order.Subtotal,
 		BillDiscountType:   string(order.BillDiscountType),
 		BillDiscountValue:  order.BillDiscountValue,
