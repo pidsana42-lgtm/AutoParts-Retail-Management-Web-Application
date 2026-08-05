@@ -270,12 +270,25 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       if (dataList && dataList.length > 0) {
         const matched = dataList.find((c) => c.phone_number === customerPhone || c.customer_name === customerPhone);
         if (matched) {
-          setPosSession((prev) => ({
-            ...prev,
-            customer: matched,
-            activeTypeId: matched.customer_type?.id || 1
-          }));
-          setCustomer(matched);
+          // ป้องกันสภาวะแข่งขันแบบอะซิงโครนัส (Race Condition): 
+          // หากพนักงานขายบิลสำเร็จและเคลียร์ลูกค้าออกไปแล้ว (customer เป็น null) ห้ามเขียนข้อมูลใหม่ทับกลับมา
+          setPosSession((prev) => {
+            if (!prev.customer || (prev.customer.phone_number !== customerPhone && prev.customer.customer_name !== customerPhone)) {
+              return prev; // ยกเลิกการอัปเดตเซสชัน
+            }
+            return {
+              ...prev,
+              customer: matched,
+              activeTypeId: matched.customer_type?.id || 1
+            };
+          });
+
+          setCustomer((prev) => {
+            if (!prev || (prev.phone_number !== customerPhone && prev.customer_name !== customerPhone)) {
+              return prev; // ยกเลิกการอัปเดตสเตท
+            }
+            return matched;
+          });
         }
       }
     } catch (error) {
@@ -669,8 +682,11 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     currentOrderIdRef.current = null;
 
     setPosSession({
-      customer: null, searchQuery: "", activeTypeId: 1, paymentMethodId: 1, billDiscountValue: 0, billDiscountType: "none", receivedAmount: 0, receiverName: "", currentOrderId: null, currentOrderNumber: null, isPaymentModalOpen: false
+      customer: null, searchQuery: "", activeTypeId: 1, paymentMethodId: 1, billDiscountValue: 0, billDiscountType: "none", receivedAmount: 0, receiverName: "", currentOrderId: null, currentOrderNumber: null, isPaymentModalOpen: false, customerAddressTemp: ""
     });
+    setCustomer(null);
+    setSearchCustomerQuery("");
+    setCustomerAddressTemp("");
     setTempPhone("");
     setSearchResults([]);
     setDisplayValue("");
