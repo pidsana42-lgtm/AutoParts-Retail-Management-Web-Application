@@ -772,6 +772,7 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
 
 	existingOrder.CustomerID = customerIDForOrder
 	existingOrder.PaymentMethodID = &req.PaymentMethodID
+	existingOrder.PaymentMethod = nil // ล้าง pointer พรีโหลดเดิมออก เพื่อป้องกัน GORM เขียนทับ foreign key
 	existingOrder.DueDate = dueDate
 	existingOrder.CustomerNameTemp = &savedName
 	existingOrder.CustomerPhoneTemp = &savedPhone
@@ -829,6 +830,14 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
 				tx.Rollback()
 				return nil, fmt.Errorf("อัปเดตรายการชำระเงินสดล้มเหลว: %w", err)
 			}
+		}
+	}
+
+	// ถ้าเปลี่ยนวิธีชำระเงินเป็น Credit (3) ให้ลบประวัติชำระเงินของบิล QR/Cash เดิมออก
+	if req.PaymentMethodID == 3 {
+		if err := tx.Where("order_id = ?", existingOrder.ID).Delete(&entity.Payment{}).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("ลบประวัติการชำระเงินเดิมล้มเหลว: %w", err)
 		}
 	}
 

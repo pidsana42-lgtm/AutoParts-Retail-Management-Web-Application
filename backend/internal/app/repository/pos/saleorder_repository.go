@@ -113,7 +113,7 @@ func (r *saleRepository) UpdateOrderWithTx(tx *gorm.DB, order *entity.SaleOrder)
     }
     
     // บันทึกตัว Order Header และ Save Items ชุดใหม่ลงไป
-    return tx.Omit("Customer").Save(order).Error
+    return tx.Omit("Customer", "PaymentMethod").Save(order).Error
 }
 
 func (r *saleRepository) GetOrderByOrderNumber(orderNumber string) (*entity.SaleOrder, error) {
