@@ -79,6 +79,8 @@ export interface GetSaleHistoryByIDResponse {
   // ขาจร
   customer_name_temp?: string | null;
   customer_phone_temp?: string | null;
+  customer_type_name?: string; 
+  address?: string;            
 
   subtotal: number;
   bill_discount_type: string;

@@ -502,7 +502,7 @@ export default function TransactionHistoryPage() {
                     <Text variant="xs" className="font-normal text-[#E51C23] mb-2">
                       ข้อมูลลูกค้า
                     </Text>
-                    <Card className="bg-[#F6F3F2] rounded-none border border-gray-100 shadow-none">
+                    <Card className="bg-[#F6F3F2] rounded-none  border-gray-100 border-l-3 border-l-[#E51C23] shadow-none">
                       <CardContent className="p-4 space-y-1">
                         <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
                           {getDisplayCustomerName(orderDetail as unknown as SalesHistoryItemResponse)}
@@ -510,9 +510,15 @@ export default function TransactionHistoryPage() {
                         <Text variant="small" className="text-[#6B7280] mb-0">
                           {orderDetail.phone_number || orderDetail.customer_phone_temp || "-"}
                         </Text>
-                        {orderDetail.note && (
+                        {orderDetail.customer_type_name && (
                           <Text variant="xs" className="text-[#6B7280] mb-0">
-                            {orderDetail.note}
+                            ประเภท: {orderDetail.customer_type_name}
+                          </Text>
+                        )}
+
+                        {orderDetail.address && (
+                          <Text variant="xs" className="text-[#6B7280] mb-0 truncate">
+                            ที่อยู่: {orderDetail.address}
                           </Text>
                         )}
                       </CardContent>
