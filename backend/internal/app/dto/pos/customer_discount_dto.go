@@ -19,6 +19,8 @@ type GetCustomerDiscountResponse struct {
     StandardDiscountRate float64                  `json:"standard_discount_rate"`
     OntopDiscountRate    float64                  `json:"ontop_discount_rate"`
     CustomerType         CustomerTypeInfoResponse `json:"customer_type"` // ผูก Object ประเภทเข้าท่อส่งออก
+    ShippingAddress      string                   `json:"shipping_address"`
+    RegisteredAddress    string                   `json:"registered_address"`
 }
 
 func ToCustomerDiscountResponse(customer *entity.Customer) *GetCustomerDiscountResponse {
@@ -48,6 +50,8 @@ func ToCustomerDiscountResponse(customer *entity.Customer) *GetCustomerDiscountR
             TypeName:  name,
             TypeLabel: label,
         },
+        ShippingAddress:      customer.ShippingAddress,
+        RegisteredAddress:    customer.RegisteredAddress,
     }
 }
 

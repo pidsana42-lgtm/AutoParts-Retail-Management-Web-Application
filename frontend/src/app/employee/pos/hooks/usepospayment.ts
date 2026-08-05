@@ -55,6 +55,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const [searchResults, setSearchResults] = useState<CustomerDiscountResponse[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<{ id: number; method_name: string }[]>([]);
   const [displayValue, setDisplayValue] = useState<string>("");
+  const [customerAddressTemp, setCustomerAddressTemp] = useState<string>(posSession.customerAddressTemp || "");
   
   // Restore currentOrderId & currentOrderNumber
   const [currentOrderId, setCurrentOrderId] = useState<number | null>(posSession.currentOrderId || null);
@@ -82,6 +83,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     setReceivedAmount(posSession.receivedAmount);
     setReceiverName(posSession.receiverName);
     setSearchCustomerQuery(posSession.searchQuery || "");
+    setCustomerAddressTemp(posSession.customerAddressTemp || "");
     if (posSession.currentOrderNumber) {
       currentOrderNumberRef.current = posSession.currentOrderNumber;
     }
@@ -228,22 +230,30 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
           ...prev,
           customer: exactMatchedCustomer,
           activeTypeId: exactMatchedCustomer.customer_type?.id || 1,
-          searchQuery: exactMatchedCustomer.customer_name
+          searchQuery: exactMatchedCustomer.customer_name,
+          // ดึงที่อยู่จาก DB หรือถ้า DB ไม่มีที่อยู่ ให้ใช้ค่าเดิมที่เคยพิมพ์ไว้ใน Modal
+          customerAddressTemp: exactMatchedCustomer.shipping_address || exactMatchedCustomer.registered_address || prev.customerAddressTemp || ""
         }));
       } else {
-        // เคสลูกค้าทั่วไป/ขาจร คีย์มือสร้างชั่วคราว
+        // เคสลูกค้าขาจร: นำค่าที่อยู่จาก posSession (ที่พิมพ์ค้างไว้) มาใช้งาน
+        const currentAddress = posSession.customerAddressTemp?.trim() || "";
+
         const guestCustomer = {
           id: 0,
           customer_name: cleanedQuery,
           phone_number: tempPhone.trim() || "ลูกค้าทั่วไป (ไม่ระบุ)",
+          shipping_address: currentAddress,    // ใส่ที่อยู่ให้ guestCustomer
+          registered_address: currentAddress,  // ใส่ที่อยู่ให้ guestCustomer
           standard_discount_rate: 0, is_discount_enabled: false, current_debt_amount: 0, max_credit_limit: 0, is_credit_enabled: false,
           customer_type: { id: 1, type_name: "GENERAL", type_label: "ลูกค้าทั่วไป" }
         };
+
         setPosSession((prev) => ({
           ...prev,
           customer: guestCustomer,
           activeTypeId: 1,
-          searchQuery: cleanedQuery
+          searchQuery: cleanedQuery,
+          customerAddressTemp: currentAddress // รักษาค่าที่อยู่เดิมเอาไว้ ไม่ล้างเป็น ""
         }));
       }
       setSearchResults([]);
@@ -391,11 +401,13 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       };
     });
 
+    const finalAddress = customerAddressTemp || posSession.customerAddressTemp || "";
     const rawCustomerId = posSession.customer?.id || 0;
     const salePayload: CreateSaleOrderRequest = {
       customer_id: rawCustomerId && rawCustomerId > 0 ? rawCustomerId : (null as any),
       customer_name_temp: posSession.customer?.customer_name || "ลูกค้าทั่วไป",
       customer_phone_temp: posSession.customer?.phone_number || "",
+      customer_address_temp: finalAddress,
       received_amount: finalPaymentMethodId === 1 ? receivedAmount : finalTotal, 
       payment_method_id: finalPaymentMethodId,
       bill_discount_type: posSession.billDiscountType,
@@ -678,6 +690,11 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     updateSession("isPaymentModalOpen", false); // บันทึกลง Storage/Session ว่าปิดแล้วนะ
   };
 
+  const handleAddressChange = (address: string) => {
+    setCustomerAddressTemp(address);
+    updateSession("customerAddressTemp", address);
+  };
+
   return {
     posSession, setPosSession, updateSession,
     customer, setCustomer, paymentMethods, setPaymentMethods,
@@ -706,5 +723,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     handleConfirmSale,              
     handleFinalConfirmAndPrint,   
     closePaymentModal,
+    customerAddressTemp,
+    handleAddressChange,
   };
 }

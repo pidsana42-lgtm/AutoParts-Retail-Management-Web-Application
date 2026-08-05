@@ -17,8 +17,9 @@ type SaleOrder struct {
 	Customer   Customer `gorm:"foreignKey:CustomerID" json:"customer"`
 
 	// Optional ข้อมูลลูกค้าแบบชั่วคราว (กรณีลูกค้า walk-in หรือไม่อยากบันทึกลงฐานข้อมูล)
-	CustomerNameTemp  *string `gorm:"type:varchar(100)" json:"customer_name_temp"`
-	CustomerPhoneTemp *string `gorm:"type:varchar(20)" json:"customer_phone_temp"`
+	CustomerNameTemp    *string `gorm:"type:varchar(100)" json:"customer_name_temp"`
+	CustomerPhoneTemp   *string `gorm:"type:varchar(20)" json:"customer_phone_temp"`
+	CustomerAddressTemp string  `gorm:"type:varchar(255)" json:"customer_address_temp"`
 
 	// ระบบ Set เอง
 	Status        enum.OrderStatus   `gorm:"type:varchar(50);not null;default:pending" json:"status"`
@@ -54,8 +55,8 @@ type SaleOrder struct {
 	StockMovements []StockMovement `gorm:"foreignKey:SaleOrderID" json:"stock_movements"`
 
 	// เพิ่ม Field สำหรับระบบ Cancel Workflow
-	CancelReason    *string    `gorm:"type:varchar(255)" json:"cancel_reason"`    // เหตุผลที่พนักงานขอยกเลิก
+	CancelReason      *string    `gorm:"type:varchar(255)" json:"cancel_reason"`    // เหตุผลที่พนักงานขอยกเลิก
 	CancelRequestedAt *time.Time `gorm:"type:timestamp" json:"cancel_requested_at"` // เวลาที่ส่งคำขอยกเลิก
-	CancelRemark    *string    `gorm:"type:varchar(255)" json:"cancel_remark"`    // หมายเหตุอนุมัติ/ปฏิเสธจากเจ้าของร้าน
+	CancelRemark      *string    `gorm:"type:varchar(255)" json:"cancel_remark"`    // หมายเหตุอนุมัติ/ปฏิเสธจากเจ้าของร้าน
 	CancelProcessedAt *time.Time `gorm:"type:timestamp" json:"cancel_processed_at"` // เวลาที่เจ้าของร้านกดจัดการ
 }

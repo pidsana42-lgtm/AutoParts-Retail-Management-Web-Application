@@ -12,4 +12,5 @@ export interface PosSession {
   currentOrderId?: number | null;
   currentOrderNumber?: string | null;
   isPaymentModalOpen?: boolean;
+  customerAddressTemp?: string;
 }
