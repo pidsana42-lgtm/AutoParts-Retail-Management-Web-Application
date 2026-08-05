@@ -65,6 +65,7 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
     var customerIDForOrder *uint // ใช้ Pointer เพื่อให้บันทึกเป็น NULL ได้กรณีขาจร
     var savedName string
     var savedPhone string
+    var savedAddress string
 
     // -------------------------------------------------------------------------
     // [1. แยก Logic ระหว่าง ลูกค้าสมาชิก vs ลูกค้าขาจร (ไม่ได้ลงทะเบียน)]
@@ -88,6 +89,13 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
 		if req.CustomerPhoneTemp != "" {
 			savedPhone = req.CustomerPhoneTemp
 		}
+
+		savedAddress = req.CustomerAddressTemp
+		customer.ShippingAddress = savedAddress
+		if err := tx.Session(&gorm.Session{}).Save(customer).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("อัปเดตที่อยู่ลูกค้าล้มเหลว: %w", err)
+		}
 	} else {
 		// กรณี: ลูกค้าขาจร (เช่น คุณสมจิต / ไม่ได้ลงทะเบียน / CustomerID == 0)
 		customerIDForOrder = nil // บันทึก customer_id ลงตาราง sale_orders เป็น NULL ไม่ทับใคร 100%
@@ -106,6 +114,7 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
 		}
 
 		savedPhone = req.CustomerPhoneTemp
+		savedAddress = req.CustomerAddressTemp
 	}
 
 	// ตัดความยาวเบอร์โทรไม่ให้เกิน 20 ตัวอักษร (แปลงเป็น []rune ก่อนตัด)
@@ -364,6 +373,7 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         PaymentMethodID:    &req.PaymentMethodID,
         CustomerNameTemp:   &savedName,
         CustomerPhoneTemp:  &savedPhone,
+        CustomerAddressTemp: savedAddress,
         Status:             enum.OrderStatus(orderStatus),                  
         PaymentStatus:      enum.PaymentStatus(paymentStatus), 
         Subtotal:           orderSubtotalAfterItems,
@@ -535,6 +545,7 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
     
     var savedName string
     var savedPhone string
+    var savedAddress string
 
     if req.CustomerID > 0 {
         customer = &entity.Customer{}
@@ -554,6 +565,13 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
         if req.CustomerPhoneTemp != "" {
             savedPhone = req.CustomerPhoneTemp
         }
+
+        savedAddress = req.CustomerAddressTemp
+        customer.ShippingAddress = savedAddress
+        if err := tx.Session(&gorm.Session{}).Save(customer).Error; err != nil {
+            tx.Rollback()
+            return nil, fmt.Errorf("อัปเดตที่อยู่ลูกค้าล้มเหลว: %w", err)
+        }
     } else {
         // เป็นลูกค้าทั่วไป/ขาจร
         customerIDForOrder = nil
@@ -566,6 +584,7 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
             savedName = "ลูกค้าทั่วไป (หน้าร้าน)"
         }
         savedPhone = req.CustomerPhoneTemp
+        savedAddress = req.CustomerAddressTemp
     }
 
 	// ตัดความยาวเบอร์โทรไม่ให้เกิน 20 ตัวอักษร
@@ -756,6 +775,7 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
 	existingOrder.DueDate = dueDate
 	existingOrder.CustomerNameTemp = &savedName
 	existingOrder.CustomerPhoneTemp = &savedPhone
+	existingOrder.CustomerAddressTemp = savedAddress
 	existingOrder.Status = enum.OrderStatus(orderStatus)
 	existingOrder.PaymentStatus = enum.PaymentStatus(paymentStatus)
 	existingOrder.Subtotal = orderSubtotalAfterItems
