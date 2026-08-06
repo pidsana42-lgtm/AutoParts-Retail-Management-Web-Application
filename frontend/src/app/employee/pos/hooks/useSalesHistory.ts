@@ -3,10 +3,29 @@ import { posApiService } from "../../../../service/http/pos/pos_service";
 import type { SalesHistoryFilterRequest, SalesHistoryItemResponse, GetSaleHistoryByIDResponse } from "../../../../interface/pos/sales_history_interface";
 
 export const useSalesHistory = () => {
+  //คำนวณหา วันที่ย้อนหลังไป 30 วัน นับจากวันนี้
+  const get30DaysAgoDateString = () => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30); //เอาวันที่ปัจจุบันลบออกไป 30 วัน
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  //ดึง วันที่ปัจจุบัน (วันนี้)
+  const getTodayDateString = () => {
+    const date = new Date();
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   // --- States สำหรับ Query Filter ---
   const [search, setSearch] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState(get30DaysAgoDateString()); // ล็อกไว้ 30 วันก่อน
+  const [endDate, setEndDate] = useState(getTodayDateString()); // ล็อกไว้ถึงวันนี้
   const [customerType, setCustomerType] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [page, setPage] = useState(1);
@@ -105,8 +124,8 @@ export const useSalesHistory = () => {
   // Handler สำหรับปุ่ม "รีเซ็ตตัวกรอง"
   const handleResetFilter = () => {
     setSearch("");
-    setStartDate("");
-    setEndDate("");
+    setStartDate(get30DaysAgoDateString());
+    setEndDate(getTodayDateString());
     setCustomerType("");
     setPaymentMethod("");
     setPage(1);

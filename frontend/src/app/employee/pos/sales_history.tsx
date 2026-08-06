@@ -191,8 +191,8 @@ export default function TransactionHistoryPage() {
                   </div>
                 </div>
 
-                {/* ช่องที่ 2: ช่วงวันที่ (Start Date) */}
-                <div className="md:col-span-3 flex flex-col gap-1.5">
+                {/* ช่องที่ 2: วันที่เริ่มต้น (Start Date) */}
+                <div className="md:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     วันที่เริ่มต้น
                   </label>
@@ -201,6 +201,21 @@ export default function TransactionHistoryPage() {
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
+                      className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0 cursor-pointer [&::-webkit-calendar-picker-indicator]:pr-4"
+                    />
+                  </div>
+                </div>
+
+                {/* ช่องที่ 2.5: วันที่สิ้นสุด (End Date) */}
+                <div className="md:col-span-2 flex flex-col gap-1.5">
+                  <label className="text-xs font-normal text-[#5F5E5E]">
+                    วันที่สิ้นสุด
+                  </label>
+                  <div className="relative">
+                    <Input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
                       className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0 cursor-pointer [&::-webkit-calendar-picker-indicator]:pr-4"
                     />
                   </div>
@@ -245,12 +260,12 @@ export default function TransactionHistoryPage() {
                 </div>
 
                 {/* ช่องที่ 5: ปุ่มใช้ตัวกรอง */}
-                <div className="md:col-span-2">
+                <div className="md:col-span-1">
                   <Button
                     onClick={handleApplyFilter}
                     className="w-full h-11 rounded-none bg-[#E51C23] hover:bg-[#c9151b] text-white text-sm font-normal transition-colors border-none shadow-none cursor-pointer"
                   >
-                    ใช้ตัวกรอง
+                    ค้นหา
                   </Button>
                 </div>
               </div>
