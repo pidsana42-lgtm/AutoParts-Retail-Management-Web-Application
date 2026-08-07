@@ -1,0 +1,143 @@
+// src/utils/posHelpers.tsx
+import React from "react";
+import Badge from "../components/elements/badge";
+import type { SalesHistoryItemResponse } from "../interface/pos/sales_history_interface";
+
+/** ฟังก์ชันช่วยดึงชื่อลูกค้าที่ถูกต้องในการแสดงผล */
+export const getDisplayCustomerName = (item: SalesHistoryItemResponse): string => {
+  if (item.customer_name && item.customer_name.trim() !== "") {
+    return item.customer_name;
+  }
+  if (item.customer_name_temp && item.customer_name_temp.trim() !== "") {
+    return `${item.customer_name_temp} (ขาจร)`;
+  }
+  return "ลูกค้าทั่วไป";
+};
+
+/** คำนวณปุ่มหมายเลขหน้าสำหรับ Pagination */
+export const getPageNumbers = (
+  currentPage: number,
+  totalPages: number
+): (number | "...")[] => {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  if (currentPage <= 3) {
+    return [1, 2, 3, 4, "...", totalPages];
+  }
+  if (currentPage >= totalPages - 2) {
+    return [1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+  return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
+};
+
+/** เลือกประเภท Variant ของ Badge ชำระเงิน */
+export const getPaymentVariant = (methodName?: string) => {
+  switch (methodName) {
+    case "เงินเชื่อ":
+      return "credit";
+    case "เงินโอน/สแกน QR":
+      return "transfer";
+    case "เงินสด":
+      return "cash";
+    default:
+      return "neutral";
+  }
+};
+
+/** ฟังก์ชันแปลงรูปแบบวันที่ภาษาไทย */
+export const formatDate = (dateStr: string): string => {
+  if (!dateStr) return "-";
+  const date = new Date(dateStr);
+  return isNaN(date.getTime())
+    ? dateStr
+    : date.toLocaleDateString("th-TH", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+};
+
+/**
+ * ฟังก์ชัน Render Status Badge สำหรับแสดงสถานะของบิล POS
+ */
+export const renderStatusBadge = (status: string, paymentStatus: string) => {
+  const billStatus = (status || "").trim().toUpperCase();
+  const payStatus = (paymentStatus || "").trim().toUpperCase();
+
+  // 1. เช็กการยกเลิกก่อน
+  if (billStatus === "PENDING_CANCEL") {
+    return (
+      <Badge variant="error" className="rounded-none whitespace-nowrap">
+        ส่งคำขอยกเลิกแล้ว
+      </Badge>
+    );
+  }
+
+  if (billStatus === "CANCELLED" || billStatus === "ยกเลิก") {
+    return (
+      <Badge variant="error" className="rounded-none whitespace-nowrap">
+        ยกเลิกแล้ว
+      </Badge>
+    );
+  }
+
+  // 2. ถ้าชำระเงินครบถ้วนแล้ว (paid) -> แสดง "ชำระแล้ว"
+  if (payStatus === "PAID" || payStatus === "ชำระแล้ว") {
+    return (
+      <Badge variant="success" className="rounded-none whitespace-nowrap">
+        ชำระแล้ว
+      </Badge>
+    );
+  }
+
+  // 3. ถ้าเป็นบิลเงินเชื่อที่ทำรายการเสร็จแล้ว แต่ยังไม่ชำระ (completed + unpaid/partial)
+  if (billStatus === "COMPLETED") {
+    return (
+      <Badge variant="info" className="rounded-none whitespace-nowrap">
+        ทำรายการแล้ว
+      </Badge>
+    );
+  }
+
+  // 4. สถานะรอดำเนินการ / รอตอบรับ
+  if (billStatus === "PENDING") {
+    return (
+      <Badge variant="neutral" className="rounded-none whitespace-nowrap">
+        รอดำเนินการ
+      </Badge>
+    );
+  }
+
+  if (billStatus === "OVERDUE" || payStatus === "OVERDUE") {
+    return (
+      <Badge variant="error" className="rounded-none whitespace-nowrap">
+        เกินกำหนด
+      </Badge>
+    );
+  }
+
+  // default สำรองกรณีค่าอื่น
+  return (
+    <Badge variant="info" className="rounded-none whitespace-nowrap">
+      {status || "ไม่ทราบสถานะ"}
+    </Badge>
+  );
+};
+
+/**
+ * เลือก Class สีพื้นหลังของ Badge ชำระเงิน
+ */
+export const getPaymentBadgeColor = (methodName?: string): string => {
+  switch (methodName) {
+    case "เงินเชื่อ":
+      return "bg-blue-500";
+    case "เงินโอน/สแกน QR":
+      return "bg-gray-500";
+    case "เงินสด":
+    default:
+      return "bg-[#259B24]";
+  }
+};
