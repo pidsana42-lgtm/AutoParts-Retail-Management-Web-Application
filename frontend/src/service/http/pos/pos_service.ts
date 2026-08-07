@@ -73,15 +73,15 @@ export const posApiService = {
       .then((res) => res.data),
   
   /** พนักงานดูรายการคำขอยกเลิกบิลของตนเอง */
-  getMyCancellationRequests: (): Promise<SalesHistoryItemResponse[]> =>
+  getMyCancellationRequests: (params: SalesHistoryFilterRequest): Promise<SalesHistoryPaginationResponse> =>
     apiClient
-      .get<{ data: SalesHistoryItemResponse[]; message: string }>("/pos/my-cancellation-requests")
+      .get<{ data: SalesHistoryPaginationResponse; message: string }>("/pos/my-cancellation-requests", { params })
       .then((res) => res.data.data),
 
   /** เจ้าของร้านดูรายการคำขอยกเลิกบิลทั้งหมด */
-  getCancellationRequests: (params?: { status?: string }): Promise<SalesHistoryItemResponse[]> =>
+  getCancellationRequests: (params: SalesHistoryFilterRequest): Promise<SalesHistoryPaginationResponse> =>
     apiClient
-      .get<{ data: SalesHistoryItemResponse[]; message: string }>("/pos/cancellation-requests", { params })
+      .get<{ data: SalesHistoryPaginationResponse; message: string }>("/pos/cancellation-requests", { params })
       .then((res) => res.data.data),
 
   /** ค้นหาใบสั่งซื้อขายด้วยหมายเลข invoice */
