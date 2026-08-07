@@ -29,22 +29,22 @@ export const getThaiMonthOptions = () => {
     "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
   ];
   
-  return thaiMonths.map((month, index) => ({
+  const monthOptions = thaiMonths.map((month, index) => ({
     label: month,
     value: String(index + 1).padStart(2, '0') // จะได้ค่าเป็น "01", "02", ...
   }));
+
+  return [{ label: "ทุกเดือน", value: "" }, ...monthOptions];
 };
 
-export const getYearOptions = (yearsBack = 5) => {
+export const getYearOptions = (availableYears: number[]) => {
   const currentYear = new Date().getFullYear();
-  const options = [];
-  
-  for (let i = 0; i <= yearsBack; i++) {
-    const year = currentYear - i;
-    options.push({
-      label: String(year + 543), // โชว์ให้ผู้ใช้เห็นเป็น พ.ศ.
-      value: String(year)        // แต่หลังบ้านเก็บค่าเป็น ค.ศ.
-    });
-  }
-  return options;
+  const yearSet = new Set<number>([currentYear, ...availableYears]);
+
+  return Array.from(yearSet)
+    .sort((a, b) => b - a)
+    .map((year) => ({
+      label: String(year + 543),
+      value: String(year),
+    }));
 };

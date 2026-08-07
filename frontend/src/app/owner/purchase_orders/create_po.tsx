@@ -77,34 +77,34 @@ const CreatePurchaseOrders: React.FC = () => {
 
                 setSupplierOptions(formattedOptions);
             } catch (error) {
-                console.error("ไม่สามารถดึงข้อมูลซัพพลายเออร์ได้:", error);
+                console.error('ไม่สามารถดึงข้อมูลซัพพลายเออร์ได้:', error);
             }
         };
 
         fetchSuppliers();
     }, []);
 
-    // ดึงข้อมูล Stock Alert อัตโนมัติ หลังเลือก Supplier แล้ว
-    useEffect(() => {
-        const fetchAlertsAutomatically = async () => {
-            // 1. ถ้ายังไม่ได้เลือกบริษัท หรือเคลียร์ค่าทิ้ง ให้หยุดการทำงาน
-            if (!listsSupplier) return;
+    // รอแก้เป็นส่งมาจากหน้า stock alerts
+    // useEffect(() => {
+    //     const fetchAlertsAutomatically = async () => {
+    //         // 1. ถ้ายังไม่ได้เลือกบริษัท หรือเคลียร์ค่าทิ้ง ให้หยุดการทำงาน
+    //         if (!listsSupplier) return;
 
-            try {
-                // 2. ไปดึงข้อมูลจาก API
-                const alertItems = await poService.getStockAlertsBySupplier(listsSupplier);
+    //         try {
+    //             // 2. ไปดึงข้อมูลจาก API
+    //             const alertItems = await poService.getStockAlertsBySupplier(listsSupplier);
                 
-                // 3. เอาข้อมูลมาใส่ตาราง => ใช้ setItem(alertItems) เพื่อล้างของเก่าแล้วใส่ของบริษัทใหม่
-                // หรือใช้ setItem(prev => [...prev, ...alertItems]) ถ้าอยากให้ต่อท้ายของเดิม
-                setItem(alertItems); 
+    //             // 3. เอาข้อมูลมาใส่ตาราง => ใช้ setItem(alertItems) เพื่อล้างของเก่าแล้วใส่ของบริษัทใหม่
+    //             // หรือใช้ setItem(prev => [...prev, ...alertItems]) ถ้าอยากให้ต่อท้ายของเดิม
+    //             setItem(alertItems); 
                 
-            } catch (error) {
-                console.error("โหลด Stock Alert อัตโนมัติล้มเหลว:", error);
-            }
-        };
+    //         } catch (error) {
+    //             console.error("โหลด Stock Alert อัตโนมัติล้มเหลว:", error);
+    //         }
+    //     };
 
-        fetchAlertsAutomatically();
-    }, [listsSupplier]);
+    //     fetchAlertsAutomatically();
+    // }, [listsSupplier]);
 
     // ดึงข้อมูลคาดการณ์ระยะเวลาจัดส่งของ Supplier ที่เลือก
     useEffect(() => {
@@ -210,7 +210,7 @@ const CreatePurchaseOrders: React.FC = () => {
             return;
         }
 
-        if (!listsSupplier || listsSupplier === "all" || listsSupplier === "others") {
+        if (!listsSupplier || listsSupplier === 'all' || listsSupplier === 'others') {
             alert("กรุณาเลือกผู้จัดจำหน่าย (Supplier)");
             return;
         }
@@ -245,7 +245,7 @@ const CreatePurchaseOrders: React.FC = () => {
             navigate(`${basePath}/orders`); // กลับไปหน้ารวม
         } catch (error: any) {
             const backendMessage = error?.response?.data?.message || error?.message;
-            alert(backendMessage || "เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง");
+            alert(backendMessage || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง');
         } finally {
             setIsSaving(false);
         }
@@ -282,14 +282,14 @@ const CreatePurchaseOrders: React.FC = () => {
     return (
         <div className='p-8 space-y-6 bg-gray-50 min-h-screen'>
             { /* Header */ }
-            <div className="flex items-center justify-between">
+            <div className='flex items-center justify-between'>
                 <div className='flex-col space-y-2'>
-                    <nav className="flex items-center text-sm text-gray-500 gap-2 font-light">
-                        <Link to={`${basePath}/orders`} className="hover:text-gray-900 transition-colors cursor-pointer">
+                    <nav className='flex items-center text-sm text-gray-500 gap-2 font-light'>
+                        <Link to={`${basePath}/orders`} className='hover:text-gray-900 transition-colors cursor-pointer'>
                             จัดการใบสั่งซื้อ
                         </Link>
-                        <ChevronRight className="w-4 h-4 text-gray-400" />                        
-                        <span className="text-black font-normal">สร้างใบสั่งซื้อสินค้าใหม่</span>
+                        <ChevronRight size={16} className='text-gray-400' />                        
+                        <span className='text-black font-normal'>สร้างใบสั่งซื้อสินค้าใหม่</span>
                     </nav>
                     <Heading level='h1' weight='semibold' className='m-0 text-black'>
                         สร้างใบสั่งซื้อสินค้าใหม่
@@ -303,11 +303,11 @@ const CreatePurchaseOrders: React.FC = () => {
 
             { /* Contents */ }
             { /* Left Side */ }
-            <div className="flex gap-6 items-start">
+            <div className='flex gap-6 items-start'>
                 <div className='w-1/4 flex flex-col gap-6'>
                     <Card className='border-l-[5px] border-l-red-800'>
                         <CardHeader className='items-center justify-start gap-4 mt-2 mb-2'>
-                            <CardTitle className='text-base text-red-800'><Building2 className="h-6 w-6" /></CardTitle>
+                            <CardTitle className='text-base text-red-800'><Building2 size={24} /></CardTitle>
                             <CardTitle className='text-lg text-black'>รายละเอียดบริษัท</CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -332,7 +332,7 @@ const CreatePurchaseOrders: React.FC = () => {
                     </Card>
                     <Card className='border-l-[5px] border-l-black'>
                         <CardHeader className='items-center justify-start gap-4 mt-2 mb-2'>
-                            <CardTitle className='text-base text-black'><ShoppingBag className="h-6 w-6" /></CardTitle>
+                            <CardTitle className='text-base text-black'><ShoppingBag size={24} /></CardTitle>
                             <CardTitle className='text-lg text-black'>รายการพรีออเดอร์</CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -342,7 +342,7 @@ const CreatePurchaseOrders: React.FC = () => {
                                         "กำลังดึงข้อมูล..."
                                     ) : (
                                         <>
-                                            มีรายการพรีออเดอร์ค้างอยู่ <strong className="font-medium">{totalPreorders}</strong> รายการ
+                                            มีรายการพรีออเดอร์ค้างอยู่ <strong className='font-medium'>{totalPreorders}</strong> รายการ
                                         </>
                                     )}
                                 </Heading>
@@ -351,7 +351,7 @@ const CreatePurchaseOrders: React.FC = () => {
                                 <Button 
                                     variant='tertiary' 
                                     size='sm'
-                                    disabled={isPreordersLoading || totalPreorders === 0}
+                                    disabled={!listsSupplier || isPreordersLoading || totalPreorders === 0}
                                     onClick={() => setIsPreorderModalOpen(true)}
                                 >
                                     เลือกรายการ
@@ -362,7 +362,7 @@ const CreatePurchaseOrders: React.FC = () => {
                     {listsSupplier && (
                         <div className='bg-[#22252a] text-white rounded-md p-6 h-fit shadow-sm relative overflow-hidden'>
                             <div className='absolute right-4 top-4 opacity-5 pointer-events-none'>
-                                <ChartNoAxesCombined className='w-12 h-12' />
+                                <ChartNoAxesCombined size={48} />
                             </div>
                             <div>
                                 <Heading level='h5' weight='semibold' className='text-white'>ข้อมูลวิเคราะห์จากระบบ</Heading>
@@ -382,7 +382,7 @@ const CreatePurchaseOrders: React.FC = () => {
                                             เราขอแนะนำให้คุณวางแผนการขนส่งล่วงหน้าตามนั้น
                                         </Heading>
                                         <div className='flex items-center justify-start gap-3 mt-3'>
-                                            <Heading className='text-base text-white w-auto m-0'>{<Info className="h-4 w-4" />}</Heading>
+                                            <Heading className='text-base text-white w-auto m-0'>{<Info size={16} />}</Heading>
                                             <Heading level='p' weight='light' className='text-white w-auto m-0'>
                                                 ระยะเวลาการจัดส่ง: แม่นยำร้อยละ {deliveryEstimate.accuracy_rate}
                                             </Heading>
@@ -394,7 +394,7 @@ const CreatePurchaseOrders: React.FC = () => {
                     )}
                     <Card>
                         <CardHeader className='items-center justify-start gap-4 mt-2 mb-2'>
-                            <CardTitle className='text-base text-black'><MessageSquareMore className="h-6 w-6" /></CardTitle>
+                            <CardTitle className='text-base text-black'><MessageSquareMore size={24} /></CardTitle>
                             <CardTitle className='text-lg text-black'>ข้อความถึงเจ้าของร้าน</CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -409,17 +409,17 @@ const CreatePurchaseOrders: React.FC = () => {
 
                 { /* Right Side */ }
                 <div className='flex flex-col items-start w-3/4 gap-4'>
-                    <Card className="flex items-center w-full h-fit bg-white p-4 gap-4">
-                        <div className="relative flex-1">
+                    <Card className='flex items-center w-full h-fit bg-white p-4 gap-4'>
+                        <div className='relative flex-1'>
                             <Input
                                 ref={searchInputRef} // ผูก Ref เข้ากับ Input
                                 value={searchInput}
                                 onChange={(e) => handleSearchInput(e.target.value)}
                                 onKeyDown={handleSearchKeyDown}
-                                className="bg-transparent border-none shadow-none focus:outline-none"
+                                className='bg-transparent border-none shadow-none focus:outline-none'
                                 disabled={!listsSupplier}
                                 leftIcon={
-                                    <div className="pointer-events-auto relative z-10 flex items-center justify-center">
+                                    <div className='pointer-events-auto relative z-10 flex items-center justify-center'>
                                         <ScanBarcode 
                                             className={`w-6 h-6 transition-colors ${
                                                 !listsSupplier 
@@ -443,7 +443,7 @@ const CreatePurchaseOrders: React.FC = () => {
                             
                             {/* เพิ่ม Dropdown แสดงผลลัพธ์การค้นหา */}
                             {searchResults.length > 0 && (
-                                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
+                                <div className='absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg'>
                                     {searchResults.map((product, index) => (
                                         <div 
                                             key={product.id}
@@ -460,11 +460,11 @@ const CreatePurchaseOrders: React.FC = () => {
                             )}
                         </div>
 
-                        <div className="w-px h-8 bg-gray-300/60 mx-1"></div>
+                        <div className='w-px h-8 bg-gray-300/60 mx-1'></div>
 
                         <Input
                             ref={quantityInputRef}
-                            type="number"
+                            type='number'
                             min={1}
                             value={addQuantity}
                             onChange={(e) => {
@@ -479,9 +479,9 @@ const CreatePurchaseOrders: React.FC = () => {
                                     if (isSuccess) searchInputRef.current?.focus();
                                 }
                             }}
-                            containerClassName="w-32 shrink-0"
-                            className="bg-transparent border-none shadow-none text-center px-1 focus:outline-none"
-                            placeholder="จำนวน"
+                            containerClassName='w-32 shrink-0'
+                            className='bg-transparent border-none shadow-none text-center px-1 focus:outline-none'
+                            placeholder='จำนวน'
                         />
 
                         {/* เพิ่ม onClick */}
@@ -489,27 +489,27 @@ const CreatePurchaseOrders: React.FC = () => {
                             เพิ่มลงใบสั่งซื้อ
                         </Button>
                     </Card>
-                    <Card className="w-full overflow-hidden" noPadding>
+                    <Card className='w-full overflow-hidden' noPadding>
                         <Table>
-                            <TableHeader className="bg-gray-100 text-gray-600">
+                            <TableHeader className='bg-gray-100 text-gray-600'>
                                 <TableRow>
-                                    <TableHead className="pl-6">ลำดับ</TableHead>
+                                    <TableHead className='pl-6'>ลำดับ</TableHead>
                                     <TableHead>ประเภท</TableHead>
                                     <TableHead>รหัสสินค้า</TableHead>
                                     <TableHead>ชื่อสินค้า</TableHead>
-                                    <TableHead className="text-center">จำนวนต่อหน่วย</TableHead>
-                                    <TableHead className="text-center">หน่วย</TableHead>
-                                    <TableHead className="text-center">ราคาต่อหน่วย</TableHead>
-                                    <TableHead className="text-right pr-6">ราคารวม</TableHead>
-                                    <TableHead className="text-center">จัดการ</TableHead>
+                                    <TableHead className='text-center'>จำนวนต่อหน่วย</TableHead>
+                                    <TableHead className='text-center'>หน่วย</TableHead>
+                                    <TableHead className='text-center'>ราคาต่อหน่วย</TableHead>
+                                    <TableHead className='text-right pr-6'>ราคารวม</TableHead>
+                                    <TableHead className='text-center'>จัดการ</TableHead>
                                 </TableRow>
                             </TableHeader>
-                            <TableBody className="text-gray-700">
+                            <TableBody className='text-gray-700'>
                                 {item.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={9} className='py-16'>
-                                        <div className="flex flex-col items-center justify-center gap-4 text-gray-500">
-                                            <ShoppingCart className="w-24 h-24 text-gray-300" />
+                                        <div className='flex flex-col items-center justify-center gap-4 text-gray-500'>
+                                            <ShoppingCart size={96} className='text-gray-300' />
                                             <span>ไม่พบข้อมูลรายการสินค้า กรุณาเพิ่มสินค้า</span>
                                         </div>
                                         </TableCell>
@@ -517,11 +517,11 @@ const CreatePurchaseOrders: React.FC = () => {
                                 ) : (
                                     item.map((row, index) => (
                                         <TableRow key={row.id}>
-                                            <TableCell className="pl-6">{index + 1}</TableCell>
+                                            <TableCell className='pl-6'>{index + 1}</TableCell>
                                             <TableCell>{row.order_type}</TableCell>
                                             <TableCell>{row.product_name_code_snapshot}</TableCell>
                                             <TableCell>{row.product_name_snapshot}</TableCell>
-                                            <TableCell className="text-center">
+                                            <TableCell className='text-center'>
                                                 <div className='inline-flex items-center border border-gray-300 rounded-none bg-[#F6F3F2]'>
                                                     <button
                                                         type='button'
@@ -577,15 +577,15 @@ const CreatePurchaseOrders: React.FC = () => {
                                                     </button>
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="text-center">{row.unit}</TableCell>
-                                            <TableCell className="text-right pr-10">{row.unit_price.toLocaleString()} ฿</TableCell>
-                                            <TableCell className="text-right pr-6">{row.sub_total.toLocaleString()} ฿</TableCell>
-                                            <TableCell className="text-center">
+                                            <TableCell className='text-center'>{row.unit}</TableCell>
+                                            <TableCell className='text-right pr-10'>{(row.unit_price ?? 0).toLocaleString()} ฿</TableCell>
+                                            <TableCell className='text-right pr-6'>{row.sub_total.toLocaleString()} ฿</TableCell>
+                                            <TableCell className='text-center'>
                                                 <button 
                                                     onClick={() => handleRemoveItem(row.id.toString())}
-                                                    className="text-red-500 hover:text-red-700 font-light"
+                                                    className='text-red-500 hover:text-red-700 font-light'
                                                 >
-                                                    <Trash2 className='w-4 h-4' />
+                                                    <Trash2 size={16} />
                                                 </button>
                                             </TableCell>
                                         </TableRow>
@@ -594,30 +594,30 @@ const CreatePurchaseOrders: React.FC = () => {
                             </TableBody>
                             <TableFooter>
                                 <TableRow>
-                                    <TableCell colSpan={9} className="py-5">
-                                        <div className="flex items-center justify-end gap-10 pr-4">
-                                            <div className="flex flex-col items-center gap-1">
-                                                <span className="text-sm text-gray-500 font-light">รายการทั้งหมด</span>
-                                                <span className="text-2xl font-semibold text-gray-900">
-                                                    {totalItems} <span className="text-sm font-normal text-gray-500">รายการ</span>
+                                    <TableCell colSpan={9} className='py-5'>
+                                        <div className='flex items-center justify-end gap-10 pr-4'>
+                                            <div className='flex flex-col items-center gap-1'>
+                                                <span className='text-sm text-gray-500 font-light'>รายการทั้งหมด</span>
+                                                <span className='text-2xl font-semibold text-gray-900'>
+                                                    {totalItems} <span className='text-sm font-normal text-gray-500'>รายการ</span>
                                                 </span>
                                             </div>
 
-                                            <div className="w-px h-10 bg-gray-200"></div>
+                                            <div className='w-px h-10 bg-gray-200'></div>
 
-                                            <div className="flex flex-col items-center gap-1">
-                                                <span className="text-sm text-gray-500 font-light">จำนวนทั้งหมด</span>
-                                                <span className="text-2xl font-semibold text-gray-900">
-                                                    {totalQuantity} <span className="text-sm font-normal text-gray-500">หน่วย</span>
+                                            <div className='flex flex-col items-center gap-1'>
+                                                <span className='text-sm text-gray-500 font-light'>จำนวนทั้งหมด</span>
+                                                <span className='text-2xl font-semibold text-gray-900'>
+                                                    {totalQuantity} <span className='text-sm font-normal text-gray-500'>หน่วย</span>
                                                 </span>
                                             </div>
 
-                                            <div className="w-px h-10 bg-gray-200"></div>
+                                            <div className='w-px h-10 bg-gray-200'></div>
 
-                                            <div className="flex flex-col items-center gap-1">
-                                                <span className="text-sm text-gray-500 font-light">ราคาสั่งซื้อโดยประมาณ</span>
-                                                <span className="text-2xl font-semibold text-red-600">
-                                                    {totalEstimatedPrice.toLocaleString()} <span className="text-sm font-normal text-gray-500">บาท</span>
+                                            <div className='flex flex-col items-center gap-1'>
+                                                <span className='text-sm text-gray-500 font-light'>ราคาสั่งซื้อโดยประมาณ</span>
+                                                <span className='text-2xl font-semibold text-red-600'>
+                                                    {totalEstimatedPrice.toLocaleString()} <span className='text-sm font-normal text-gray-500'>บาท</span>
                                                 </span>
                                             </div>
                                         </div>
