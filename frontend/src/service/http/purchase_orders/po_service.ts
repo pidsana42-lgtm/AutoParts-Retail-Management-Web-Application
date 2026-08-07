@@ -12,12 +12,19 @@ export const poService = {
       if (params.status && params.status !== "all") queryParams.status = params.status;
       if (params.search) queryParams.search = params.search;
       if (params.month) queryParams.month = params.month;
+      if (params.year) queryParams.year = params.year;
       const response = await apiClient.get<GetPOsResponse>('/po/get-all-po', { params: queryParams });
       return response.data;
     } catch (error) {
       console.error("เกิดข้อผิดพลาดในการดึงข้อมูลใบสั่งซื้อ:", error);
       throw error; 
     }
+  },
+
+  // ดึงข้อมูลปี พ.ศ. มาแสดงใน Dropdown
+  getAvailableYears: async (): Promise<number[]> => {
+    const response = await apiClient.get('/po/available-years');
+    return response.data.years;
   },
 
   // 2. สร้างใบสั่งซื้อฉบับร่าง/ใหม่
@@ -156,16 +163,12 @@ export const poService = {
   },
 
   // 11. อัพเดตสถานะ PO (อนุมัติ / ไม่อนุมัติ)
-  updatePOStatus: async ( id: number | string, 
-      status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'RESUBMITTED',
-      rejectionReason?: string
+  updatePOStatus: async (
+      id: number | string,
+      status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'RESUBMITTED' | 'CANCELLED'
   ): Promise<{ message: string }> => {
       try {
-          const payload: any = { status };
-          if (rejectionReason) {
-              payload.rejection_reason = rejectionReason;
-          }
-          const response = await apiClient.patch<{ message: string }>(`/po/${id}/status`, payload);
+          const response = await apiClient.patch<{ message: string }>(`/po/${id}/status`, { status });
           return response.data;
       } catch (error) {
           console.error("เกิดข้อผิดพลาดในการอัพเดตสถานะใบสั่งซื้อ:", error);
