@@ -54,6 +54,24 @@ export const posApiService = {
       .get<{ data: GetSaleHistoryByIDResponse; message: string }>(`/pos/sales-history/${id}`)
       .then((res) => res.data.data),
 
+  /** พนักงานส่งคำขอยกเลิกรายการขาย */
+  requestCancelSaleOrder: (id: number, payload: { reason: string }): Promise<any> =>
+    apiClient
+      .post(`/pos/sales-history/${id}/request-cancel`, payload)
+      .then((res) => res.data),
+
+  /** เจ้าของร้านอนุมัติคำขอยกเลิกรายการขาย (และคืนสต็อกสินค้า) */
+  approveCancelSaleOrder: (id: number, payload?: { remark?: string }): Promise<any> =>
+    apiClient
+      .post(`/pos/sales-history/${id}/approve-cancel`, payload || {})
+      .then((res) => res.data),
+
+  /** เจ้าของร้านปฏิเสธคำขอยกเลิกรายการขาย */
+  rejectCancelSaleOrder: (id: number, payload?: { remark?: string }): Promise<any> =>
+    apiClient
+      .post(`/pos/sales-history/${id}/reject-cancel`, payload || {})
+      .then((res) => res.data),
+
   /** ค้นหาใบสั่งซื้อขายด้วยหมายเลข invoice */
   getSaleOrderByNumber: async (orderNumber: string): Promise<any | null> => {
     const endpoints = [

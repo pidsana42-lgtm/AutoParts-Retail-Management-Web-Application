@@ -30,6 +30,7 @@ const buttonVariants = cva(
           "bg-white border border-[#FFCDD2] text-gray-700",
           "hover:bg-gray-50",
         ],
+        approved: "bg-[#259B24] text-white hover:bg-[#1E7E1B]", // เพิ่มใหม่
       },
       size: {
         sm: "px-3 py-1.5 text-sm",

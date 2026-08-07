@@ -48,7 +48,6 @@ const dotVariants = cva("rounded-full shrink-0", {
       info:        "bg-blue-500",
       neutral:     "bg-slate-400",
       outline:     "bg-slate-400",
-
       credit:      "bg-white",
       transfer:    "bg-white",
       cash:        "bg-white",
