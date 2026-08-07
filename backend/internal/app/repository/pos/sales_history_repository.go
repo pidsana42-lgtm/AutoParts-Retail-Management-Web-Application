@@ -14,7 +14,7 @@ import (
 type SalesHistoryRepository interface {
 	GetSalesHistory(req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error)
 	GetSaleHistoryByID(identifier string) (*entity.SaleOrder, error)
-	RequestCancelOrder(orderID uint, reason string) error
+	RequestCancelOrder(orderID uint, userID uint, reason string) error
 	ApproveCancelOrder(order *entity.SaleOrder, remark string) error
 	RejectCancelOrder(orderID uint, remark string) error
 	GetCancellationRequests(req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error)
@@ -168,15 +168,16 @@ func (r *salesHistoryRepository) GetSaleHistoryByID(identifier string) (*entity.
 }
 
 // พนักงานส่งคำขอยกเลิก
-func (r *salesHistoryRepository) RequestCancelOrder(orderID uint, reason string) error {
-	now := time.Now()
-	return r.db.Model(&entity.SaleOrder{}).
-		Where("id = ?", orderID).
-		Updates(map[string]interface{}{
-			"status":              enum.OrderPendingCancel,
-			"cancel_reason":       reason,
-			"cancel_requested_at": now,
-		}).Error
+func (r *salesHistoryRepository) RequestCancelOrder(orderID uint, userID uint, reason string) error {
+    now := time.Now()
+    return r.db.Model(&entity.SaleOrder{}).
+        Where("id = ?", orderID).
+        Updates(map[string]interface{}{
+            "status":                 enum.OrderPendingCancel,
+            "cancel_reason":          reason,
+            "cancel_requested_at":    now,
+            "cancel_requested_by_id": userID, 
+        }).Error
 }
 
 // เจ้าของร้านอนุมัติการยกเลิก (เปลี่ยนสถานะ + Restock คืนสต็อก)
@@ -280,12 +281,12 @@ func (r *salesHistoryRepository) GetMyCancellationRequests(userID uint, req pos.
         Preload("PaymentMethod").
         Preload("Payments.PaymentMethod").
         Preload("Payments.ReceivedBy").
-        Where("cancel_requested_at IS NOT NULL AND id IN (SELECT order_id FROM payments WHERE received_by_id = ?)", userID)
+        Where("cancel_requested_at IS NOT NULL AND cancel_requested_by_id = ?", userID)
 
     // 1. ค้นหาบาร์โค้ด / เลข Order / ชื่อลูกค้า
     if req.Search != "" {
         query = query.Joins("LEFT JOIN customers ON customers.id = sale_orders.customer_id").
-            Where("sale_orders.order_number LIKE ? OR sale_orders.customer_name_temp LIKE ? OR customers.customer_name LIKE ?",
+            Where("(sale_orders.order_number LIKE ? OR sale_orders.customer_name_temp LIKE ? OR customers.customer_name LIKE ?)",
                 "%"+req.Search+"%", "%"+req.Search+"%", "%"+req.Search+"%")
     }
 

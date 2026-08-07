@@ -9,9 +9,9 @@ import (
 type SaleOrder struct {
 	gorm.Model
 	// User ส่งมา
-	OrderNumber string    `gorm:"type:varchar(100);not null;unique" json:"order_number" binding:"required"`
+	OrderNumber string `gorm:"type:varchar(100);not null;unique" json:"order_number" binding:"required"`
 	// เติม index:idx_sale_orders_created_at_id
-	OrderDate   time.Time `gorm:"type:timestamptz;not null;index:idx_sale_orders_created_at_id,priority:1" json:"order_date"`
+	OrderDate time.Time `gorm:"type:timestamptz;not null;index:idx_sale_orders_created_at_id,priority:1" json:"order_date"`
 
 	// FK
 	CustomerID *uint    `gorm:"column:customer_id;default:null" json:"customer_id"`
@@ -56,8 +56,10 @@ type SaleOrder struct {
 	StockMovements []StockMovement `gorm:"foreignKey:SaleOrderID" json:"stock_movements"`
 
 	// เพิ่ม Field สำหรับระบบ Cancel Workflow
-	CancelReason      *string    `gorm:"type:varchar(255)" json:"cancel_reason"`    // เหตุผลที่พนักงานขอยกเลิก
-	CancelRequestedAt *time.Time `gorm:"type:timestamp" json:"cancel_requested_at"` // เวลาที่ส่งคำขอยกเลิก
-	CancelRemark      *string    `gorm:"type:varchar(255)" json:"cancel_remark"`    // หมายเหตุอนุมัติ/ปฏิเสธจากเจ้าของร้าน
-	CancelProcessedAt *time.Time `gorm:"type:timestamp" json:"cancel_processed_at"` // เวลาที่เจ้าของร้านกดจัดการ
+	CancelReason        *string    `gorm:"type:varchar(255)" json:"cancel_reason"`                                   // เหตุผลที่พนักงานขอยกเลิก
+	CancelRequestedAt   *time.Time `gorm:"type:timestamp" json:"cancel_requested_at"`                                // เวลาที่ส่งคำขอยกเลิก
+	CancelRemark        *string    `gorm:"type:varchar(255)" json:"cancel_remark"`                                   // หมายเหตุอนุมัติ/ปฏิเสธจากเจ้าของร้าน
+	CancelProcessedAt   *time.Time `gorm:"type:timestamp" json:"cancel_processed_at"`                                // เวลาที่เจ้าของร้านกดจัดการ
+	CancelRequestedByID *uint      `gorm:"column:cancel_requested_by_id;default:null" json:"cancel_requested_by_id"` // ใครเป็นคนขอยกเลิก
+	CancelRequestedBy   *User      `gorm:"foreignKey:CancelRequestedByID" json:"cancel_requested_by"`                // Relation ไปตาราง User
 }

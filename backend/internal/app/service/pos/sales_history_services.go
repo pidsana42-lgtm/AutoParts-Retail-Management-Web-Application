@@ -12,7 +12,7 @@ import (
 type SalesHistoryService interface {
 	GetSalesHistory(req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
 	GetSaleHistoryByID(ctx context.Context, identifier string) (*pos.GetSaleHistoryByIDResponse, error)
-	RequestCancelSale(ctx context.Context, identifier string, req pos.RequestCancelOrderRequest) error
+	RequestCancelSale(ctx context.Context, identifier string, userID uint, req pos.RequestCancelOrderRequest) error
 	ApproveCancelSale(ctx context.Context, identifier string, req pos.ProcessCancelOrderRequest) error
 	RejectCancelSale(ctx context.Context, identifier string, req pos.ProcessCancelOrderRequest) error
 	GetCancellationRequests(ctx context.Context, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
@@ -74,11 +74,11 @@ func (s *salesHistoryService) GetSaleHistoryByID(ctx context.Context, identifier
 }
 
 // ส่งคำขอยกเลิก
-func (s *salesHistoryService) RequestCancelSale(ctx context.Context, identifier string, req pos.RequestCancelOrderRequest) error {
-	order, err := s.salesHistoryRepo.GetSaleHistoryByID(identifier)
-	if err != nil {
-		return err
-	}
+func (s *salesHistoryService) RequestCancelSale(ctx context.Context, identifier string, userID uint, req pos.RequestCancelOrderRequest) error {
+    order, err := s.salesHistoryRepo.GetSaleHistoryByID(identifier)
+    if err != nil {
+    	return err
+    }
 
 	if order.Status == enum.OrderCancelled {
 		return errors.New("รายการนี้ถูกยกเลิกไปแล้ว")
@@ -87,7 +87,7 @@ func (s *salesHistoryService) RequestCancelSale(ctx context.Context, identifier 
 		return errors.New("รายการนี้อยู่ระหว่างรออนุมัติการยกเลิกอยู่แล้ว")
 	}
 
-	return s.salesHistoryRepo.RequestCancelOrder(order.ID, req.Reason)
+    return s.salesHistoryRepo.RequestCancelOrder(order.ID, userID, req.Reason)
 }
 
 // เจ้าของร้านอนุมัติ
