@@ -4,7 +4,7 @@ import type { POSProductResponse } from "../../../interface/pos/product_interfac
 import type { StoreConfigInterface } from "../../../interface/pos/store_config_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
 import type { ConfirmPaymentRequest } from "../../../interface/pos/payment_interface";
-import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, GetSaleHistoryByIDResponse } from "../../../interface/pos/sales_history_interface";
+import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, GetSaleHistoryByIDResponse, SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
 
 // API Services 
 export const posApiService = {
@@ -71,6 +71,18 @@ export const posApiService = {
     apiClient
       .post(`/pos/sales-history/${id}/reject-cancel`, payload || {})
       .then((res) => res.data),
+  
+  /** พนักงานดูรายการคำขอยกเลิกบิลของตนเอง */
+  getMyCancellationRequests: (): Promise<SalesHistoryItemResponse[]> =>
+    apiClient
+      .get<{ data: SalesHistoryItemResponse[]; message: string }>("/pos/my-cancellation-requests")
+      .then((res) => res.data.data),
+
+  /** เจ้าของร้านดูรายการคำขอยกเลิกบิลทั้งหมด */
+  getCancellationRequests: (params?: { status?: string }): Promise<SalesHistoryItemResponse[]> =>
+    apiClient
+      .get<{ data: SalesHistoryItemResponse[]; message: string }>("/pos/cancellation-requests", { params })
+      .then((res) => res.data.data),
 
   /** ค้นหาใบสั่งซื้อขายด้วยหมายเลข invoice */
   getSaleOrderByNumber: async (orderNumber: string): Promise<any | null> => {
