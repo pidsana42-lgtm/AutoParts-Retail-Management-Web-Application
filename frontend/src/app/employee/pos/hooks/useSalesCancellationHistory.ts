@@ -18,32 +18,60 @@ export const useSalesCancellationHistory = () => {
   const [totalRows, setTotalRows] = useState<number>(0);
   const [totalPages, setTotalPages] = useState<number>(1);
 
+  const get30DaysAgoDateString = () => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const getTodayDateString = () => {
+    const date = new Date();
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   // --- Filter States ---
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [startDate, setStartDate] = useState<string>("");
-  const [endDate, setEndDate] = useState<string>("");
+  const [startDate, setStartDate] = useState<string>(get30DaysAgoDateString());
+  const [endDate, setEndDate] = useState<string>(getTodayDateString());
   const [customerType, setCustomerType] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("");
 
   // --- Fetch Data Function ---
-    const fetchCancellationHistory = useCallback(async () => {
+  const fetchCancellationHistory = useCallback(async () => {
     try {
         setIsLoading(true);
         setError(null);
 
-        // 🔹 เรียก API สำหรับดึงรายการขอยกเลิกของพนักงานคนนี้โดยตรง
-        const data = await posApiService.getMyCancellationRequests();
+      // ส่งค่าพารามิเตอร์ไปยัง API Service
+      const params: SalesHistoryFilterRequest = {
+        search: searchQuery,
+        start_date: startDate,
+        end_date: endDate,
+        customer_type: customerType,
+        payment_method: paymentMethod,
+        page: page,
+        limit: limit,
+      };
 
-        setDataList(data || []);
-        setTotalRows(data?.length || 0);
-        setTotalPages(1);
+      // เรียก API สำหรับดึงรายการขอยกเลิกของพนักงานคนนี้โดยตรง
+      const response = await posApiService.getMyCancellationRequests(params);
+
+      setDataList(response.items || []);
+      setTotalRows(response.total_rows || 0);
+      setTotalPages(response.total_pages || 1);
     } catch (err: any) {
         console.error("Failed to fetch cancellation history:", err);
         setError(err?.response?.data?.message || "ไม่สามารถโหลดข้อมูลประวัติการยกเลิกได้");
     } finally {
         setIsLoading(false);
     }
-    }, []);
+  }, [searchQuery, startDate, endDate, customerType, paymentMethod, page, limit]);
 
   // Effect สำหรับเรียกข้อมูลใหม่เมื่อ Filter/Pagination เปลี่ยน
   useEffect(() => {
