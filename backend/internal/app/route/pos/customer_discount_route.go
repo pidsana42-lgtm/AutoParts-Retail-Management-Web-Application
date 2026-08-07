@@ -12,17 +12,23 @@ import (
 )
 
 func SetupCustomerDiscountRoutes(r *gin.Engine, db *gorm.DB) {
-	customerDiscountRepo := customerdiscountRepo.NewCustomerDiscountRepository(db)
-	customerDiscountSvc := customerdiscountSvc.NewCustomerDiscountService(customerDiscountRepo)
-	customerDiscountCtrl := customerdiscountCtrl.NewCustomerDiscountController(customerDiscountSvc)
+    customerDiscountRepo := customerdiscountRepo.NewCustomerDiscountRepository(db)
+    customerDiscountSvc := customerdiscountSvc.NewCustomerDiscountService(customerDiscountRepo)
+    customerDiscountCtrl := customerdiscountCtrl.NewCustomerDiscountController(customerDiscountSvc)
 
-	customerDiscountGroup := r.Group("/api/pos/customer-discount")
-	customerDiscountGroup.Use(
-		middleware.AuthMiddleware(),
-		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)),
-	)
-	{
-		customerDiscountGroup.GET("", customerDiscountCtrl.GetCustomerDiscount)
-		customerDiscountGroup.PUT("", customerDiscountCtrl.BulkUpdateCustomerDiscounts)
-	}
+    customerDiscountGroup := r.Group("/api/pos/customer-discount")
+    customerDiscountGroup.Use(middleware.AuthMiddleware())
+    {
+        // อนุญาตให้ Employee ดึงข้อมูลลูกค้า/ค้นหาได้ด้วย
+        customerDiscountGroup.GET("", 
+            middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin), string(enum.RoleEmployee)), 
+            customerDiscountCtrl.GetCustomerDiscount,
+        )
+
+        // ส่วนการบันทึกแก้ไขวงเงิน/ส่วนลดจำนวนมาก สงวนไว้แค่ Owner/Admin
+        customerDiscountGroup.PUT("", 
+            middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)), 
+            customerDiscountCtrl.BulkUpdateCustomerDiscounts,
+        )
+    }
 }
