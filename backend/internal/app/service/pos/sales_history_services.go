@@ -15,6 +15,8 @@ type SalesHistoryService interface {
 	RequestCancelSale(ctx context.Context, identifier string, req pos.RequestCancelOrderRequest) error
 	ApproveCancelSale(ctx context.Context, identifier string, req pos.ProcessCancelOrderRequest) error
 	RejectCancelSale(ctx context.Context, identifier string, req pos.ProcessCancelOrderRequest) error
+	GetCancellationRequests(ctx context.Context, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
+    GetMyCancellationRequests(ctx context.Context, userID uint, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
 }
 
 type salesHistoryService struct {
@@ -114,4 +116,52 @@ func (s *salesHistoryService) RejectCancelSale(ctx context.Context, identifier s
 	}
 
 	return s.salesHistoryRepo.RejectCancelOrder(order.ID, req.Remark)
+}
+
+func (s *salesHistoryService) GetCancellationRequests(ctx context.Context, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error) {
+    orders, totalRows, err := s.salesHistoryRepo.GetCancellationRequests(req)
+    if err != nil {
+        return nil, err
+    }
+
+    items := pos.ToSalesHistoryItemResponseList(orders)
+    page := req.Page
+    if page <= 0 { page = 1 }
+
+    totalPages := 1
+    if req.Limit > 0 {
+        totalPages = int(math.Ceil(float64(totalRows) / float64(req.Limit)))
+    }
+
+    return &pos.SalesHistoryPaginationResponse{
+        Items:      items,
+        Page:       page,
+        Limit:      req.Limit,
+        TotalRows:  totalRows,
+        TotalPages: totalPages,
+    }, nil
+}
+
+func (s *salesHistoryService) GetMyCancellationRequests(ctx context.Context, userID uint, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error) {
+    orders, totalRows, err := s.salesHistoryRepo.GetMyCancellationRequests(userID, req)
+    if err != nil {
+        return nil, err
+    }
+
+    items := pos.ToSalesHistoryItemResponseList(orders)
+    page := req.Page
+    if page <= 0 { page = 1 }
+
+    totalPages := 1
+    if req.Limit > 0 {
+        totalPages = int(math.Ceil(float64(totalRows) / float64(req.Limit)))
+    }
+
+    return &pos.SalesHistoryPaginationResponse{
+        Items:      items,
+        Page:       page,
+        Limit:      req.Limit,
+        TotalRows:  totalRows,
+        TotalPages: totalPages,
+    }, nil
 }

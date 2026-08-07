@@ -131,3 +131,62 @@ func (c *SalesHistoryController) RejectCancelSale(ctx *gin.Context) {
 		"message": "ปฏิเสธคำขอยกเลิกรายการเรียบร้อยแล้ว",
 	})
 }
+
+func (c *SalesHistoryController) GetCancellationRequests(ctx *gin.Context) {
+    var req pos.SalesHistoryFilterRequest
+    if err := ctx.ShouldBindQuery(&req); err != nil {
+        ctx.JSON(http.StatusBadRequest, gin.H{
+            "message": "รูปแบบ Query Parameter ไม่ถูกต้อง",
+            "error":   err.Error(),
+        })
+        return
+    }
+
+    result, err := c.salesHistoryService.GetCancellationRequests(ctx.Request.Context(), req)
+    if err != nil {
+        ctx.JSON(http.StatusInternalServerError, gin.H{
+            "message": "ไม่สามารถดึงข้อมูลรายการคำขอยกเลิกได้",
+            "error":   err.Error(),
+        })
+        return
+    }
+
+    ctx.JSON(http.StatusOK, gin.H{
+        "message": "ดึงข้อมูลรายการคำขอยกเลิกสำเร็จ",
+        "data":    result,
+    })
+}
+
+func (c *SalesHistoryController) GetMyCancellationRequests(ctx *gin.Context) {
+	userIDFloat, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{
+			"message": "ไม่พบข้อมูลพนักงานในระบบ",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	var req pos.SalesHistoryFilterRequest
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "รูปแบบ Query Parameter ไม่ถูกต้อง",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	result, err := c.salesHistoryService.GetMyCancellationRequests(ctx.Request.Context(), userID, req)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "ไม่สามารถดึงข้อมูลรายการคำขอยกเลิกของฉันได้",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "ดึงข้อมูลรายการคำขอยกเลิกของฉันสำเร็จ",
+		"data":    result,
+	})
+}

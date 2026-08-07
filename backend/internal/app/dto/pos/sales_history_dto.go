@@ -2,6 +2,7 @@ package pos
 
 import (
 	"backend/internal/app/entity"
+	"strings"
 	"time"
 )
 
@@ -55,6 +56,12 @@ type SalesHistoryItemResponse struct {
 	PaymentMethodName string `json:"payment_method_name"`
 	Status            string `json:"status"`
 	PaymentStatus     string `json:"payment_status"`
+
+	CancelReason      *string    `json:"cancel_reason"`
+	CancelRequestedAt *time.Time `json:"cancel_requested_at"`
+	CancelRemark      *string    `json:"cancel_remark"`
+	CancelProcessedAt *time.Time `json:"cancel_processed_at"`
+	Canceller         string     `json:"canceller"`
 }
 
 // SalesHistoryPaginationResponse โครงสร้างข้อมูลครอบทั้งหมดที่มีข้อมูล Pagination แปะไปด้วย
@@ -87,7 +94,7 @@ func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse
 		// [ลูกค้าทั่วไป / Walk-in]
 		customerName = ""
 		phoneNumber = ""
-		customerTypeName = "ลูกค้าทั่วไป" // 👈 Default ให้ขาจร
+		customerTypeName = "ลูกค้าทั่วไป" // Default ให้ขาจร
 		customerNameTemp = order.CustomerNameTemp
 		customerPhoneTemp = order.CustomerPhoneTemp
 	}
@@ -100,6 +107,16 @@ func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse
 	} else if len(order.Payments) > 0 && order.Payments[0].PaymentMethod.MethodName != "" {
 		// 2. Fallback: ถ้าที่หัวบิลไม่ได้ลงไว้ ให้ดึงจากรายการชำระเงิน Payment ตัวแรก
 		paymentMethodName = order.Payments[0].PaymentMethod.MethodName
+	}
+
+	var canceller string = "-"
+	if len(order.Payments) > 0 {
+		p := order.Payments[0]
+		if p.ReceivedBy.FirstName != "" || p.ReceivedBy.LastName != "" {
+			canceller = strings.TrimSpace(p.ReceivedBy.FirstName + " " + p.ReceivedBy.LastName)
+		} else if p.ReceivedBy.Username != "" {
+			canceller = p.ReceivedBy.Username
+		}
 	}
 
 	return SalesHistoryItemResponse{
@@ -122,6 +139,11 @@ func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse
 		PaymentMethodName: paymentMethodName,
 		Status:            string(order.Status),
 		PaymentStatus:     string(order.PaymentStatus),
+		CancelReason:      order.CancelReason,
+		CancelRequestedAt: order.CancelRequestedAt,
+		CancelRemark:      order.CancelRemark,
+		CancelProcessedAt: order.CancelProcessedAt,
+		Canceller:         canceller,
 	}
 }
 
