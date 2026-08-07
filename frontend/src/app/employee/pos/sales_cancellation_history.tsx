@@ -5,6 +5,7 @@ import { Card, CardContent } from "../../../components/elements/card";
 import Input from "../../../components/elements/input";
 import Button from "../../../components/elements/button";
 import Select from "../../../components/elements/select";
+import Badge from "../../../components/elements/badge";
 import {
   Eye,
   ChevronLeft,
@@ -13,6 +14,7 @@ import {
   ChevronsRight,
   RotateCcw,
   ScanBarcode,
+  X,
 } from "lucide-react";
 import {
   Table,
@@ -23,50 +25,57 @@ import {
   TableCell,
 } from "../../../components/elements/table";
 import { cn } from "../../../utils/component";
-import { useSalesCancellationHistory } from "./hooks/useSalesCancellationHistory"; 
+import { getDisplayCustomerName, getPageNumbers, getPaymentVariant } from "../../../utils/poshelpers";
+import { useSalesCancellationHistory } from "./hooks/useSalesCancellationHistory";
+import { useSalesHistory } from "./hooks/useSalesHistory";
+import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
+import { useUserRole } from "../../../hooks/useUserRole";
 
 const SalesCancellationHistory: React.FC = () => {
-  const {
-    dataList,
-    selectedIds,
-    isSelectAll,
-    isLoading,
-    error,
-    page,
-    limit,
-    totalRows,
-    totalPages,
-    setPage,
-    setLimit,
-    searchQuery,
-    startDate,
-    endDate,
-    customerType,
-    paymentMethod,
-    setSearchQuery,
-    setStartDate,
-    setEndDate,
-    setCustomerType,
-    setPaymentMethod,
-    handleSelectAll,
-    handleSelectRow,
-    handleSearch,
-    handleRestoreSelected,
-  } = useSalesCancellationHistory();
+    const { isOwnerOrAdmin } = useUserRole();
+  // 1. ดึงข้อมูลตารางคำขอยกเลิกจาก useSalesCancellationHistory
+    const {
+        dataList,
+        selectedIds,
+        isSelectAll,
+        isLoading,
+        error,
+        page,
+        limit,
+        totalRows,
+        totalPages,
+        setPage,
+        setLimit,
+        searchQuery,
+        startDate,
+        endDate,
+        customerType,
+        paymentMethod,
+        setSearchQuery,
+        setStartDate,
+        setEndDate,
+        setCustomerType,
+        setPaymentMethod,
+        handleSelectAll,
+        handleSelectRow,
+        handleSearch,
+        handleRestoreSelected,
+    } = useSalesCancellationHistory();
 
-  // Helper สำหรับปุ่มเลขหน้า Pagination
-  const getPageNumbers = (currentPage: number, totalPages: number): (number | "...")[] => {
-    if (totalPages <= 5) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-    if (currentPage <= 3) {
-      return [1, 2, 3, 4, "...", totalPages];
-    }
-    if (currentPage >= totalPages - 2) {
-      return [1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
-    }
-    return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
-  };
+  // 2. ดึงเฉพาะ Drawer State และ Action Handlers จาก useSalesHistory
+    const {
+        selectedOrderId,
+        setSelectedOrderId,
+        orderDetail,
+        isDetailLoading,
+        cancelReason,
+        setCancelReason,
+        isCancelling,
+        handleRequestCancel,
+        handleDirectCancelByOwner,
+        handleRejectCancelByOwner,
+        getStatusText,
+    } = useSalesHistory();
 
   return (
     <div className="relative flex min-h-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-x-hidden">
@@ -225,24 +234,31 @@ const SalesCancellationHistory: React.FC = () => {
                             className="w-4 h-4 border border-gray-300 rounded-none bg-white checked:bg-[#E51C23] checked:border-[#E51C23] cursor-pointer appearance-none flex items-center justify-center after:content-['✓'] after:text-white after:text-[10px] after:font-bold after:hidden checked:after:block"
                           />
                         </TableCell>
+
                         <TableCell className="py-3.5 px-4">
                           <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
                             {item.order_number}
                           </Text>
                         </TableCell>
+
                         <TableCell className="py-3.5 px-3">
                           <Text variant="xs" className="font-light text-[#5B5B5B] mb-0">
                             {item.order_date ? new Date(item.order_date).toLocaleString("th-TH") : "-"}
                           </Text>
                         </TableCell>
+
                         <TableCell className="py-3.5 px-3 truncate">
                           <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate">
                             {item.customer_name || item.customer_name_temp || "ลูกค้าทั่วไป"}
                           </Text>
                           <Text variant="xs" className="font-light text-[#A8A29E] mb-0">
+                            {item.phone_number || item.customer_phone_temp || "-"}
+                          </Text>
+                          <Text variant="xs" className="font-light text-[#A8A29E] mb-0">
                             ประเภท: {item.customer_type_name || "-"}
                           </Text>
                         </TableCell>
+
                         <TableCell className="py-3.5 px-3 text-right">
                           <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
                             {item.total_amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -265,7 +281,7 @@ const SalesCancellationHistory: React.FC = () => {
                         <TableCell className="py-3.5 px-3 text-center">
                           <button
                             type="button"
-                            onClick={() => alert(`ดูรายละเอียด ID: ${item.id}`)}
+                            onClick={() => setSelectedOrderId(item.id)}
                             className="p-1.5 text-[#E51C23] hover:bg-red-50 rounded-full cursor-pointer"
                           >
                             <Eye className="w-4 h-4" />
@@ -381,6 +397,406 @@ const SalesCancellationHistory: React.FC = () => {
           </Card>
         </main>
       </div>
+
+      {/* ==================== SLIDE-OVER DRAWER (REAL DATA) ==================== */}
+      {selectedOrderId && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-none transition-opacity cursor-pointer"
+            onClick={() => setSelectedOrderId(null)}
+          />
+
+          <aside className="relative z-10 w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200">
+            {isDetailLoading ? (
+              <div className="flex-1 flex items-center justify-center p-6">
+                <Text variant="small" className="text-gray-500">
+                  กำลังโหลดข้อมูลออเดอร์...
+                </Text>
+              </div>
+            ) : orderDetail ? (
+              <div className="flex-1 overflow-y-auto">
+                {/* Header */}
+                <div className="p-5 border-b border-[#E7BDB8] flex items-start justify-between bg-white">
+                  <div>
+                    <Heading
+                      level="h3"
+                      weight="normal"
+                      className="text-xl text-[#1C1B1B] mb-0.5"
+                    >
+                      รายละเอียดออเดอร์
+                    </Heading>
+                    <Text variant="xs" className="text-[#6B7280]">
+                      หมายเลขบิล:{" "}
+                      <span className="font-semibold text-[#1C1B1B]">
+                        {orderDetail.order_number}
+                      </span>
+                    </Text>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrderId(null)}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Scrollable Body Content */}
+                <div className="p-6 space-y-6">
+                  {/* ข้อมูลลูกค้า */}
+                  <div>
+                    <Text
+                      variant="xs"
+                      className="font-normal text-[#E51C23] mb-2"
+                    >
+                      ข้อมูลลูกค้า
+                    </Text>
+                    <Card className="bg-[#F6F3F2] rounded-none border-gray-100 border-l-3 border-l-[#E51C23] shadow-none">
+                      <CardContent className="p-4 space-y-1">
+                        <Text
+                          variant="small"
+                          className="font-medium text-[#1C1B1B] mb-0"
+                        >
+                          {getDisplayCustomerName
+                            ? getDisplayCustomerName(orderDetail as unknown as SalesHistoryItemResponse)
+                            : orderDetail.customer_name || orderDetail.customer_name_temp || "ลูกค้าทั่วไป"}
+                        </Text>
+                        <Text variant="small" className="text-[#6B7280] mb-0">
+                          {orderDetail.phone_number || orderDetail.customer_phone_temp || "-"}
+                        </Text>
+                        {orderDetail.customer_type_name && (
+                          <Text variant="xs" className="text-[#6B7280] mb-0">
+                            ประเภท: {orderDetail.customer_type_name}
+                          </Text>
+                        )}
+                        {orderDetail.address && (
+                          <Text
+                            variant="xs"
+                            className="text-[#6B7280] mb-0 truncate"
+                          >
+                            ที่อยู่: {orderDetail.address}
+                          </Text>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* รายการสินค้า */}
+                  <div>
+                    <Text
+                      variant="xs"
+                      className="font-normal text-[#E51C23] mb-3"
+                    >
+                      รายการสินค้า ({orderDetail.items?.length || 0})
+                    </Text>
+                    <div className="divide-y divide-gray-100">
+                      {orderDetail.items &&
+                        orderDetail.items.map((prod) => (
+                          <div
+                            key={prod.id}
+                            className="flex items-center justify-between py-3 first:pt-0"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div>
+                                <Text
+                                  variant="small"
+                                  className="font-medium text-[#1C1B1B] mb-0"
+                                >
+                                  {prod.product_name}
+                                </Text>
+                                <Text
+                                  variant="xs"
+                                  className="font-normal text-[#1C1B1B] mb-0"
+                                >
+                                  {prod.part_number && `รหัสสินค้า: ${prod.part_number}`}
+                                </Text>
+                                <Text
+                                  variant="xs"
+                                  className="font-normal text-[#6B7280] mb-0"
+                                >
+                                  QTY: {prod.qty} {prod.unit} |{" "}
+                                  {prod.unit_price.toLocaleString("th-TH", {
+                                    minimumFractionDigits: 2,
+                                  })}
+                                </Text>
+                              </div>
+                            </div>
+                            <Text
+                              variant="small"
+                              className="font-normal text-[#1C1B1B] mb-0"
+                            >
+                              {(prod.subtotal || 0).toLocaleString("th-TH", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </Text>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* สรุปยอดเงิน */}
+                  <Card className="bg-[#1C1B1B] rounded-none border-none shadow-none">
+                    <CardContent className="p-4 space-y-2.5">
+                      <div className="flex justify-between text-white">
+                        <Text variant="xs" className="text-[#9CA3AF] mb-0">
+                          ราคารวมสินค้า
+                        </Text>
+                        <Text variant="xs" className="font-normal text-white mb-0">
+                          {(orderDetail.subtotal || 0).toLocaleString("th-TH", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </Text>
+                      </div>
+
+                      <div className="flex justify-between text-white">
+                        <Text variant="xs" className="text-[#9CA3AF] mb-0">
+                          ส่วนลดท้ายบิล
+                        </Text>
+                        <Text variant="xs" className="font-normal text-white mb-0">
+                          {(orderDetail.discount_amount || 0).toLocaleString("th-TH", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </Text>
+                      </div>
+
+                      <div className="flex justify-between text-white">
+                        <Text variant="xs" className="text-[#9CA3AF] mb-0">
+                          ส่วนลดรวมทั้งสิ้น
+                        </Text>
+                        <Text variant="xs" className="font-normal text-white mb-0">
+                          {(orderDetail.total_discount_items || 0).toLocaleString("th-TH", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </Text>
+                      </div>
+
+                      <div className="border-t border-[#9CA3AF] pt-2.5 flex justify-between">
+                        <Text variant="small" className="font-normal text-white mb-0">
+                          ยอดชำระสุทธิ
+                        </Text>
+                        <Text variant="small" className="font-normal text-white mb-0">
+                          {(orderDetail.total_amount || 0).toLocaleString("th-TH", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </Text>
+                      </div>
+
+                      <div className="pt-2 flex justify-end items-center gap-2">
+                        <Badge variant={getPaymentVariant(orderDetail.payment_method_name)}>
+                          {orderDetail.payment_method_name || "เงินสด"}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Dynamic Cancel Form / Status Section */}
+                  {(() => {
+                    const status = (orderDetail.status || "").trim().toUpperCase();
+                    const hasBeenRejected = Boolean(orderDetail.cancel_remark);
+
+                    if (status === "PENDING_CANCEL") {
+                      if (isOwnerOrAdmin) {
+                        return (
+                          <div className="space-y-4">
+                            <Card className="p-4 bg-[#EFF6FF] border border-[#BFDBFE] rounded-none shadow-none space-y-3">
+                              <div className="flex items-center justify-between">
+                                <Text variant="small" className="font-normal text-[#1E40AF] mb-0">
+                                  สถานะคำขอ: คำขอยกเลิกจากพนักงาน
+                                </Text>
+                                <Badge
+                                  variant="neutral"
+                                  className="bg-[#DBEAFE] text-[#1E40AF] border-none text-[10px] font-light rounded-none py-0.5 px-2"
+                                >
+                                  {getStatusText ? getStatusText(orderDetail.status) : orderDetail.status}
+                                </Badge>
+                              </div>
+
+                              <div className="text-xs text-[#5F5E5E] bg-[#F5F9FC] p-2.5 border-l-2 border-[#3B82F6]">
+                                <span className="font-normal text-[#1C1B1B]">
+                                  เหตุผลที่พนักงานขอ:
+                                </span>{" "}
+                                {cancelReason || orderDetail.cancel_reason || "-"}
+                              </div>
+                            </Card>
+
+                            <div className="space-y-3 pt-1">
+                              <div className="space-y-1.5">
+                                <Text
+                                  variant="xs"
+                                  className="font-normal text-[#E51C23] uppercase tracking-wider mb-1"
+                                >
+                                  หมายเหตุการดำเนินการ (ถ้ามี):
+                                </Text>
+                                <textarea
+                                  rows={3}
+                                  value={cancelReason}
+                                  onChange={(e) => setCancelReason(e.target.value)}
+                                  placeholder="ระบุเหตุผลในการอนุมัติหรือปฏิเสธ..."
+                                  className="w-full p-2.5 text-xs font-light bg-[#F6F3F2] border border-[#E51C23] rounded-none focus:outline-none text-[#1C1B1B] placeholder-[#6B7280] resize-none"
+                                />
+                              </div>
+
+                              <div className="flex gap-2 pt-1">
+                                <Button
+                                  type="button"
+                                  variant="approved"
+                                  onClick={handleDirectCancelByOwner}
+                                  disabled={isCancelling}
+                                  className="flex-1 text-xs h-10 font-normal rounded-none"
+                                >
+                                  {isCancelling ? "กำลังดำเนินการ..." : "อนุมัติยกเลิก (คืนสต็อก)"}
+                                </Button>
+
+                                <Button
+                                  type="button"
+                                  variant="solid-red"
+                                  onClick={handleRejectCancelByOwner}
+                                  disabled={isCancelling}
+                                  className="flex-1 text-xs h-10 font-normal rounded-none"
+                                >
+                                  {isCancelling ? "กำลังดำเนินการ..." : "ปฏิเสธคำขอ"}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <Card className="p-4 bg-[#EFF6FF] border border-[#BFDBFE] rounded-none shadow-none space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Text variant="small" className="font-normal text-[#1E40AF] mb-0">
+                              สถานะคำขอ: อยู่ระหว่างรออนุมัติ
+                            </Text>
+                            <Badge
+                              variant="neutral"
+                              className="bg-[#DBEAFE] text-[#1E40AF] border-none text-[10px] font-light rounded-none py-0.5 px-2"
+                            >
+                              {getStatusText ? getStatusText(orderDetail.status) : orderDetail.status}
+                            </Badge>
+                          </div>
+                          <div className="text-xs text-[#5F5E5E] bg-[#F5F9FC] p-2.5 border-l-2 border-[#3B82F6]">
+                            <span className="font-normal text-[#1C1B1B]">
+                              เหตุผลที่ระบุ:
+                            </span>{" "}
+                            {cancelReason || orderDetail.cancel_reason || "-"}
+                          </div>
+                        </Card>
+                      );
+                    }
+
+                    if (status === "CANCELLED" || status === "ยกเลิก") {
+                      return (
+                        <Card className="p-4 bg-[#FCF7F7] border border-[#F5DFDF] rounded-none shadow-none space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Text variant="small" className="font-normal text-[#E51C23] mb-0">
+                              สถานะคำขอ: รายการนี้ถูกยกเลิกแล้ว
+                            </Text>
+                            <Badge
+                              variant="neutral"
+                              className="bg-[#E51C23] text-white border-none text-[10px] font-light rounded-none py-0.5 px-2"
+                            >
+                              {getStatusText ? getStatusText(orderDetail.status) : orderDetail.status}
+                            </Badge>
+                          </div>
+                          <div className="text-xs text-[#5F5E5E] bg-[#FAF2F2] p-2.5 border-l-2 border-[#E51C23]">
+                            <span className="font-normal text-[#1C1B1B]">
+                              เหตุผลการยกเลิก:
+                            </span>{" "}
+                            {orderDetail.cancel_reason || "-"}
+                          </div>
+                        </Card>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-4 pt-2">
+                        {hasBeenRejected && (
+                          <Card className="p-4 bg-[#FCF7F7] border border-[#F5DFDF] rounded-none shadow-none space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Text variant="small" className="font-normal text-[#E51C23] mb-0">
+                                สถานะ: คำขอยกเลิกก่อนหน้านี้ถูกปฏิเสธ
+                              </Text>
+                              <Badge
+                                variant="neutral"
+                                className="bg-[#E51C23] text-white border-none text-[10px] font-light rounded-none py-0.5 px-2"
+                              >
+                                {getStatusText
+                                  ? getStatusText(orderDetail.status, orderDetail.cancel_remark)
+                                  : orderDetail.status}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-[#5F5E5E] bg-[#FAF2F2] p-2.5 border-l-2 border-[#E51C23]">
+                              <span className="font-normal text-[#1C1B1B]">
+                                เหตุผลจากเจ้าของร้าน:
+                              </span>{" "}
+                              {orderDetail.cancel_remark}
+                            </div>
+                          </Card>
+                        )}
+
+                        <div className="space-y-3">
+                          <Text
+                            variant="xs"
+                            className="font-normal text-[#E51C23] uppercase tracking-wider mb-1"
+                          >
+                            {hasBeenRejected
+                              ? "ระบุเหตุผลเพื่อยื่นขอยกเลิกใหม่อีกครั้ง"
+                              : "ระบุเหตุผลในการขอยกเลิกรายการ"}
+                          </Text>
+
+                          <textarea
+                            rows={3}
+                            value={cancelReason}
+                            onChange={(e) => setCancelReason(e.target.value)}
+                            placeholder="ตัวอย่าง: ลูกค้าขอยกเลิกออเดอร์เนื่องจากเปลี่ยนใจ / ยิงรายการผิด..."
+                            className="w-full p-2.5 text-xs font-light bg-[#F6F3F2] border border-[#E51C23] rounded-none focus:outline-none text-[#1C1B1B] placeholder-[#6B7280] resize-none"
+                          />
+
+                          <div className="flex gap-3 pt-1">
+                            <Button
+                              type="button"
+                              variant="solid-red"
+                              onClick={
+                                isOwnerOrAdmin
+                                  ? handleDirectCancelByOwner
+                                  : handleRequestCancel
+                              }
+                              disabled={isCancelling}
+                              className="flex-1 text-sm h-11 font-normal"
+                            >
+                              {isCancelling
+                                ? "กำลังดำเนินการ..."
+                                : isOwnerOrAdmin
+                                ? "อนุมัติยกเลิกรายการ (คืนสต็อก)"
+                                : "ยืนยันการขออนุมัติยกเลิก"}
+                            </Button>
+
+                            <Button
+                              type="button"
+                              variant="outline-cancel"
+                              onClick={() => setSelectedOrderId(null)}
+                              className="text-sm px-6 h-11 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal"
+                            >
+                              ยกเลิก
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center p-6">
+                <Text variant="small" className="text-red-500">
+                  ไม่พบข้อมูลออเดอร์
+                </Text>
+              </div>
+            )}
+          </aside>
+        </div>
+      )}
     </div>
   );
 };

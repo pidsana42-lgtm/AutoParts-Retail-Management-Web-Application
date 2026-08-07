@@ -29,49 +29,15 @@ import { cn } from "../../../utils/component";
 
 // นำเข้า Hook & Helpers
 import { useSalesHistory } from "./hooks/useSalesHistory";
-import { getDisplayCustomerName } from "../../../utils/poshelpers";
+import { getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge, getPaymentBadgeColor } from "../../../utils/poshelpers";
+import { formatDate } from "../../../utils/date";
 import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
+import { useUserRole } from "../../../hooks/useUserRole";
 
-// --- Helper Function สำหรับ Pagination ---
-const getPageNumbers = (
-  currentPage: number,
-  totalPages: number,
-): (number | "...")[] => {
-  if (totalPages <= 5) {
-    return Array.from({ length: totalPages }, (_, i) => i + 1);
-  }
-  if (currentPage <= 3) {
-    return [1, 2, 3, 4, "...", totalPages];
-  }
-  if (currentPage >= totalPages - 2) {
-    return [
-      1,
-      "...",
-      totalPages - 3,
-      totalPages - 2,
-      totalPages - 1,
-      totalPages,
-    ];
-  }
-  return [
-    1,
-    "...",
-    currentPage - 1,
-    currentPage,
-    currentPage + 1,
-    "...",
-    totalPages,
-  ];
-};
 
 export default function TransactionHistoryPage() {
-  // 1. ดึง Role ผู้ใช้งานจาก LocalStorage / Context
-  const userRole = (
-    typeof window !== "undefined"
-      ? localStorage.getItem("role") || "EMPLOYEE"
-      : "EMPLOYEE"
-  ).toUpperCase();
-  const isOwnerOrAdmin = ["OWNER", "ADMIN"].includes(userRole);
+  // --- ดึงข้อมูลและ Handlers จริงจาก Custom Hook ---
+  const { isOwnerOrAdmin } = useUserRole();
 
   // --- ดึงข้อมูลและ Handlers จริงจาก Custom Hook ---
   const {
@@ -108,111 +74,6 @@ export default function TransactionHistoryPage() {
     handleRejectCancelByOwner,
     getStatusText,
   } = useSalesHistory();
-
-  // --- Helper Render Status Badge ---
-  const renderStatusBadge = (status: string, paymentStatus: string) => {
-    const billStatus = (status || "").trim().toUpperCase();
-    const payStatus = (paymentStatus || "").trim().toUpperCase();
-
-    // 1. เช็กการยกเลิกก่อน
-    if (billStatus === "PENDING_CANCEL") {
-      return (
-        <Badge variant="error" className="rounded-none whitespace-nowrap">
-          ส่งคำขอยกเลิกแล้ว
-        </Badge>
-      );
-    }
-
-    if (billStatus === "CANCELLED" || billStatus === "ยกเลิก") {
-      return (
-        <Badge variant="error" className="rounded-none whitespace-nowrap">
-          ยกเลิกแล้ว
-        </Badge>
-      );
-    }
-
-    // 2. ถ้าชำระเงินครบถ้วนแล้ว (paid) -> แสดง "ชำระแล้ว"
-    if (payStatus === "PAID" || payStatus === "ชำระแล้ว") {
-      return (
-        <Badge variant="success" className="rounded-none whitespace-nowrap">
-          ชำระแล้ว
-        </Badge>
-      );
-    }
-
-    // 3. ถ้าเป็นบิลเงินเชื่อที่ทำรายการเสร็จแล้ว แต่ยังไม่ชำระ (completed + unpaid/partial)
-    if (billStatus === "COMPLETED") {
-      return (
-        <Badge variant="info" className="rounded-none whitespace-nowrap">
-          ทำรายการแล้ว
-        </Badge>
-      );
-    }
-
-    // 4. สถานะรอดำเนินการ / รอตอบรับ
-    if (billStatus === "PENDING") {
-      return (
-        <Badge variant="neutral" className="rounded-none whitespace-nowrap">
-          รอดำเนินการ
-        </Badge>
-      );
-    }
-
-    if (billStatus === "OVERDUE" || payStatus === "OVERDUE") {
-      return (
-        <Badge variant="error" className="rounded-none whitespace-nowrap">
-          เกินกำหนด
-        </Badge>
-      );
-    }
-
-    // default สำรองกรณีค่าอื่น
-    return (
-      <Badge variant="info" className="rounded-none whitespace-nowrap">
-        {status || "ไม่ทราบสถานะ"}
-      </Badge>
-    );
-  };
-
-  // Helper สำหรับแปลงวันที่
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return "-";
-    const date = new Date(dateStr);
-    return isNaN(date.getTime())
-      ? dateStr
-      : date.toLocaleDateString("th-TH", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-  };
-
-  const getPaymentBadgeColor = (methodName?: string) => {
-    switch (methodName) {
-      case "เงินเชื่อ":
-        return "bg-blue-500";
-      case "เงินโอน/สแกน QR":
-        return "bg-gray-500";
-      case "เงินสด":
-      default:
-        return "bg-[#259B24]";
-    }
-  };
-
-  const getPaymentVariant = (methodName?: string) => {
-    switch (methodName) {
-      case "เงินเชื่อ":
-        return "credit";
-      case "เงินโอน/สแกน QR":
-        return "transfer";
-      case "เงินสด":
-        return "cash";
-      default:
-        return "neutral"; // คืนค่าสีเทาไว้กรณีเป็นค่า null หรือ "-"
-    }
-  };
 
   return (
     <div className="relative flex min-h-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-x-hidden">
@@ -425,7 +286,7 @@ export default function TransactionHistoryPage() {
                         </Text>
                       </TableCell>
 
-                      {/* 3. ชื่อลูกค้า + เบอร์โทรศัพท์ */}
+                      {/* 3. ชื่อลูกค้า + เบอร์โทรศัพท์ + ประเภท */}
                       <TableCell className="py-3.5 px-4 truncate">
                         <Text
                           variant="small"
@@ -438,6 +299,11 @@ export default function TransactionHistoryPage() {
                           className="font-light text-[#A8A29E] mb-0"
                         >
                           {item.phone_number || item.customer_phone_temp || "-"}
+                        </Text>
+                        <Text 
+                          variant="xs" 
+                          className="font-light text-[#A8A29E] mb-0">
+                          ประเภท: {item.customer_type_name || "-"}
                         </Text>
                       </TableCell>
 
