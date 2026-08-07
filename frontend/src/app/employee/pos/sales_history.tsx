@@ -553,6 +553,9 @@ export default function TransactionHistoryPage() {
                               <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
                                 {prod.product_name}
                               </Text>
+                              <Text variant="xs" className="font-normal text-[#1C1B1B] mb-0">
+                                {prod.part_number && `รหัสสินค้า: ${prod.part_number}`}
+                              </Text>
                               <Text variant="xs" className="font-normal text-[#6B7280] mb-0">
                                 QTY: {prod.qty} {prod.unit} | {prod.unit_price.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                               </Text>

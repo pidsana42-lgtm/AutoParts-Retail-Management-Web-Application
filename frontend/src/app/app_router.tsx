@@ -28,6 +28,7 @@ import EmployeeImport from './employee/import';
 import EmployeePreOrder from './employee/pre-order';
 import EmployeeClaimsPage from './employee/claim/claims';
 import MobileScanPage from './mobile-scan/mobile_scan_page';
+import SalesCancellationHistory from './employee/pos/sales_cancellation_history';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -105,8 +106,12 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/owner/returns/detail/:id" element={<ReturnDetailPage />} />
         {/* ----------------------------------------------------------- */}
 
+        {/* -------- เพิ่ม Route สำหรับ POS -------- */}
         <Route path="/employee/pos/pos" element={<Pos />} />
         <Route path="/employee/pos/sales_history" element={<SalesHistory />} />
+        <Route path="/employee/pos/sales_cancellation_history" element={<SalesCancellationHistory />} />
+        {/* --------------------------------------------------- */}
+
         <Route path="/owner/orders" element={<PurchaseOrders />} />
         <Route path="/owner/new-orders" element={<CreatePurchaseOrders />} />
         <Route path="/owner/orders/:id" element={<OrderDetail />} />

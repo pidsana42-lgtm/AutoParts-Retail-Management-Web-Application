@@ -1,6 +1,7 @@
 import {
   LayoutDashboard, FileText, Boxes, MonitorSmartphone,
-  ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight, CircleCheck, History
+  ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight, CircleCheck, History,
+  FileX
 
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -64,6 +65,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   { icon: MonitorSmartphone, label: "ระบบขาย POS", path: "/employee/pos/pos", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"], 
     subs: [
       { icon: History, path: "/employee/pos/sales_history", label: "รายการธุรกรรม" },
+      { icon: FileX, path: "/employee/pos/sales_cancellation_history", label: "ประวัติยกเลิกการขาย" },
     ],
   },
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/owner/orders", roles: ["OWNER", "ADMIN"] },

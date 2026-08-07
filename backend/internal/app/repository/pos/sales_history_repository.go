@@ -17,6 +17,8 @@ type SalesHistoryRepository interface {
 	RequestCancelOrder(orderID uint, reason string) error
 	ApproveCancelOrder(order *entity.SaleOrder, remark string) error
 	RejectCancelOrder(orderID uint, remark string) error
+	GetCancellationRequests(req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error)
+	GetMyCancellationRequests(userID uint, req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error)
 }
 
 type salesHistoryRepository struct {
@@ -218,4 +220,100 @@ func (r *salesHistoryRepository) RejectCancelOrder(orderID uint, remark string) 
 	}
 
 	return r.db.Model(&entity.SaleOrder{}).Where("id = ?", orderID).Updates(updates).Error
+}
+
+func (r *salesHistoryRepository) GetCancellationRequests(req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error) {
+    var orders []entity.SaleOrder
+    var totalRows int64
+
+    query := r.db.Model(&entity.SaleOrder{}).
+        Preload("Customer").
+        Preload("Customer.CustomerType").
+        Preload("PaymentMethod").
+        Preload("Payments.PaymentMethod").
+        Preload("Payments.ReceivedBy").
+        Where("cancel_requested_at IS NOT NULL") // ฉพาะรายการที่มีคำขอยกเลิก
+
+    // 1. ค้นหาบาร์โค้ด / เลข Order / ชื่อลูกค้า
+    if req.Search != "" {
+        query = query.Joins("LEFT JOIN customers ON customers.id = sale_orders.customer_id").
+            Where("sale_orders.order_number LIKE ? OR sale_orders.customer_name_temp LIKE ? OR customers.customer_name LIKE ?",
+                "%"+req.Search+"%", "%"+req.Search+"%", "%"+req.Search+"%")
+    }
+
+    // 2. กรองช่วงวันที่ขอยกเลิก
+    if req.StartDate != "" && req.EndDate != "" {
+        startDate := strings.Split(req.StartDate, "T")[0]
+        endDate := strings.Split(req.EndDate, "T")[0]
+        query = query.Where("sale_orders.cancel_requested_at BETWEEN ? AND ?", startDate+" 00:00:00", endDate+" 23:59:59")
+    }
+
+    // นับจำนวนรายการทั้งหมด
+    if err := query.Count(&totalRows).Error; err != nil {
+        return nil, 0, err
+    }
+
+    // 3. ทำ Limit / Offset Pagination
+    if req.Limit > 0 {
+        page := req.Page
+        if page <= 0 { page = 1 }
+        offset := (page - 1) * req.Limit
+        query = query.Limit(req.Limit).Offset(offset)
+    }
+
+    query = query.Order("cancel_requested_at DESC")
+
+    if err := query.Find(&orders).Error; err != nil {
+        return nil, 0, err
+    }
+
+    return orders, totalRows, nil
+}
+
+func (r *salesHistoryRepository) GetMyCancellationRequests(userID uint, req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error) {
+    var orders []entity.SaleOrder
+    var totalRows int64
+
+    query := r.db.Model(&entity.SaleOrder{}).
+        Preload("Customer").
+        Preload("Customer.CustomerType").
+        Preload("PaymentMethod").
+        Preload("Payments.PaymentMethod").
+        Preload("Payments.ReceivedBy").
+        Where("cancel_requested_at IS NOT NULL AND id IN (SELECT order_id FROM payments WHERE received_by_id = ?)", userID)
+
+    // 1. ค้นหาบาร์โค้ด / เลข Order / ชื่อลูกค้า
+    if req.Search != "" {
+        query = query.Joins("LEFT JOIN customers ON customers.id = sale_orders.customer_id").
+            Where("sale_orders.order_number LIKE ? OR sale_orders.customer_name_temp LIKE ? OR customers.customer_name LIKE ?",
+                "%"+req.Search+"%", "%"+req.Search+"%", "%"+req.Search+"%")
+    }
+
+    // 2. กรองช่วงวันที่ขอยกเลิก
+    if req.StartDate != "" && req.EndDate != "" {
+        startDate := strings.Split(req.StartDate, "T")[0]
+        endDate := strings.Split(req.EndDate, "T")[0]
+        query = query.Where("sale_orders.cancel_requested_at BETWEEN ? AND ?", startDate+" 00:00:00", endDate+" 23:59:59")
+    }
+
+    // นับจำนวนรายการทั้งหมด
+    if err := query.Count(&totalRows).Error; err != nil {
+        return nil, 0, err
+    }
+
+    // 3. ทำ Limit / Offset Pagination
+    if req.Limit > 0 {
+        page := req.Page
+        if page <= 0 { page = 1 }
+        offset := (page - 1) * req.Limit
+        query = query.Limit(req.Limit).Offset(offset)
+    }
+
+    query = query.Order("cancel_requested_at DESC")
+
+    if err := query.Find(&orders).Error; err != nil {
+        return nil, 0, err
+    }
+
+    return orders, totalRows, nil
 }

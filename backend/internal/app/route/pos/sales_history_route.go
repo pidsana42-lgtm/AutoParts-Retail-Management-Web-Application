@@ -25,11 +25,15 @@ func SetupSalesHistoryRoutes(r *gin.Engine, db *gorm.DB) {
 		salesGroup.GET("/sales/history", ctrl.GetSalesHistory)
 		salesGroup.GET("/sales-history/:id", ctrl.GetSaleHistoryByID)
 		salesGroup.POST("/sales-history/:id/request-cancel", ctrl.RequestCancelSale)
+		// เพิ่มพนักงานดูรายการคำขอยกเลิกบิลของตนเอง
+		salesGroup.GET("/my-cancellation-requests", ctrl.GetMyCancellationRequests)
 
 		// ส่วนสิทธิ์ของ Owner/Admin ค่อยแตก Group ย่อยออกมาจาก salesGroup อีกที
 		ownerOnly := salesGroup.Group("")
 		ownerOnly.Use(middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)))
 		{
+			// เพิ่มดูคำขอยกเลิกบิลทั้งหมด (กรองตาม status เช่น PENDING ได้)
+            ownerOnly.GET("/cancellation-requests", ctrl.GetCancellationRequests)
 			ownerOnly.POST("/sales-history/:id/approve-cancel", ctrl.ApproveCancelSale)
 			ownerOnly.POST("/sales-history/:id/reject-cancel", ctrl.RejectCancelSale)
 		}
