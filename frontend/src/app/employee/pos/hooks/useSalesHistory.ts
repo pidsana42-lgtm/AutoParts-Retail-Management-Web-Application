@@ -43,6 +43,7 @@ export const useSalesHistory = () => {
   const [orderDetail, setOrderDetail] = useState<GetSaleHistoryByIDResponse | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // --- Fetch Function ---
   const fetchSalesHistory = useCallback(async (overrideSearch?: string) => {
@@ -131,6 +132,112 @@ export const useSalesHistory = () => {
     setPage(1);
   };
 
+  // 1. Handler สำหรับ พนักงาน (Employee/Staff): ส่งคำขอยกเลิกรายการ (เข้าสถานะ PENDING_CANCEL)
+  const handleRequestCancel = async () => {
+    if (!selectedOrderId) return;
+    if (!cancelReason.trim()) {
+      alert("กรุณาระบุเหตุผลในการขอยกเลิกรายการ");
+      return;
+    }
+
+    setIsCancelling(true);
+    try {
+      await posApiService.requestCancelSaleOrder(selectedOrderId, {
+        reason: cancelReason.trim(),
+      });
+
+      alert("ส่งคำขอยกเลิกรายการเรียบร้อยแล้ว รอการอนุมัติจากเจ้าของร้าน");
+      
+      setSelectedOrderId(null);
+      setCancelReason("");
+      fetchSalesHistory();
+    } catch (err: any) {
+      console.error("Failed to request cancel order:", err);
+      alert(err?.response?.data?.message || "ไม่สามารถส่งคำขอยกเลิกรายการได้");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  //  2. Handler สำหรับ เจ้าของร้าน (Owner/Admin): อนุมัติยกเลิกรายการและคืนสต็อกทันที
+  const handleDirectCancelByOwner = async () => {
+    if (!selectedOrderId) return;
+    if (!cancelReason.trim()) {
+      alert("กรุณาระบุเหตุผลในการยกเลิกรายการ");
+      return;
+    }
+
+    setIsCancelling(true);
+    try {
+      await posApiService.approveCancelSaleOrder(selectedOrderId, {
+        remark: cancelReason.trim(),
+      });
+
+      alert("ยกเลิกรายการขายและคืนสินค้าเข้าสต็อกเรียบร้อยแล้ว");
+      
+      setSelectedOrderId(null);
+      setCancelReason("");
+      fetchSalesHistory();
+    } catch (err: any) {
+      console.error("Failed to cancel order directly:", err);
+      alert(err?.response?.data?.message || "ไม่สามารถยกเลิกรายการได้");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  // 3. Handler สำหรับ เจ้าของร้าน (Owner/Admin): ปฏิเสธคำขอยกเลิกรายการขาย
+  const handleRejectCancelByOwner = async () => {
+    if (!selectedOrderId) return;
+    if (!cancelReason.trim()) {
+      alert("กรุณาระบุเหตุผลในการปฏิเสธคำขอ");
+      return;
+    }
+
+    setIsCancelling(true);
+    try {
+      // ยิง API ปฏิเสธคำขอยกเลิก ( Reject )
+      await posApiService.rejectCancelSaleOrder(selectedOrderId, {
+        remark: cancelReason.trim(),
+      });
+
+      alert("ปฏิเสธคำขอยกเลิกรายการเรียบร้อยแล้ว");
+      
+      setSelectedOrderId(null);
+      setCancelReason("");
+      fetchSalesHistory(); // รีโหลดตารางใหม่
+    } catch (err: any) {
+      console.error("Failed to reject cancel order:", err);
+      alert(err?.response?.data?.message || "ไม่สามารถปฏิเสธคำขอยกเลิกรายการได้");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  // Helper แปลงสถานะเป็นข้อความภาษาไทย
+  const getStatusText = (statusStr?: string | null, cancelRemark?: string | null) => {
+    if (!statusStr) return "-";
+    const status = statusStr.trim().toUpperCase();
+
+    if (cancelRemark && status !== "PENDING_CANCEL" && status !== "CANCELLED" && status !== "ยกเลิก") {
+      return "ปฏิเสธคำขอ";
+    }
+
+    switch (status) {
+      case "PENDING_CANCEL":
+        return "รออนุมัติยกเลิก";
+      case "CANCELLED":
+      case "ยกเลิก":
+        return "ยกเลิกแล้ว";
+      case "COMPLETED":
+        return "ทำรายการสำเร็จ";
+      case "PENDING":
+        return "รอดำเนินการ";
+      default:
+        return statusStr;
+    }
+  };
+
   return {
     // States
     items,
@@ -166,5 +273,10 @@ export const useSalesHistory = () => {
     isDetailLoading,
     cancelReason,
     setCancelReason,
+    isCancelling,
+    handleRequestCancel,        // สำหรับ Employee (ส่งเรื่องรออนุมัติ)
+    handleDirectCancelByOwner,  //  สำหรับ Owner (อนุมัติทันที)
+    handleRejectCancelByOwner,  //  สำหรับ Owner (ปฏิเสธคำขอ)
+    getStatusText,
   };
 };
