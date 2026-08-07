@@ -344,7 +344,7 @@ const SalesCancellationHistory: React.FC = () => {
                       {/* สถานะ */}
                       <TableCell className="py-3.5 px-3 text-center">
                         <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-normal text-red-600 bg-red-100 rounded-none">
-                          ยกเลิก
+                          รออนุมัติ
                         </span>
                       </TableCell>
 

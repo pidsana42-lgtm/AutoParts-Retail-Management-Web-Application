@@ -1,19 +1,19 @@
 package pos
 
 import (
-	"backend/internal/app/dto/pos"
-	salesHistorySvc"backend/internal/app/service/pos"
-	"net/http"
-
-	"github.com/gin-gonic/gin"
+    "backend/internal/app/dto/pos"
+    salesHistorySvc "backend/internal/app/service/pos"
+    "net/http"
+	"log"
+    "github.com/gin-gonic/gin"
 )
 
 type SalesHistoryController struct {
-	salesHistoryService salesHistorySvc.SalesHistoryService
+    salesHistoryService salesHistorySvc.SalesHistoryService
 }
 
 func NewSalesHistoryController(salesHistoryService salesHistorySvc.SalesHistoryService) *SalesHistoryController {
-	return &SalesHistoryController{salesHistoryService: salesHistoryService}
+    return &SalesHistoryController{salesHistoryService: salesHistoryService}
 }
 
 func (c *SalesHistoryController) GetSalesHistory(ctx *gin.Context) {
@@ -70,8 +70,19 @@ func (c *SalesHistoryController) GetSaleHistoryByID(ctx *gin.Context) {
 
 // พนักงานส่งคำขอยกเลิก
 func (c *SalesHistoryController) RequestCancelSale(ctx *gin.Context) {
-	identifier := ctx.Param("id")
-	var req pos.RequestCancelOrderRequest
+    identifier := ctx.Param("id")
+
+    // ดึง userID ของผู้ใช้งานที่ทำรายการ
+    userIDFloat, exists := ctx.Get("user_id")
+    if !exists {
+        ctx.JSON(http.StatusUnauthorized, gin.H{
+            "message": "ไม่พบข้อมูลพนักงานในระบบ",
+        })
+        return
+    }
+    userID := uint(userIDFloat.(float64))
+
+    var req pos.RequestCancelOrderRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
@@ -81,13 +92,14 @@ func (c *SalesHistoryController) RequestCancelSale(ctx *gin.Context) {
 		return
 	}
 
-	if err := c.salesHistoryService.RequestCancelSale(ctx.Request.Context(), identifier, req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"message": "ไม่สามารถส่งคำขอยกเลิกรายการได้",
-			"error":   err.Error(),
-		})
-		return
-	}
+    // ส่ง userID ต่อให้ Service
+    if err := c.salesHistoryService.RequestCancelSale(ctx.Request.Context(), identifier, userID, req); err != nil {
+        ctx.JSON(http.StatusBadRequest, gin.H{
+            "message": "ไม่สามารถส่งคำขอยกเลิกรายการได้",
+            "error":   err.Error(),
+        })
+        return
+    }
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"message": "ส่งคำขอยกเลิกรายการสำเร็จ รอการอนุมัติจากเจ้าของร้าน",
@@ -158,35 +170,53 @@ func (c *SalesHistoryController) GetCancellationRequests(ctx *gin.Context) {
 }
 
 func (c *SalesHistoryController) GetMyCancellationRequests(ctx *gin.Context) {
-	userIDFloat, exists := ctx.Get("user_id")
-	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{
-			"message": "ไม่พบข้อมูลพนักงานในระบบ",
-		})
-		return
-	}
-	userID := uint(userIDFloat.(float64))
+	log.Printf("DEBUG context keys: user_id=%v", ctx.Value("user_id"))
+    userIDVal, exists := ctx.Get("user_id")
+    if !exists {
+        ctx.JSON(http.StatusUnauthorized, gin.H{
+            "message": "ไม่พบข้อมูลพนักงานในระบบ",
+        })
+        return
+    }
 
-	var req pos.SalesHistoryFilterRequest
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"message": "รูปแบบ Query Parameter ไม่ถูกต้อง",
-			"error":   err.Error(),
-		})
-		return
-	}
+    //  ป้องกันเรื่อง Type Mismatch จาก JWT Claim ต่างๆ
+    var userID uint
+    switch v := userIDVal.(type) {
+    case float64:
+        userID = uint(v)
+    case uint:
+        userID = v
+    case int:
+        userID = uint(v)
+    case int64:
+        userID = uint(v)
+    default:
+        ctx.JSON(http.StatusInternalServerError, gin.H{
+            "message": "ชนิดข้อมูล user_id ไม่ถูกต้อง",
+        })
+        return
+    }
 
-	result, err := c.salesHistoryService.GetMyCancellationRequests(ctx.Request.Context(), userID, req)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"message": "ไม่สามารถดึงข้อมูลรายการคำขอยกเลิกของฉันได้",
-			"error":   err.Error(),
-		})
-		return
-	}
+    var req pos.SalesHistoryFilterRequest
+    if err := ctx.ShouldBindQuery(&req); err != nil {
+        ctx.JSON(http.StatusBadRequest, gin.H{
+            "message": "รูปแบบ Query Parameter ไม่ถูกต้อง",
+            "error":   err.Error(),
+        })
+        return
+    }
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"message": "ดึงข้อมูลรายการคำขอยกเลิกของฉันสำเร็จ",
-		"data":    result,
-	})
+    result, err := c.salesHistoryService.GetMyCancellationRequests(ctx.Request.Context(), userID, req)
+    if err != nil {
+        ctx.JSON(http.StatusInternalServerError, gin.H{
+            "message": "ไม่สามารถดึงข้อมูลรายการคำขอยกเลิกของฉันได้",
+            "error":   err.Error(),
+        })
+        return
+    }
+
+    ctx.JSON(http.StatusOK, gin.H{
+        "message": "ดึงข้อมูลรายการคำขอยกเลิกของฉันสำเร็จ",
+        "data":    result,
+    })
 }
