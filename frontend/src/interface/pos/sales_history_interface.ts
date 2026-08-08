@@ -147,3 +147,10 @@ export interface CancellationRequestItem {
   cancel_processed_at?: string | null;
   canceller?: string;
 }
+
+
+export interface RevertCancellationRequestResponse {
+	order_id: number;
+	status: string;
+	message: string;
+}
