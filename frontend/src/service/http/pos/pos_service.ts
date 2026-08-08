@@ -4,9 +4,9 @@ import type { POSProductResponse } from "../../../interface/pos/product_interfac
 import type { StoreConfigInterface } from "../../../interface/pos/store_config_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
 import type { ConfirmPaymentRequest } from "../../../interface/pos/payment_interface";
-import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, GetSaleHistoryByIDResponse, SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
+import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, GetSaleHistoryByIDResponse, RevertCancellationRequestResponse } from "../../../interface/pos/sales_history_interface";
 
-// API Services 
+// ==================== API Services ====================
 export const posApiService = {
   /** ดึงค่าตั้งค่าคอนฟิกร้านค้า */
   getStoreConfig: (): Promise<StoreConfigInterface> => 
@@ -84,6 +84,12 @@ export const posApiService = {
       .get<{ data: SalesHistoryPaginationResponse; message: string }>("/pos/cancellation-requests", { params })
       .then((res) => res.data.data),
 
+  /** คืนสถานะคำขอยกเลิกบิล (พนักงานดึงคำขอกลับ) */
+  revertCancellationRequest: (id: number): Promise<RevertCancellationRequestResponse> =>
+    apiClient
+      .post<RevertCancellationRequestResponse>(`/pos/sales-history/${id}/cancel-request/revert`)
+      .then((res) => res.data),
+
   /** ค้นหาใบสั่งซื้อขายด้วยหมายเลข invoice */
   getSaleOrderByNumber: async (orderNumber: string): Promise<any | null> => {
     const endpoints = [
@@ -104,7 +110,7 @@ export const posApiService = {
   },
 };
 
-// Business Logic 
+// ==================== Business Logic Helpers ====================
 export const calculateValidatedDiscount = (
   item: SaleOrderItemRequest,
   value: number,
