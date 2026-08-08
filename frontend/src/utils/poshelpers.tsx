@@ -70,7 +70,7 @@ export const renderStatusBadge = (status: string, paymentStatus: string) => {
   // 1. เช็กการยกเลิกก่อน
   if (billStatus === "PENDING_CANCEL") {
     return (
-      <Badge variant="error" className="rounded-none whitespace-nowrap">
+      <Badge variant="warning" className="rounded-none whitespace-nowrap">
         ส่งคำขอยกเลิกแล้ว
       </Badge>
     );
