@@ -238,7 +238,7 @@ func (r *salesHistoryRepository) GetCancellationRequests(req pos.SalesHistoryFil
     // 1. ค้นหาบาร์โค้ด / เลข Order / ชื่อลูกค้า
     if req.Search != "" {
         query = query.Joins("LEFT JOIN customers ON customers.id = sale_orders.customer_id").
-            Where("sale_orders.order_number LIKE ? OR sale_orders.customer_name_temp LIKE ? OR customers.customer_name LIKE ?",
+            Where("(sale_orders.order_number LIKE ? OR sale_orders.customer_name_temp LIKE ? OR customers.customer_name LIKE ?)",
                 "%"+req.Search+"%", "%"+req.Search+"%", "%"+req.Search+"%")
     }
 
@@ -249,12 +249,26 @@ func (r *salesHistoryRepository) GetCancellationRequests(req pos.SalesHistoryFil
         query = query.Where("sale_orders.cancel_requested_at BETWEEN ? AND ?", startDate+" 00:00:00", endDate+" 23:59:59")
     }
 
+    // 3. กรองประเภทลูกค้า (Customer Type)
+    if req.CustomerType != "" {
+        if req.CustomerType == "GENERAL" {
+            query = query.Where("(sale_orders.customer_id IS NULL OR sale_orders.customer_id IN (SELECT id FROM customers WHERE customer_type_id = 1))")
+        } else {
+            query = query.Where("sale_orders.customer_id IN (SELECT id FROM customers WHERE customer_type_id IN (SELECT id FROM customer_types WHERE type_name = ?))", req.CustomerType)
+        }
+    }
+
+    // 4. กรองตามสถานะคำขอยกเลิก (Status)
+    if req.Status != "" {
+        query = query.Where("sale_orders.status = ?", strings.ToLower(req.Status))
+    }
+
     // นับจำนวนรายการทั้งหมด
     if err := query.Count(&totalRows).Error; err != nil {
         return nil, 0, err
     }
 
-    // 3. ทำ Limit / Offset Pagination
+    // 5. ทำ Limit / Offset Pagination
     if req.Limit > 0 {
         page := req.Page
         if page <= 0 { page = 1 }
@@ -297,12 +311,26 @@ func (r *salesHistoryRepository) GetMyCancellationRequests(userID uint, req pos.
         query = query.Where("sale_orders.cancel_requested_at BETWEEN ? AND ?", startDate+" 00:00:00", endDate+" 23:59:59")
     }
 
+    // 3. กรองประเภทลูกค้า (Customer Type)
+    if req.CustomerType != "" {
+        if req.CustomerType == "GENERAL" {
+            query = query.Where("(sale_orders.customer_id IS NULL OR sale_orders.customer_id IN (SELECT id FROM customers WHERE customer_type_id = 1))")
+        } else {
+            query = query.Where("sale_orders.customer_id IN (SELECT id FROM customers WHERE customer_type_id IN (SELECT id FROM customer_types WHERE type_name = ?))", req.CustomerType)
+        }
+    }
+
+    // 4. กรองตามสถานะคำขอยกเลิก (Status)
+    if req.Status != "" {
+        query = query.Where("sale_orders.status = ?", strings.ToLower(req.Status))
+    }
+
     // นับจำนวนรายการทั้งหมด
     if err := query.Count(&totalRows).Error; err != nil {
         return nil, 0, err
     }
 
-    // 3. ทำ Limit / Offset Pagination
+    // 5. ทำ Limit / Offset Pagination
     if req.Limit > 0 {
         page := req.Page
         if page <= 0 { page = 1 }
