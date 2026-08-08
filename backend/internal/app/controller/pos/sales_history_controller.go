@@ -220,3 +220,55 @@ func (c *SalesHistoryController) GetMyCancellationRequests(ctx *gin.Context) {
         "data":    result,
     })
 }
+
+func (c *SalesHistoryController) RevertCancellationRequest(ctx *gin.Context) {
+    identifier := ctx.Param("id") // อ่าน identifier จาก URL Parameter
+	if identifier == "" { // ตรวจสอบว่ามีการส่ง identifier มาหรือไม่
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "กรุณาระบุรหัสรายการขายหรือเลขที่ใบเสร็จ",
+			"error":   "Identifier parameter is required",
+		})
+		return
+	}
+
+    // ดึง userID ของผู้ใช้งานที่ทำรายการ
+	userIDVal, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{
+			"message": "ไม่พบข้อมูลพนักงานในระบบ",
+		})
+		return
+	}
+
+	var userID uint
+	switch v := userIDVal.(type) {
+	case float64:
+		userID = uint(v)
+	case uint:
+		userID = v
+	case int:
+		userID = uint(v)
+	case int64:
+		userID = uint(v)
+	default:
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "ชนิดข้อมูล user_id ไม่ถูกต้อง",
+		})
+		return
+	}
+
+    // เรียกใช้ Service เพื่อให้ไปประมวลผลการดึงคำขอยกเลิกบิลกลับ
+	res, err := c.salesHistoryService.RevertCancellationRequest(ctx.Request.Context(), identifier, userID)
+	// ถ้ามี error เกิดขึ้น ให้ส่ง response กลับไปยัง client ว่าเกิดข้อผิดพลาด
+    if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "ดึงคำขอยกเลิกบิลกลับสำเร็จ",
+		"data":    res,
+	})
+}
