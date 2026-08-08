@@ -25,6 +25,7 @@ type SalesHistoryFilterRequest struct {
 	CustomerTypeID  uint   `form:"customer_type_id"`
 	PaymentMethodID uint   `form:"payment_method_id"`
 	PaymentMethod   string `form:"payment_method" json:"payment_method"`
+	Status          string `form:"status" json:"status"`
 	Page            int    `form:"page,default=1"`
 	Limit           int    `form:"limit,default=15"`
 }

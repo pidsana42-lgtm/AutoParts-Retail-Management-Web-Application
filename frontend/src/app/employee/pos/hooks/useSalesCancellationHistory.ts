@@ -40,6 +40,7 @@ export const useSalesCancellationHistory = () => {
   const [startDate, setStartDate] = useState<string>(get30DaysAgoDateString());
   const [endDate, setEndDate] = useState<string>(getTodayDateString());
   const [customerType, setCustomerType] = useState<string>("");
+  const [status, setStatus] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("");
 
   // --- Fetch Data Function ---
@@ -54,6 +55,7 @@ export const useSalesCancellationHistory = () => {
         start_date: startDate,
         end_date: endDate,
         customer_type: customerType,
+        status: status,
         payment_method: paymentMethod,
         page: page,
         limit: limit,
@@ -71,7 +73,7 @@ export const useSalesCancellationHistory = () => {
     } finally {
         setIsLoading(false);
     }
-  }, [searchQuery, startDate, endDate, customerType, paymentMethod, page, limit]);
+  }, [searchQuery, startDate, endDate, customerType, status, paymentMethod, page, limit]);
 
   // Effect สำหรับเรียกข้อมูลใหม่เมื่อ Filter/Pagination เปลี่ยน
   useEffect(() => {
@@ -146,11 +148,13 @@ export const useSalesCancellationHistory = () => {
     startDate,
     endDate,
     customerType,
+    status,
     paymentMethod,
     setSearchQuery,
     setStartDate,
     setEndDate,
     setCustomerType,
+    setStatus,
     setPaymentMethod,
 
     // Handlers

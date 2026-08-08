@@ -50,12 +50,14 @@ const SalesCancellationHistory: React.FC = () => {
         startDate,
         endDate,
         customerType,
-        paymentMethod,
+        status,
+        // paymentMethod,
         setSearchQuery,
         setStartDate,
         setEndDate,
         setCustomerType,
-        setPaymentMethod,
+        // setPaymentMethod,
+        setStatus,
         handleSelectAll,
         handleSelectRow,
         handleSearch,
@@ -96,7 +98,8 @@ const SalesCancellationHistory: React.FC = () => {
           {/* Filter Bar */}
           <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
             <CardContent className="p-6 md:p-8">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                {/* 1. ค้นหาเลขบิล/ชื่อลูกค้า (col-span-3) */}
                 <div className="md:col-span-3 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     ค้นหาเลขคำสั่งซื้อ/ชื่อลูกค้า
@@ -112,6 +115,7 @@ const SalesCancellationHistory: React.FC = () => {
                   </div>
                 </div>
 
+                {/* 2. วันที่เริ่มต้น (col-span-2) */}
                 <div className="md:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">วันที่เริ่มต้น</label>
                   <Input
@@ -122,6 +126,7 @@ const SalesCancellationHistory: React.FC = () => {
                   />
                 </div>
 
+                {/* 3. วันที่สิ้นสุด (col-span-2) */}
                 <div className="md:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">วันที่สิ้นสุด</label>
                   <Input
@@ -132,6 +137,7 @@ const SalesCancellationHistory: React.FC = () => {
                   />
                 </div>
 
+                {/* 4. ประเภทลูกค้า (col-span-2) */}
                 <div className="md:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">ประเภทลูกค้า</label>
                   <Select
@@ -148,22 +154,23 @@ const SalesCancellationHistory: React.FC = () => {
                   />
                 </div>
 
+                {/* 5. สถานะการยกเลิก (col-span-2) เปลี่ยนจากช่องชำระเงินมาเป็นอันนี้แทน */}
                 <div className="md:col-span-2 flex flex-col gap-1.5">
-                  <label className="text-xs font-normal text-[#5F5E5E]">การชำระเงิน</label>
-                  <Select
-                    value={paymentMethod}
-                    onChange={(e: any) => setPaymentMethod(e.target.value)}
-                    placeholder="วิธีการทั้งหมด"
+                    <label className="text-xs font-normal text-[#5F5E5E]">สถานะคำขอ</label>
+                    <Select
+                    value={status}
+                    onChange={(e: any) => setStatus(e.target.value)}
+                    placeholder="สถานะทั้งหมด"
                     className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none"
                     options={[
-                      { label: "ทั้งหมด", value: "" },
-                      { label: "เงินสด", value: "CASH" },
-                      { label: "เงินโอน", value: "QR" },
-                      { label: "เงินเชื่อ", value: "CREDIT" },
+                        { label: "ทั้งหมด", value: "" },
+                        { label: "รออนุมัติ", value: "PENDING_CANCEL" },
+                        { label: "ยกเลิกแล้ว", value: "CANCELLED" },
                     ]}
-                  />
+                    />
                 </div>
 
+                {/* 6. ปุ่มค้นหา (col-span-1) */}
                 <div className="md:col-span-1">
                   <Button
                     onClick={handleSearch}
