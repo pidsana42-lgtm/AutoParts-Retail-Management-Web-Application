@@ -17,6 +17,7 @@ type SalesHistoryRepository interface {
 	RequestCancelOrder(orderID uint, userID uint, reason string) error
 	ApproveCancelOrder(order *entity.SaleOrder, remark string) error
 	RejectCancelOrder(orderID uint, remark string) error
+	RevertCancelOrder(orderID uint) error
 	GetCancellationRequests(req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error)
 	GetMyCancellationRequests(userID uint, req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error)
 }
@@ -345,4 +346,15 @@ func (r *salesHistoryRepository) GetMyCancellationRequests(userID uint, req pos.
     }
 
     return orders, totalRows, nil
+}
+
+func (r *salesHistoryRepository) RevertCancelOrder(orderID uint) error {
+	return r.db.Model(&entity.SaleOrder{}).
+		Where("id = ?", orderID).
+		Updates(map[string]interface{}{
+			"status":                 enum.OrderCompleted, // เปลี่ยนกลับเป็น Completed
+			"cancel_reason":          nil, // ล้างเหตุผลการยกเลิก
+			"cancel_requested_at":    nil, // ล้างวันที่ขอยกเลิก
+			"cancel_requested_by_id": nil, // ล้างผู้ขอยกเลิก
+		}).Error
 }

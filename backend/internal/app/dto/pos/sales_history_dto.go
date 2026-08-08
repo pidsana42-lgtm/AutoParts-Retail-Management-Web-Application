@@ -16,6 +16,13 @@ type ProcessCancelOrderRequest struct {
 	Remark string `json:"remark"`
 }
 
+// Response DTO สำหรับการดึงคำขอยกเลิกบิลกลับ
+type RevertCancellationRequestResponse struct {
+	OrderID uint   `json:"order_id"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
 // SalesHistoryFilterRequest โครงสร้างข้อมูลที่รับมาจาก Query String หน้าเว็บ
 type SalesHistoryFilterRequest struct {
 	Search          string `form:"search"`

@@ -15,8 +15,9 @@ type SalesHistoryService interface {
 	RequestCancelSale(ctx context.Context, identifier string, userID uint, req pos.RequestCancelOrderRequest) error
 	ApproveCancelSale(ctx context.Context, identifier string, req pos.ProcessCancelOrderRequest) error
 	RejectCancelSale(ctx context.Context, identifier string, req pos.ProcessCancelOrderRequest) error
+	RevertCancellationRequest(ctx context.Context, identifier string, userID uint) (*pos.RevertCancellationRequestResponse, error)
 	GetCancellationRequests(ctx context.Context, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
-    GetMyCancellationRequests(ctx context.Context, userID uint, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
+	GetMyCancellationRequests(ctx context.Context, userID uint, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
 }
 
 type salesHistoryService struct {
@@ -164,4 +165,35 @@ func (s *salesHistoryService) GetMyCancellationRequests(ctx context.Context, use
         TotalRows:  totalRows,
         TotalPages: totalPages,
     }, nil
+}
+
+func (s *salesHistoryService) RevertCancellationRequest(ctx context.Context, identifier string, userID uint) (*pos.RevertCancellationRequestResponse, error) {
+	// ไปสั่ง repo ให้ค้นหาข้อมูลนี้ใน DB ว่ามีอยู่จริงหรือไม่ และดึงข้อมูลออกมา
+	order, err := s.salesHistoryRepo.GetSaleHistoryByID(identifier)
+	if err != nil {
+		return nil, err
+	}
+
+	// ตรวจสอบว่า order นี้อยู่ในสถานะรออนุมัติการยกเลิกหรือไม่
+	if order.Status != enum.OrderPendingCancel {
+		return nil, errors.New("รายการนี้ไม่ได้อยู่ในสถานะรออนุมัติการยกเลิก")
+	}
+
+	// ตรวจสอบว่า userID ที่ส่งเข้ามาเป็นผู้ที่ส่งคำขอยกเลิกนี้หรือไม่ พนักงานคนอื่นไม่สามารถดึงคำขอยกเลิกของคนอื่นกลับได้
+	if order.CancelRequestedByID == nil || *order.CancelRequestedByID != userID {
+		return nil, errors.New("ไม่มีสิทธิ์ดึงคำขอยกเลิกนี้กลับ เนื่องจากคุณไม่ได้เป็นผู้ส่งคำขอ")
+	}
+
+	// ถ้าผ่านเงื่อนไขทั้งหมด สั่ง Repository ให้อัปเดตข้อมูลใน Database
+	err = s.salesHistoryRepo.RevertCancelOrder(order.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// ส่ง response กลับไปให้ controller
+	return &pos.RevertCancellationRequestResponse{
+		OrderID: order.ID,
+		Status:  string(enum.OrderCompleted),
+		Message: "ดึงคำขอยกเลิกบิลกลับสำเร็จ และเปลี่ยนสถานะบิลกลับเป็นสำเร็จเรียบร้อย",
+	}, nil
 }
