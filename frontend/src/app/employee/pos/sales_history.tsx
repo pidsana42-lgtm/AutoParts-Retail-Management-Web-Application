@@ -697,23 +697,23 @@ export default function TransactionHistoryPage() {
                         return (
                           <div className="space-y-4">
                             {/* ส่วนที่ 1: กล่องสรุปคำขอจากพนักงาน */}
-                            <Card className="p-4 bg-[#EFF6FF] border border-[#BFDBFE] rounded-none shadow-none space-y-3">
+                            <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-3">
                               <div className="flex items-center justify-between">
                                 <Text
                                   variant="small"
-                                  className="font-normal text-[#1E40AF] mb-0"
+                                  className="font-normal text-[#854D0E] mb-0"
                                 >
                                   สถานะคำขอ: คำขอยกเลิกจากพนักงาน
                                 </Text>
                                 <Badge
-                                  variant="neutral"
-                                  className="bg-[#DBEAFE] text-[#1E40AF] border-none text-[10px] font-light rounded-none py-0.5 px-2"
+                                  variant="warning"
+                                  className="bg-[#FEF08A] text-[#854D0E] border-none text-[10px] font-light rounded-none py-0.5 px-2"
                                 >
                                   {getStatusText(orderDetail.status)}
                                 </Badge>
                               </div>
 
-                              <div className="text-xs text-[#5F5E5E] bg-[#F5F9FC] p-2.5 border-l-2 border-[#3B82F6]">
+                              <div className="text-xs text-[#5F5E5E] bg-[#FFFBEB] p-2.5 border-l-2 border-[#EAB308]">
                                 <span className="font-normal text-[#1C1B1B]">
                                   เหตุผลที่พนักงานขอ:
                                 </span>{" "}
@@ -769,22 +769,22 @@ export default function TransactionHistoryPage() {
 
                       // 🧑‍💼 1.2 ถ้าเป็น EMPLOYEE / STAFF: ดูได้อย่างเดียวว่า รออนุมัติ
                       return (
-                        <Card className="p-4 bg-[#EFF6FF] border border-[#BFDBFE] rounded-none shadow-none space-y-2">
+                        <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-2">
                           <div className="flex items-center justify-between">
                             <Text
                               variant="small"
-                              className="font-normal text-[#1E40AF] mb-0"
+                              className="font-normal text-[#854D0E] mb-0"
                             >
                               สถานะคำขอ: อยู่ระหว่างรออนุมัติ
                             </Text>
                             <Badge
-                              variant="neutral"
-                              className="bg-[#DBEAFE] text-[#1E40AF] border-none text-[10px] font-light rounded-none py-0.5 px-2"
+                              variant="warning"
+                              className="bg-[#FEF08A] text-[#854D0E] border-none text-[10px] font-light rounded-none py-0.5 px-2"
                             >
                               {getStatusText(orderDetail.status)}
                             </Badge>
                           </div>
-                          <div className="text-xs text-[#5F5E5E] bg-[#F5F9FC] p-2.5 border-l-2 border-[#3B82F6]">
+                          <div className="text-xs text-[#5F5E5E] bg-[#FFFBEB] p-2.5 border-l-2 border-[#EAB308]">
                             <span className="font-normal text-[#1C1B1B]">
                               เหตุผลที่ระบุ:
                             </span>{" "}
