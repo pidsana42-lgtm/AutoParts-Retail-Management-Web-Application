@@ -81,22 +81,36 @@ export const useSalesCancellationHistory = () => {
   }, [fetchCancellationHistory]);
 
   // --- Selection Handlers ---
-  const isSelectAll =
-    dataList.length > 0 && selectedIds.length === dataList.length;
 
+  // ดึงเฉพาะรายการที่มีสถานะ "PENDING_CANCEL" เพื่อให้สามารถเลือกได้
+  const selectableItems = dataList.filter(
+    (item) => (item.status || "").toUpperCase() === "PENDING_CANCEL"
+  );
+
+  // ตรวจสอบว่าเลือกครบทุกรายการที่สามารถเลือกได้แล้วหรือยัง
+  const isSelectAll =
+    selectableItems.length > 0 && selectedIds.length === selectableItems.length;
+
+  // เลือก/ยกเลิกเลือกเฉพาะรายการที่มีสถานะ "PENDING_CANCEL" ทั้งหมด
   const handleSelectAll = () => {
     if (isSelectAll) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(dataList.map((item) => item.id));
+      setSelectedIds(selectableItems.map((item) => item.id));
     }
   };
 
+  // เลือกทีละรายการ เช็คสถานะก่อนว่าถูกต้องหรือไม่ (เฉพาะ PENDING_CANCEL)
   const handleSelectRow = (id: number) => {
+    const item = dataList.find((x) => x.id === id);
+    if (!item) return;
+    const itemStatus = (item.status || "").toUpperCase();
+    if (itemStatus !== "PENDING_CANCEL") return;
+
     if (selectedIds.includes(id)) {
-      setSelectedIds(selectedIds.filter((itemId) => itemId !== id));
+      setSelectedIds((prev) => prev.filter((itemId) => itemId !== id));
     } else {
-      setSelectedIds([...selectedIds, id]);
+      setSelectedIds((prev) => [...prev, id]);
     }
   };
 
@@ -106,6 +120,7 @@ export const useSalesCancellationHistory = () => {
     fetchCancellationHistory();
   };
 
+  // function สำหรับกู้คืนคำขอยกเลิกบิลที่เลือก ยิง API ไป revertCancellationRequest
   const handleRestoreSelected = async () => {
     if (selectedIds.length === 0) {
       alert("กรุณาเลือกรายการที่ต้องการกู้คืนอย่างน้อย 1 รายการ");
@@ -118,11 +133,19 @@ export const useSalesCancellationHistory = () => {
       )
     ) {
       try {
-        alert("กู้คืนรายการสำเร็จ");
+        setIsLoading(true);
+        // ยิง API กู้คืนคำขอทีละรายการ
+        await Promise.all(
+          selectedIds.map((id) => posApiService.revertCancellationRequest(id))
+        );
+
+        alert("ดึงคำขอยกเลิกบิลกลับสำเร็จ");
         setSelectedIds([]);
         fetchCancellationHistory();
       } catch (err: any) {
-        alert(err?.response?.data?.message || "เกิดข้อผิดพลาดในการกู้คืน");
+        alert(err?.response?.data?.message || "เกิดข้อผิดพลาดในการดึงคำขอกลับ");
+      } finally {
+        setIsLoading(false);
       }
     }
   };
@@ -132,6 +155,8 @@ export const useSalesCancellationHistory = () => {
     dataList,
     selectedIds,
     isSelectAll,
+    selectableCount: selectableItems.length,
+    selectableItems,
     isLoading,
     error,
 
