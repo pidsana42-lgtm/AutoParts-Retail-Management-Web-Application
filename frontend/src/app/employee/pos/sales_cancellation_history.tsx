@@ -190,10 +190,11 @@ const SalesCancellationHistory: React.FC = () => {
                 <TableRow>
                   <TableHead className="py-3 px-3 w-[4%] text-center">
                     <input
-                      type="checkbox"
-                      checked={isSelectAll}
-                      onChange={handleSelectAll}
-                      className="w-4 h-4 border border-gray-300 rounded-none bg-white checked:bg-[#E51C23] checked:border-[#E51C23] cursor-pointer appearance-none flex items-center justify-center after:content-['✓'] after:text-white after:text-[10px] after:font-bold after:hidden checked:after:block"
+                        type="checkbox"
+                        checked={isSelectAll}
+                        onChange={handleSelectAll}
+                        disabled={dataList.filter((item) => (item.status || "").toUpperCase() === "PENDING_CANCEL").length === 0}
+                        className="w-4 h-4 border border-gray-300 rounded-none bg-white checked:bg-[#E51C23] checked:border-[#E51C23] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 appearance-none flex items-center justify-center after:content-['✓'] after:text-white after:text-[10px] after:font-bold after:hidden checked:after:block"
                     />
                   </TableHead>
                   <TableHead className="py-3 px-3 w-[14%]">หมายเลขคำสั่งซื้อ</TableHead>
@@ -228,17 +229,20 @@ const SalesCancellationHistory: React.FC = () => {
                 ) : (
                   dataList.map((item) => {
                     const isChecked = selectedIds.includes(item.id);
+                    const isPendingCancel = (item.status || "").toUpperCase() === "PENDING_CANCEL";
                     return (
                       <TableRow
                         key={item.id}
                         className={isChecked ? "bg-red-50/40" : "hover:bg-slate-50 transition-colors"}
                       >
+                        {/* Checkbox */}
                         <TableCell className="py-3.5 px-3 text-center">
                           <input
                             type="checkbox"
                             checked={isChecked}
                             onChange={() => handleSelectRow(item.id)}
-                            className="w-4 h-4 border border-gray-300 rounded-none bg-white checked:bg-[#E51C23] checked:border-[#E51C23] cursor-pointer appearance-none flex items-center justify-center after:content-['✓'] after:text-white after:text-[10px] after:font-bold after:hidden checked:after:block"
+                            disabled={!isPendingCancel}
+                            className="w-4 h-4 border border-gray-300 rounded-none bg-white checked:bg-[#E51C23] checked:border-[#E51C23] disabled:bg-gray-100 disabled:border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer appearance-none flex items-center justify-center after:content-['✓'] after:text-white after:text-[10px] after:font-bold after:hidden checked:after:block"
                           />
                         </TableCell>
 
