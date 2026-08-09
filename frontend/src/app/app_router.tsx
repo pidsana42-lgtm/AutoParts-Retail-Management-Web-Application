@@ -108,6 +108,10 @@ export default function AppRouter(): React.JSX.Element {
         {/* ----------------------------------------------------------- */}
 
         {/* -------- เพิ่ม Route สำหรับ POS -------- */}
+        
+        {/* ทุกคนใช้งาน */}
+        <Route path="/owner/pos/pos" element={isAdminOrOwner ? <Pos /> : <Navigate to={firstMenuPath} replace />} />
+        <Route path="/owner/pos/sales_history" element={isAdminOrOwner ? <SalesHistory /> : <Navigate to={firstMenuPath} replace />} />
         <Route path="/employee/pos/pos" element={<Pos />} />
         <Route path="/employee/pos/sales_history" element={<SalesHistory />} />
         

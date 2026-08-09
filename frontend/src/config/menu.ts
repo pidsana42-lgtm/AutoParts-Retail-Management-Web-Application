@@ -106,20 +106,38 @@ export const getMenuByRole = (role: string): MenuItem[] => {
     .filter((menu) => menu.roles.includes(currentRole))
     // 2. ปรับแต่ง Path ของเมนูย่อยให้ตรงตาม Role
     .map((menu) => {
-      if (!menu.subs) return menu;
+      let updatedMenu = { ...menu };
 
+      // 1. สลับ Main Path ของ POS ตาม Role
+      if (menu.path.includes("/pos/pos")) {
+        updatedMenu.path = isOwnerOrAdmin ? "/owner/pos/pos" : "/employee/pos/pos";
+      }
+
+      if (!updatedMenu.subs) return updatedMenu;
+
+      // 2. สลับ Sub-menu Path & Label ตาม Role
       return {
-        ...menu,
-        subs: menu.subs.map((sub) => {
-          // เช็กจาก Keyword ใน Path แทนการเช็ก Label ไทย (เพื่อความปลอดภัยหากมีการเปลี่ยนชื่อเมนู)
+        ...updatedMenu,
+        subs: updatedMenu.subs.map((sub) => {
           if (sub.path.includes("sales_cancellation_history")) {
             return {
               ...sub,
+              label: isOwnerOrAdmin ? "คำขอยกเลิกบิล" : "ประวัติยกเลิกการขาย",
               path: isOwnerOrAdmin
                 ? "/owner/pos/sales_cancellation_history"
                 : "/employee/pos/sales_cancellation_history",
             };
           }
+
+          if (sub.path.includes("sales_history")) {
+            return {
+              ...sub,
+              path: isOwnerOrAdmin
+                ? "/owner/pos/sales_history"
+                : "/employee/pos/sales_history",
+            };
+          }
+
           return sub;
         }),
       };
