@@ -87,7 +87,7 @@ const SalesCancellationHistory: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
               <Text variant="xs" className="text-[#E51C23] uppercase tracking-wider mb-0">
-                บันทึกบิลขาย เคลม/คืน สินค้า
+                ยกเลิกบิลขาย
               </Text>
               <Heading level="h1" weight="normal" className="mb-0 text-[#1C1B1B]">
                 ประวัติการยกเลิกขายสินค้า
