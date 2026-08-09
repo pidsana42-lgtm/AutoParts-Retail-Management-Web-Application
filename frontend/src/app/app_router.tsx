@@ -29,6 +29,7 @@ import EmployeePreOrder from './employee/pre-order';
 import EmployeeClaimsPage from './employee/claim/claims';
 import MobileScanPage from './mobile-scan/mobile_scan_page';
 import SalesCancellationHistory from './employee/pos/sales_cancellation_history';
+import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_history';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -109,7 +110,14 @@ export default function AppRouter(): React.JSX.Element {
         {/* -------- เพิ่ม Route สำหรับ POS -------- */}
         <Route path="/employee/pos/pos" element={<Pos />} />
         <Route path="/employee/pos/sales_history" element={<SalesHistory />} />
+        
+        {/* หน้าฝั่งพนักงาน */}
         <Route path="/employee/pos/sales_cancellation_history" element={<SalesCancellationHistory />} />
+        
+        {/* หน้าฝั่งเจ้าของร้าน (ล็อกสิทธิ์ด้วย isAdminOrOwner) */}
+        <Route path="/owner/pos/sales_cancellation_history" element={
+          isAdminOrOwner ? <OwnerSalesCancellationHistory /> : <Navigate to={firstMenuPath} replace />
+        } />
         {/* --------------------------------------------------- */}
 
         <Route path="/owner/orders" element={<PurchaseOrders />} />

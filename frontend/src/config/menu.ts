@@ -93,8 +93,35 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   },
 ];
 
-// ใครมีชื่อในอาเรย์ roles ของปุ่มนั้น ถึงจะโชว์บนหน้าจอ
+/**
+ * ดึงรายการเมนู Sidebar ที่เปิดสิทธิ์ให้ใช้งานตาม Role ผู้เล่น
+ * และสลับ Route Path ของเมนูย่อยให้อัตโนมัติตามสิทธิ์ (OWNER/ADMIN vs EMPLOYEE/STAFF)
+ */
 export const getMenuByRole = (role: string): MenuItem[] => {
   const currentRole = role.toUpperCase();
-  return SIDEBAR_MENUS.filter((menu) => menu.roles.includes(currentRole));
+  const isOwnerOrAdmin = currentRole === "OWNER" || currentRole === "ADMIN";
+
+  return SIDEBAR_MENUS
+    // 1. กรองเมนูหลักตามสิทธิ์ของ Role
+    .filter((menu) => menu.roles.includes(currentRole))
+    // 2. ปรับแต่ง Path ของเมนูย่อยให้ตรงตาม Role
+    .map((menu) => {
+      if (!menu.subs) return menu;
+
+      return {
+        ...menu,
+        subs: menu.subs.map((sub) => {
+          // เช็กจาก Keyword ใน Path แทนการเช็ก Label ไทย (เพื่อความปลอดภัยหากมีการเปลี่ยนชื่อเมนู)
+          if (sub.path.includes("sales_cancellation_history")) {
+            return {
+              ...sub,
+              path: isOwnerOrAdmin
+                ? "/owner/pos/sales_cancellation_history"
+                : "/employee/pos/sales_cancellation_history",
+            };
+          }
+          return sub;
+        }),
+      };
+    });
 };
