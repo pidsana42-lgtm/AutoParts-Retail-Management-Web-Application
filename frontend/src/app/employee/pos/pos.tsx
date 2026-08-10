@@ -786,8 +786,8 @@ export default function PosPage(): React.JSX.Element {
                       </div>
                     </div>
                     <div>
-                      <Text variant="small" className="text-[#1C1B1B] font-medium">ชื่อผู้รับของ / ผู้สั่งซื้อ </Text>
-                       <div className="grid grid-cols-2 gap-4">
+                      {/* <Text variant="small" className="text-[#1C1B1B] font-medium">ชื่อผู้รับของ / ผู้สั่งซื้อ </Text> */}
+                       {/* <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-baseline justify-between w-full px-4 py-2 bg-white border-b-2 border-[#E7BDB8]">
                           <Input 
                               type="text" 
@@ -799,9 +799,9 @@ export default function PosPage(): React.JSX.Element {
                             <User className="w-5 h-5 text-[#1C1B1B] shrink-0" />
                         </div>
                         <div className="flex items-center justify-between w-full px-4 py-6 border-b-1 border-[#E7BDB8]"></div>
-                      </div>  
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="border-l-3 border-[#E7BDB8] p-4 mt-4 bg-[#F0EDEC]">
+                      </div>   */}
+                      <div className="grid grid-cols-2 gap-4 border-t border-[#E7BDB8] pt-4 mt-4">
+                        <div className="border-l-3 border-[#E7BDB8] p-4 mt-1 bg-[#F0EDEC] ">
                           <Text variant="xs" className="text-[#1C1B1B] font-light">* ระบบจะดำเนินการเพิ่มยอดหนี้ในบัญชีของ<br /><span className="font-medium">{customerName}</span>{" "}ทันทีหลังจากยืนยันรายการ</Text>
                         </div>
                         {/*ฝั่งซ้าย วันที่, เวลา, ผู้ดำเนินการ */}

@@ -218,6 +218,15 @@ func (r *salesHistoryRepository) ApproveCancelOrder(order *entity.SaleOrder, rem
 			return err
 		}
 
+		// คืนยอดหนี้สะสมลูกค้า (ถ้า Order นั้นเคยชำระด้วยเงินเชื่อ)
+		if order.PaymentMethod != nil && order.PaymentMethod.IsCredit && order.CustomerID != nil {
+			if err := tx.Model(&entity.Customer{}).
+				Where("id = ?", *order.CustomerID).
+				UpdateColumn("current_debt_amount", gorm.Expr("current_debt_amount - ?", order.TotalAmount)).Error; err != nil {
+				return err
+			}
+		}
+
 		// คืนสต็อกสินค้า (Restock)
 		for _, item := range order.Items {
 			if err := tx.Model(&entity.Product{}).
