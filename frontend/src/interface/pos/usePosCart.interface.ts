@@ -29,4 +29,9 @@ export interface UsePosCartReturn {
   handleDiscountToggle: (index: number, isChecked: boolean) => void;
   handleDiscountTypeChange: (index: number, type: "amount" | "percentage") => void;
   handleDiscountValueChange: (index: number, valueStr: string) => void;
+  suggestions: any[];
+  setSuggestions: React.Dispatch<React.SetStateAction<any[]>>;
+  showSuggestions: boolean;
+  setShowSuggestions: React.Dispatch<React.SetStateAction<boolean>>;
+  handleSelectProduct: (product: any) => void;
 }
