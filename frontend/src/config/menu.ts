@@ -64,7 +64,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   // POS
   { icon: MonitorSmartphone, label: "ระบบขาย POS", path: "/employee/pos/pos", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"], 
     subs: [
-      { icon: History, path: "/employee/pos/sales_history", label: "รายการธุรกรรม" },
+      { icon: History, path: "/employee/pos/sales_history", label: "ประวัติการขาย" },
       { icon: FileX, path: "/employee/pos/sales_cancellation_history", label: "ประวัติยกเลิกการขาย" },
     ],
   },

@@ -241,7 +241,7 @@ export default function TransactionHistoryPage() {
                   <TableHead className="py-3 px-3 w-[20%]">
                     ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท
                   </TableHead>
-                  <TableHead className="py-3 px-3 w-[12%]">
+                  <TableHead className="py-3  text-left px-3 w-[12%]">
                     พนักงานขาย
                   </TableHead>
                   <TableHead className="py-3 px-3 text-right w-[10%]">
