@@ -121,10 +121,48 @@ export default function PosPage(): React.JSX.Element {
                   type="text"
                   value={cartHook.searchQuery}
                   onChange={(e) => cartHook.setSearchQuery(e.target.value)}
-                  placeholder="สแกนบาร์โค้ดสินค้า หรือพิมพ์เลขบาร์โค้ดที่นี่เพื่อเพิ่มรายการ..."
+                  onBlur={() => {
+                    setTimeout(() => {
+                      cartHook.setShowSuggestions(false);
+                    }, 200);
+                  }}
+                  onFocus={() => {
+                    if (cartHook.searchQuery.trim().length > 0) {
+                      cartHook.setShowSuggestions(true);
+                    }
+                  }}
+                  placeholder="สแกนบาร์โค้ดสินค้า, พิมพ์เลขบาร์โค้ด, พิมพ์รหัสสินค้า, Part Number หรือชื่อสินค้าเพื่อเพิ่มรายการ..."
                   className="w-full bg-white border border-gray-200 rounded-none pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-red-500 shadow-sm"
                   autoFocus
                 />
+
+                {/* Dropdown ค้นหาด่วน (Autocomplete Suggestions) */}
+                {cartHook.showSuggestions && cartHook.suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-gray-100">
+                    {cartHook.suggestions.map((product) => (
+                      <div
+                        key={product.id}
+                        onClick={() => cartHook.handleSelectProduct(product)}
+                        className="p-3 hover:bg-gray-50 flex justify-between items-center cursor-pointer transition-colors text-left"
+                      >
+                        <div className="flex flex-col">
+                          <Text variant="small" className="text-[#1C1B1B] mb-0 leading-tight">{product.product_name}</Text>
+                          <Text variant="xs" className="text-[10px] text-[#6B7280] mb-0.5 mt-1 leading-tight">
+                            SKU: {product.product_code} | PN: {product.part_number || "-"}
+                          </Text>
+                        </div>
+                        <div className="text-right flex flex-col shrink-0 pl-4">
+                          <Text variant="xs" className="text-[#E51C23]">
+                            ฿{(product.sale_price || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </Text>
+                          <Text variant="xs" className="text-[10px] text-gray-400">
+                            คงเหลือ: {product.quantity}
+                          </Text>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <button
                 type="submit"
@@ -408,7 +446,7 @@ export default function PosPage(): React.JSX.Element {
             {paymentData.searchCustomerQuery.trim().length > 0 &&
               paymentData.searchResults &&
               paymentData.searchResults.length > 0 && (
-                <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 shadow-xl max-h-60 overflow-y-auto z-50 rounded flex flex-col">
+                <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 shadow-xl max-h-60 overflow-y-auto z-50 rounded-none flex flex-col">
                   {paymentData.searchResults.map((cust) => (
                     <div
                       key={cust.id}
