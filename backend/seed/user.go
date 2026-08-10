@@ -74,6 +74,18 @@ func User(db *gorm.DB) error {
             LineUserID:        "LINE_EMPLOYEE",
         },
         {
+            FirstName:         "Somying2",
+            LastName:          "หน้าร้าน",
+            IdCardNumberUser:  "1100000000005",
+            Username:          "employee2",
+            Password:          employeePasswordHashed,
+            StoreConfigID:     storeConfig.ID,
+            BankID:            bank.ID,
+            BankAccountNumber: "123-4-56789-2",
+            RoleID:            2, // roleEmployee.ID
+            LineUserID:        "LINE_EMPLOYEE2",
+        },
+        {
             FirstName:         "Manager",
             LastName:          "IT",
             IdCardNumberUser:  "1100000000003",

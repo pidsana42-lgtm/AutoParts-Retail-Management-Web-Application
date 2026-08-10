@@ -5,6 +5,7 @@ export interface SalesHistoryFilterRequest {
   end_date?: string;
   customer_type?: string;
   payment_method?: string;
+  employee_id?: string;
   status?: string;
   page?: number;
   limit?: number;

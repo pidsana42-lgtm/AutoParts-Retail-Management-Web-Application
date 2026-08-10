@@ -272,3 +272,22 @@ func (c *SalesHistoryController) RevertCancellationRequest(ctx *gin.Context) {
 		"data":    res,
 	})
 }
+
+func (c *SalesHistoryController) GetEmployees(ctx *gin.Context) {
+	res, err := c.salesHistoryService.GetEmployees(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	var out []map[string]interface{}
+	for _, u := range res {
+		out = append(out, map[string]interface{}{
+			"id":         u.ID,
+			"first_name": u.FirstName,
+			"last_name":  u.LastName,
+			"full_name":  u.FirstName + " " + u.LastName,
+		})
+	}
+	ctx.JSON(http.StatusOK, out)
+}

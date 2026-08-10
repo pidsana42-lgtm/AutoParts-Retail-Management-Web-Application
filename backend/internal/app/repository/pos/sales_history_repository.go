@@ -20,6 +20,7 @@ type SalesHistoryRepository interface {
 	RevertCancelOrder(orderID uint) error
 	GetCancellationRequests(req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error)
 	GetMyCancellationRequests(userID uint, req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error)
+	GetEmployees() ([]entity.User, error)
 }
 
 type salesHistoryRepository struct {
@@ -264,6 +265,11 @@ func (r *salesHistoryRepository) GetCancellationRequests(req pos.SalesHistoryFil
         query = query.Where("sale_orders.status = ?", strings.ToLower(req.Status))
     }
 
+    // 4.5 กรองตามพนักงานที่ส่งคำขอยกเลิก (EmployeeID)
+    if req.EmployeeID != 0 {
+        query = query.Where("sale_orders.cancel_requested_by_id = ?", req.EmployeeID)
+    }
+
     // นับจำนวนรายการทั้งหมด
     if err := query.Count(&totalRows).Error; err != nil {
         return nil, 0, err
@@ -357,4 +363,12 @@ func (r *salesHistoryRepository) RevertCancelOrder(orderID uint) error {
 			"cancel_requested_at":    nil, // ล้างวันที่ขอยกเลิก
 			"cancel_requested_by_id": nil, // ล้างผู้ขอยกเลิก
 		}).Error
+}
+
+func (r *salesHistoryRepository) GetEmployees() ([]entity.User, error) {
+	var users []entity.User
+	err := r.db.Joins("JOIN roles ON roles.id = users.role_id").
+		Where("roles.role_name = ?", "Employee").
+		Find(&users).Error
+	return users, err
 }

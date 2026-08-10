@@ -90,6 +90,12 @@ export const posApiService = {
       .post<RevertCancellationRequestResponse>(`/pos/sales-history/${id}/cancel-request/revert`)
       .then((res) => res.data),
 
+  /** ดึงรายชื่อพนักงาน */
+  getEmployees: (): Promise<any[]> =>
+    apiClient
+      .get<any[]>("/pos/employees")
+      .then((res) => res.data),
+
   /** ค้นหาใบสั่งซื้อขายด้วยหมายเลข invoice */
   getSaleOrderByNumber: async (orderNumber: string): Promise<any | null> => {
     const endpoints = [

@@ -29,6 +29,8 @@ func SetupSalesHistoryRoutes(r *gin.Engine, db *gorm.DB) {
 		salesGroup.GET("/my-cancellation-requests", ctrl.GetMyCancellationRequests)
 		// พนักงานยกเลิกคำขอยกเลิกบิล (ดึงคำขอกลับ เมื่อบิลยังอยู่สถานะ PENDING_CANCEL)
 		salesGroup.POST("/sales-history/:id/cancel-request/revert", ctrl.RevertCancellationRequest)
+		// ดึงรายชื่อพนักงานในแผนก POS
+		salesGroup.GET("/employees", ctrl.GetEmployees)
 
 		// ส่วนสิทธิ์ของ Owner/Admin ค่อยแตก Group ย่อยออกมาจาก salesGroup อีกที
 		ownerOnly := salesGroup.Group("")
