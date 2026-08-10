@@ -204,6 +204,15 @@ func (r *salesHistoryRepository) ApproveCancelOrder(order *entity.SaleOrder, rem
 		if remark != "" {
 			updates["cancel_remark"] = remark
 		}
+		if order.CancelRequestedByID != nil {
+			updates["cancel_requested_by_id"] = order.CancelRequestedByID
+		}
+		if order.CancelReason != nil {
+			updates["cancel_reason"] = order.CancelReason
+		}
+		if order.CancelRequestedAt != nil {
+			updates["cancel_requested_at"] = order.CancelRequestedAt
+		}
 
 		if err := tx.Model(&entity.SaleOrder{}).Where("id = ?", order.ID).Updates(updates).Error; err != nil {
 			return err
@@ -248,7 +257,7 @@ func (r *salesHistoryRepository) GetCancellationRequests(req pos.SalesHistoryFil
         Preload("Payments.ReceivedBy").
         Preload("CreatedBy").
         Preload("CancelRequestedBy").
-        Where("cancel_requested_at IS NOT NULL") // ฉพาะรายการที่มีคำขอยกเลิก
+        Where("cancel_requested_at IS NOT NULL OR status = ?", enum.OrderCancelled) // เฉพาะรายการที่มีการขอยกเลิกหรือถูกยกเลิกแล้ว
 
     // 1. ค้นหาบาร์โค้ด / เลข Order / ชื่อลูกค้า
     if req.Search != "" {
@@ -317,7 +326,7 @@ func (r *salesHistoryRepository) GetMyCancellationRequests(userID uint, req pos.
         Preload("Payments.ReceivedBy").
         Preload("CreatedBy").
         Preload("CancelRequestedBy").
-        Where("cancel_requested_at IS NOT NULL AND cancel_requested_by_id = ?", userID)
+        Where("(cancel_requested_at IS NOT NULL OR status = ?) AND cancel_requested_by_id = ?", enum.OrderCancelled, userID)
 
     // 1. ค้นหาบาร์โค้ด / เลข Order / ชื่อลูกค้า
     if req.Search != "" {
@@ -383,7 +392,7 @@ func (r *salesHistoryRepository) RevertCancelOrder(orderID uint) error {
 func (r *salesHistoryRepository) GetEmployees() ([]entity.User, error) {
 	var users []entity.User
 	err := r.db.Joins("JOIN roles ON roles.id = users.role_id").
-		Where("roles.role_name = ?", "Employee").
+		Where("roles.role_name IN ?", []string{"Employee", "Owner", "Admin"}).
 		Find(&users).Error
 	return users, err
 }

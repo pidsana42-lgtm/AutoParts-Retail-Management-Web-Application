@@ -8,13 +8,14 @@ import (
 	"context"
 	"backend/internal/app/enum"
 	"errors"
+	"time"
 )
 
 type SalesHistoryService interface {
 	GetSalesHistory(req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
 	GetSaleHistoryByID(ctx context.Context, identifier string) (*pos.GetSaleHistoryByIDResponse, error)
 	RequestCancelSale(ctx context.Context, identifier string, userID uint, req pos.RequestCancelOrderRequest) error
-	ApproveCancelSale(ctx context.Context, identifier string, req pos.ProcessCancelOrderRequest) error
+	ApproveCancelSale(ctx context.Context, identifier string, userID uint, req pos.ProcessCancelOrderRequest) error
 	RejectCancelSale(ctx context.Context, identifier string, req pos.ProcessCancelOrderRequest) error
 	RevertCancellationRequest(ctx context.Context, identifier string, userID uint) (*pos.RevertCancellationRequestResponse, error)
 	GetCancellationRequests(ctx context.Context, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
@@ -93,15 +94,27 @@ func (s *salesHistoryService) RequestCancelSale(ctx context.Context, identifier 
     return s.salesHistoryRepo.RequestCancelOrder(order.ID, userID, req.Reason)
 }
 
-// เจ้าของร้านอนุมัติ
-func (s *salesHistoryService) ApproveCancelSale(ctx context.Context, identifier string, req pos.ProcessCancelOrderRequest) error {
+func (s *salesHistoryService) ApproveCancelSale(ctx context.Context, identifier string, userID uint, req pos.ProcessCancelOrderRequest) error {
 	order, err := s.salesHistoryRepo.GetSaleHistoryByID(identifier)
 	if err != nil {
 		return err
 	}
 
-	if order.Status != enum.OrderPendingCancel {
-		return errors.New("รายการนี้ไม่ได้อยู่ในสถานะรออนุมัติการยกเลิก")
+	if order.Status != enum.OrderPendingCancel && order.Status != enum.OrderCompleted {
+		return errors.New("รายการนี้ไม่อยู่ในสถานะที่สามารถอนุมัติหรือยกเลิกได้")
+	}
+
+	// ถ้าเป็นการยกเลิกตรงโดยเจ้าของร้าน (บิลสำเร็จ) ให้บันทึกข้อมูลผู้ยกเลิกและเหตุผลในตารางด้วย
+	if order.Status == enum.OrderCompleted {
+		order.CancelRequestedByID = &userID
+		if req.Remark != "" {
+			order.CancelReason = &req.Remark
+		} else {
+			defaultReason := "ยกเลิกโดยเจ้าของร้าน"
+			order.CancelReason = &defaultReason
+		}
+		now := time.Now()
+		order.CancelRequestedAt = &now
 	}
 
 	return s.salesHistoryRepo.ApproveCancelOrder(order, req.Remark)

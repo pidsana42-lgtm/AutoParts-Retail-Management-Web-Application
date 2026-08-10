@@ -104,39 +104,40 @@ export default function TransactionHistoryPage() {
 
           {/* Filter Bar */}
           <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
-            <CardContent className="p-6 md:p-8">
+            <CardContent className="p-5 md:p-6 space-y-4">
+              {/* ค้นหาหลัก + ตัวกรองบุคคล */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 {/* ช่องที่ 1: ค้นหาคำ */}
-                <div className={cn("flex flex-col gap-1.5", isOwnerOrAdmin ? "md:col-span-2" : "md:col-span-3")}>
-                  <label className="text-xs font-normal text-[#5F5E5E]">
-                    ค้นหาเลขคำสั่งซื้อ/ชื่อลูกค้า
-                  </label>
+                <div className={cn("flex flex-col gap-1.5", isOwnerOrAdmin ? "md:col-span-8" : "md:col-span-12")}>
+                  <Text variant="xs" className="text-[#5F5E5E]">
+                    ค้นหาเลขคำสั่งซื้อ / ชื่อลูกค้า
+                  </Text>
                   <div className="relative flex-1">
                     <ScanBarcode
                       className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10"
                       size={18}
                     />
                     <Input
-                      placeholder="สแกนบาร์โค้ด / INV-2024-XXX หรือ ชื่อลูกค้า"
+                      placeholder="สแกนบาร์โค้ด / INV-202X-XXX หรือ ชื่อลูกค้า..."
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       autoFocus
-                      className="w-full h-11 bg-white border border-gray-200 rounded-none pl-12 pr-4 text-sm text-[#1C1B1B] font-light focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 shadow-sm transition-all placeholder:text-[#6B7280] placeholder:font-light"
+                      className="w-full h-10 bg-white border border-gray-200 rounded-none pl-11 pr-4 text-sm text-[#1C1B1B] font-light focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 shadow-sm transition-all placeholder:text-[#6B7280]"
                     />
                   </div>
                 </div>
 
-                {/* ช่องที่ 1.5: พนักงานขาย (เฉพาะเจ้าของร้าน) */}
+                {/* ช่องที่ 2: พนักงานขาย (เฉพาะเจ้าของร้าน 4/12) */}
                 {isOwnerOrAdmin && (
-                  <div className="md:col-span-2 flex flex-col gap-1.5">
-                    <label className="text-xs font-normal text-[#5F5E5E]">
+                  <div className="md:col-span-4 flex flex-col gap-1.5">
+                    <Text variant="xs" className="text-[#5F5E5E]">
                       พนักงานขาย
-                    </label>
+                    </Text>
                     <Select
                       value={employeeId}
                       onChange={(e: any) => setEmployeeId(e.target.value)}
                       placeholder="พนักงานทุกคน"
-                      className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0"
+                      className="bg-white border-none rounded-none h-10 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0 cursor-pointer"
                       options={[
                         { label: "พนักงานทุกคน", value: "" },
                         ...employeeList,
@@ -144,39 +145,38 @@ export default function TransactionHistoryPage() {
                     />
                   </div>
                 )}
+              </div>
 
-                {/* ช่องที่ 2: วันที่เริ่มต้น (Start Date) */}
-                <div className="md:col-span-2 flex flex-col gap-1.5">
-                  <label className="text-xs font-normal text-[#5F5E5E]">
+              {/* บรรทัดที่ 2: ตัวกรองเงื่อนไข + วันที่ + ปุ่มค้นหา */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end pt-1 border-t border-gray-200/60">
+                {/* วันที่เริ่มต้น (2.5/12 -> 3) */}
+                <div className="md:col-span-3 lg:col-span-2 flex flex-col gap-1.5">
+                  <Text variant="xs" className="text-[#5F5E5E]">
                     วันที่เริ่มต้น
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0 cursor-pointer [&::-webkit-calendar-picker-indicator]:pr-4"
-                    />
-                  </div>
+                  </Text>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="bg-white border-none rounded-none h-10 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0 cursor-pointer [&::-webkit-calendar-picker-indicator]:pr-2"
+                  />
                 </div>
 
-                {/* ช่องที่ 2.5: วันที่สิ้นสุด (End Date) */}
-                <div className="md:col-span-2 flex flex-col gap-1.5">
-                  <label className="text-xs font-normal text-[#5F5E5E]">
+                {/* วันที่สิ้นสุด (2.5/12 -> 3) */}
+                <div className="md:col-span-3 lg:col-span-2 flex flex-col gap-1.5">
+                  <Text variant="xs" className="text-[#5F5E5E]">
                     วันที่สิ้นสุด
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0 cursor-pointer [&::-webkit-calendar-picker-indicator]:pr-4"
-                    />
-                  </div>
+                  </Text>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="bg-white border-none rounded-none h-10 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0 cursor-pointer [&::-webkit-calendar-picker-indicator]:pr-2"
+                  />
                 </div>
 
-                {/* ช่องที่ 3: ประเภทลูกค้า */}
-                <div className="md:col-span-2 flex flex-col gap-1.5">
+                {/* ประเภทลูกค้า */}
+                <div className="md:col-span-3 lg:col-span-3 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     ประเภทลูกค้า
                   </label>
@@ -184,7 +184,7 @@ export default function TransactionHistoryPage() {
                     value={customerType}
                     onChange={(e) => setCustomerType(e.target.value)}
                     placeholder="ทั้งหมด"
-                    className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0"
+                    className="bg-white border-none rounded-none h-10 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0 cursor-pointer"
                     options={[
                       { label: "ทั้งหมด", value: "" },
                       { label: "ลูกค้าทั่วไป (ขาจร)", value: "GENERAL" },
@@ -194,8 +194,8 @@ export default function TransactionHistoryPage() {
                   />
                 </div>
 
-                {/* ช่องที่ 4: การชำระเงิน */}
-                <div className={cn("flex flex-col gap-1.5", isOwnerOrAdmin ? "md:col-span-1" : "md:col-span-2")}>
+                {/* การชำระเงิน */}
+                <div className="md:col-span-3 lg:col-span-3 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     การชำระเงิน
                   </label>
@@ -203,7 +203,7 @@ export default function TransactionHistoryPage() {
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
                     placeholder="วิธีการทั้งหมด"
-                    className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0"
+                    className="bg-white border-none rounded-none h-10 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0 cursor-pointer"
                     options={[
                       { label: "ทั้งหมด", value: "" },
                       { label: "เงินสด", value: "CASH" },
@@ -213,11 +213,11 @@ export default function TransactionHistoryPage() {
                   />
                 </div>
 
-                {/* ช่องที่ 5: ปุ่มใช้ตัวกรอง */}
-                <div className="md:col-span-1">
+                {/* ปุ่มใช้ตัวกรอง */}
+                <div className="md:col-span-12 lg:col-span-2">
                   <Button
                     onClick={handleApplyFilter}
-                    className="w-full h-11 rounded-none bg-[#E51C23] hover:bg-[#c9151b] text-white text-sm font-normal transition-colors border-none shadow-none cursor-pointer"
+                    className="w-full h-10 rounded-none bg-[#E51C23] hover:bg-[#c9151b] text-white text-sm font-normal transition-colors border-none shadow-none cursor-pointer"
                   >
                     ค้นหา
                   </Button>

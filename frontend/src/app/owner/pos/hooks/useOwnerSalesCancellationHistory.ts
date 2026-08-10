@@ -52,7 +52,9 @@ export const useOwnerSalesCancellationHistory = () => {
       // เรียก API ดึงรายชื่อพนักงานในร้าน (ปรับตาม endpoint ของระบบคุณ เช่น posApiService.getEmployees())
       const res = await posApiService.getEmployees(); 
       const options = res.map((emp: any) => ({
-        label: emp.name || emp.full_name,
+        label: (emp.first_name || emp.last_name)
+          ? `${emp.first_name || ""} ${emp.last_name || ""}`.trim()
+          : (emp.username || `User #${emp.id}`),
         value: String(emp.id),
       }));
       setEmployeeList(options);
@@ -92,7 +94,7 @@ export const useOwnerSalesCancellationHistory = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, startDate, endDate, customerType, status, paymentMethod, page, limit]);
+  }, [searchQuery, startDate, endDate, customerType, status, employeeId, paymentMethod, page, limit]);
 
   useEffect(() => {
     fetchCancellationHistory();
