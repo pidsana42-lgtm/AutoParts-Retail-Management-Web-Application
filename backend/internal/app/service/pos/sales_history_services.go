@@ -2,6 +2,7 @@ package pos
 
 import (
 	"backend/internal/app/dto/pos"
+	"backend/internal/app/entity"
 	salesHistoryRepo "backend/internal/app/repository/pos"
 	"math"
 	"context"
@@ -18,6 +19,7 @@ type SalesHistoryService interface {
 	RevertCancellationRequest(ctx context.Context, identifier string, userID uint) (*pos.RevertCancellationRequestResponse, error)
 	GetCancellationRequests(ctx context.Context, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
 	GetMyCancellationRequests(ctx context.Context, userID uint, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
+	GetEmployees(ctx context.Context) ([]entity.User, error)
 }
 
 type salesHistoryService struct {
@@ -196,4 +198,8 @@ func (s *salesHistoryService) RevertCancellationRequest(ctx context.Context, ide
 		Status:  string(enum.OrderCompleted),
 		Message: "ดึงคำขอยกเลิกบิลกลับสำเร็จ และเปลี่ยนสถานะบิลกลับเป็นสำเร็จเรียบร้อย",
 	}, nil
+}
+
+func (s *salesHistoryService) GetEmployees(ctx context.Context) ([]entity.User, error) {
+	return s.salesHistoryRepo.GetEmployees()
 }
