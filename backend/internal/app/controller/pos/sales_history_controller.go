@@ -27,6 +27,42 @@ func (c *SalesHistoryController) GetSalesHistory(ctx *gin.Context) {
 		return
 	}
 
+	// เช็คบทบาท (Role) ของผู้ใช้งานจาก Context
+	roleVal, exists := ctx.Get("role")
+	var isOwnerOrAdmin bool
+	if exists {
+		roleStr, ok := roleVal.(string)
+		if ok && (roleStr == "Owner" || roleStr == "Admin") {
+			isOwnerOrAdmin = true
+		}
+	}
+
+	// ถ้าเป็นพนักงาน/แคชเชียร์ธรรมดา ให้เห็นเฉพาะออเดอร์ที่ตนเองขาย (ล็อกค่า EmployeeID)
+	if !isOwnerOrAdmin {
+		userIDVal, exists := ctx.Get("user_id")
+		if exists {
+			var userID uint
+			switch v := userIDVal.(type) {
+			case float64:
+				userID = uint(v)
+			case uint:
+				userID = v
+			case int:
+				userID = uint(v)
+			case int64:
+				userID = uint(v)
+			}
+			if userID > 0 {
+				req.EmployeeID = userID
+			}
+		} else {
+			ctx.JSON(http.StatusUnauthorized, gin.H{
+				"message": "ไม่พบข้อมูลสิทธิ์ของผู้ใช้งานในระบบ",
+			})
+			return
+		}
+	}
+
 	result, err := c.salesHistoryService.GetSalesHistory(req)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{

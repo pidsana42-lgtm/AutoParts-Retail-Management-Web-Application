@@ -120,6 +120,11 @@ func (r *salesHistoryRepository) GetSalesHistory(req pos.SalesHistoryFilterReque
         query = query.Group("sale_orders.id")
     }
 
+    // 4.5 กรองตามพนักงานผู้บันทึกรายการ (EmployeeID)
+    if req.EmployeeID != 0 {
+        query = query.Where("sale_orders.created_by_id = ?", req.EmployeeID)
+    }
+
     // นับจำนวนรายการทั้งหมดก่อนทำ Pagination
     if err := query.Count(&totalRows).Error; err != nil {
         return nil, 0, err
