@@ -49,6 +49,8 @@ export default function TransactionHistoryPage() {
     search,
     customerType,
     paymentMethod,
+    employeeId,
+    employeeList,
     startDate,
     endDate,
     page,
@@ -56,6 +58,7 @@ export default function TransactionHistoryPage() {
     setSearch,
     setCustomerType,
     setPaymentMethod,
+    setEmployeeId,
     setStartDate,
     setEndDate,
     setPage,
@@ -104,7 +107,7 @@ export default function TransactionHistoryPage() {
             <CardContent className="p-6 md:p-8">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 {/* ช่องที่ 1: ค้นหาคำ */}
-                <div className="md:col-span-3 flex flex-col gap-1.5">
+                <div className={cn("flex flex-col gap-1.5", isOwnerOrAdmin ? "md:col-span-2" : "md:col-span-3")}>
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     ค้นหาเลขคำสั่งซื้อ/ชื่อลูกค้า
                   </label>
@@ -122,6 +125,25 @@ export default function TransactionHistoryPage() {
                     />
                   </div>
                 </div>
+
+                {/* ช่องที่ 1.5: พนักงานขาย (เฉพาะเจ้าของร้าน) */}
+                {isOwnerOrAdmin && (
+                  <div className="md:col-span-2 flex flex-col gap-1.5">
+                    <label className="text-xs font-normal text-[#5F5E5E]">
+                      พนักงานขาย
+                    </label>
+                    <Select
+                      value={employeeId}
+                      onChange={(e: any) => setEmployeeId(e.target.value)}
+                      placeholder="พนักงานทุกคน"
+                      className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0"
+                      options={[
+                        { label: "พนักงานทุกคน", value: "" },
+                        ...employeeList,
+                      ]}
+                    />
+                  </div>
+                )}
 
                 {/* ช่องที่ 2: วันที่เริ่มต้น (Start Date) */}
                 <div className="md:col-span-2 flex flex-col gap-1.5">
@@ -173,7 +195,7 @@ export default function TransactionHistoryPage() {
                 </div>
 
                 {/* ช่องที่ 4: การชำระเงิน */}
-                <div className="md:col-span-2 flex flex-col gap-1.5">
+                <div className={cn("flex flex-col gap-1.5", isOwnerOrAdmin ? "md:col-span-1" : "md:col-span-2")}>
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     การชำระเงิน
                   </label>
@@ -210,16 +232,19 @@ export default function TransactionHistoryPage() {
               {/* Header Table */}
               <TableHeader className="bg-[#F6F3F2] rounded-none border-b border-gray-200 text-[11px] text-[#6B7280] uppercase tracking-wider">
                 <TableRow>
-                  <TableHead className="py-3 px-3 w-[16%]">
+                  <TableHead className="py-3 px-3 w-[14%]">
                     หมายเลขคำสั่งซื้อ
                   </TableHead>
-                  <TableHead className="py-3 px-3 w-[14%]">
+                  <TableHead className="py-3 px-3 w-[12%]">
                     วันที่ทำรายการ
                   </TableHead>
-                  <TableHead className="py-3 px-3 w-[26%]">
+                  <TableHead className="py-3 px-3 w-[20%]">
                     ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท
                   </TableHead>
-                  <TableHead className="py-3 px-3 text-right w-[12%]">
+                  <TableHead className="py-3 px-3 w-[12%]">
+                    พนักงานขาย
+                  </TableHead>
+                  <TableHead className="py-3 px-3 text-right w-[10%]">
                     จำนวนเงิน
                   </TableHead>
                   <TableHead className="py-3 px-3 text-center w-[12%]">
@@ -238,7 +263,7 @@ export default function TransactionHistoryPage() {
               <TableBody className="divide-y divide-gray-200">
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-12 text-center">
+                    <TableCell colSpan={8} className="py-12 text-center">
                       <Text variant="small" className="text-gray-500 mb-0">
                         กำลังโหลดข้อมูล...
                       </Text>
@@ -246,7 +271,7 @@ export default function TransactionHistoryPage() {
                   </TableRow>
                 ) : error ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-12 text-center">
+                    <TableCell colSpan={8} className="py-12 text-center">
                       <Text variant="small" className="text-red-500 mb-0">
                         {error}
                       </Text>
@@ -254,7 +279,7 @@ export default function TransactionHistoryPage() {
                   </TableRow>
                 ) : items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-12 text-center">
+                    <TableCell colSpan={8} className="py-12 text-center">
                       <Text variant="small" className="text-gray-400 mb-0">
                         ไม่พบรายการประวัติการขาย
                       </Text>
@@ -304,6 +329,16 @@ export default function TransactionHistoryPage() {
                           variant="xs" 
                           className="font-light text-[#A8A29E] mb-0">
                           ประเภท: {item.customer_type_name || "-"}
+                        </Text>
+                      </TableCell>
+
+                      {/* 3.5 พนักงานขาย */}
+                      <TableCell className="py-3.5 px-4 truncate">
+                        <Text
+                          variant="small"
+                          className="font-normal text-[#1C1B1B] mb-0"
+                        >
+                          {item.created_by_name || "-"}
                         </Text>
                       </TableCell>
 
@@ -542,6 +577,9 @@ export default function TransactionHistoryPage() {
                             ที่อยู่: {orderDetail.address}
                           </Text>
                         )}
+                        <Text variant="xs" className="text-[#6B7280] mb-0">
+                          พนักงานขาย: {orderDetail.created_by_name || "-"}
+                        </Text>
                       </CardContent>
                     </Card>
                   </div>
@@ -713,13 +751,21 @@ export default function TransactionHistoryPage() {
                                 </Badge>
                               </div>
 
-                              <div className="text-xs text-[#5F5E5E] bg-[#FFFBEB] p-2.5 border-l-2 border-[#EAB308]">
-                                <span className="font-normal text-[#1C1B1B]">
-                                  เหตุผลที่พนักงานขอ:
-                                </span>{" "}
-                                {cancelReason ||
-                                  orderDetail.cancel_reason ||
-                                  "-"}
+                              <div className="text-xs text-[#5F5E5E] bg-[#FFFBEB] p-2.5 border-l-2 border-[#EAB308] space-y-1">
+                                <div>
+                                  <span className="font-normal text-[#1C1B1B]">
+                                    ผู้ส่งคำขอ:
+                                  </span>{" "}
+                                  {orderDetail.canceller || "-"}
+                                </div>
+                                <div>
+                                  <span className="font-normal text-[#1C1B1B]">
+                                    เหตุผลที่พนักงานขอ:
+                                  </span>{" "}
+                                  {cancelReason ||
+                                    orderDetail.cancel_reason ||
+                                    "-"}
+                                </div>
                               </div>
                             </Card>
 
@@ -784,11 +830,19 @@ export default function TransactionHistoryPage() {
                               {getStatusText(orderDetail.status)}
                             </Badge>
                           </div>
-                          <div className="text-xs text-[#5F5E5E] bg-[#FFFBEB] p-2.5 border-l-2 border-[#EAB308]">
-                            <span className="font-normal text-[#1C1B1B]">
-                              เหตุผลที่ระบุ:
-                            </span>{" "}
-                            {cancelReason || orderDetail.cancel_reason || "-"}
+                          <div className="text-xs text-[#5F5E5E] bg-[#FFFBEB] p-2.5 border-l-2 border-[#EAB308] space-y-1">
+                            <div>
+                              <span className="font-normal text-[#1C1B1B]">
+                                ผู้ส่งคำขอ:
+                              </span>{" "}
+                              {orderDetail.canceller || "-"}
+                            </div>
+                            <div>
+                              <span className="font-normal text-[#1C1B1B]">
+                                เหตุผลที่ระบุ:
+                              </span>{" "}
+                              {cancelReason || orderDetail.cancel_reason || "-"}
+                            </div>
                           </div>
                         </Card>
                       );
@@ -812,11 +866,19 @@ export default function TransactionHistoryPage() {
                               {getStatusText(orderDetail.status)}
                             </Badge>
                           </div>
-                          <div className="text-xs text-[#5F5E5E] bg-[#FAF2F2] p-2.5 border-l-2 border-[#E51C23]">
-                            <span className="font-normal text-[#1C1B1B]">
-                              เหตุผลการยกเลิก:
-                            </span>{" "}
-                            {orderDetail.cancel_reason || "-"}
+                          <div className="text-xs text-[#5F5E5E] bg-[#FAF2F2] p-2.5 border-l-2 border-[#E51C23] space-y-1">
+                            <div>
+                              <span className="font-normal text-[#1C1B1B]">
+                                ผู้ขอยกเลิก:
+                              </span>{" "}
+                              {orderDetail.canceller || "-"}
+                            </div>
+                            <div>
+                              <span className="font-normal text-[#1C1B1B]">
+                                เหตุผลการยกเลิก:
+                              </span>{" "}
+                              {orderDetail.cancel_reason || "-"}
+                            </div>
                           </div>
                         </Card>
                       );

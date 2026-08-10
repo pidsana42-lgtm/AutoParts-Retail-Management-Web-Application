@@ -5,7 +5,7 @@ export interface SalesHistoryFilterRequest {
   end_date?: string;
   customer_type?: string;
   payment_method?: string;
-  employee_id?: string;
+  employee_id?: number | string;
   status?: string;
   page?: number;
   limit?: number;
@@ -16,6 +16,9 @@ export interface SalesHistoryItemResponse {
   order_number: string;
   order_date: string; // ISO String จาก time.Time ของ Go
   created_at: string;
+
+  created_by_id?: number | null;
+  created_by_name?: string;
 
   // ลูกค้าในระบบ
   customer_id?: number | null;
@@ -121,6 +124,9 @@ export interface GetSaleHistoryByIDResponse {
   cancel_requested_at?: string | null;
   cancel_remark?: string | null;
   cancel_processed_at?: string | null;
+  created_by_id?: number | null;
+  created_by_name?: string;
+  canceller?: string;
 }
 
 /** Request Payload สำหรับพนักงานส่งคำขอยกเลิก */

@@ -246,6 +246,7 @@ type GetSaleHistoryByIDResponse struct {
 	CancelRequestedAt *time.Time `json:"cancel_requested_at,omitempty"`
 	CancelRemark      *string    `json:"cancel_remark,omitempty"`
 	CancelProcessedAt *time.Time `json:"cancel_processed_at,omitempty"`
+	Canceller         string     `json:"canceller,omitempty"`
 }
 
 func ToSaleHistoryItemDetail(item entity.SaleOrderItem) SaleHistoryItemDetail {
@@ -322,6 +323,15 @@ func ToGetSaleHistoryByIDResponse(order entity.SaleOrder) GetSaleHistoryByIDResp
 		items = append(items, ToSaleHistoryItemDetail(item))
 	}
 
+	var canceller string = "-"
+	if order.CancelRequestedBy != nil {
+		if order.CancelRequestedBy.FirstName != "" || order.CancelRequestedBy.LastName != "" {
+			canceller = strings.TrimSpace(order.CancelRequestedBy.FirstName + " " + order.CancelRequestedBy.LastName)
+		} else if order.CancelRequestedBy.Username != "" {
+			canceller = order.CancelRequestedBy.Username
+		}
+	}
+
 	// 5. Return DTO
 	return GetSaleHistoryByIDResponse{
 		ID:                 order.ID,
@@ -358,5 +368,6 @@ func ToGetSaleHistoryByIDResponse(order entity.SaleOrder) GetSaleHistoryByIDResp
 		CancelRequestedAt:  order.CancelRequestedAt,
 		CancelRemark:       order.CancelRemark,
 		CancelProcessedAt:  order.CancelProcessedAt,
+		Canceller:          canceller,
 	}
 }
