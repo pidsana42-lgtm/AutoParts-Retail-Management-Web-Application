@@ -53,7 +53,9 @@ export const useSalesHistory = () => {
       try {
         const res = await posApiService.getEmployees();
         const options = res.map((emp: any) => ({
-          label: emp.name || emp.full_name,
+          label: (emp.first_name || emp.last_name)
+            ? `${emp.first_name || ""} ${emp.last_name || ""}`.trim()
+            : (emp.username || `User #${emp.id}`),
           value: String(emp.id),
         }));
         setEmployeeList(options);

@@ -148,7 +148,22 @@ func (c *SalesHistoryController) ApproveCancelSale(ctx *gin.Context) {
 	var req pos.ProcessCancelOrderRequest
 	_ = ctx.ShouldBindJSON(&req)
 
-	if err := c.salesHistoryService.ApproveCancelSale(ctx.Request.Context(), identifier, req); err != nil {
+	userIDVal, exists := ctx.Get("user_id")
+	var userID uint
+	if exists {
+		switch v := userIDVal.(type) {
+		case float64:
+			userID = uint(v)
+		case uint:
+			userID = v
+		case int:
+			userID = uint(v)
+		case int64:
+			userID = uint(v)
+		}
+	}
+
+	if err := c.salesHistoryService.ApproveCancelSale(ctx.Request.Context(), identifier, userID, req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"message": "ไม่สามารถอนุมัติการยกเลิกได้",
 			"error":   err.Error(),
