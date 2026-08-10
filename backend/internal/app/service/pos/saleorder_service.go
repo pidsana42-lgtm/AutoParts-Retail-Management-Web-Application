@@ -367,6 +367,7 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
 
     order := &entity.SaleOrder{
         OrderNumber:        orderNumber,
+        CreatedByID:         userID,
         OrderDate:          now,
         DueDate:            dueDate,
         CustomerID:         customerIDForOrder, 
@@ -773,6 +774,7 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
 	existingOrder.CustomerID = customerIDForOrder
 	existingOrder.PaymentMethodID = &req.PaymentMethodID
 	existingOrder.PaymentMethod = nil // ล้าง pointer พรีโหลดเดิมออก เพื่อป้องกัน GORM เขียนทับ foreign key
+    existingOrder.CreatedByID = userID // อัปเดตผู้สร้างเป็นคนแก้ไขล่าสุด
 	existingOrder.DueDate = dueDate
 	existingOrder.CustomerNameTemp = &savedName
 	existingOrder.CustomerPhoneTemp = &savedPhone
