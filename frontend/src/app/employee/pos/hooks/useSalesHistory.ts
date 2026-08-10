@@ -28,6 +28,8 @@ export const useSalesHistory = () => {
   const [endDate, setEndDate] = useState(getTodayDateString()); // ล็อกไว้ถึงวันนี้
   const [customerType, setCustomerType] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
+  const [employeeList, setEmployeeList] = useState<{ label: string; value: string }[]>([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
@@ -45,6 +47,23 @@ export const useSalesHistory = () => {
   const [cancelReason, setCancelReason] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
 
+  // ดึงรายชื่อพนักงานเมื่อหน้าเว็บโหลด
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const res = await posApiService.getEmployees();
+        const options = res.map((emp: any) => ({
+          label: emp.name || emp.full_name,
+          value: String(emp.id),
+        }));
+        setEmployeeList(options);
+      } catch (err) {
+        console.error("Failed to load employees for pos history filter", err);
+      }
+    };
+    fetchEmployees();
+  }, []);
+
   // --- Fetch Function ---
   const fetchSalesHistory = useCallback(async (overrideSearch?: string) => {
     setIsLoading(true);
@@ -58,6 +77,7 @@ export const useSalesHistory = () => {
       end_date: endDate || undefined,
       customer_type: customerType || undefined,
       payment_method: paymentMethod || undefined,
+      employee_id: employeeId ? Number(employeeId) : undefined,
       page,
       limit,
     };
@@ -73,7 +93,7 @@ export const useSalesHistory = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [search, startDate, endDate, customerType, paymentMethod, page, limit]);
+  }, [search, startDate, endDate, customerType, paymentMethod, employeeId, page, limit]);
 
   // เพิ่ม: Effect ดึงข้อมูลรายละเอียดออเดอร์เมื่อ selectedOrderId เปลี่ยนแปลง
   useEffect(() => {
@@ -114,7 +134,7 @@ export const useSalesHistory = () => {
   // ดึงข้อมูลใหม่ทุกครั้งที่ page หรือ limit เปลี่ยนแปลง
   useEffect(() => {
     fetchSalesHistory();
-  }, [startDate, endDate, customerType, paymentMethod, page, limit]);
+  }, [startDate, endDate, customerType, paymentMethod, employeeId, page, limit]);
 
   // Handler เมื่อกดปุ่ม "ใช้ตัวกรอง"
   const handleApplyFilter = () => {
@@ -129,6 +149,7 @@ export const useSalesHistory = () => {
     setEndDate(getTodayDateString());
     setCustomerType("");
     setPaymentMethod("");
+    setEmployeeId("");
     setPage(1);
   };
 
@@ -251,6 +272,8 @@ export const useSalesHistory = () => {
     endDate,
     customerType,
     paymentMethod,
+    employeeId,
+    employeeList,
     page,
     limit,
     // Setters
@@ -259,6 +282,7 @@ export const useSalesHistory = () => {
     setEndDate,
     setCustomerType,
     setPaymentMethod,
+    setEmployeeId,
     setPage,
     setLimit,
     // Actions
