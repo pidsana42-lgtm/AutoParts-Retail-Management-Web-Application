@@ -45,6 +45,10 @@ type SalesHistoryItemResponse struct {
 	OrderDate   time.Time `json:"order_date"`
 	CreatedAt   time.Time `json:"created_at"`
 
+	// พนักงานผู้ขาย/ผู้บันทึกบิล
+	CreatedByID   *uint  `json:"created_by_id,omitempty"`
+	CreatedByName string `json:"created_by_name"`
+
 	// ลูกค้าในตาราง
 	CustomerID   *uint  `json:"customer_id"`
 	CustomerName string `json:"customer_name"`
@@ -95,8 +99,8 @@ func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse
 		// [สมาชิก]
 		customerName = order.Customer.CustomerName
 		phoneNumber = order.Customer.PhoneNumber
-		customerTypeName = order.Customer.CustomerType.TypeLabel // 👈 ดึงชื่อประเภทลูกค้าภาษาไทย (หรือใช้ TypeName ก็ได้)
-        address = order.Customer.ShippingAddress          
+		customerTypeName = order.Customer.CustomerType.TypeLabel // ดึงชื่อประเภทลูกค้าภาษาไทย
+		address = order.Customer.ShippingAddress
 		customerNameTemp = nil
 		customerPhoneTemp = nil
 	} else {
@@ -118,13 +122,22 @@ func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse
 		paymentMethodName = order.Payments[0].PaymentMethod.MethodName
 	}
 
+	// ดึงชื่อพนักงานขาย/ผู้บันทึกบิล
+	createdByName := "-"
+	if order.CreatedBy != nil {
+		if order.CreatedBy.FirstName != "" || order.CreatedBy.LastName != "" {
+			createdByName = strings.TrimSpace(order.CreatedBy.FirstName + " " + order.CreatedBy.LastName)
+		} else if order.CreatedBy.Username != "" {
+			createdByName = order.CreatedBy.Username
+		}
+	}
+
 	var canceller string = "-"
-	if len(order.Payments) > 0 {
-		p := order.Payments[0]
-		if p.ReceivedBy.FirstName != "" || p.ReceivedBy.LastName != "" {
-			canceller = strings.TrimSpace(p.ReceivedBy.FirstName + " " + p.ReceivedBy.LastName)
-		} else if p.ReceivedBy.Username != "" {
-			canceller = p.ReceivedBy.Username
+	if order.CancelRequestedBy != nil {
+		if order.CancelRequestedBy.FirstName != "" || order.CancelRequestedBy.LastName != "" {
+			canceller = strings.TrimSpace(order.CancelRequestedBy.FirstName + " " + order.CancelRequestedBy.LastName)
+		} else if order.CancelRequestedBy.Username != "" {
+			canceller = order.CancelRequestedBy.Username
 		}
 	}
 
@@ -133,6 +146,8 @@ func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse
 		OrderNumber:       order.OrderNumber,
 		OrderDate:         order.OrderDate,
 		CreatedAt:         order.CreatedAt,
+		CreatedByID:       &order.CreatedByID,
+		CreatedByName:     createdByName,
 		CustomerID:        order.CustomerID,
 		CustomerName:      customerName,
 		PhoneNumber:       phoneNumber,
@@ -188,6 +203,10 @@ type GetSaleHistoryByIDResponse struct {
 	ID          uint      `json:"id"`
 	OrderNumber string    `json:"order_number"`
 	OrderDate   time.Time `json:"order_date"`
+
+	// พนักงานผู้ขาย/ผู้บันทึกบิล
+	CreatedByID   *uint  `json:"created_by_id,omitempty"`
+	CreatedByName string `json:"created_by_name"`
 
 	// ลูกค้าในตาราง
 	CustomerID   *uint  `json:"customer_id"`
@@ -272,7 +291,7 @@ func ToGetSaleHistoryByIDResponse(order entity.SaleOrder) GetSaleHistoryByIDResp
 		// [ลูกค้าทั่วไป / Walk-in]
 		customerName = ""
 		phoneNumber = ""
-		customerTypeName = "ลูกค้าทั่วไป" // 👈 Default ให้ขาจร
+		customerTypeName = "ลูกค้าทั่วไป"
 		customerNameTemp = order.CustomerNameTemp
 		customerPhoneTemp = order.CustomerPhoneTemp
 	}
@@ -287,17 +306,29 @@ func ToGetSaleHistoryByIDResponse(order entity.SaleOrder) GetSaleHistoryByIDResp
 		}
 	}
 
-	// 3. แปลงรายการสินค้า (Items)
+	// 3. ดึงชื่อพนักงานขาย/ผู้บันทึกบิล
+	createdByName := "-"
+	if order.CreatedBy != nil {
+		if order.CreatedBy.FirstName != "" || order.CreatedBy.LastName != "" {
+			createdByName = strings.TrimSpace(order.CreatedBy.FirstName + " " + order.CreatedBy.LastName)
+		} else if order.CreatedBy.Username != "" {
+			createdByName = order.CreatedBy.Username
+		}
+	}
+
+	// 4. แปลงรายการสินค้า (Items)
 	items := make([]SaleHistoryItemDetail, 0, len(order.Items))
 	for _, item := range order.Items {
 		items = append(items, ToSaleHistoryItemDetail(item))
 	}
 
-	// 4. Return DTO
+	// 5. Return DTO
 	return GetSaleHistoryByIDResponse{
 		ID:                 order.ID,
 		OrderNumber:        order.OrderNumber,
 		OrderDate:          order.OrderDate,
+		CreatedByID:        &order.CreatedByID,
+		CreatedByName:      createdByName,
 		CustomerID:         order.CustomerID,
 		CustomerName:       customerName,
 		PhoneNumber:        phoneNumber,

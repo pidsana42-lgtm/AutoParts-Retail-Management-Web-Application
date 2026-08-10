@@ -13,6 +13,10 @@ type SaleOrder struct {
 	// เติม index:idx_sale_orders_created_at_id
 	OrderDate time.Time `gorm:"type:timestamptz;not null;index:idx_sale_orders_created_at_id,priority:1" json:"order_date"`
 
+	// เก็บพนักงานแคชเชียร์/ผู้สร้างออเดอร์
+    CreatedByID uint  `gorm:"column:created_by_id;not null" json:"created_by_id"`
+    CreatedBy   *User `gorm:"foreignKey:CreatedByID" json:"created_by,omitempty"`
+
 	// FK
 	CustomerID *uint    `gorm:"column:customer_id;default:null" json:"customer_id"`
 	Customer   Customer `gorm:"foreignKey:CustomerID" json:"customer"`

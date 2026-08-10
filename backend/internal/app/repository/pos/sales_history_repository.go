@@ -39,7 +39,9 @@ func (r *salesHistoryRepository) GetSalesHistory(req pos.SalesHistoryFilterReque
         Preload("Customer").
         Preload("Customer.CustomerType").
         Preload("PaymentMethod").
-        Preload("Payments.PaymentMethod")
+        Preload("Payments.PaymentMethod").
+        Preload("CreatedBy").
+        Preload("CancelRequestedBy")
 
     // 1. ค้นหาบาร์โค้ด / เลข Order / ชื่อลูกค้า
     if req.Search != "" {
@@ -149,9 +151,13 @@ func (r *salesHistoryRepository) GetSaleHistoryByID(identifier string) (*entity.
 	query := r.db.Model(&entity.SaleOrder{}).
 		Preload("Customer").
 		Preload("PaymentMethod").
-        Preload("Customer.CustomerType").
+		Preload("Customer.CustomerType").
 		Preload("Payments").
-		Preload("Items")
+		Preload("Payments.PaymentMethod").
+		Preload("Payments.ReceivedBy").
+		Preload("Items").
+		Preload("CreatedBy").
+		Preload("CancelRequestedBy")
 
 	id, err := strconv.ParseUint(identifier, 10, 64)
 	if err == nil && id > 0 {
@@ -235,6 +241,8 @@ func (r *salesHistoryRepository) GetCancellationRequests(req pos.SalesHistoryFil
         Preload("PaymentMethod").
         Preload("Payments.PaymentMethod").
         Preload("Payments.ReceivedBy").
+        Preload("CreatedBy").
+        Preload("CancelRequestedBy").
         Where("cancel_requested_at IS NOT NULL") // ฉพาะรายการที่มีคำขอยกเลิก
 
     // 1. ค้นหาบาร์โค้ด / เลข Order / ชื่อลูกค้า
@@ -302,6 +310,8 @@ func (r *salesHistoryRepository) GetMyCancellationRequests(userID uint, req pos.
         Preload("PaymentMethod").
         Preload("Payments.PaymentMethod").
         Preload("Payments.ReceivedBy").
+        Preload("CreatedBy").
+        Preload("CancelRequestedBy").
         Where("cancel_requested_at IS NOT NULL AND cancel_requested_by_id = ?", userID)
 
     // 1. ค้นหาบาร์โค้ด / เลข Order / ชื่อลูกค้า

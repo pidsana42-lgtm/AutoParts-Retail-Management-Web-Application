@@ -21,6 +21,7 @@ func SaleOrder(db *gorm.DB) error {
 		// 1) SO-2026-0001 ขายเงินสด จ่ายครบ มีเงินทอน
 		{
 			OrderNumber:        "SO-2026-0001",
+			CreatedByID:        2,
 			OrderDate:          now,
 			CustomerID:         uintPtr(2), // สมชาย ใจดี
 			Status:             enum.OrderCompleted,
@@ -41,6 +42,7 @@ func SaleOrder(db *gorm.DB) error {
 		// 2) SO-2026-0002 ขายเครดิต จ่ายบางส่วน + ส่วนลดรายชิ้น
 		{
 			OrderNumber:        "SO-2026-0002",
+			CreatedByID:        2,
 			OrderDate:          now,
 			CustomerID:         uintPtr(1), // เอเป็กซ์ ออโต้
 			Status:             enum.OrderCompleted,
@@ -61,6 +63,7 @@ func SaleOrder(db *gorm.DB) error {
 		// 3) SO-2026-0003 ขายเครดิต ยังไม่จ่าย + ส่วนลดท้ายบิล %
 		{
 			OrderNumber:        "SO-2026-0003",
+			CreatedByID:        2,
 			OrderDate:          now,
 			CustomerID:         uintPtr(3), // บจก.โคราชคอนสตรัคชั่น
 			Status:             enum.OrderPending,
