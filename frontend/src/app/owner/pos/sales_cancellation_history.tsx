@@ -108,7 +108,8 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="สแกนบาร์โค้ด / INV-2024-XXX หรือ ชื่อลูกค้า"
-                  className="w-full h-11 bg-white border border-gray-200 rounded-none pl-12 pr-4 text-sm text-[#1C1B1B] font-light focus:outline-none focus:border-red-500 shadow-sm"
+                  autoFocus
+                  className="w-full h-11 bg-white border border-gray-200 rounded-none pl-12 pr-4 text-sm text-[#1C1B1B] font-light focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 shadow-sm transition-all placeholder:text-[#6B7280]"
                 />
               </div>
             </div>
@@ -120,7 +121,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                 value={employeeId}
                 onChange={(e: any) => setEmployeeId(e.target.value)}
                 placeholder="พนักงานทุกคน"
-                className="w-full bg-white border border-gray-200 rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-sm"
+                className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none"
                 options={[
                   { label: "พนักงานทุกคน", value: "" },
                   ...employeeList, // แสดงรายชื่อพนักงานที่ดึงมาจาก API
@@ -157,7 +158,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                 value={status}
                 onChange={(e: any) => setStatus(e.target.value)}
                 placeholder="สถานะทั้งหมด"
-                className="w-full bg-white border border-gray-200 rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-sm"
+                className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none"
                 options={[
                   { label: "ทั้งหมด", value: "" },
                   { label: "รอดำเนินการ", value: "PENDING_CANCEL" },
