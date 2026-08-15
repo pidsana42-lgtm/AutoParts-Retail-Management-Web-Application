@@ -79,6 +79,7 @@ func toStockAlertResponse(sa *entity.StockAlert) *wmsDto.StockAlertResponseDTO {
 	}
 	if sa.Product != nil {
 		res.ProductName = sa.Product.Product_Name
+		res.ProductCode = sa.Product.Product_Code
 	}
 	return res
 }
