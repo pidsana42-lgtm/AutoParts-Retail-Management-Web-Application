@@ -28,7 +28,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   { 
     icon: LayoutDashboard, 
     label: "แดชบอร์ด", 
-    path: "/owner/dashboard/", 
+    path: "/owner/dashboard/maindashboard", 
     roles: ["OWNER", "ADMIN"] 
   },
   
@@ -36,7 +36,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   { 
     icon: LayoutDashboard, 
     label: "แดชบอร์ด", 
-    path: "/employee/dashboard", 
+    path: "/employee/dashboard/maindashboard", 
     roles: ["EMPLOYEE", "STAFF"] 
   },
 

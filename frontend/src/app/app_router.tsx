@@ -2,13 +2,13 @@ import React, { useMemo } from 'react';
 import { Routes, Route, Outlet, Navigate } from 'react-router-dom';
 import MainLayout from '../components/layer/main_layout'; 
 import Login from './login/Login';
-import Dashboard from './owner/dashboard/dashboard'; 
+import MainDashboard from './owner/dashboard/dashboard'; 
+import SaleDashboard from './owner/dashboard/sale-dashboard';
 import Pos from './employee/pos/pos'; 
 import SalesHistory from './employee/pos/sales_history';
 import { getMenuByRole } from '../config/menu'; 
 import { useAuth } from '../contexts/AuthContexts'; 
 import StoreConfig from './owner/storeconfig/storeconfig'; 
-import EmployeeDashboard from './employee/dashboard/dashboard';
 import Stock from './owner/stock/stock';
 import StockMovement from './owner/stock/stock_movement/stock_movement';
 import Stockdata from './owner/stock/Stock_data/stock_data';
@@ -61,8 +61,11 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/" element={<Navigate to={firstMenuPath} replace />} />
 
         {/* เฉพาะ OWNER หรือ ADMIN เท่านั้นที่เข้าได้ */}
-        <Route path="/owner/dashboard" element={
-          isAdminOrOwner ? <Dashboard /> : <Navigate to={firstMenuPath} replace />
+        <Route path="/owner/dashboard/maindashboard" element={
+          isAdminOrOwner ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/dashboard/salesdashboard" element={
+          isAdminOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/owner/storeconfig" element={<StoreConfig />} />
@@ -111,8 +114,11 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/owner/new-orders" element={<CreatePurchaseOrders />} />
         <Route path="/owner/orders/:id" element={<OrderDetail />} />
         {/* แดชบอร์ดของฝั่งพนักงาน */}
-        <Route path="/employee/dashboard" element={
-          !isAdminOrOwner ? <EmployeeDashboard /> : <Navigate to={firstMenuPath} replace />
+        <Route path="/employee/dashboard/maindashboard" element={
+          !isAdminOrOwner ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/employee/dashboard/salesdashboard" element={
+          !isAdminOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/employee/orders" element={<PurchaseOrders />} />
