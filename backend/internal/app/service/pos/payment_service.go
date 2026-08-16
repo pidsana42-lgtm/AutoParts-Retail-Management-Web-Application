@@ -328,16 +328,20 @@ func (s *paymentService) SettleCustomerBills(req posDto.SettleBillsRequest) (*po
 		}
 	}()
 
-	now := time.Now()
-	receiptNo := fmt.Sprintf("RE-%d-%d", req.CustomerID, now.Unix())
-	var lastRepaymentID uint
+    now := time.Now()
+    var lastRepaymentID uint
+    var lastReceiptNo string // ประกาศตัวแปรเก็บเลขที่ใบเสร็จสำหรับส่งกลับ response
 
-	for _, alloc := range req.Allocations {
-		order, err := s.paymentRepo.GetOrderById(alloc.OrderID)
-		if err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("ไม่พบบิลเลขที่ %d", alloc.OrderID)
-		}
+    for _, alloc := range req.Allocations {
+        order, err := s.paymentRepo.GetOrderById(alloc.OrderID)
+        if err != nil {
+            tx.Rollback()
+            return nil, fmt.Errorf("ไม่พบบิลเลขที่ %d", alloc.OrderID)
+        }
+
+        // ย้ายมาสร้างตรงนี้เพื่อให้มีตัวแปร order ให้ใช้งาน
+        receiptNo := fmt.Sprintf("RE-%s-%d", strings.TrimPrefix(order.OrderNumber, "INV"), now.Unix())
+        lastReceiptNo = receiptNo
 
 		repayment := entity.PaymentRepayment{
 			ReceiptNumber:   receiptNo,
@@ -392,14 +396,14 @@ func (s *paymentService) SettleCustomerBills(req posDto.SettleBillsRequest) (*po
 		return nil, err
 	}
 
-	return &posDto.SettleBillsResponse{
-		ReceiptID:         lastRepaymentID,
-		ReceiptNumber:     receiptNo,
-		CustomerID:        req.CustomerID,
-		TotalReceived:     req.TotalReceived,
-		SettledBillsCount: len(req.Allocations),
-		PaidAt:            now,
-	}, nil
+    return &posDto.SettleBillsResponse{
+        ReceiptID:         lastRepaymentID,
+        ReceiptNumber:     lastReceiptNo,
+        CustomerID:        req.CustomerID,
+        TotalReceived:     req.TotalReceived,
+        SettledBillsCount: len(req.Allocations),
+        PaidAt:            now,
+    }, nil
 }
 
 // -------------------------------------------------------------
