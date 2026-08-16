@@ -35,10 +35,15 @@ export const getPageNumbers = (
 export const getPaymentVariant = (methodName?: string) => {
   switch (methodName) {
     case "เงินเชื่อ":
+    case "CREDIT":
       return "credit";
     case "เงินโอน/สแกน QR":
+    case "เงินโอน":
+    case "QR":
+    case "TRANSFER":
       return "transfer";
     case "เงินสด":
+    case "CASH":
       return "cash";
     default:
       return "neutral";
@@ -133,10 +138,15 @@ export const renderStatusBadge = (status: string, paymentStatus: string) => {
 export const getPaymentBadgeColor = (methodName?: string): string => {
   switch (methodName) {
     case "เงินเชื่อ":
+    case "CREDIT":
       return "bg-blue-500";
     case "เงินโอน/สแกน QR":
+    case "เงินโอน":
+    case "QR":
+    case "TRANSFER":
       return "bg-gray-500";
     case "เงินสด":
+    case "CASH":
     default:
       return "bg-[#259B24]";
   }
