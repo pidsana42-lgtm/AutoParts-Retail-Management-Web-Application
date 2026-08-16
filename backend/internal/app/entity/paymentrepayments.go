@@ -8,6 +8,7 @@ import (
 
 type PaymentRepayment struct {
     gorm.Model
+    ReceiptNumber string `gorm:"type:varchar(50)" json:"receipt_number"`
     // FK ID User ส่งมา
     OrderID uint      `gorm:"not null" json:"order_id" binding:"required"`
     Order   SaleOrder `gorm:"foreignKey:OrderID" json:"order"`
@@ -27,4 +28,10 @@ type PaymentRepayment struct {
     // FK ID User ส่งมา
     RecordedByID uint `gorm:"not null" json:"recorded_by_id" binding:"required"`
     RecordedBy   User `gorm:"foreignKey:RecordedByID" json:"recorded_by"`
+
+    Status        string     `gorm:"type:varchar(20);not null;default:'completed'" json:"status"` // 'completed' หรือ 'cancelled'
+    CancelledByID *uint      `json:"cancelled_by_id"`
+    CancelledBy   *User      `gorm:"foreignKey:CancelledByID" json:"cancelled_by"`
+    CancelledAt   *time.Time `gorm:"type:timestamptz" json:"cancelled_at"`
+    CancelReason  string     `gorm:"type:text" json:"cancel_reason"`
 }

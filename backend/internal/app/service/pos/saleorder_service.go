@@ -347,7 +347,14 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
     var balanceDue float64 = totalAmount
     var changeAmount float64 = 0.0
 
-    if req.PaymentMethodID == 1 { // Cash
+    if paymentMethod.IsCredit {
+        orderStatus = "completed"
+        paymentStatus = "unpaid"
+        receivedAmount = 0.0
+        paidAmount = 0.0
+        balanceDue = totalAmount
+        changeAmount = 0.0
+    } else if req.PaymentMethodID == 1 { // Cash
         orderStatus = "completed"
         paymentStatus = "paid"
         receivedAmount = req.ReceivedAmount
@@ -356,13 +363,6 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         if req.ReceivedAmount > totalAmount {
             changeAmount = req.ReceivedAmount - totalAmount
         }
-    } else if req.PaymentMethodID == 3 { // Credit
-        orderStatus = "completed"
-        paymentStatus = "unpaid"
-        receivedAmount = 0.0
-        paidAmount = 0.0
-        balanceDue = totalAmount
-        changeAmount = 0.0
     }
 
     order := &entity.SaleOrder{
