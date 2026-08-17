@@ -22,3 +22,29 @@ export const getTodayDateString = () => {
     
     return `${year}-${month}-${day}`;
 };
+
+export const getThaiMonthOptions = () => {
+  const thaiMonths = [
+    "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+    "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+  ];
+  
+  const monthOptions = thaiMonths.map((month, index) => ({
+    label: month,
+    value: String(index + 1).padStart(2, '0') // จะได้ค่าเป็น "01", "02", ...
+  }));
+
+  return [{ label: "ทุกเดือน", value: "" }, ...monthOptions];
+};
+
+export const getYearOptions = (availableYears: number[]) => {
+  const currentYear = new Date().getFullYear();
+  const yearSet = new Set<number>([currentYear, ...availableYears]);
+
+  return Array.from(yearSet)
+    .sort((a, b) => b - a)
+    .map((year) => ({
+      label: String(year + 543),
+      value: String(year),
+    }));
+};

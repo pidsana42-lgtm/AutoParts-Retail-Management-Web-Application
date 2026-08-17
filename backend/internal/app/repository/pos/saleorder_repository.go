@@ -14,6 +14,10 @@ type SaleRepository interface {
 	GetCustomerTypes() ([]entity.CustomerType, error)
     SearchCustomers(searchQuery string) ([]entity.Customer, error)
 	GetPaymentMethods() ([]entity.PaymentMethod, error)
+	GetOrderByID(id uint) (*entity.SaleOrder, error)
+    UpdateOrderWithTx(tx *gorm.DB, order *entity.SaleOrder) error
+    DeleteOrderItemsWithTx(tx *gorm.DB, orderID uint) error
+	GetOrderByOrderNumber(orderNumber string) (*entity.SaleOrder, error)
 }
 
 type saleRepository struct {
@@ -87,4 +91,39 @@ func (r *saleRepository) GetPaymentMethods() ([]entity.PaymentMethod, error) {
 	var methods []entity.PaymentMethod
 	err := r.db.Find(&methods).Error
 	return methods, err
+}
+
+func (r *saleRepository) GetOrderByID(id uint) (*entity.SaleOrder, error) {
+    var order entity.SaleOrder
+    // Preload Items ขึ้นมาด้วยเพื่อเอาไปคำนวณคืนสต็อกเก่า
+    if err := r.db.Preload("Items").First(&order, id).Error; err != nil {
+        return nil, err
+    }
+    return &order, nil
+}
+
+func (r *saleRepository) DeleteOrderItemsWithTx(tx *gorm.DB, orderID uint) error {
+    return tx.Where("order_id = ?", orderID).Delete(&entity.SaleOrderItem{}).Error
+}
+
+func (r *saleRepository) UpdateOrderWithTx(tx *gorm.DB, order *entity.SaleOrder) error {
+    if order.CustomerID == nil {
+    } else if *order.CustomerID == 0 {
+        order.CustomerID = nil
+    }
+    
+    // บันทึกตัว Order Header และ Save Items ชุดใหม่ลงไป
+    return tx.Omit("Customer", "PaymentMethod").Save(order).Error
+}
+
+func (r *saleRepository) GetOrderByOrderNumber(orderNumber string) (*entity.SaleOrder, error) {
+    var order entity.SaleOrder
+    err := r.db.Preload("Items").
+        Preload("PaymentMethod").
+        Where("order_number = ?", orderNumber).
+        First(&order).Error
+    if err != nil {
+        return nil, err
+    }
+    return &order, nil
 }

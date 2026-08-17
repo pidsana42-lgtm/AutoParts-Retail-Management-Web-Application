@@ -29,6 +29,7 @@ func SetupPOSRoutes(r *gin.Engine, db *gorm.DB) {
 	{
 		posGroup.GET("/products", posProductCtrl.SearchProducts)
 		posGroup.POST("/orders", saleCtrl.CreateOrderHandler)
+		posGroup.PUT("/orders/:id", saleCtrl.UpdateOrderHandler)
 		posGroup.GET("/customer-types", saleCtrl.GetCustomerTypes)
 		posGroup.GET("/customer-search", saleCtrl.SearchCustomerDiscount)
 		posGroup.GET("/payment-methods", saleCtrl.GetPaymentMethods)

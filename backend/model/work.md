@@ -147,3 +147,217 @@ LINE_RICH_MENU_EMPLOYEE=richmenu-employee-mock-id
       }'
     ```
     *(หลังบ้าน Go จะส่งคำถามเข้า Agent ไพทอนเพื่อดึงข้อมูลเครดิตลูกค้า 'อู่วิชัยยนต์' และส่งคำตอบแสดงผลออกมาในทันที)*
+
+---
+
+## 5. ประวัติการอัปเดตระบบและการปรับปรุงล่าสุด (Deployment & Recent Technical Updates)
+
+### A. สถาปัตยกรรมระบบบนเซิร์ฟเวอร์จริง (Cloud VPS Production: 8.219.93.236)
+ระบบบน Cloud VPS ควบคุมและรันผ่าน **PM2 Process Manager** ทั้งหมด 3 บริการ:
+* **Frontend App (Port 3000):** สตาร์ตด้วย `pm2 serve dist 3000 --name "frontend-app" --spa`
+* **Backend App (Port 8080):** สตาร์ตด้วย `pm2 start ./main --name "backend-app"` (รันไฟล์ไบนารี Go)
+* **AI FastAPI API (Port 8000 - Internal Only):** สตาร์ตด้วย `pm2 start server.py --name "ai-fastapi-api" --interpreter python3`
+
+---
+
+### B. ระบบ OCR Scan Proxy & แก้ปัญหา CORS / Network Error
+* **การซ่อนพอร์ต 8000 ไว้ภายใน (Internal Proxy):** เบราว์เซอร์ผู้ใช้จะไม่ยิงไปที่พอร์ต `8000` โดยตรงเพื่อป้องกันปัญหา CORS และ Network Error แต่จะยิงผ่าน Go Backend พอร์ต `8080` แทน
+* **การผูกเส้นทาง Proxy บน Go Backend (`bill_route.go`):** ลงทะเบียน `ocrProxyHandler` รองรับทุกเส้นทาง ได้แก่ `/api/ocr/extract-invoice/upload`, `/api/ocr/api/extract-invoice/upload` และ `/ocr/api/extract-invoice/upload` โดย Go จะทำหน้าที่บีบอัดและยิงต่อไปยัง `http://127.0.0.1:8000/api/extract-invoice/upload` ภายในเซิร์ฟเวอร์ พร้อมกำหนด Timeout ไว้ที่ 300 วินาที (5 นาที)
+* **ระบบ Dual Fallback บน Frontend (`import_service.ts`):** 
+  1. ยิงผ่าน Go Backend Proxy (`apiClient.post('/ocr/extract-invoice/upload')`) เมื่อรันบน Production Server
+  2. หากยิงไม่สำเร็จในโหมดพัฒนา Local จะสลับไปยิงผ่าน Vite Dev Proxy (`axios.post('/ocr/api/extract-invoice/upload')`) อัตโนมัติ
+
+---
+
+### C. ระบบถ่ายรูปบิลผ่านมือถือ (Mobile QR Scan) & Supabase Storage
+* **การอัปโหลดผ่านมือถือ:** เมื่อผู้ใช้สแกน QR Code บนมือถือ มือถือจะส่งรูปภาพเข้าพอร์ต 8080 ผ่าน API `/api/mobile/upload-image?session=...`
+* **การบันทึกภาพสองชั้น (Dual Storage Strategy):**
+  1. ระบบจะอัปโหลดรูปขึ้น **Supabase Storage** บักเก็ต `G03-Capstone` และรับ Public URL กลับมา
+  2. มีระบบสำรอง (Fallback) บันทึกไฟล์ลงดิสก์เครื่องท้องถิ่นในโฟลเดอร์ `./uploads/mobile-tmp/<session>/`
+* **การ Polling บนจอคอมพิวเตอร์:** หน้าสแกนบิลบนคอมพิวเตอร์จะส่ง `GET /api/mobile/images?session=...` ทุกๆ 2 วินาทีเพื่อเช็ครูปภาพ เมื่อพบรูปภาพใหม่ รูปจะเด้งขึ้นหน้าจอพรีวิวฝั่งซ้ายอัตโนมัติทันที
+
+---
+
+### D. ปรับปรุงการคำนวณยอดรวมบิลแบบ Dynamic (Subtotal & Grand Total Fix)
+* **แก้ปัญหายอดรวมไม่ตรงรายการ:** แก้ไขใน `scan_view.tsx` และ `manual_entry_view.tsx` โดยปรับการแสดงผล `subtotal` และ `total_amount` ให้คำนวณสดจากรายการสินค้าในตารางแบบ Dynamic (`calcSubtotal` และ `calcTotalAmount`) 
+* **สูตรการคำนวณ:** `ยอดรวมสุทธิ = Sum(จำนวน x ราคาต่อหน่วย - ส่วนลด) - ส่วนลดรวมบิล + ภาษี (VAT)`
+* ช่วยให้ยอดรวมของบิลตรงกับผลรวมราคาสินค้าทุกรายการในตาราง 100% เสมอ แม้มีการเพิ่ม/ลด/แก้ไขรายการสินค้า
+
+---
+
+### E. การแก้ไข TypeScript Build Errors & Dependencies
+* **แก้ไขข้อผิดพลาด TS6133 (Unused Imports):** เคลียร์ `import React` และตัวแปรไม่ได้ใช้ออกใน 6 ไฟล์ ได้แก่ `sales_history.tsx`, `GradeTab.tsx`, `SearchableSelect.tsx`, `stock_check.tsx`, `tree_select.tsx`, และ `ProductDetailModal.tsx` เพื่อให้คำสั่ง `npm run build` (`tsc -b && vite build`) ทำงานผ่าน 100%
+* **อัปเดต `requirements.txt` ฝั่ง Python:** เพิ่มการระบุแพ็กเกจ `sqlalchemy`, `psycopg2-binary`, `pillow-heif`, `PyMuPDF`, `scikit-learn`, `python-multipart` ครบถ้วน เพื่อให้ติดตั้งใช้งานได้รวดเร็วด้วย `pip3 install -r requirements.txt`
+
+---
+
+### F. คำสั่งสำหรับการ Rebuild และอัปเดตระบบบน Production Server (Build & Deploy Commands)
+
+#### 1. อัปเดตและบิ้วฝั่ง **Go Backend**:
+```bash
+cd /var/www/AutoParts-Retail-Management-Web-Application/backend
+git stash
+git pull
+export PATH=$PATH:/usr/local/go/bin
+go build -o main main.go
+pm2 restart backend-app || pm2 start ./main --name "backend-app" --update-env
+```
+
+#### 2. อัปเดตและบิ้วฝั่ง **Frontend (React / Vite)**:
+```bash
+cd /var/www/AutoParts-Retail-Management-Web-Application/frontend
+git stash
+git pull
+npm run build
+pm2 restart frontend-app || pm2 serve dist 3000 --name "frontend-app" --spa
+```
+
+#### 3. อัปเดตและบิ้วฝั่ง **Python AI Agent (FastAPI)**:
+```bash
+cd /var/www/AutoParts-Retail-Management-Web-Application/backend/model
+pip3 install -r requirements.txt
+# VPS RAM 4GB: บังคับใช้ TF-IDF (ประหยัด ~2GB RAM, boot เร็วขึ้น)
+USE_TFIDF_ONLY=1 pm2 restart ai-fastapi-api || USE_TFIDF_ONLY=1 pm2 start server.py --name "ai-fastapi-api" --interpreter python3
+```
+> **หมายเหตุ:** ถ้า VPS มี RAM ≥ 8GB สามารถเอา `USE_TFIDF_ONLY=1` ออกได้ เพื่อใช้ ONNX embedding ที่แม่นยำกว่า
+
+#### 4. สั่งบันทึกและตรวจสอบสถานะบริการ PM2:
+```bash
+pm2 save
+pm2 status
+```
+
+---
+
+## 6. การ Implement MCP (Model Context Protocol) เข้าสู่ระบบ
+
+### MCP คืออะไร?
+**MCP (Model Context Protocol)** คือมาตรฐานเปิด (Open Protocol) ที่พัฒนาโดย Anthropic เพื่อเชื่อม AI Model เข้ากับ Tools และ Data Sources ภายนอกแบบมาตรฐาน แทนที่การเขียน function calling เองแบบ ad-hoc เหมือนปัจจุบัน
+
+---
+
+### ✅ ระบบนี้ Implement MCP ได้ไหม?
+
+**ได้ครับ และเหมาะมากด้วย** เพราะระบบใช้ **Gemini API** ซึ่ง Google ประกาศรองรับ MCP อย่างเป็นทางการแล้วใน `google-genai` SDK ตั้งแต่ต้นปี 2025
+
+---
+
+### สถาปัตยกรรมหลังเพิ่ม MCP:
+
+```
+[ LINE Chat / Frontend ]
+        │
+        ▼
+[ Go Backend (Port 8080) ]
+        │
+        ▼ HTTP POST /api/agent
+[ FastAPI AI Service (Port 8000) ]
+        │
+        ▼ Gemini API (Function Calling via MCP)
+[ MCP Server (ภายในหรือภายนอก) ]
+        ├── Tool: query_stock(product_name)
+        ├── Tool: get_customer_debt(customer_id)
+        ├── Tool: get_order_history(customer_id, limit)
+        ├── Tool: search_product(keyword)
+        └── Tool: get_claim_status(claim_no)
+        │
+        ▼ execute SQL (Read-Only)
+[ PostgreSQL Database ]
+```
+
+---
+
+### แนวทางที่ Implement ได้ใน Project นี้
+
+#### แนวทางที่ 1: MCP แบบ In-Process (แนะนำสำหรับ VPS ขนาดเล็ก)
+ไม่ต้องรัน MCP server แยก — ประกาศ tools ตรงใน `agent.py` ผ่าน Gemini Function Calling API (compatible กับ MCP tool schema):
+
+```python
+# agent.py — ตัวอย่าง MCP-compatible tool definitions
+tools = [
+    {
+        "name": "query_stock",
+        "description": "ค้นหาจำนวนสต็อกสินค้าในคลังตามชื่อสินค้า",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "product_name": {"type": "string", "description": "ชื่อสินค้า"}
+            },
+            "required": ["product_name"]
+        }
+    },
+    {
+        "name": "get_customer_debt",
+        "description": "ดึงยอดหนี้ค้างชำระของลูกค้า",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "customer_id": {"type": "integer"}
+            },
+            "required": ["customer_id"]
+        }
+    }
+]
+```
+
+แทนที่โค้ด Text-to-SQL เดิม (ที่ใช้ Gemini generate SQL string ดิบ) ด้วย tool calling loop — ปลอดภัยกว่ามาก (ไม่มี SQL injection)
+
+---
+
+#### แนวทางที่ 2: MCP Server แยก (สำหรับอนาคต / เพิ่ม client ได้)
+รัน MCP Server เป็น process แยก ให้ทั้ง agent.py และ tool อื่นๆ เชื่อมเข้ามาได้:
+
+```bash
+pip install mcp
+```
+
+```python
+# mcp_server.py — รัน port 8001 (internal)
+from mcp.server.fastmcp import FastMCP
+import psycopg2
+
+mcp = FastMCP("AutoParts MCP Server")
+
+@mcp.tool()
+def query_stock(product_name: str) -> str:
+    """ค้นหาสต็อกสินค้าตามชื่อ"""
+    # query DB แล้ว return string
+    ...
+
+@mcp.tool()
+def get_customer_debt(customer_phone: str) -> str:
+    """ดึงยอดหนี้ค้างชำระตามเบอร์โทร"""
+    ...
+
+if __name__ == "__main__":
+    mcp.run(transport="streamable-http", host="127.0.0.1", port=8001)
+```
+
+PM2 start:
+```bash
+pm2 start mcp_server.py --name "mcp-server" --interpreter python3
+```
+
+---
+
+### ข้อดีเมื่อเทียบกับ Text-to-SQL เดิม
+
+| หัวข้อ | Text-to-SQL เดิม | MCP Tool Calling |
+|---|---|---|
+| ความปลอดภัย | Gemini generate SQL ตรงๆ (risk SQL injection) | Gemini เรียก tool ที่เราเขียนไว้ (safe) |
+| ความแม่นยำ | ขึ้นอยู่กับ prompt ว่า SQL ถูกไหม | ตาม schema ที่กำหนดแน่นอน |
+| Debug | ดู SQL ที่ generate ยาก | ดู tool call + arguments ได้ชัด |
+| เพิ่ม feature | ต้องแก้ prompt | เพิ่ม `@mcp.tool()` function ใหม่ |
+| Multi-step query | ทำยาก | Agent เรียก tools หลายรอบเองอัตโนมัติ |
+
+---
+
+### ขั้นตอน Implement (ถ้าจะทำ)
+
+1. `pip install mcp google-genai` (update `requirements.txt`)
+2. สร้างไฟล์ `backend/model/mcp_server.py` — ประกาศ tools ตาม DB schema
+3. แก้ `backend/model/agent.py` — เปลี่ยนจาก Text-to-SQL เป็น Gemini + MCP tool loop
+4. เพิ่ม PM2 process สำหรับ `mcp_server.py` (แนวทางที่ 2) หรือ inline ใน `agent.py` (แนวทางที่ 1)
+5. ทดสอบผ่าน LINE Chat หรือ `/api/oa/simulate`
+
+> **สรุป:** MCP เป็น upgrade ที่ทำได้และเหมาะมากกับ project นี้ โดยเฉพาะส่วน AI Agent ที่ปัจจุบัน generate SQL ดิบ — เปลี่ยนเป็น MCP tool calling จะ **ปลอดภัยกว่า แม่นยำกว่า และ maintain ง่ายกว่า** มาก

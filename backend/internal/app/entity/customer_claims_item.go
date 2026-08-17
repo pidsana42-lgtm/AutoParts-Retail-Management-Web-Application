@@ -11,6 +11,7 @@ type CustomerClaimItem struct {
 	Qty uint `gorm:"not null" json:"qty"`
 	Reason string `gorm:"type:text" json:"reason"`
 	Resolution string `gorm:"type:text" json:"resolution"`
-	Status     string `gorm:"default:'Pending'" json:"status"`
+	Status      string `gorm:"default:'Pending'" json:"status"`
+	ClaimType   string `gorm:"type:varchar(50);default:'INSTANT'" json:"claim_type"`
 	EvidenceURL string `gorm:"type:text" json:"evidence_url"`
 }

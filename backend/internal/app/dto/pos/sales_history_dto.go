@@ -2,6 +2,7 @@ package pos
 
 import (
 	"backend/internal/app/entity"
+	"strings"
 	"time"
 )
 
@@ -15,13 +16,24 @@ type ProcessCancelOrderRequest struct {
 	Remark string `json:"remark"`
 }
 
+// Response DTO สำหรับการดึงคำขอยกเลิกบิลกลับ
+type RevertCancellationRequestResponse struct {
+	OrderID uint   `json:"order_id"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
 // SalesHistoryFilterRequest โครงสร้างข้อมูลที่รับมาจาก Query String หน้าเว็บ
 type SalesHistoryFilterRequest struct {
 	Search          string `form:"search"`
 	StartDate       string `form:"start_date"`
 	EndDate         string `form:"end_date"`
+	CustomerType    string `form:"customer_type" json:"customer_type"`
 	CustomerTypeID  uint   `form:"customer_type_id"`
 	PaymentMethodID uint   `form:"payment_method_id"`
+	PaymentMethod   string `form:"payment_method" json:"payment_method"`
+	Status          string `form:"status" json:"status"`
+	EmployeeID      uint   `form:"employee_id" json:"employee_id"`
 	Page            int    `form:"page,default=1"`
 	Limit           int    `form:"limit,default=15"`
 }
@@ -33,6 +45,10 @@ type SalesHistoryItemResponse struct {
 	OrderDate   time.Time `json:"order_date"`
 	CreatedAt   time.Time `json:"created_at"`
 
+	// พนักงานผู้ขาย/ผู้บันทึกบิล
+	CreatedByID   *uint  `json:"created_by_id,omitempty"`
+	CreatedByName string `json:"created_by_name"`
+
 	// ลูกค้าในตาราง
 	CustomerID   *uint  `json:"customer_id"`
 	CustomerName string `json:"customer_name"`
@@ -41,6 +57,8 @@ type SalesHistoryItemResponse struct {
 	// ขาจร
 	CustomerNameTemp  *string `json:"customer_name_temp"`
 	CustomerPhoneTemp *string `json:"customer_phone_temp"`
+	CustomerTypeName string `json:"customer_type_name"` 
+    Address          string `json:"address"` 
 
 	Subtotal       float64 `json:"subtotal"`
 	DiscountAmount float64 `json:"discount_amount"`
@@ -51,6 +69,12 @@ type SalesHistoryItemResponse struct {
 	PaymentMethodName string `json:"payment_method_name"`
 	Status            string `json:"status"`
 	PaymentStatus     string `json:"payment_status"`
+
+	CancelReason      *string    `json:"cancel_reason"`
+	CancelRequestedAt *time.Time `json:"cancel_requested_at"`
+	CancelRemark      *string    `json:"cancel_remark"`
+	CancelProcessedAt *time.Time `json:"cancel_processed_at"`
+	Canceller         string     `json:"canceller"`
 }
 
 // SalesHistoryPaginationResponse โครงสร้างข้อมูลครอบทั้งหมดที่มีข้อมูล Pagination แปะไปด้วย
@@ -65,6 +89,8 @@ type SalesHistoryPaginationResponse struct {
 func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse {
 	var customerName string
 	var phoneNumber string
+	var customerTypeName string
+    var address string
 	var customerNameTemp *string
 	var customerPhoneTemp *string
 
@@ -73,12 +99,15 @@ func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse
 		// [สมาชิก]
 		customerName = order.Customer.CustomerName
 		phoneNumber = order.Customer.PhoneNumber
+		customerTypeName = order.Customer.CustomerType.TypeLabel // ดึงชื่อประเภทลูกค้าภาษาไทย
+		address = order.Customer.ShippingAddress
 		customerNameTemp = nil
 		customerPhoneTemp = nil
 	} else {
 		// [ลูกค้าทั่วไป / Walk-in]
 		customerName = ""
 		phoneNumber = ""
+		customerTypeName = "ลูกค้าทั่วไป" // Default ให้ขาจร
 		customerNameTemp = order.CustomerNameTemp
 		customerPhoneTemp = order.CustomerPhoneTemp
 	}
@@ -93,14 +122,37 @@ func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse
 		paymentMethodName = order.Payments[0].PaymentMethod.MethodName
 	}
 
+	// ดึงชื่อพนักงานขาย/ผู้บันทึกบิล
+	createdByName := "-"
+	if order.CreatedBy != nil {
+		if order.CreatedBy.FirstName != "" || order.CreatedBy.LastName != "" {
+			createdByName = strings.TrimSpace(order.CreatedBy.FirstName + " " + order.CreatedBy.LastName)
+		} else if order.CreatedBy.Username != "" {
+			createdByName = order.CreatedBy.Username
+		}
+	}
+
+	var canceller string = "-"
+	if order.CancelRequestedBy != nil {
+		if order.CancelRequestedBy.FirstName != "" || order.CancelRequestedBy.LastName != "" {
+			canceller = strings.TrimSpace(order.CancelRequestedBy.FirstName + " " + order.CancelRequestedBy.LastName)
+		} else if order.CancelRequestedBy.Username != "" {
+			canceller = order.CancelRequestedBy.Username
+		}
+	}
+
 	return SalesHistoryItemResponse{
 		ID:                order.ID,
 		OrderNumber:       order.OrderNumber,
 		OrderDate:         order.OrderDate,
 		CreatedAt:         order.CreatedAt,
+		CreatedByID:       &order.CreatedByID,
+		CreatedByName:     createdByName,
 		CustomerID:        order.CustomerID,
 		CustomerName:      customerName,
 		PhoneNumber:       phoneNumber,
+		CustomerTypeName:   customerTypeName, 
+        Address:            address,  
 		CustomerNameTemp:  customerNameTemp,
 		CustomerPhoneTemp: customerPhoneTemp,
 		Subtotal:          order.Subtotal,
@@ -111,6 +163,11 @@ func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse
 		PaymentMethodName: paymentMethodName,
 		Status:            string(order.Status),
 		PaymentStatus:     string(order.PaymentStatus),
+		CancelReason:      order.CancelReason,
+		CancelRequestedAt: order.CancelRequestedAt,
+		CancelRemark:      order.CancelRemark,
+		CancelProcessedAt: order.CancelProcessedAt,
+		Canceller:         canceller,
 	}
 }
 
@@ -147,6 +204,10 @@ type GetSaleHistoryByIDResponse struct {
 	OrderNumber string    `json:"order_number"`
 	OrderDate   time.Time `json:"order_date"`
 
+	// พนักงานผู้ขาย/ผู้บันทึกบิล
+	CreatedByID   *uint  `json:"created_by_id,omitempty"`
+	CreatedByName string `json:"created_by_name"`
+
 	// ลูกค้าในตาราง
 	CustomerID   *uint  `json:"customer_id"`
 	CustomerName string `json:"customer_name"`
@@ -155,6 +216,9 @@ type GetSaleHistoryByIDResponse struct {
 	// ขาจร
 	CustomerNameTemp  *string `json:"customer_name_temp"`
 	CustomerPhoneTemp *string `json:"customer_phone_temp"`
+
+	CustomerTypeName string `json:"customer_type_name"` 
+    Address          string `json:"address"`           
 
 	Subtotal           float64 `json:"subtotal"`             // ยอดรวมก่อนหักส่วนลดบิล
 	BillDiscountType   string  `json:"bill_discount_type"`   // ประเภทส่วนลดท้ายบิล (none, amount, percent)
@@ -182,6 +246,7 @@ type GetSaleHistoryByIDResponse struct {
 	CancelRequestedAt *time.Time `json:"cancel_requested_at,omitempty"`
 	CancelRemark      *string    `json:"cancel_remark,omitempty"`
 	CancelProcessedAt *time.Time `json:"cancel_processed_at,omitempty"`
+	Canceller         string     `json:"canceller,omitempty"`
 }
 
 func ToSaleHistoryItemDetail(item entity.SaleOrderItem) SaleHistoryItemDetail {
@@ -209,6 +274,8 @@ func ToSaleHistoryItemDetail(item entity.SaleOrderItem) SaleHistoryItemDetail {
 func ToGetSaleHistoryByIDResponse(order entity.SaleOrder) GetSaleHistoryByIDResponse {
 	var customerName string
 	var phoneNumber string
+	var customerTypeName string
+    var address string
 	var customerNameTemp *string
 	var customerPhoneTemp *string
 
@@ -217,12 +284,15 @@ func ToGetSaleHistoryByIDResponse(order entity.SaleOrder) GetSaleHistoryByIDResp
 		// [สมาชิก]
 		customerName = order.Customer.CustomerName
 		phoneNumber = order.Customer.PhoneNumber
+		customerTypeName = order.Customer.CustomerType.TypeLabel // 👈 ดึงชื่อประเภทลูกค้าภาษาไทย (หรือใช้ TypeName ก็ได้)
+        address = order.Customer.ShippingAddress                // 👈 ดึงที่อยู่จัดส่ง
 		customerNameTemp = nil
 		customerPhoneTemp = nil
 	} else {
 		// [ลูกค้าทั่วไป / Walk-in]
 		customerName = ""
 		phoneNumber = ""
+		customerTypeName = "ลูกค้าทั่วไป"
 		customerNameTemp = order.CustomerNameTemp
 		customerPhoneTemp = order.CustomerPhoneTemp
 	}
@@ -237,22 +307,45 @@ func ToGetSaleHistoryByIDResponse(order entity.SaleOrder) GetSaleHistoryByIDResp
 		}
 	}
 
-	// 3. แปลงรายการสินค้า (Items)
+	// 3. ดึงชื่อพนักงานขาย/ผู้บันทึกบิล
+	createdByName := "-"
+	if order.CreatedBy != nil {
+		if order.CreatedBy.FirstName != "" || order.CreatedBy.LastName != "" {
+			createdByName = strings.TrimSpace(order.CreatedBy.FirstName + " " + order.CreatedBy.LastName)
+		} else if order.CreatedBy.Username != "" {
+			createdByName = order.CreatedBy.Username
+		}
+	}
+
+	// 4. แปลงรายการสินค้า (Items)
 	items := make([]SaleHistoryItemDetail, 0, len(order.Items))
 	for _, item := range order.Items {
 		items = append(items, ToSaleHistoryItemDetail(item))
 	}
 
-	// 4. Return DTO
+	var canceller string = "-"
+	if order.CancelRequestedBy != nil {
+		if order.CancelRequestedBy.FirstName != "" || order.CancelRequestedBy.LastName != "" {
+			canceller = strings.TrimSpace(order.CancelRequestedBy.FirstName + " " + order.CancelRequestedBy.LastName)
+		} else if order.CancelRequestedBy.Username != "" {
+			canceller = order.CancelRequestedBy.Username
+		}
+	}
+
+	// 5. Return DTO
 	return GetSaleHistoryByIDResponse{
 		ID:                 order.ID,
 		OrderNumber:        order.OrderNumber,
 		OrderDate:          order.OrderDate,
+		CreatedByID:        &order.CreatedByID,
+		CreatedByName:      createdByName,
 		CustomerID:         order.CustomerID,
 		CustomerName:       customerName,
 		PhoneNumber:        phoneNumber,
 		CustomerNameTemp:   customerNameTemp,
 		CustomerPhoneTemp:  customerPhoneTemp,
+		CustomerTypeName:   customerTypeName, 
+        Address:            address,          
 		Subtotal:           order.Subtotal,
 		BillDiscountType:   string(order.BillDiscountType),
 		BillDiscountValue:  order.BillDiscountValue,
@@ -275,5 +368,6 @@ func ToGetSaleHistoryByIDResponse(order entity.SaleOrder) GetSaleHistoryByIDResp
 		CancelRequestedAt:  order.CancelRequestedAt,
 		CancelRemark:       order.CancelRemark,
 		CancelProcessedAt:  order.CancelProcessedAt,
+		Canceller:          canceller,
 	}
 }

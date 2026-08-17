@@ -24,6 +24,8 @@ func SetupCheckStockScheduleRoutes(r *gin.Engine, db *gorm.DB) {
 		wms.GET("/:id", controller.GetByID)
 		wms.PUT("/:id", controller.UpdateSchedule)
 		wms.PATCH("/:id/status", controller.UpdateStatus)
+		wms.POST("/:id/approve", controller.Approve)
+		wms.POST("/:id/reject", controller.Reject)
 		wms.DELETE("/:id", controller.Delete)
 	}
 }

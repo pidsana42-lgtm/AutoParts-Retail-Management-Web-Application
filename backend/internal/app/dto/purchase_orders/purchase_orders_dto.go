@@ -16,7 +16,7 @@ type POItemDTO struct {
 
 type CreatePurchaseOrderRequest struct {
 	SupplierID			uint			`json:"supplier_id" binding:"required"`
-	POTypeID 			uint			`json:"po_type_id" binding:"required"`
+	Notes				*string			`json:"notes" binding:"required"`
 	Status				poEnum.POStatus	`json:"status" binding:"required,oneof=DRAFT PENDING"`
 	POItems				[]POItemDTO 	`json:"po_items" binding:"required,gt=0"`
 }
@@ -26,15 +26,15 @@ type PurchaseOrderResponse struct {
 	PONumber			string 			`json:"po_number"`
 	SupplierID			uint			`json:"supplier_id"`
 	SupplierName		string 			`json:"supplier_name"`
-	Expires_at			time.Time		`json:"expires_at,omitempty"`
 	POTypeID			uint 			`json:"po_type_id"`
 	TotalAmount			float64 		`json:"total_amount"`
 	Status				poEnum.POStatus   `json:"status"`
 	Notes				*string			`json:"notes"`
-	RejectionReason  	*string 		`json:"rejection_reason"`
 	CreatorID    		uint            `json:"creator_id"`
 	CreatorName  		string          `json:"creator_name"`
 	CreatedAt    		time.Time       `json:"created_at"`
+	UpdatedByID  		*uint           `json:"updated_by_id,omitempty"`
+	UpdatedByName		*string         `json:"updated_by_name,omitempty"`
 	UpdatedAt    		time.Time       `json:"updated_at"`
 	POItems      		[]POItemResponse `json:"po_items,omitempty"`
 }
@@ -62,10 +62,16 @@ type SupplierRejectedSummary struct {
 
 // Struct สำหรับส่งสรุป
 type POSummaryResponse struct {
-    PendingAmount      float64                   `json:"pending_amount"`
-    ApprovedMTDAmount  float64                   `json:"approved_mtd_amount"`
-    RejectedMTDAmount  float64                   `json:"rejected_mtd_amount"`
-    RejectedBySupplier []SupplierRejectedSummary `json:"rejected_by_supplier"`
+	MonthlyApprovedCount     int64                     `json:"monthly_approved_count"`
+	MonthlyApprovedLastCount int64                     `json:"monthly_approved_last_count"`
+	ApprovedChangePercent    float64                   `json:"approved_change_percent"`
+
+	PendingAmount            float64                   `json:"pending_amount"`
+	ApprovedMTDAmount        float64                   `json:"approved_mtd_amount"`
+	ApprovedLastMonthAmount  float64                   `json:"approved_last_month_amount"`
+
+	RejectedMTDAmount        float64                   `json:"rejected_mtd_amount"`
+	RejectedBySupplier       []SupplierRejectedSummary `json:"rejected_by_supplier"`
 }
 
 type ListPOQuery struct {
@@ -73,7 +79,8 @@ type ListPOQuery struct {
 	Limit  int    `form:"limit"`
 	Status string `form:"status"` // เช่น PENDING, APPROVED
 	Search string `form:"search"` // ค้นหาด้วย po_number
-	Date   string `form:"date"`   // ค้นหาด้วยวันที่สร้าง
+	Year   string `form:"year"`  // ค.ศ. เช่น "2025"
+	Month  string `form:"month"` // "01"-"12"
 }
 
 // Struct สำหรับตอบกลับ (ตรงกับที่ Frontend รอรับ)
