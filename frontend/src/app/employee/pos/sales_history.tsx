@@ -59,6 +59,8 @@ export default function TransactionHistoryPage() {
     setPaymentMethod,
     setEmployeeId,
     setStartDate,
+    endDate,     
+    setEndDate,    
     setPage,
     setLimit,
     handleApplyFilter,
