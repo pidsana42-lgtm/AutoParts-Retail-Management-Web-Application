@@ -53,6 +53,11 @@ class ProductMatcher:
 
         local_model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "embeddinggemma-300m-ONNX"))
 
+        # ถ้าตั้ง USE_TFIDF_ONLY=1 (เช่น VPS RAM น้อย) ให้ข้าม ONNX ไปเลย
+        if os.environ.get("USE_TFIDF_ONLY", "0") == "1":
+            print("USE_TFIDF_ONLY=1 detected — skipping ONNX model load, using TF-IDF only.")
+            return
+
         # Try to initialize ONNX model
         try:
             # Disable torch warnings

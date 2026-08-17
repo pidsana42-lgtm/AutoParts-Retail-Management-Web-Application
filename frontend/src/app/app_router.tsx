@@ -19,6 +19,7 @@ import PreOrder from './owner/pre-order/pre-order';
 import ClaimsPage from './owner/claim/claims';
 import ClaimDetailPage from './owner/claim/claim_detail';
 import ClaimEditPage from './owner/claim/claim_edit';
+import ClaimApprovePage from './owner/claim/claim_approve';
 import ReturnsPage from './owner/return/returns';
 import ReturnDetailPage from './owner/return/return_detail';
 import PurchaseOrders from './owner/purchase_orders/purchase_orders';
@@ -101,6 +102,8 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/owner/claims" element={<ClaimsPage />} />
         <Route path="/owner/claims/detail/:id" element={<ClaimDetailPage />} />
         <Route path="/owner/claims/edit/:id" element={<ClaimEditPage canApprove={true} />} />
+        <Route path="/owner/claims/approve/:id" element={<ClaimApprovePage />} />
+        <Route path="/owner/claims/status/:id" element={<Navigate to="/owner/claims/detail/:id" replace />} />
         <Route path="/owner/returns" element={<ReturnsPage />} />
         <Route path="/owner/returns/detail/:id" element={<ReturnDetailPage />} />
         {/* ----------------------------------------------------------- */}
@@ -132,6 +135,7 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/employee/claims" element={<EmployeeClaimsPage />} />
         <Route path="/employee/claims/detail/:id" element={<ClaimDetailPage />} />
         <Route path="/employee/claims/edit/:id" element={<ClaimEditPage canApprove={false} />} />
+        <Route path="/employee/claims/status/:id" element={<Navigate to="/employee/claims/detail/:id" replace />} />
 
       </Route>
 
