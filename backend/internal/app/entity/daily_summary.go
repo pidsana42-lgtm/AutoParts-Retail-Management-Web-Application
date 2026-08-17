@@ -28,5 +28,5 @@ type DailySummary struct {
 }
 
 func (DailySummary) TableName() string {
-	return "daily_sales_summary"
+	return "daily_summary"
 }
