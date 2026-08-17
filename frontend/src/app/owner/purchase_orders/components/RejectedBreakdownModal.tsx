@@ -1,50 +1,93 @@
 import React from "react";
-import { X } from "lucide-react";
+import { X, AlertCircle } from "lucide-react";
+import Heading from "../../../../components/elements/heading";
 import type { SupplierRejectedSummary } from "../../../../interface/purchase_orders/po_interface";
 
-// กำหนด Type ให้กับ Props ที่ Component นี้ต้องรับเข้ามา
 interface RejectedBreakdownModalProps {
   isOpen: boolean;
   onClose: () => void;
   data: SupplierRejectedSummary[];
 }
 
-export const RejectedBreakdownModal: React.FC<RejectedBreakdownModalProps> = ({ 
-  isOpen, 
-  onClose, 
-  data 
+export const RejectedBreakdownModal: React.FC<RejectedBreakdownModalProps> = ({
+  isOpen,
+  onClose,
+  data,
 }) => {
   if (!isOpen) return null;
 
+  const total = data.reduce((sum, item) => sum + Number(item.amount), 0);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-none shadow-xl w-full max-w-md overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+      <div className="w-full max-w-md overflow-hidden bg-white shadow-xl border border-gray-200">
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
-          <h3 className="text-base font-semibold text-gray-800">ยอดไม่อนุมัติแยกตามบริษัท (MTD)</h3>
-          <button 
-            onClick={onClose} 
-            className="text-gray-400 hover:text-gray-600 p-1 rounded-none hover:bg-gray-200 transition cursor-pointer"
+        <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200">
+          <div>
+            <Heading level="h4" className="font-semibold text-gray-900">
+              ยอดรอส่งอนุมัติใหม่ทั้งหมด ({data.length} รายการ)
+            </Heading>
+
+            <div className="flex items-center gap-2 mt-2">
+              <AlertCircle size={15} className="text-red-500" />
+              <Heading level="p" className="text-sm text-red-600">
+                ใบสั่งซื้อที่ถูกตีกลับจะมีอายุ 7 วัน
+              </Heading>
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="p-2 rounded-none text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition"
           >
-            <X className="w-4 h-4" />
+            <X size={20} />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 max-h-87.5 overflow-y-auto space-y-1 divide-y divide-gray-100">
+        <div className="max-h-96 overflow-y-auto p-4">
           {data.length > 0 ? (
-            data.map((item, index) => (
-              <div key={index} className="flex justify-between items-center py-3 first:pt-0 last:pb-0">
-                <span className="font-medium text-gray-700 text-sm truncate max-w-60">
-                  {item.supplier_name || "ไม่ระบุชื่อบริษัท"}
+            <>
+              <div className="space-y-2">
+                {data.map((item, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between rounded-md px-3 py-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <span className="max-w-60 truncate text-sm font-medium text-gray-700">
+                      {item.supplier_name || "ไม่ระบุชื่อบริษัท"}
+                    </span>
+
+                    <span className="tabular-nums text-sm font-semibold text-gray-900">
+                      ฿
+                      {Number(item.amount).toLocaleString("th-TH", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 border-t pt-4 flex items-center justify-between">
+                <span className="font-medium text-gray-700">
+                  รวมทั้งหมด
                 </span>
-                <span className="font-semibold text-gray-950 text-sm">
-                  ฿{Number(item.amount).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+
+                <span className="tabular-nums text-lg font-bold text-red-600">
+                  ฿
+                  {total.toLocaleString("th-TH", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </span>
               </div>
-            ))
+            </>
           ) : (
-            <p className="text-center text-sm text-gray-400 py-6">ไม่มีข้อมูลการไม่อนุมัติในเดือนนี้</p>
+            <p className="py-8 text-center text-sm text-gray-400">
+              ไม่มีข้อมูลการไม่อนุมัติในเดือนนี้
+            </p>
           )}
         </div>
       </div>

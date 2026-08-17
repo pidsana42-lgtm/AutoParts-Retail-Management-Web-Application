@@ -52,12 +52,13 @@ func (ctrl *SaleController) CreateOrderHandler(ctx *gin.Context) {
         return
     }
 
-    // 4. ส่ง id ของ Order ที่สร้างขึ้นใหม่กลับไปด้วย
+    // 4. ส่ง id และ order_number ของ Order ที่สร้างขึ้นใหม่กลับไปด้วย
     ctx.JSON(http.StatusOK, gin.H{
         "status":  "success",
         "message": "บันทึกใบสั่งซื้อและอัปเดตสต็อกเรียบร้อยแล้ว",
         "data": gin.H{
-            "id": createdOrder.ID, // 👈 ใช้งาน createdOrder.ID ได้สมบูรณ์แล้ว!
+            "id":           createdOrder.ID, 
+            "order_number": createdOrder.OrderNumber,
         },
     })
 }
@@ -96,4 +97,52 @@ func (ctrl *SaleController) GetPaymentMethods(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, paymentMethods)
+}
+
+func (ctrl *SaleController) UpdateOrderHandler(ctx *gin.Context) {
+    // 1. รับ order_number จาก URL Param (เช่น "INV2608040021")
+    orderNumber := ctx.Param("id") 
+    if orderNumber == "" {
+        ctx.JSON(http.StatusBadRequest, gin.H{
+            "status":  "error", 
+            "message": "ระบุเลขที่ใบสั่งซื้อ (Order Number) ไม่ถูกต้อง",
+        })
+        return
+    }
+
+    var req pos.UpdateSaleOrderRequest
+    if err := ctx.ShouldBindJSON(&req); err != nil {
+        ctx.JSON(http.StatusBadRequest, gin.H{
+            "status":  "error",
+            "message": "ข้อมูลไม่ถูกต้องหรือส่งฟิลด์มาไม่ครบ",
+            "error":   err.Error(),
+        })
+        return
+    }
+
+    userIDFloat, exists := ctx.Get("user_id")
+    if !exists {
+        ctx.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "ไม่พบข้อมูลพนักงานในระบบ"})
+        return
+    }
+    userID := uint(userIDFloat.(float64))
+
+    // 2. ส่ง orderNumber (string) เข้า Service แทน uint
+    updatedOrder, err := ctrl.svc.UpdatePOSOrder(orderNumber, &req, userID)
+    if err != nil {
+        ctx.JSON(http.StatusBadRequest, gin.H{
+            "status":  "error",
+            "message": err.Error(),
+        })
+        return
+    }
+
+    ctx.JSON(http.StatusOK, gin.H{
+        "status":  "success",
+        "message": "อัปเดตรายการสั่งซื้อเรียบร้อยแล้ว",
+        "data": gin.H{
+            "id":           updatedOrder.ID,
+            "order_number": updatedOrder.OrderNumber,
+        },
+    })
 }

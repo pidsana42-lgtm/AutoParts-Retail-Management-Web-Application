@@ -2,13 +2,13 @@ import React, { useMemo } from 'react';
 import { Routes, Route, Outlet, Navigate } from 'react-router-dom';
 import MainLayout from '../components/layer/main_layout'; 
 import Login from './login/Login';
-import Dashboard from './owner/dashboard/dashboard'; 
+import MainDashboard from './owner/dashboard/dashboard'; 
+import SaleDashboard from './owner/dashboard/saledashboard';
 import Pos from './employee/pos/pos'; 
 import SalesHistory from './employee/pos/sales_history';
 import { getMenuByRole } from '../config/menu'; 
 import { useAuth } from '../contexts/AuthContexts'; 
 import StoreConfig from './owner/storeconfig/storeconfig'; 
-import EmployeeDashboard from './employee/dashboard/dashboard';
 import Stock from './owner/stock/stock';
 import StockMovement from './owner/stock/stock_movement/stock_movement';
 import Stockdata from './owner/stock/Stock_data/stock_data';
@@ -38,6 +38,11 @@ import EmployeePreOrder from './employee/pre-order';
 import EmployeeClaimsPage from './employee/claim/claims';
 import MobileScanPage from './mobile-scan/mobile_scan_page';
 import PublicProductPage from './public-product/public_product_page';
+import SalesCancellationHistory from './employee/pos/sales_cancellation_history';
+import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_history';
+import RepaymentHistory from './employee/transactions/repayment_history';
+import OwnerRepaymentHistory from './owner/transactions/repayment_history';
+import SettleBills from './employee/transactions/settle_bills';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -71,8 +76,11 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/" element={<Navigate to={firstMenuPath} replace />} />
 
         {/* เฉพาะ OWNER หรือ ADMIN เท่านั้นที่เข้าได้ */}
-        <Route path="/owner/dashboard" element={
-          isAdminOrOwner ? <Dashboard /> : <Navigate to={firstMenuPath} replace />
+        <Route path="/owner/dashboard/maindashboard" element={
+          isAdminOrOwner ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/dashboard/salesdashboard" element={
+          isAdminOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/owner/storeconfig" element={<StoreConfig />} />
@@ -135,14 +143,43 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/owner/returns/detail/:id" element={<ReturnDetailPage />} />
         {/* ----------------------------------------------------------- */}
 
+        {/* -------- เพิ่ม Route สำหรับ POS -------- */}
+        {/* ทุกคนใช้งาน */}
+        <Route path="/owner/pos/pos" element={isAdminOrOwner ? <Pos /> : <Navigate to={firstMenuPath} replace />} />
+        <Route path="/owner/pos/sales_history" element={isAdminOrOwner ? <SalesHistory /> : <Navigate to={firstMenuPath} replace />} />
         <Route path="/employee/pos/pos" element={<Pos />} />
         <Route path="/employee/pos/sales_history" element={<SalesHistory />} />
+        
+        {/* หน้าฝั่งพนักงาน */}
+        <Route path="/employee/pos/sales_cancellation_history" element={<SalesCancellationHistory />} />
+        
+        {/* หน้าฝั่งเจ้าของร้าน (ล็อกสิทธิ์ด้วย isAdminOrOwner) */}
+        <Route path="/owner/pos/sales_cancellation_history" element={
+          isAdminOrOwner ? <OwnerSalesCancellationHistory /> : <Navigate to={firstMenuPath} replace />
+        } />
+        {/* --------------------------------------------------- */}
+
+        {/* -------- หน้ารายการธุรกรรม / การเงิน -------- */}
+        <Route path="/employee/transactions/settle-bills" element={<SettleBills />} />
+        <Route path="/employee/transactions/repayment-history" element={<RepaymentHistory />} />
+
+        <Route path="/owner/transactions/settle-bills" element={
+          isAdminOrOwner ? <SettleBills /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/transactions/repayment-history" element={
+          isAdminOrOwner ? <OwnerRepaymentHistory /> : <Navigate to={firstMenuPath} replace />
+        } />
+        {/* --------------------------------------------------- */}
+
         <Route path="/owner/orders" element={<PurchaseOrders />} />
         <Route path="/owner/new-orders" element={<CreatePurchaseOrders />} />
         <Route path="/owner/orders/:id" element={<OrderDetail />} />
         {/* แดชบอร์ดของฝั่งพนักงาน */}
-        <Route path="/employee/dashboard" element={
-          !isAdminOrOwner ? <EmployeeDashboard /> : <Navigate to={firstMenuPath} replace />
+        <Route path="/employee/dashboard/maindashboard" element={
+          !isAdminOrOwner ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/employee/dashboard/salesdashboard" element={
+          !isAdminOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/employee/orders" element={<PurchaseOrders />} />

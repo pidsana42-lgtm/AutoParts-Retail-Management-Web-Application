@@ -25,6 +25,7 @@ type StockAlertResponseDTO struct {
 	Limit_Quantity    int       `json:"limit_quantity"`
 	Is_Resolved       string    `json:"is_resolved"`
 	ProductID         *uint     `json:"product_id"`
+	ProductCode       string    `json:"product_code,omitempty"`
 	ProductName       string    `json:"product_name,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
 }

@@ -6,9 +6,10 @@ import { BadgeCheck } from "lucide-react";
 
 interface CustomerCardProps {
   customer: CustomerDiscountResponse | null;
+  address?: string;
 }
 
-export function CustomerCard({ customer }: CustomerCardProps): React.JSX.Element {
+export function CustomerCard({ customer, address }: CustomerCardProps): React.JSX.Element {
   // เรียกใช้ Hook ชุดเดียวกันเพื่อแปลง Data ออกมา
   const {
     customerName,
@@ -27,6 +28,9 @@ export function CustomerCard({ customer }: CustomerCardProps): React.JSX.Element
         <div>
           <Text variant="lead" className="mb-0 leading-tight text-white">{customerName}</Text>
           <Text variant="xs" className="mb-0 leading-tight text-[#9CA3AF]">โทร: {phoneNumber}</Text>
+          <Text variant="xs" className="mb-0 leading-tight text-[#9CA3AF] truncate max-w-[200px]" title={address || customer?.shipping_address || customer?.registered_address || "ไม่ได้ระบุที่อยู่"}>
+            ที่อยู่: {address || customer?.shipping_address || customer?.registered_address || "ไม่ได้ระบุที่อยู่"}
+          </Text>
         </div>
         <div className="bg-[#006E0A] text-white text-[10px] px-2.5 py-1 select-none uppercase tracking-wide">
           {isSpecialPrice ? "ระดับราคาพิเศษ" : "ระดับราคามาตรฐาน"}
