@@ -311,13 +311,14 @@ export default function PreOrderManager() {
     <div className="p-8 w-full font-sans">
       {view === 'list' ? (
         <div className="space-y-6 animate-in fade-in duration-300">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-5">
+          {/* Top Header & Action */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-2">
             <div>
               <Heading level="h1" className="mb-0 font-extrabold flex items-center gap-3">
-                <Package className="text-[#e51c23]" size={36} />
-                ระบบจัดการสั่งจองสินค้าล่วงหน้า (Pre-Orders)
+                <Package className="text-[#e51c23]" size={32} />
+                ระบบจัดการสั่งจองสินค้าล่วงหน้า
               </Heading>
-              <p className="text-sm text-[#5F5E5E] mt-1">บันทึก ติดตามสถานะสินค้าจองมัดจำอะไหล่ด่วนสำหรับลูกค้าและช่าง</p>
+              <p className="text-sm text-[#5F5E5E] mt-1">บันทึกและติดตามสถานะสั่งจองมัดจำอะไหล่สำหรับลูกค้าและช่าง</p>
             </div>
             <Button 
               onClick={handleCreateNew}
@@ -325,60 +326,70 @@ export default function PreOrderManager() {
               size="md"
               className="gap-2 font-bold shadow-sm"
             >
-              <Plus size={20} />
+              <Plus size={18} />
               สร้างใบสั่งจองใหม่
             </Button>
           </div>
 
-          {/* Filters & Search */}
-          <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-slate-100 shadow-sm items-stretch md:items-center">
-            <div className="flex-1">
-              <Input
-                type="text"
-                placeholder="ค้นหาชื่อลูกค้า, เบอร์โทรศัพท์ หรือเลขที่ใบสั่งจอง..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                leftIcon={<Search size={18} />}
-                className="bg-slate-50 border border-slate-200"
-              />
-            </div>
-            <div className="flex gap-2 shrink-0 items-center">
-              {['', 'PENDING', 'COMPLETED', 'CANCELLED'].map((status) => (
-                <Button
-                  key={status}
-                  type="button"
-                  variant={statusFilter === status ? 'primary' : 'outline'}
-                  onClick={() => setStatusFilter(status)}
-                  className={`font-bold text-xs h-10 px-4 ${statusFilter === status ? 'border-2 border-transparent' : ''}`}
-                >
-                  {status === '' ? 'ทั้งหมด' : status === 'PENDING' ? 'ค้างส่งสินค้า' : status === 'COMPLETED' ? 'ส่งมอบแล้ว' : 'ยกเลิก'}
-                </Button>
-              ))}
-            </div>
-          </div>
+          {/* Table Container Card */}
+          <Card className="overflow-hidden border border-gray-200 shadow-xs" noPadding>
+            {/* Header Toolbar: Search on Left, Filter Tabs on Right */}
+            <div className="p-4 bg-gray-50/80 border-b border-gray-200 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
+              <div className="relative w-full md:w-80">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="ค้นหาชื่อลูกค้า, เบอร์โทร หรือเลขใบจอง..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-white border border-gray-300 rounded-none pl-9 pr-3 py-2 text-xs font-medium text-[#1C1B1B] focus:border-[#e51c23] outline-none"
+                />
+              </div>
 
-          {/* Table List Section */}
-          {loading ? (
-            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-slate-100 shadow-sm min-h-[300px]">
-              <Loader2 className="animate-spin text-[#e51c23] mb-3" size={40} />
-              <span className="text-[#5F5E5E] font-medium">กำลังโหลดข้อมูลรายการจอง...</span>
+              <div className="flex items-center gap-1.5 overflow-x-auto">
+                {[
+                  { label: 'ทั้งหมด', value: '' },
+                  { label: 'ค้างส่งสินค้า', value: 'PENDING' },
+                  { label: 'ส่งมอบแล้ว', value: 'COMPLETED' },
+                  { label: 'ยกเลิก', value: 'CANCELLED' }
+                ].map((st) => (
+                  <button
+                    key={st.value}
+                    type="button"
+                    onClick={() => setStatusFilter(st.value)}
+                    className={`px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer rounded-none border ${
+                      statusFilter === st.value
+                        ? 'bg-[#1C1B1B] text-white border-[#1C1B1B] shadow-xs'
+                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          ) : filteredOrders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-slate-100 shadow-sm min-h-[300px] text-[#5F5E5E]/80">
-              <FileText size={48} className="mb-3 text-slate-300" />
-              <span className="font-semibold text-lg text-slate-600">ไม่พบข้อมูลรายการจองล่วงหน้า</span>
-              <p className="text-xs text-[#5F5E5E]/80 mt-1">ลองเปลี่ยนคำค้นหา หรือกดปุ่มบวกเพื่อเพิ่มใบสั่งจองใหม่</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden p-1">
+
+            {/* Table Content */}
+            {loading ? (
+              <div className="flex flex-col items-center justify-center p-12 min-h-[300px]">
+                <Loader2 className="animate-spin text-[#e51c23] mb-3" size={36} />
+                <span className="text-[#5F5E5E] font-medium text-sm">กำลังโหลดข้อมูลรายการจอง...</span>
+              </div>
+            ) : filteredOrders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 min-h-[300px] text-[#5F5E5E]">
+                <FileText size={44} className="mb-3 text-gray-300" />
+                <span className="font-bold text-base text-[#1C1B1B]">ไม่พบข้อมูลรายการจองล่วงหน้า</span>
+                <p className="text-xs text-[#5F5E5E] mt-1">ลองเปลี่ยนคำค้นหา หรือกดสร้างใบสั่งจองใหม่</p>
+              </div>
+            ) : (
               <Table 
                 columns={columns}
                 data={filteredOrders}
                 rowKey={(row) => row.id!}
                 isLoading={loading}
               />
-            </div>
-          )}
+            )}
+          </Card>
         </div>
       ) : (
         <form onSubmit={handleSave} className="w-full animate-in fade-in duration-300 space-y-6">
@@ -421,7 +432,7 @@ export default function PreOrderManager() {
                     value={formType}
                     onChange={(e) => setFormType(e.target.value)}
                     options={[
-                      { label: 'หน้าร้าน (Walk-in)', value: 'WALK_IN' },
+                      { label: 'หน้าร้าน', value: 'WALK_IN' },
                       { label: 'LINE OA', value: 'LINE' },
                       { label: 'โทรศัพท์', value: 'TEL' }
                     ]} 

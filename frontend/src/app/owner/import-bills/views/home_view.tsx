@@ -248,11 +248,11 @@ export default function HomeView({
           <Table>
             <TableHeader className="bg-gray-100 text-[#5F5E5E]">
               <TableRow>
-                <TableHead className="pl-6 text-center w-32">INVOICE NO.</TableHead>
-                <TableHead>วันที่นำเข้า (IMPORT DATE)</TableHead>
-                <TableHead>ผู้จัดจำหน่าย (SUPPLIER)</TableHead>
-                <TableHead className="text-right">ยอดรวมสุทธิ (TOTAL)</TableHead>
-                <TableHead className="text-center">สถานะบิล (BILL STATUS)</TableHead>
+                <TableHead className="pl-6 text-center w-32">เลขที่บิล</TableHead>
+                <TableHead>วันที่นำเข้า</TableHead>
+                <TableHead>ผู้จัดจำหน่าย</TableHead>
+                <TableHead className="text-right">ยอดรวมสุทธิ</TableHead>
+                <TableHead className="text-center">สถานะบิล</TableHead>
                 <TableHead className="text-center pr-6 w-24">การจัดการ</TableHead>
               </TableRow>
             </TableHeader>
