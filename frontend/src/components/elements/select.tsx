@@ -169,7 +169,7 @@ export default function Select({
               onKeyDown={handleKeyDown}
               onClick={() => setIsOpen((prev) => !prev)}
               className={cn(
-                "h-10 w-full rounded-sm border bg-white px-3 pr-9 text-sm text-left",
+                "h-10 w-full rounded-none border bg-white px-3 pr-9 text-sm text-left",
                 "transition-colors duration-150 ease-out",
                 "focus:outline-none focus:ring-2 focus:ring-offset-0",
                 "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",

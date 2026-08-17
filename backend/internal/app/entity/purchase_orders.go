@@ -8,14 +8,10 @@ import (
 
 type PO struct {
 	gorm.Model
-	PO_number        string     `gorm:"type:varchar(100);uniqueIndex;not null" json:"po_number"`
-	Status           enum.POStatus   `gorm:"type:varchar(50);default:'DRAFT';not null" json:"status"`
-	Total_amount     float64         `gorm:"type:decimal(10,2);not null;default:0" json:"total_amount"`
-	Expires_at       *time.Time `json:"expires_at,omitempty"`
-	Pdf_url          string     `gorm:"type:text" json:"pdf_url"`
-	Pdf_generated_at *time.Time `json:"pdf_generated_at"`
-	Notes            *string    `gorm:"type:text" json:"notes"`
-	RejectionReason  *string    `gorm:"type:text;column:rejection_reason" json:"rejection_reason,omitempty"`
+	PO_number    string        `gorm:"type:varchar(100);uniqueIndex;not null" json:"po_number"`
+	Status       enum.POStatus `gorm:"type:varchar(50);default:'DRAFT';not null" json:"status"`
+	Total_amount float64       `gorm:"type:decimal(10,2);not null;default:0" json:"total_amount"`
+	Notes        *string       `gorm:"type:text" json:"notes"`
 
 	LastUpdatedBy 	 *uint      `gorm:"column:last_updated_by" json:"last_updated_by,omitempty"`
 	UpdatedByUser 	 *User      `gorm:"foreignKey:LastUpdatedBy" json:"updated_by_user,omitempty"`

@@ -1,6 +1,7 @@
 package pos
 
 import (
+	"strings"
 	"backend/internal/app/entity"
 	"gorm.io/gorm"
 )
@@ -20,16 +21,24 @@ func NewPOSProductRepository(db *gorm.DB) POSProductRepository {
 }
 
 func (r *posProductRepository) SearchProducts(search string) ([]entity.Product, error) {
-	var products []entity.Product
+    var products []entity.Product
 
-	query := r.db.Preload("Grade").Preload("Models").Preload("Models.Brand").Where("is_active = ?", true)
-	if search != "" {
-		likeSearch := "%" + search + "%"
-		query = query.Where("product_code LIKE ? OR barcode = ? OR product_name ILIKE ? OR part_number LIKE ?", likeSearch, search, likeSearch, likeSearch)
-	}
+    query := r.db.Preload("Grade").Preload("Models").Preload("Models.Brand").Where("is_active = ?", true)
+    
+    if search != "" {
+        // แปลงคำค้นหาเป็นตัวพิมพ์เล็ก และตัดช่องว่างส่วนเกิน
+        cleanSearch := strings.ToLower(strings.TrimSpace(search))
+        likeSearch := "%" + cleanSearch + "%"
 
-	err := query.Find(&products).Error
-	return products, err
+        // 	เปลี่ยน barcode = ? ให้ใช้ LIKE และใช้ LOWER() ป้องกันปัญหา Case-Sensitive ครบทุกฟิลด์
+        query = query.Where(
+            "LOWER(product_code) LIKE ? OR LOWER(barcode) LIKE ? OR LOWER(product_name) LIKE ? OR LOWER(part_number) LIKE ?", 
+            likeSearch, likeSearch, likeSearch, likeSearch,
+        )
+    }
+
+    err := query.Find(&products).Error
+    return products, err
 }
 
 func (r *posProductRepository) GetProductByID(id uint) (*entity.Product, error) {

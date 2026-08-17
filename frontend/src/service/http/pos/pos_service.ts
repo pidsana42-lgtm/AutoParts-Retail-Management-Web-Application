@@ -1,12 +1,12 @@
 import apiClient from "../apiClient";
-import type { CreateSaleOrderRequest, SaleOrderItemRequest } from "../../../interface/pos/pos_interface";
+import type { CreateSaleOrderRequest, SaleOrderItemRequest, UpdateSaleOrderRequest } from "../../../interface/pos/pos_interface";
 import type { POSProductResponse } from "../../../interface/pos/product_interface";
 import type { StoreConfigInterface } from "../../../interface/pos/store_config_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
 import type { ConfirmPaymentRequest } from "../../../interface/pos/payment_interface";
-import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse } from "../../../interface/pos/sales_history_interface";
+import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, GetSaleHistoryByIDResponse, RevertCancellationRequestResponse } from "../../../interface/pos/sales_history_interface";
 
-// API Services 
+// ==================== API Services ====================
 export const posApiService = {
   /** ดึงค่าตั้งค่าคอนฟิกร้านค้า */
   getStoreConfig: (): Promise<StoreConfigInterface> => 
@@ -23,6 +23,10 @@ export const posApiService = {
   /** บันทึกคำสั่งซื้อออเดอร์ขาย POS */
   createPOSOrder: (payload: CreateSaleOrderRequest): Promise<any> => 
     apiClient.post("/pos/orders", payload).then((res) => res.data),
+
+  /** อัปเดตคำสั่งซื้อออเดอร์ขาย POS (ตาม orderNumber) */
+  updatePOSOrder: (orderNumber: string, payload: UpdateSaleOrderRequest): Promise<any> =>
+    apiClient.put(`/pos/orders/${orderNumber}`, payload).then((res) => res.data),
 
   getCustomerTypes: (): Promise<{ id: number; type_name: string }[]> => 
     apiClient.get<{ id: number; type_name: string }[]>("/pos/customer-types").then((res) => res.data),
@@ -43,6 +47,55 @@ export const posApiService = {
     apiClient
       .get<{ data: SalesHistoryPaginationResponse; message: string }>("/pos/sales/history", { params })
       .then((res) => res.data.data), 
+  
+  /** ดึงประวัติการขายสินค้าตาม ID (รายละเอียดบิล) */
+  getSalesHistoryById: (id: number): Promise<GetSaleHistoryByIDResponse> =>
+    apiClient
+      .get<{ data: GetSaleHistoryByIDResponse; message: string }>(`/pos/sales-history/${id}`)
+      .then((res) => res.data.data),
+
+  /** พนักงานส่งคำขอยกเลิกรายการขาย */
+  requestCancelSaleOrder: (id: number, payload: { reason: string }): Promise<any> =>
+    apiClient
+      .post(`/pos/sales-history/${id}/request-cancel`, payload)
+      .then((res) => res.data),
+
+  /** เจ้าของร้านอนุมัติคำขอยกเลิกรายการขาย (และคืนสต็อกสินค้า) */
+  approveCancelSaleOrder: (id: number, payload?: { remark?: string }): Promise<any> =>
+    apiClient
+      .post(`/pos/sales-history/${id}/approve-cancel`, payload || {})
+      .then((res) => res.data),
+
+  /** เจ้าของร้านปฏิเสธคำขอยกเลิกรายการขาย */
+  rejectCancelSaleOrder: (id: number, payload?: { remark?: string }): Promise<any> =>
+    apiClient
+      .post(`/pos/sales-history/${id}/reject-cancel`, payload || {})
+      .then((res) => res.data),
+  
+  /** พนักงานดูรายการคำขอยกเลิกบิลของตนเอง */
+  getMyCancellationRequests: (params: SalesHistoryFilterRequest): Promise<SalesHistoryPaginationResponse> =>
+    apiClient
+      .get<{ data: SalesHistoryPaginationResponse; message: string }>("/pos/my-cancellation-requests", { params })
+      .then((res) => res.data.data),
+
+  /** เจ้าของร้านดูรายการคำขอยกเลิกบิลทั้งหมด */
+  getCancellationRequests: (params: SalesHistoryFilterRequest): Promise<SalesHistoryPaginationResponse> =>
+    apiClient
+      .get<{ data: SalesHistoryPaginationResponse; message: string }>("/pos/cancellation-requests", { params })
+      .then((res) => res.data.data),
+
+  /** คืนสถานะคำขอยกเลิกบิล (พนักงานดึงคำขอกลับ) */
+  revertCancellationRequest: (id: number): Promise<RevertCancellationRequestResponse> =>
+    apiClient
+      .post<RevertCancellationRequestResponse>(`/pos/sales-history/${id}/cancel-request/revert`)
+      .then((res) => res.data),
+
+  /** ดึงรายชื่อพนักงาน */
+  getEmployees: (): Promise<any[]> =>
+    apiClient
+      .get<any[]>("/pos/employees")
+      .then((res) => res.data),
+
   /** ค้นหาใบสั่งซื้อขายด้วยหมายเลข invoice */
   getSaleOrderByNumber: async (orderNumber: string): Promise<any | null> => {
     const endpoints = [
@@ -63,7 +116,7 @@ export const posApiService = {
   },
 };
 
-// Business Logic 
+// ==================== Business Logic Helpers ====================
 export const calculateValidatedDiscount = (
   item: SaleOrderItemRequest,
   value: number,

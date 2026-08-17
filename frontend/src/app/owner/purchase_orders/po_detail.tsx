@@ -4,11 +4,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useParams } from 'react-router-dom';
-import { Building2, ChevronRight, ClipboardClock, FileText, User, Trash2, Minus, Plus, Search, ChevronDown } from 'lucide-react';
+import { Building2, ChevronRight, ClipboardClock, FileText, User, Trash2, Minus, Plus, Search, ChevronDown, MessageSquareWarning } from 'lucide-react';
 // Components
 import Heading from '../../../components/elements/heading';
 import Badge from '../../../components/elements/badge';
 import Card from '../../../components/elements/card';
+import Input from '../../../components/elements/input';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '../../../components/elements/table';
 import Button from '../../../components/elements/button';
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
@@ -29,42 +30,38 @@ const STATUS_LABEL: Record<string, string> = {
     PENDING: 'รออนุมัติ',
     APPROVED: 'อนุมัติแล้ว',
     RESUBMITTED: 'รอส่งอนุมัติใหม่',
-    EXPIRED: 'หมดอายุ'
+    CANCELLED: 'ยกเลิกแล้ว',
+    DELETED: 'อยู่ในถังขยะ',
 };
 
 // ฟังก์ชันสำหรับเช็คหัวข้อ
 const getPageTitle = (status: string, role: string | null): string => {
-    // ถ้าสถานะรออนุมัติ แต่คนดู "ไม่ใช่" Owner ให้แสดงหัวข้อธรรมดา
     if (status === 'PENDING' && role !== 'Owner') {
         return 'รายละเอียดใบสั่งซื้อ';
     }
-    
-    // สำหรับสถานะอื่นๆ หรือถ้าเป็น Owner
     const titles: Record<string, string> = {
         DRAFT: 'รายละเอียดใบสั่งซื้อ',
         PENDING: 'ตรวจสอบและอนุมัติใบสั่งซื้อ',
         APPROVED: 'รายละเอียดใบสั่งซื้อ',
         RESUBMITTED: 'แก้ไขใบสั่งซื้อเพื่อส่งอนุมัติใหม่',
-        EXPIRED: 'รายละเอียดใบสั่งซื้อ',
+        CANCELLED: 'รายละเอียดใบสั่งซื้อ',
+        DELETED: 'รายละเอียดใบสั่งซื้อ',
     };
     return titles[status] || 'รายละเอียดใบสั่งซื้อ';
 };
 
 // ฟังก์ชันสำหรับเช็คคำอธิบายใต้หัวข้อ
 const getPageSubtitle = (status: string, role: string | null): string => {
-    // ถ้าสถานะรออนุมัติ แต่คนดู "ไม่ใช่" Owner ให้แสดงข้อความรอ
     if (status === 'PENDING' && role !== 'Owner') {
         return 'ใบสั่งซื้อนี้อยู่ระหว่างรอการอนุมัติจากเจ้าของร้าน';
     }
-    
-    // สำหรับสถานะอื่นๆ หรือถ้าเป็น Owner
     const subtitles: Record<string, string> = {
         DRAFT: 'ใบสั่งซื้อนี้เป็นฉบับร่าง',
         PENDING: 'กรุณาตรวจสอบรายการสินค้าและยอดประเมินก่อนทำการอนุมัติ',
         APPROVED: 'ใบสั่งซื้อนี้ได้รับการอนุมัติเรียบร้อยแล้ว',
         RESUBMITTED: 'ใบสั่งซื้อนี้ถูกตีกลับ คุณสามารถแก้ไขรายการและส่งอนุมัติใหม่ได้',
-        EXPIRED: 'ใบสั่งซื้อนี้หมดอายุแล้ว',
-        DELETED: 'ใบสั่งซื้อนี้อยู่ในถังขยะ คุณสามารถกู้คืนเพื่อแก้ไขรายการและส่งอนุมัติใหม่ได้'
+        CANCELLED: 'ใบสั่งซื้อนี้ถูกยกเลิกโดยเจ้าของร้าน',
+        DELETED: 'ใบสั่งซื้อนี้อยู่ในถังขยะ คุณสามารถกู้คืนเพื่อแก้ไขและส่งอนุมัติใหม่ได้',
     };
     return subtitles[status] || '';
 };
@@ -78,9 +75,12 @@ function OrderDetail() {
     const [po, setPo] = useState<POResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isEditingNotes, setIsEditingNotes] = useState(false);
     const [notes, setNotes] = useState('');
     const [items, setItems] = useState<LocalPOItem[]>([]);
     const [activeAction, setActiveAction] = useState<'draft' | 'submit' | 'approve' | 'resubmitted' | 'restore' | null>(null);
+    const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+    const [rejectMode, setRejectMode] = useState<'cancel' | 'return' | null>(null);
     // เก็บค่าที่ผู้ใช้กำลังพิมพ์อยู่ (ระหว่างลบเลขเดิมทิ้งแล้วยังพิมพ์ไม่เสร็จ) แยกจาก items จริง
     const [qtyDrafts, setQtyDrafts] = useState<Record<string | number, string>>({});
     // เก็บ id ของรายการที่ "มีอยู่แล้วจริงใน DB" ตอนโหลดหน้ามาครั้งแรก
@@ -104,19 +104,19 @@ function OrderDetail() {
     
     useEffect(() => {
         if (po) {
-        setNotes(po.notes ?? '');
-        setItems(po.po_items as LocalPOItem[]);
-        setInitialItemIds(new Set(po.po_items.map(item => item.id)));
+            setNotes(po.notes ?? '');
+            setItems(po.po_items as LocalPOItem[]);
+            setInitialItemIds(new Set(po.po_items.map(item => item.id)));
         }
     }, [po]);
 
     useEffect(() => {
         if (!id) return;
-        setLoading(true);
-        poService.getPurchaseOrderById(id)
-        .then(setPo)
-        .catch(() => setError('ไม่สามารถโหลดข้อมูลใบสั่งซื้อได้'))
-        .finally(() => setLoading(false));
+            setLoading(true);
+            poService.getPurchaseOrderById(id)
+            .then(setPo)
+            .catch(() => setError('ไม่สามารถโหลดข้อมูลใบสั่งซื้อได้'))
+            .finally(() => setLoading(false));
     }, [id]);
 
     useEffect(() => {
@@ -136,7 +136,7 @@ function OrderDetail() {
 
     const canApprove = po.status === 'PENDING' && userRole === 'Owner'; // เจ้าของร้านพิจารณา
     const canEditDraft = po.status === 'DRAFT' || po.status === 'RESUBMITTED';  // พนักงานยังแก้ไขร่างได้อยู่
-    const canRestore = po.status === 'EXPIRED' || po.status === 'DELETED';
+    const canRestore = po.status === 'DELETED';
     const isEditable = canApprove || canEditDraft;
 
     // คำนวณจาก items ปัจจุบัน (ไม่ใช้ po.total_amount ตรงๆ เพราะผู้ใช้อาจแก้ไขจำนวน/ราคาแล้วยังไม่ได้กดบันทึก)
@@ -149,7 +149,7 @@ function OrderDetail() {
         try {
             await poService.updatePOStatus(id, 'APPROVED');
             alert('อนุมัติใบสั่งซื้อสำเร็จ');
-            navigate('${basePath}/orders');
+            navigate(`${basePath}/orders`);
         } catch {
             setError('อนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
         } finally {
@@ -157,18 +157,26 @@ function OrderDetail() {
         }
     };
 
-    const handleReject = async () => {
-        if (!id) return;
-        const rejectReason = window.prompt('กรุณาระบุเหตุผลที่ไม่อนุมัติ:');
-        if (rejectReason === null) return; 
+    const handleReject = () => {
+        setIsRejectModalOpen(true);
+        setRejectMode(null);
+    };
+
+    const handleConfirmReject = async () => {
+        if (!id || !rejectMode) return;
+        setIsRejectModalOpen(false);
         setActiveAction('resubmitted');
         try {
-            await poService.updatePOStatus(id, 'RESUBMITTED', rejectReason);
-            
-            alert('ปฏิเสธใบสั่งซื้อสำเร็จ');
+            if (rejectMode === 'cancel') {
+                await poService.updatePOStatus(id, 'CANCELLED');
+                alert('ยกเลิกใบสั่งซื้อสำเร็จ');
+            } else {
+                await poService.updatePOStatus(id, 'RESUBMITTED');
+                alert('ตีกลับใบสั่งซื้อสำเร็จ');
+            }
             navigate(`${basePath}/orders`);
         } catch {
-            setError('ไม่สามารถปฏิเสธใบสั่งซื้อได้');
+            setError('ไม่สามารถดำเนินการได้ กรุณาลองใหม่อีกครั้ง');
         } finally {
             setActiveAction(null);
         }
@@ -338,6 +346,19 @@ function OrderDetail() {
                 </div>
             </div>
 
+            {po.status === 'RESUBMITTED' && (
+                <div className='flex items-center gap-2 border-l-[3px] border-l-red-600 bg-red-50 rounded-r-sm px-4 py-2.5'>
+                    <MessageSquareWarning className='w-4 h-4 text-red-600 shrink-0' />
+                    <span className='font-semibold text-red-700 text-sm'>เจ้าของร้านตีกลับใบสั่งซื้อนี้ กรุณาแก้ไขและส่งอนุมัติใหม่</span>
+                </div>
+            )}
+            {po.status === 'CANCELLED' && (
+                <div className='flex items-center gap-2 border-l-[3px] border-l-red-600 bg-red-50 rounded-r-sm px-4 py-2.5'>
+                    <MessageSquareWarning className='w-4 h-4 text-red-600 shrink-0' />
+                    <span className='font-semibold text-red-700 text-sm'>ใบสั่งซื้อนี้ถูกยกเลิกโดยเจ้าของร้าน</span>
+                </div>
+            )}
+
             { /* ส่วนการ์ดรายละเอียดบริษัท ดึงจากใบสั่งซื้อใน DB */ }
             <div className='grid grid-cols-2 gap-8 items-stretch'>
                 { /* Left Card ส่วนของบริษัท */ }
@@ -402,10 +423,32 @@ function OrderDetail() {
                         </div>
                         <div>
                             <Heading level='p' weight='normal'>หมายเหตุจากพนักงาน</Heading>
-                            <div className='bg-[#E5E2E1] px-3'>
-                                <Heading level='p' className='leading-relaxed'>
-                                    {notes ? `" ${notes} "` : '-'}
-                                </Heading>
+                            <div className='bg-[#E5E2E1] px-3 flex items-center justify-between rounded-sm min-h-10'>
+                                {!isEditingNotes ? (
+                                    <>
+                                        <Heading level='p' className="truncate mr-2">
+                                            {notes || '-'}
+                                        </Heading>                                        
+                                        {(po.status === 'DRAFT' || po.status === 'RESUBMITTED') && (
+                                            <span 
+                                                className='text-[#6B7280] hover:text-black cursor-pointer text-sm font-medium shrink-0'
+                                                onClick={() => setIsEditingNotes(true)}
+                                            >
+                                                แก้ไข
+                                            </span>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className='w-full flex-1 p-0'>
+                                        <Input
+                                            value={notes}
+                                            onChange={(e) => setNotes(e.target.value)}
+                                            placeholder='พิมพ์ข้อความหมายเหตุที่นี่..'
+                                            className='bg-transparent'
+                                            min={255}
+                                        />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -695,12 +738,59 @@ function OrderDetail() {
                 </div>
             )}
 
-            <PreorderSelectionModal 
+            <PreorderSelectionModal
                 isOpen={isPreorderModalOpen}
                 onClose={() => setIsPreorderModalOpen(false)}
                 preorders={preorders}
                 onSelectPreorder={handleAddPreorderToPO}
             />
+
+            {/* Reject Modal */}
+            {isRejectModalOpen && (
+                <div className='fixed inset-0 z-50 flex items-center justify-center'>
+                    <div className='absolute inset-0 bg-black/40' onClick={() => setIsRejectModalOpen(false)} />
+                    <div className='relative bg-white rounded-sm shadow-xl w-full max-w-md mx-4 p-6 space-y-5'>
+                        <Heading level='h4' weight='semibold' className='text-black'>ไม่อนุมัติใบสั่งซื้อ</Heading>
+                        <p className='text-sm text-gray-600'>กรุณาเลือกวิธีดำเนินการสำหรับใบสั่งซื้อนี้</p>
+
+                        <div className='space-y-3'>
+                            {/* ตัวเลือก 1: ตีกลับให้แก้ไข */}
+                            <button
+                                type='button'
+                                onClick={() => setRejectMode('return')}
+                                className={`w-full text-left p-4 border-2 rounded-sm transition-colors ${rejectMode === 'return' ? 'border-red-600 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
+                            >
+                                <div className='font-semibold text-sm text-black'>ตีกลับให้แก้ไข</div>
+                                <div className='text-xs text-gray-500 mt-1'>ส่งกลับให้พนักงานแก้ไขรายการและส่งอนุมัติใหม่</div>
+                            </button>
+
+                            {/* ตัวเลือก 2: ยกเลิกทั้งบิล */}
+                            <button
+                                type='button'
+                                onClick={() => setRejectMode('cancel')}
+                                className={`w-full text-left p-4 border-2 rounded-sm transition-colors ${rejectMode === 'cancel' ? 'border-red-600 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
+                            >
+                                <div className='font-semibold text-sm text-black'>ยกเลิกทั้งบิล</div>
+                                <div className='text-xs text-gray-500 mt-1'>ยกเลิกใบสั่งซื้อนี้ถาวร (สถานะจะเปลี่ยนเป็น "ยกเลิกแล้ว")</div>
+                            </button>
+                        </div>
+
+                        <div className='flex gap-3 justify-end'>
+                            <Button variant='outline' className='w-28' onClick={() => setIsRejectModalOpen(false)}>
+                                ยกเลิก
+                            </Button>
+                            <Button
+                                variant='primary'
+                                className='w-36'
+                                onClick={handleConfirmReject}
+                                disabled={!rejectMode}
+                            >
+                                ยืนยัน
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
