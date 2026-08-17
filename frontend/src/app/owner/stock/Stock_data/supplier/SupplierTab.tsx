@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Plus, Trash2, SquarePen } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
 
@@ -8,20 +8,36 @@ import type { Supplier } from "../../../../../interface/wms/stock_data";
 // Extracted Modals
 import AddSupplierModal from "./AddSupplierModal";
 import EditSupplierModal from "./EditSupplierModal";
+import TablePagination from "../components/TablePagination";
 
 interface SupplierTabProps {
   search: string;
   suppliers: Supplier[];
   loadData: () => void;
+  addSignal?: number;
 }
 
-export default function SupplierTab({ search, suppliers, loadData }: SupplierTabProps) {
+export default function SupplierTab({ search, suppliers, loadData, addSignal }: SupplierTabProps) {
   const { toast } = useToast();
 
   // Modals visibility state
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  useEffect(() => {
+    if (addSignal && addSignal > 0) {
+      setAddOpen(true);
+    }
+  }, [addSignal]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
 
   const handleDeleteSupplier = async (id: number) => {
     if (!confirm("คุณแน่ใจว่าต้องการลบบริษัทสั่งซื้อนี้?")) return;
@@ -49,19 +65,24 @@ export default function SupplierTab({ search, suppliers, loadData }: SupplierTab
     );
   }, [suppliers, search]);
 
+  const paginatedSuppliers = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredSuppliers.slice(start, start + itemsPerPage);
+  }, [filteredSuppliers, currentPage, itemsPerPage]);
+
   return (
     <>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left border-collapse">
           <thead>
-            <tr className="bg-[#F2ECE9] border-b border-slate-200">
-              <th className="px-6 py-3.5 font-semibold text-slate-700">ชื่อบริษัท</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700">ชื่อย่อ</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700">เบอร์โทรศัพท์</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700">Line ID</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700">อีเมล</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700">เลขที่บัญชี</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700 text-right w-24">จัดการ</th>
+            <tr className="bg-[#f6f3f2] border-b border-slate-200">
+              <th className="px-6 py-3.5 font-semibold text-[#797878]">ชื่อบริษัท</th>
+              <th className="px-6 py-3.5 font-semibold text-[#797878]">ชื่อย่อ</th>
+              <th className="px-6 py-3.5 font-semibold text-[#797878]">เบอร์โทรศัพท์</th>
+              <th className="px-6 py-3.5 font-semibold text-[#797878]">Line ID</th>
+              <th className="px-6 py-3.5 font-semibold text-[#797878]">อีเมล</th>
+              <th className="px-6 py-3.5 font-semibold text-[#797878]">เลขที่บัญชี</th>
+              <th className="px-6 py-3.5 font-semibold text-[#797878] text-right w-24">จัดการ</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -72,7 +93,7 @@ export default function SupplierTab({ search, suppliers, loadData }: SupplierTab
                 </td>
               </tr>
             ) : (
-              filteredSuppliers.map((sup) => (
+              paginatedSuppliers.map((sup) => (
                 <tr key={sup.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-3 text-slate-800 font-medium">{sup.supplier_name}</td>
                   <td className="px-6 py-3 text-slate-600">{sup.short_supplier_name}</td>
@@ -103,15 +124,17 @@ export default function SupplierTab({ search, suppliers, loadData }: SupplierTab
         </table>
       </div>
 
-      <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4">
-        <button
-          onClick={() => setAddOpen(true)}
-          className="flex items-center gap-1.5 text-sm font-semibold text-[#B70011] hover:text-[#9e0010] cursor-pointer"
-        >
-          <Plus className="h-4 w-4" />
-          เพิ่มบริษัทสั่งซื้อ
-        </button>
-      </div>
+      <TablePagination
+        currentPage={currentPage}
+        totalItems={filteredSuppliers.length}
+        itemsPerPage={itemsPerPage}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={(n) => {
+          setItemsPerPage(n);
+          setCurrentPage(1);
+        }}
+        itemLabel="บริษัท"
+      />
 
       {/* Modals */}
       <AddSupplierModal

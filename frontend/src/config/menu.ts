@@ -53,13 +53,19 @@ export const SIDEBAR_MENUS: MenuItem[] = [
     path: "/employee/import", 
     roles: ["EMPLOYEE", "STAFF"]
   },
-  { icon: Boxes, label: "คลังสินค้า", path: "/owner/stock", roles: ["OWNER", "ADMIN"], 
+  { icon: Boxes, label: "คลังสินค้า", path: "/owner/stock", roles: ["OWNER", "ADMIN"],
     subs: [
       { icon: ArrowLeftRight, path: "/owner/stock/stock-movement", label: "การเคลื่อนไหวของคลังสินค้า" },
       { icon: FolderPlus, path: "/owner/stock/stock-data", label: "สร้างข้อมูลสินค้า" },
       { icon: CircleCheck, path: "/owner/stock/stock-check", label: "ตรวจสอบสินค้า"},
     ],
   },
+  // งานเช็คสต็อกที่มอบหมายให้พนักงาน (เห็นเฉพาะ EMPLOYEE, STAFF)
+  { icon: Boxes, label: "คลังสินค้า", path: "/employee/wms/stock-data", roles: ["EMPLOYEE", "STAFF"],
+    subs: [
+      { icon: CircleCheck, path: "/employee/wms/check-stock", label: "เช็คสต็อกสินค้า" },
+    ],
+   },
   // POS
   { icon: MonitorSmartphone, label: "ระบบขาย POS", path: "/employee/pos/pos", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"], 
     subs: [

@@ -1,38 +1,22 @@
 import React, { useEffect, useState } from "react";
-import Modal from "../../../../components/elements/modal";
+import { useNavigate } from "react-router-dom";
+import { ChevronLeft } from "lucide-react";
+
+import Heading from "../../../../components/elements/heading";
+import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
 import Input from "../../../../components/elements/input";
 import Select from "../../../../components/elements/select";
 import MultiSelect from "../../../../components/elements/multiselect";
-import Cascader, { type CascaderOption } from "../../../../components/elements/cascader";
+import TreeSelect from "../../../../components/elements/tree_select";
 import Button from "../../../../components/elements/button";
 import ImageUploader from "../../../../components/elements/image_uploader";
 import { createProduct, uploadProductImage } from "../../../../service/http/wms/product";
+import { useProductFormOptions } from "../hooks/useProductFormOptions";
 
-interface SelectOption {
-  label: string;
-  value: string;
-}
+export default function AddProductPage() {
+  const navigate = useNavigate();
+  const { models, categories, grades, units, zones, loading } = useProductFormOptions();
 
-interface AddDataStckProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
-  models: SelectOption[];
-  categories: CascaderOption[];
-  grades: SelectOption[];
-  units: SelectOption[];
-  zones: CascaderOption[];
-}
-export default function AddDataStck({
-  isOpen,
-  onClose,
-  onSuccess,
-  models,
-  categories,
-  grades,
-  units,
-  zones,
-}: AddDataStckProps) {
   const [formData, setFormData] = useState({
     product_code: "",
     part_number: "",
@@ -42,6 +26,7 @@ export default function AddDataStck({
     limit_quantity: 0,
     sale_price: 0,
     cost_price: 0,
+    max_discount_rate: 0,
     note: "",
     model_ids: [] as string[],
     category_path: [] as string[],
@@ -86,6 +71,16 @@ export default function AddDataStck({
         return;
       }
 
+      if (formData.max_discount_rate < 0 || formData.max_discount_rate > 2) {
+        alert("ส่วนลดสูงสุดต้องอยู่ระหว่าง 0-2% เท่านั้น");
+        return;
+      }
+
+      // หา shelf/level จาก path ด้วย prefix แทนตำแหน่ง index เพราะ zone_path มาจาก TreeSelect
+      // ที่ prefix ค่าตามประเภทไว้แล้ว (zone-/shelf-/level-) กัน id ชนกันข้ามตาราง
+      const shelfEntry = formData.zone_path.find((p) => p.startsWith("shelf-"));
+      const levelEntry = formData.zone_path.find((p) => p.startsWith("level-"));
+
       setSubmitting(true);
       const payload = {
         ...formData,
@@ -101,8 +96,8 @@ export default function AddDataStck({
         sub_sub_category_id: formData.category_path[2] ? Number(formData.category_path[2].split("-").pop()) : null,
         grade_id: Number(formData.grade_id),
         unit_id: Number(formData.unit_id),
-        shelf_id: Number(formData.zone_path[1]),
-        shelf_level_id: formData.zone_path[2] ? Number(formData.zone_path[2]) : null,
+        shelf_id: shelfEntry ? Number(shelfEntry.split("-").pop()) : 0,
+        shelf_level_id: levelEntry ? Number(levelEntry.split("-").pop()) : null,
       };
 
       const created = await createProduct(payload);
@@ -117,26 +112,7 @@ export default function AddDataStck({
         }
       }
       alert(imageUploadFailed ? "เพิ่มข้อมูลสินค้าสำเร็จ แต่อัปโหลดรูปสินค้าไม่สำเร็จ" : "เพิ่มข้อมูลสินค้าสำเร็จ");
-      setFormData({
-        product_code: "",
-        part_number: "",
-        product_name: "",
-        barcode: "",
-        quantity: 0,
-        limit_quantity: 0,
-        sale_price: 0,
-        cost_price: 0,
-        note: "",
-        model_ids: [],
-        category_path: [],
-        grade_id: "",
-        unit_id: "",
-        zone_path: [],
-      });
-      setImageFile(null);
-      setImagePreview("");
-      onSuccess();
-      onClose();
+      navigate("/owner/stock");
     } catch (err: any) {
       console.error("Error creating product:", err);
       alert(err.response?.data?.error || "เกิดข้อผิดพลาดในการเพิ่มข้อมูลสินค้า");
@@ -146,138 +122,156 @@ export default function AddDataStck({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="เพิ่มข้อมูลสินค้าใหม่"
-      description="กรอกรายละเอียดสินค้าด้านล่างเพื่อเพิ่มข้อมูลสินค้าเข้าสู่ระบบคลัง"
-      size="lg"
-    >
-      <form onSubmit={handleAddSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Input
-            label="ชื่อสินค้า"
-            required
-            value={formData.product_name}
-            onChange={(e) => setFormData({ ...formData, product_name: e.target.value })}
-            placeholder="เช่น Turbocharger"
-          />
-          <Input
-            label="PART NO."
-            value={formData.part_number}
-            onChange={(e) => setFormData({ ...formData, part_number: e.target.value })}
-            placeholder="เช่น PT-TURBO-01"
-          />
-          <Input
-            label="ราคาทุน (Cost Price)"
-            type="number"
-            step="any"
-            required
-            value={formData.cost_price || ""}
-            onChange={(e) => setFormData({ ...formData, cost_price: Number(e.target.value) })}
-            placeholder="เช่น 600"
-          />
-          <Input
-            label="ราคาขาย (Sale Price)"
-            type="number"
-            step="any"
-            required
-            value={formData.sale_price || ""}
-            onChange={(e) => setFormData({ ...formData, sale_price: Number(e.target.value) })}
-            placeholder="เช่น 870"
-          />
-          <Input
-            label="จำนวนสินค้า (Quantity)"
-            type="number"
-            value={formData.quantity || ""}
-            onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
-            placeholder="เช่น 50"
-          />
-          <Input
-            label="จำนวนขั้นต่ำแจ้งเตือน (Min Stock)"
-            type="number"
-            value={formData.limit_quantity || ""}
-            onChange={(e) => setFormData({ ...formData, limit_quantity: Number(e.target.value) })}
-            placeholder="เช่น 5"
-          />
+    <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
+      {/* Header */}
+      <div className="flex items-center gap-4 border-b border-slate-200 pb-4">
+        <button
+          type="button"
+          onClick={() => navigate("/owner/stock")}
+          className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
+        >
+          <ChevronLeft size={24} className="text-slate-600" />
+        </button>
+        <div>
+          <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
+            เพิ่มข้อมูลสินค้าใหม่
+          </Heading>
+          <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
+            กรอกรายละเอียดสินค้าด้านล่างเพื่อเพิ่มข้อมูลสินค้าเข้าสู่ระบบคลัง
+          </Heading>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <MultiSelect
-            label="รุ่นรถ (Models)"
-            required
-            options={models}
-            value={formData.model_ids}
-            onChange={(selected) => setFormData({ ...formData, model_ids: selected })}
-            placeholder="เลือกรุ่นรถที่รองรับ..."
-          />
-          <Cascader
-            label="หมวดหมู่สินค้า"
-            required
-            options={categories}
-            placeholder="เลือกหมวดหมู่ย่อย"
-            value={formData.category_path}
-            onChange={(val) => setFormData({ ...formData, category_path: val })}
-            changeOnSelect={true}
-          />
-          <Select
-            label="เกรดสินค้า"
-            required
-            options={grades}
-            placeholder="เลือกเกรด"
-            value={formData.grade_id}
-            onChange={(e) => setFormData({ ...formData, grade_id: e.target.value })}
-          />
-          <Select
-            label="หน่วยนับ"
-            required
-            options={units}
-            placeholder="เลือกหน่วย"
-            value={formData.unit_id}
-            onChange={(e) => setFormData({ ...formData, unit_id: e.target.value })}
-          />
-          <Cascader
-            label="ตำแหน่งจัดเก็บ (โซน > ตู้ > ชั้นระดับ)"
-            required
-            options={zones}
-            placeholder="เลือกโซน/ตู้/ชั้นระดับ"
-            value={formData.zone_path}
-            onChange={(val) => setFormData({ ...formData, zone_path: val })}
-            changeOnSelect={true}
-          />
-        </div>
+      <Card className="border-l-[5px] border-l-red-800">
+        <CardHeader>
+          <CardTitle className="text-lg">รายละเอียดสินค้า</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleAddSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Input
+                label="ชื่อสินค้า"
+                required
+                value={formData.product_name}
+                onChange={(e) => setFormData({ ...formData, product_name: e.target.value })}
+                placeholder="เช่น Turbocharger"
+              />
+              <Input
+                label="PART NO."
+                value={formData.part_number}
+                onChange={(e) => setFormData({ ...formData, part_number: e.target.value })}
+                placeholder="เช่น PT-TURBO-01"
+              />
+              <Input
+                label="ราคาทุน (Cost Price)"
+                type="number"
+                step="any"
+                required
+                value={formData.cost_price || ""}
+                onChange={(e) => setFormData({ ...formData, cost_price: Number(e.target.value) })}
+                placeholder="เช่น 600"
+              />
+              <Input
+                label="ราคาขาย (Sale Price)"
+                type="number"
+                step="any"
+                required
+                value={formData.sale_price || ""}
+                onChange={(e) => setFormData({ ...formData, sale_price: Number(e.target.value) })}
+                placeholder="เช่น 870"
+              />
+              <Input
+                label="จำนวนสินค้า (Quantity)"
+                type="number"
+                value={formData.quantity || ""}
+                onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                placeholder="เช่น 50"
+              />
+              <Input
+                label="จำนวนขั้นต่ำแจ้งเตือน (Min Stock)"
+                type="number"
+                value={formData.limit_quantity || ""}
+                onChange={(e) => setFormData({ ...formData, limit_quantity: Number(e.target.value) })}
+                placeholder="เช่น 5"
+              />
+            </div>
 
-        <Input
-          label="หมายเหตุ / รายละเอียดการรองรับ"
-          value={formData.note}
-          onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-          placeholder="เช่น รุ่นรถที่รองรับ หรือรายละเอียดเพิ่มเติม"
-        />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <MultiSelect
+                label="รุ่นรถ (Models)"
+                required
+                options={models}
+                value={formData.model_ids}
+                onChange={(selected) => setFormData({ ...formData, model_ids: selected })}
+                placeholder={loading ? "กำลังโหลด..." : "เลือกรุ่นรถที่รองรับ..."}
+              />
+              <TreeSelect
+                label="หมวดหมู่สินค้า"
+                required
+                options={categories}
+                placeholder={loading ? "กำลังโหลด..." : "เลือกหมวดหมู่ย่อย"}
+                searchPlaceholder="ค้นหาหมวดหมู่..."
+                value={formData.category_path[formData.category_path.length - 1] || ""}
+                onChange={(_val, path) => setFormData({ ...formData, category_path: path.map((p) => p.value) })}
+              />
+              <Select
+                label="เกรดสินค้า"
+                required
+                options={grades}
+                placeholder={loading ? "กำลังโหลด..." : "เลือกเกรด"}
+                value={formData.grade_id}
+                onChange={(e) => setFormData({ ...formData, grade_id: e.target.value })}
+              />
+              <Select
+                label="หน่วยนับ"
+                required
+                options={units}
+                placeholder={loading ? "กำลังโหลด..." : "เลือกหน่วย"}
+                value={formData.unit_id}
+                onChange={(e) => setFormData({ ...formData, unit_id: e.target.value })}
+              />
+              <TreeSelect
+                label="ตำแหน่งจัดเก็บ (โซน > ตู้ > ชั้นระดับ)"
+                required
+                options={zones}
+                placeholder={loading ? "กำลังโหลด..." : "เลือกโซน/ตู้/ชั้นระดับ"}
+                searchPlaceholder="ค้นหาโซน/ตู้/ชั้นระดับ..."
+                value={formData.zone_path[formData.zone_path.length - 1] || ""}
+                onChange={(_val, path) => setFormData({ ...formData, zone_path: path.map((p) => p.value) })}
+              />
+              <Input
+                label="ส่วนลดสูงสุด (%)"
+                type="number"
+                step="0.1"
+                min={0}
+                max={2}
+                value={formData.max_discount_rate === 0 ? "" : formData.max_discount_rate}
+                onChange={(e) => setFormData({ ...formData, max_discount_rate: Number(e.target.value) })}
+                placeholder="เช่น 2 (ลดได้สูงสุดไม่เกิน 2% ของราคาขาย)"
+                helperText="พนักงานขายหน้าร้าน (POS) จะลดราคาสินค้าชิ้นนี้ได้ไม่เกินเปอร์เซ็นต์ที่กำหนด"
+              />
+            </div>
 
-        <ImageUploader
-          preview={imagePreview}
-          onChange={handleImageChange}
-          onClear={handleImageClear}
-        />
+            <Input
+              label="หมายเหตุ / รายละเอียดการรองรับ"
+              value={formData.note}
+              onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+              placeholder="เช่น รุ่นรถที่รองรับ หรือรายละเอียดเพิ่มเติม"
+            />
 
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            disabled={submitting}
-          >
-            ยกเลิก
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            isLoading={submitting}
-          >
-            บันทึกข้อมูล
-          </Button>
-        </div>
-      </form>
-    </Modal>
+            <ImageUploader preview={imagePreview} onChange={handleImageChange} onClear={handleImageClear} />
+
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <Button type="button" variant="outline" onClick={() => navigate("/owner/stock")} disabled={submitting}>
+                ยกเลิก
+              </Button>
+              <Button type="submit" variant="primary" isLoading={submitting}>
+                บันทึกข้อมูล
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

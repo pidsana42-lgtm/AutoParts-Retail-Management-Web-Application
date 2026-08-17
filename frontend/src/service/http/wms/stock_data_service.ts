@@ -28,10 +28,22 @@ export type {
 };
 
 export const stockDataService = {
+  // Helper to normalize GORM's ID field to frontend's expected id field
+  _mapIds: (items: any[]) => {
+    if (!Array.isArray(items)) return [];
+    return items.map((item) => {
+      const normalized = { ...item };
+      if (normalized.id === undefined && normalized.ID !== undefined) {
+        normalized.id = normalized.ID;
+      }
+      return normalized;
+    });
+  },
+
   // --- Category APIs ---
   getCategories: async (): Promise<Category[]> => {
     const res = await apiClient.get<any[]>("/wms/categories");
-    return res.data || [];
+    return stockDataService._mapIds(res.data);
   },
   createCategory: async (data: Omit<Category, "id">): Promise<any> => {
     const res = await apiClient.post("/wms/categories", data);
@@ -50,7 +62,7 @@ export const stockDataService = {
   getSubCategories: async (categoryId?: number): Promise<SubCategory[]> => {
     const url = categoryId ? `/wms/sub-categories?category_id=${categoryId}` : "/wms/sub-categories";
     const res = await apiClient.get<any[]>(url);
-    return res.data || [];
+    return stockDataService._mapIds(res.data);
   },
   createSubCategory: async (data: Omit<SubCategory, "id" | "category">): Promise<any> => {
     const res = await apiClient.post("/wms/sub-categories", data);
@@ -69,7 +81,7 @@ export const stockDataService = {
   getSubSubCategories: async (subCategoryId?: number): Promise<SubSubCategory[]> => {
     const url = subCategoryId ? `/wms/sub-sub-categories?sub_category_id=${subCategoryId}` : "/wms/sub-sub-categories";
     const res = await apiClient.get<any[]>(url);
-    return res.data || [];
+    return stockDataService._mapIds(res.data);
   },
   createSubSubCategory: async (data: Omit<SubSubCategory, "id" | "sub_category" | "sub_category_name">): Promise<any> => {
     const res = await apiClient.post("/wms/sub-sub-categories", data);
@@ -87,7 +99,7 @@ export const stockDataService = {
   // --- Unit APIs ---
   getUnits: async (): Promise<Unit[]> => {
     const res = await apiClient.get<any[]>("/wms/units");
-    return res.data || [];
+    return stockDataService._mapIds(res.data);
   },
   createUnit: async (data: Omit<Unit, "id">): Promise<any> => {
     const res = await apiClient.post("/wms/units", data);
@@ -105,7 +117,7 @@ export const stockDataService = {
   // --- Grade APIs ---
   getGrades: async (): Promise<Grade[]> => {
     const res = await apiClient.get<any[]>("/wms/grades");
-    return res.data || [];
+    return stockDataService._mapIds(res.data);
   },
   createGrade: async (data: Omit<Grade, "id">): Promise<any> => {
     const res = await apiClient.post("/wms/grades", data);
@@ -123,7 +135,7 @@ export const stockDataService = {
   // --- Zone APIs ---
   getZones: async (): Promise<Zone[]> => {
     const res = await apiClient.get<any[]>("/wms/zones");
-    return res.data || [];
+    return stockDataService._mapIds(res.data);
   },
   createZone: async (data: Omit<Zone, "id" | "shelves">): Promise<any> => {
     const res = await apiClient.post("/wms/zones", data);
@@ -141,7 +153,7 @@ export const stockDataService = {
   // --- Shelf APIs ---
   getShelves: async (): Promise<Shelf[]> => {
     const res = await apiClient.get<any[]>("/wms/shelves");
-    return res.data || [];
+    return stockDataService._mapIds(res.data);
   },
   createShelf: async (data: Omit<Shelf, "id" | "zone">): Promise<any> => {
     const res = await apiClient.post("/wms/shelves", data);
@@ -173,7 +185,7 @@ export const stockDataService = {
   // --- Brand & Model APIs ---
   getBrands: async (): Promise<Brand[]> => {
     const res = await apiClient.get<any[]>("/wms/brands");
-    return res.data || [];
+    return stockDataService._mapIds(res.data);
   },
   createBrand: async (data: { brand_name: string }): Promise<any> => {
     const res = await apiClient.post("/wms/brands", data);
@@ -203,7 +215,7 @@ export const stockDataService = {
   // --- Supplier APIs ---
   getSuppliers: async (): Promise<Supplier[]> => {
     const res = await apiClient.get<any[]>("/wms/suppliers");
-    return res.data || [];
+    return stockDataService._mapIds(res.data);
   },
   createSupplier: async (data: Omit<Supplier, "id">): Promise<any> => {
     const res = await apiClient.post("/wms/suppliers", data);
