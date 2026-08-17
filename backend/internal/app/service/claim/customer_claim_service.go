@@ -41,6 +41,15 @@ func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomer
 		claimEntity.ClaimNo = fmt.Sprintf("CLM-%d", input.OriginalOrderID)
 	}
 
+	// Auto-calculate amounts from items if not provided
+	if input.ClaimAmount == 0 && len(input.Items) > 0 {
+		var total float64
+		for _, item := range input.Items {
+			total += float64(item.Qty) * item.UnitPrice
+		}
+		claimEntity.ClaimAmount = total
+	}
+
 	if err := s.repo.CreateCustomerClaim(&claimEntity); err != nil {
 		return claimDTO.CustomerClaimResponseDTO{}, err
 	}

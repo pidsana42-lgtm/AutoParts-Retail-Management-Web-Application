@@ -972,21 +972,93 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const data = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
+        const buffer = event.target?.result as ArrayBuffer;
+        let workbook: XLSX.WorkBook;
+
+        const isCsvOrTxt = file.name.toLowerCase().endsWith('.csv') || file.name.toLowerCase().endsWith('.txt');
+        if (isCsvOrTxt) {
+          let text = '';
+          try {
+            // Try decoding as strict UTF-8 first
+            const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+            text = utf8Decoder.decode(buffer);
+          } catch (e) {
+            // Fallback to Thai Windows-874 / TIS-620 for Thai CSV files exported from Windows / Excel
+            const thaiDecoder = new TextDecoder('windows-874');
+            text = thaiDecoder.decode(buffer);
+          }
+          workbook = XLSX.read(text, { type: 'string' });
+        } else {
+          // Binary Excel files (.xlsx, .xls)
+          const data = new Uint8Array(buffer);
+          workbook = XLSX.read(data, { type: 'array' });
+        }
+
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
 
         // ตรวจหา header row จริง — รองรับไฟล์ที่มีข้อมูลบริษัทอยู่บนสุด
-        const colKeywords = [
-          'code', 'name', 'qty', 'quantity', 'price', 'unit', 'uom', 'amount',
-          'รหัส', 'ชื่อ', 'จำนวน', 'ราคา', 'หน่วย', 'ลำดับ', 'part', 'item', 'description', 'sku',
-        ];
         const rawRows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-        const headerRowIdx = rawRows.findIndex(row => {
-          const rowText = row.map((c: any) => String(c ?? '').toLowerCase()).join(' ');
-          return colKeywords.some(kw => rowText.includes(kw));
-        });
+        
+        let headerRowIdx = -1;
+        let maxMatchCount = 0;
+
+        for (let i = 0; i < Math.min(rawRows.length, 30); i++) {
+          const row = rawRows[i];
+          if (!Array.isArray(row) || row.length < 2) continue;
+
+          let matchCount = 0;
+          row.forEach((cell: any) => {
+            const text = String(cell ?? '').trim().toLowerCase();
+            if (!text) return;
+
+            const explicitTerms = [
+              'รหัสสินค้า', 'รหัสอะไหล่', 'ชื่อสินค้า', 'ชื่ออะไหล่', 'จำนวน', 'หน่วย', 'ราคาต่อหน่วย', 'ราคา', 'ส่วนลด', 'คำอธิบาย', 'รายการ',
+              'part number', 'part_number', 'item description', 'item_description', 'quantity ordered', 'unit cost', 'uom', 'sku', 'product_code', 'unit_price', 'part_no'
+            ];
+            const singleTerms = ['code', 'qty', 'quantity', 'price', 'unit', 'amount', 'uom', 'sku', 'part', 'item', 'description', 'รหัส', 'จำนวน', 'หน่วย', 'ราคา'];
+
+            if (explicitTerms.some(term => text.includes(term))) {
+              matchCount += 2;
+            } else if (singleTerms.some(term => text === term || text.includes(term))) {
+              if (text.includes('ชื่อบริษัท') || text.includes('ชื่อย่อ') || text.includes('เลขที่') || text.includes('วันที่') || text.includes('เบอร์โทร') || text.includes('อีเมล') || text.includes('ที่อยู่')) {
+                // Ignore metadata label matches
+              } else {
+                matchCount += 1;
+              }
+            }
+          });
+
+          if (matchCount >= 2 && matchCount > maxMatchCount) {
+            maxMatchCount = matchCount;
+            headerRowIdx = i;
+          }
+        }
+
+        // ดึงข้อมูลบริษัท เลขที่บิล วันที่ จากส่วนหัวข้อไฟล์ (ถ้ามี)
+        let extractedBillNo = '';
+        let extractedSupplierName = '';
+        let extractedDueDate = '';
+        let extractedReceiveDate = '';
+
+        const scanHeaderLimit = headerRowIdx > 0 ? headerRowIdx : Math.min(rawRows.length, 15);
+        for (let r = 0; r < scanHeaderLimit; r++) {
+          const row = rawRows[r];
+          if (!row || row.length < 2) continue;
+          const label = String(row[0] || '').trim().toLowerCase();
+          const val = String(row[1] || row[2] || '').trim();
+          if (!val) continue;
+
+          if (label.includes('เลขที่บิล') || label.includes('bill no') || label.includes('invoice no')) {
+            extractedBillNo = val;
+          } else if (label.includes('ชื่อบริษัท') || label.includes('company name') || label.includes('ผู้จัดจำหน่าย') || label.includes('supplier')) {
+            extractedSupplierName = val;
+          } else if (label.includes('ครบกำหนด') || label.includes('due date')) {
+            extractedDueDate = val;
+          } else if (label.includes('วันที่รับ') || label.includes('bill date') || label.includes('date')) {
+            extractedReceiveDate = val;
+          }
+        }
 
         const rows = XLSX.utils.sheet_to_json(worksheet, {
           range: headerRowIdx >= 0 ? headerRowIdx : 0,
@@ -1026,11 +1098,25 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
           return maxLength === 0 ? 0 : 1 - (distance / maxLength);
         };
 
+        const parseNum = (val: any, defaultVal = 0): number => {
+          if (val === null || val === undefined || val === '') return defaultVal;
+          if (typeof val === 'number') return isNaN(val) ? defaultVal : val;
+          const cleaned = String(val).replace(/[^0-9.-]/g, '');
+          const parsed = parseFloat(cleaned);
+          return isNaN(parsed) ? defaultVal : parsed;
+        };
+
         const mappedItems: BillItemDTO[] = rows.map((row: any, index: number) => {
           const findValue = (keywords: string[]) => {
-            const matchedKey = Object.keys(row).find(key => 
-              keywords.some(kw => key.toLowerCase().includes(kw.toLowerCase()) || kw.toLowerCase().includes(key.toLowerCase()))
+            const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9ก-๙]/g, '');
+            let matchedKey = Object.keys(row).find(key => 
+              keywords.some(kw => clean(key) === clean(kw))
             );
+            if (!matchedKey) {
+              matchedKey = Object.keys(row).find(key => 
+                keywords.some(kw => clean(key).includes(clean(kw)))
+              );
+            }
             if (matchedKey) return row[matchedKey];
 
             let bestKey = '';
@@ -1052,10 +1138,10 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
           };
 
           const code = findValue(['code', 'product_code', 'รหัส', 'รหัสสินค้า', 'part_number', 'part_no', 'sku', 'รหัสอะไหล่']);
-          const name = findValue(['name', 'product_name', 'ชื่อ', 'ชื่อสินค้า', 'description', 'detail', 'รายการ', 'ชื่ออะไหล่']);
-          const qty = parseFloat(findValue(['quantity', 'qty', 'จำนวน', 'จำนวนต่อหน่วย', 'ordered', 'vol', 'ยอดสั่งซื้อ']) || '1') || 1;
+          const name = findValue(['name', 'product_name', 'ชื่อ', 'ชื่อสินค้า', 'description', 'detail', 'รายการ', 'ชื่ออะไหล่', 'คำอธิบาย']);
+          const qty = parseNum(findValue(['quantity', 'qty', 'จำนวน', 'จำนวนต่อหน่วย', 'ordered', 'vol', 'ยอดสั่งซื้อ']), 1);
           const unit = findValue(['unit', 'หน่วย', 'uom', 'pack', 'ขนาดบรรจุ']) || 'ชิ้น';
-          const price = parseFloat(findValue(['price', 'rate', 'ราคา', 'ราคาต่อหน่วย', 'cost', 'unit_cost', 'ราคา/หน่วย']) || '0') || 0;
+          const price = parseNum(findValue(['price', 'rate', 'ราคา', 'ราคาต่อหน่วย', 'cost', 'unit_cost', 'ราคา/หน่วย', 'unit price', 'unitcost']), 0);
 
           return {
             item_sequence: index + 1,
@@ -1073,21 +1159,51 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
           };
         });
 
-        const subtotal = mappedItems.reduce((sum, item) => sum + item.net_amount, 0);
+        // กรองเฉพาะแถวที่เป็นรายการสินค้าจริง (ตัดแถวส่วนหัว/ส่วนสรุปที่หลุดเข้ามาออก)
+        const validMappedItems = mappedItems.filter((item) => {
+          const code = item.company_product_code.trim();
+          const name = item.company_product_name.trim();
+          if (!code && !name) return false;
+
+          const lowerName = name.toLowerCase();
+          const lowerCode = code.toLowerCase();
+          const metadataKeywords = ['ที่อยู่', 'เบอร์โทร', 'อีเมล', 'เลขที่บิล', 'วันที่', 'เครดิต', 'ผู้จัดจำหน่าย', 'บริษัท', 'รวมเงิน', 'ภาษี', 'ยอดสุทธิ', 'total', 'subtotal', 'vat', 'address', 'phone', 'email', 'invoice'];
+          if (metadataKeywords.some(kw => lowerName.startsWith(kw) || lowerCode.startsWith(kw))) {
+            return false;
+          }
+          return true;
+        }).map((item, idx) => ({ ...item, item_sequence: idx + 1 }));
+
+        const subtotal = validMappedItems.reduce((sum, item) => sum + item.net_amount, 0);
+
+        let matchedSupplierId = suppliers[0]?.id || 1;
+        let supplierName = extractedSupplierName || suppliers[0]?.supplier_name || '';
+
+        if (extractedSupplierName) {
+          const found = suppliers.find(s => 
+            s.supplier_name.toLowerCase().replace(/บริษัท|จำกัด|บจก\.|หจก\./g, '').trim() === 
+            extractedSupplierName.toLowerCase().replace(/บริษัท|จำกัด|บจก\.|หจก\./g, '').trim()
+          );
+          if (found) {
+            matchedSupplierId = found.id;
+            supplierName = found.supplier_name;
+          }
+        }
 
         setFormData({
-          bill_no: 'IMPORT-' + Math.floor(1000 + Math.random() * 9000),
+          bill_no: extractedBillNo || ('IMPORT-' + Math.floor(1000 + Math.random() * 9000)),
+          supplier_id: matchedSupplierId,
+          supplier_name: supplierName,
           total_amount: subtotal,
-          due_date: new Date().toISOString().split('T')[0],
+          due_date: extractedDueDate || new Date().toISOString().split('T')[0],
           transport_by: '',
-          supplier_id: suppliers[0]?.id || 1,
           subtotal: subtotal,
           discount_total: 0,
-          receive_date: new Date().toISOString().split('T')[0],
+          receive_date: extractedReceiveDate || new Date().toISOString().split('T')[0],
           vat_amount: 0,
           grand_total: subtotal,
           payment_status: 'unpaid',
-          items: mappedItems,
+          items: validMappedItems,
           db_job_id: 0,
           bill_image_id: 0,
           filename: file.name
@@ -1130,7 +1246,8 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
           net_amount: qty * price,
           is_freebie: false,
           remark: '',
-          product_id: item.product_id || null
+          product_id: item.product_id || null,
+          pre_order_item_id: item.pre_order_item_id || null
         };
       });
 
