@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Plus, Trash2, SquarePen } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
 
@@ -8,6 +8,7 @@ import type { Zone, Shelf, ShelfLevel } from "../../../../../interface/wms/stock
 // Extracted Modals
 import AddZoneShelfModal from "./AddZoneShelfModal";
 import EditRowModal from "./EditRowModal";
+import TablePagination from "../components/TablePagination";
 
 interface ZoneTabProps {
   search: string;
@@ -15,9 +16,17 @@ interface ZoneTabProps {
   zones: Zone[];
   shelves: Shelf[];
   loadData: () => void;
+  addSignal?: number;
 }
 
-export default function ZoneTab({ search, zoneFilter, zones, shelves, loadData }: ZoneTabProps) {
+export default function ZoneTab({
+  search,
+  zoneFilter,
+  zones,
+  shelves,
+  loadData,
+  addSignal,
+}: ZoneTabProps) {
   const { toast } = useToast();
 
   // Modals visibility state
@@ -29,6 +38,20 @@ export default function ZoneTab({ search, zoneFilter, zones, shelves, loadData }
   const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
   const [selectedShelf, setSelectedShelf] = useState<Shelf | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<ShelfLevel | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  useEffect(() => {
+    if (addSignal && addSignal > 0) {
+      openAddModal();
+    }
+  }, [addSignal]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, zoneFilter]);
 
   const handleDeleteZone = async (id: number) => {
     if (!confirm("คุณแน่ใจว่าต้องการลบโซนนี้? (ชั้นวางทั้งหมดในโซนนี้จะถูกลบด้วย)")) return;
@@ -139,16 +162,32 @@ export default function ZoneTab({ search, zoneFilter, zones, shelves, loadData }
     return list;
   }, [zones, shelves, search, zoneFilter]);
 
+  // จัดกลุ่มแถวตามโซนหลัก เพื่อแบ่งหน้าโดยไม่ตัดกลุ่มขาดจากกัน
+  const groupedByZone = useMemo(() => {
+    const map = new Map<number, typeof filteredRows>();
+    filteredRows.forEach((row) => {
+      const key = row.zone.id;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(row);
+    });
+    return Array.from(map.values());
+  }, [filteredRows]);
+
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return groupedByZone.slice(start, start + itemsPerPage).flat();
+  }, [groupedByZone, currentPage, itemsPerPage]);
+
   return (
     <>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left border-collapse">
           <thead>
-            <tr className="bg-[#F2ECE9] border-b border-slate-200">
-              <th className="px-6 py-3.5 font-semibold text-slate-700 w-1/4">โซนสินค้า</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700 w-1/4">ตู้วางสินค้า</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700 w-1/3">ชั้นระดับ</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700 text-right w-28">จัดการ</th>
+            <tr className="bg-[#f6f3f2] border-b border-slate-200">
+              <th className="px-6 py-3.5 font-semibold text-[#797878] w-1/4">โซนสินค้า</th>
+              <th className="px-6 py-3.5 font-semibold text-[#797878] w-1/4">ตู้วางสินค้า</th>
+              <th className="px-6 py-3.5 font-semibold text-[#797878] w-1/3">ชั้นระดับ</th>
+              <th className="px-6 py-3.5 font-semibold text-[#797878] text-right w-28">จัดการ</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -159,7 +198,7 @@ export default function ZoneTab({ search, zoneFilter, zones, shelves, loadData }
                 </td>
               </tr>
             ) : (
-              filteredRows.map((row, index) => (
+              paginatedRows.map((row, index) => (
                 <tr key={index} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-3 text-slate-800 font-medium align-top">
                     {row.isFirst && (
@@ -261,15 +300,17 @@ export default function ZoneTab({ search, zoneFilter, zones, shelves, loadData }
         </table>
       </div>
 
-      <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4 flex gap-6">
-        <button
-          onClick={openAddModal}
-          className="flex items-center gap-1.5 text-sm font-semibold text-[#B70011] hover:text-[#9e0010] cursor-pointer transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          เพิ่มโซนสินค้า / ตู้วางสินค้า / ชั้นระดับ
-        </button>
-      </div>
+      <TablePagination
+        currentPage={currentPage}
+        totalItems={groupedByZone.length}
+        itemsPerPage={itemsPerPage}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={(n) => {
+          setItemsPerPage(n);
+          setCurrentPage(1);
+        }}
+        itemLabel="โซนสินค้า"
+      />
 
       {/* Modals */}
       <AddZoneShelfModal

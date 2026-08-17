@@ -13,9 +13,12 @@ export interface StockItem {
   MinStock: number;
   Price: number;
   CostPrice: number;
+  MaxDiscountRate: number; // เพดานส่วนลดสูงสุดที่ POS กดลดให้สินค้าชิ้นนี้ได้ (%)
+  ThumbnailUrl?: string;
   Note: string;
   Unit?: string;
   Shelf?: string;
   ShelfLevel?: string;
+  Zone?: string;
   Supplier?: string;
 }

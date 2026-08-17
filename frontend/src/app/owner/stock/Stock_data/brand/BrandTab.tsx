@@ -1,12 +1,12 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Plus, Trash2, SquarePen } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
 import type { Brand, Model } from "../../../../../interface/wms/stock_data";
 
 // Extracted Modals
-import EditBrandModal from "./EditBrandModal";
-import EditModelModal from "./EditModelModal";
+import EditBrandRowModal from "./EditBrandRowModal";
 import AddBrandModelModal from "./AddBrandModelModal";
+import TablePagination from "../components/TablePagination";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 
@@ -15,21 +15,41 @@ interface BrandTabProps {
   brandFilter: string;
   brands: Brand[];
   reloadBrands: () => void;
+  addSignal?: number;
 }
 
-export default function BrandTab({ search, brandFilter, brands, reloadBrands }: BrandTabProps) {
+export default function BrandTab({
+  search,
+  brandFilter,
+  brands,
+  reloadBrands,
+  addSignal,
+}: BrandTabProps) {
   const { toast } = useToast();
 
   // Modals visibility state
   const [addOpen, setAddOpen] = useState(false);
   const [addMode, setAddMode] = useState<"new_brand" | "existing_brand">("new_brand");
-  const [editBrandOpen, setEditBrandOpen] = useState(false);
-  const [editModelOpen, setEditModelOpen] = useState(false);
+  const [editRowOpen, setEditRowOpen] = useState(false);
 
   // Selected records
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
   const [selectedModel, setSelectedModel] = useState<Model | null>(null);
   const [initialBrandId, setInitialBrandId] = useState<number | undefined>(undefined);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  useEffect(() => {
+    if (addSignal && addSignal > 0) {
+      openAddBrandButton();
+    }
+  }, [addSignal]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, brandFilter]);
 
   const handleDeleteBrand = async (id: number) => {
     if (!confirm("คุณแน่ใจว่าต้องการลบแบรนด์รถนี้?")) return;
@@ -54,20 +74,10 @@ export default function BrandTab({ search, brandFilter, brands, reloadBrands }: 
   };
 
   // Openers
-  const openEditBrand = (brand: Brand) => {
+  const openEditRow = (brand: Brand, model?: Model) => {
     setSelectedBrand(brand);
-    setEditBrandOpen(true);
-  };
-
-  const openAddModelInline = (brandId?: number) => {
-    setInitialBrandId(brandId);
-    setAddMode("existing_brand");
-    setAddOpen(true);
-  };
-
-  const openEditModel = (model: Model) => {
-    setSelectedModel(model);
-    setEditModelOpen(true);
+    setSelectedModel(model || null);
+    setEditRowOpen(true);
   };
 
   const openAddBrandButton = () => {
@@ -125,15 +135,31 @@ export default function BrandTab({ search, brandFilter, brands, reloadBrands }: 
     return list;
   }, [brands, search, brandFilter]);
 
+  // จัดกลุ่มแถวตามแบรนด์หลัก เพื่อแบ่งหน้าโดยไม่ตัดกลุ่มขาดจากกัน
+  const groupedByBrand = useMemo(() => {
+    const map = new Map<number, typeof filteredRows>();
+    filteredRows.forEach((row) => {
+      const key = row.brand.id;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(row);
+    });
+    return Array.from(map.values());
+  }, [filteredRows]);
+
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return groupedByBrand.slice(start, start + itemsPerPage).flat();
+  }, [groupedByBrand, currentPage, itemsPerPage]);
+
   return (
     <>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left border-collapse">
           <thead>
-            <tr className="bg-[#F2ECE9] border-b border-slate-200">
-              <th className="px-6 py-3.5 font-semibold text-slate-700 w-1/3">แบรนด์รถ</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700 w-1/2">รุ่นรถ</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700 text-right w-1/6">จัดการ</th>
+            <tr className="bg-[#f6f3f2] border-b border-slate-200">
+              <th className="px-6 py-3.5 font-semibold text-[#797878] w-1/3">แบรนด์รถ</th>
+              <th className="px-6 py-3.5 font-semibold text-[#797878] w-1/2">รุ่นรถ</th>
+              <th className="px-6 py-3.5 font-semibold text-[#797878] text-right w-1/6">จัดการ</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -144,66 +170,60 @@ export default function BrandTab({ search, brandFilter, brands, reloadBrands }: 
                 </td>
               </tr>
             ) : (
-              filteredRows.map((row, index) => (
+              paginatedRows.map((row, index) => (
                 <tr key={index} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-3 text-slate-800 font-medium">
+                  <td className="px-6 py-3 text-slate-800 font-medium align-top">
                     {row.isFirst && (
-                      <div className="flex items-center gap-2 group">
-                        <span>{row.brand.brand_name}</span>
-                        <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-1">
-                          <button
-                            onClick={() => openEditBrand(row.brand)}
-                            className="text-slate-400 hover:text-slate-700 p-0.5"
-                            title="แก้ไขแบรนด์รถ"
-                          >
-                            <SquarePen className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteBrand(row.brand.id)}
-                            className="text-slate-400 hover:text-red-600 p-0.5"
-                            title="ลบแบรนด์รถ"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
+                      <span>{row.brand.brand_name}</span>
                     )}
                   </td>
-                  <td className="px-6 py-3 text-slate-700">
+                  <td className="px-6 py-3 text-slate-700 align-top">
                     {row.model ? (
                       row.model.model_name
                     ) : (
                       <span className="text-slate-300 italic text-xs">ไม่มีรุ่นรถ</span>
                     )}
                   </td>
-                  <td className="px-6 py-3 text-right">
-                    {row.model ? (
-                      <div className="flex items-center justify-end gap-3 text-slate-400">
-                        <button
-                          onClick={() => openEditModel(row.model!)}
-                          className="hover:text-slate-700 transition-colors"
-                          title="แก้ไขรุ่นรถ"
-                        >
-                          <SquarePen className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteModel(row.model!.id)}
-                          className="hover:text-red-600 transition-colors"
-                          title="ลบรุ่นรถ"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      row.isFirst && (
-                        <button
-                          onClick={() => openAddModelInline(row.brand.id)}
-                          className="text-xs text-[#B70011] hover:underline"
-                        >
-                          + เพิ่มรุ่นรถ
-                        </button>
-                      )
-                    )}
+                  <td className="px-6 py-3 text-right align-top">
+                    <div className="flex items-center justify-end gap-3 text-slate-400">
+                      {row.model ? (
+                        <>
+                          <button
+                            onClick={() => openEditRow(row.brand, row.model!)}
+                            className="hover:text-slate-700 transition-colors"
+                            title="แก้ไขข้อมูลแถวนี้"
+                          >
+                            <SquarePen className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteModel(row.model!.id)}
+                            className="hover:text-red-600 transition-colors"
+                            title="ลบรุ่นรถ"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      ) : (
+                        row.isFirst && (
+                          <>
+                            <button
+                              onClick={() => openEditRow(row.brand)}
+                              className="hover:text-slate-700 transition-colors"
+                              title="แก้ไขข้อมูลแถวนี้"
+                            >
+                              <SquarePen className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBrand(row.brand.id)}
+                              className="hover:text-red-600 transition-colors"
+                              title="ลบแบรนด์รถ"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -212,15 +232,17 @@ export default function BrandTab({ search, brandFilter, brands, reloadBrands }: 
         </table>
       </div>
 
-      <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4 flex gap-4">
-        <button
-          onClick={openAddBrandButton}
-          className="flex items-center gap-1.5 text-sm font-semibold text-[#B70011] hover:text-[#9e0010] cursor-pointer"
-        >
-          <Plus className="h-4 w-4" />
-          เพิ่มแบรนด์รถ
-        </button>
-      </div>
+      <TablePagination
+        currentPage={currentPage}
+        totalItems={groupedByBrand.length}
+        itemsPerPage={itemsPerPage}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={(n) => {
+          setItemsPerPage(n);
+          setCurrentPage(1);
+        }}
+        itemLabel="แบรนด์รถ"
+      />
 
       {/* Modals */}
       <AddBrandModelModal
@@ -232,16 +254,10 @@ export default function BrandTab({ search, brandFilter, brands, reloadBrands }: 
         onSuccess={reloadBrands}
       />
 
-      <EditBrandModal
-        isOpen={editBrandOpen}
-        onClose={() => setEditBrandOpen(false)}
+      <EditBrandRowModal
+        isOpen={editRowOpen}
+        onClose={() => setEditRowOpen(false)}
         brand={selectedBrand}
-        onSuccess={reloadBrands}
-      />
-
-      <EditModelModal
-        isOpen={editModelOpen}
-        onClose={() => setEditModelOpen(false)}
         model={selectedModel}
         brands={brands}
         onSuccess={reloadBrands}

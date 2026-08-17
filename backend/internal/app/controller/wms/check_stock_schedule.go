@@ -88,6 +88,41 @@ func (ctrl *CheckStockScheduleController) UpdateStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "status updated successfully"})
 }
 
+func (ctrl *CheckStockScheduleController) Approve(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ID format"})
+		return
+	}
+	if err := ctrl.service.ApproveSchedule(uri.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "อนุมัติผลนับสต็อกและบันทึกลงคลังสินค้าสำเร็จ"})
+}
+
+func (ctrl *CheckStockScheduleController) Reject(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ID format"})
+		return
+	}
+	var body struct {
+		Note string `json:"note"`
+	}
+	// note เป็น optional จึงไม่เช็ค error จากการ bind (ไม่ส่ง body มาก็ได้)
+	_ = c.ShouldBindJSON(&body)
+	if err := ctrl.service.RejectSchedule(uri.ID, body.Note); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "ตีกลับให้นับสต็อกใหม่สำเร็จ"})
+}
+
 func (ctrl *CheckStockScheduleController) Delete(c *gin.Context) {
 	var uri struct {
 		ID uint `uri:"id" binding:"required"`
