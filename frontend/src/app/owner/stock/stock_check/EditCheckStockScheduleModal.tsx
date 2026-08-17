@@ -5,11 +5,18 @@ import Select from "../../../../components/elements/select";
 import Button from "../../../../components/elements/button";
 import TreeSelect from "../../../../components/elements/tree_select";
 import SearchableSelect from "./SearchableSelect";
-import type { CascaderOption } from "../../../../components/elements/cascader";
+import ProductQuickView from "./ProductQuickView";
+import CheckDateTimeRangeField, {
+  type CheckDateTimeRangeValue,
+  validateCheckDateTimeRange,
+  combineDateTime,
+} from "./CheckDateTimeRangeField";
 import { useToast } from "../../../../components/elements/toast";
+import { useCheckStockOptions } from "./useCheckStockOptions";
+import { buildZoneTree, buildCategoryTree, getRelatedProducts } from "./checkStockTargets";
 
-import { stockCheckService, type CheckStockScheduleCreateInput, type CheckStockSchedule, type Employee } from "../../../../service/http/wms/stock_check_service";
-import { getProductsList } from "../../../../service/http/wms/product";
+import { stockCheckService, type CheckStockScheduleCreateInput, type CheckStockSchedule } from "../../../../service/http/wms/stock_check_service";
+import type { StockItem } from "../../../../interface/wms/product";
 
 interface EditCheckStockScheduleModalProps {
   isOpen: boolean;
@@ -25,12 +32,13 @@ export default function EditCheckStockScheduleModal({
   schedule,
 }: EditCheckStockScheduleModalProps) {
   const { toast } = useToast();
+  const { loading: loadingOptions, employees, zones, categories, products } = useCheckStockOptions();
+  const [quickViewProduct, setQuickViewProduct] = useState<StockItem | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
-  const [loadingOptions, setLoadingOptions] = useState(false);
 
   // Form states
-  const [scheduledDatetime, setScheduledDatetime] = useState("");
+  const [dateTimeRange, setDateTimeRange] = useState<CheckDateTimeRangeValue>({ date: "", startTime: "", endTime: "" });
   const [note, setNote] = useState("");
   const [checkType, setCheckType] = useState<"LOCATION" | "CATEGORY" | "PRODUCT">("LOCATION");
   const [userId, setUserId] = useState("");
@@ -40,160 +48,59 @@ export default function EditCheckStockScheduleModal({
   const [categoryId, setCategoryId] = useState("");
   const [productId, setProductId] = useState("");
 
-  // Options
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [zones, setZones] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-
   useEffect(() => {
-    if (isOpen) {
-      loadOptions();
-      if (schedule) {
-        setScheduledDatetime(schedule.scheduled_datetime ? schedule.scheduled_datetime.substring(0, 16) : "");
-        setNote(schedule.note || "");
-        setCheckType(schedule.check_type || "LOCATION");
-        setUserId(schedule.user_id ? String(schedule.user_id) : "");
-        
-        if (schedule.check_type === "LOCATION") {
-          if (schedule.shelf_level_id) {
-            setSelectedZonePath(`level-${schedule.shelf_level_id}`);
-          } else if (schedule.shelf_id) {
-            setSelectedZonePath(`shelf-${schedule.shelf_id}`);
-          } else if (schedule.zone_id) {
-            setSelectedZonePath(`zone-${schedule.zone_id}`);
-          }
-        } else if (schedule.check_type === "CATEGORY") {
-          if (schedule.sub_sub_category_id) {
-            setCategoryId(`subsubcategory-${schedule.sub_sub_category_id}`);
-          } else if (schedule.sub_category_id) {
-            setCategoryId(`subcategory-${schedule.sub_category_id}`);
-          } else if (schedule.category_id) {
-            setCategoryId(`category-${schedule.category_id}`);
-          }
-        } else if (schedule.check_type === "PRODUCT") {
-          setProductId(schedule.product_id ? String(schedule.product_id) : "");
+    if (isOpen && schedule) {
+      setDateTimeRange({
+        date: schedule.scheduled_datetime ? schedule.scheduled_datetime.substring(0, 10) : "",
+        startTime: schedule.scheduled_datetime ? schedule.scheduled_datetime.substring(11, 16) : "",
+        endTime: schedule.scheduled_end_datetime ? schedule.scheduled_end_datetime.substring(11, 16) : "",
+      });
+      setNote(schedule.note || "");
+      setCheckType(schedule.check_type || "LOCATION");
+      setUserId(schedule.user_id ? String(schedule.user_id) : "");
+
+      if (schedule.check_type === "LOCATION") {
+        if (schedule.shelf_level_id) {
+          setSelectedZonePath(`level-${schedule.shelf_level_id}`);
+        } else if (schedule.shelf_id) {
+          setSelectedZonePath(`shelf-${schedule.shelf_id}`);
+        } else if (schedule.zone_id) {
+          setSelectedZonePath(`zone-${schedule.zone_id}`);
         }
+      } else if (schedule.check_type === "CATEGORY") {
+        if (schedule.sub_sub_category_id) {
+          setCategoryId(`subsubcategory-${schedule.sub_sub_category_id}`);
+        } else if (schedule.sub_category_id) {
+          setCategoryId(`subcategory-${schedule.sub_category_id}`);
+        } else if (schedule.category_id) {
+          setCategoryId(`category-${schedule.category_id}`);
+        }
+      } else if (schedule.check_type === "PRODUCT") {
+        setProductId(schedule.product_id ? String(schedule.product_id) : "");
       }
     }
   }, [isOpen, schedule]);
 
-  const loadOptions = async () => {
-    try {
-      setLoadingOptions(true);
-      const [emps, zns, cats, prods] = await Promise.all([
-        stockCheckService.getEmployees(),
-        stockCheckService.getZoneTree(),
-        stockCheckService.getCategoryTree(),
-        getProductsList(),
-      ]);
-      setEmployees(emps);
-      setZones(zns);
-      setCategories(cats);
-      setProducts(prods);
-    } catch (err) {
-      console.error(err);
-      toast({ variant: "error", message: "ไม่สามารถโหลดข้อมูลตัวเลือกได้" });
-    } finally {
-      setLoadingOptions(false);
-    }
-  };
-
-  const buildZoneTree = (): CascaderOption[] => {
-    return zones.map((z: any) => ({
-      value: `zone-${z.ID || z.id}`,
-      label: z.zone_name,
-      children: z.shelves?.map((s: any) => ({
-        value: `shelf-${s.ID || s.id}`,
-        label: s.shelf_name,
-        children: s.shelf_levels?.map((l: any) => ({
-          value: `level-${l.ID || l.id}`,
-          label: l.level_name,
-        })),
-      })),
-    }));
-  };
-
-  const buildCategoryTree = (): CascaderOption[] => {
-    return categories.map((c: any) => ({
-      value: `category-${c.ID || c.id}`,
-      label: c.category_name,
-      children: c.sub_categories?.map((sc: any) => ({
-        value: `subcategory-${sc.ID || sc.id}`,
-        label: sc.sub_category_name,
-        children: sc.sub_sub_categories?.map((ssc: any) => ({
-          value: `subsubcategory-${ssc.ID || ssc.id}`,
-          label: ssc.sub_sub_category_name,
-        })),
-      })),
-    }));
-  };
-
-  const relatedProducts = useMemo(() => {
-    if (checkType === "LOCATION" && selectedZonePath) {
-      if (selectedZonePath.startsWith("level-")) {
-        const id = parseInt(selectedZonePath.replace("level-", ""));
-        let levelName = "";
-        zones.forEach((z: any) => z.shelves?.forEach((s: any) => s.shelf_levels?.forEach((l: any) => {
-          if ((l.ID || l.id) === id) levelName = l.level_name;
-        })));
-        return products.filter(p => p.ShelfLevel === levelName);
-      } else if (selectedZonePath.startsWith("shelf-")) {
-        const id = parseInt(selectedZonePath.replace("shelf-", ""));
-        let shelfName = "";
-        zones.forEach((z: any) => z.shelves?.forEach((s: any) => {
-          if ((s.ID || s.id) === id) shelfName = s.shelf_name;
-        }));
-        return products.filter(p => p.Shelf === shelfName);
-      } else if (selectedZonePath.startsWith("zone-")) {
-        const id = parseInt(selectedZonePath.replace("zone-", ""));
-        let shelfNames: string[] = [];
-        zones.forEach((z: any) => {
-          if ((z.ID || z.id) === id) z.shelves?.forEach((s: any) => shelfNames.push(s.shelf_name));
-        });
-        return products.filter(p => shelfNames.includes(p.Shelf || ""));
-      }
-    } else if (checkType === "CATEGORY" && categoryId) {
-      if (categoryId.startsWith("subsubcategory-")) {
-        const id = parseInt(categoryId.replace("subsubcategory-", ""));
-        let sscName = "";
-        categories.forEach((c: any) => c.sub_categories?.forEach((sc: any) => sc.sub_sub_categories?.forEach((ssc: any) => {
-          if ((ssc.ID || ssc.id) === id) sscName = ssc.sub_sub_category_name;
-        })));
-        return products.filter(p => p.SubSubCategory === sscName);
-      } else if (categoryId.startsWith("subcategory-")) {
-        const id = parseInt(categoryId.replace("subcategory-", ""));
-        let scName = "";
-        categories.forEach((c: any) => c.sub_categories?.forEach((sc: any) => {
-          if ((sc.ID || sc.id) === id) scName = sc.sub_category_name;
-        }));
-        return products.filter(p => p.SubCategory === scName);
-      } else if (categoryId.startsWith("category-")) {
-        const id = parseInt(categoryId.replace("category-", ""));
-        let cName = "";
-        categories.forEach((c: any) => {
-          if ((c.ID || c.id) === id) cName = c.category_name;
-        });
-        return products.filter(p => p.Category === cName);
-      }
-    }
-    return [];
-  }, [checkType, selectedZonePath, categoryId, products, zones, categories]);
+  const relatedProducts = useMemo(
+    () => getRelatedProducts(checkType, selectedZonePath, categoryId, products, zones, categories),
+    [checkType, selectedZonePath, categoryId, products, zones, categories]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!schedule) return;
 
-    if (!scheduledDatetime || !userId) {
-      toast({ variant: "error", message: "กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน" });
+    const rangeError = validateCheckDateTimeRange(dateTimeRange);
+    if (rangeError) {
+      toast({ variant: "error", message: rangeError });
       return;
     }
-
     const payload: CheckStockScheduleCreateInput = {
-      scheduled_datetime: new Date(scheduledDatetime).toISOString(),
+      scheduled_datetime: combineDateTime(dateTimeRange.date, dateTimeRange.startTime).toISOString(),
+      scheduled_end_datetime: combineDateTime(dateTimeRange.date, dateTimeRange.endTime).toISOString(),
       note,
       check_type: checkType,
-      user_id: parseInt(userId),
+      user_id: userId ? parseInt(userId) : undefined,
     };
 
     if (checkType === "LOCATION") {
@@ -246,13 +153,14 @@ export default function EditCheckStockScheduleModal({
   const isEditable = !schedule || schedule.status === "รอดำเนินการ";
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="แก้ไขตารางเช็คสต็อก"
-      description="กำหนดวันเวลา พื้นที่เป้าหมาย และพนักงานที่รับผิดชอบ"
-      size="lg"
-    >
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="แก้ไขตารางเช็คสต็อก"
+        description="กำหนดวันเวลา พื้นที่เป้าหมาย และพนักงานที่รับผิดชอบ"
+        size="lg"
+      >
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isEditable && (
           <div className="p-3 bg-red-50 text-red-600 rounded-md text-sm mb-4">
@@ -260,29 +168,25 @@ export default function EditCheckStockScheduleModal({
           </div>
         )}
 
+        <CheckDateTimeRangeField
+          value={dateTimeRange}
+          onChange={setDateTimeRange}
+          required
+          disabled={!isEditable || submitting}
+        />
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            type="datetime-local"
-            label="วันที่และเวลาที่กำหนด"
-            value={scheduledDatetime}
-            onChange={(e) => setScheduledDatetime(e.target.value)}
-            required
-            disabled={!isEditable || submitting}
-          />
           <Select
             label="พนักงานที่รับมอบหมาย"
             options={[
-              { label: "เลือกพนักงาน...", value: "" },
+              { label: "ยังไม่มอบหมาย", value: "" },
               ...employees.map(e => ({ label: e.full_name, value: String(e.id) }))
             ]}
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
-            required
             disabled={!isEditable || submitting || loadingOptions}
           />
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Select
             label="ประเภทการตรวจสอบ"
             options={[
@@ -299,40 +203,44 @@ export default function EditCheckStockScheduleModal({
             }}
             disabled={!isEditable || submitting}
           />
-
-          {checkType === "LOCATION" && (
-            <TreeSelect
-              label="พื้นที่ตรวจสอบ"
-              placeholder="เลือกพื้นที่..."
-              options={buildZoneTree()}
-              value={selectedZonePath}
-              onChange={(val) => setSelectedZonePath(val)}
-            />
-          )}
-
-          {checkType === "CATEGORY" && (
-            <TreeSelect
-              label="หมวดหมู่สินค้า"
-              placeholder="เลือกหมวดหมู่..."
-              options={buildCategoryTree()}
-              value={categoryId}
-              onChange={(val) => setCategoryId(val)}
-            />
-          )}
-
-          {checkType === "PRODUCT" && (
-            <SearchableSelect
-              label="สินค้า"
-              options={[
-                { label: "เลือกสินค้า...", value: "" },
-                ...products.map(p => ({ label: `[${p.ProductCode}] ${p.Name}`, value: String(p.ID) }))
-              ]}
-              value={productId}
-              onChange={(val) => setProductId(val)}
-              disabled={!isEditable || submitting || loadingOptions}
-            />
-          )}
         </div>
+
+        {checkType === "LOCATION" && (
+          <TreeSelect
+            label="พื้นที่ตรวจสอบ"
+            placeholder="เลือกพื้นที่..."
+            options={buildZoneTree(zones)}
+            value={selectedZonePath}
+            onChange={(val) => setSelectedZonePath(val)}
+          />
+        )}
+
+        {checkType === "CATEGORY" && (
+          <TreeSelect
+            label="หมวดหมู่สินค้า"
+            placeholder="เลือกหมวดหมู่..."
+            options={buildCategoryTree(categories)}
+            value={categoryId}
+            onChange={(val) => setCategoryId(val)}
+          />
+        )}
+
+        {checkType === "PRODUCT" && (
+          <SearchableSelect
+            label="สินค้า"
+            options={[
+              { label: "เลือกสินค้า...", value: "" },
+              ...products.map(p => ({
+                label: `[${p.ProductCode}] ${p.Name}`,
+                value: String(p.ID),
+                imageUrl: p.ThumbnailUrl || "",
+              }))
+            ]}
+            value={productId}
+            onChange={(val) => setProductId(val)}
+            disabled={!isEditable || submitting || loadingOptions}
+          />
+        )}
 
         <Input
           label="หมายเหตุ (ถ้ามี)"
@@ -347,11 +255,21 @@ export default function EditCheckStockScheduleModal({
             <p className="text-sm font-medium text-slate-700 mb-2">
               สินค้าที่เกี่ยวข้อง ({relatedProducts.length} รายการ)
             </p>
-            <div className="max-h-32 overflow-y-auto text-xs text-slate-600 flex flex-col gap-1">
+            <div className="max-h-48 overflow-y-auto text-xs text-slate-600 flex flex-col gap-1">
               {relatedProducts.slice(0, 10).map(p => (
-                <div key={p.ID} className="flex justify-between items-center bg-white p-1.5 border border-slate-100 rounded-sm shadow-sm">
-                  <span>[{p.ProductCode}] {p.Name}</span>
-                  <span className="text-[#B70011] font-medium">{p.Stock} ชิ้น</span>
+                <div
+                  key={p.ID}
+                  onClick={() => setQuickViewProduct(p)}
+                  className="flex cursor-pointer items-center gap-2 bg-white p-1.5 border border-slate-100 rounded-sm shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                  title="ดูข้อมูลสินค้า"
+                >
+                  {p.ThumbnailUrl ? (
+                    <img src={p.ThumbnailUrl} alt="" className="h-8 w-8 shrink-0 rounded object-cover" />
+                  ) : (
+                    <div className="h-8 w-8 shrink-0 rounded bg-slate-100" />
+                  )}
+                  <span className="flex-1 truncate">[{p.ProductCode}] {p.Name}</span>
+                  <span className="shrink-0 text-[#B70011] font-medium">{p.Stock} ชิ้น</span>
                 </div>
               ))}
               {relatedProducts.length > 10 && (
@@ -375,5 +293,9 @@ export default function EditCheckStockScheduleModal({
         </div>
       </form>
     </Modal>
+    {quickViewProduct && (
+      <ProductQuickView product={quickViewProduct} onClose={() => setQuickViewProduct(null)} />
+    )}
+    </>
   );
 }

@@ -13,6 +13,15 @@ import Stock from './owner/stock/stock';
 import StockMovement from './owner/stock/stock_movement/stock_movement';
 import Stockdata from './owner/stock/Stock_data/stock_data';
 import StockCheck from './owner/stock/stock_check/stock_check';
+import AddCheckStockSchedulePage from './owner/stock/stock_check/add_check_stock_schedule';
+import ScheduleDetailPage from './owner/stock/stock_check/schedule_detail';
+import ProductDetailPage from './owner/stock/product_detail/product_detail';
+import EmployeeCheckStockListPage from './employee/wms/check_stock/check_stock_list';
+import EmployeeCheckStockExecutePage from './employee/wms/check_stock/check_stock_execute';
+import EmployeeStockData from './employee/wms/stock_data/stock';
+import EmployeeProductDetail from './employee/wms/stock_data/product_detail/product_detail';
+import AddProductPage from './owner/stock/add_data_stock/add_data_stock';
+import EditProductPage from './owner/stock/edit_data_stock/edit_data_stock';
 import ImportBill from './owner/import-bills/import_bill';
 import EditStockBillPage from './owner/import-bills/edit-stock-bill';
 import PreOrder from './owner/pre-order/pre-order';
@@ -72,12 +81,32 @@ export default function AppRouter(): React.JSX.Element {
           isAdminOrOwner ? <Stock /> : <Navigate to={firstMenuPath} replace />
         } />
 
+        <Route path="/owner/stock/new" element={
+          isAdminOrOwner ? <AddProductPage /> : <Navigate to={firstMenuPath} replace />
+        } />
+
+        <Route path="/owner/stock/:id" element={
+          isAdminOrOwner ? <ProductDetailPage /> : <Navigate to={firstMenuPath} replace />
+        } />
+
+        <Route path="/owner/stock/:id/edit" element={
+          isAdminOrOwner ? <EditProductPage /> : <Navigate to={firstMenuPath} replace />
+        } />
+
         <Route path="/owner/stock/stock-movement" element={
           isAdminOrOwner ? <StockMovement /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/owner/stock/stock-check" element={
           isAdminOrOwner ? <StockCheck /> : <Navigate to={firstMenuPath} replace />
+        } />
+
+        <Route path="/owner/stock/stock-check/new" element={
+          isAdminOrOwner ? <AddCheckStockSchedulePage /> : <Navigate to={firstMenuPath} replace />
+        } />
+
+        <Route path="/owner/stock/stock-check/:id" element={
+          isAdminOrOwner ? <ScheduleDetailPage /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/owner/stock/stock-data" element={
@@ -133,6 +162,12 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/employee/claims" element={<EmployeeClaimsPage />} />
         <Route path="/employee/claims/detail/:id" element={<ClaimDetailPage />} />
         <Route path="/employee/claims/edit/:id" element={<ClaimEditPage canApprove={false} />} />
+
+        {/* หน้าตรวจนับสต็อกสำหรับพนักงาน */}
+        <Route path="/employee/wms/check-stock" element={<EmployeeCheckStockListPage />} />
+        <Route path="/employee/wms/check-stock/:id" element={<EmployeeCheckStockExecutePage />} />
+        <Route path="/employee/wms/stock-data" element={<EmployeeStockData />} />
+        <Route path="/employee/wms/stock-data/:id" element={<EmployeeProductDetail />} />
 
       </Route>
 

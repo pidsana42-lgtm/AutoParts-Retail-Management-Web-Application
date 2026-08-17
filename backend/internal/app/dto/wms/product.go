@@ -15,6 +15,9 @@ type ProductRequestDTO struct {
 	Cost_price     float64 `json:"cost_price" binding:"required,gt=0"`
 	Note           string  `json:"note"`
 
+	// เพดานส่วนลดสูงสุดที่พนักงานขายหน้าร้าน (POS) กดลดให้สินค้าชิ้นนี้ได้ (%) — ฟิลด์นี้มีอยู่แล้วใน entity/products.go
+	MaxDiscountRate float64 `json:"max_discount_rate"`
+
 	ModelIDs         []uint `json:"model_ids" binding:"required"`
 	UnitID           uint   `json:"unit_id" binding:"required"`
 	CategoryID       uint   `json:"category_id" binding:"required"`
@@ -37,6 +40,7 @@ func (r *ProductRequestDTO) ToEntity() entity.Product {
 		Cost_price:       r.Cost_price,
 		Is_Active:        true, // กำหนดค่าเริ่มต้นให้เปิดใช้งานทันที
 		Note:             r.Note,
+		MaxDiscountRate:  r.MaxDiscountRate,
 		UnitID:           r.UnitID,
 		CategoryID:       r.CategoryID,
 		SubCategoryID:    r.SubCategoryID,
@@ -48,17 +52,18 @@ func (r *ProductRequestDTO) ToEntity() entity.Product {
 }
 
 type ProductListResponseDTO struct {
-	ID             uint    `json:"id"`
-	Product_Code   string  `json:"product_code"`
-	Part_Number    string  `json:"part_number"`
-	Product_Name   string  `json:"product_name"`
-	Barcode        string  `json:"barcode"`
-	Quantity       int     `json:"quantity"`
-	Limit_Quantity int     `json:"limit_quantity"`
-	Sale_price     float64 `json:"sale_price"`
-	Cost_price     float64 `json:"cost_price"`
-	Is_Active      bool    `json:"is_active"`
-	Models         []struct {
+	ID              uint    `json:"id"`
+	Product_Code    string  `json:"product_code"`
+	Part_Number     string  `json:"part_number"`
+	Product_Name    string  `json:"product_name"`
+	Barcode         string  `json:"barcode"`
+	Quantity        int     `json:"quantity"`
+	Limit_Quantity  int     `json:"limit_quantity"`
+	Sale_price      float64 `json:"sale_price"`
+	Cost_price      float64 `json:"cost_price"`
+	Is_Active       bool    `json:"is_active"`
+	MaxDiscountRate float64 `json:"max_discount_rate"`
+	Models          []struct {
 		ID        uint   `json:"id"`
 		ModelName string `json:"model_name"`
 		BrandName string `json:"brand_name"`
@@ -70,6 +75,7 @@ type ProductListResponseDTO struct {
 	UnitName           string `json:"unit_name"`
 	ShelfName          string `json:"shelf_name"`
 	ShelfLevelName     string `json:"shelf_level_name"`
+	ZoneName           string `json:"zone_name"`
 	ThumbnailUrl       string `json:"thumbnail_url"`
 	SupplierName       string `json:"supplier_name"`
 	Note               string `json:"note"`
@@ -93,6 +99,7 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	d.Sale_price = p.Sale_price
 	d.Cost_price = p.Cost_price
 	d.Is_Active = p.Is_Active
+	d.MaxDiscountRate = p.MaxDiscountRate
 
 	d.Models = make([]struct {
 		ID        uint   `json:"id"`
@@ -133,8 +140,12 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	}
 	d.UnitName = p.Unit.Unit_Name
 	d.ShelfName = ""
+	d.ZoneName = ""
 	if p.Shelf != nil {
 		d.ShelfName = p.Shelf.Shelf_Name
+		if p.Shelf.Zone != nil {
+			d.ZoneName = p.Shelf.Zone.Zone_Name
+		}
 	}
 	d.ShelfLevelName = ""
 	if p.ShelfLevel != nil {

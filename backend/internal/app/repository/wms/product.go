@@ -38,7 +38,7 @@ func (r *productRepository) CreateProduct(product *entity.Product) error {
 
 func (r *productRepository) GetProductByID(id uint) (*entity.Product, error) {
 	var product entity.Product
-	err := r.db.Preload("Models").Preload("Models.Brand").Preload("Category").Preload("SubCategory").Preload("SubSubCategory").Preload("Grade").Preload("Unit").Preload("Shelf").
+	err := r.db.Preload("Models").Preload("Models.Brand").Preload("Category").Preload("SubCategory").Preload("SubSubCategory").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("Shelf.Zone").Preload("ShelfLevel").
 		Preload("ProductImages", func(db *gorm.DB) *gorm.DB {
 			return db.Order("product_images.created_at DESC")
 		}).
@@ -74,7 +74,7 @@ func (r *productRepository) CreateProductImage(image *entity.ProductImage) error
 
 func (r *productRepository) ListProducts() ([]entity.Product, error) {
 	var products []entity.Product
-	err := r.db.Preload("Models").Preload("Models.Brand").Preload("Category").Preload("SubCategory").Preload("SubSubCategory").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("ShelfLevel").
+	err := r.db.Preload("Models").Preload("Models.Brand").Preload("Category").Preload("SubCategory").Preload("SubSubCategory").Preload("Grade").Preload("Unit").Preload("Shelf").Preload("Shelf.Zone").Preload("ShelfLevel").
 		Preload("ProductImages", func(db *gorm.DB) *gorm.DB {
 			return db.Order("product_images.created_at DESC")
 		}).

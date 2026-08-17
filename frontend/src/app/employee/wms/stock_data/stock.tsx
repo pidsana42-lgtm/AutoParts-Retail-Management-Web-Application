@@ -15,22 +15,22 @@ import {
   Eye,
 } from "lucide-react";
 
-import Card from "../../../components/elements/card";
-import Heading from "../../../components/elements/heading";
-import Text from "../../../components/elements/text";
-import Input from "../../../components/elements/input";
-import Select from "../../../components/elements/select";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../components/elements/table";
-import Button from "../../../components/elements/button";
-import TreeSelect from "../../../components/elements/tree_select";
-import type { CascaderOption } from "../../../components/elements/cascader";
+import Card from "../../../../components/elements/card";
+import Heading from "../../../../components/elements/heading";
+import Text from "../../../../components/elements/text";
+import Input from "../../../../components/elements/input";
+import Select from "../../../../components/elements/select";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../../components/elements/table";
+import Button from "../../../../components/elements/button";
+import TreeSelect from "../../../../components/elements/tree_select";
+import type { CascaderOption } from "../../../../components/elements/cascader";
 
 // นำเข้า API service สำหรับดึงข้อมูลสินค้า
-import { getProductsList, getSuppliersList } from "../../../service/http/wms/product";
-import { stockDataService } from "../../../service/http/wms/stock_data_service";
+import { getProductsList, getSuppliersList } from "../../../../service/http/wms/product";
+import { stockDataService } from "../../../../service/http/wms/stock_data_service";
 
-import type { StockItem } from "../../../interface/wms/product";
-import { cn } from "../../../utils/component";
+import type { StockItem } from "../../../../interface/wms/product";
+import { cn } from "../../../../utils/component";
 
 // คอนฟิก Badge ตามเกรดสินค้า
 const GRADE_BADGE: Record<string, string> = {
@@ -132,7 +132,7 @@ export default function StockPage() {
   };
 
   const handleViewClick = (product: StockItem) => {
-    navigate(`/owner/stock/${product.ID}`);
+    navigate(`/employee/wms/stock-data/${product.ID}`);
   };
 
   const fetchStock = async () => {
@@ -285,14 +285,14 @@ export default function StockPage() {
           <Heading level="h1" className="mb-1">จัดการคลังสินค้า</Heading>
           <Text variant="muted" className="mb-0">จัดการคลังสินค้าและอะไหล่จริงจากระบบ</Text>
         </div>
-        <Button
+        {/* <Button
           onClick={() => navigate("/owner/stock/new")}
           variant="primary"
           className="flex items-center gap-2 self-start sm:self-auto"
         >
           <Plus className="h-4 w-4" />
           เพิ่มข้อมูลสินค้า
-        </Button>
+        </Button> */}
       </div>
 
       {/* Stat cards */}
@@ -399,7 +399,7 @@ export default function StockPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </button>
-                        <button
+                        {/* <button
                           onClick={() => handleEditClick(row)}
                           className="hover:text-slate-700"
                           aria-label="แก้ไข"
@@ -408,7 +408,7 @@ export default function StockPage() {
                         </button>
                         <button className="hover:text-red-600" aria-label="ลบ">
                           <Trash2 className="h-4 w-4" />
-                        </button>
+                        </button> */}
                       </div>
                     </TableCell>
                   </TableRow>

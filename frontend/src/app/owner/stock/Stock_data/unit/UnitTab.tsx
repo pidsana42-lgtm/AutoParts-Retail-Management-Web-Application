@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Plus, Trash2, SquarePen } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
 
@@ -8,20 +8,36 @@ import type { Unit } from "../../../../../interface/wms/stock_data";
 // Extracted Modals
 import AddUnitModal from "./AddUnitModal";
 import EditUnitModal from "./EditUnitModal";
+import TablePagination from "../components/TablePagination";
 
 interface UnitTabProps {
   search: string;
   units: Unit[];
   loadData: () => void;
+  addSignal?: number;
 }
 
-export default function UnitTab({ search, units, loadData }: UnitTabProps) {
+export default function UnitTab({ search, units, loadData, addSignal }: UnitTabProps) {
   const { toast } = useToast();
 
   // Modals visibility state
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  useEffect(() => {
+    if (addSignal && addSignal > 0) {
+      setAddOpen(true);
+    }
+  }, [addSignal]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
 
   const handleDeleteUnit = async (id: number) => {
     if (!confirm("คุณแน่ใจว่าต้องการลบหน่วยสินค้านี้?")) return;
@@ -45,14 +61,19 @@ export default function UnitTab({ search, units, loadData }: UnitTabProps) {
     );
   }, [units, search]);
 
+  const paginatedUnits = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredUnits.slice(start, start + itemsPerPage);
+  }, [filteredUnits, currentPage, itemsPerPage]);
+
   return (
     <>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left border-collapse">
           <thead>
-            <tr className="bg-[#F2ECE9] border-b border-slate-200">
-              <th className="px-6 py-3.5 font-semibold text-slate-700">หน่วยสินค้า</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700 text-right w-1/6">จัดการ</th>
+            <tr className="bg-[#f6f3f2] border-b border-slate-200">
+              <th className="px-6 py-3.5 font-semibold text-[#797878]">หน่วยสินค้า</th>
+              <th className="px-6 py-3.5 font-semibold text-[#797878] text-right w-1/6">จัดการ</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -63,7 +84,7 @@ export default function UnitTab({ search, units, loadData }: UnitTabProps) {
                 </td>
               </tr>
             ) : (
-              filteredUnits.map((unit) => (
+              paginatedUnits.map((unit) => (
                 <tr key={unit.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-3.5 text-slate-800 font-medium">{unit.unit_name}</td>
                   <td className="px-6 py-3.5 text-right">
@@ -89,15 +110,17 @@ export default function UnitTab({ search, units, loadData }: UnitTabProps) {
         </table>
       </div>
 
-      <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4">
-        <button
-          onClick={() => setAddOpen(true)}
-          className="flex items-center gap-1.5 text-sm font-semibold text-[#B70011] hover:text-[#9e0010] cursor-pointer"
-        >
-          <Plus className="h-4 w-4" />
-          เพิ่มหน่วยสินค้า
-        </button>
-      </div>
+      <TablePagination
+        currentPage={currentPage}
+        totalItems={filteredUnits.length}
+        itemsPerPage={itemsPerPage}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={(n) => {
+          setItemsPerPage(n);
+          setCurrentPage(1);
+        }}
+        itemLabel="หน่วยสินค้า"
+      />
 
       {/* Modals */}
       <AddUnitModal
