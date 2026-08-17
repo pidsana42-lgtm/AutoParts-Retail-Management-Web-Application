@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TriangleAlert, TrendingUp, TrendingDown, CheckCircle2, Loader2, FileInput, CreditCard, ClipboardList, PackageOpen } from 'lucide-react';
+import { TriangleAlert, TrendingUp, TrendingDown, CheckCircle2, Loader2, FileInput, CreditCard, ClipboardList, PackageOpen, ReceiptText } from 'lucide-react';
 // Hooks
 import { useDashboardMetrics } from '../../owner/dashboard/hooks/useDashboardMetrics';
 // Components
@@ -469,11 +469,16 @@ const MainDashboard: React.FC = () => {
               <TableBody className='text-black'>
                 {recentSaleLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className='text-center py-12 text-gray-400'><Loader2 size={20} className='animate-spin' /></TableCell>
+                    <TableCell colSpan={5} className='text-center py-12 text-gray-400'><Loader2 size={32} className='animate-spin mx-auto' /></TableCell>
                   </TableRow>
                 ) : recentSale.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className='text-center py-12 text-gray-400'>ยังไม่มีรายการขายในวันนี้</TableCell>
+                    <TableCell colSpan={5} className='text-center py-12 text-gray-400'>
+                      <div className='flex flex-col items-center gap-4'>
+                        <ReceiptText size={40} strokeWidth={0.7} />
+                        <div>ยังไม่มีรายการขายในวันนี้</div>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ) : (
                   recentSale.map((item) => (
@@ -512,14 +517,14 @@ const MainDashboard: React.FC = () => {
               <TableBody className='text-black'>
                 {agingStockLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className='text-center py-12 text-gray-400'><Loader2 size={20} className='animate-spin' /></TableCell>
+                    <TableCell colSpan={8} className='text-center py-12 text-gray-400'><Loader2 size={32} className='animate-spin mx-auto' /></TableCell>
                   </TableRow>
                 ) : agingStock.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className='text-center py-12 text-gray-400'>
                       <div className='flex flex-col items-center gap-4'>
                         <PackageOpen size={40} strokeWidth={0.7} />
-                        <div>ไม่มีสินค้าค้างสต๊อก</div>
+                        <div>ไม่มีสินค้าค้างสต๊อกเกิน 180 วัน</div>
                       </div>
                     </TableCell>
                   </TableRow>

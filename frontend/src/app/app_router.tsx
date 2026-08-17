@@ -3,7 +3,7 @@ import { Routes, Route, Outlet, Navigate } from 'react-router-dom';
 import MainLayout from '../components/layer/main_layout'; 
 import Login from './login/Login';
 import MainDashboard from './owner/dashboard/dashboard'; 
-import SaleDashboard from './owner/dashboard/sale-dashboard';
+import SaleDashboard from './owner/dashboard/saledashboard';
 import Pos from './employee/pos/pos'; 
 import SalesHistory from './employee/pos/sales_history';
 import { getMenuByRole } from '../config/menu'; 
