@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, Boxes, MonitorSmartphone,
   ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight, CircleCheck, History,
-  FileX
+  FileX, ReceiptText
 
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -68,6 +68,8 @@ export const SIDEBAR_MENUS: MenuItem[] = [
       { icon: FileX, path: "/employee/pos/sales_cancellation_history", label: "ประวัติยกเลิกการขาย" },
     ],
   },
+  { icon: ReceiptText, label: "รายการธุรกรรม / การเงิน", path: "/employee/transactions/repayment-history", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],},
+
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/owner/orders", roles: ["OWNER", "ADMIN"] },
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/employee/orders", roles: ["EMPLOYEE"] },
   { icon: FileClock, label: "พรีออเดอร์", path: "/owner/pre-orders", roles: ["OWNER", "ADMIN"] },
@@ -113,9 +115,16 @@ export const getMenuByRole = (role: string): MenuItem[] => {
         updatedMenu.path = isOwnerOrAdmin ? "/owner/pos/pos" : "/employee/pos/pos";
       }
 
+      // 2. สลับ Main Path ของ รายการธุรกรรม ตาม Role
+      if (menu.path.includes("/transactions/repayment-history")) {
+        updatedMenu.path = isOwnerOrAdmin
+          ? "/owner/transactions/repayment-history"
+          : "/employee/transactions/repayment-history";
+      }
+
       if (!updatedMenu.subs) return updatedMenu;
 
-      // 2. สลับ Sub-menu Path & Label ตาม Role
+      // 3. สลับ Sub-menu Path & Label ตาม Role
       return {
         ...updatedMenu,
         subs: updatedMenu.subs.map((sub) => {
