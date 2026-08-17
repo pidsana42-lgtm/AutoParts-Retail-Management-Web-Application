@@ -37,7 +37,8 @@ export interface POItemResponse {
 
 // ข้อมูลที่เพิ่ม type เพื่อใช้จัดการ State ภายในหน้าเว็บ
 export type LocalPOItem = POItemResponse & { 
-    order_type: 'สั่งซื้อ' | 'พรีออเดอร์' 
+    order_type: 'สั่งซื้อ' | 'พรีออเดอร์';
+    pre_order_item_id?: number;
 };
 
 // -----------------------------------------
@@ -55,7 +56,7 @@ export interface CreatePOItemRequest {
 
 export interface CreatePORequest {
     supplier_id: number;
-    po_type_id: number;
+    notes?: string;
     status: 'DRAFT' | 'PENDING';
     po_items: CreatePOItemRequest[];
 }
@@ -112,11 +113,11 @@ export interface POResponse {
     supplier_name: string;
     total_amount: number;
     notes?: string;
-    status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'RESUBMITTED' | 'EXPIRED' | 'DELETED';
+    status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'RESUBMITTED' | 'CANCELLED' | 'DELETED';
     creator_name: string;
     created_at: string;
-    last_updated_by?: number;
-    updated_by_user?: { id: number; name: string };
+    updated_by_id?: number;
+    updated_by_name?: string;
     updated_at?: string;
     po_items: POItemResponse[];
 }
@@ -126,7 +127,8 @@ export interface GetPOsParams {
     limit: number;
     status?: string;
     search?: string;
-    date?: string;
+    month?: string;
+    year?: string;
 }
 
 export interface GetPOsResponse {
@@ -142,6 +144,9 @@ export interface SupplierRejectedSummary {
 export interface POSummaryResponse {
     pending_amount: number;
     approved_mtd_amount: number;
+    monthly_approved_count: number;
+    monthly_approved_last_count: number;
+    approved_change_percent: number;
     rejected_mtd_amount: number;
     rejected_by_supplier?: SupplierRejectedSummary[]; 
 }
@@ -167,7 +172,7 @@ export interface UpdatePOResponse {
   id: number;
   po_number: string;
   supplier_name: string;
-  status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'RESUBMITTED' | 'EXPIRED' | 'DELETED';
+  status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'RESUBMITTED' | 'CANCELLED' | 'DELETED';
   total_amount: number;
   notes?: string;
   last_updated_by?: number;

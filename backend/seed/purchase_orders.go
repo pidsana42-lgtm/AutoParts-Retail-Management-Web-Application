@@ -26,53 +26,45 @@ func PurchaseOrders(db *gorm.DB) error {
 	}
 
 	noteText := "ส่งสินค้าภายในเวลาทำการ 09:00 - 16:00 น. เท่านั้น"
-	approvedBy := employee.ID
-	approvedAt := time.Now().Add(-1 * time.Hour)   
-	expiresAt := time.Now().AddDate(0, 3, 0)       
-	pdfGeneratedAt := time.Now().Add(-2 * time.Hour)
+	approvedBy := owner.ID
+	approvedAt := time.Now().Add(-1 * time.Hour)
 
 	purchaseOrders := []entity.PO{
 		{
-			PO_number:        "PO-2026-0001",
-			Status:           enum.StatusApproved,
-			Total_amount:     59000.00,
-			Expires_at:       &expiresAt,
-			Pdf_url:          "https://storage.googleapis.com/bucket/pos/po-2026-0001.pdf",
-			Pdf_generated_at: &pdfGeneratedAt,
-			Notes:            &noteText,
-			Created_by:       owner.ID,
-			Approved_by:      &approvedBy,
-			Approved_at:      &approvedAt,
-			SupplierID:       1, 
-			PO_type_id:       1, 
+			PO_number:   "PO-2026-0001",
+			Status:      enum.StatusApproved,
+			Total_amount: 59000.00,
+			Notes:       &noteText,
+			Created_by:  owner.ID,
+			LastUpdatedBy: &owner.ID,
+			Approved_by: &approvedBy,
+			Approved_at: &approvedAt,
+			SupplierID:  1,
+			PO_type_id:  1,
 		},
 		{
-			PO_number:        "PO-2026-0002",
-			Status:           enum.StatusApproved,
-			Total_amount:     30000.00,
-			Expires_at:       &expiresAt,
-			Pdf_url:          "https://storage.googleapis.com/bucket/pos/po-2026-0002.pdf",
-			Pdf_generated_at: &pdfGeneratedAt,
-			Notes:            &noteText,
-			Created_by:       owner.ID,
-			Approved_by:      &approvedBy,
-			Approved_at:      &approvedAt,
-			SupplierID:       2, 
-			PO_type_id:       1, 
+			PO_number:   "PO-2026-0002",
+			Status:      enum.StatusApproved,
+			Total_amount: 30000.00,
+			Notes:       &noteText,
+			Created_by:  owner.ID,
+			LastUpdatedBy: &owner.ID,
+			Approved_by: &approvedBy,
+			Approved_at: &approvedAt,
+			SupplierID:  2,
+			PO_type_id:  1,
 		},
 		{
-			PO_number:        "PO-2026-0003",
-			Status:           enum.StatusApproved,
-			Total_amount:     100000.00,
-			Expires_at:       &expiresAt,
-			Pdf_url:          "https://storage.googleapis.com/bucket/pos/po-2026-0003.pdf",
-			Pdf_generated_at: &pdfGeneratedAt,
-			Notes:            &noteText,
-			Created_by:       admin.ID,
-			Approved_by:      &approvedBy,
-			Approved_at:      &approvedAt,
-			SupplierID:       3, 
-			PO_type_id:       1, 
+			PO_number:   "PO-2026-0003",
+			Status:      enum.StatusApproved,
+			Total_amount: 100000.00,
+			Notes:       &noteText,
+			Created_by:  admin.ID,
+			LastUpdatedBy: &owner.ID,
+			Approved_by: &approvedBy,
+			Approved_at: &approvedAt,
+			SupplierID:  3,
+			PO_type_id:  1,
 		},
 	}
 
