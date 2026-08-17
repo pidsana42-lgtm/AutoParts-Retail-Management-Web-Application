@@ -15,7 +15,6 @@ import Card from '../../../components/elements/card';
 import Select from '../../../components/elements/select';
 import Button from '../../../components/elements/button';
 import Table from '../../../components/elements/table';
-import Input from '../../../components/elements/input';
 
 interface Customer {
   id: number;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, FileUp } from 'lucide-react';
+import { ChevronRight, FileUp } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import type { ViewState } from '../../../../interface/import';
 

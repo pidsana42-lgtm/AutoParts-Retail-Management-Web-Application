@@ -1,16 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { TrendingUp, TrendingDown, Banknote, Users } from 'lucide-react';
-import { PieChart, Pie, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts';
 // Components
 import Card from '../../../components/elements/card';
 import Heading from '../../../components/elements/heading';
 import Input from '../../../components/elements/input';
 // Hooks
 import { useDashboardMetrics } from '../../owner/dashboard/hooks/useDashboardMetrics';
-// Service & Interface
-import { dashboardService } from '../../../service/http/dashboard/dashboard_service';
-import type { DashboardSummaryItem, SummaryQuery, StockAlertItem, RecentSaleItem, StockHealthStats } from '../../../interface/dashboard/dashboard_interface';
+// Interface
+import type { DashboardSummaryItem, StockHealthStats } from '../../../interface/dashboard/dashboard_interface';
 // Utils
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
@@ -87,16 +86,16 @@ const SaleDashboard: React.FC = () => {
   const isOwner = userRole === 'Owner';
 
   // Basic State
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoading] = useState(false);
+  const [error] = useState<string | null>(null);
   // Filter State
   const [selectedFilter, setSelectedFilter] = useState('daily');
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [summaryData, setSummaryData] = useState<DashboardSummaryItem[]>([]);
+  const [summaryData] = useState<DashboardSummaryItem[]>([]);
   // State ส่วน KPI Card
-  const [revenueTrend, setRevenueTrend] = useState<number | null>(null);
-  const [orderTrend, setOrderTrend] = useState<number | null>(null);
-  const [stockHealth, setStockHealth] = useState<StockHealthStats | null>(null);
+  const [revenueTrend] = useState<number | null>(null);
+  const [orderTrend] = useState<number | null>(null);
+  const [stockHealth] = useState<StockHealthStats | null>(null);
   const { aggr, marginPct } = useDashboardMetrics(summaryData, stockHealth);
 
   const getTrendLabel = () => {
