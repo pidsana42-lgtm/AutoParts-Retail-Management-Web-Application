@@ -7,7 +7,7 @@ import Card from '../../../components/elements/card';
 import Badge from '../../../components/elements/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import { getCustomerClaimById, updateCustomerClaim, updateClaimItemStatus } from '../../../service/http/claim/claim';
-import type { CustomerClaim, CustomerClaimItem } from '../../../interface/claim/claim';
+import type { CustomerClaim } from '../../../interface/claim/claim';
 
 interface ApprovedItemState {
   [itemId: number]: boolean;
@@ -82,13 +82,6 @@ export default function ClaimApprovePage(): React.JSX.Element {
       setSaving(false);
     }
   };
-
-  const claimAmount = (claim?.items ?? []).reduce((sum, item) => {
-    if (approvedItems[item.id ?? 0]) {
-      return sum + (item.qty * (item.unit_price || 0));
-    }
-    return sum;
-  }, 0);
 
   if (loading) {
     return (

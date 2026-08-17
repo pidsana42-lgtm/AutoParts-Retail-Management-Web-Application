@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Save, Trash2, AlertCircle } from 'lucide-react';
+import { ChevronRight, Save, Trash2, AlertCircle } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
 import type { ViewState, Supplier, Product, ScannedBillData } from '../../../../interface/import';

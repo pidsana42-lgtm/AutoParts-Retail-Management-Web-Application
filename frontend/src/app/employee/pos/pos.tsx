@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, User,ScanBarcode,} from "lucide-react";
+import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, ScanBarcode,} from "lucide-react";
 import Button from "../../../components/elements/button";
 import { usePosPayment } from "./hooks/usepospayment";
 import { usePosCart } from "./hooks/useposcart";
