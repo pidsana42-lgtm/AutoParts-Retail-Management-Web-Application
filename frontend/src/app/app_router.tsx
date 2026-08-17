@@ -32,6 +32,7 @@ import SalesCancellationHistory from './employee/pos/sales_cancellation_history'
 import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_history';
 import RepaymentHistory from './employee/transactions/repayment_history';
 import OwnerRepaymentHistory from './owner/transactions/repayment_history';
+import SettleBills from './employee/transactions/settle_bills';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -126,8 +127,12 @@ export default function AppRouter(): React.JSX.Element {
         {/* --------------------------------------------------- */}
 
         {/* -------- หน้ารายการธุรกรรม / การเงิน -------- */}
+        <Route path="/employee/transactions/settle-bills" element={<SettleBills />} />
         <Route path="/employee/transactions/repayment-history" element={<RepaymentHistory />} />
 
+        <Route path="/owner/transactions/settle-bills" element={
+          isAdminOrOwner ? <SettleBills /> : <Navigate to={firstMenuPath} replace />
+        } />
         <Route path="/owner/transactions/repayment-history" element={
           isAdminOrOwner ? <OwnerRepaymentHistory /> : <Navigate to={firstMenuPath} replace />
         } />
