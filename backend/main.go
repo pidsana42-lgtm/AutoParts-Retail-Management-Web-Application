@@ -3,8 +3,8 @@ package main
 import (
 	"backend/config"
 	"backend/internal/app/route"
-	"github.com/gin-gonic/gin"
 	"backend/internal/middleware"
+	"github.com/gin-gonic/gin"
 	"os"
 )
 
@@ -22,6 +22,7 @@ func main() {
 	// 3. เปิดโฟลเดอร์สำหรับฝากรูปภาพอะไหล่หรือสลิปเงิน
 	r.Static("/uploads", "./uploads")
 	r.Static("/barcode", "./barcode")
+	r.Static("/qrcode", "./QRCode")
 
 	// 4. ตั้งค่าด่าน OPTIONS สำหรับรองรับ CORS ตอนดึง API ข้ามไปหา Frontend
 	r.OPTIONS("/*path", func(c *gin.Context) {

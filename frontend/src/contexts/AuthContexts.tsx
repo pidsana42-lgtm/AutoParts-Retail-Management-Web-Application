@@ -47,6 +47,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const urlRole = searchParams.get("role");
       const urlUsername = searchParams.get("username");
       const urlFirstName = searchParams.get("first_name");
+      const urlId = searchParams.get("id");
       const urlError = searchParams.get("error");
 
       if (urlError) {
@@ -54,7 +55,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         window.history.replaceState({}, document.title, window.location.pathname);
       } else if (urlToken && urlRole) {
         const userObj = {
-          id: "",
+          id: urlId || "",
           name: urlFirstName ? decodeURIComponent(urlFirstName) : (urlUsername || "LINE User"),
           username: urlUsername || "line_user",
           first_name: urlFirstName ? decodeURIComponent(urlFirstName) : "",
@@ -114,9 +115,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!data.token) throw new Error("เซิร์ฟเวอร์ไม่ได้ส่ง token มา");
 
     // 1. ประกอบร่างวัตถุ User ตัวใหม่ ดึงข้อมูลจากฐานข้อมูลของ Go โดยตรง
+    // หมายเหตุ: backend ส่ง id มาแบบ flat (data.id) ไม่ได้ซ้อนอยู่ใต้ data.user — ของเดิมอ่านผิด field ทำให้ user.id ว่างเปล่าตลอด
     const userObj = {
-      id: data.user?.id || "", 
-      name: `${data.first_name} ${data.last_name}`, 
+      id: data.id != null ? String(data.id) : "",
+      name: `${data.first_name} ${data.last_name}`,
       username: data.username,
       first_name: data.first_name,
       last_name: data.last_name

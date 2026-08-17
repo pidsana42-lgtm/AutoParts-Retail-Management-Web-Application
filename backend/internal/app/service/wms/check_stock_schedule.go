@@ -17,6 +17,8 @@ type CheckStockScheduleService interface {
 	GetByID(id uint) (*wmsDto.CheckStockScheduleResponseDTO, error)
 	Update(id uint, req *wmsDto.CheckStockScheduleRequestDTO) error
 	UpdateStatus(id uint, status string) error
+	ApproveSchedule(id uint) error
+	RejectSchedule(id uint, note string) error
 	Delete(id uint) error
 	List(status string) ([]wmsDto.CheckStockScheduleResponseDTO, error)
 	ListEmployees() ([]entity.User, error)
@@ -35,18 +37,19 @@ func NewCheckStockScheduleService(repo wmsRepo.CheckStockScheduleRepository, db 
 
 func (s *checkStockScheduleService) CreateSchedule(req *wmsDto.CheckStockScheduleRequestDTO) error {
 	schedule := entity.CheckStockSchedule{
-		Scheduled_DateTime: req.Scheduled_DateTime,
-		Status:             "รอดำเนินการ",
-		Note:               req.Note,
-		CheckType:          req.CheckType,
-		ZoneID:             req.ZoneID,
-		ShelfID:            req.ShelfID,
-		ShelfLevelID:       req.ShelfLevelID,
-		CategoryID:         req.CategoryID,
-		SubCategoryID:      req.SubCategoryID,
-		SubSubCategoryID:   req.SubSubCategoryID,
-		ProductID:          req.ProductID,
-		UserID:             req.UserID,
+		Scheduled_DateTime:     req.Scheduled_DateTime,
+		Scheduled_End_DateTime: req.Scheduled_End_DateTime,
+		Status:                 "รอดำเนินการ",
+		Note:                   req.Note,
+		CheckType:              req.CheckType,
+		ZoneID:                 req.ZoneID,
+		ShelfID:                req.ShelfID,
+		ShelfLevelID:           req.ShelfLevelID,
+		CategoryID:             req.CategoryID,
+		SubCategoryID:          req.SubCategoryID,
+		SubSubCategoryID:       req.SubSubCategoryID,
+		ProductID:              req.ProductID,
+		UserID:                 req.UserID,
 	}
 	return s.repo.Create(&schedule)
 }
@@ -62,6 +65,7 @@ func (s *checkStockScheduleService) Update(id uint, req *wmsDto.CheckStockSchedu
 	}
 
 	schedule.Scheduled_DateTime = req.Scheduled_DateTime
+	schedule.Scheduled_End_DateTime = req.Scheduled_End_DateTime
 	schedule.Note = req.Note
 	schedule.CheckType = req.CheckType
 	schedule.ZoneID = req.ZoneID
@@ -83,7 +87,78 @@ func (s *checkStockScheduleService) GetByID(id uint) (*wmsDto.CheckStockSchedule
 }
 
 func (s *checkStockScheduleService) UpdateStatus(id uint, status string) error {
+	// กันพนักงานส่งผลนับ ("รอตรวจสอบ") หลังเลยกำหนดเวลาสิ้นสุดที่ตั้งไว้ — กันกรณี client ข้าม UI ยิง API ตรงๆ
+	// (ถ้ายังไม่เคยตั้งเวลาสิ้นสุดไว้จริง (ค่าว่าง/zero value) ถือว่าไม่มีเดดไลน์ ไม่บล็อก)
+	if status == "รอตรวจสอบ" {
+		schedule, err := s.repo.GetByID(id)
+		if err != nil {
+			return err
+		}
+		if !schedule.Scheduled_End_DateTime.IsZero() && time.Now().After(schedule.Scheduled_End_DateTime) {
+			return errors.New("หมดเวลาที่กำหนดให้ตรวจสอบตารางนี้แล้ว ไม่สามารถส่งผลนับได้")
+		}
+	}
 	return s.repo.UpdateStatus(id, status)
+}
+
+// ApproveSchedule: เจ้าของร้านอนุมัติผลนับสต็อกที่พนักงานส่งมา (สถานะ "รอตรวจสอบ")
+// นำจำนวนที่นับได้จริง (New_Quantity) ของแต่ละสินค้าไปเซ็ตเป็นสต็อกจริงในตาราง product แล้วปิดตารางเช็คเป็น "เสร็จสิ้น"
+func (s *checkStockScheduleService) ApproveSchedule(id uint) error {
+	schedule, err := s.repo.GetByID(id)
+	if err != nil {
+		return err
+	}
+	if schedule.Status != "รอตรวจสอบ" {
+		return errors.New("ตารางนี้ยังไม่ได้ส่งผลนับสต็อกมาให้ตรวจสอบ")
+	}
+
+	var records []entity.CheckStock
+	if err := s.db.Where("check_stock_schedule_id = ?", id).Find(&records).Error; err != nil {
+		return err
+	}
+	if len(records) == 0 {
+		return errors.New("ยังไม่มีข้อมูลสินค้าที่นับให้ตรวจสอบ")
+	}
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		for _, rec := range records {
+			if rec.ProductID == nil {
+				continue
+			}
+			if err := tx.Model(&entity.Product{}).Where("id = ?", *rec.ProductID).
+				Update("quantity", rec.New_Quantity).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Model(&entity.CheckStockSchedule{}).Where("id = ?", id).Update("status", "เสร็จสิ้น").Error
+	})
+}
+
+// RejectSchedule: เจ้าของร้านตีกลับผลนับสต็อก ให้พนักงานนับใหม่
+// ลบข้อมูลที่นับไว้เดิมทิ้ง (กันซ้ำตอนนับใหม่) แล้วเปิดตารางกลับไปสถานะ "กำลังเช็ค" พร้อมแนบเหตุผลไว้ในหมายเหตุ
+func (s *checkStockScheduleService) RejectSchedule(id uint, note string) error {
+	schedule, err := s.repo.GetByID(id)
+	if err != nil {
+		return err
+	}
+	if schedule.Status != "รอตรวจสอบ" {
+		return errors.New("ตารางนี้ยังไม่ได้ส่งผลนับสต็อกมาให้ตรวจสอบ")
+	}
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("check_stock_schedule_id = ?", id).Delete(&entity.CheckStock{}).Error; err != nil {
+			return err
+		}
+		updates := map[string]interface{}{"status": "กำลังเช็ค"}
+		if note != "" {
+			combined := fmt.Sprintf("[เจ้าของร้านตีกลับ] %s", note)
+			if schedule.Note != "" {
+				combined = combined + "\n" + schedule.Note
+			}
+			updates["note"] = combined
+		}
+		return tx.Model(&entity.CheckStockSchedule{}).Where("id = ?", id).Updates(updates).Error
+	})
 }
 
 func (s *checkStockScheduleService) Delete(id uint) error {
@@ -124,20 +199,21 @@ func (s *checkStockScheduleService) GetCategoryTree() ([]entity.Category, error)
 
 func (s *checkStockScheduleService) toResponse(sc *entity.CheckStockSchedule) *wmsDto.CheckStockScheduleResponseDTO {
 	res := &wmsDto.CheckStockScheduleResponseDTO{
-		ID:                 sc.ID,
-		Scheduled_DateTime: sc.Scheduled_DateTime,
-		Status:             sc.Status,
-		Note:               sc.Note,
-		CreatedAt:          sc.CreatedAt,
-		CheckType:          sc.CheckType,
-		ZoneID:             sc.ZoneID,
-		ShelfID:            sc.ShelfID,
-		ShelfLevelID:       sc.ShelfLevelID,
-		CategoryID:         sc.CategoryID,
-		SubCategoryID:      sc.SubCategoryID,
-		SubSubCategoryID:   sc.SubSubCategoryID,
-		ProductID:          sc.ProductID,
-		UserID:             sc.UserID,
+		ID:                     sc.ID,
+		Scheduled_DateTime:     sc.Scheduled_DateTime,
+		Scheduled_End_DateTime: sc.Scheduled_End_DateTime,
+		Status:                 sc.Status,
+		Note:                   sc.Note,
+		CreatedAt:              sc.CreatedAt,
+		CheckType:              sc.CheckType,
+		ZoneID:                 sc.ZoneID,
+		ShelfID:                sc.ShelfID,
+		ShelfLevelID:           sc.ShelfLevelID,
+		CategoryID:             sc.CategoryID,
+		SubCategoryID:          sc.SubCategoryID,
+		SubSubCategoryID:       sc.SubSubCategoryID,
+		ProductID:              sc.ProductID,
+		UserID:                 sc.UserID,
 	}
 
 	if sc.User != nil {
@@ -155,13 +231,13 @@ func (s *checkStockScheduleService) toResponse(sc *entity.CheckStockSchedule) *w
 		var zone entity.Zone
 		s.db.First(&zone, sc.ZoneID)
 		target := fmt.Sprintf("Zone %s", zone.Zone_Name)
-		
+
 		var shelf entity.Shelf
 		if sc.ShelfID != nil {
 			s.db.First(&shelf, sc.ShelfID)
 			target += fmt.Sprintf(" - %s", shelf.Shelf_Name)
 		}
-		
+
 		var level entity.ShelfLevel
 		if sc.ShelfLevelID != nil {
 			s.db.First(&level, sc.ShelfLevelID)
@@ -208,7 +284,8 @@ func (s *checkStockScheduleService) toResponse(sc *entity.CheckStockSchedule) *w
 	} else if sc.CheckType == "PRODUCT" && sc.ProductID != nil {
 		var prod entity.Product
 		s.db.First(&prod, sc.ProductID)
-		res.TargetName = fmt.Sprintf("สินค้า: %s", prod.Product_Name)
+		// รวมรหัสสินค้าไว้ใน TargetName ด้วย ให้ค้นหาได้ทั้งรหัสและชื่อจากฟิลด์เดียวกัน
+		res.TargetName = fmt.Sprintf("[%s] %s", prod.Product_Code, prod.Product_Name)
 		res.ProductCount = 1
 	}
 

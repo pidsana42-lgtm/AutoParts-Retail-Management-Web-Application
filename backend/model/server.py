@@ -1164,45 +1164,55 @@ def sanitize_filename(name: str) -> str:
 def generate_product_codes(request: GenerateCodesRequest):
     """
     Query products table by ID to get the real internal WMS product code.
-    Generates Barcode (Code 128) using these internal values,
-    and saves them under the backend/barcode folder using generator.py.
+    Generates Barcode (Code 128) and public product URL QR Code images.
     """
     import os
     import sys
     
-    # Add backend root to path to allow importing from barcode package
-    backend_root = "/Users/phonsirithabunsri/Desktop/AutoParts-Retail-Management-Web-Application/backend"
-    if backend_root not in sys.path:
-        sys.path.append(backend_root)
+    backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    barcode_dir = os.path.join(backend_root, "barcode")
+    qrcode_dir = os.path.join(backend_root, "QRCode")
+    for path in (barcode_dir, qrcode_dir):
+        if path not in sys.path:
+            sys.path.insert(0, path)
         
     try:
-        from backend.barcode.barcode_generator import generate_barcode
+        from barcode_generator import generate_barcode
+        from qr_generator import generate_qrcode
     except ImportError as e:
-        print(f"Error importing barcode generator: {e}")
-        raise HTTPException(status_code=500, detail=f"Barcode module import error: {e}")
+        print(f"Error importing code generator: {e}")
+        raise HTTPException(status_code=500, detail=f"Code module import error: {e}")
 
-    BARCODE_DIR = os.path.join(backend_root, "barcode")
+    product_base_url = os.getenv("QR_PRODUCT_BASE_URL", "http://8.219.93.236:3000/product").rstrip("/")
     generated = []
+    generated_qr_urls = {}
     
     with engine.connect() as conn:
         for prod_id in request.product_ids:
             try:
-                # Query the actual internal WMS product code (source of truth)
-                query = text("SELECT product_code FROM products WHERE id = :id")
+                # Use the internal WMS product code as the barcode source.
+                query = text("SELECT product_code, barcode FROM products WHERE id = :id")
                 row = conn.execute(query, {"id": prod_id}).fetchone()
                 if not row:
                     print(f"Product ID {prod_id} not found in DB, skipping code generation.")
                     continue
                 
-                wms_code = row[0] or ""
+                product_code, barcode_value = row
+                wms_code = (product_code or barcode_value or "").strip()
+                product_url = f"{product_base_url}/{prod_id}"
                 
-                # Call the modular barcode generator
-                generate_barcode(prod_id, wms_code, BARCODE_DIR)
+                generate_barcode(prod_id, wms_code, barcode_dir)
+                generate_qrcode(prod_id, wms_code, product_url, qrcode_dir)
                 generated.append(prod_id)
+                generated_qr_urls[str(prod_id)] = product_url
             except Exception as item_err:
                 print(f"Error processing product ID {prod_id}: {item_err}")
                 
-    return {"status": "success", "generated_product_ids": generated}
+    return {
+        "status": "success",
+        "generated_product_ids": generated,
+        "generated_qr_urls": generated_qr_urls,
+    }
 
 @app.get("/health")
 def health_check():

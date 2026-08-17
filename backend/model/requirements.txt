@@ -18,6 +18,7 @@ numpy>=1.20.0
 llama-cpp-python>=0.3.0
 PyMuPDF>=1.22.0
 qrcode[pil]>=7.4.2
+python-barcode[images]>=0.15.1
 pillow-heif>=0.18.0
 
 

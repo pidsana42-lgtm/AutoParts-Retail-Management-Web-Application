@@ -15,64 +15,76 @@ type ProductRequestDTO struct {
 	Cost_price     float64 `json:"cost_price" binding:"required,gt=0"`
 	Note           string  `json:"note"`
 
-	ModelIDs      []uint `json:"model_ids" binding:"required"`
-	UnitID        uint  `json:"unit_id" binding:"required"`
-	CategoryID    uint  `json:"category_id" binding:"required"`
-	SubCategoryID *uint `json:"sub_category_id"`
-	SubSubCategoryID *uint `json:"sub_sub_category_id"`
-	GradeID       uint  `json:"grade_id" binding:"required"`
-	ShelfID       uint  `json:"shelf_id" binding:"required"`
-	ShelfLevelID  *uint `json:"shelf_level_id"`
+	// เพดานส่วนลดสูงสุดที่พนักงานขายหน้าร้าน (POS) กดลดให้สินค้าชิ้นนี้ได้ (%) — ฟิลด์นี้มีอยู่แล้วใน entity/products.go
+	MaxDiscountRate float64 `json:"max_discount_rate"`
+
+	ModelIDs         []uint `json:"model_ids" binding:"required"`
+	UnitID           uint   `json:"unit_id" binding:"required"`
+	CategoryID       uint   `json:"category_id" binding:"required"`
+	SubCategoryID    *uint  `json:"sub_category_id"`
+	SubSubCategoryID *uint  `json:"sub_sub_category_id"`
+	GradeID          uint   `json:"grade_id" binding:"required"`
+	ShelfID          uint   `json:"shelf_id" binding:"required"`
+	ShelfLevelID     *uint  `json:"shelf_level_id"`
 }
 
 func (r *ProductRequestDTO) ToEntity() entity.Product {
 	return entity.Product{
-		Product_Code:   r.Product_Code,
-		Part_Number:    r.Part_Number,
-		Product_Name:   r.Product_Name,
-		Barcode:        r.Barcode,
-		Quantity:       r.Quantity,
-		Limit_Quantity: r.Limit_Quantity,
-		Sale_price:     r.Sale_price,
-		Cost_price:     r.Cost_price,
-		Is_Active:      true, // กำหนดค่าเริ่มต้นให้เปิดใช้งานทันที
-		Note:           r.Note,
-		UnitID:         r.UnitID,
-		CategoryID:     r.CategoryID,
-		SubCategoryID:  r.SubCategoryID,
+		Product_Code:     r.Product_Code,
+		Part_Number:      r.Part_Number,
+		Product_Name:     r.Product_Name,
+		Barcode:          r.Barcode,
+		Quantity:         r.Quantity,
+		Limit_Quantity:   r.Limit_Quantity,
+		Sale_price:       r.Sale_price,
+		Cost_price:       r.Cost_price,
+		Is_Active:        true, // กำหนดค่าเริ่มต้นให้เปิดใช้งานทันที
+		Note:             r.Note,
+		MaxDiscountRate:  r.MaxDiscountRate,
+		UnitID:           r.UnitID,
+		CategoryID:       r.CategoryID,
+		SubCategoryID:    r.SubCategoryID,
 		SubSubCategoryID: r.SubSubCategoryID,
-		GradeID:        r.GradeID,
-		ShelfID:        r.ShelfID,
-		ShelfLevelID:   r.ShelfLevelID,
+		GradeID:          r.GradeID,
+		ShelfID:          r.ShelfID,
+		ShelfLevelID:     r.ShelfLevelID,
 	}
 }
 
 type ProductListResponseDTO struct {
-	ID             uint    `json:"id"`
-	Product_Code   string  `json:"product_code"`
-	Part_Number    string  `json:"part_number"`
-	Product_Name   string  `json:"product_name"`
-	Barcode        string  `json:"barcode"`
-	Quantity       int     `json:"quantity"`
-	Limit_Quantity int     `json:"limit_quantity"`
-	Sale_price     float64 `json:"sale_price"`
-	Cost_price     float64 `json:"cost_price"`
-	Is_Active      bool    `json:"is_active"`
-	Models         []struct {
+	ID              uint    `json:"id"`
+	Product_Code    string  `json:"product_code"`
+	Part_Number     string  `json:"part_number"`
+	Product_Name    string  `json:"product_name"`
+	Barcode         string  `json:"barcode"`
+	Quantity        int     `json:"quantity"`
+	Limit_Quantity  int     `json:"limit_quantity"`
+	Sale_price      float64 `json:"sale_price"`
+	Cost_price      float64 `json:"cost_price"`
+	Is_Active       bool    `json:"is_active"`
+	MaxDiscountRate float64 `json:"max_discount_rate"`
+	Models          []struct {
 		ID        uint   `json:"id"`
 		ModelName string `json:"model_name"`
 		BrandName string `json:"brand_name"`
 	} `json:"models"`
-	CategoryName   string  `json:"category_name"`
-	SubCategoryName string `json:"sub_category_name"`
+	CategoryName       string `json:"category_name"`
+	SubCategoryName    string `json:"sub_category_name"`
 	SubSubCategoryName string `json:"sub_sub_category_name"`
-	GradeName      string  `json:"grade_name"`
-	UnitName       string  `json:"unit_name"`
-	ShelfName      string  `json:"shelf_name"`
-	ShelfLevelName string  `json:"shelf_level_name"`
-	ThumbnailUrl   string  `json:"thumbnail_url"`
-	SupplierName   string  `json:"supplier_name"`
-	Note           string  `json:"note"`
+	GradeName          string `json:"grade_name"`
+	UnitName           string `json:"unit_name"`
+	ShelfName          string `json:"shelf_name"`
+	ShelfLevelName     string `json:"shelf_level_name"`
+	ZoneName           string `json:"zone_name"`
+	ThumbnailUrl       string `json:"thumbnail_url"`
+	SupplierName       string `json:"supplier_name"`
+	Note               string `json:"note"`
+}
+
+type ProductImageResponseDTO struct {
+	ID        uint   `json:"id"`
+	ProductID uint   `json:"product_id"`
+	ImageURL  string `json:"image_url"`
 }
 
 // Helper function ใน DTO สำหรับแปลงข้อมูลยกชุด
@@ -87,6 +99,7 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	d.Sale_price = p.Sale_price
 	d.Cost_price = p.Cost_price
 	d.Is_Active = p.Is_Active
+	d.MaxDiscountRate = p.MaxDiscountRate
 
 	d.Models = make([]struct {
 		ID        uint   `json:"id"`
@@ -127,8 +140,12 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	}
 	d.UnitName = p.Unit.Unit_Name
 	d.ShelfName = ""
+	d.ZoneName = ""
 	if p.Shelf != nil {
 		d.ShelfName = p.Shelf.Shelf_Name
+		if p.Shelf.Zone != nil {
+			d.ZoneName = p.Shelf.Zone.Zone_Name
+		}
 	}
 	d.ShelfLevelName = ""
 	if p.ShelfLevel != nil {

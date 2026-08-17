@@ -1,19 +1,18 @@
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ClipboardList,
   TriangleAlert,
   Landmark,
   Filter,
-  Barcode,
-  Cog,
-  Disc,
-  Droplet,
-  Zap,
   SquarePen,
   Trash2,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Plus,
+  Eye,
 } from "lucide-react";
 
 import Card from "../../../components/elements/card";
@@ -21,32 +20,17 @@ import Heading from "../../../components/elements/heading";
 import Text from "../../../components/elements/text";
 import Input from "../../../components/elements/input";
 import Select from "../../../components/elements/select";
-import Table, { type TableColumn } from "../../../components/elements/table";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../components/elements/table";
 import Button from "../../../components/elements/button";
 import TreeSelect from "../../../components/elements/tree_select";
-import AddDataStock from "./add_data_stock/add_data_stock";
-import EditDataStock from "./edit_data_stock/edit_data_stock";
 import type { CascaderOption } from "../../../components/elements/cascader";
 
 // นำเข้า API service สำหรับดึงข้อมูลสินค้า
-import {
-  getProductsList,
-  getSuppliersList,
-  getGradesList,
-  getUnitsList,
-} from "../../../service/http/wms/product";
+import { getProductsList, getSuppliersList } from "../../../service/http/wms/product";
 import { stockDataService } from "../../../service/http/wms/stock_data_service";
 
 import type { StockItem } from "../../../interface/wms/product";
-
-// คอนฟิกไอคอนตามประเภทสินค้า (รองรับตัวพิมพ์ใหญ่จากหลังบ้าน)
-const CATEGORY_ICON: Record<string, { icon: typeof Cog; className: string }> = {
-  ENGINE: { icon: Cog, className: "bg-slate-800" },
-  BRAKING: { icon: Disc, className: "bg-red-900" },
-  MAINT: { icon: Droplet, className: "bg-amber-600" },
-  "MAINT.": { icon: Droplet, className: "bg-amber-600" },
-  ELECTRICAL: { icon: Zap, className: "bg-slate-600" },
-};
+import { cn } from "../../../utils/component";
 
 // คอนฟิก Badge ตามเกรดสินค้า
 const GRADE_BADGE: Record<string, string> = {
@@ -55,7 +39,21 @@ const GRADE_BADGE: Record<string, string> = {
   B: "bg-slate-300 text-slate-700",
 };
 
+// สร้างเลขหน้าแบบมี "..." คั่นเมื่อมีหลายหน้า (สไตล์เดียวกับหน้าใบสั่งซื้อ)
+function getPageNumbers(current: number, total: number): (number | "...")[] {
+  const delta = 1;
+  const range: (number | "...")[] = [];
+  const left = Math.max(2, current - delta);
+  const right = Math.min(total - 1, current + delta);
 
+  range.push(1);
+  if (left > 2) range.push("...");
+  for (let i = left; i <= right; i++) range.push(i);
+  if (right < total - 1) range.push("...");
+  if (total > 1) range.push(total);
+
+  return range;
+}
 
 // -----------------------------------------------------------------------------
 // Presentational Helpers
@@ -114,6 +112,7 @@ function StockLevelBar({ stock, minStock }: { stock: number; minStock: number })
 // Page Component
 // -----------------------------------------------------------------------------
 export default function StockPage() {
+  const navigate = useNavigate();
   const [stockData, setStockData] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -123,27 +122,18 @@ export default function StockPage() {
   const [categoryNames, setCategoryNames] = useState<string[]>([]);
   const [supplier, setSupplier] = useState("");
   const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const [suppliers, setSuppliers] = useState<{ label: string; value: string }[]>([]);
-
-  // States สำหรับปุ่มและแบบฟอร์มเพิ่มสินค้า (Add Product)
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [formCascaderOptions, setFormCascaderOptions] = useState<CascaderOption[]>([]);
-  const [zoneCascaderOptions, setZoneCascaderOptions] = useState<CascaderOption[]>([]);
-  const [models, setModels] = useState<{ label: string; value: string }[]>([]);
-  const [grades, setGrades] = useState<{ label: string; value: string }[]>([]);
-  const [units, setUnits] = useState<{ label: string; value: string }[]>([]);
-
-  // States สำหรับแก้ไขสินค้า (Edit Product)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<StockItem | null>(null);
 
   const handleEditClick = (product: StockItem) => {
-    setSelectedProduct(product);
-    setIsEditModalOpen(true);
+    navigate(`/owner/stock/${product.ID}/edit`);
   };
 
-
+  const handleViewClick = (product: StockItem) => {
+    navigate(`/owner/stock/${product.ID}`);
+  };
 
   const fetchStock = async () => {
     try {
@@ -204,53 +194,6 @@ export default function StockPage() {
         { label: "บริษัททั้งหมด", value: "" },
         ...sups.map((s) => ({ label: s.name, value: s.name })),
       ]);
-
-      const brandList = await stockDataService.getBrands();
-      const modelOptions: { label: string; value: string }[] = [];
-      brandList.forEach((b) => {
-        if (b.models && b.models.length > 0) {
-          b.models.forEach((m) => {
-            modelOptions.push({
-              label: `${b.brand_name} - ${m.model_name}`,
-              value: String((m as any).ID || m.id),
-            });
-          });
-        }
-      });
-      setModels(modelOptions);
-
-      const gradeList = await getGradesList();
-      setGrades(gradeList.map((g) => ({ label: g.name, value: String(g.id) })));
-
-      const unitList = await getUnitsList();
-      setUnits(unitList.map((u) => ({ label: u.name, value: String(u.id) })));
-
-      const shelfList = await stockDataService.getShelves();
-
-      const zoneList = await stockDataService.getZones();
-      const zMap = new Map<number, CascaderOption>();
-      zoneList.forEach(z => {
-        zMap.set(z.id, {
-          value: String(z.id),
-          label: z.zone_name,
-          children: []
-        });
-      });
-      shelfList.forEach(s => {
-        const pz = zMap.get(s.zone_id);
-        if (pz) {
-          if (!pz.children) pz.children = [];
-          const sNode: CascaderOption = { value: String(s.id), label: s.shelf_name };
-          if (s.shelf_levels && s.shelf_levels.length > 0) {
-            sNode.children = s.shelf_levels.map(l => ({
-              value: String(l.id),
-              label: l.level_name
-            }));
-          }
-          pz.children.push(sNode);
-        }
-      });
-      setZoneCascaderOptions(Array.from(zMap.values()));
     } catch (err) {
       console.error("Failed to load products from API:", err);
       setError("ไม่สามารถดึงข้อมูลสินค้าจากระบบคลังได้");
@@ -306,6 +249,18 @@ export default function StockPage() {
     });
   }, [stockData, search, categoryNames, supplier]);
 
+  // กลับไปหน้า 1 ทุกครั้งที่ตัวกรองเปลี่ยน กันกรณีหน้าปัจจุบันเกินจำนวนหน้าที่กรองได้แล้ว
+  useEffect(() => {
+    setPage(1);
+  }, [search, categoryNames, supplier, itemsPerPage]);
+
+  const totalItems = filteredData.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const pagedData = useMemo(
+    () => filteredData.slice((page - 1) * itemsPerPage, page * itemsPerPage),
+    [filteredData, page, itemsPerPage]
+  );
+
   // คำนวณ Summary การ์ดด้านบนจาก Database จริง
   const totalSkus = stockData.length;
   const lowStockCount = stockData.filter((item) => item.Stock <= item.MinStock).length;
@@ -319,111 +274,6 @@ export default function StockPage() {
     return `฿${total.toLocaleString()}`;
   }, [stockData]);
 
-  const columns: TableColumn<StockItem>[] = [
-    {
-      key: "ID",
-      header: "ID",
-      width: "70px",
-      render: (row) => <span className="text-slate-400">{row.ID}</span>,
-    },
-    {
-      key: "image",
-      header: "รูปภาพ",
-      width: "70px",
-      render: (row) => {
-        const catConfig = CATEGORY_ICON[row.Category?.toUpperCase()] || { icon: Cog, className: "bg-slate-800" };
-        const Icon = catConfig.icon;
-        return (
-          <div className={["flex h-9 w-9 items-center justify-center rounded-md", catConfig.className].join(" ")}>
-            <Icon className="h-4 w-4 text-white" />
-          </div>
-        );
-      },
-    },
-    {
-      key: "product",
-      header: "รหัสสินค้า / ชื่อสินค้า",
-      render: (row) => (
-        <div>
-          <p className="font-semibold text-slate-800">{row.ProductCode}</p>
-          <p className="text-xs text-slate-400">{row.Name}</p>
-        </div>
-      ),
-    },
-    {
-      key: "PartNo",
-      header: "PART NO.",
-      render: (row) => <span className="text-slate-600">{row.PartNo || "-"}</span>,
-    },
-    {
-      key: "Barcode",
-      header: "บาร์โค้ด",
-      render: (row) => (
-        <div className="flex items-center gap-1.5 text-slate-500">
-          <Barcode className="h-3.5 w-3.5 shrink-0" />
-          <span>{row.Barcode || "-"}</span>
-        </div>
-      ),
-    },
-    {
-      key: "Models",
-      header: "แบรนด์ - รุ่นรถ",
-      render: (row) => (
-        <span className="font-semibold text-slate-700">
-          {row.Models && row.Models.length > 0
-            ? row.Models.map(m => `${m.brand_name} ${m.model_name}`).join(", ")
-            : "-"}
-        </span>
-      ),
-    },
-    {
-      key: "Category",
-      header: "ประเภท",
-      render: (row) => (
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
-          {row.Category || "ทั่วไป"}
-        </span>
-      ),
-    },
-    {
-      key: "Grade",
-      header: "เกรด",
-      align: "center",
-      render: (row) => {
-        const gradeKey = row.Grade?.toUpperCase() || "A";
-        return (
-          <span className={["inline-flex h-6 w-6 items-center justify-center rounded text-xs font-bold", GRADE_BADGE[gradeKey] || "bg-slate-200"].join(" ")}>
-            {gradeKey}
-          </span>
-        );
-      },
-    },
-    {
-      key: "stockLevel",
-      header: "คลังคงเหลือ / ขั้นต่ำ",
-      render: (row) => <StockLevelBar stock={row.Stock} minStock={row.MinStock} />,
-    },
-    {
-      key: "actions",
-      header: "จัดการ",
-      align: "right",
-      render: (row) => (
-        <div className="flex items-center justify-end gap-3 text-slate-400">
-          <button
-            onClick={() => handleEditClick(row)}
-            className="hover:text-slate-700"
-            aria-label="แก้ไข"
-          >
-            <SquarePen className="h-4 w-4" />
-          </button>
-          <button className="hover:text-red-600" aria-label="ลบ">
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
-      ),
-    },
-  ];
-
   if (loading) return <div className="p-6 text-slate-500 text-center">กำลังเชื่อมต่อฐานข้อมูลคลังสินค้า...</div>;
   if (error) return <div className="p-6 text-red-600 text-center font-medium">{error}</div>;
 
@@ -436,7 +286,7 @@ export default function StockPage() {
           <Text variant="muted" className="mb-0">จัดการคลังสินค้าและอะไหล่จริงจากระบบ</Text>
         </div>
         <Button
-          onClick={() => setIsAddModalOpen(true)}
+          onClick={() => navigate("/owner/stock/new")}
           variant="primary"
           className="flex items-center gap-2 self-start sm:self-auto"
         >
@@ -464,7 +314,7 @@ export default function StockPage() {
             />
           </div>
           <div className="flex gap-3">
-            <div className="w-full sm:w-56 relative z-50">
+            <div className="w-full sm:w-56">
               <TreeSelect
                 options={treeSelectOptions}
                 placeholder="เลือกประเภท"
@@ -491,76 +341,169 @@ export default function StockPage() {
       </Card>
 
       {/* Table */}
-      <Card noPadding>
-        <Table
-          columns={columns}
-          data={filteredData}
-          rowKey={(row) => row.ID}
-          emptyText="ไม่พบรายการอะไหล่ในระบบสต็อก"
-        />
+      <Card className="overflow-hidden" noPadding>
+        <Table>
+          <TableHeader className="bg-[#f6f3f2] text-[#797878]">
+            <TableRow>
+              <TableHead className="pl-6">รหัสสินค้า</TableHead>
+              <TableHead>ชื่อสินค้า</TableHead>
+              <TableHead>PART NO.</TableHead>
+              <TableHead>แบรนด์ - รุ่นรถ</TableHead>
+              <TableHead>ประเภท</TableHead>
+              <TableHead className="text-center">เกรด</TableHead>
+              <TableHead>คลังคงเหลือ / ขั้นต่ำ</TableHead>
+              <TableHead className="text-right pr-6">จัดการ</TableHead>
+            </TableRow>
+          </TableHeader>
+
+          <TableBody className="text-gray-700">
+            {pagedData.length > 0 ? (
+              pagedData.map((row) => {
+                const gradeKey = row.Grade?.toUpperCase() || "A";
+                return (
+                  <TableRow key={row.ID} className="hover:bg-gray-50/70">
+                    <TableCell className="pl-6 font-semibold text-gray-900">{row.ProductCode}</TableCell>
+                    <TableCell className="text-gray-600">{row.Name}</TableCell>
+                    <TableCell className="text-gray-600">{row.PartNo || "-"}</TableCell>
+                    <TableCell>
+                      <span className="font-semibold text-slate-700">
+                        {row.Models && row.Models.length > 0
+                          ? row.Models.map((m) => `${m.brand_name} ${m.model_name}`).join(", ")
+                          : "-"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
+                        {row.Category || "ทั่วไป"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span
+                        className={cn(
+                          "inline-flex h-6 w-6 items-center justify-center rounded text-xs font-bold",
+                          GRADE_BADGE[gradeKey] || "bg-slate-200"
+                        )}
+                      >
+                        {gradeKey}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <StockLevelBar stock={row.Stock} minStock={row.MinStock} />
+                    </TableCell>
+                    <TableCell className="text-right pr-6">
+                      <div className="flex items-center justify-end gap-3 text-slate-400">
+                        <button
+                          onClick={() => handleViewClick(row)}
+                          className="hover:text-blue-600"
+                          aria-label="ดูรายละเอียด"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleEditClick(row)}
+                          className="hover:text-slate-700"
+                          aria-label="แก้ไข"
+                        >
+                          <SquarePen className="h-4 w-4" />
+                        </button>
+                        <button className="hover:text-red-600" aria-label="ลบ">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            ) : (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-12 text-gray-500">
+                  ไม่พบรายการอะไหล่ในระบบสต็อก
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
 
         {/* Pagination footer */}
-        <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-sm text-slate-400">
-          <span>Showing 1 to {filteredData.length} of {totalSkus.toLocaleString()} entries</span>
-          <div className="flex items-center gap-1">
-            <button
-              className="flex h-8 w-8 items-center justify-center rounded hover:bg-slate-100 disabled:opacity-40"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            {[1, 2, 3].map((p) => (
-              <button
-                key={p}
-                onClick={() => setPage(p)}
-                className={[
-                  "flex h-8 w-8 items-center justify-center rounded text-sm font-medium",
-                  page === p ? "bg-red-600 text-white" : "hover:bg-slate-100 text-slate-500",
-                ].join(" ")}
-              >
-                {p}
-              </button>
-            ))}
-            <button
-              className="flex h-8 w-8 items-center justify-center rounded hover:bg-slate-100"
-              onClick={() => setPage((p) => Math.min(3, p + 1))}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </Card>
-      {/* Modal สำหรับเพิ่มสินค้าใหม่ (ดึงแยกไฟล์) */}
-      <AddDataStock
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onSuccess={() => {
-          setIsAddModalOpen(false);
-          fetchStock();
-        }}
-        models={models}
-        categories={treeSelectOptions.filter(o => o.value !== "")}
-        grades={grades}
-        units={units}
-        zones={zoneCascaderOptions}
-      />
+        {totalItems > 0 && (
+          <div className="bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+            <div className="flex items-center gap-4">
+              <span>
+                แสดง {Math.min((page - 1) * itemsPerPage + 1, totalItems)} ถึง{" "}
+                {Math.min(page * itemsPerPage, totalItems)} จาก {totalItems} รายการ
+              </span>
+              <div className="flex items-center gap-2">
+                <span>รายการต่อหน้า:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  className="border border-gray-200 rounded-none px-2 py-1 text-gray-600 bg-white hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200 cursor-pointer"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
 
-      {/* Modal สำหรับแก้ไขสินค้า (ดึงแยกไฟล์) */}
-      <EditDataStock
-        isOpen={isEditModalOpen}
-        onClose={() => {
-          setIsEditModalOpen(false);
-          setSelectedProduct(null);
-        }}
-        onSuccess={fetchStock}
-        categories={treeSelectOptions.filter(o => o.value !== "")}
-        models={models}
-        product={selectedProduct}
-        grades={grades}
-        units={units}
-        zones={zoneCascaderOptions}
-      />
+            <div className="flex items-center gap-1">
+              <button
+                disabled={page === 1}
+                onClick={() => setPage(1)}
+                aria-label="หน้าแรก"
+                className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+              <button
+                disabled={page === 1}
+                onClick={() => setPage((p) => p - 1)}
+                aria-label="หน้าก่อนหน้า"
+                className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {getPageNumbers(page, totalPages).map((p, idx) =>
+                p === "..." ? (
+                  <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">
+                    ...
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    aria-current={page === p ? "page" : undefined}
+                    className={cn(
+                      "px-3 py-1.5 rounded-none font-medium transition-colors cursor-pointer",
+                      page === p ? "bg-[#d61c24] text-white" : "text-gray-600 hover:bg-gray-100"
+                    )}
+                  >
+                    {p}
+                  </button>
+                )
+              )}
+
+              <button
+                disabled={page === totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                aria-label="หน้าถัดไป"
+                className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                disabled={page === totalPages}
+                onClick={() => setPage(totalPages)}
+                aria-label="หน้าสุดท้าย"
+                className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
