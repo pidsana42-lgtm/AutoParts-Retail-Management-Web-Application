@@ -31,10 +31,15 @@ export interface CustomerClaimItem {
   product_id: number;
   product_name?: string;
   qty: number;
+  unit_price?: number;
   reason: string;
   resolution: string;
   status?: string;
+  claim_type?: 'INSTANT' | 'SUPPLIER_PENDING' | 'CREDIT_ACCOUNT';
   evidence_url?: string;
+  // fields สำหรับติดตามการส่งมอบ
+  item_given?: boolean;        // ให้ของไปแล้วหรือยัง
+  given_from?: 'STOCK' | 'SUPPLIER' | null; // เอาจากสต็อกร้าน หรือรอบริษัท
 }
 
 export interface CustomerClaim {
@@ -43,6 +48,11 @@ export interface CustomerClaim {
   claim_date: string;
   original_order_id: number;
   customer_name?: string;
+  customer_phone?: string;
+  claim_type?: 'INSTANT' | 'SUPPLIER_PENDING' | 'CREDIT_ACCOUNT';
+  claim_amount?: number;
+  refund_amount?: number;
+  replacement_cost?: number;
   return_id: number;
   created_by: number;
   approved_by?: number;
@@ -51,6 +61,13 @@ export interface CustomerClaim {
   notes?: string;
   note?: string;
   items?: CustomerClaimItem[];
+  // fields ใหม่สำหรับติดตามสถานะการดำเนินงาน
+  supplier_response_status?: 'WAITING' | 'APPROVED' | 'REJECTED' | null; // สถานะตอบกลับจากบริษัท
+  customer_received_item?: boolean;  // ลูกค้าได้รับของแล้วหรือยัง
+  customer_waiting?: boolean;        // ลูกค้ารอผลก่อน (ไม่ได้รับของไป)
+  operation_note?: string;           // บันทึกการดำเนินงาน
+  updated_by_name?: string;          // ชื่อผู้อัพเดทล่าสุด
+  updated_at?: string;               // เวลาอัพเดทล่าสุด
 }
 
 export interface SupplierClaimItem {

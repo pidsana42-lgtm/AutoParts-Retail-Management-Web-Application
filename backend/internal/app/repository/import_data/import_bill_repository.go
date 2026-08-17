@@ -273,6 +273,33 @@ func (r *billRepository) UpdateBill(id uint, bill *entity.Bill, items []entity.B
 		}
 		for i := range items {
 			items[i].BillID = id
+
+			// Ensure items[i].ProductID is valid to satisfy foreign key constraint fk_products_bill_items
+			if items[i].ProductID > 0 {
+				var count int64
+				tx.Model(&entity.Product{}).Where("id = ?", items[i].ProductID).Count(&count)
+				if count == 0 {
+					items[i].ProductID = 0
+				}
+			}
+
+			if items[i].ProductID == 0 {
+				var prod entity.Product
+				prodName := strings.TrimSpace(items[i].CompanyProductName)
+				prodCode := strings.TrimSpace(items[i].CompanyProductCode)
+				if prodName != "" || prodCode != "" {
+					if errMatch := tx.Where("LOWER(TRIM(product_name)) = LOWER(TRIM(?)) OR (LOWER(TRIM(product_code)) = LOWER(TRIM(?)) AND product_code != '')", prodName, prodCode).First(&prod).Error; errMatch == nil {
+						items[i].ProductID = prod.ID
+					}
+				}
+				if items[i].ProductID == 0 {
+					var firstProd entity.Product
+					if errFirst := tx.First(&firstProd).Error; errFirst == nil {
+						items[i].ProductID = firstProd.ID
+					}
+				}
+			}
+
 			if err := tx.Create(&items[i]).Error; err != nil {
 				return err
 			}

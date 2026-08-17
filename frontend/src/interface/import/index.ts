@@ -36,6 +36,7 @@ export interface BillItemDTO {
   is_freebie: boolean;
   remark: string;
   product_id: number | null;
+  pre_order_item_id?: number | null;
   category_id?: number | null;
   sub_category_id?: number | null;
 }
