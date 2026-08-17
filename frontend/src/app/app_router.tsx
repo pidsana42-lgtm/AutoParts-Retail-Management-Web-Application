@@ -30,6 +30,8 @@ import EmployeeClaimsPage from './employee/claim/claims';
 import MobileScanPage from './mobile-scan/mobile_scan_page';
 import SalesCancellationHistory from './employee/pos/sales_cancellation_history';
 import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_history';
+import RepaymentHistory from './employee/transactions/repayment_history';
+import OwnerRepaymentHistory from './owner/transactions/repayment_history';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -108,7 +110,6 @@ export default function AppRouter(): React.JSX.Element {
         {/* ----------------------------------------------------------- */}
 
         {/* -------- เพิ่ม Route สำหรับ POS -------- */}
-        
         {/* ทุกคนใช้งาน */}
         <Route path="/owner/pos/pos" element={isAdminOrOwner ? <Pos /> : <Navigate to={firstMenuPath} replace />} />
         <Route path="/owner/pos/sales_history" element={isAdminOrOwner ? <SalesHistory /> : <Navigate to={firstMenuPath} replace />} />
@@ -121,6 +122,14 @@ export default function AppRouter(): React.JSX.Element {
         {/* หน้าฝั่งเจ้าของร้าน (ล็อกสิทธิ์ด้วย isAdminOrOwner) */}
         <Route path="/owner/pos/sales_cancellation_history" element={
           isAdminOrOwner ? <OwnerSalesCancellationHistory /> : <Navigate to={firstMenuPath} replace />
+        } />
+        {/* --------------------------------------------------- */}
+
+        {/* -------- หน้ารายการธุรกรรม / การเงิน -------- */}
+        <Route path="/employee/transactions/repayment-history" element={<RepaymentHistory />} />
+
+        <Route path="/owner/transactions/repayment-history" element={
+          isAdminOrOwner ? <OwnerRepaymentHistory /> : <Navigate to={firstMenuPath} replace />
         } />
         {/* --------------------------------------------------- */}
 
