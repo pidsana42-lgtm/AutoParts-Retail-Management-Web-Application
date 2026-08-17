@@ -86,8 +86,7 @@ func (ctrl *PurchaseOrderController) GetByID(c *gin.Context) {
 
 // for ตอนที่อัพเดตสถานะที่เจ้าของร้าน
 type UpdateStatusInput struct {
-	Status          poEnum.POStatus `json:"status" binding:"required,oneof=DRAFT PENDING APPROVED REJECTED EXPIRED RESUBMITTED"`
-	RejectionReason string          `json:"rejection_reason"`
+	Status poEnum.POStatus `json:"status" binding:"required,oneof=DRAFT PENDING APPROVED RESUBMITTED CANCELLED"`
 }
 
 func (ctrl *PurchaseOrderController) UpdateStatus(c *gin.Context) {
@@ -105,9 +104,28 @@ func (ctrl *PurchaseOrderController) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	err := ctrl.poService.UpdatePOStatus(c.Request.Context(), uri.ID, input.Status, input.RejectionReason)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized: missing user profile"})
+		return
+	}
+	idFloat, ok := userID.(float64)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id type in token"})
+		return
+	}
+	updatedBy := uint(idFloat)
+
+	err := ctrl.poService.UpdatePOStatus(c.Request.Context(), uri.ID, input.Status, updatedBy)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		switch {
+		case errors.Is(err, poSvc.ErrPONotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, poSvc.ErrPOCannotUpdate):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
@@ -136,6 +154,15 @@ func (ctrl *PurchaseOrderController) ListPOs(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, res)
+}
+
+func (ctrl *PurchaseOrderController) GetAvailableYears(ctx *gin.Context) {
+	years, err := ctrl.poService.GetAvailableYears(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"years": years})
 }
 
 func (ctrl *PurchaseOrderController) GetSummary(c *gin.Context) {
@@ -168,7 +195,7 @@ func (ctrl *PurchaseOrderController) GetSummary(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-func (c *PurchaseOrderController) PrintPO(ctx *gin.Context) {
+func (ctrl *PurchaseOrderController) PrintPO(ctx *gin.Context) {
     idStr := ctx.Param("id")
     id, err := strconv.ParseUint(idStr, 10, 32)
     if err != nil {
@@ -178,7 +205,7 @@ func (c *PurchaseOrderController) PrintPO(ctx *gin.Context) {
 
 	includeCode, _ := strconv.ParseBool(ctx.DefaultQuery("include_code", "false"))
     // เรียก Service เพื่อ Gen PDF (คืนค่ากลับมาเป็น []byte)
-    pdfBytes, err := c.poService.GeneratePOPDF(ctx.Request.Context(), uint(id), includeCode)
+    pdfBytes, err := ctrl.poService.GeneratePOPDF(ctx.Request.Context(), uint(id), includeCode)
     if err != nil {
 		fmt.Println("PDF Generation Error:", err)
         ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate PDF"})
@@ -220,7 +247,7 @@ func (ctrl *PurchaseOrderController) DeletePO(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "purchase order deleted successfully"})
 }
 
-func (c *PurchaseOrderController) SearchProducts(ctx *gin.Context) {
+func (ctrl *PurchaseOrderController) SearchProducts(ctx *gin.Context) {
 	var query poDto.ProductSearchQuery
 
 	if err := ctx.ShouldBindQuery(&query); err != nil {
@@ -231,7 +258,7 @@ func (c *PurchaseOrderController) SearchProducts(ctx *gin.Context) {
 	}
 
 	// 2. เรียกใช้ Service
-	products, err := c.poService.SearchProducts(ctx.Request.Context(), query)
+	products, err := ctrl.poService.SearchProducts(ctx.Request.Context(), query)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "Internal Server Error",
@@ -310,4 +337,32 @@ func (ctrl *PurchaseOrderController) GetMonthlyCount(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"total_count": count})
+}
+
+func (ctrl *PurchaseOrderController) RestorePO(c *gin.Context) {
+	poID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid PO id"})
+		return
+	}
+
+	userIDRaw, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized: missing user profile"})
+		return
+	}
+
+	idFloat, ok := userIDRaw.(float64)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id type in token"})
+		return
+	}
+	userID := uint(idFloat)
+
+	if err := ctrl.poService.RestorePO(c, uint(poID), userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "กู้คืนใบสั่งซื้อสำเร็จ"})
 }

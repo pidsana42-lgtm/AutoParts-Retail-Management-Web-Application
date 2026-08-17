@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, FileUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileUp } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import type { ViewState } from '../../../../interface/import';
 
@@ -17,11 +17,20 @@ export default function ExcelView({ setCurrentView, processExcelFile }: ExcelVie
 
   return (
     <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
-      <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-none transition-colors">
-          <ChevronLeft size={24} className="text-gray-600" />
+      {/* Breadcrumbs Navigation */}
+      <nav className="flex items-center gap-2 text-xs text-gray-500 mb-4">
+        <button type="button" onClick={() => setCurrentView('home')} className="hover:text-[#e51c23] transition-colors cursor-pointer font-bold">
+          นำเข้าสินค้าจากบิล
         </button>
-        <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">นำเข้าใบสั่งซื้อด้วย CSV / Excel</Heading>
+        <ChevronRight size={14} className="text-gray-400" />
+        <span className="text-[#1C1B1B] font-bold">นำเข้าด้วยไฟล์ CSV / Excel</span>
+      </nav>
+
+      {/* Header */}
+      <div className="mb-8">
+        <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
+          นำเข้าข้อมูลสินค้าด้วยไฟล์ CSV / Excel
+        </Heading>
       </div>
 
       <div className="bg-white rounded-none shadow-sm border border-gray-100 p-12 flex flex-col items-center justify-center text-center min-h-[500px]">

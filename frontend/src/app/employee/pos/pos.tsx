@@ -46,7 +46,7 @@ export default function PosPage(): React.JSX.Element {
   }
 }
 
-  const { customerName } = useCustomerFinancials(paymentData.customer);
+  const { customerName, remainingCreditStr } = useCustomerFinancials(paymentData.customer);
 
   // ซิงค์ข้อมูลสิทธิ์ลูกค้าระหว่าง 2 Hooks เวลาเปลี่ยนลูกค้าใหม่หรือเปลี่ยนประเภทลูกค้า (Active Type) 
   React.useEffect(() => {
@@ -121,10 +121,48 @@ export default function PosPage(): React.JSX.Element {
                   type="text"
                   value={cartHook.searchQuery}
                   onChange={(e) => cartHook.setSearchQuery(e.target.value)}
-                  placeholder="สแกนบาร์โค้ดสินค้า หรือพิมพ์เลขบาร์โค้ดที่นี่เพื่อเพิ่มรายการ..."
+                  onBlur={() => {
+                    setTimeout(() => {
+                      cartHook.setShowSuggestions(false);
+                    }, 200);
+                  }}
+                  onFocus={() => {
+                    if (cartHook.searchQuery.trim().length > 0) {
+                      cartHook.setShowSuggestions(true);
+                    }
+                  }}
+                  placeholder="สแกนบาร์โค้ดสินค้า, พิมพ์เลขบาร์โค้ด, พิมพ์รหัสสินค้า, Part Number หรือชื่อสินค้าเพื่อเพิ่มรายการ..."
                   className="w-full bg-white border border-gray-200 rounded-none pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-red-500 shadow-sm"
                   autoFocus
                 />
+
+                {/* Dropdown ค้นหาด่วน (Autocomplete Suggestions) */}
+                {cartHook.showSuggestions && cartHook.suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-gray-100">
+                    {cartHook.suggestions.map((product) => (
+                      <div
+                        key={product.id}
+                        onClick={() => cartHook.handleSelectProduct(product)}
+                        className="p-3 hover:bg-gray-50 flex justify-between items-center cursor-pointer transition-colors text-left"
+                      >
+                        <div className="flex flex-col">
+                          <Text variant="small" className="text-[#1C1B1B] mb-0 leading-tight">{product.product_name}</Text>
+                          <Text variant="xs" className="text-[10px] text-[#6B7280] mb-0.5 mt-1 leading-tight">
+                            SKU: {product.product_code} | PN: {product.part_number || "-"}
+                          </Text>
+                        </div>
+                        <div className="text-right flex flex-col shrink-0 pl-4">
+                          <Text variant="xs" className="text-[#E51C23]">
+                            ฿{(product.sale_price || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </Text>
+                          <Text variant="xs" className="text-[10px] text-gray-400">
+                            คงเหลือ: {product.quantity}
+                          </Text>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <button
                 type="submit"
@@ -315,99 +353,149 @@ export default function PosPage(): React.JSX.Element {
       {/* ─── [โซนฝั่งขวา] : ข้อมูลลูกค้า และสรุปยอดเงิน ─── */}
       <div className="w-full lg:w-[27%] bg-[#F6F3F2] p-6 flex flex-col justify-between shadow-2xl shrink-0 min-h-full">
         <div>
-          <div className="mb-4">
-            <Text variant="small" className="text-gray-500 mb-2 uppercase tracking-wide">ข้อมูลลูกค้า</Text>
-            <div className="grid grid-cols-3 gap-1 mb-2">
-              {paymentData.customerTypes.map((type) => {
-                const isActive = paymentData.posSession.customer && paymentData.posSession.customer.customer_type
+          <Text variant="small" className="text-gray-500 mb-4 uppercase tracking-wide">
+            ข้อมูลลูกค้า
+          </Text>
+          
+          {/* เลือกประเภทลูกค้า */}
+          <div className="grid grid-cols-3 gap-1 mb-2">
+            {paymentData.customerTypes.map((type) => {
+              const isActive =
+                paymentData.posSession.customer && paymentData.posSession.customer.customer_type
                   ? paymentData.posSession.customer.customer_type.id === type.id
                   : paymentData.posSession.activeTypeId === type.id;
-                return (
-                  <button
-                    key={type.id}
-                    type="button"
-                    onClick={() => {
-                      paymentData.updateSession("activeTypeId", type.id);
-                    }}
-                    className={`flex flex-col items-center justify-center text-center transition-all h-10 leading-tight border text-xs ${isActive ? "bg-white border-zinc-400 text-zinc-900 shadow-sm" : "border-transparent text-gray-400 hover:text-gray-600"}`}
-                  >
-                    {type.type_label?.replace("ลูกค้า", "") || type.type_name}
-                    <span className="text-[9px] block">{subLabelMap[type.type_name] || type.type_name}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* <div className="grid grid-cols-2 gap-1 mb-4">
-              {["CASH", "CREDIT"].map((mode) => (
+              return (
                 <button
-                  key={mode}
+                  key={type.id}
                   type="button"
                   onClick={() => {
-                    if (mode === "CREDIT") {
-                      const currentActiveType = paymentData.customerTypes.find((t) => t.id === paymentData.activeTypeId);
-                      if (currentActiveType?.type_name === "GENERAL") return alert("ลูกค้าทั่วไปไม่สามารถเลือกโหมดเงินเชื่อได้");
-                    }
-                    paymentData.setSelectedPaymentType(mode as any);
-                    paymentData.updateSession("paymentMethodId", mode === "CASH" ? 1 : 3);
+                    paymentData.updateSession("activeTypeId", type.id);
                   }}
-                  className={`text-center py-1.5 border text-xs transition-all ${paymentData.selectedPaymentType === mode ? "bg-white border-zinc-400 text-zinc-900 shadow-sm" : "bg-gray-50 border-gray-200 text-gray-400"}`}
+                  className={`flex flex-col items-center justify-center text-center transition-all h-10 leading-tight border text-xs ${
+                    isActive
+                      ? "bg-white border-zinc-400 text-zinc-900 shadow-sm"
+                      : "border-transparent text-gray-400 hover:text-gray-600"
+                  }`}
                 >
-                  {mode === "CASH" ? "เงินสด" : "เงินเชื่อ"}
+                  {type.type_label?.replace("ลูกค้า", "") || type.type_name}
+                  <span className="text-[9px] block">
+                    {subLabelMap[type.type_name] || type.type_name}
+                  </span>
                 </button>
-              ))}
-            </div> */}
+              );
+            })}
+          </div>
 
-            <div className="relative w-full">
-              <form onSubmit={paymentData.handleSearchCustomer} className="flex flex-col gap-1.5">            
+          {/* ฟอร์มค้นหาและคีย์ข้อมูลลูกค้า */}
+          <div className="relative w-full">
+            <form onSubmit={paymentData.handleSearchCustomer} className="flex flex-col gap-1.5">
+              {/* ช่องค้นหาชื่อ/เบอร์ */}
+              <input
+                type="text"
+                value={paymentData.posSession.searchQuery}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  paymentData.updateSession("searchQuery", val);
+                  if (val.trim().length > 0) {
+                    paymentData.triggerLiveSearch(val);
+                  } else {
+                    if (typeof paymentData.setSearchResults === "function") paymentData.setSearchResults([]);
+                  }
+                }}
+                className="bg-white border border-gray-300 rounded-none px-3 py-2 text-xs shadow-sm focus:outline-none focus:border-[#E51C23] transition-colors text-black"
+                placeholder="พิมพ์ชื่ออู่, เบอร์โทรสมาชิก หรือพิมพ์ชื่อลูกค้าขาจร..."
+              />
+
+              {/* ช่องกรอกเบอร์โทร (ปรับเป็นช่องเต็ม) */}
+              <input
+                type="text"
+                value={paymentData.tempPhone}
+                onChange={(e) => {
+                  const newPhone = e.target.value;
+                  paymentData.setTempPhone(newPhone);
+                  if (paymentData.customer && paymentData.customer.id === 0) {
+                    paymentData.setCustomer({
+                      ...paymentData.customer,
+                      phone_number: newPhone.trim() || "ลูกค้าทั่วไป (ไม่ระบุ)",
+                    });
+                  }
+                }}
+                className="bg-white border border-gray-300 rounded-none px-3 py-2 text-xs shadow-sm focus:outline-none focus:border-[#E51C23] transition-colors text-black"
+                placeholder="ระบุเบอร์โทรติดต่อส่งของ..."
+              />
+
+              {/* ช่องกรอก/แสดงที่อยู่จัดส่ง + ปุ่มเลือกลูกค้า */}
+              <div className="flex gap-1">
                 <input
                   type="text"
-                  value={paymentData.posSession.searchQuery}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    paymentData.updateSession("searchQuery", val);
-                    if (val.trim().length > 0) { paymentData.triggerLiveSearch(val); } 
-                    else { if (typeof paymentData.setSearchResults === "function") paymentData.setSearchResults([]); }
-                  }}
-                  className="bg-white border border-gray-300 rounded-none px-3 py-2 text-xs shadow-sm focus:outline-none focus:border-[#E51C23] transition-colors text-black"
-                  placeholder="พิมพ์ชื่ออู่, เบอร์โทรสมาชิก หรือพิมพ์ชื่อลูกค้าขาจร..."
+                  value={paymentData.customerAddressTemp}
+                  onChange={(e) => paymentData.handleAddressChange(e.target.value)}
+                  className="flex-1 bg-white border border-gray-300 rounded-none px-3 py-2 text-xs shadow-sm mb-2 focus:outline-none focus:border-[#E51C23] transition-colors text-black"
+                  placeholder="ระบุที่อยู่จัดส่ง/ออกใบเสร็จ (ไม่ระบุได้)..."
                 />
-                <div className="flex gap-1">
-                  <input type="text" value={paymentData.tempPhone} onChange={(e) => { const newPhone = e.target.value; paymentData.setTempPhone(newPhone); if (paymentData.customer && paymentData.customer.id === 0) { paymentData.setCustomer({ ...paymentData.customer, phone_number: newPhone.trim() || "ลูกค้าทั่วไป (ไม่ระบุ)" }); } }} className="flex-1 bg-white border border-gray-300 rounded-none px-3 py-2 text-xs shadow-sm focus:outline-none focus:border-[#E51C23] transition-colors text-black" placeholder="ระบุเบอร์โทรติดต่อสำหรับส่งของ (เฉพาะลูกค้าขาจร)..." />
-                  <button type="submit" className="bg-zinc-900 text-white text-xs px-4 py-2 rounded-none shadow hover:bg-zinc-800 transition-colors whitespace-nowrap">ล็อกชื่อ</button>
-                </div>
-              </form>
+                <button
+                  type="submit"
+                  className="bg-zinc-900 text-white text-xs px-4 py-2 rounded-none shadow mb-2 hover:bg-zinc-800 transition-colors whitespace-nowrap"
+                >
+                  เลือกลูกค้า
+                </button>
+              </div>
+            </form>
 
-              {paymentData.searchCustomerQuery.trim().length > 0 && paymentData.searchResults && paymentData.searchResults.length > 0 && (
-                <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 shadow-xl max-h-60 overflow-y-auto z-50 rounded flex flex-col">
+            {/* Dropdown Live Search */}
+            {paymentData.searchCustomerQuery.trim().length > 0 &&
+              paymentData.searchResults &&
+              paymentData.searchResults.length > 0 && (
+                <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 shadow-xl max-h-60 overflow-y-auto z-50 rounded-none flex flex-col">
                   {paymentData.searchResults.map((cust) => (
                     <div
                       key={cust.id}
                       onClick={() => {
                         paymentData.updateSession("customer", cust);
                         paymentData.updateSession("searchQuery", cust.customer_name);
+                        paymentData.updateSession(
+                          "customerAddressTemp",
+                          cust.shipping_address || cust.registered_address || ""
+                        );
                         if (cust.customer_type) {
                           paymentData.updateSession("activeTypeId", cust.customer_type.id);
-                          paymentData.setSelectedPaymentType(cust.customer_type.type_name === "GENERAL" ? "CASH" : "CREDIT");
-                          paymentData.updateSession("paymentMethodId", cust.customer_type.type_name === "GENERAL" ? 1 : 1);
+                          paymentData.setSelectedPaymentType(
+                            cust.customer_type.type_name === "GENERAL" ? "CASH" : "CREDIT"
+                          );
+                          paymentData.updateSession("paymentMethodId", 1);
                         }
-                        if (typeof paymentData.setSearchResults === "function") paymentData.setSearchResults([]);
+                        if (typeof paymentData.setSearchResults === "function")
+                          paymentData.setSearchResults([]);
                       }}
-                      className="px-3 py-2 text-xs text-zinc-800 hover:bg-zinc-100 cursor-pointer flex justify-between border-b border-gray-100 bg-white"
+                      className="px-3 py-2 text-xs text-zinc-800 hover:bg-zinc-100 cursor-pointer flex flex-col gap-0.5 border-b border-gray-100 bg-white"
                     >
-                      <span className="text-zinc-900">{cust.customer_name}</span>
-                      <span className="text-zinc-500">{cust.phone_number || "ไม่มีเบอร์โทร"}</span>
+                      <div className="flex justify-between font-medium">
+                        <span className="text-zinc-900">{cust.customer_name}</span>
+                        <span className="text-zinc-500">{cust.phone_number || "ไม่มีเบอร์โทร"}</span>
+                      </div>
+                      {(cust.shipping_address || cust.registered_address) && (
+                        <span className="text-[10px] text-gray-400 truncate">
+                          {cust.shipping_address || cust.registered_address}
+                        </span>
+                      )}
                     </div>
                   ))}
-                  <div onClick={(e) => { paymentData.handleSearchCustomer(e); if (typeof paymentData.setSearchResults === "function") paymentData.setSearchResults([]); }} className="px-3 py-2.5 text-xs text-[#E51C23] bg-red-50 hover:bg-red-100 cursor-pointer text-center sticky bottom-0 border-t border-red-100 transition-colors">
+                  <div
+                    onClick={(e) => {
+                      paymentData.handleSearchCustomer(e);
+                      if (typeof paymentData.setSearchResults === "function")
+                        paymentData.setSearchResults([]);
+                    }}
+                    className="px-3 py-2.5 text-xs text-[#E51C23] bg-red-50 hover:bg-red-100 cursor-pointer text-center sticky bottom-0 border-t border-red-100 transition-colors"
+                  >
                     ใช้ชื่อชั่วคราว: "{paymentData.searchCustomerQuery}" (ลูกค้าขาจร)
                   </div>
                 </div>
               )}
-            </div>
           </div>
 
-          <CustomerCard customer={paymentData.customer} />
+          {/* การ์ดสรุปข้อมูลลูกค้าที่เลือก */}
+          <CustomerCard customer={paymentData.customer} address={paymentData.customerAddressTemp} />
 
           {/* ตารางแจกแจงบิลสรุปราคา */}
           <div className="space-y-3 pt-4">
@@ -421,21 +509,27 @@ export default function PosPage(): React.JSX.Element {
             </div>
             <div className="flex justify-between items-center text-[#E51C23] border-b border-dashed pb-2">
               <Text variant="small" className="text-[#E51C23] mb-0">ส่วนลดรวมทั้งสิ้น</Text>
-              <Text variant="muted" className="text-[#E51C23] mb-0">฿{(cartHook.totalLineDiscount + paymentData.computedBillDiscount).toFixed(2)}</Text>
+              <Text variant="muted" className="text-[#E51C23] mb-0">
+                ฿{(cartHook.totalLineDiscount + paymentData.computedBillDiscount).toFixed(2)}
+              </Text>
             </div>
           </div>
 
+          {/* สรุปยอดชำระสุทธิ */}
           <div className="bg-[#1C1B1B] p-5 my-5 flex justify-between items-center border border-zinc-800">
             <Text variant="small" className="text-[#9CA3AF] uppercase mb-0 tracking-wider">ยอดชำระสุทธิ</Text>
-            <Text variant="muted" className="text-[#FFFFFF] text-2xl mb-0">฿{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+            <Text variant="muted" className="text-[#FFFFFF] text-2xl mb-0">
+              ฿{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </Text>
           </div>
 
+          {/* เลือกวิธีการชำระเงิน */}
           <Text variant="small" className="text-[#6B7280] uppercase">เลือกวิธีการชำระเงิน</Text>
           <div className="grid grid-cols-3 gap-2">
             {paymentData.paymentMethods.map((method) => {
               const isProcessing = paymentData.isSubmitting || paymentData.isConfirming;
-              //ล็อกเฉพาะ: ปุ่มเงินเชื่อ (ID: 3) + มีการเลือกลูกค้าแล้ว + ลูกค้าไม่เป็นสมาชิก
-              const isCreditDisabled = method.id === 3 && paymentData.isCustomerSelected && !paymentData.isRegisteredCustomer;
+              // ล็อกเฉพาะปุ่มเงินเชื่อ (ID: 3) ถ้าลูกค้าไม่ได้เป็นสมาชิกที่ลงทะเบียนไว้
+              const isCreditDisabled = method.id === 3 && !paymentData.isRegisteredCustomer;
 
               const isDisabled = isProcessing || isCreditDisabled;
               const isSelected = paymentData.paymentMethodId === method.id;
@@ -487,7 +581,7 @@ export default function PosPage(): React.JSX.Element {
               {/* Header */}
               <div className="bg-[#1C1B1B] px-6 py-4 flex justify-between items-center">
                 <Text variant="lead" className="text-white mb-0 font-medium">ชำระเงิน ({paymentData.paymentMethodId === 1 ? "เงินสด" : paymentData.paymentMethodId === 2 ? "QR CODE" : "เงินเชื่อ"})</Text>
-                <button onClick={() => paymentData.setIsPaymentModalOpen(false)} className="text-[#9CA3AF] hover:text-white text-xl">✕</button>
+                <button onClick={() => paymentData.closePaymentModal()} className="text-[#9CA3AF] hover:text-white text-xl">✕</button>
               </div>
 
               {/* 2. Body */}
@@ -638,7 +732,15 @@ export default function PosPage(): React.JSX.Element {
                             <p className="text-xs text-red-500 mb-2">ไม่สามารถโหลด QR Code ได้</p>
                             <button
                               type="button"
-                              onClick={() => paymentData.handleGeneratePromptPayQR(0, 1)}
+                              onClick={async () => {
+                                let targetOrderId = paymentData.currentOrderId || paymentData.posSession.currentOrderId;
+                                if (!targetOrderId) {
+                                  targetOrderId = await paymentData.submitOrderToDatabase();
+                                }
+                                if (targetOrderId) {
+                                  paymentData.handleGeneratePromptPayQR(targetOrderId, 1);
+                                }
+                              }}
                               className="px-3 py-1 bg-white text-gray-700 text-xs rounded border border-gray-200 hover:bg-gray-50 transition"
                             >
                               ลองใหม่อีกครั้ง
@@ -715,15 +817,15 @@ export default function PosPage(): React.JSX.Element {
                         <Text variant="xs" className="text-[#2563EB]">เครดิตคงเหลือ</Text>
                         <div className="flex justify-between items-baseline mt-2">
                           <Text variant="fourxl" className={`text-[#2563EB] truncate ${Math.max(0, paymentData.receivedAmount - paymentData.finalTotal) > 999999 ? "text-2xl" : "text-4xl"}`}>
-                            {paymentData.customer?.max_credit_limit?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}
+                            {remainingCreditStr || "0.00"}
                           </Text>
                           <Text variant="xs" className="text-[#2563EB]">บาท</Text>
                         </div>
                       </div>
                     </div>
                     <div>
-                      <Text variant="small" className="text-[#1C1B1B] font-medium">ชื่อผู้รับของ / ผู้สั่งซื้อ </Text>
-                       <div className="grid grid-cols-2 gap-4">
+                      {/* <Text variant="small" className="text-[#1C1B1B] font-medium">ชื่อผู้รับของ / ผู้สั่งซื้อ </Text> */}
+                       {/* <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-baseline justify-between w-full px-4 py-2 bg-white border-b-2 border-[#E7BDB8]">
                           <Input 
                               type="text" 
@@ -735,9 +837,9 @@ export default function PosPage(): React.JSX.Element {
                             <User className="w-5 h-5 text-[#1C1B1B] shrink-0" />
                         </div>
                         <div className="flex items-center justify-between w-full px-4 py-6 border-b-1 border-[#E7BDB8]"></div>
-                      </div>  
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="border-l-3 border-[#E7BDB8] p-4 mt-4 bg-[#F0EDEC]">
+                      </div>   */}
+                      <div className="grid grid-cols-2 gap-4 border-t border-[#E7BDB8] pt-4 mt-4">
+                        <div className="border-l-3 border-[#E7BDB8] p-4 mt-1 bg-[#F0EDEC] ">
                           <Text variant="xs" className="text-[#1C1B1B] font-light">* ระบบจะดำเนินการเพิ่มยอดหนี้ในบัญชีของ<br /><span className="font-medium">{customerName}</span>{" "}ทันทีหลังจากยืนยันรายการ</Text>
                         </div>
                         {/*ฝั่งซ้าย วันที่, เวลา, ผู้ดำเนินการ */}

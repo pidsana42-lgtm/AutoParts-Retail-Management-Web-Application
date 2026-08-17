@@ -8,6 +8,7 @@ type LoginRequest struct {
 
 // หลังบ้านตอบกลับไปเมื่อล็อกอินสำเร็จ
 type LoginResponse struct {
+    ID    uint   `json:"id"` // เดิมไม่เคยส่งมา ทำให้ฝั่งหน้าบ้านไม่รู้ user id ของตัวเองเลย (user.id ว่างเปล่าตลอด)
     Token string `json:"token"`
     Role  string `json:"role"`
     FirstName string `json:"first_name"`

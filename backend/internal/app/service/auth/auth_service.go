@@ -61,6 +61,7 @@ func (s *authService) Login(req *authDTO.LoginRequest) (*authDTO.LoginResponse, 
 
     // 4. ส่ง Token และสิทธิ์ของ User กลับไปให้ Controller
     return &authDTO.LoginResponse{
+        ID:    user.ID,
         Token: tokenString,
         Role:  string(user.Role.RoleName),
         FirstName: user.FirstName,
@@ -97,10 +98,11 @@ func (s *authService) LoginWithLine(lineUserID string) (*authDTO.LoginResponse, 
 
     // 3. ส่ง Token และข้อมูลผู้ใช้กลับไป
     return &authDTO.LoginResponse{
+        ID:        user.ID,
         Token:     tokenString,
         Role:      string(user.Role.RoleName),
         FirstName: user.FirstName,
         LastName:  user.LastName,
         Username:  user.Username,
     }, nil
-}               
+}

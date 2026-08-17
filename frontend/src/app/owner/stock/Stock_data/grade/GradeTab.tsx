@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Plus, Trash2, SquarePen } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
 
@@ -8,20 +8,36 @@ import type { Grade } from "../../../../../interface/wms/stock_data";
 // Extracted Modals
 import AddGradeModal from "./AddGradeModal";
 import EditGradeModal from "./EditGradeModal";
+import TablePagination from "../components/TablePagination";
 
 interface GradeTabProps {
   search: string;
   grades: Grade[];
   loadData: () => void;
+  addSignal?: number;
 }
 
-export default function GradeTab({ search, grades, loadData }: GradeTabProps) {
+export default function GradeTab({ search, grades, loadData, addSignal }: GradeTabProps) {
   const { toast } = useToast();
 
   // Modals visibility state
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [selectedGrade, setSelectedGrade] = useState<Grade | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  useEffect(() => {
+    if (addSignal && addSignal > 0) {
+      setAddOpen(true);
+    }
+  }, [addSignal]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
 
   const handleDeleteGrade = async (id: number) => {
     if (!confirm("คุณแน่ใจว่าต้องการลบเกรดสินค้านี้?")) return;
@@ -45,14 +61,19 @@ export default function GradeTab({ search, grades, loadData }: GradeTabProps) {
     );
   }, [grades, search]);
 
+  const paginatedGrades = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredGrades.slice(start, start + itemsPerPage);
+  }, [filteredGrades, currentPage, itemsPerPage]);
+
   return (
     <>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left border-collapse">
           <thead>
-            <tr className="bg-[#F2ECE9] border-b border-slate-200">
-              <th className="px-6 py-3.5 font-semibold text-slate-700">เกรดสินค้า</th>
-              <th className="px-6 py-3.5 font-semibold text-slate-700 text-right w-1/6">จัดการ</th>
+            <tr className="bg-[#f6f3f2] border-b border-slate-200">
+              <th className="px-6 py-3.5 font-semibold text-[#797878]">เกรดสินค้า</th>
+              <th className="px-6 py-3.5 font-semibold text-[#797878] text-right w-1/6">จัดการ</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -63,7 +84,7 @@ export default function GradeTab({ search, grades, loadData }: GradeTabProps) {
                 </td>
               </tr>
             ) : (
-              filteredGrades.map((grade) => (
+              paginatedGrades.map((grade) => (
                 <tr key={grade.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-3.5 text-slate-800 font-medium">{grade.grade_name}</td>
                   <td className="px-6 py-3.5 text-right">
@@ -89,15 +110,17 @@ export default function GradeTab({ search, grades, loadData }: GradeTabProps) {
         </table>
       </div>
 
-      <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4">
-        <button
-          onClick={() => setAddOpen(true)}
-          className="flex items-center gap-1.5 text-sm font-semibold text-[#B70011] hover:text-[#9e0010] cursor-pointer"
-        >
-          <Plus className="h-4 w-4" />
-          เพิ่มเกรดสินค้า
-        </button>
-      </div>
+      <TablePagination
+        currentPage={currentPage}
+        totalItems={filteredGrades.length}
+        itemsPerPage={itemsPerPage}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={(n) => {
+          setItemsPerPage(n);
+          setCurrentPage(1);
+        }}
+        itemLabel="เกรดสินค้า"
+      />
 
       {/* Modals */}
       <AddGradeModal

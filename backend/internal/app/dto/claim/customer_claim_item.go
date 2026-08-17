@@ -10,16 +10,20 @@ type CreateCustomerClaimItemDTO struct {
 	ReturnItemID    *uint   `json:"return_item_id"`
 	ProductID       uint    `json:"product_id" binding:"required"`
 	Qty             float64 `json:"qty" binding:"required,gt=0"`
+	UnitPrice       float64 `json:"unit_price"`
 	Reason          string  `json:"reason" binding:"required"`
 	Resolution      string  `json:"resolution"`
+	ClaimType       string  `json:"claim_type"`
 	EvidenceURL     string  `json:"evidence_url"`
 }
 
 // UpdateCustomerClaimItemDTO ใช้สำหรับอัปเดตรายการสินค้า
 type UpdateCustomerClaimItemDTO struct {
 	Qty         float64 `json:"qty"`
+	UnitPrice   float64 `json:"unit_price"`
 	Reason      string  `json:"reason"`
 	Resolution  string  `json:"resolution"`
+	ClaimType   string  `json:"claim_type"`
 	EvidenceURL string  `json:"evidence_url"`
 }
 
@@ -36,9 +40,11 @@ type CustomerClaimItemResponseDTO struct {
 	ProductID       uint    `json:"product_id"`
 	ProductName     string  `json:"product_name"`
 	Qty             float64 `json:"qty"`
+	UnitPrice       float64 `json:"unit_price"`
 	Reason          string  `json:"reason"`
 	Resolution      string  `json:"resolution"`
 	Status          string  `json:"status"`
+	ClaimType       string  `json:"claim_type"`
 	EvidenceURL     string  `json:"evidence_url"`
 }
 
@@ -46,6 +52,10 @@ func (d *CreateCustomerClaimItemDTO) ToEntity() entity.CustomerClaimItem {
 	var customerClaimID uint
 	if d.CustomerClaimID != nil {
 		customerClaimID = *d.CustomerClaimID
+	}
+	claimType := d.ClaimType
+	if claimType == "" {
+		claimType = "INSTANT"
 	}
 	return entity.CustomerClaimItem{
 		CustomerClaimID: customerClaimID,
@@ -55,6 +65,7 @@ func (d *CreateCustomerClaimItemDTO) ToEntity() entity.CustomerClaimItem {
 		Reason:          d.Reason,
 		Resolution:      d.Resolution,
 		Status:          "Pending",
+		ClaimType:       claimType,
 		EvidenceURL:     d.EvidenceURL,
 	}
 }
@@ -69,6 +80,10 @@ func ToCustomerClaimItemResponseDTO(m *entity.CustomerClaimItem) CustomerClaimIt
 	if status == "" {
 		status = "Pending"
 	}
+	claimType := m.ClaimType
+	if claimType == "" {
+		claimType = "INSTANT"
+	}
 	return CustomerClaimItemResponseDTO{
 		ID:              m.ID,
 		CustomerClaimID: m.CustomerClaimID,
@@ -76,9 +91,11 @@ func ToCustomerClaimItemResponseDTO(m *entity.CustomerClaimItem) CustomerClaimIt
 		ProductID:       m.ProductID,
 		ProductName:     productName,
 		Qty:             float64(m.Qty),
+		UnitPrice:       0,
 		Reason:          m.Reason,
 		Resolution:      m.Resolution,
 		Status:          status,
+		ClaimType:       claimType,
 		EvidenceURL:     m.EvidenceURL,
 	}
 }

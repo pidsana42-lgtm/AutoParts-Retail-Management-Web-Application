@@ -13,31 +13,40 @@ const resolveAssetUrl = (url: string): string => {
   }
 };
 
+const mapProductItem = (item: any): StockItem => ({
+  ID: item.id,
+  ProductCode: item.product_code || "",
+  Name: item.product_name || "",
+  PartNo: item.part_number || "",
+  Barcode: item.barcode || "",
+  Models: item.models || [],
+  Category: item.category_name || "",
+  SubCategory: item.sub_category_name || "",
+  SubSubCategory: item.sub_sub_category_name || "",
+  Grade: item.grade_name || "A",
+  Stock: item.quantity || 0,
+  MinStock: item.limit_quantity || 0,
+  Price: item.sale_price || 0,
+  CostPrice: item.cost_price || 0,
+  MaxDiscountRate: item.max_discount_rate ?? 0,
+  ThumbnailUrl: resolveAssetUrl(item.thumbnail_url || ""),
+  Note: item.note || "",
+  Unit: item.unit_name || "",
+  Shelf: item.shelf_name || "",
+  ShelfLevel: item.shelf_level_name || "",
+  Zone: item.zone_name || "",
+  Supplier: item.supplier_name || "",
+});
+
 export const getProductsList = async (): Promise<StockItem[]> => {
   // เติม /wms นำหน้า /products ให้ตรงกับระบบหลังบ้าน
-  const response = await apiClient.get<any[]>("/wms/products"); 
-  return (response.data || []).map((item) => ({
-    ID: item.id,
-    ProductCode: item.product_code || "",
-    Name: item.product_name || "",
-    PartNo: item.part_number || "",
-    Barcode: item.barcode || "",
-    Models: item.models || [],
-    Category: item.category_name || "",
-    SubCategory: item.sub_category_name || "",
-    SubSubCategory: item.sub_sub_category_name || "",
-    Grade: item.grade_name || "A",
-    Stock: item.quantity || 0,
-    MinStock: item.limit_quantity || 0,
-    Price: item.sale_price || 0,
-    CostPrice: item.cost_price || 0,
-    ThumbnailUrl: resolveAssetUrl(item.thumbnail_url || ""),
-    Note: item.note || "",
-    Unit: item.unit_name || "",
-    Shelf: item.shelf_name || "",
-    ShelfLevel: item.shelf_level_name || "",
-    Supplier: item.supplier_name || "",
-  }));
+  const response = await apiClient.get<any[]>("/wms/products");
+  return (response.data || []).map(mapProductItem);
+};
+
+export const getProductById = async (id: number | string): Promise<StockItem> => {
+  const response = await apiClient.get<any>(`/wms/products/${id}`);
+  return mapProductItem(response.data);
 };
 
 export interface WmsOption {

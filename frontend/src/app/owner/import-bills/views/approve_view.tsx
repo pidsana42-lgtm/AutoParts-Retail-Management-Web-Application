@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { ArrowLeft, CheckCircle2, RotateCcw, Loader2, FileImage, ExternalLink } from 'lucide-react';
+import { CheckCircle2, Loader2, FileImage, ExternalLink, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Heading from '../../../../components/elements/heading';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
 import type { SavedBill, Supplier, Product } from '../../../../interface/import';
+import BillSummaryFooterBar from '../components/BillSummaryFooterBar';
 
 interface ApproveViewProps {
   bill: SavedBill;
@@ -58,26 +59,27 @@ export default function ApproveView({
         productName: i.company_product_name,
       }));
     navigate(`/owner/import-bills/edit-stock-bill?productId=${item.product_id}`, {
-      state: { mismatchedItems: allBillItems, returnFrom: 'approve', returnBillId: bill.id },
+      state: { mismatchedItems: allBillItems, returnFrom: 'approve', returnBillId: bill.id, billNo: bill.bill_no },
     });
   };
 
   return (
     <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <button
-          onClick={onBack}
-          className="p-2 rounded-none hover:bg-gray-100 text-gray-500 hover:text-[#1C1B1B] transition-colors cursor-pointer"
-        >
-          <ArrowLeft size={22} />
+      {/* Breadcrumbs Navigation */}
+      <nav className="flex items-center gap-2 text-xs text-gray-500 mb-4">
+        <button type="button" onClick={onBack} className="hover:text-[#e51c23] transition-colors cursor-pointer font-bold">
+          นำเข้าสินค้าจากบิล
         </button>
-        <div>
-          <Heading level="h1" className="font-extrabold text-[#1C1B1B]">
-            อนุมัติบิลนำเข้าสินค้า
-          </Heading>
-          <p className="text-sm text-gray-500 mt-0.5">ตรวจสอบรายละเอียดบิลก่อนอนุมัติ</p>
-        </div>
+        <ChevronRight size={14} className="text-gray-400" />
+        <span className="text-[#1C1B1B] font-bold">อนุมัติบิลนำเข้าสินค้า (เลขที่: {bill.bill_no || '-'})</span>
+      </nav>
+
+      {/* Header */}
+      <div className="mb-8">
+        <Heading level="h1" className="font-extrabold text-[#1C1B1B]">
+          อนุมัติบิลนำเข้าสินค้า
+        </Heading>
+        <p className="text-sm text-gray-500 mt-0.5">ตรวจสอบรายละเอียดบิลก่อนอนุมัติ</p>
       </div>
 
       <div className={`grid grid-cols-1 gap-6 ${imageUrl && !imgError ? 'xl:grid-cols-3' : ''}`}>
@@ -162,7 +164,7 @@ export default function ApproveView({
                     <TableHead className="pl-6 w-10">#</TableHead>
                     <TableHead>ชื่อสินค้า</TableHead>
                     <TableHead className="text-center">จำนวน</TableHead>
-                    <TableHead className="text-right">ราคาทุนเดิม (DB)</TableHead>
+                    <TableHead className="text-right">ราคาทุนเดิม</TableHead>
                     <TableHead className="text-right">ราคาในบิลใหม่</TableHead>
                     <TableHead className="text-center">เปลี่ยนแปลง</TableHead>
                     <TableHead className="text-right pr-6">ยอดสุทธิ</TableHead>
@@ -219,32 +221,24 @@ export default function ApproveView({
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex gap-3 justify-end">
+          {/* Summary & Submit Footer Bar */}
+          <BillSummaryFooterBar
+            totalItems={(bill.bill_items || []).length}
+            subtotal={bill.subtotal || totalNetAmount}
+            totalAmount={bill.total_amount || totalNetAmount}
+            onCancel={onBack}
+            disabled={!!loading}
+          >
             <button
-              onClick={onBack}
-              disabled={!!loading}
-              className="flex items-center gap-2 px-6 py-3 border border-gray-300 text-[#5F5E5E] font-bold rounded-none hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              ยกเลิก
-            </button>
-            <button
-              onClick={handleReject}
-              disabled={!!loading}
-              className="flex items-center gap-2 px-6 py-3 border-2 border-[#e51c23] text-[#e51c23] font-bold rounded-none hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              {loading === 'reject' ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}
-              ส่งกลับแก้ไข
-            </button>
-            <button
+              type="button"
               onClick={handleApprove}
               disabled={!!loading}
-              className="flex items-center gap-2 px-8 py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-none transition-colors cursor-pointer disabled:opacity-50 shadow-md"
+              className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
             >
-              {loading === 'approve' ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-              อนุมัติบิล
+              {loading === 'approve' ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+              <span>อนุมัติบิล</span>
             </button>
-          </div>
+          </BillSummaryFooterBar>
         </div>
       </div>
     </div>

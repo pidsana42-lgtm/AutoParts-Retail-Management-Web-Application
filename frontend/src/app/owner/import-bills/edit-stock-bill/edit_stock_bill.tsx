@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
-  AlertCircle, ChevronLeft, ChevronRight, Search, RefreshCw, 
+  ChevronLeft, ChevronRight, Search, RefreshCw, 
   Edit3, CheckCircle2, DollarSign, Tag
 } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
@@ -245,14 +245,6 @@ export default function EditStockBillPage() {
   useEffect(() => {
     fetchData();
   }, []);
-
-  // Update form values on profit margin button click
-  const applyMarkup = (percentage: number) => {
-    const cost = Number(formData.cost_price) || 0;
-    const calculatedSalePrice = Math.round(cost * (1 + percentage / 100));
-    setFormData(prev => ({ ...prev, sale_price: calculatedSalePrice }));
-  };
-
   // Submit product update to PostgreSQL DB
   const handleSaveProduct = async (e?: React.FormEvent, goToNext = false) => {
     if (e) e.preventDefault();
@@ -309,30 +301,40 @@ export default function EditStockBillPage() {
 
   return (
     <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
+      {/* Breadcrumbs Navigation */}
+      <nav className="flex items-center gap-2 text-xs text-gray-500 mb-4">
+        <button
+          type="button"
+          onClick={() => navigate('/owner/import-bills')}
+          className="hover:text-[#e51c23] transition-colors cursor-pointer font-bold"
+        >
+          นำเข้าสินค้าจากบิล
+        </button>
+        {location.state?.returnFrom === 'approve' && location.state?.returnBillId && (
+          <>
+            <ChevronRight size={14} className="text-gray-400" />
+            <button
+              type="button"
+              onClick={() => navigate('/owner/import-bills', { state: { openApproveForBill: location.state.returnBillId } })}
+              className="hover:text-[#e51c23] transition-colors cursor-pointer"
+            >
+              อนุมัติบิลนำเข้าสินค้า {location.state.billNo ? `(เลขที่: ${location.state.billNo})` : ''}
+            </button>
+          </>
+        )}
+        <ChevronRight size={14} className="text-gray-400" />
+        <span className="text-[#1C1B1B] font-bold">แก้ไขและปรับราคาสินค้า</span>
+      </nav>
+
       {/* Top Header Bar */}
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => {
-              if (location.state?.returnFrom === 'approve' && location.state?.returnBillId) {
-                navigate('/owner/import-bills', { state: { openApproveForBill: location.state.returnBillId } });
-              } else {
-                navigate('/owner/import-bills');
-              }
-            }}
-            className="p-2 hover:bg-gray-200 rounded-none transition-colors cursor-pointer"
-            title="ย้อนกลับไปหน้านำเข้าบิล"
-          >
-            <ChevronLeft size={24} className="text-[#5F5E5E]" />
-          </button>
-          <div>
-            <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
-              จัดการการเปลี่ยนแปลงราคาในบิล (Bill Stock & Product Edit)
-            </Heading>
-            <p className="text-xs text-[#5F5E5E] mt-1">
-              เลือกรายการสินค้าฝั่งซ้ายเพื่อตรวจสอบ และปรับแก้ไขรายละเอียด ราคาทุน และราคาขายรายสินค้าฝั่งขวา
-            </p>
-          </div>
+        <div>
+          <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
+            จัดการการเปลี่ยนแปลงราคาในบิล
+          </Heading>
+          <p className="text-xs text-[#5F5E5E] mt-1">
+            เลือกรายการสินค้าฝั่งซ้ายเพื่อตรวจสอบ และปรับแก้ไขรายละเอียด ราคาทุน และราคาขายรายสินค้าฝั่งขวา
+          </p>
         </div>
 
         <button
@@ -469,50 +471,30 @@ export default function EditStockBillPage() {
                     <Edit3 className="w-5 h-5" />
                   </div>
                 </div>
-
-                {/* Notice banner if cost price mismatch exists */}
-                {mismatchMap.has(editingProduct.ID) && (
-                  <div className="p-3.5 bg-red-50 border border-red-200 text-red-800 flex flex-wrap items-center justify-between gap-2 shadow-xs">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 text-[#e51c23] shrink-0" />
-                      <span className="text-xs">
-                        ราคานำเข้าใหม่ในบิลคือ <strong className="text-[#e51c23] text-sm">฿{mismatchMap.get(editingProduct.ID)?.newPrice.toLocaleString()}</strong> (ราคาทุนเดิมใน DB คือ ฿{(editingProduct.CostPrice || 0).toLocaleString()})
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, cost_price: mismatchMap.get(editingProduct.ID)?.newPrice || prev.cost_price }))}
-                      className="px-3 py-1.5 bg-[#e51c23] hover:bg-[#c9181f] text-white font-bold text-xs cursor-pointer transition-colors"
-                    >
-                      ดึงราคานำเข้าใหม่ใส่ช่องทุน
-                    </button>
-                  </div>
-                )}
-
                 {/* Main Form Inputs */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Input
-                    label="ชื่อสินค้า (Product Name)"
+                    label="ชื่อสินค้า"
                     required
                     value={formData.product_name}
                     onChange={(e) => setFormData({ ...formData, product_name: e.target.value })}
                     placeholder="เช่น ผ้าเบรคหน้า Toyota Vios"
                   />
                   <Input
-                    label="รหัสสินค้า (Product Code System)"
+                    label="รหัสสินค้า"
                     required
                     value={formData.product_code}
                     onChange={(e) => setFormData({ ...formData, product_code: e.target.value })}
                     placeholder="เช่น BR-900X"
                   />
                   <Input
-                    label="PART NO. (รหัสผู้ผลิต/ซัพพลายเออร์)"
+                    label="PART NO."
                     value={formData.part_number}
                     onChange={(e) => setFormData({ ...formData, part_number: e.target.value })}
                     placeholder="เช่น PT-TURBO-01"
                   />
                   <Input
-                    label="บาร์โค้ด (Barcode)"
+                    label="บาร์โค้ด"
                     value={formData.barcode}
                     onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
                     placeholder="เช่น 8850000000001"
@@ -523,21 +505,21 @@ export default function EditStockBillPage() {
                 <div className="p-4 bg-gray-50 border border-gray-200 space-y-3">
                   <div className="font-bold text-[#1C1B1B] text-xs flex items-center gap-1.5 border-b border-gray-200 pb-2">
                     <DollarSign className="w-4 h-4 text-[#e51c23]" />
-                    กำหนดราคาทุนและราคาขายใหม่ (Price Configuration)
+                    กำหนดราคาทุนและราคาขายใหม่
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#5F5E5E] mb-1.5">
-                        ราคาทุนเดิมในคลัง (Original Cost ฿)
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-slate-700">
+                        ราคาทุนเดิมในคลัง
                       </label>
-                      <div className="px-3 py-2 bg-gray-100 border border-gray-300 font-bold text-[#1C1B1B] text-sm">
+                      <div className="h-10 w-full rounded-none bg-gray-100 border border-gray-300 px-3 flex items-center text-sm font-bold text-slate-800">
                         ฿{(editingProduct?.CostPrice || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
                       </div>
                     </div>
 
                     <Input
-                      label="ราคาทุนใหม่จากบิล (Cost Price ฿)"
+                      label="ราคาทุนใหม่จากบิล"
                       type="number"
                       step="any"
                       required
@@ -545,44 +527,29 @@ export default function EditStockBillPage() {
                       onChange={(e) => setFormData({ ...formData, cost_price: Number(e.target.value) })}
                       placeholder="เช่น 600"
                     />
-                    <div>
-                      <Input
-                        label="ราคาขายตั้งใหม่ (Sale Price ฿)"
-                        type="number"
-                        step="any"
-                        required
-                        value={formData.sale_price || ''}
-                        onChange={(e) => setFormData({ ...formData, sale_price: Number(e.target.value) })}
-                        placeholder="เช่น 900"
-                      />
-                      <div className="flex items-center gap-1.5 mt-1.5">
-                        <span className="text-[10px] text-gray-500 font-bold">คำนวณกำไร:</span>
-                        {[15, 20, 30, 50].map(pct => (
-                          <button
-                            key={pct}
-                            type="button"
-                            onClick={() => applyMarkup(pct)}
-                            className="px-1.5 py-0.5 bg-gray-100 hover:bg-gray-200 text-[#1C1B1B] text-[10px] font-bold border border-gray-300 cursor-pointer"
-                          >
-                            +{pct}%
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    <Input
+                      label="ราคาขายตั้งใหม่"
+                      type="number"
+                      step="any"
+                      required
+                      value={formData.sale_price || ''}
+                      onChange={(e) => setFormData({ ...formData, sale_price: Number(e.target.value) })}
+                      placeholder="เช่น 900"
+                    />
                   </div>
                 </div>
 
                 {/* Quantities */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Input
-                    label="จำนวนคงเหลือในคลัง (Quantity Stock)"
+                    label="จำนวนคงเหลือในคลัง"
                     type="number"
                     value={formData.quantity || ''}
                     onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
                     placeholder="เช่น 50"
                   />
                   <Input
-                    label="จำนวนขั้นต่ำแจ้งเตือนสต็อก (Min Stock Limit)"
+                    label="จำนวนขั้นต่ำแจ้งเตือนสต็อก"
                     type="number"
                     value={formData.limit_quantity || ''}
                     onChange={(e) => setFormData({ ...formData, limit_quantity: Number(e.target.value) })}

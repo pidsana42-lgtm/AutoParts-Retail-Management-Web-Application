@@ -22,6 +22,7 @@ export interface CreateSaleOrderRequest {
   received_amount: number;
   customer_name_temp?: string; // ชื่อลูกค้า (สำหรับบิลใบเสร็จ)
   customer_phone_temp?: string; // เบอร์โทรลูกค้า (สำหรับบิลใบเสร็จ)
+  customer_address_temp?: string;
   bill_discount_type: "none" | "percentage" | "amount";
   bill_discount_value: number;
   note: string;
@@ -37,4 +38,18 @@ export interface GenerateQRResponse {
   qr_code: string;
   reference_number: string;
   transaction_ref?: string;
+}
+
+export interface UpdateSaleOrderRequest {
+  customer_id?: number | null;
+  payment_method_id: number;
+  due_date?: string | null; // ส่งเป็น ISO String หรือ Date string เช่น "2026-08-04T16:38:15Z"
+  customer_name_temp?: string | null;
+  customer_phone_temp?: string | null;
+  customer_address_temp?: string | null;
+  bill_discount_type: "none" | "percentage" | "amount";
+  bill_discount_value: number;
+  received_amount: number;
+  note?: string;
+  items: SaleOrderItemRequest[];
 }

@@ -15,7 +15,9 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
     }
     return [];
   });
-  const [searchQuery, setSearchQuery] = useState<string>(""); // searchQuery = เก็บข้อมูลรหัสบาร์โค้ดหรือ SKU ที่พนักงานกรอกเพื่อค้นหาสินค้า (ตัวแปรฝั่งข้อมูล) setSearchQuery = ฟังก์ชันสำหรับอัปเดตข้อมูลรหัสบาร์โค้ดหรือ SKU ที่พนักงานกรอกเพื่อค้นหาสินค้า (ตัวแปรฝั่งข้อมูล)
+  const [searchQuery, setSearchQuery] = useState<string>(""); 
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
   const { calculateLineDiscountAmount, validateLineDiscountPolicy } = useDiscountCalculation();
 
   // เก็บ ID ลูกค้าล่าสุดไว้เช็คความเปลี่ยนแปลง ป้องกัน Loop
@@ -144,11 +146,17 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
     try {
       const products = await posApiService.searchProducts(cleanedQuery);
       if (!products || products.length === 0) {
-        alert("ไม่พบรหัสบาร์โค้ดสินค้าชิ้นนี้ในสต๊อกระบบ");
+        alert("ไม่พบข้อมูลสินค้าชิ้นนี้ในระบบ (รองรับการค้นหาจาก บาร์โค้ด, รหัสสินค้า, Part Number และชื่อสินค้า)");
         return;
       }
-      //.find() ค้นหาในอาร์เรย์ตัวที่ตรงที่สุด
-      const product = products.find((p) => p.barcode === cleanedQuery || p.product_code === cleanedQuery) || products[0];
+      // ค้นหาตัวเลือกที่ตรงกับเงื่อนไขที่สุด (ไม่ว่าจะเป็น barcode, product_code, part_number, หรือ product_name)
+      const product = products.find(
+        (p) =>
+          p.barcode?.toLowerCase() === cleanedQuery.toLowerCase() ||
+          p.product_code?.toLowerCase() === cleanedQuery.toLowerCase() ||
+          p.part_number?.toLowerCase() === cleanedQuery.toLowerCase() ||
+          p.product_name?.toLowerCase() === cleanedQuery.toLowerCase()
+      ) || products[0];
       // โซนที่ 3 & 4: คำนวณและเช็คความปลอดภัย (มีของซ้ำไหม/สิทธิ์ส่วนลดได้เท่าไหร่)
       const discountConfig = getDefaultProductDiscount(product, customer, activeTypeId);
       const existingIndex = cart.findIndex((item) => item.product_id === product.id);
@@ -339,6 +347,85 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
     );
   };
 
+  // ดึงข้อมูลคำแนะนำสินค้าแบบเรียลไทม์ (Autocomplete)
+  useEffect(() => {
+    const cleaned = searchQuery.trim().toLowerCase();
+    if (!cleaned) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+const timer = setTimeout(async () => {
+    try {
+      const res = await posApiService.searchProducts(cleaned);
+      
+      
+      // กรองรายการเพิ่มเติมให้ตรงกับคำค้นหาแบบ Case-Insensitive
+      const filteredResults = (res || []).filter((item: any) =>
+        item.product_name?.toLowerCase().includes(cleaned) ||
+        item.product_code?.toLowerCase().includes(cleaned) ||
+        item.part_number?.toLowerCase().includes(cleaned) ||
+        item.barcode?.toLowerCase().includes(cleaned)
+      );
+
+      setSuggestions(filteredResults);
+      setShowSuggestions(true);
+    } catch (err) {
+      console.error("Failed to fetch suggestions:", err);
+    }
+  }, 200); // 200ms debounce
+
+  return () => clearTimeout(timer);
+}, [searchQuery]);
+
+const handleSelectProduct = (product: any) => {
+    const discountConfig = getDefaultProductDiscount(product, customer, activeTypeId);
+    const existingIndex = cart.findIndex((item) => item.product_id === product.id);
+
+    if (existingIndex > -1) {
+      const newCart = [...cart];
+      const item = newCart[existingIndex];
+
+      newCart[existingIndex] = {
+        ...item,
+        qty: item.qty + 1,
+        model_name: product.model_name,
+        brand_name: product.brand_name,
+        grade_name: product.grade_name,
+        unit_price: product.sale_price,
+        quantity: product.quantity,
+        note: product.note,
+      };
+
+      setCart(newCart);
+    } else {
+      setCart([
+        ...cart,
+        {
+          product_id: product.id,
+          product_code: product.product_code,
+          product_name: product.product_name,
+          part_number: product.part_number,
+          qty: 1,
+          model_name: product.model_name,
+          brand_name: product.brand_name,
+          grade_name: product.grade_name,
+          unit_price: product.sale_price,
+          quantity: product.quantity,
+          note: product.note || "",
+          max_discount_rate: product.max_discount_rate,
+          discount_type: discountConfig.type,
+          discount_value: discountConfig.value,
+        },
+      ]);
+    }
+
+    setSearchQuery("");
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
+
   return {
     cart,
     setCart,
@@ -354,5 +441,10 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
     handleDiscountToggle,
     handleDiscountTypeChange,
     handleDiscountValueChange,
+    suggestions,
+    setSuggestions,
+    showSuggestions,
+    setShowSuggestions,
+    handleSelectProduct,
   };
 }
