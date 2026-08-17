@@ -2,7 +2,7 @@ import React from "react";
 import Text from "../../../components/elements/text";
 import Heading from "../../../components/elements/heading";
 
-const RepaymentHistory: React.FC = () => {
+const SettleBills: React.FC = () => {
   return (
     <div className="relative flex min-h-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
@@ -14,7 +14,7 @@ const RepaymentHistory: React.FC = () => {
                 บันทึกรายการรับชำระเงินและตัดหนี้ที่คุณทำรายการ
               </Text>
               <Heading level="h1" weight="normal" className="mb-0 text-[#1C1B1B]">
-                ประวัติการชำระเงิน
+                ชำระหนี้คงค้าง
               </Heading>
             </div>
           </div>
@@ -23,5 +23,5 @@ const RepaymentHistory: React.FC = () => {
     </div>
   );
 } 
-export default RepaymentHistory;
+export default SettleBills;
 

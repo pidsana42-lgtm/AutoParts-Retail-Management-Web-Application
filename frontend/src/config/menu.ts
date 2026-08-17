@@ -68,7 +68,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
       { icon: FileX, path: "/employee/pos/sales_cancellation_history", label: "ประวัติยกเลิกการขาย" },
     ],
   },
-  { icon: ReceiptText, label: "รายการธุรกรรม / การเงิน", path: "/employee/transactions/repayment-history", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],},
+  { icon: ReceiptText, label: "รายการธุรกรรม / การเงิน", path: "/employee/transactions/settle_bills", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],},
 
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/owner/orders", roles: ["OWNER", "ADMIN"] },
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/employee/orders", roles: ["EMPLOYEE"] },
@@ -116,10 +116,10 @@ export const getMenuByRole = (role: string): MenuItem[] => {
       }
 
       // 2. สลับ Main Path ของ รายการธุรกรรม ตาม Role
-      if (menu.path.includes("/transactions/repayment-history")) {
+      if (menu.path.includes("/transactions/settle_bills")) {
         updatedMenu.path = isOwnerOrAdmin
-          ? "/owner/transactions/repayment-history"
-          : "/employee/transactions/repayment-history";
+          ? "/owner/transactions/settle_bills"
+          : "/employee/transactions/settle_bills";
       }
 
       if (!updatedMenu.subs) return updatedMenu;
