@@ -280,41 +280,48 @@ func (s *paymentService) ConfirmPayment(req posDto.ConfirmPaymentRequest) (*posD
 // 2. ดึงรายการบิลค้างชำระของลูกค้า (Unpaid Orders) GET /api/pos/payments/unpaid-bills/:customer_id
 // -------------------------------------------------------------
 func (s *paymentService) GetUnpaidBillsByCustomer(customerID uint) (*posDto.CustomerUnpaidBillsResponse, error) {
-	orders, err := s.paymentRepo.GetUnpaidOrdersByCustomerID(customerID)
-	if err != nil {
-		return nil, err
-	}
+    // 1. ดึงข้อมูลลูกค้าโดยตรงจากฐานข้อมูลก่อน (เพื่อให้ได้ชื่อลูกค้าเสมอแม้ไม่มีบิล)
+    var customer entity.Customer
+    customerName := ""
+    if err := s.paymentRepo.BeginTransaction().First(&customer, customerID).Error; err == nil {
+        customerName = customer.CustomerName
+    }
 
-	var totalDebt float64
-	var billItems []posDto.UnpaidBillItem
+    // 2. ดึงรายการบิล
+    orders, err := s.paymentRepo.GetUnpaidOrdersByCustomerID(customerID)
+    if err != nil {
+        return nil, err
+    }
 
-	customerName := ""
-	for _, o := range orders {
-		if customerName == "" {
-			if o.Customer.ID != 0 && o.Customer.CustomerName != "" {
-				customerName = o.Customer.CustomerName
-			} else if o.CustomerNameTemp != nil {
-				customerName = *o.CustomerNameTemp
-			}
-		}
-		totalDebt += o.BalanceDue
-		billItems = append(billItems, posDto.UnpaidBillItem{
-			OrderID:       o.ID,
-			OrderNumber:   o.OrderNumber,
-			OrderDate:     o.CreatedAt,
-			TotalAmount:   o.TotalAmount,
-			PaidAmount:    o.PaidAmount,
-			BalanceDue:    o.BalanceDue,
-			PaymentStatus: string(o.PaymentStatus),
-		})
-	}
+    var totalDebt float64
+    billItems := make([]posDto.UnpaidBillItem, 0) // ใช้ make เพื่อให้ได้ [] เสมอ ไม่ส่ง null กลับไป
 
-	return &posDto.CustomerUnpaidBillsResponse{
-		CustomerID:   customerID,
-		CustomerName: customerName,
-		TotalDebt:    totalDebt,
-		Bills:        billItems,
-	}, nil
+    for _, o := range orders {
+        if customerName == "" {
+            if o.Customer.ID != 0 && o.Customer.CustomerName != "" {
+                customerName = o.Customer.CustomerName
+            } else if o.CustomerNameTemp != nil {
+                customerName = *o.CustomerNameTemp
+            }
+        }
+        totalDebt += o.BalanceDue
+        billItems = append(billItems, posDto.UnpaidBillItem{
+            OrderID:       o.ID,
+            OrderNumber:   o.OrderNumber,
+            OrderDate:     o.CreatedAt,
+            TotalAmount:   o.TotalAmount,
+            PaidAmount:    o.PaidAmount,
+            BalanceDue:    o.BalanceDue,
+            PaymentStatus: string(o.PaymentStatus),
+        })
+    }
+
+    return &posDto.CustomerUnpaidBillsResponse{
+        CustomerID:   customerID,
+        CustomerName: customerName,
+        TotalDebt:    totalDebt,
+        Bills:        billItems,
+    }, nil
 }
 
 // -------------------------------------------------------------

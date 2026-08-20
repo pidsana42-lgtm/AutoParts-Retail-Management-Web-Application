@@ -5,6 +5,7 @@ import type { StoreConfigInterface } from "../../../interface/pos/store_config_i
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
 import type { ConfirmPaymentRequest } from "../../../interface/pos/payment_interface";
 import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, GetSaleHistoryByIDResponse, RevertCancellationRequestResponse } from "../../../interface/pos/sales_history_interface";
+import type { CustomerUnpaidBillsResponse, SettleBillsRequest, SettleBillsResponse } from "../../../interface/pos/settle_bills_interface";
 
 // ==================== API Services ====================
 export const posApiService = {
@@ -94,6 +95,18 @@ export const posApiService = {
   getEmployees: (): Promise<any[]> =>
     apiClient
       .get<any[]>("/pos/employees")
+      .then((res) => res.data),
+
+  /** ดึงรายการบิลค้างชำระของลูกค้าตาม customer_id */
+  getUnpaidBillsByCustomer: (customerId: number): Promise<CustomerUnpaidBillsResponse> =>
+    apiClient
+      .get<CustomerUnpaidBillsResponse>(`/pos/payments/unpaid-bills/${customerId}`)
+      .then((res) => res.data),
+
+  /** บันทึกรับชำระบิลค้างชำระ */
+  settleCustomerBills: (payload: SettleBillsRequest): Promise<SettleBillsResponse> =>
+    apiClient
+      .post<SettleBillsResponse>("/pos/payments/settle-bills", payload)
       .then((res) => res.data),
 
   /** ค้นหาใบสั่งซื้อขายด้วยหมายเลข invoice */

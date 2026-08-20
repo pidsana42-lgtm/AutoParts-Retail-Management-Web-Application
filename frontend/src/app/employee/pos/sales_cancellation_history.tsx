@@ -102,7 +102,7 @@ const SalesCancellationHistory: React.FC = () => {
                 {/* 1. ค้นหาเลขบิล/ชื่อลูกค้า (col-span-3) */}
                 <div className="md:col-span-3 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">
-                    ค้นหาเลขคำสั่งซื้อ/ชื่อลูกค้า
+                    ค้นหาเลขคำสั่งซื้อ/ชื่อลูกค้า 
                   </label>
                   <div className="relative flex-1">
                     <ScanBarcode className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={18} />

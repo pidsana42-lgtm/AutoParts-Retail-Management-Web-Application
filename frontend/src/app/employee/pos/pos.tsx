@@ -87,7 +87,7 @@ export default function PosPage(): React.JSX.Element {
                 สถานะรายการขาย
               </Text>
               <h2 className="text-2xl text-zinc-800 ">บิลร่าง (DRAFT)</h2>
-              <button
+              <Button
                 type="button"
                 onClick={() =>
                   cartHook.handleClearAllCart(() => {
@@ -99,14 +99,14 @@ export default function PosPage(): React.JSX.Element {
                 disabled={cartHook.cart.length === 0 && !paymentData.customer}
                 
                 // ให้เช็กเงื่อนไขเดียวกันเพื่อให้สีปุ่มแสดงผลถูกต้อง
-                className={`text-xs px-3 py-1.5 border cursor-pointer transition-all duration-200 ${
+                className={`text-xs font-normal px-3 py-1.5 border cursor-pointer transition-all duration-200 ${
                   cartHook.cart.length === 0 && !paymentData.customer
                     ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed select-none"
                     : "bg-[#E51C23] text-white border-[#E51C23] hover:bg-[#C62828] active:bg-[#B71C1C] shadow-sm"
                 }`}
               >
                 ล้างทั้งหมด
-              </button>
+              </Button>
             </div>
           </div>
 
