@@ -100,6 +100,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
 
   // Price Mismatch States
   const [priceMismatchedItems, setPriceMismatchedItems] = useState<PriceMismatchItem[]>([]);
+  const [pendingNewProducts, setPendingNewProducts] = useState<any[]>([]);
   const [showPriceUpdateModal, setShowPriceUpdateModal] = useState<boolean>(false);
   const [onConfirmPriceUpdateAction, setOnConfirmPriceUpdateAction] = useState<((selectedIds: number[]) => void) | null>(null);
 
@@ -1499,16 +1500,23 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
       setIsDraftMode(false);
       const warnings = validateBillBeforeSave();
       const mismatches = getPriceMismatchedItems(formData);
+      const newProds = (formData.items ?? []).filter((item: any) => !item.product_id);
 
-      if (warnings.length > 0 || mismatches.length > 0) {
+      if (warnings.length > 0 || mismatches.length > 0 || newProds.length > 0) {
+        if (newProds.length > 0) setPendingNewProducts(newProds);
+        if (mismatches.length > 0) setPriceMismatchedItems(mismatches);
         if (warnings.length > 0) {
           setValidationWarnings(warnings);
-        } else {
-          setValidationWarnings(['ตรวจพบราคานำเข้าในบิลไม่ตรงกับราคาทุนในคลังสินค้า']);
+        } else if (mismatches.length > 0 || newProds.length > 0) {
+          setValidationWarnings(['ตรวจพบข้อมูลที่ต้องการการยืนยันก่อนบันทึก']);
         }
         setSaving(false);
         return;
       }
+      // ไม่มีการเปลี่ยนแปลง — clear แล้วบันทึกตรง
+      setPendingNewProducts([]);
+      setPriceMismatchedItems([]);
+      setValidationWarnings([]);
     }
 
     setSaving(true);

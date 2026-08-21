@@ -1,24 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Search, Plus, Minus, Send,
+  Search, Plus, Minus,
   ChevronLeft, ChevronRight,
   ChevronsLeft, ChevronsRight, History, Trash2,
-  FileText, Loader2, Eye, Camera, X, Printer, CheckCircle2, SquarePen,
-  ClipboardEdit, UserCheck, UserX, Clock, Truck, SendHorizonal, XCircle,
+  FileText, Loader2, Eye, Camera, X, Printer, SquarePen,
+  Truck,
 } from 'lucide-react';
+import ClaimTrackingTab from './claim_tracking_tab';
 import Heading from '../../../components/elements/heading';
 import Card, { CardHeader, CardTitle, CardContent } from '../../../components/elements/card';
 import Input from '../../../components/elements/input';
 import Button from '../../../components/elements/button';
 import Badge from '../../../components/elements/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
-import { getCustomerClaims, searchSaleOrders, deleteCustomerClaim, updateCustomerClaim } from '../../../service/http/claim/claim';
-import { posApiService } from '../../../service/http/pos/pos_service';
+import { getCustomerClaims, searchSaleOrders, deleteCustomerClaim, searchCustomerCreditByPhone } from '../../../service/http/claim/claim';
 import type { CustomerDiscountResponse } from '../../../interface/pos/customer_interface';
 import apiClient from '../../../service/http/apiClient';
 import type { CustomerClaim } from '../../../interface/claim/claim';
 import { cn } from '../../../utils/component';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 interface ClaimFormProduct {
   product_id: number;
@@ -161,6 +162,7 @@ interface ClaimsPageProps {
 
 export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): React.JSX.Element {
   const navigate = useNavigate();
+  const { addNotification } = useNotification();
 
   const [view, setView] = useState<'list' | 'claim-form'>('list');
   const [claimSearch, setClaimSearch] = useState('');
@@ -173,6 +175,29 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Tab & Tracking state
+  const [activeTab, setActiveTab] = useState<'claims' | 'tracking'>('claims');
+  const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
+
+  const handleUpdateTrackingStage = async (itemId: number, newStage: string) => {
+    if (!itemId) return;
+    try {
+      setUpdatingItemId(itemId);
+      await apiClient.put(`/claims/customer-claims/items/${itemId}`, {
+        resolution: newStage,
+      });
+      setRawClaims(prev => prev.map(c => ({
+        ...c,
+        items: c.items?.map(i => i.id === itemId ? { ...i, resolution: newStage } : i),
+      })));
+    } catch (err) {
+      console.error('Failed to update tracking stage:', err);
+      alert('เกิดข้อผิดพลาดในการอัปเดตขั้นตอน กรุณาลองใหม่');
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
 
   const [claimType, setClaimType] = useState<'INSTANT' | 'SUPPLIER_PENDING' | 'CREDIT_ACCOUNT'>('INSTANT');
   const [claimFormInvoice, setClaimFormInvoice] = useState('');
@@ -190,35 +215,16 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
   const [posCustomerCredit, setPosCustomerCredit] = useState<CustomerDiscountResponse | null>(null);
   const [loadingPosCredit, setLoadingPosCredit] = useState(false);
 
-  const [quickUpdateClaim, setQuickUpdateClaim] = useState<CustomerClaim | null>(null);
-  const [savingQuickOp, setSavingQuickOp] = useState(false);
-  const [quickOpNote, setQuickOpNote] = useState('');
-
-  const handleQuickUpdate = async (patch: Partial<CustomerClaim>) => {
-    if (!quickUpdateClaim?.id) return;
-    try {
-      setSavingQuickOp(true);
-      const updated = { ...quickUpdateClaim, ...patch };
-      await updateCustomerClaim(quickUpdateClaim.id, updated as any);
-      setQuickUpdateClaim(updated);
-      await loadClaims();
-    } catch (err) {
-      console.error('Failed to quick update claim status:', err);
-      alert('เกิดข้อผิดพลาดในการอัปเดตสถานะ กรุณาลองใหม่');
-    } finally {
-      setSavingQuickOp(false);
-    }
-  };
 
   useEffect(() => {
-    if (claimType === 'CREDIT_ACCOUNT' && claimCustomerPhone.trim()) {
+    if (claimCustomerPhone.trim() && claimCustomerPhone.trim() !== '-') {
       const fetchCredit = async () => {
         try {
           setLoadingPosCredit(true);
-          const data = await posApiService.searchCustomerDiscount(claimCustomerPhone.trim());
+          const data = await searchCustomerCreditByPhone(claimCustomerPhone.trim());
           setPosCustomerCredit(data);
         } catch (err) {
-          console.error('Failed to fetch POS customer credit:', err);
+          console.error('Failed to fetch customer credit:', err);
           setPosCustomerCredit(null);
         } finally {
           setLoadingPosCredit(false);
@@ -228,7 +234,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
     } else {
       setPosCustomerCredit(null);
     }
-  }, [claimType, claimCustomerPhone]);
+  }, [claimCustomerPhone]);
 
   const [activeEvidenceIdx, setActiveEvidenceIdx] = useState<number | null>(null);
   const itemEvidenceRef = useRef<HTMLInputElement>(null);
@@ -298,10 +304,22 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
     setClaimItems(prev => {
       const updated = [...prev];
       const t = updated[index];
-      updated[index] = { ...t, claim_qty: Math.max(0, Math.min(t.sold_qty, t.claim_qty + delta)) };
+      const newQty = Math.max(0, Math.min(t.sold_qty, t.claim_qty + delta));
+      updated[index] = { ...t, claim_qty: newQty };
       return updated;
     });
   };
+
+  const handleDirectClaimItemQty = (index: number, val: number) => {
+    setClaimItems(prev => {
+      const updated = [...prev];
+      const t = updated[index];
+      const clamped = Math.max(0, Math.min(t.sold_qty, isNaN(val) ? 0 : val));
+      updated[index] = { ...t, claim_qty: clamped };
+      return updated;
+    });
+  };
+
 
   const handleClaimItemReasonChange = (index: number, value: string) => {
     setClaimItems(prev => prev.map((item, i) => i === index ? { ...item, reason: value } : item));
@@ -340,6 +358,13 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
     const missing = selected.find(p => !p.reason.trim());
     if (missing) { alert(`กรุณาระบุสาเหตุที่เคลมสำหรับ "${missing.product_name}"`); return; }
 
+    const isCreditEligible = Boolean(posCustomerCredit && posCustomerCredit.is_credit_enabled);
+    const hasCreditAccountItem = selected.some(p => (p.claim_type || claimType) === 'CREDIT_ACCOUNT');
+    if (hasCreditAccountItem && !isCreditEligible) {
+      alert('ลูกค้าท่านนี้ไม่มีสิทธิ์ใช้วงเงินสินเชื่อ/เงินเชื่อ กรุณาเปลี่ยนประเภทการเคลมเป็น "เปลี่ยนทันที" หรือ "ฝากส่งบริษัทตรวจ"');
+      return;
+    }
+
     try {
       setSaving(true);
       const itemsWithUrls = await Promise.all(
@@ -370,11 +395,13 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
         original_order_id: claimOrderId ?? 0,
         claim_type: claimType,
         notes: claimNote.trim(),
+        status: canApprove ? 'APPROVED' : 'PENDING',
         items: itemsWithUrls,
       });
       await loadClaims();
       setView('list');
       resetClaimForm();
+      addNotification('สร้างใบเคลมสำเร็จ', `ใบเคลมของคุณถูกบันทึกในระบบเรียบร้อยแล้ว`, 'success');
     } catch (err) {
       console.error('Failed to create claim:', err);
       alert('เกิดข้อผิดพลาดในการบันทึกใบเคลม กรุณาลองใหม่อีกครั้ง');
@@ -412,8 +439,8 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
   // ─── LIST VIEW ────────────────────────────────────────────────────────────────
   if (view === 'list') {
     const pendingCount = flatRows.filter(r => r.itemStatus === 'PENDING' && r.itemId > 0).length;
-    const approvedCount = flatRows.filter(r => r.itemStatus === 'APPROVED' && r.isFirst).length;
-    const rejectedCount = flatRows.filter(r => r.itemStatus === 'REJECTED' && r.isFirst).length;
+    const approvedCount = flatRows.filter(r => r.itemStatus === 'APPROVED').length;
+    const rejectedCount = flatRows.filter(r => r.itemStatus === 'REJECTED').length;
 
     const filteredRows = flatRows.filter(row => {
       const q = claimSearch.toLowerCase();
@@ -430,7 +457,10 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
 
     const totalItems = filteredRows.length;
     const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
-    const paginatedRows = filteredRows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const paginatedRows = filteredRows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((row, index, arr) => ({
+      ...row,
+      isFirst: index === 0 || arr[index - 1].claimId !== row.claimId,
+    }));
 
     const searchDropResults = claimSearch.trim().length > 0
       ? rawClaims.filter(c => {
@@ -443,152 +473,237 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
         }).slice(0, 8)
       : [];
 
+    // Active tracking items count for badge
+    const activeTrackingCount = rawClaims.reduce((acc, c) => {
+      const items = c.items ?? [];
+      return acc + items.filter(i => {
+        const res = (i.resolution || '').trim();
+        const isCompleted = res === 'COMPLETED' || res.includes('ส่งมอบ') || res.includes('สำเร็จ');
+        const isRejected = (i.status || '').toUpperCase() === 'REJECTED';
+        return !isCompleted && !isRejected;
+      }).length;
+    }, 0);
+
     return (
-      <div className="p-8 space-y-6 bg-gray-50 min-h-screen font-sans">
+      <div className="p-8 space-y-5 bg-gray-50 min-h-screen font-sans">
 
         {/* 1. Header */}
         <div className="flex items-center justify-between">
-          <Heading level="h1" weight="semibold" className="m-0 text-black">
+          <Heading level="h1" weight="semibold" className="m-0 text-[#1C1B1B]">
             จัดการเคลมสินค้า
           </Heading>
-          <Button
-            leftIcon={<Plus className="h-5 w-5" />}
-            size="md"
+          <button
             onClick={() => setView('claim-form')}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#e51c23] hover:bg-[#c9181f] text-white text-sm font-bold transition-colors cursor-pointer rounded-none shadow-sm"
           >
-            สร้างใบเคลม
-          </Button>
+            <Plus size={16} /> สร้างใบเคลม
+          </button>
         </div>
 
-        {/* 2. Search + Stats */}
-        <div className="flex gap-6 items-stretch">
-          <Card className="flex-1 w-3/4">
-            <div className="p-5">
-              <h3 className="text-base font-semibold text-black mb-4">ค้นหาใบเคลมด้วย</h3>
-              <div className="grid grid-cols-3 gap-4 items-end">
-                <div ref={searchRef} className="relative">
-                  <Input
-                    type="text"
-                    placeholder="เลขที่ใบเคลม, ชื่อลูกค้า, สินค้า..."
-                    value={claimSearch}
-                    onChange={e => { setClaimSearch(e.target.value); setShowSearchDrop(true); setCurrentPage(1); }}
-                    onFocus={() => setShowSearchDrop(true)}
-                    leftIcon={<Search size={16} />}
-                    className="bg-gray-50 border border-gray-200"
-                  />
-                  {showSearchDrop && searchDropResults.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-200 shadow-lg rounded mt-1 max-h-72 overflow-y-auto">
-                      {searchDropResults.map(c => {
-                        const noteText = c.notes || c.note;
-                        const name = c.customer_name && c.customer_name !== '-'
-                          ? c.customer_name
-                          : parseNote(noteText, 'ลูกค้า');
-                        return (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onMouseDown={() => { navigate(`${basePath}/detail/${c.id}`); setShowSearchDrop(false); }}
-                            className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0 cursor-pointer transition-colors"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-bold text-[#e51c23] font-mono text-sm">
-                                {c.claim_no ?? `CLM-${c.id}`}
-                              </span>
-                              {(c.status ?? '').toUpperCase() === 'APPROVED' ? (
-                                <Badge variant="success" size="sm">อนุมัติแล้ว</Badge>
-                              ) : (c.status ?? '').toUpperCase() === 'REJECTED' ? (
-                                <Badge variant="error" size="sm">ปฏิเสธ</Badge>
-                              ) : (
-                                <Badge variant="warning" size="sm">รอดำเนินการ</Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-[#1C1B1B] font-semibold mt-0.5 truncate">{name}</p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-                <select
-                  value={statusFilter}
-                  onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                  className="border border-gray-200 rounded-none px-3 py-2 text-sm text-gray-700 bg-white hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200 h-[42px] cursor-pointer"
-                >
-                  <option value="">ทุกสถานะ</option>
-                  <option value="PENDING">รอดำเนินการ</option>
-                  <option value="APPROVED">อนุมัติแล้ว</option>
-                  <option value="REJECTED">ปฏิเสธ</option>
-                </select>
-                <div className="h-[42px] flex items-center">
-                  <Button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 flex items-center gap-2 shadow-xs font-bold rounded-none text-sm shrink-0 cursor-pointer"
-                  >
-                    <Printer size={16} /> พิมพ์ใบเช็คลิสต์เคลม
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Card>
+        {/* Tab Navigation */}
+        <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-3 pt-2 shadow-xs">
+          <button
+            type="button"
+            onClick={() => setActiveTab('claims')}
+            className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition-all cursor-pointer ${
+              activeTab === 'claims'
+                ? 'border-[#e51c23] text-[#e51c23]'
+                : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
+            }`}
+          >
+            <FileText size={16} /> รายการใบเคลมทั้งหมด
+            <span className={`px-2 py-0.5 text-xs rounded-full ${
+              activeTab === 'claims' ? 'bg-red-50 text-[#e51c23] font-bold' : 'bg-gray-100 text-gray-600'
+            }`}>
+              {rawClaims.length}
+            </span>
+          </button>
 
-          {/* Monthly Stats Card */}
-          <div className="bg-[#22252a] text-white rounded-none p-6 w-1/4 flex flex-col justify-between shadow-sm relative overflow-hidden">
-            <div>
-              <p className="text-sm text-gray-400 font-light">รายการเคลมในเดือนนี้</p>
-              <p className="text-4xl font-bold mt-2 flex items-baseline gap-2">
-                {rawClaims.length} <span className="text-lg font-normal text-gray-300">รายการ</span>
-              </p>
+          <button
+            type="button"
+            onClick={() => setActiveTab('tracking')}
+            className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition-all cursor-pointer ${
+              activeTab === 'tracking'
+                ? 'border-[#e51c23] text-[#e51c23]'
+                : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
+            }`}
+          >
+            <Truck size={16} /> ติดตามสินค้าส่งเคลม
+            <span className={`px-2 py-0.5 text-xs rounded-full ${
+              activeTab === 'tracking' ? 'bg-red-50 text-[#e51c23] font-bold' : 'bg-gray-100 text-gray-600'
+            }`}>
+              {activeTrackingCount}
+            </span>
+          </button>
+        </div>
+
+        {activeTab === 'claims' ? (
+          <>
+            {/* 2. Stats row */}
+            <div className="grid grid-cols-4 gap-4">
+          <div className="bg-[#22252a] text-white p-5 col-span-1 relative overflow-hidden">
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">รายการทั้งหมด</p>
+            <p className="text-4xl font-bold mt-1">{rawClaims.length}</p>
+            <p className="text-xs text-gray-500 mt-1">ใบเคลม</p>
+            <div className="absolute right-3 bottom-3 opacity-5 pointer-events-none">
+              <History className="w-16 h-16" />
             </div>
-            <div className="absolute right-4 bottom-4 opacity-5 pointer-events-none">
-              <History className="w-24 h-24" />
-            </div>
+          </div>
+          <div className="bg-white border border-gray-200 border-l-[4px] border-l-amber-400 p-5 shadow-sm">
+            <p className="text-xs text-[#6B7280] font-medium uppercase tracking-wider">รอดำเนินการ</p>
+            <p className="text-3xl font-bold mt-1 text-gray-900">{pendingCount}</p>
+            <p className="text-xs text-gray-400 mt-1">รายการ</p>
+          </div>
+          <div className="bg-white border border-gray-200 border-l-[4px] border-l-emerald-500 p-5 shadow-sm">
+            <p className="text-xs text-[#6B7280] font-medium uppercase tracking-wider">อนุมัติแล้ว</p>
+            <p className="text-3xl font-bold mt-1 text-gray-900">{approvedCount}</p>
+            <p className="text-xs text-gray-400 mt-1">รายการ</p>
+          </div>
+          <div className="bg-white border border-gray-200 border-l-[4px] border-l-red-500 p-5 shadow-sm">
+            <p className="text-xs text-[#6B7280] font-medium uppercase tracking-wider">ปฏิเสธ</p>
+            <p className="text-3xl font-bold mt-1 text-gray-900">{rejectedCount}</p>
+            <p className="text-xs text-gray-400 mt-1">รายการ</p>
           </div>
         </div>
 
-        {/* 3. Summary Cards */}
-        <div className="grid grid-cols-3 gap-6">
-          <Card className="border-l-[5px] border-l-black flex flex-col justify-center h-24 p-5">
-            <p className="text-sm text-[#6B7280] font-medium">รอดำเนินการ</p>
-            <p className="text-2xl font-bold mt-1 text-gray-900">{pendingCount} รายการ</p>
-          </Card>
-          <Card className="border-l-[5px] border-l-emerald-500 flex flex-col justify-center h-24 p-5">
-            <p className="text-sm text-[#6B7280] font-medium">อนุมัติแล้ว</p>
-            <p className="text-2xl font-bold mt-1 text-gray-900">{approvedCount} รายการ</p>
-          </Card>
-          <Card className="border-l-[5px] border-l-red-500 flex flex-col justify-center h-24 p-5">
-            <p className="text-sm text-[#6B7280] font-medium">ปฏิเสธ</p>
-            <p className="text-2xl font-bold mt-1 text-gray-900">{rejectedCount} รายการ</p>
-          </Card>
+        {/* 3. Search & Filter Bar */}
+        <div className="bg-white border border-gray-200 p-3.5 flex flex-col md:flex-row gap-3 items-center justify-between shadow-sm">
+          <div className="flex flex-1 items-center gap-3 w-full">
+            <div ref={searchRef} className="relative flex-1 max-w-md">
+              <Input
+                type="text"
+                placeholder="ค้นหาเลขที่ใบเคลม, ชื่อลูกค้า, สินค้า..."
+                value={claimSearch}
+                onChange={e => { setClaimSearch(e.target.value); setShowSearchDrop(true); setCurrentPage(1); }}
+                onFocus={() => setShowSearchDrop(true)}
+                leftIcon={<Search size={15} className="text-gray-400" />}
+                className="bg-gray-50/70 border-gray-200 text-sm h-10 w-full focus:bg-white"
+              />
+              {showSearchDrop && searchDropResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-200 shadow-xl mt-1 max-h-72 overflow-y-auto">
+                  {searchDropResults.map(c => {
+                    const noteText = c.notes || c.note;
+                    const name = c.customer_name && c.customer_name !== '-'
+                      ? c.customer_name
+                      : parseNote(noteText, 'ลูกค้า');
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onMouseDown={() => { navigate(`${basePath}/detail/${c.id}`); setShowSearchDrop(false); }}
+                        className="w-full text-left px-4 py-2.5 hover:bg-red-50/40 border-b border-gray-100 last:border-0 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-[#e51c23] font-mono text-sm">
+                            {c.claim_no ?? `CLM-${c.id}`}
+                          </span>
+                          {(c.status ?? '').toUpperCase() === 'APPROVED' ? (
+                            <Badge variant="success" size="sm">อนุมัติแล้ว</Badge>
+                          ) : (c.status ?? '').toUpperCase() === 'REJECTED' ? (
+                            <Badge variant="error" size="sm">ปฏิเสธ</Badge>
+                          ) : (
+                            <Badge variant="warning" size="sm">รอดำเนินการ</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-[#5F5E5E] font-semibold mt-0.5 truncate">{name}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => { setStatusFilter(''); setCurrentPage(1); }}
+                className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
+                  statusFilter === ''
+                    ? 'bg-[#22252a] text-white border-[#22252a]'
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                ทั้งหมด ({flatRows.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => { setStatusFilter('PENDING'); setCurrentPage(1); }}
+                className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
+                  statusFilter === 'PENDING'
+                    ? 'bg-amber-500 text-white border-amber-500'
+                    : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50'
+                }`}
+              >
+                รอดำเนินการ ({pendingCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => { setStatusFilter('APPROVED'); setCurrentPage(1); }}
+                className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
+                  statusFilter === 'APPROVED'
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+                }`}
+              >
+                อนุมัติแล้ว ({approvedCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => { setStatusFilter('REJECTED'); setCurrentPage(1); }}
+                className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
+                  statusFilter === 'REJECTED'
+                    ? 'bg-red-600 text-white border-red-600'
+                    : 'bg-white text-red-700 border-red-200 hover:bg-red-50'
+                }`}
+              >
+                ปฏิเสธ ({rejectedCount})
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="flex items-center justify-center gap-2 px-4 h-10 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-sm font-semibold cursor-pointer transition-colors rounded-none shrink-0"
+          >
+            <Printer size={15} className="text-gray-500" />
+            <span>พิมพ์ใบเช็คลิสต์เคลม</span>
+          </button>
         </div>
 
         {/* 4. Table */}
-        <Card className="overflow-hidden" noPadding>
+        <div className="bg-white border border-gray-200 overflow-hidden shadow-sm">
           <Table>
-            <TableHeader className="bg-[#f6f3f2] text-[#797878]">
-              <TableRow>
-                <TableHead className="pl-6 w-44">เลขที่ใบเคลม / วันที่</TableHead>
-                <TableHead className="w-40">ลูกค้า</TableHead>
-                <TableHead>สินค้า</TableHead>
-                <TableHead className="w-32">ประเภทเคลม</TableHead>
-                <TableHead className="text-center w-20">จำนวน</TableHead>
-                <TableHead className="w-48">สาเหตุ</TableHead>
-                <TableHead className="text-center w-32">สถานะ</TableHead>
-                <TableHead className="text-center pr-6 w-32">จัดการ</TableHead>
+            <TableHeader className="bg-gray-50">
+              <TableRow className="border-b border-gray-200">
+                <TableHead className="pl-6 w-44 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">เลขที่ใบเคลม / วันที่</TableHead>
+                <TableHead className="w-40 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">ลูกค้า</TableHead>
+                <TableHead className="text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">สินค้า</TableHead>
+                <TableHead className="w-32 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">ประเภทเคลม</TableHead>
+                <TableHead className="text-center w-20 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">จำนวน</TableHead>
+                <TableHead className="w-48 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">สาเหตุ</TableHead>
+                <TableHead className="text-center w-32 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">สถานะ</TableHead>
+                <TableHead className="text-center pr-6 w-28 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">จัดการ</TableHead>
               </TableRow>
             </TableHeader>
 
-            <TableBody className="text-gray-700">
+            <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-gray-500">
-                    กำลังโหลดข้อมูล...
+                  <TableCell colSpan={8} className="text-center py-16">
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 size={22} className="animate-spin text-[#e51c23]" />
+                      <span className="text-sm text-gray-400">กำลังโหลดข้อมูล...</span>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : paginatedRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-gray-500">
-                    ไม่พบข้อมูลรายการเคลมสินค้า
+                  <TableCell colSpan={8} className="text-center py-16">
+                    <div className="flex flex-col items-center gap-2">
+                      <FileText size={28} className="text-gray-200" />
+                      <span className="text-sm text-gray-400 font-medium">ไม่พบข้อมูลรายการเคลมสินค้า</span>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -596,125 +711,85 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                   <TableRow
                     key={`${row.claimId}-${row.itemId}-${idx}`}
                     className={cn(
-                      'hover:bg-gray-50/70 transition-colors',
-                      row.isFirst ? 'border-t-2 border-gray-200' : 'border-t border-gray-100 bg-gray-50/30'
+                      'transition-colors',
+                      row.isFirst
+                        ? 'bg-white hover:bg-red-50/20 border-t-2 border-gray-100 cursor-pointer'
+                        : 'bg-gray-50/30 border-t border-gray-100'
                     )}
+                    onClick={row.isFirst ? () => navigate(`${basePath}/detail/${row.claimId}`) : undefined}
                   >
-                    <TableCell className="pl-6">
+                    <TableCell className="pl-6 py-3">
                       {row.isFirst ? (
                         <div>
                           <p className="font-bold text-[#e51c23] font-mono text-sm">{row.claimNo}</p>
-                          <p className="text-xs text-[#5F5E5E] mt-0.5">
+                          <p className="text-[11px] text-gray-400 mt-0.5">
                             {new Date(row.claimDate).toLocaleDateString('th-TH', {
                               year: 'numeric', month: 'short', day: 'numeric',
                             })}
                           </p>
                         </div>
                       ) : (
-                        <span className="text-gray-300 text-xs pl-2">└</span>
+                        <span className="text-gray-200 text-xs pl-2">└</span>
                       )}
                     </TableCell>
 
-                    <TableCell>
+                    <TableCell className="py-3">
                       {row.isFirst ? (
                         <div>
-                          <p className="font-bold text-[#1C1B1B] text-sm">{row.customerName}</p>
+                          <p className="font-semibold text-[#1C1B1B] text-sm">{row.customerName}</p>
                           {row.customerPhone !== '-' && (
-                            <p className="text-xs text-[#5F5E5E] font-bold mt-0.5">{row.customerPhone}</p>
+                            <p className="text-[11px] text-gray-400 mt-0.5">{row.customerPhone}</p>
                           )}
                         </div>
                       ) : null}
                     </TableCell>
 
-                    <TableCell>
-                      <p className="font-semibold text-[#1C1B1B]">{row.productName}</p>
+                    <TableCell className="py-3">
+                      <p className="font-semibold text-[#1C1B1B] text-sm">{row.productName}</p>
                       {row.resolution && row.resolution !== 'รอการตรวจสอบ' && row.resolution !== '-' && (
-                        <p className="text-xs text-emerald-600 mt-0.5">{row.resolution}</p>
+                        <p className="text-[11px] text-emerald-600 mt-0.5">{row.resolution}</p>
                       )}
                     </TableCell>
 
-                    <TableCell>
+                    <TableCell className="py-3">
                       <TypeBadge type={row.itemClaimType} />
                     </TableCell>
 
-                    <TableCell className="text-center">
-                      <span className="font-bold text-[#1C1B1B]">{row.qty} ชิ้น</span>
+                    <TableCell className="text-center py-3">
+                      <span className="font-bold text-[#1C1B1B] text-sm">{row.qty}</span>
+                      <span className="text-[11px] text-gray-400 ml-1">ชิ้น</span>
                     </TableCell>
 
-                    <TableCell>
-                      <p className="text-[#5F5E5E] text-sm truncate max-w-[180px]" title={row.reason}>
-                        {row.reason || '-'}
+                    <TableCell className="py-3">
+                      <p className="text-gray-500 text-sm truncate max-w-[180px]" title={row.reason}>
+                        {row.reason || <span className="text-gray-300">—</span>}
                       </p>
                     </TableCell>
 
-                    <TableCell className="text-center">
-                      <div
-                        onClick={() => navigate(`${basePath}/status/${row.claimId}`)}
-                        className="inline-flex flex-col items-center gap-1 cursor-pointer group p-1 hover:bg-gray-100 rounded transition-colors"
-                        title="คลิกเพื่ออัปเดตสถานะการดำเนินงาน"
-                      >
-                        <div className="flex items-center gap-1">
-                          <StatusBadge status={row.itemStatus} />
-                          <SquarePen className="w-3 h-3 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-
-                        {row.isFirst && (
-                          <div className="flex flex-col items-center gap-0.5 mt-0.5">
-                            {row.rawClaim.customer_received_item === true && (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200">
-                                ได้รับของแล้ว
-                              </span>
-                            )}
-                            {row.rawClaim.customer_waiting === true && (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200">
-                                ลูกค้ารอผล
-                              </span>
-                            )}
-                            {row.rawClaim.supplier_response_status === 'WAITING' && (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200">
-                                ส่งบริษัท (รอผล)
-                              </span>
-                            )}
-                            {row.rawClaim.supplier_response_status === 'APPROVED' && (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200">
-                                บริษัทอนุมัติ
-                              </span>
-                            )}
-                            {row.rawClaim.supplier_response_status === 'REJECTED' && (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold text-red-700 bg-red-50 border border-red-200">
-                                บริษัทปฏิเสธ
-                              </span>
-                            )}
-                            {row.rawClaim.operation_note && (
-                              <span className="text-[9px] text-[#5F5E5E] max-w-[130px] truncate" title={row.rawClaim.operation_note}>
-                                โน้ต: {row.rawClaim.operation_note}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                    <TableCell className="text-center py-3">
+                      <StatusBadge status={row.itemStatus} />
                     </TableCell>
 
-                    <TableCell className="text-center pr-6">
+                    <TableCell className="text-center pr-6 py-3" onClick={e => e.stopPropagation()}>
                       {row.isFirst && (
-                        <div className="flex items-center justify-center gap-3">
+                        <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => navigate(`${basePath}/detail/${row.claimId}`)}
-                            className="text-gray-600 hover:text-gray-800 transition cursor-pointer"
+                            className="p-1.5 text-gray-400 hover:text-[#e51c23] hover:bg-red-50 rounded transition cursor-pointer"
                             title="ดูรายละเอียด"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => navigate(`${basePath}/edit/${row.claimId}`)}
-                            className="text-gray-600 hover:text-gray-800 transition cursor-pointer"
+                            className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded transition cursor-pointer"
                             title="แก้ไขใบเคลม"
                           >
                             <SquarePen className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDeleteClaim(row.claimId)}
-                            className="text-red-600 hover:text-red-700 transition cursor-pointer"
+                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition cursor-pointer"
                             title="ลบใบเคลม"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -730,17 +805,17 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
 
           {/* Pagination */}
           {!loading && totalItems > 0 && (
-            <div className="bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-              <div className="flex items-center gap-4">
+            <div className="bg-gray-50 px-6 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
+              <div className="flex items-center gap-3">
                 <span>
-                  แสดง {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} ถึง {Math.min(currentPage * itemsPerPage, totalItems)} จาก {totalItems} รายการ
+                  แสดง {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)}–{Math.min(currentPage * itemsPerPage, totalItems)} จาก {totalItems} รายการ
                 </span>
-                <div className="flex items-center gap-2">
-                  <span>รายการต่อหน้า:</span>
+                <div className="flex items-center gap-1.5">
+                  <span>แสดง:</span>
                   <select
                     value={itemsPerPage}
                     onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                    className="border border-gray-200 rounded-none px-2 py-1 text-gray-600 bg-white hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200 cursor-pointer"
+                    className="border border-gray-200 rounded px-1.5 py-0.5 text-gray-600 bg-white focus:outline-none cursor-pointer"
                   >
                     <option value={5}>5</option>
                     <option value={10}>10</option>
@@ -750,35 +825,32 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                 </div>
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5">
                 <button
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(1)}
-                  aria-label="หน้าแรก"
-                  className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                  className="p-1.5 rounded text-gray-400 hover:bg-gray-200 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
                 >
-                  <ChevronsLeft className="w-4 h-4" />
+                  <ChevronsLeft className="w-3.5 h-3.5" />
                 </button>
                 <button
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(p => p - 1)}
-                  aria-label="หน้าก่อนหน้า"
-                  className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                  className="p-1.5 rounded text-gray-400 hover:bg-gray-200 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
 
                 {getPageNumbers(currentPage, totalPages).map((page, idx) =>
                   page === "..." ? (
-                    <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">...</span>
+                    <span key={`ellipsis-${idx}`} className="px-2 text-gray-300">...</span>
                   ) : (
                     <button
                       key={page}
                       onClick={() => setCurrentPage(page)}
-                      aria-current={currentPage === page ? "page" : undefined}
                       className={cn(
-                        "px-3 py-1.5 rounded-none font-medium transition-colors cursor-pointer",
-                        currentPage === page ? "bg-[#d61c24] text-white" : "text-gray-600 hover:bg-gray-100"
+                        "px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer",
+                        currentPage === page ? "bg-[#e51c23] text-white" : "text-gray-500 hover:bg-gray-200"
                       )}
                     >
                       {page}
@@ -789,105 +861,127 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                 <button
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage(p => p + 1)}
-                  aria-label="หน้าถัดไป"
-                  className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                  className="p-1.5 rounded text-gray-400 hover:bg-gray-200 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-3.5 h-3.5" />
                 </button>
                 <button
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage(totalPages)}
-                  aria-label="หน้าสุดท้าย"
-                  className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                  className="p-1.5 rounded text-gray-400 hover:bg-gray-200 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
                 >
-                  <ChevronsRight className="w-4 h-4" />
+                  <ChevronsRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
           )}
-        </Card>
+        </div>
+          </>
+        ) : (
+          <ClaimTrackingTab
+            rawClaims={rawClaims}
+            loading={loading}
+            basePath={basePath}
+            onUpdateStage={handleUpdateTrackingStage}
+            updatingItemId={updatingItemId}
+          />
+        )}
 
         {/* Printable Area for PDF / Paper Printing */}
         <style>{`
           @media print {
+            @page {
+              size: A4 portrait;
+              margin: 12mm 10mm;
+            }
             body * { visibility: hidden; }
             #printable-claim-checklist, #printable-claim-checklist * { visibility: visible; }
             #printable-claim-checklist {
-              position: absolute; left: 0; top: 0; width: 100%; padding: 20px;
+              position: absolute; left: 0; top: 0; width: 100%; padding: 0;
               background: white; color: black; font-size: 12px;
             }
           }
         `}</style>
 
-        <div id="printable-claim-checklist" className="hidden print:block font-sans text-slate-900 p-4">
-          <div className="border-b-2 border-slate-800 pb-3 mb-4 flex justify-between items-start">
-            <div>
-              <h1 className="text-xl font-extrabold text-slate-900">AutoParts Retail Management</h1>
-              <h2 className="text-sm font-bold text-slate-700 mt-0.5">ใบรายงานเช็คลิสต์ตรวจสอบรายการเคลมสินค้า (Customer Claims Checklist Report)</h2>
-              <p className="text-xs text-slate-500 mt-1">
-                เงื่อนไขตัวกรอง: {statusFilter ? `สถานะ ${statusFilter.toUpperCase()}` : 'ทุกสถานะ'} | รวมทั้งหมด {filteredRows.length} รายการ
-              </p>
-            </div>
-            <div className="text-right text-xs text-slate-500">
-              <p className="font-bold text-slate-800">วันที่พิมพ์รายงาน</p>
-              <p>{new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
-            </div>
-          </div>
+        {(() => {
+          const approvedPrintRows = flatRows.filter(r => r.itemStatus === 'APPROVED' && (
+            !claimSearch.trim() ||
+            r.claimNo.toLowerCase().includes(claimSearch.toLowerCase().trim()) ||
+            r.customerName.toLowerCase().includes(claimSearch.toLowerCase().trim()) ||
+            r.customerPhone.includes(claimSearch.trim()) ||
+            r.productName.toLowerCase().includes(claimSearch.toLowerCase().trim())
+          ));
 
-          <table className="w-full border-collapse border border-slate-300 text-xs">
-            <thead>
-              <tr className="bg-slate-100 text-slate-800 font-bold border-b border-slate-300">
-                <th className="border border-slate-300 p-2 text-center w-10">ตรวจ</th>
-                <th className="border border-slate-300 p-2 text-left w-28">เลขใบเคลม / วันที่</th>
-                <th className="border border-slate-300 p-2 text-left w-36">ชื่อลูกค้า / เบอร์โทร</th>
-                <th className="border border-slate-300 p-2 text-left">รายการสินค้าอะไหล่</th>
-                <th className="border border-slate-300 p-2 text-center w-12">จำนวน</th>
-                <th className="border border-slate-300 p-2 text-left w-40">สาเหตุการขอเคลม</th>
-                <th className="border border-slate-300 p-2 text-center w-24">สถานะปัจจุบัน</th>
-                <th className="border border-slate-300 p-2 text-left w-36">ผลการตรวจรับจริง</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((row, idx) => (
-                <tr key={idx} className="border-b border-slate-200">
-                  <td className="border border-slate-300 p-2 text-center font-mono text-slate-500 font-bold">[ &nbsp; ]</td>
-                  <td className="border border-slate-300 p-2">
-                    <div className="font-bold text-slate-900 font-mono">{row.claimNo}</div>
-                    <div className="text-[10px] text-slate-500">{new Date(row.claimDate).toLocaleDateString('th-TH')}</div>
-                  </td>
-                  <td className="border border-slate-300 p-2">
-                    <div className="font-bold text-slate-800">{row.customerName}</div>
-                    <div className="text-[10px] text-slate-500">{row.customerPhone}</div>
-                  </td>
-                  <td className="border border-slate-300 p-2 font-medium text-slate-800">{row.productName}</td>
-                  <td className="border border-slate-300 p-2 text-center font-bold">{row.qty}</td>
-                  <td className="border border-slate-300 p-2 text-slate-600">{row.reason}</td>
-                  <td className="border border-slate-300 p-2 text-center font-bold">
-                    {row.itemStatus === 'APPROVED' ? 'อนุมัติ' : row.itemStatus === 'REJECTED' ? 'ปฏิเสธ' : 'รอดำเนินการ'}
-                  </td>
-                  <td className="border border-slate-300 p-2 text-slate-400"></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          return (
+            <div id="printable-claim-checklist" className="hidden print:block font-sans text-slate-900 p-0">
+              <div className="border-b-2 border-slate-800 pb-3 mb-4 flex justify-between items-start">
+                <div>
+                  <h1 className="text-xl font-extrabold text-slate-900">AutoParts Retail Management</h1>
+                  <h2 className="text-sm font-bold text-slate-700 mt-0.5">ใบรายงานเช็คลิสต์รายการเคลมสินค้า (เฉพาะรายการที่อนุมัติแล้ว)</h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    สถานะ: อนุมัติแล้ว (APPROVED) | รวมทั้งหมด {approvedPrintRows.length} รายการ
+                  </p>
+                </div>
+                <div className="text-right text-xs text-slate-500">
+                  <p className="font-bold text-slate-800">วันที่พิมพ์รายงาน</p>
+                  <p>{new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+              </div>
 
-          <div className="mt-8 pt-4 flex justify-between items-end text-xs text-slate-700">
-            <div>
-              <p>หมายเหตุเพิ่มเติม: __________________________________________________________________</p>
+              {approvedPrintRows.length === 0 ? (
+                <div className="text-center py-8 text-slate-500 text-sm border border-slate-200">
+                  ไม่พบรายการเคลมที่ได้รับการอนุมัติ
+                </div>
+              ) : (
+                <table className="w-full border-collapse border border-slate-300 text-xs">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-800 font-bold border-b border-slate-300">
+                      <th className="border border-slate-300 p-2 text-center w-10">ตรวจ</th>
+                      <th className="border border-slate-300 p-2 text-left w-28">เลขใบเคลม / วันที่</th>
+                      <th className="border border-slate-300 p-2 text-left w-36">ชื่อลูกค้า / เบอร์โทร</th>
+                      <th className="border border-slate-300 p-2 text-left">รายการสินค้าอะไหล่</th>
+                      <th className="border border-slate-300 p-2 text-center w-12">จำนวน</th>
+                      <th className="border border-slate-300 p-2 text-left w-40">สาเหตุการขอเคลม</th>
+                      <th className="border border-slate-300 p-2 text-center w-24">สถานะ</th>
+                      <th className="border border-slate-300 p-2 text-left w-36">ผลการตรวจรับจริง</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {approvedPrintRows.map((row, idx) => (
+                      <tr key={idx} className="border-b border-slate-200">
+                        <td className="border border-slate-300 p-2 text-center font-mono text-slate-500 font-bold">[ &nbsp; ]</td>
+                        <td className="border border-slate-300 p-2">
+                          <div className="font-bold text-slate-900 font-mono">{row.claimNo}</div>
+                          <div className="text-[10px] text-slate-500">{new Date(row.claimDate).toLocaleDateString('th-TH')}</div>
+                        </td>
+                        <td className="border border-slate-300 p-2">
+                          <div className="font-bold text-slate-800">{row.customerName}</div>
+                          <div className="text-[10px] text-slate-500">{row.customerPhone}</div>
+                        </td>
+                        <td className="border border-slate-300 p-2 font-medium text-slate-800">{row.productName}</td>
+                        <td className="border border-slate-300 p-2 text-center font-bold">{row.qty}</td>
+                        <td className="border border-slate-300 p-2 text-slate-600">{row.reason}</td>
+                        <td className="border border-slate-300 p-2 text-center font-bold text-emerald-700">
+                          อนุมัติแล้ว
+                        </td>
+                        <td className="border border-slate-300 p-2 text-slate-400"></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
-            <div className="text-center border-t border-slate-400 pt-2 min-w-[220px]">
-              <p className="font-bold">ลายเซ็นเจ้าของร้าน / ผู้ตรวจสอบสินค้า</p>
-              <p className="mt-6">วันที่ ____/____/________</p>
-            </div>
-          </div>
-        </div>
+          );
+        })()}
       </div>
     );
   }
 
   // ─── FORM VIEW ────────────────────────────────────────────────────────────────
+  const isCreditEligible = Boolean(posCustomerCredit && posCustomerCredit.is_credit_enabled);
+
   return (
-    <div className='p-8 space-y-6 bg-gray-50 min-h-screen'>
+    <div className='p-8 space-y-6 bg-white min-h-screen'>
       <form onSubmit={handleSaveClaim} className="space-y-6">
 
         {/* Header */}
@@ -908,520 +1002,392 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
               สร้างใบเคลมสินค้า
             </Heading>
           </div>
-          <div className='flex items-end gap-4 justify-end'>
-            <Button
-              type="submit"
-              size='md'
-              disabled={saving}
-            >
-              {saving ? <Loader2 size={16} className="animate-spin mr-2" /> : <Send size={16} className="mr-2" />}
-              {saving ? 'กำลังบันทึก...' : 'ส่งใบเคลม'}
-            </Button>
-          </div>
+
         </div>
 
-        <div className="flex gap-6 items-start">
-          {/* Left Side */}
-          <div className='w-1/4 flex flex-col gap-6'>
-            <Card className='border-l-[5px] border-l-black'>
-              <CardHeader className='items-center justify-start gap-4 mt-2 mb-2'>
-                <CardTitle className='text-base text-black'><Search className="h-6 w-6" /></CardTitle>
-                <CardTitle className='text-lg text-black'>ค้นหาใบสั่งซื้อ</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div ref={invoiceRef} className="relative">
-                  <Input
-                    type="text"
-                    placeholder="เลขที่ SO หรือชื่อลูกค้า..."
-                    value={claimFormInvoice}
-                    onChange={e => handleInvoiceInput(e.target.value)}
-                    onFocus={() => invoiceResults.length > 0 && setShowInvoiceDrop(true)}
-                    leftIcon={invoiceSearching
-                      ? <Loader2 size={14} className="text-[#e51c23] animate-spin" />
-                      : <Search size={14} />}
-                    className="bg-slate-50 border border-slate-200"
-                  />
-                  {showInvoiceDrop && invoiceResults.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-200 shadow-lg rounded-lg mt-1 max-h-72 overflow-y-auto">
-                      {invoiceResults.map((order: any) => (
-                        <button
-                          key={order.id}
-                          type="button"
-                          onMouseDown={() => handleSelectOrder(order)}
-                          className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-0 cursor-pointer transition-colors"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-[#e51c23] font-mono text-sm">{order.order_number}</span>
-                          </div>
-                          <p className="text-sm font-semibold text-slate-700 mt-0.5">{order.customer_name || 'ลูกค้าทั่วไป'}</p>
-                          {order.customer_phone && order.customer_phone !== '-' && (
-                            <p className="text-xs text-slate-400">{order.customer_phone}</p>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {showInvoiceDrop && !invoiceSearching && invoiceResults.length === 0 && claimFormInvoice.length >= 2 && (
-                    <div className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-200 shadow-lg rounded-lg mt-1 px-4 py-3 text-sm text-slate-500">
-                      ไม่พบใบสั่งซื้อที่ตรงกับ &quot;{claimFormInvoice}&quot;
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className='border-l-[5px] border-l-gray-500'>
-              <CardHeader className='items-center justify-start gap-4 mt-2 mb-2'>
-                <CardTitle className='text-base text-gray-700'><History className="h-6 w-6" /></CardTitle>
-                <CardTitle className='text-lg text-black'>ประเภทการเคลม</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {[
-                    { key: 'INSTANT', title: 'เปลี่ยนทันที', desc: 'สินค้าเสียชัดเจน เปลี่ยนชิ้นใหม่ทันที', color: 'text-[#e51c23]' },
-                    { key: 'SUPPLIER_PENDING', title: 'ส่งบริษัทตรวจ', desc: 'ฝากส่งซัพพลายเออร์ตรวจก่อนอนุมัติ', color: 'text-[#1C1B1B]' },
-                    { key: 'CREDIT_ACCOUNT', title: 'ลงบัญชีเชื่อ', desc: 'เปลี่ยนของให้ + ตั้งหักยอดบิล', color: 'text-gray-700' },
-                  ].map((t) => (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() => setClaimType(t.key as any)}
-                      className={`w-full text-left p-3 border rounded-none transition-all cursor-pointer ${
-                        claimType === t.key
-                          ? 'border-[#e51c23] bg-red-50/50 ring-1 ring-[#e51c23]'
-                          : 'border-gray-200 bg-white hover:bg-gray-50'
-                      }`}
-                    >
-                      <p className={`text-sm font-bold ${t.color}`}>{t.title}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{t.desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Side */}
-          <div className='flex flex-col items-start w-3/4 gap-4'>
-            <Card title="ข้อมูลลูกค้าและรายละเอียดใบเคลม" subtitle="โหลดจากใบสั่งซื้อที่เลือก" className="w-full">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 py-2">
-                <Input label="ชื่อ" type="text" value={claimCustomerName} disabled className="bg-slate-50 border border-slate-200" />
-                <Input label="นามสกุล" type="text" value={claimCustomerSurname} disabled className="bg-slate-50 border border-slate-200" />
-                <Input label="เบอร์โทรศัพท์" type="text" value={claimCustomerPhone} disabled className="bg-slate-50 border border-slate-200" />
+        <div className="space-y-6">
+          {/* Search Invoice — Top */}
+          <Card className='border-l-[5px] border-l-black bg-white'>
+            <CardHeader className='items-center justify-start gap-4 mt-2 mb-2'>
+              <CardTitle className='text-base text-black'><Search className="h-6 w-6" /></CardTitle>
+              <CardTitle className='text-lg text-black'>ค้นหาใบสั่งซื้อ</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div ref={invoiceRef} className="relative">
                 <Input
-                  label="วันที่เคลม"
-                  type="date"
-                  value={claimDate}
-                  onChange={(e) => setClaimDate(e.target.value)}
-                  className="bg-slate-50 border border-slate-200"
+                  type="text"
+                  placeholder="เลขที่ SO หรือชื่อลูกค้า..."
+                  value={claimFormInvoice}
+                  onChange={e => handleInvoiceInput(e.target.value)}
+                  onFocus={() => invoiceResults.length > 0 && setShowInvoiceDrop(true)}
+                  leftIcon={invoiceSearching
+                    ? <Loader2 size={14} className="text-[#e51c23] animate-spin" />
+                    : <Search size={14} />}
+                  className="bg-gray-50 border border-gray-300 hover:border-gray-400 focus:bg-white focus:border-black focus:ring-1 focus:ring-black transition-colors rounded-md"
                 />
+                {showInvoiceDrop && invoiceResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-200 shadow-lg rounded-none mt-1 max-h-72 overflow-y-auto">
+                    {invoiceResults.map((order: any) => (
+                      <button
+                        key={order.id}
+                        type="button"
+                        onMouseDown={() => handleSelectOrder(order)}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-[#e51c23] font-mono text-sm">{order.order_number}</span>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-700 mt-0.5">{order.customer_name || 'ลูกค้าทั่วไป'}</p>
+                        {order.customer_phone && order.customer_phone !== '-' && (
+                          <p className="text-xs text-slate-400">{order.customer_phone}</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showInvoiceDrop && !invoiceSearching && invoiceResults.length === 0 && claimFormInvoice.length >= 2 && (
+                  <div className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-200 shadow-lg rounded-none mt-1 px-4 py-3 text-sm text-slate-500">
+                    ไม่พบใบสั่งซื้อที่ตรงกับ &quot;{claimFormInvoice}&quot;
+                  </div>
+                )}
               </div>
-              <div className="mt-3">
-                <p className="text-xs text-slate-500 font-semibold mb-1">หมายเหตุเพิ่มเติม</p>
-                <textarea
-                  value={claimNote}
-                  onChange={(e) => setClaimNote(e.target.value)}
-                  rows={2}
-                  placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)..."
-                  className="w-full border border-gray-200 p-2.5 text-xs text-slate-800 focus:outline-none focus:border-[#e51c23] rounded-none resize-none"
-                />
-              </div>
-            </Card>
+            </CardContent>
+          </Card>
 
-            {claimType === 'CREDIT_ACCOUNT' && (
-              <Card className="border-l-[5px] border-l-slate-800 bg-slate-50 w-full" noPadding>
-                <div className="py-3 px-5 border-b border-slate-200 flex items-center justify-between">
-                  <p className="text-xs font-bold text-slate-800">ข้อมูลวงเงินและบัญชีเชื่อ POS</p>
-                  {posCustomerCredit?.is_credit_enabled ? (
-                    <Badge variant="success" size="sm">อนุมัติวงเงินเชื่อ</Badge>
-                  ) : (
-                    <Badge variant="error" size="sm">ไม่อนุมัติวงเงินเชื่อ</Badge>
-                  )}
-                </div>
-                <div className="p-4">
-                  {loadingPosCredit ? (
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <Loader2 size={14} className="animate-spin text-[#e51c23]" /> กำลังโหลดข้อมูลบัญชีเชื่อ POS...
-                    </div>
-                  ) : posCustomerCredit ? (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                      <div>
-                        <p className="text-slate-500 font-semibold mb-0.5">กลุ่มลูกค้า</p>
-                        <p className="font-bold text-slate-800">
-                          {posCustomerCredit.customer_type?.type_label || posCustomerCredit.customer_type?.type_name || 'ลูกค้าทั่วไป'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-slate-500 font-semibold mb-0.5">วงเงินสินเชื่อสูงสุด</p>
-                        <p className="font-bold text-slate-800">฿{(posCustomerCredit.max_credit_limit || 0).toLocaleString('th-TH')}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-500 font-semibold mb-0.5">ยอดหนี้ค้างชำระปัจจุบัน</p>
-                        <p className="font-bold text-[#e51c23]">฿{(posCustomerCredit.current_debt_amount || 0).toLocaleString('th-TH')}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-500 font-semibold mb-0.5">วงเงินคงเหลือใช้ได้</p>
-                        <p className="font-bold text-emerald-600">
-                          ฿{Math.max(0, (posCustomerCredit.max_credit_limit || 0) - (posCustomerCredit.current_debt_amount || 0)).toLocaleString('th-TH')}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-500 font-medium">
-                      {claimCustomerPhone ? 'ค้นหาข้อมูลวงเงินเชื่อ POS สำหรับเบอร์นี้ไม่พบ' : 'กรุณาเลือกใบสั่งซื้อเพื่อโหลดเบอร์โทรลูกค้า POS'}
-                    </p>
-                  )}
-                </div>
-              </Card>
-            )}
 
-            <Card noPadding title="เลือกสินค้าที่ต้องการเคลม" subtitle="กดไอคอนกล้องเพื่อแนบหลักฐานรายสินค้า" className="w-full overflow-hidden">
-              <input
-                ref={itemEvidenceRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={handleItemEvidenceSelect}
+          {/* Customer Info & Credit Section */}
+          <Card title="ข้อมูลลูกค้าและรายละเอียดใบเคลม" subtitle="โหลดจากใบสั่งซื้อที่เลือก" className="w-full bg-white border border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 py-2">
+              <Input label="ชื่อ" type="text" value={claimCustomerName} disabled className="bg-gray-50 border border-gray-200" />
+              <Input label="นามสกุล" type="text" value={claimCustomerSurname} disabled className="bg-gray-50 border border-gray-200" />
+              <Input label="เบอร์โทรศัพท์" type="text" value={claimCustomerPhone} disabled className="bg-gray-50 border border-gray-200" />
+              <Input
+                label="วันที่เคลม"
+                type="date"
+                value={claimDate}
+                onChange={(e) => setClaimDate(e.target.value)}
+                className="bg-white border border-gray-200"
               />
-              {claimItems.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader className="bg-gray-100 text-gray-600">
-                      <TableRow>
-                        <TableHead className="pl-6">ชื่อสินค้า</TableHead>
-                        <TableHead className="text-center w-20">ซื้อมา</TableHead>
-                        <TableHead className="text-center w-28">จำนวนเคลม</TableHead>
-                        <TableHead className="w-36">ประเภทเคลม</TableHead>
-                        <TableHead>สาเหตุที่เคลม</TableHead>
-                        <TableHead className="text-center w-24">หลักฐาน</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody className="text-gray-700">
-                      {claimItems.map((item, idx) => {
-                        const isSelected = item.claim_qty > 0;
-                        return (
-                        <TableRow
-                          key={idx}
-                          onClick={(e) => {
-                            // ไม่ toggle ถ้า click ที่ปุ่ม +/- หรือ input หรือ select หรือ camera
-                            const tag = (e.target as HTMLElement).closest('button, input, select');
-                            if (tag) return;
-                            // toggle: ถ้าเลือกอยู่ → 0, ถ้าไม่เลือก → sold_qty
-                            setClaimItems(prev => {
-                              const updated = [...prev];
-                              updated[idx] = { ...updated[idx], claim_qty: isSelected ? 0 : updated[idx].sold_qty };
-                              return updated;
-                            });
-                          }}
-                          className={`cursor-pointer transition-all ${
-                            isSelected
-                              ? 'bg-red-50 border-l-4 border-l-[#e51c23]'
-                              : 'opacity-50 hover:opacity-75 hover:bg-gray-50 border-l-4 border-l-transparent'
-                          }`}
-                        >
-                          <TableCell className="pl-5 font-semibold text-slate-800">
-                            <div className="flex items-center gap-2">
-                              {isSelected
-                                ? <span className="w-2 h-2 rounded-full bg-[#e51c23] shrink-0" />
-                                : <span className="w-2 h-2 rounded-full bg-gray-300 shrink-0" />}
-                              {item.product_name}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center text-slate-500">{item.sold_qty}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-center gap-2">
-                              <button type="button" onClick={(e) => { e.stopPropagation(); handleClaimItemQtyChange(idx, -1); }}
-                                className="p-1 hover:bg-slate-100 rounded text-slate-500 cursor-pointer">
-                                <Minus size={13} />
-                              </button>
-                              <span className={`w-8 text-center font-bold ${isSelected ? 'text-[#e51c23]' : 'text-slate-400'}`}>
-                                {item.claim_qty}
-                              </span>
-                              <button type="button" onClick={(e) => { e.stopPropagation(); handleClaimItemQtyChange(idx, 1); }}
-                                className="p-1 hover:bg-slate-100 rounded text-slate-500 cursor-pointer">
-                                <Plus size={13} />
-                              </button>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <select
-                              value={item.claim_type || claimType}
-                              disabled={!isSelected}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => {
-                                const val = e.target.value as 'INSTANT' | 'SUPPLIER_PENDING' | 'CREDIT_ACCOUNT';
-                                setClaimItems(prev => prev.map((it, i) => i === idx ? { ...it, claim_type: val } : it));
-                              }}
-                              className="w-full border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:border-[#e51c23] disabled:bg-slate-50 disabled:text-slate-400 bg-white rounded cursor-pointer font-bold text-slate-700"
-                            >
-                              <option value="INSTANT">เปลี่ยนทันที</option>
-                              <option value="SUPPLIER_PENDING">ส่งบริษัทตรวจ</option>
-                              <option value="CREDIT_ACCOUNT">ลงบัญชีเชื่อ</option>
-                            </select>
-                          </TableCell>
-                          <TableCell>
-                            <input
-                              type="text"
-                              value={item.reason}
-                              onChange={e => handleClaimItemReasonChange(idx, e.target.value)}
-                              onClick={e => e.stopPropagation()}
-                              placeholder="ระบุสาเหตุ..."
-                              disabled={!isSelected}
-                              className="w-full border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:border-[#e51c23] disabled:bg-slate-50 disabled:text-slate-400 rounded"
-                            />
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {item.evidencePreview ? (
-                              <div className="relative inline-block">
-                                <img src={item.evidencePreview} alt="หลักฐาน"
-                                  className="w-9 h-9 object-cover border border-slate-200 rounded" />
-                                <button type="button" onClick={(e) => { e.stopPropagation(); handleRemoveItemEvidence(idx); }}
-                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white flex items-center justify-center rounded-full cursor-pointer">
-                                  <X size={8} />
-                                </button>
-                              </div>
-                            ) : (
-                              <button type="button"
-                                onClick={(e) => { e.stopPropagation(); isSelected && handleItemEvidenceClick(idx); }}
-                                disabled={!isSelected}
-                                className="p-1.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                                title="แนบหลักฐาน">
-                                <Camera size={15} />
-                              </button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+            </div>
+
+            {/* Credit Info inside Customer Info */}
+            {claimCustomerPhone && claimCustomerPhone !== '-' && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="mb-3">
+                  <span className="text-xs font-bold text-slate-800">ข้อมูลวงเงินและสถานะสินเชื่อ</span>
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-                  <FileText className="w-24 h-24 text-gray-300 mb-3" />
-                  <span className="font-semibold text-gray-500">กรุณาค้นหาใบสั่งซื้อเพื่อแสดงรายการสินค้า</span>
+
+                {loadingPosCredit ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <Loader2 size={14} className="animate-spin text-[#e51c23]" /> กำลังตรวจสอบข้อมูลวงเงินเชื่อ...
+                  </div>
+                ) : posCustomerCredit ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs bg-gray-50/60 p-3 border border-gray-100">
+                    <div>
+                      <p className="text-slate-500 font-semibold mb-0.5">กลุ่มลูกค้า</p>
+                      <p className="font-bold text-slate-800">
+                        {posCustomerCredit.customer_type?.type_label || posCustomerCredit.customer_type?.type_name || 'ลูกค้าทั่วไป'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500 font-semibold mb-0.5">วงเงินสินเชื่อสูงสุด</p>
+                      <p className="font-bold text-slate-800">฿{(posCustomerCredit.max_credit_limit || 0).toLocaleString('th-TH')}</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500 font-semibold mb-0.5">ยอดหนี้ค้างชำระปัจจุบัน</p>
+                      <p className="font-bold text-[#e51c23]">฿{(posCustomerCredit.current_debt_amount || 0).toLocaleString('th-TH')}</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500 font-semibold mb-0.5">วงเงินคงเหลือใช้ได้</p>
+                      <p className="font-bold text-emerald-600">
+                        ฿{Math.max(0, (posCustomerCredit.max_credit_limit || 0) - (posCustomerCredit.current_debt_amount || 0)).toLocaleString('th-TH')}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 font-medium">
+                    ไม่พบข้อมูลบัญชีเชื่อสำหรับเบอร์โทรนี้
+                  </p>
+                )}
+              </div>
+            )}
+          </Card>
+
+          {/* Section: เลือกสินค้าที่ต้องการเคลม */}
+          {(() => {
+            const selectedClaimItems = claimItems.filter(i => i.claim_qty > 0);
+            const totalClaimQuantity = selectedClaimItems.reduce((sum, i) => sum + i.claim_qty, 0);
+            const totalClaimEstimatedAmount = selectedClaimItems.reduce((sum, i) => sum + (i.claim_qty * (i.price || 0)), 0);
+
+            return (
+              <Card noPadding className="w-full overflow-hidden border border-gray-200 shadow-xs bg-white">
+                {/* Card Header */}
+                <div className="p-5 bg-white border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <Heading level="h2" className="m-0 text-base font-bold text-[#1C1B1B]">
+                      เลือกสินค้าที่ต้องการเคลม
+                    </Heading>
+                    <p className="text-xs text-[#5F5E5E] mt-1">
+                      ระบุจำนวนสินค้าที่ต้องการเคลมและสาเหตุการเคลมให้ครบถ้วน
+                    </p>
+                  </div>
+
+
                 </div>
-              )}
-            </Card>
-          </div>
+
+                <input
+                  ref={itemEvidenceRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleItemEvidenceSelect}
+                />
+
+                {claimItems.length > 0 ? (
+                  <>
+                    <div className="overflow-x-auto bg-white">
+                      <Table>
+                        <TableHeader className="bg-white border-b border-gray-200 text-[#5F5E5E]">
+                          <TableRow>
+                            <TableHead className="min-w-[220px] pl-6">รายการสินค้า</TableHead>
+                            <TableHead className="text-center w-24">ซื้อมา</TableHead>
+                            <TableHead className="text-center w-36">จำนวนที่เคลม</TableHead>
+                            <TableHead className="w-48">ประเภทการเคลม</TableHead>
+                            <TableHead className="min-w-[200px]">สาเหตุที่เคลม</TableHead>
+                            <TableHead className="text-center w-28 pr-6">หลักฐานรูปภาพ</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody className="divide-y divide-gray-100 bg-white">
+                          {claimItems.map((item, idx) => {
+                            const isSelected = item.claim_qty > 0;
+                            const hasReason = item.reason.trim().length > 0;
+
+                            return (
+                              <TableRow
+                                key={idx}
+                                className="transition-colors bg-white hover:bg-gray-50/70"
+                              >
+                                {/* Product Details */}
+                                <TableCell className="py-3.5 pl-6">
+                                  <div className="flex flex-col">
+                                    <span className="font-semibold text-sm text-[#1C1B1B]">
+                                      {item.product_name}
+                                    </span>
+                                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                      {item.price > 0 && (
+                                        <span className="font-medium text-gray-600">
+                                          ราคาต่อหน่วย: ฿{item.price.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </TableCell>
+
+                                {/* Sold Qty */}
+                                <TableCell className="text-center">
+                                  <span className="inline-block px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded">
+                                    {item.sold_qty} ชิ้น
+                                  </span>
+                                </TableCell>
+
+                                {/* Claim Qty Stepper & Input */}
+                                <TableCell className="text-center">
+                                  <div className="inline-flex items-center border border-gray-300 bg-white">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleClaimItemQtyChange(idx, -1)}
+                                      disabled={item.claim_qty <= 0}
+                                      className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent text-gray-600 transition-colors cursor-pointer"
+                                      title="ลดจำนวน"
+                                    >
+                                      <Minus size={13} />
+                                    </button>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={item.sold_qty}
+                                      value={item.claim_qty}
+                                      onChange={(e) => handleDirectClaimItemQty(idx, parseInt(e.target.value, 10))}
+                                      className="w-12 h-8 text-center text-xs font-bold border-x border-gray-300 focus:outline-none bg-white text-[#e51c23] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleClaimItemQtyChange(idx, 1)}
+                                      disabled={item.claim_qty >= item.sold_qty}
+                                      className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent text-gray-600 transition-colors cursor-pointer"
+                                      title="เพิ่มจำนวน"
+                                    >
+                                      <Plus size={13} />
+                                    </button>
+                                  </div>
+                                </TableCell>
+
+                                {/* Claim Type */}
+                                <TableCell>
+                                  {canApprove ? (
+                                    <select
+                                      value={item.claim_type || claimType}
+                                      onChange={(e) => {
+                                        const val = e.target.value as 'INSTANT' | 'SUPPLIER_PENDING' | 'CREDIT_ACCOUNT';
+                                        if (val === 'CREDIT_ACCOUNT' && !isCreditEligible) {
+                                          alert('ลูกค้าท่านนี้ไม่มีสิทธิ์ใช้วงเงินสินเชื่อ/เงินเชื่อ');
+                                          return;
+                                        }
+                                        setClaimItems(prev => prev.map((it, i) => i === idx ? { ...it, claim_type: val } : it));
+                                      }}
+                                      className="w-full border border-gray-300 px-3 py-2 text-xs focus:outline-none focus:border-[#e51c23] bg-white font-medium text-gray-800 cursor-pointer"
+                                    >
+                                      <option value="INSTANT">เปลี่ยนทันที</option>
+                                      <option value="SUPPLIER_PENDING">ฝากส่งบริษัทตรวจ</option>
+                                      <option value="CREDIT_ACCOUNT">ลงบัญชีเชื่อ</option>
+                                    </select>
+                                  ) : (
+                                    <span className="px-2.5 py-1 text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200 inline-block">
+                                      รอเจ้าของร้านพิจารณา
+                                    </span>
+                                  )}
+                                </TableCell>
+
+                                {/* Reason */}
+                                <TableCell>
+                                  <div className="relative">
+                                    <input
+                                      type="text"
+                                      value={item.reason}
+                                      onChange={e => handleClaimItemReasonChange(idx, e.target.value)}
+                                      placeholder="ระบุอาการเสีย / สาเหตุการเคลม..."
+                                      className={`w-full border px-3 py-2 text-xs focus:outline-none focus:border-[#e51c23] bg-white text-gray-800 ${
+                                        isSelected && !hasReason
+                                          ? 'border-amber-400 bg-amber-50/20 placeholder:text-amber-600/70'
+                                          : 'border-gray-300'
+                                      }`}
+                                    />
+                                    {isSelected && !hasReason && (
+                                      <span className="block text-[10px] text-amber-600 mt-1 font-medium">
+                                        * จำเป็นต้องระบุสาเหตุ
+                                      </span>
+                                    )}
+                                  </div>
+                                </TableCell>
+
+                                {/* Evidence Photo */}
+                                <TableCell className="text-center pr-6">
+                                  {item.evidencePreview ? (
+                                    <div className="relative inline-block group">
+                                      <img
+                                        src={item.evidencePreview}
+                                        alt="หลักฐาน"
+                                        className="w-10 h-10 object-cover border border-gray-200 shadow-xs cursor-pointer"
+                                        onClick={() => handleItemEvidenceClick(idx)}
+                                        title="คลิกเพื่อเปลี่ยนรูปภาพ"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveItemEvidence(idx)}
+                                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 hover:bg-red-600 text-white flex items-center justify-center rounded-full shadow-sm cursor-pointer transition-transform group-hover:scale-110"
+                                        title="ลบรูปภาพหลักฐาน"
+                                      >
+                                        <X size={10} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleItemEvidenceClick(idx)}
+                                      className="px-3 py-1.5 text-xs inline-flex items-center gap-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 shadow-2xs transition-colors cursor-pointer"
+                                      title="แนบรูปภาพหลักฐาน"
+                                    >
+                                      <Camera size={14} className="text-gray-500" />
+                                      <span>แนบรูป</span>
+                                    </button>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Card Footer Summary */}
+                    <div className="p-4 bg-white border-t border-gray-200 flex flex-wrap items-center justify-between gap-4">
+                      <div className="flex items-center gap-6 text-xs text-gray-600">
+                        <div>
+                          <span>จำนวนชิ้นรวม: </span>
+                          <span className="font-bold text-[#1C1B1B]">{totalClaimQuantity} ชิ้น</span>
+                        </div>
+                        {totalClaimEstimatedAmount > 0 && (
+                          <div>
+                            <span>มูลค่ารวม: </span>
+                            <span className="font-bold text-[#e51c23]">
+                              ฿{totalClaimEstimatedAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {selectedClaimItems.some(i => !i.reason.trim()) && (
+                        <span className="text-xs text-amber-600 font-medium">
+                          * มีรายการที่ยังไม่ได้ระบุสาเหตุการเคลม
+                        </span>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 text-center px-4 bg-white">
+                    <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center text-[#e51c23] mb-3">
+                      <FileText className="w-8 h-8" />
+                    </div>
+                    <Heading level="h3" className="text-sm font-bold text-gray-800 m-0">
+                      ยังไม่มีรายการสินค้าสำหรับเคลม
+                    </Heading>
+                    <p className="text-xs text-gray-500 mt-1 max-w-sm">
+                      กรุณาค้นหาและเลือกเลขที่ใบสั่งซื้อ ในกล่อง &quot;ค้นหาใบสั่งซื้อ&quot; ด้านบนเพื่อโหลดรายการสินค้าที่ซื้อ
+                    </p>
+                  </div>
+                )}
+              </Card>
+            );
+          })()}
+        </div>
+
+        {/* Submit Actions */}
+        <div className='flex items-center justify-end gap-3 mt-8'>
+          <Button
+            type="button"
+            variant="outline"
+            size='lg'
+            onClick={() => { setView('list'); resetClaimForm(); }}
+            disabled={saving}
+            className="w-full sm:w-auto px-6 text-gray-600 border-gray-300 hover:bg-gray-50"
+          >
+            ยกเลิก
+          </Button>
+          <Button
+            type="submit"
+            size='lg'
+            disabled={saving}
+            className="w-full sm:w-auto px-8"
+          >
+            {saving && <Loader2 size={18} className="animate-spin mr-2" />}
+            {saving ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+          </Button>
         </div>
       </form>
 
-      {/* Quick Status Update Modal */}
-      {quickUpdateClaim && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-5 rounded-none relative">
-            <button
-              onClick={() => setQuickUpdateClaim(null)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
-            >
-              <X size={18} />
-            </button>
-
-            <div className="border-b border-gray-100 pb-3">
-              <div className="flex items-center gap-2">
-                <ClipboardEdit size={18} className="text-emerald-600" />
-                <Heading level="h2" className="mb-0 text-base font-bold text-[#1C1B1B]">
-                  อัปเดทสถานะใบเคลม ({quickUpdateClaim.claim_no || `CLM-${quickUpdateClaim.id}`})
-                </Heading>
-              </div>
-              <p className="text-xs text-[#5F5E5E] mt-1">
-                ลูกค้า: {quickUpdateClaim.customer_name && quickUpdateClaim.customer_name !== '-' ? quickUpdateClaim.customer_name : parseNote(quickUpdateClaim.notes || quickUpdateClaim.note, 'ลูกค้า')}
-              </p>
-            </div>
-
-            {/* ส่วนที่ 0: ผลการอนุมัติใบเคลมหลัก */}
-            <div className="bg-gray-50 p-3 border border-gray-200">
-              <p className="text-xs font-bold text-[#1C1B1B] mb-2 flex items-center gap-1.5">
-                <CheckCircle2 size={14} className="text-[#e51c23]" />
-                สถานะผลการพิจารณาเคลม (สำเร็จ / ยังไม่สำเร็จ)
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={savingQuickOp}
-                  onClick={() => handleQuickUpdate({ status: 'PENDING' })}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer rounded-none ${
-                    (quickUpdateClaim.status ?? 'PENDING').toUpperCase() === 'PENDING'
-                      ? 'bg-amber-500 text-white border-amber-500'
-                      : 'bg-white text-gray-700 border-gray-300 hover:border-amber-400'
-                  }`}
-                >
-                  <Clock size={13} /> รอดำเนินการ (ยังไม่สำเร็จ)
-                </button>
-                <button
-                  type="button"
-                  disabled={savingQuickOp}
-                  onClick={() => handleQuickUpdate({ status: 'APPROVED' })}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer rounded-none ${
-                    (quickUpdateClaim.status ?? '').toUpperCase() === 'APPROVED'
-                      ? 'bg-emerald-600 text-white border-emerald-600'
-                      : 'bg-white text-gray-700 border-gray-300 hover:border-emerald-500'
-                  }`}
-                >
-                  <CheckCircle2 size={13} /> อนุมัติเคลม (สำเร็จ)
-                </button>
-                <button
-                  type="button"
-                  disabled={savingQuickOp}
-                  onClick={() => handleQuickUpdate({ status: 'REJECTED' })}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer rounded-none ${
-                    (quickUpdateClaim.status ?? '').toUpperCase() === 'REJECTED'
-                      ? 'bg-red-600 text-white border-red-600'
-                      : 'bg-white text-gray-700 border-gray-300 hover:border-red-500'
-                  }`}
-                >
-                  <XCircle size={13} /> ปฏิเสธเคลม (จบงาน)
-                </button>
-              </div>
-            </div>
-
-            {/* ส่วนที่ 1: สถานะการส่งมอบของให้ลูกค้า */}
-            <div>
-              <p className="text-xs font-bold text-[#1C1B1B] mb-2 flex items-center gap-1.5">
-                <UserCheck size={14} className="text-[#e51c23]" />
-                สถานะการส่งมอบของให้ลูกค้า
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={savingQuickOp}
-                  onClick={() => handleQuickUpdate({ customer_received_item: true, customer_waiting: false })}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer rounded-none ${
-                    quickUpdateClaim.customer_received_item === true
-                      ? 'bg-emerald-500 text-white border-emerald-500'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-emerald-400'
-                  }`}
-                >
-                  <UserCheck size={13} /> ลูกค้าได้รับของแล้ว
-                </button>
-                <button
-                  type="button"
-                  disabled={savingQuickOp}
-                  onClick={() => handleQuickUpdate({ customer_received_item: false, customer_waiting: true })}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer rounded-none ${
-                    quickUpdateClaim.customer_waiting === true
-                      ? 'bg-amber-500 text-white border-amber-500'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-amber-400'
-                  }`}
-                >
-                  <Clock size={13} /> ลูกค้ารอผลอยู่ (ยังไม่รับของ)
-                </button>
-                <button
-                  type="button"
-                  disabled={savingQuickOp}
-                  onClick={() => handleQuickUpdate({ customer_received_item: false, customer_waiting: false })}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer rounded-none ${
-                    quickUpdateClaim.customer_received_item === false && quickUpdateClaim.customer_waiting === false
-                      ? 'bg-gray-600 text-white border-gray-600'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-gray-500'
-                  }`}
-                >
-                  <UserX size={13} /> ยังไม่ได้ส่งมอบ
-                </button>
-              </div>
-            </div>
-
-            {/* ส่วนที่ 2: ถ้าเป็นเคลมส่งบริษัท */}
-            {quickUpdateClaim.claim_type === 'SUPPLIER_PENDING' && (
-              <div className="border-t border-gray-100 pt-3">
-                <p className="text-xs font-bold text-[#1C1B1B] mb-2 flex items-center gap-1.5">
-                  <Truck size={14} className="text-[#e51c23]" />
-                  สถานะการส่งบริษัทและผลการตรวจ
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={savingQuickOp}
-                    onClick={() => handleQuickUpdate({ supplier_response_status: 'WAITING' })}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer rounded-none ${
-                      quickUpdateClaim.supplier_response_status === 'WAITING'
-                        ? 'bg-amber-500 text-white border-amber-500'
-                        : 'bg-white text-gray-600 border-gray-300 hover:border-amber-400'
-                    }`}
-                  >
-                    <SendHorizonal size={13} /> ส่งบริษัทแล้ว (รอผล)
-                  </button>
-                  <button
-                    type="button"
-                    disabled={savingQuickOp}
-                    onClick={() => handleQuickUpdate({ supplier_response_status: 'APPROVED', status: 'APPROVED' })}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer rounded-none ${
-                      quickUpdateClaim.supplier_response_status === 'APPROVED'
-                        ? 'bg-emerald-500 text-white border-emerald-500'
-                        : 'bg-white text-gray-600 border-gray-300 hover:border-emerald-400'
-                    }`}
-                  >
-                    <CheckCircle2 size={13} /> บริษัทอนุมัติ
-                  </button>
-                  <button
-                    type="button"
-                    disabled={savingQuickOp}
-                    onClick={() => handleQuickUpdate({ supplier_response_status: 'REJECTED', status: 'REJECTED' })}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer rounded-none ${
-                      quickUpdateClaim.supplier_response_status === 'REJECTED'
-                        ? 'bg-red-600 text-white border-red-600'
-                        : 'bg-white text-gray-600 border-gray-300 hover:border-red-500'
-                    }`}
-                  >
-                    <XCircle size={13} /> บริษัทปฏิเสธ
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ส่วนที่ 3: บันทึกการดำเนินงาน */}
-            <div className="border-t border-gray-100 pt-3">
-              <p className="text-xs font-bold text-[#1C1B1B] mb-2">บันทึกการดำเนินงานเพิ่มเติม</p>
-              {quickUpdateClaim.operation_note && (
-                <div className="mb-2 px-3 py-1.5 bg-blue-50 border border-blue-200 text-xs text-blue-800 font-medium">
-                  <span className="font-bold">ล่าสุด:</span> {quickUpdateClaim.operation_note}
-                </div>
-              )}
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={quickOpNote}
-                  onChange={e => setQuickOpNote(e.target.value)}
-                  placeholder="พิมพ์บันทึกแล้วกดบันทึก..."
-                  className="flex-1 border border-gray-300 px-3 py-1.5 text-xs focus:outline-none focus:border-[#e51c23]"
-                />
-                <button
-                  type="button"
-                  disabled={savingQuickOp || !quickOpNote.trim()}
-                  onClick={async () => {
-                    if (!quickOpNote.trim()) return;
-                    await handleQuickUpdate({ operation_note: quickOpNote.trim() });
-                    setQuickOpNote('');
-                  }}
-                  className="px-3 py-1.5 bg-[#1C1B1B] text-white text-xs font-bold disabled:opacity-40 cursor-pointer"
-                >
-                  บันทึกโน้ต
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-gray-100 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setQuickUpdateClaim(null)}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold cursor-pointer rounded-none"
-              >
-                ปิดหน้าต่าง
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Printable Checklist for Claims List Page (Only Approved Items) */}
-      <div className="hidden print:block font-sans text-slate-900 p-4">
+      <div className="hidden print:block font-sans text-slate-900 p-0">
         <style>{`
           @media print {
+            @page {
+              size: A4 portrait;
+              margin: 12mm 10mm;
+            }
             body * { visibility: hidden; }
             #printable-claims-checklist, #printable-claims-checklist * { visibility: visible; }
             #printable-claims-checklist {
-              position: absolute; left: 0; top: 0; width: 100%; padding: 20px;
+              position: absolute; left: 0; top: 0; width: 100%; padding: 0;
               background: white; color: black; font-size: 12px;
             }
           }
@@ -1430,7 +1396,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
           <div className="border-b-2 border-slate-800 pb-3 mb-4 flex justify-between items-start">
             <div>
               <h1 className="text-xl font-extrabold text-slate-900">AutoParts Retail Management</h1>
-              <h2 className="text-sm font-bold text-slate-700 mt-0.5">ใบเช็คลิสต์รายการสินค้าที่อนุมัติให้เคลม (Approved Claims Checklist)</h2>
+              <h2 className="text-sm font-bold text-slate-700 mt-0.5">ใบเช็คลิสต์รายการสินค้าที่อนุมัติให้เคลม</h2>
             </div>
             <div className="text-right text-xs text-slate-500">
               <p className="font-bold text-slate-800">วันที่พิมพ์</p>
@@ -1478,16 +1444,6 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
               })()}
             </tbody>
           </table>
-
-          <div className="mt-8 pt-4 flex justify-between items-end text-xs text-slate-700">
-            <div>
-              <p>ผู้พิมพ์รายการ: ________________________</p>
-            </div>
-            <div className="text-center border-t border-slate-400 pt-2 min-w-[220px]">
-              <p className="font-bold">ลายเซ็นเจ้าของร้าน / ผู้อนุมัติ</p>
-              <p className="mt-6">วันที่ ____/____/________</p>
-            </div>
-          </div>
         </div>
       </div>
     </div>

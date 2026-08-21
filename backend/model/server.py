@@ -1233,6 +1233,25 @@ def health_check():
         "database_connected": db_ok
     }
 
+@app.post("/api/extract-catalog")
+async def extract_catalog_endpoint(file: UploadFile = File(...), crop_thumbnails: bool = True):
+    """
+    Extract all automotive product parts from an uploaded catalog page image using Gemini AI.
+    """
+    try:
+        from catalog_extractor import extract_catalog_from_image
+        contents = await file.read()
+        results = extract_catalog_from_image(contents, crop_thumbnails=crop_thumbnails)
+        return {
+            "status": "success",
+            "filename": file.filename,
+            "total_items": len(results),
+            "data": results
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
