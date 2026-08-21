@@ -7,13 +7,34 @@ import type {
   SettleCustomerSuggestion,
   SettleBillSuggestion,
   SettleSearchSuggestions,
+  SettleBillsSavedSession,
 } from "../../../../interface/pos/settle_bills_interface";
 
+const SETTLE_SESSION_KEY = "settle_bills_session";
+
+// โหลดสถานะเดิมจาก localStorage (ถ้ามี) เพื่อให้คงสถานะไว้เมื่อสลับหน้าเมนู
+const loadSavedSession = (): SettleBillsSavedSession => {
+  if (typeof window === "undefined") return {};
+  try {
+    const saved = localStorage.getItem(SETTLE_SESSION_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (err) {
+    console.error("Failed to load settle bills session:", err);
+  }
+  return {};
+};
+
 export const useSettleBills = (initialCustomerId: number | null = null) => {
-  // --- Search & Filter States ---
-  const [searchQuery, setSearchQuery] = useState("");
-  const [customerId, setCustomerId] = useState<number | null>(initialCustomerId);
-  const [singleBillMode, setSingleBillMode] = useState<boolean>(false);
+  // --- Search & Filter States (โหลดค่าเดิมจาก localStorage ถ้ามี) ---
+  const [searchQuery, setSearchQuery] = useState<string>(() => loadSavedSession().searchQuery ?? "");
+  const [customerId, setCustomerId] = useState<number | null>(
+    () => initialCustomerId ?? loadSavedSession().customerId ?? null
+  );
+  const [singleBillMode, setSingleBillMode] = useState<boolean>(
+    () => loadSavedSession().singleBillMode ?? false
+  );
 
   // --- Live Search Dropdown States ---
   const [searchSuggestions, setSearchSuggestions] = useState<SettleSearchSuggestions>({
@@ -23,19 +44,27 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
   const [, setIsSearchingBills] = useState(false);
 
   // --- Data States ---
-  const [bills, setBills] = useState<UnpaidBillItem[]>([]);
-  const [customerName, setCustomerName] = useState<string>("");
-  const [selectedBillIds, setSelectedBillIds] = useState<number[]>([]);
+  const [bills, setBills] = useState<UnpaidBillItem[]>(() => loadSavedSession().bills ?? []);
+  const [customerName, setCustomerName] = useState<string>(() => loadSavedSession().customerName ?? "");
+  const [selectedBillIds, setSelectedBillIds] = useState<number[]>(
+    () => loadSavedSession().selectedBillIds ?? []
+  );
   const [isLoading, setIsLoading] = useState(false);
 
   // --- Partial Payment / Custom Amounts Per Bill ---
   // maps order_id -> numeric pay_amount
-  const [customPayAmounts, setCustomPayAmounts] = useState<Record<number, number>>({});
+  const [customPayAmounts, setCustomPayAmounts] = useState<Record<number, number>>(
+    () => loadSavedSession().customPayAmounts ?? {}
+  );
   // maps order_id -> string value in input while typing
-  const [customPayDisplay, setCustomPayDisplay] = useState<Record<number, string>>({});
+  const [customPayDisplay, setCustomPayDisplay] = useState<Record<number, string>>(
+    () => loadSavedSession().customPayDisplay ?? {}
+  );
 
   // --- Payment States ---
-  const [paymentMethodId, setPaymentMethodId] = useState<number>(1);
+  const [paymentMethodId, setPaymentMethodId] = useState<number>(
+    () => loadSavedSession().paymentMethodId ?? 1
+  );
   const [receivedAmount, setReceivedAmount] = useState<number>(0);
   const [displayValue, setDisplayValue] = useState<string>("");
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -44,6 +73,58 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
   // --- QR Code States ---
   const [qrCodeData, setQrCodeData] = useState<{ qrCode: string; refNo: string; amount: number } | null>(null);
   const [isLoadingQR, setIsLoadingQR] = useState(false);
+
+  // บันทึก State ลง localStorage ทุกครั้งที่มีการเปลี่ยนแปลง เพื่อให้คงสถานะไว้เมื่อสลับหน้าเมนู
+  useEffect(() => {
+    try {
+      if (customerId || bills.length > 0 || searchQuery || selectedBillIds.length > 0) {
+        const sessionToSave: SettleBillsSavedSession = {
+          searchQuery,
+          customerId,
+          customerName,
+          singleBillMode,
+          bills,
+          selectedBillIds,
+          customPayAmounts,
+          customPayDisplay,
+          paymentMethodId,
+        };
+        localStorage.setItem(SETTLE_SESSION_KEY, JSON.stringify(sessionToSave));
+      } else {
+        localStorage.removeItem(SETTLE_SESSION_KEY);
+      }
+    } catch (err) {
+      console.error("Failed to save settle bills session:", err);
+    }
+  }, [
+    searchQuery,
+    customerId,
+    customerName,
+    singleBillMode,
+    bills,
+    selectedBillIds,
+    customPayAmounts,
+    customPayDisplay,
+    paymentMethodId,
+  ]);
+
+  // ล้างสถานะทั้งหมดและเคลียร์ localStorage
+  const handleClearCustomer = useCallback(() => {
+    setCustomerId(null);
+    setCustomerName("");
+    setBills([]);
+    setSelectedBillIds([]);
+    setCustomPayAmounts({});
+    setCustomPayDisplay({});
+    setSearchQuery("");
+    setSingleBillMode(false);
+    setQrCodeData(null);
+    try {
+      localStorage.removeItem(SETTLE_SESSION_KEY);
+    } catch (e) {
+      console.error("Failed to remove settle bills session:", e);
+    }
+  }, []);
 
   // 1. ดึงรายการบิลค้างชำระทั้งหมดของลูกค้า (All unpaid bills of customer)
   const fetchUnpaidBills = useCallback(async (targetCustomerId: number) => {
@@ -54,24 +135,38 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
       setBills(fetchedBills);
       setCustomerName(res.customer_name || "");
       setCustomerId(res.customer_id);
-      setSingleBillMode(false);
-      setSelectedBillIds([]);
 
-      // ตั้งค่ายอดจ่ายเริ่มต้นตามยอดค้างชำระของแต่ละบิล
-      const initialAmounts: Record<number, number> = {};
-      const initialDisplay: Record<number, string> = {};
-      fetchedBills.forEach((b) => {
-        initialAmounts[b.order_id] = b.balance_due;
-        initialDisplay[b.order_id] = b.balance_due.toFixed(2);
+      // รักษาเฉพาะบิลที่เคยเลือกไว้และยังมียอดค้างชำระอยู่
+      const remainingOrderIds = new Set(fetchedBills.map((b) => b.order_id));
+
+      setSelectedBillIds((prevSelected) =>
+        prevSelected.filter((id) => remainingOrderIds.has(id)),
+      );
+
+      // อัปเดตยอด custom pay ใหม่ตามยอด balance_due ล่าสุด
+      setCustomPayAmounts((prevAmounts) => {
+        const nextAmounts: Record<number, number> = {};
+        fetchedBills.forEach((b) => {
+          // ถ้ายอดเดิมที่เคยกรอกไว้เกินยอดหนี้ใหม่ ให้ปรับเท่ากับ balance_due ล่าสุด
+          const prevVal = prevAmounts[b.order_id];
+          nextAmounts[b.order_id] =
+            prevVal !== undefined && prevVal <= b.balance_due ? prevVal : b.balance_due;
+        });
+        return nextAmounts;
       });
-      setCustomPayAmounts(initialAmounts);
-      setCustomPayDisplay(initialDisplay);
+
+      setCustomPayDisplay((prevDisplay) => {
+        const nextDisplay: Record<number, string> = {};
+        fetchedBills.forEach((b) => {
+          const prevVal = parseFloat(prevDisplay[b.order_id]);
+          const valToSet =
+            !isNaN(prevVal) && prevVal <= b.balance_due ? prevVal : b.balance_due;
+          nextDisplay[b.order_id] = valToSet.toFixed(2);
+        });
+        return nextDisplay;
+      });
     } catch (err) {
       console.error("Failed to load unpaid bills:", err);
-      setBills([]);
-      setCustomerName("");
-      setCustomPayAmounts({});
-      setCustomPayDisplay({});
     } finally {
       setIsLoading(false);
     }
@@ -96,12 +191,24 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
       setCustomerId(res.customer_id);
       setSingleBillMode(true);
 
-      // เลือกบิลนั้นทันที
+      // เลือกบิลนั้นทันที (หรือคงเดิมถ้ามีอยู่แล้ว)
       const singleId = fetchedBills[0].order_id;
       const singleDue = fetchedBills[0].balance_due;
-      setSelectedBillIds([singleId]);
-      setCustomPayAmounts({ [singleId]: singleDue });
-      setCustomPayDisplay({ [singleId]: singleDue.toFixed(2) });
+      setSelectedBillIds((prev) => (prev.includes(singleId) ? prev : [singleId]));
+      setCustomPayAmounts((prev) => {
+        const prevVal = prev[singleId];
+        return {
+          ...prev,
+          [singleId]: prevVal !== undefined && prevVal <= singleDue ? prevVal : singleDue,
+        };
+      });
+      setCustomPayDisplay((prev) => {
+        const prevVal = parseFloat(prev[singleId]);
+        return {
+          ...prev,
+          [singleId]: !isNaN(prevVal) && prevVal <= singleDue ? prevVal.toFixed(2) : singleDue.toFixed(2),
+        };
+      });
       setSearchSuggestions({ customers: [], bills: [] });
     } catch (err: any) {
       console.error("Failed to load single unpaid bill:", err);
@@ -111,12 +218,18 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
     }
   }, []);
 
-  // โหลดข้อมูลเมื่อ customerId เปลี่ยนแปลงตอนเปิดหน้าครั้งแรก (ถ้ามี)
+  // รีเฟรชข้อมูลบิลล่าสุดในพื้นหลังตอน mount เมื่อมีข้อมูลค้างอยู่
+  const hasSyncedOnMount = useMemo(() => ({ current: false }), []);
   useEffect(() => {
-    if (customerId && !singleBillMode && bills.length === 0) {
-      fetchUnpaidBills(customerId);
+    if (!hasSyncedOnMount.current) {
+      hasSyncedOnMount.current = true;
+      if (customerId && !singleBillMode) {
+        fetchUnpaidBills(customerId);
+      } else if (singleBillMode && bills.length > 0 && bills[0]?.order_number) {
+        fetchSingleUnpaidBill(bills[0].order_number);
+      }
     }
-  }, [customerId, singleBillMode, bills.length, fetchUnpaidBills]);
+  }, [customerId, singleBillMode, bills, fetchUnpaidBills, fetchSingleUnpaidBill, hasSyncedOnMount]);
 
   // ค้นหาแบบ Live Dropdown แนะนำ (ทั้งลูกค้า และ บิล)
   const triggerLiveSearch = useCallback(async (query: string) => {
@@ -129,11 +242,8 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
     try {
       // 1. ค้นหาประวัติการขายที่มียอดค้างชำระ (บิลเงินเชื่อ ไม่รวมบิลที่ยกเลิก)
       const salesPromise = posApiService.getSalesHistory({ search: cleaned, limit: 10, page: 1 });
-      // 2. ค้นหาลูกค้า
-      const customerPromise = apiClient
-        .get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${encodeURIComponent(cleaned)}`)
-        .then((r) => r.data || [])
-        .catch(() => []);
+      // 2. ค้นหาลูกค้าผ่าน Service (เปลี่ยนจาก apiClient.get)
+      const customerPromise = posApiService.searchCustomerDiscount(cleaned);
 
       const [salesRes, customerRes] = await Promise.all([salesPromise, customerPromise]);
 
@@ -244,13 +354,12 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
 
     // ค้นหาตามชื่อลูกค้า
     try {
-      const custRes = await apiClient
-        .get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${encodeURIComponent(q)}`)
-        .then((r) => r.data || []);
-
-      const exactOrFirst = custRes.find(
-        (c) => c.customer_name?.toLowerCase() === q.toLowerCase() || c.phone_number === q
-      ) || custRes[0];
+      const custRes = await posApiService.searchCustomerDiscount(q);
+      
+      const exactOrFirst =
+        custRes.find(
+          (c) => c.customer_name?.toLowerCase() === q.toLowerCase() || c.phone_number === q,
+        ) || custRes[0];
 
       if (exactOrFirst && exactOrFirst.id) {
         setCustomerId(exactOrFirst.id);
@@ -289,9 +398,7 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
     // ถ้าข้อความที่พิมพ์เป็นชื่อลูกค้าที่เลือกอยู่ ให้แสดงทุกบิลของลูกค้ารายนั้น
     if (customerName && customerName.toLowerCase().includes(q)) return bills;
     return bills.filter(
-      (b) =>
-        b.order_number &&
-        b.order_number.toLowerCase().includes(q)
+      (b) => b.order_number && b.order_number.toLowerCase().includes(q),
     );
   }, [bills, searchQuery, customerName, singleBillMode]);
 
@@ -303,7 +410,7 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
       }
       return bill.balance_due || 0;
     },
-    [customPayAmounts]
+    [customPayAmounts],
   );
 
   // คำนวณยอดหนี้รวมทั้งหมดของบิลที่เลือก
@@ -437,7 +544,7 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
       totalPayAmount.toLocaleString("en-US", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
-      })
+      }),
     );
     setIsPaymentModalOpen(true);
 
@@ -508,7 +615,13 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
       alert(`บันทึกชำระเงินสำเร็จ!\nเลขที่ใบเสร็จ: ${res.receipt_number}\nยอดชำระ: ฿${res.total_received.toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท`);
       setIsPaymentModalOpen(false);
       setQrCodeData(null);
-      if (customerId) {
+
+      // ดึงข้อมูลอัปเดตยอดคงเหลือล่าสุดโดยคงโหมดเดิมไว้
+      if (singleBillMode && selectedBills.length > 0) {
+        // ถ้าดูบิลเดี่ยว ให้รีเฟรชบิลเดิมนั้น
+        fetchSingleUnpaidBill(selectedBills[0].order_number);
+      } else if (customerId) {
+        // ถ้าดูลูกค้า ให้รีเฟรชบิลทั้งหมดของลูกค้ารายนี้
         fetchUnpaidBills(customerId);
       }
     } catch (err: any) {
@@ -556,6 +669,7 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
     handleViewAllBillsOfCustomer,
     fetchUnpaidBills,
     fetchSingleUnpaidBill,
+    handleClearCustomer,
     handleToggleSelect,
     handleToggleSelectAll,
     handleOpenModal,

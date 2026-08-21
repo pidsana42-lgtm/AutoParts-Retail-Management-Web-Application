@@ -71,6 +71,7 @@ export default function SettleBillsPage(): React.JSX.Element {
     handleSearchSubmit,
     singleBillMode,
     handleViewAllBillsOfCustomer,
+    handleClearCustomer,
     qrCodeData,
     isLoadingQR,
     generateSettleQR,
@@ -291,10 +292,7 @@ export default function SettleBillsPage(): React.JSX.Element {
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setCustomerId(null);
-                  setSearchQuery("");
-                }}
+                onClick={handleClearCustomer}
                 className="text-xs text-[#6B7280] hover:text-[#E51C23] transition-colors cursor-pointer"
               >
                 ✕ เปลี่ยนลูกค้า

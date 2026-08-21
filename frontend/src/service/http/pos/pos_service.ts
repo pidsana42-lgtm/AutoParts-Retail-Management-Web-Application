@@ -14,8 +14,11 @@ export const posApiService = {
     apiClient.get<StoreConfigInterface>("/pos/store-config").then((res) => res.data),
 
   /** ค้นหาข้อมูลสิทธิ์ส่วนลดและโปรไฟล์ลูกค้า */
-  searchCustomerDiscount: (query: string): Promise<CustomerDiscountResponse> => 
-    apiClient.get<CustomerDiscountResponse>(`/pos/customer-discount?search=${query}`).then((res) => res.data),
+  searchCustomerDiscount: (query: string): Promise<CustomerDiscountResponse[]> => 
+    apiClient
+      .get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${encodeURIComponent(query)}`)
+      .then((res) => res.data || [])
+      .catch(() => []),
 
   /** ค้นหาข้อมูลอะไหล่ยนต์ในสต๊อกระบบ */
   searchProducts: (query: string): Promise<POSProductResponse[]> => 
