@@ -54,6 +54,9 @@ export default function SettleBillsPage(): React.JSX.Element {
     totalSelectedDebt,
     totalPayAmount,
     remainingDebtAfterPay,
+    summaryBills,
+    hasSelectedBills,
+    selectedCount,
     customPayDisplay,
     getBillPayAmount,
     handleBillPayAmountChange,
@@ -77,6 +80,7 @@ export default function SettleBillsPage(): React.JSX.Element {
     generateSettleQR,
   } = useSettleBills();
 
+  const selectedBills = bills.filter((b) => selectedBillIds.includes(b.order_id));
   const searchBoxRef = useRef<HTMLDivElement>(null);
 
   // ปิด Dropdown เมื่อกดคลิกนอกพื้นที่ช่องค้นหา
@@ -170,8 +174,8 @@ export default function SettleBillsPage(): React.JSX.Element {
                     {/* หมวดที่ 1: รายชื่อลูกค้า / อู่ */}
                     {searchSuggestions.customers.length > 0 && (
                       <div>
-                        <div className="bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-500 flex items-center gap-1.5 uppercase tracking-wider">
-                          <span>👥 ลูกค้า / อู่ (คลิกเพื่อแสดงบิลเงินเชื่อทั้งหมดของลูกค้ารายนี้)</span>
+                        <div className="bg-[#F6F3F2] px-3 py-1.5 text-[11px]  text-[#6B7280] flex items-center gap-1.5 uppercase tracking-wider">
+                          <Text variant="xs">ลูกค้า / อู่ (คลิกเพื่อแสดงบิลเงินเชื่อทั้งหมดของลูกค้ารายนี้)</Text>
                         </div>
                         {searchSuggestions.customers.map((cust) => (
                           <div
@@ -181,11 +185,11 @@ export default function SettleBillsPage(): React.JSX.Element {
                               handleSelectCustomer(cust);
                             }}
                             onClick={() => handleSelectCustomer(cust)}
-                            className="p-3 hover:bg-red-50/50 flex justify-between items-center cursor-pointer transition-colors text-left"
+                            className="p-3 hover:bg-slate-50 flex justify-between items-center cursor-pointer transition-colors text-left"
                           >
                             <div className="flex flex-col">
                               <div className="flex items-center gap-2">
-                                <Text variant="small" className="text-[#1C1B1B] font-medium mb-0 leading-tight">
+                                <Text variant="small" className="text-[#1C1B1B] mb-0 leading-tight">
                                   {cust.customer_name}
                                 </Text>
                                 {cust.customer_type && (
@@ -195,15 +199,15 @@ export default function SettleBillsPage(): React.JSX.Element {
                                 )}
                               </div>
                               {cust.phone_number && (
-                                <Text variant="xs" className="text-[11px] text-[#6B7280] mb-0 mt-0.5">
+                                <Text variant="xs" className="text-[10px] text-[#6B7280] mb-0.5 mt-1 leading-tight">
                                   โทร: {cust.phone_number}
                                 </Text>
                               )}
                             </div>
                             <div className="text-right flex flex-col shrink-0 pl-4">
-                              <span className="text-xs text-[#E51C23] font-medium">
-                                กดดูบิลค้างทั้งหมด →
-                              </span>
+                              <Text variant="xs" className="text-[#E51C23]">
+                                กดดูบิลค้างทั้งหมด 
+                              </Text>
                             </div>
                           </div>
                         ))}
@@ -213,8 +217,8 @@ export default function SettleBillsPage(): React.JSX.Element {
                     {/* หมวดที่ 2: บิลค้างชำระ / ใบเสร็จ */}
                     {searchSuggestions.bills.length > 0 && (
                       <div>
-                        <div className="bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-500 flex items-center gap-1.5 uppercase tracking-wider">
-                          <span>📄 บิลค้างชำระ (คลิกเพื่อเปิดชำระเฉพาะบิลนี้)</span>
+                        <div className="bg-[#F6F3F2] px-3 py-1.5 text-[11px]  text-[#6B7280] flex items-center gap-1.5 uppercase tracking-wider">
+                          <Text variant="xs">บิลค้างชำระ (คลิกเพื่อเปิดชำระเฉพาะบิลนี้)</Text>
                         </div>
                         {searchSuggestions.bills.map((bill) => (
                           <div
@@ -224,23 +228,23 @@ export default function SettleBillsPage(): React.JSX.Element {
                               handleSelectBill(bill);
                             }}
                             onClick={() => handleSelectBill(bill)}
-                            className="p-3 hover:bg-red-50/50 flex justify-between items-center cursor-pointer transition-colors text-left"
+                            className="p-3 hover:bg-slate-50  flex justify-between items-center cursor-pointer transition-colors text-left"
                           >
                             <div className="flex flex-col">
                               <div className="flex items-center gap-2">
-                                <span className="font-mono text-sm font-semibold text-[#1C1B1B]">
+                                <Text variant="small" className="text-[#1C1B1B] mb-0 leading-tight">
                                   {bill.order_number}
-                                </span>
+                                </Text>
                                 <Badge variant="warning" className="text-[10px] py-0 px-1.5">
                                   {bill.payment_status === "partial" ? "แบ่งจ่าย" : "ยังไม่จ่าย"}
                                 </Badge>
                               </div>
-                              <Text variant="xs" className="text-[11px] text-[#6B7280] mb-0 mt-0.5 leading-tight">
+                              <Text variant="xs" className="text-[10px] text-[#6B7280] mb-0.5 mt-1 leading-tight">
                                 ลูกค้า: {bill.customer_name}
                               </Text>
                             </div>
                             <div className="text-right flex flex-col shrink-0 pl-4">
-                              <Text variant="xs" className="text-[#E51C23] font-medium">
+                              <Text variant="xs" className="text-[#E51C23]">
                                 ค้างชำระ ฿{bill.balance_due.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                               </Text>
                               <Text variant="xs" className="text-[10px] text-gray-400">
@@ -265,18 +269,17 @@ export default function SettleBillsPage(): React.JSX.Element {
 
           {/* แถบแจ้งเตือนเมื่ออยู่ในโหมดแสดงบิลเดียว */}
           {singleBillMode && bills.length > 0 && (
-            <div className="bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 mb-6 flex justify-between items-center">
+            <div className="bg-[#F6F3F2] border border-zinc-200 text-[#1C1B1B] px-4 py-3 mb-6 flex justify-between items-center">
               <div className="flex items-center gap-2 text-xs">
-                <span className="font-semibold text-amber-800">โหมดชำระเฉพาะบิล:</span>
-                <span>กำลังแสดงเฉพาะบิล <strong className="font-mono">{bills[0]?.order_number}</strong> ของลูกค้า <strong>{customerName || "—"}</strong></span>
+                 <Text variant="xs" className="text-[#6B7280]">โหมดชำระเฉพาะบิล:</Text>
+                <Text variant="xs" className="text-[#1C1B1B] font-normal">{bills[0]?.order_number}</Text> ของลูกค้า <Text variant="xs" className="text-[#1C1B1B] font-normal">{customerName || "—"}</Text>
               </div>
               {customerId && (
                 <button
                   type="button"
                   onClick={handleViewAllBillsOfCustomer}
-                  className="text-xs bg-white text-amber-900 border border-amber-300 hover:bg-amber-100 px-3 py-1.5 font-medium transition-colors cursor-pointer shadow-sm"
-                >
-                  🔄 แสดงบิลค้างชำระทั้งหมดของลูกค้ารายนี้
+                  className="text-xs text-[#6B7280] hover:text-[#E51C23] transition-colors cursor-pointer"                >
+                  <RefreshCw size={14} className="inline-block mr-1" />แสดงบิลค้างชำระทั้งหมดของลูกค้ารายนี้
                 </button>
               )}
             </div>
@@ -284,11 +287,11 @@ export default function SettleBillsPage(): React.JSX.Element {
 
           {/* แถบแสดงลูกค้าที่เลือก (กรณีดูบิลทั้งหมด) */}
           {!singleBillMode && customerId && customerName && (
-            <div className="bg-zinc-50 border border-zinc-200 text-[#1C1B1B] px-4 py-3 mb-6 flex justify-between items-center">
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-[#6B7280]">ลูกค้าที่เลือก:</span>
-                <strong className="text-sm text-[#1C1B1B] font-medium">{customerName}</strong>
-                <span className="text-[#6B7280]">(พบ {bills.length} บิลค้างชำระ)</span>
+            <div className="bg-[#F6F3F2] border border-zinc-200 text-[#1C1B1B] px-4 py-3 mb-6 flex justify-between items-center">
+              <div className="flex items-center gap-1.5 text-xs">
+                <Text variant="xs" className="text-[#6B7280]">ลูกค้าที่เลือก:</Text>
+                <Text variant="xs" className="text-[#1C1B1B] font-normal">{customerName}</Text>
+                <Text variant="xs" className="text-[#6B7280]">(พบ {bills.length} บิลค้างชำระ)</Text>
               </div>
               <button
                 type="button"
@@ -334,7 +337,7 @@ export default function SettleBillsPage(): React.JSX.Element {
                   <TableHead className="py-3 px-3 text-left w-[18%] font-normal text-[#6B7280]">ชื่อลูกค้า/อู่</TableHead>
                   <TableHead className="py-3 px-3 text-right w-[12%] font-normal text-[#6B7280]">ยอดรวมทั้งบิล</TableHead>
                   <TableHead className="py-3 px-3 text-right w-[14%] font-normal text-[#6B7280]">ค้างชำระ</TableHead>
-                  <TableHead className="py-3 px-3 text-right w-[25%] font-normal text-[#E51C23]">ยอดชำระงวดนี้ (฿)</TableHead>
+                  <TableHead className="py-3 px-3 text-right w-[25%] font-normal text-[#E51C23]">ยอดชำระงวดนี้</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -431,7 +434,7 @@ export default function SettleBillsPage(): React.JSX.Element {
                                     onBlur={() => handleBillPayAmountBlur(bill.order_id, bill.balance_due)}
                                     className={`w-full text-right bg-white border ${
                                       isOverBalance ? "border-red-500 text-red-600" : "border-red-300 focus:border-red-500"
-                                    } focus:ring-1 focus:ring-red-500 rounded-none pl-6 pr-2 py-1 text-sm font-semibold text-[#1C1B1B] shadow-inner focus:outline-none`}
+                                    } focus:ring-1 focus:ring-red-500 rounded-none pl-6 pr-2 py-1 text-sm font-normal text-[#1C1B1B] shadow-inner focus:outline-none`}
                                     placeholder={bill.balance_due.toFixed(2)}
                                   />
                                 </div>
@@ -447,25 +450,25 @@ export default function SettleBillsPage(): React.JSX.Element {
 
                               {/* ป้ายเตือนสถานะคงเหลือ / เกินยอด */}
                               {isOverBalance ? (
-                                <span className="text-[10px] text-red-600 font-medium leading-none">
-                                  ⚠️ เกินยอดหนี้ค้างชำระ
-                                </span>
+                                <Text variant="xs" className="text-[10px] text-[#E53E3E]  leading-none">
+                                  เกินยอดหนี้ค้างชำระ
+                                </Text>
                               ) : remainingBalance > 0 ? (
-                                <span className="text-[10px] text-amber-700 font-normal leading-none">
+                                <Text variant="xs" className="text-[10px] text-[#1C1B1B] leading-none">
                                   คงเหลือ ฿{remainingBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                                </span>
+                                </Text>
                               ) : (
-                                <span className="text-[10px] text-emerald-600 font-normal leading-none">
-                                  ✓ จ่ายเต็มยอด
-                                </span>
+                                <Text variant="xs" className="text-[10px] text-[#006E0A] leading-none">
+                                  จ่ายเต็มยอด
+                                </Text>
                               )}
                             </div>
                           ) : (
                             <div className="flex flex-col items-end">
-                              <Text variant="small" className="font-normal text-gray-400 mb-0">
+                              <Text variant="small" className="font-normal text-[#6B7280] mb-0">
                                 ฿{bill.balance_due?.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                               </Text>
-                              <span className="text-[10px] text-gray-400">(ยังไม่เลือก)</span>
+                              <Text className="text-[10px] text-[#6B7280]">(ยังไม่เลือก)</Text>
                             </div>
                           )}
                         </TableCell>
@@ -482,21 +485,56 @@ export default function SettleBillsPage(): React.JSX.Element {
       {/* ─── [โซนฝั่งขวา] : สรุปยอด และช่องทางการรับชำระ ─── */}
       <div className="w-full lg:w-[27%] bg-[#F6F3F2] p-6 flex flex-col justify-between shadow-2xl shrink-0 min-h-full">
         <div>
-          <Text variant="small" className="text-gray-500 mb-4 uppercase tracking-wide">
+          <Text variant="small" className="text-[#6B7280] mb-4 uppercase tracking-wide">
             สรุปการตัดยอดหนี้
           </Text>
 
-          <Card className="bg-white p-4 border border-gray-200 shadow-none mb-4 space-y-2 rounded-none">
+          <Card className="bg-[#1C1B1B] text-white p-5 mb-6 border border-zinc-800 shadow-lg relative overflow-hidden">
             <div className="flex justify-between items-center text-xs">
-              <Text variant="xs" className="text-[#6B7280] mb-0">จำนวนบิลที่เลือก:</Text>
-              <Text variant="xs" className="font-normal text-[#1C1B1B] mb-0">{selectedBillIds.length} รายการ</Text>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <Text variant="xs" className="text-[#6B7280] mb-0">ลูกค้า:</Text>
-              <Text variant="xs" className="font-normal text-[#1C1B1B] truncate max-w-[150px] mb-0">
+              <Text variant="xs" className="font-light text-white mb-0">ลูกค้า:</Text>
+              <Text variant="xs" className="font-light text-white truncate max-w-[150px] mb-0">
                 {customerName || "—"}
               </Text>
             </div>
+            
+            <div className="flex justify-between items-center text-xs border-b border-[#9CA3AF]/30 pb-2">
+              <Text variant="xs" className="font-light text-white mb-0">จำนวนบิลที่เลือก:</Text>
+              <Text variant="xs" className="font-light text-white mb-0">{selectedCount} รายการ</Text>
+            </div>
+
+            {/* แสดงรายการบิลที่เลือก รหัสบิล ยอดตัดชำระ และยอดคงเหลือถ้าแบ่งจ่าย */}
+            {hasSelectedBills ? (
+              <div className="space-y-2 pt-1 max-h-52 overflow-y-auto">
+                {summaryBills.map((b) => (
+                  <div key={`summary-bill-${b.order_id}`} className="pt-2 first:pt-0 text-xs">
+                    <div className="flex justify-between items-center">
+                      <Text variant="xs" className="text-[11px] text-white">{b.order_number}</Text>
+                      <Text variant="xs" className="text-[#E51C23]">
+                        ฿{b.pay_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </Text>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px]">
+                      <Text variant="xs" className="text-[10px] font-light text-gray-400">
+                        ค้างชำระ: ฿{b.balance_due.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </Text>
+                      {b.is_partial ? (
+                        <Text variant="xs" className="text-[9px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-none">
+                          แบ่งจ่าย (เหลือ ฿{b.remaining_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })})
+                        </Text>
+                      ) : (
+                        <Text variant="xs" className="text-[9px] text-[#006E0A] bg-emerald-50 px-1.5 py-0.5 rounded-none">
+                          จ่ายเต็มบิล
+                        </Text>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-2 text-xs text-gray-400">
+                ยังไม่ได้เลือกบิล
+              </div>
+            )}
           </Card>
 
           <div className="space-y-3 pt-2">
@@ -506,25 +544,31 @@ export default function SettleBillsPage(): React.JSX.Element {
                 ฿{totalSelectedDebt.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </Text>
             </div>
-            <div className="flex justify-between items-center text-[#E51C23]">
-              <Text variant="small" className="text-[#E51C23] font-medium mb-0">ยอดตัดชำระงวดนี้</Text>
-              <Text variant="muted" className="text-[#E51C23] font-semibold mb-0">
+            <div className="flex justify-between">
+              <Text variant="small" className="text-[#6B7280] mb-0">หนี้คงเหลือหลังตัดยอด</Text>
+              <Text variant="muted" className="text-[#1C1B1B] mb-0">
+                ฿{remainingDebtAfterPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </Text>
+            </div>
+            <div className="flex justify-between items-center text-[#E51C23] border-b border-dashed pb-2">
+              <Text variant="small" className="text-[#E51C23] mb-0">ยอดตัดชำระงวดนี้</Text>
+              <Text variant="muted" className="text-[#E51C23] mb-0">
                 ฿{totalPayAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </Text>
             </div>
-            {remainingDebtAfterPay > 0 && (
-              <div className="flex justify-between items-center text-xs text-amber-700 bg-amber-50 px-2 py-1.5 border border-amber-200">
-                <span>หนี้คงเหลือหลังตัดยอด:</span>
+            {/* {remainingDebtAfterPay > 0 && (
+              <div className="flex justify-between items-center text-xs text-amber-700 border-b border-dashed pb-2">
+                <Text variant="small" className="text-[#6B7280] mb-0">หนี้คงเหลือหลังตัดยอด</Text>
                 <span className="font-medium">
                   ฿{remainingDebtAfterPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
-            )}
+            )} */}
           </div>
 
           <div className="bg-[#1C1B1B] p-5 my-5 flex justify-between items-center border border-zinc-800">
             <Text variant="small" className="text-[#9CA3AF] uppercase mb-0 tracking-wider">ยอดรับชำระสุทธิ</Text>
-            <Text variant="muted" className="text-[#FFFFFF] text-2xl mb-0 font-semibold">
+            <Text variant="muted" className="text-white text-2xl mb-0">
               ฿{totalPayAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </Text>
           </div>
@@ -562,9 +606,9 @@ export default function SettleBillsPage(): React.JSX.Element {
           disabled={selectedBillIds.length === 0 || totalPayAmount <= 0}
           variant="primary"
           size="lg"
-          className="w-full mt-6 py-4 text-xl bg-[#E51C23] hover:bg-red-700 text-white rounded-none disabled:bg-gray-300 disabled:cursor-not-allowed cursor-pointer"
+          className="w-full mt-6 py-4 text-xl bg-[#E51C23] hover:bg-red-700 text-white rounded-none"
         >
-          รับชำระเงิน ({selectedBillIds.length} บิล | ฿{totalPayAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })})
+          รับชำระเงิน ({selectedBillIds.length} บิล)
         </Button>
 
         {/* ================= PAYMENT MODAL ================= */}
@@ -584,20 +628,50 @@ export default function SettleBillsPage(): React.JSX.Element {
 
               {/* Body */}
               <div className="p-6 space-y-4">
-                <div className="flex justify-between items-start border-l-3 border-[#5D3F3C] bg-[#F6F3F2] pl-4 py-3 my-2">
-                  <div className="text-xs">
-                    <Text variant="xs" className="text-[#1C1B1B] mb-0.5">ลูกค้า / อู่:</Text>
-                    <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">{customerName || "ลูกค้าทั่วไป"}</Text>
+                <div className="border-l-3 border-[#5D3F3C] bg-[#F6F3F2] p-3 my-2 space-y-2">
+                  <div className="flex justify-between items-start text-xs">
+                    <div>
+                      <Text variant="xs" className="text-[#6B7280] mb-0.5">ลูกค้า / อู่:</Text>
+                      <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">{customerName || "ลูกค้าทั่วไป"}</Text>
+                    </div>
+                    <div className="text-right">
+                      <Text variant="xs" className="text-[#6B7280] mb-0.5">รายการบิลที่เลือก:</Text>
+                      <Text variant="xs" className="text-[#E51C23] font-semibold mb-0">{selectedBillIds.length} บิล</Text>
+                    </div>
                   </div>
-                  <div className="text-right text-xs mr-2">
-                    <Text variant="xs" className="text-[#1C1B1B] mb-0.5">รายการบิลที่เลือก:</Text>
-                    <Text variant="xs" className="text-[#E51C23] font-medium mb-0">{selectedBillIds.length} บิลค้างชำระ</Text>
-                    {remainingDebtAfterPay > 0 && (
-                      <Text variant="xs" className="text-amber-700 text-[11px] mb-0">
-                        (แบ่งจ่าย / เหลือค้าง ฿{remainingDebtAfterPay.toLocaleString(undefined, { minimumFractionDigits: 2 })})
-                      </Text>
-                    )}
-                  </div>
+
+                  {/* รายการบิลใน Modal */}
+                  {selectedBills.length > 0 && (
+                    <div className="border-t border-gray-200/80 pt-2 space-y-1.5 max-h-32 overflow-y-auto pr-1 divide-y divide-gray-200/40">
+                      {selectedBills.map((b) => {
+                        const payAmt = getBillPayAmount(b);
+                        const remAmt = b.balance_due - payAmt;
+                        const isPartial = remAmt > 0.009;
+
+                        return (
+                          <div key={`modal-bill-${b.order_id}`} className="pt-1.5 first:pt-0 flex justify-between items-center text-xs">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-[11px] font-semibold text-[#1C1B1B]">
+                                {b.order_number}
+                              </span>
+                              {isPartial ? (
+                                <span className="text-[10px] text-amber-700 bg-amber-100/70 px-1.5 py-0.5 rounded font-normal">
+                                  แบ่งจ่าย (เหลือ ฿{remAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })})
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-emerald-700 bg-emerald-100/70 px-1.5 py-0.5 rounded font-normal">
+                                  เต็มจำนวน
+                                </span>
+                              )}
+                            </div>
+                            <span className="font-medium text-[#1C1B1B]">
+                              ฿{payAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* ---------------- 1. เงินสด ---------------- */}

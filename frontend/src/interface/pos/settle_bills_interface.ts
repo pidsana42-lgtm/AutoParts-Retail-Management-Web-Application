@@ -93,3 +93,13 @@ export interface SettleBillsSavedSession {
   customPayDisplay?: Record<number, string>;
   paymentMethodId?: number;
 }
+
+// Interface สำหรับสรุปการตัดยอดหนี้
+export interface SettleBillSummaryItem {
+  order_id: number;
+  order_number: string;
+  balance_due: number;
+  pay_amount: number;
+  remaining_amount: number;
+  is_partial: boolean;
+}
