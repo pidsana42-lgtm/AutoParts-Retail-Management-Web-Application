@@ -39,7 +39,7 @@ function EmployeeCheckStockExecuteContent() {
   const urlToken = searchParams.get("token");
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, role } = useAuth() as any;
   const { products, zones, categories, loading: loadingOptions } = useCheckStockOptions();
 
   const [schedule, setSchedule] = useState<CheckStockSchedule | null>(null);
@@ -78,7 +78,10 @@ function EmployeeCheckStockExecuteContent() {
 
   // สแกน QR ที่มี token ประจำตารางนี้มาถูกต้อง -> ถือว่าเป็นพนักงานที่ได้รับมอบหมายเลย ไม่ต้องล็อกอินในมือถือก่อน
   const isValidQrToken = !!schedule && !!urlToken && schedule.access_token === urlToken;
-  const isOwnSchedule = !schedule || isValidQrToken || schedule.user_id === Number(user?.id);
+  // เจ้าของร้าน/แอดมินเข้าดูได้ทุกตาราง ไม่ว่าจะมอบหมายให้ใครก็ตาม (ไม่ต้องพึ่ง token ก็เข้าได้)
+  const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
+  const isOwnerOrAdmin = currentRole === "OWNER" || currentRole === "ADMIN";
+  const isOwnSchedule = !schedule || isValidQrToken || isOwnerOrAdmin || schedule.user_id === Number(user?.id);
   // ใช้ user_id ของตารางเป็นคนส่งเมื่อเข้าผ่าน QR token, ไม่งั้นใช้คนที่ล็อกอินอยู่ตามปกติ
   const submitterUserId = isValidQrToken ? schedule?.user_id : Number(user?.id);
 
@@ -275,7 +278,8 @@ function EmployeeCheckStockExecuteContent() {
         {getStatusBadge(schedule.status)}
       </div>
 
-      {qrPayload && (
+      {/* ซ่อน QR เมื่อ: เข้ามาจากการสแกนอยู่แล้ว (ไม่ต้องโชว์ซ้ำในมือถือ), งานเสร็จสิ้นแล้ว, หรือหมดเวลาตรวจแล้ว (QR ใช้ต่อไม่ได้อีก) */}
+      {qrPayload && !isValidQrToken && schedule.status !== "เสร็จสิ้น" && !hasEnded && (
         <Card className="border-t-[5px] border-t-blue-600">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
