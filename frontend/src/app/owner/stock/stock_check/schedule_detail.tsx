@@ -104,7 +104,11 @@ function ScheduleDetailContent() {
   }, [products]);
 
   // QR Code พาไปหน้าติ๊กเช็คสต็อกของพนักงานโดยตรง (มือถือสแกนแล้วเปิดหน้านี้ทันที ถ้าล็อกอินอยู่แล้วในเบราว์เซอร์มือถือ)
-  const qrPayload = id ? `${window.location.origin}/employee/wms/check-stock/${id}` : "";
+  // แนบ access_token ไปด้วย ให้พนักงานสแกนแล้วเข้าหน้าเช็คสต็อกได้เลยโดยไม่ต้องล็อกอินในมือถือก่อน
+  const qrPayload =
+    id && schedule?.access_token
+      ? `${window.location.origin}/employee/wms/check-stock/${id}?token=${schedule.access_token}`
+      : "";
 
   const handleDownloadQR = () => {
     const canvas = document.getElementById("schedule-qr-canvas") as HTMLCanvasElement;

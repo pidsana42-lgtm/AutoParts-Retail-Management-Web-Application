@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronLeft, Loader2, MapPin, Send } from "lucide-react";
 
 import Heading from "../../../../components/elements/heading";
@@ -34,6 +34,8 @@ function getStatusBadge(status: string) {
 
 function EmployeeCheckStockExecuteContent() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const urlToken = searchParams.get("token");
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -73,7 +75,11 @@ function EmployeeCheckStockExecuteContent() {
     };
   }, [id]);
 
-  const isOwnSchedule = !schedule || schedule.user_id === Number(user?.id);
+  // สแกน QR ที่มี token ประจำตารางนี้มาถูกต้อง -> ถือว่าเป็นพนักงานที่ได้รับมอบหมายเลย ไม่ต้องล็อกอินในมือถือก่อน
+  const isValidQrToken = !!schedule && !!urlToken && schedule.access_token === urlToken;
+  const isOwnSchedule = !schedule || isValidQrToken || schedule.user_id === Number(user?.id);
+  // ใช้ user_id ของตารางเป็นคนส่งเมื่อเข้าผ่าน QR token, ไม่งั้นใช้คนที่ล็อกอินอยู่ตามปกติ
+  const submitterUserId = isValidQrToken ? schedule?.user_id : Number(user?.id);
 
   // "รอดำเนินการ" หมายถึงยังไม่ถึงเวลาเริ่ม (backend คำนวณสถานะนี้แบบไดนามิกจากเวลาเริ่มอยู่แล้ว)
   // ส่วนเวลาสิ้นสุดต้องเช็คเองที่นี่ เพราะ backend ไม่มีการเปลี่ยนสถานะอัตโนมัติตอนหมดเขต
@@ -113,7 +119,7 @@ function EmployeeCheckStockExecuteContent() {
   const allCounted = scheduleProducts.length > 0 && countedItems === scheduleProducts.length;
 
   const handleSubmit = async () => {
-    if (!id || !schedule || !user) return;
+    if (!id || !schedule || !submitterUserId) return;
     if (!allCounted) {
       toast({ variant: "error", message: "กรุณากรอกจำนวนที่นับได้ให้ครบทุกรายการก่อนส่งตรวจสอบ" });
       return;
@@ -126,7 +132,6 @@ function EmployeeCheckStockExecuteContent() {
     try {
       setSubmitting(true);
       const now = new Date().toISOString();
-      const userId = Number(user.id);
 
       await Promise.all(
         scheduleProducts.map((p) =>
@@ -136,7 +141,7 @@ function EmployeeCheckStockExecuteContent() {
             reason: notes[p.ID] || "",
             adjustment_datetime: now,
             product_id: p.ID,
-            user_id: userId,
+            user_id: submitterUserId,
             check_stock_schedule_id: Number(id),
           })
         )

@@ -36,6 +36,7 @@ type CheckStockScheduleResponseDTO struct {
 
 	UserID       *uint  `json:"user_id"`
 	UserFullName string `json:"user_full_name"`
+	AccessToken  string `json:"access_token"`
 
 	// Derived Fields for UI
 	TargetName   string `json:"target_name"`   // e.g., "Zone A (RACK 04 - LEVEL 2)" or "Category: Engine Oil"
