@@ -12,8 +12,10 @@ import (
 
 type PaymentController interface {
 	GenerateQR(c *gin.Context)
+	GenerateSettleQR(c *gin.Context)
 	ConfirmPayment(c *gin.Context)
 	GetUnpaidBillsByCustomer(c *gin.Context)
+	GetUnpaidBillByOrderNumber(c *gin.Context)
 	SettleCustomerBills(c *gin.Context)
 	GetPaymentHistory(c *gin.Context)
 	GetPaymentHistoryByID(c *gin.Context)
@@ -37,6 +39,22 @@ func (ctrl *paymentController) GenerateQR(c *gin.Context) {
 	}
 
 	res, err := ctrl.paymentService.GeneratePromptPayQR(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+func (ctrl *paymentController) GenerateSettleQR(c *gin.Context) {
+	var req posDto.GenerateSettleQRRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูล Request ไม่ถูกต้อง"})
+		return
+	}
+
+	res, err := ctrl.paymentService.GenerateSettleQR(req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -77,6 +95,22 @@ func (ctrl *paymentController) GetUnpaidBillsByCustomer(c *gin.Context) {
 	// ถ้าเกิดข้อผิดพลาด ส่ง response เป็น JSON พร้อมกับ HTTP Status Code 500 (Internal Server Error) และข้อความ error
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+    c.JSON(http.StatusOK, res)
+}
+
+// ดูรายการบิลค้างชำระเจาะจงเฉพาะบิลเดียว GET /api/pos/payments/unpaid-order/:order_number
+func (ctrl *paymentController) GetUnpaidBillByOrderNumber(c *gin.Context) {
+    orderNumber := c.Param("order_number")
+    if orderNumber == "" {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเลขที่บิล"})
+        return
+    }
+
+    res, err := ctrl.paymentService.GetUnpaidBillByOrderNumber(orderNumber)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         return
     }
     c.JSON(http.StatusOK, res)

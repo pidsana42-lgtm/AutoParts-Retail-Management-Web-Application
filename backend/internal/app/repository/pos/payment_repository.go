@@ -23,6 +23,7 @@ type PaymentRepository interface {
 	GetStoreConfig() (*entity.StoreConfig, error)
 
 	GetUnpaidOrdersByCustomerID(customerID uint) ([]entity.SaleOrder, error)
+	GetUnpaidOrderByOrderNumber(orderNumber string) (*entity.SaleOrder, error)
     CreateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error
     GetRepaymentByID(repaymentID uint) (*entity.PaymentRepayment, error)
     UpdateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error
@@ -139,10 +140,23 @@ func (r *paymentRepository) GetStoreConfig() (*entity.StoreConfig, error) {
 func (r *paymentRepository) GetUnpaidOrdersByCustomerID(customerID uint) ([]entity.SaleOrder, error) {
     var orders []entity.SaleOrder
     err := r.db.Preload("Customer").
-        Where("customer_id = ? AND payment_status IN ('unpaid', 'partial') AND status != 'cancelled'", customerID).
+        Preload("Customer.CustomerType"). 
+        Where("customer_id = ? AND payment_status IN ('unpaid', 'partial') AND status NOT IN ('cancelled', 'pending_cancel')", customerID).
         Order("created_at asc").
         Find(&orders).Error
     return orders, err
+}
+
+func (r *paymentRepository) GetUnpaidOrderByOrderNumber(orderNumber string) (*entity.SaleOrder, error) {
+    var order entity.SaleOrder
+    err := r.db.Preload("Customer").
+        Preload("Customer.CustomerType").
+        Where("order_number = ? AND payment_status IN ('unpaid', 'partial') AND status NOT IN ('cancelled', 'pending_cancel')", orderNumber).
+        First(&order).Error
+    if err != nil {
+        return nil, err
+    }
+    return &order, nil
 }
 
 func (r *paymentRepository) CreateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error {

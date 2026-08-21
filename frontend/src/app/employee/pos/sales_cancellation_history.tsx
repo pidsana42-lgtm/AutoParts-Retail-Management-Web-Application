@@ -25,7 +25,7 @@ import {
   TableCell,
 } from "../../../components/elements/table";
 import { cn } from "../../../utils/component";
-import { getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge } from "../../../utils/poshelpers";
+import { formatDate, getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge } from "../../../utils/poshelpers";
 import { useSalesCancellationHistory } from "./hooks/useSalesCancellationHistory";
 import { useSalesHistory } from "./hooks/useSalesHistory";
 import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
@@ -257,7 +257,13 @@ const SalesCancellationHistory: React.FC = () => {
                         {/* วันที่ทำรายการยกเลิก */}
                         <TableCell className="py-3.5 px-3">
                           <Text variant="xs" className="font-light text-[#5B5B5B] mb-0">
-                            {item.order_date ? new Date(item.order_date).toLocaleString("th-TH") : "-"}
+                            {formatDate(
+                              item.cancel_processed_at ||
+                              item.cancel_requested_at ||
+                              item.order_date ||
+                              item.created_at ||
+                              ""
+                            )}
                           </Text>
                         </TableCell>
 
