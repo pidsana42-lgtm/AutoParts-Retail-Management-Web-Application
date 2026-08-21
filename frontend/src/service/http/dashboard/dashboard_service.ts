@@ -1,6 +1,6 @@
 import apiClient from '../apiClient';
 import type { DashboardSummaryResponse, StockAlertItem, SummaryQuery, RecentSaleItem, AgingStockItem, StockHealthStats,
-  RevenueBreakdownResponse, TopSellerItem } from '../../../interface/dashboard/dashboard_interface';
+  RevenueBreakdownResponse, TopSellerItem, DebtAgingQuery, DebtAgingResponse } from '../../../interface/dashboard/dashboard_interface';
 
 export const dashboardService = {
   getSummaryData: (query: SummaryQuery) =>
@@ -26,5 +26,20 @@ export const dashboardService = {
   getTopSellers: (query: SummaryQuery, limit = 10) =>
     apiClient.get<{ data: TopSellerItem[] }>('/dashboard/top-sellers', {
       params: { ...query, limit },
+    }),
+
+  getDebtAging: (query: DebtAgingQuery) =>
+    apiClient.get<DebtAgingResponse>('/dashboard/debt-aging', { params: query }),
+
+  exportDebtAgingPdf: (query: DebtAgingQuery) =>
+    apiClient.get('/dashboard/debt-aging/export/pdf', {
+      params: query,
+      responseType: 'blob',
+    }),
+
+  exportDebtAgingExcel: (query: DebtAgingQuery) =>
+    apiClient.get('/dashboard/debt-aging/export/excel', {
+      params: query,
+      responseType: 'blob',
     }),
 };

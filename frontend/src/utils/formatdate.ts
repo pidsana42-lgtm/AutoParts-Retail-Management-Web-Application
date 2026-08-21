@@ -1,10 +1,6 @@
 export const formatDate = (dateValue: string | Date | undefined | null) => {
   if (!dateValue) return "-";
-  
-  // แปลงให้เป็น Date object (ถ้ารับมาเป็น string มันก็จะแปลง, ถ้ารับมาเป็น Date อยู่แล้วก็ไม่มีปัญหา)
   const date = new Date(dateValue);
-  
-  // เช็คว่าเป็น Date ที่ถูกต้องไหม (Invalid Date)
   if (isNaN(date.getTime())) return "-";
 
   return date.toLocaleDateString("th-TH", {
@@ -12,6 +8,18 @@ export const formatDate = (dateValue: string | Date | undefined | null) => {
     month: "short",
     day: "numeric",
   });
+};
+
+export const formatDateThai = (dateValue: string | Date | undefined | null) => {
+  if (!dateValue) return "-";
+  const date = new Date(dateValue);
+  if (isNaN(date.getTime())) return "-";
+
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = date.getFullYear() + 543;
+
+  return `${dd}/${mm}/${yyyy}`;
 };
 
 export const getTodayDateString = () => {

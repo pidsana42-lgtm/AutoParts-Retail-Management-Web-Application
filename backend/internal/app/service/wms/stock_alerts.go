@@ -80,6 +80,19 @@ func toStockAlertResponse(sa *entity.StockAlert) *wmsDto.StockAlertResponseDTO {
 	if sa.Product != nil {
 		res.ProductName = sa.Product.Product_Name
 		res.ProductCode = sa.Product.Product_Code
+		res.CostPrice = sa.Product.Cost_price
+		if sa.Product.Unit != nil {
+			res.UnitName = sa.Product.Unit.Unit_Name
+		}
+		// ดึง supplier จาก inventory ล่าสุด (preloaded ordered by id desc → [0] = newest)
+		if len(sa.Product.Inventories) > 0 {
+			inv := sa.Product.Inventories[0]
+			if inv.Supplier != nil {
+				id := inv.Supplier.ID
+				res.SupplierID = &id
+				res.SupplierName = inv.Supplier.SupplierName
+			}
+		}
 	}
 	return res
 }

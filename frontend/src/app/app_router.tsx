@@ -4,6 +4,7 @@ import MainLayout from '../components/layer/main_layout';
 import Login from './login/Login';
 import MainDashboard from './owner/dashboard/dashboard'; 
 import SaleDashboard from './owner/dashboard/saledashboard';
+import DebtDashboard from './owner/dashboard/debtdashboard';
 import Pos from './employee/pos/pos'; 
 import SalesHistory from './employee/pos/sales_history';
 import { getMenuByRole } from '../config/menu'; 
@@ -82,6 +83,9 @@ export default function AppRouter(): React.JSX.Element {
         } />
         <Route path="/owner/dashboard/salesdashboard" element={
           isAdminOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/dashboard/debtdashboard" element={
+          isAdminOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/owner/storeconfig" element={<StoreConfig />} />
@@ -183,6 +187,9 @@ export default function AppRouter(): React.JSX.Element {
         } />
         <Route path="/employee/dashboard/salesdashboard" element={
           !isAdminOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/employee/dashboard/debtdashboard" element={
+          !isAdminOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/employee/orders" element={<PurchaseOrders />} />

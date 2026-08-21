@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Banknote, Users, Loader2, Eye, Trophy } from 'lucide-react';
+import { TrendingUp, TrendingDown, Banknote, Users, Loader2, Eye, Trophy, FileText } from 'lucide-react';
 // Components
 import Button from '../../../components/elements/button';
 import { Card, CardHeader } from '../../../components/elements/card';
@@ -16,6 +16,7 @@ import { dashboardService } from '../../../service/http/dashboard/dashboard_serv
 import type { DashboardSummaryItem, SummaryQuery, StockHealthStats, TopSellerItem } from '../../../interface/dashboard/dashboard_interface';
 // Utils
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
+import { exportTopSellerPdf } from '../../../utils/print';
 
 const Filter = [
   { label: 'วันนี้',     value: 'daily' },
@@ -60,6 +61,7 @@ const SaleDashboard: React.FC = () => {
 
   const [topSellerProduct, setTopSellerProduct] = useState<TopSellerItem[]>([]);
   const [topSellerProductLoading, setTopSellerProductLoading] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const query = useMemo<SummaryQuery>(() => {
     if (selectedDate) return { summary_date: selectedDate };
@@ -191,6 +193,15 @@ const SaleDashboard: React.FC = () => {
     const newDate = e.target.value;
     setSelectedDate(newDate);
     setSelectedFilter(newDate ? '' : 'daily');
+  };
+
+  const handleExportPdf = () => {
+    const periodLabel = selectedDate
+      ? selectedDate
+      : Filter.find((f) => f.value === selectedFilter)?.label ?? 'ทั้งหมด';
+    setExportingPdf(true);
+    exportTopSellerPdf(topSellerProduct, periodLabel);
+    setExportingPdf(false);
   };
 
   const kpiValue = (value: string) => isLoading ? <span className='text-gray-400 animate-pulse'>...</span> : value;
@@ -353,13 +364,15 @@ const SaleDashboard: React.FC = () => {
         <Card className='col-span-1 overflow-hidden' noPadding>
             <CardHeader className='flex items-center bg-[#F6F3F2]/50'>
               <Heading level='h4'>สินค้าขายดี 10 อันดับของร้าน</Heading>
-              <Button variant='outline' size='sm' onClick={() => navigate(`${basePath}/pos/sales_history`)}
-                className='border-none hover:bg-transparent hover:text-red-700 hover:underline p-0 h-auto font-light'>ส่งออกรายการทั้งหมด</Button>
+              <Button variant='outline' size='sm' onClick={handleExportPdf} disabled={exportingPdf || topSellerProduct.length === 0}
+                className='border-none hover:bg-transparent hover:text-red-700 hover:underline p-0 h-auto font-light'>
+                ส่งออกรายการทั้งหมด
+              </Button>
             </CardHeader>
             <Table>
               <TableHeader className='bg-[#F6F3F2] text-[#797878]'>
                 <TableRow>
-                  <TableHead className='pl-6'>อันดับ</TableHead>
+                  <TableHead className='pl-6 text-center'>อันดับ</TableHead>
                   <TableHead className='text-left'>ชื่อสินค้า</TableHead>
                   <TableHead className='text-center'>หมวดหมู่</TableHead>
                   <TableHead className='text-right'>ขายแล้ว</TableHead>
@@ -375,22 +388,19 @@ const SaleDashboard: React.FC = () => {
                 ) : topSellerProduct.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className='text-center py-12 text-gray-400'>
-                      <div className='flex flex-col items-center gap-4'>
-                        <Trophy size={40} strokeWidth={0.7} />
-                        <div>ยังไม่มีข้อมูลสินค้าขายดี 10 อับดับ</div>
-                      </div>
+                      <Trophy size={40} strokeWidth={0.7} className='mx-auto' /> <br />ยังไม่มีข้อมูลสินค้าขายดี 10 อับดับ
                     </TableCell>
                   </TableRow>
                 ) : (
                   topSellerProduct.map((item, index) => (
                     <TableRow key={item.id}>
-                      <TableCell className='text-left'>{`#${index + 1}`}</TableCell>
+                      <TableCell className='text-center'>{`#${index + 1}`}</TableCell>
                       <TableCell className='text-left'>{item.product_name}</TableCell>
                       <TableCell className='text-center'>{item.category}</TableCell>
                       <TableCell className='text-right'>{item.total_sold}</TableCell>
                       <TableCell className='text-right'>฿{item.total_revenue.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell className='text-center'>
-                        <button onClick={() => navigate(`${basePath}`)} className="text-gray-600 hover:text-gray-700 transition cursor-pointer">
+                        <button onClick={() => navigate(`${basePath}/stock/${item.id}`)} className="text-gray-600 hover:text-gray-700 transition cursor-pointer">
                           <Eye size={20} strokeWidth={1.5} />
                         </button>
                       </TableCell>

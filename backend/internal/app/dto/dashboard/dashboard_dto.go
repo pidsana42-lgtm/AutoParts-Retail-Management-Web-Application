@@ -2,6 +2,35 @@ package dashboard
 
 import "time"
 
+// Debt Aging
+
+type DebtAgingQuery struct {
+	StartDate   string `form:"start_date"`
+	EndDate     string `form:"end_date"`
+	Status      string `form:"status"`        // "เกินกำหนด" | "ทยอยชำระ" | "" (all)
+	MinAgeDays  int    `form:"min_age_days"`  // 0 = no lower bound
+	MaxAgeDays  int    `form:"max_age_days"`  // 0 = no upper bound
+	Page        int    `form:"page"`
+	PageSize    int    `form:"page_size"`
+}
+
+type DebtAgingItemDTO struct {
+	CustomerCode     string  `json:"customer_code"`
+	CustomerName     string  `json:"customer_name"`
+	TotalDebt        float64 `json:"total_debt"`        // SUM(total_amount)
+	RemainingBalance float64 `json:"remaining_balance"` // SUM(balance_due)
+	LastPurchaseDate string  `json:"last_purchase_date"`
+	AgeDays          int     `json:"age_days"`
+	Status           string  `json:"status"` // "ทยอยชำระ" | "เกินกำหนด" | "ชำระหมดแล้ว"
+}
+
+type DebtAgingResponse struct {
+	Data         []DebtAgingItemDTO `json:"data"`
+	Total        int64              `json:"total"`
+	TotalDebtors int64              `json:"total_debtors"`
+	YearlyTarget float64            `json:"yearly_target"`
+}
+
 type DisplayDashboardDTO struct {
 	SummaryDate				time.Time	`json:"summary_date"`
 	TotalOrders				int			`json:"total_orders"`

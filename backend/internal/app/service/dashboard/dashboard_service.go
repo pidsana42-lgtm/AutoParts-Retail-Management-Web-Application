@@ -19,6 +19,7 @@ type DashboardService interface {
 	GetStockHealth(ctx context.Context) (*dashDto.StockHealthDTO, error)
 	GetIncomeSummary(ctx context.Context, query dashDto.SummaryQuery) (*dashDto.RevenueBreakdownResponse, error)
 	GetTopSellers(ctx context.Context, query dashDto.SummaryQuery, limit int) ([]dashDto.TopSellerDTO, error)
+	GetDebtAging(ctx context.Context, query dashDto.DebtAgingQuery) (*dashDto.DebtAgingResponse, error)
 }
 
 type dashboardService struct {
@@ -313,6 +314,23 @@ func (s *dashboardService) GetTopSellers(ctx context.Context, query dashDto.Summ
 	}
 
 	return s.dashboardRepository.GetTopSellers(ctx, start, end, limit)
+}
+
+func (s *dashboardService) GetDebtAging(ctx context.Context, query dashDto.DebtAgingQuery) (*dashDto.DebtAgingResponse, error) {
+	data, total, err := s.dashboardRepository.GetDebtAging(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	totalDebtors, err := s.dashboardRepository.GetTotalDebtors(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &dashDto.DebtAgingResponse{
+		Data:         data,
+		Total:        total,
+		TotalDebtors: totalDebtors,
+		YearlyTarget: 0,
+	}, nil
 }
 
 // resolveDateRange คำนวณช่วงวันที่จาก weekly/monthly/quarterly/yearly filter
