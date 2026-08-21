@@ -214,6 +214,10 @@ function ScheduleDetailContent() {
     ? new Date(schedule.created_at).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" })
     : "-";
 
+  // งานเสร็จสิ้นแล้ว หรือหมดเวลาตรวจแล้ว -> QR ใช้สแกนต่อไม่ได้อีก จึงไม่ต้องโชว์ให้สับสน
+  const hasEnded = !!endObj && new Date() > endObj;
+  const qrExpired = schedule.status === "เสร็จสิ้น" || hasEnded;
+
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
       {/* Header */}
@@ -378,37 +382,39 @@ function ScheduleDetailContent() {
 
         {/* Right: ข้อมูลตารางเช็ค */}
         <div className="flex w-full flex-col gap-6 lg:w-1/3">
-          <Card className="border-t-[5px] border-t-blue-600">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <QrCode className="h-4 w-4 text-blue-500" />
-                QR Code สำหรับเช็คสต็อก
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center gap-3">
-              <div className="rounded-md border border-slate-200 bg-white p-3">
-                <QRCodeSVG value={qrPayload} size={140} level="M" />
-              </div>
-              {/* ตัวจริงไว้ export/print (ซ่อนไว้ ไม่ต้องโชว์ซ้ำ) */}
-              <div className="hidden">
-                <QRCodeCanvas id="schedule-qr-canvas" value={qrPayload} size={320} level="H" includeMargin />
-              </div>
-              <p className="text-center text-xs text-slate-400">
-                ให้พนักงานที่รับมอบหมายสแกนด้วยมือถือ จะเข้าหน้าติ๊กเช็คสต็อกของตารางนี้ทันที
-                {schedule.user_full_name ? ` (${schedule.user_full_name})` : ""}
-              </p>
-              <div className="flex w-full gap-2">
-                <Button onClick={handleDownloadQR} variant="outline" className="flex flex-1 items-center justify-center gap-1.5">
-                  <Download className="h-3.5 w-3.5" />
-                  ดาวน์โหลด
-                </Button>
-                <Button onClick={handlePrintQR} variant="outline" className="flex flex-1 items-center justify-center gap-1.5">
-                  <Printer className="h-3.5 w-3.5" />
-                  พิมพ์
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          {qrPayload && !qrExpired && (
+            <Card className="border-t-[5px] border-t-blue-600">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <QrCode className="h-4 w-4 text-blue-500" />
+                  QR Code สำหรับเช็คสต็อก
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col items-center gap-3">
+                <div className="rounded-md border border-slate-200 bg-white p-3">
+                  <QRCodeSVG value={qrPayload} size={140} level="M" />
+                </div>
+                {/* ตัวจริงไว้ export/print (ซ่อนไว้ ไม่ต้องโชว์ซ้ำ) */}
+                <div className="hidden">
+                  <QRCodeCanvas id="schedule-qr-canvas" value={qrPayload} size={320} level="H" includeMargin />
+                </div>
+                <p className="text-center text-xs text-slate-400">
+                  ให้พนักงานที่รับมอบหมายสแกนด้วยมือถือ จะเข้าหน้าติ๊กเช็คสต็อกของตารางนี้ทันที
+                  {schedule.user_full_name ? ` (${schedule.user_full_name})` : ""}
+                </p>
+                <div className="flex w-full gap-2">
+                  <Button onClick={handleDownloadQR} variant="outline" className="flex flex-1 items-center justify-center gap-1.5">
+                    <Download className="h-3.5 w-3.5" />
+                    ดาวน์โหลด
+                  </Button>
+                  <Button onClick={handlePrintQR} variant="outline" className="flex flex-1 items-center justify-center gap-1.5">
+                    <Printer className="h-3.5 w-3.5" />
+                    พิมพ์
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-t-[5px] border-t-red-800">
             <CardHeader>
