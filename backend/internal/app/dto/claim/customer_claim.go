@@ -11,6 +11,7 @@ import (
 type CreateCustomerClaimDTO struct {
 	OriginalOrderID uint                         `json:"original_order_id" binding:"required"` // อ้างอิงออเดอร์เดิมที่ซื้อไป
 	ReturnID        *uint                        `json:"return_id"`                            // อ้างอิงบิลรับคืน (ถ้ามี/บังคับแล้วแต่ Business Logic)
+	Status          string                       `json:"status"`
 	Notes           string                       `json:"notes"`
 	ClaimDate       *time.Time                   `json:"claim_date"`
 	CustomerName    string                       `json:"customer_name"`
@@ -77,7 +78,7 @@ func (d *CreateCustomerClaimDTO) ToEntity() entity.CustomerClaim {
 		OriginalOrderID: d.OriginalOrderID,
 		ReturnID:        d.ReturnID,
 		Note:            d.Notes,
-		Status:          "Pending",
+		Status:          func() string { if d.Status != "" { return d.Status }; return "Pending" }(),
 		ClaimDate:       claimDate,
 		CustomerName:    d.CustomerName,
 		CustomerPhone:   d.CustomerPhone,
@@ -101,12 +102,24 @@ func (d *UpdateCustomerClaimDTO) ToEntity(existing entity.CustomerClaim) entity.
 	if d.ClaimDate != nil {
 		existing.ClaimDate = *d.ClaimDate
 	}
-	existing.CustomerName = d.CustomerName
-	existing.CustomerPhone = d.CustomerPhone
-	existing.ClaimType = d.ClaimType
-	existing.ClaimAmount = d.ClaimAmount
-	existing.RefundAmount = d.RefundAmount
-	existing.ReplacementCost = d.ReplacementCost
+	if d.CustomerName != "" {
+		existing.CustomerName = d.CustomerName
+	}
+	if d.CustomerPhone != "" {
+		existing.CustomerPhone = d.CustomerPhone
+	}
+	if d.ClaimType != "" {
+		existing.ClaimType = d.ClaimType
+	}
+	if d.ClaimAmount != 0 {
+		existing.ClaimAmount = d.ClaimAmount
+	}
+	if d.RefundAmount != 0 {
+		existing.RefundAmount = d.RefundAmount
+	}
+	if d.ReplacementCost != 0 {
+		existing.ReplacementCost = d.ReplacementCost
+	}
 	// อัพเดต operation fields
 	if d.SupplierResponseStatus != "" {
 		existing.SupplierResponseStatus = d.SupplierResponseStatus

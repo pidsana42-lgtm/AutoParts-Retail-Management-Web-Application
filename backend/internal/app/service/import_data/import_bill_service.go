@@ -23,7 +23,7 @@ type ImportBillService interface {
 	CreateBillImage(input importDataDTO.CreateBillImageDTO) (importDataDTO.BillImageResponseDTO, error)
 	CreateBillImportJob(input importDataDTO.CreateBillImportJobDTO) (importDataDTO.BillImportJobResponseDTO, error)
 	GetBillImportJob(id uint) (importDataDTO.BillImportJobResponseDTO, error)
-	ConfirmBillImport(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.ConfirmBillImportResponseDTO, error)
+	ConfirmBillImport(id uint, input importDataDTO.ConfirmBillImportDTO, role string) (importDataDTO.ConfirmBillImportResponseDTO, error)
 	CreateBillItem(input importDataDTO.CreateBillItemDTO) (importDataDTO.BillItemResponseDTO, error)
 	UpdateBill(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.BillResponseDTO, error)
 	DeleteBill(id uint) error
@@ -105,7 +105,7 @@ func (s *importBillService) CreateBillItem(input importDataDTO.CreateBillItemDTO
 	return importDataDTO.ToBillItemResponseDTO(&item), nil
 }
 
-func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.ConfirmBillImportResponseDTO, error) {
+func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.ConfirmBillImportDTO, role string) (importDataDTO.ConfirmBillImportResponseDTO, error) {
 	var job *entity.BillImportJob
 	var err error
 	if id > 0 {
@@ -158,7 +158,7 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 		job.DraftJSON = input.DraftJSON
 	}
 
-	err = s.repo.ConfirmBillImportTransaction(&bill, billItems, job)
+	err = s.repo.ConfirmBillImportTransaction(&bill, billItems, job, role)
 	if err != nil {
 		return importDataDTO.ConfirmBillImportResponseDTO{}, err
 	}

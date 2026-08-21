@@ -1,11 +1,13 @@
 package pre_order
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
 	preOrderDTO "backend/internal/app/dto/pre_oder"
 	preOrderSvc "backend/internal/app/service/pre_oder"
+	"backend/internal/pkg/websocket"
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,6 +31,13 @@ func (ctrl *PreOrderController) CreatePreOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create pre-order: " + err.Error()})
 		return
 	}
+
+	// Broadcast Notification
+	msg := fmt.Sprintf("มีรายการสั่งจองใหม่จากลูกค้า %s จำนวน %d รายการ", res.CustomerName, len(res.PreOrderItems))
+	if res.CustomerName == "" {
+		msg = fmt.Sprintf("มีรายการสั่งจองใหม่ จำนวน %d รายการ", len(res.PreOrderItems))
+	}
+	websocket.BroadcastNotification("ใบสั่งจองใหม่", msg, "info")
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Created successfully",

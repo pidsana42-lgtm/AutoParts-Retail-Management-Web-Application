@@ -58,14 +58,18 @@ func SetupDatabase() {
 		&entity.BillImage{},
 		&entity.BillItem{},
 		&entity.BillImportJob{},
+		&entity.ProductMappingCorrection{},
 		&entity.PreOrder{},
 		&entity.PreOrderItem{},
+		&entity.Catalog{},
+		&entity.CatalogItem{},
 		&entity.SalesReturn{},
 		&entity.SalesReturnItem{},
 		&entity.CustomerClaim{},
 		&entity.CustomerClaimItem{},
 		&entity.SupplierClaim{},
 		&entity.SupplierClaimItem{},
+		&entity.ClaimStock{},
 
 		// pos
 		&entity.Role{},

@@ -52,6 +52,8 @@ interface ScanViewProps {
   handleMergeBatchResultsToSingleBill?: () => void;
   saving: boolean;
   priceMismatchedItems?: PriceMismatchItem[];
+  pendingNewProducts?: any[];
+  setPendingNewProducts?: (v: any[]) => void;
   handleConfirmUpdatePrices?: () => void;
   handleSkipPriceUpdate?: () => void;
   validationWarnings?: string[];
@@ -99,6 +101,8 @@ export default function ScanView({
   handleMergeBatchResultsToSingleBill,
   saving,
   priceMismatchedItems = [],
+  pendingNewProducts = [],
+  setPendingNewProducts: _setPendingNewProducts,
   handleConfirmUpdatePrices,
   handleSkipPriceUpdate,
   validationWarnings = [],
@@ -121,7 +125,7 @@ export default function ScanView({
     ? Math.round((calcSubtotal - (Number(formData.discount_total) || 0) + (Number(formData.vat_amount) || 0)) * 100) / 100
     : 0;
 
-  const showBanner = (validationWarnings.length > 0 || priceMismatchedItems.length > 0) && !!handleConfirmValidationSave && !!handleDismissValidation;
+  const showBanner = (validationWarnings.length > 0 || priceMismatchedItems.length > 0 || pendingNewProducts.length > 0) && !!handleConfirmValidationSave && !!handleDismissValidation;
 
   const [showQR, setShowQR] = useState(false);
   const mobileUrl = mobileSessionId
@@ -813,10 +817,18 @@ export default function ScanView({
                       <button
                         type="button"
                         onClick={() => {
-                          if (batchResults.length > 0) {
-                            handleSaveAllBatchBills(isDraftMode);
+                          if (showBanner) {
+                            if (batchResults.length > 0) {
+                              handleSaveAllBatchBills(false, true, true);
+                            } else {
+                              handleSaveBill(false, true, true);
+                            }
                           } else {
-                            handleSaveBill(isDraftMode);
+                            if (batchResults.length > 0) {
+                              handleSaveAllBatchBills(isDraftMode);
+                            } else {
+                              handleSaveBill(isDraftMode);
+                            }
                           }
                         }}
                         disabled={saving || formData.items.length === 0}
@@ -831,11 +843,13 @@ export default function ScanView({
                           <>
                             <Save size={16} />
                             <span>
-                              {isDraftMode
-                                ? 'บันทึกเป็นแบบร่าง'
-                                : batchResults.length > 0
-                                  ? `บันทึกข้อมูลทั้งหมด (${batchResults.length} บิล)`
-                                  : 'บันทึกบิลต่อไป'}
+                              {showBanner
+                                ? 'ยืนยันบันทึกข้อมูลต่อไป'
+                                : isDraftMode
+                                  ? 'บันทึกเป็นแบบร่าง'
+                                  : batchResults.length > 0
+                                    ? `บันทึกข้อมูลทั้งหมด (${batchResults.length} บิล)`
+                                    : 'บันทึกข้อมูล'}
                             </span>
                           </>
                         )}
