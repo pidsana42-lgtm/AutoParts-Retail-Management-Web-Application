@@ -23,7 +23,7 @@ export default function Navbar(): React.JSX.Element {
   return (
     // ใส่ sticky top-0, z-40 และ shadow-sm เพื่อให้ Navbar ลอยอยู่เหนือกองสินค้าเวลาเลื่อนเมาส์
     <nav className="sticky top-0 z-40 flex items-center justify-between bg-white px-6 border-b-2 border-b-[#E51C23] h-16 select-none shrink-0 shadow-sm">
-      
+
       {/* ช่องค้นหา */}
       <div className="flex items-center bg-[#F6F3F2] px-3 py-2 w-[350px] lg:w-[550px] rounded-lg border border-transparent focus-within:border-gray-300 transition-all">
         <Search className="w-4 h-4 text-[#6B7280] mr-2 shrink-0" />
