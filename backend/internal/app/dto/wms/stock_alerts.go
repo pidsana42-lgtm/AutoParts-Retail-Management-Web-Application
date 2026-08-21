@@ -27,5 +27,9 @@ type StockAlertResponseDTO struct {
 	ProductID         *uint     `json:"product_id"`
 	ProductCode       string    `json:"product_code,omitempty"`
 	ProductName       string    `json:"product_name,omitempty"`
+	UnitName          string    `json:"unit_name,omitempty"`
+	CostPrice         float64   `json:"cost_price,omitempty"`
+	SupplierID        *uint     `json:"supplier_id,omitempty"`
+	SupplierName      string    `json:"supplier_name,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
 }

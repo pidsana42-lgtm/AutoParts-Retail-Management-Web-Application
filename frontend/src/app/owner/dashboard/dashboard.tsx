@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TriangleAlert, TrendingUp, TrendingDown, CheckCircle2, Loader2, FileInput, CreditCard, ClipboardList, PackageOpen, ReceiptText } from 'lucide-react';
+import { TriangleAlert, TrendingUp, TrendingDown, CheckCircle2, Loader2, FileInput, CreditCard, ClipboardList, PackageOpen, ReceiptText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 // Hooks
 import { useDashboardMetrics } from '../../owner/dashboard/hooks/useDashboardMetrics';
 // Components
@@ -14,7 +14,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { dashboardService } from '../../../service/http/dashboard/dashboard_service';
 import type { DashboardSummaryItem, SummaryQuery, StockAlertItem, RecentSaleItem, AgingStockItem, StockHealthStats } from '../../../interface/dashboard/dashboard_interface';
 // Utils
+import { cn } from '../../../utils/component';
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
+// Modal
+import StockAlertPOModal from './components/StockAlertPOModal';
 
 const Filter = [
   { label: 'วันนี้',     value: 'daily' },
@@ -30,6 +33,8 @@ const PageFilter = [
   { label: 'สรุปยอดหนี้', value: 'debtdashboard' },
 ];
 
+const PAGE_SIZE = 10;
+
 const fmt = (n: number) =>
   n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -37,6 +42,19 @@ const todayLocalDate = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+
+function getPageNumbers(current: number, total: number): (number | '...')[] {
+  const delta = 1;
+  const range: (number | '...')[] = [];
+  const left = Math.max(2, current - delta);
+  const right = Math.min(total - 1, current + delta);
+  range.push(1);
+  if (left > 2) range.push('...');
+  for (let i = left; i <= right; i++) range.push(i);
+  if (right < total - 1) range.push('...');
+  if (total > 1) range.push(total);
+  return range;
+}
 
 // ───────── Page ──────────
 const MainDashboard: React.FC = () => {
@@ -58,6 +76,7 @@ const MainDashboard: React.FC = () => {
   // State ส่วน Stock Alert Card (แผงขวา)
   const [stockAlerts, setStockAlerts] = useState<StockAlertItem[]>([]);
   const [stockAlertLoading, setStockAlertLoading] = useState(false);
+  const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [revenueTrend, setRevenueTrend] = useState<number | null>(null);
   const [orderTrend, setOrderTrend] = useState<number | null>(null);
   // State รายการขายล่าสุด
@@ -68,7 +87,10 @@ const MainDashboard: React.FC = () => {
   // Stste รายการค้างสต๊อกเกิน 180 วัน
   const [agingStock, setAgingStock] = useState<AgingStockItem[]>([]);
   const [agingStockLoading, setAgingStockLoading] = useState(false);
-  
+
+  // Pagination
+  const [recentSalePage, setRecentSalePage] = useState(1);
+  const [agingStockPage, setAgingStockPage] = useState(1);
   const { aggr, marginPct, stockHealthLabel } = useDashboardMetrics(summaryData, stockHealth);
 
   const buildQuery = (): SummaryQuery => {
@@ -232,18 +254,21 @@ const MainDashboard: React.FC = () => {
   const handleFilterClick = (value: string) => {
     setSelectedFilter(value);
     setSelectedDate('');
+    setRecentSalePage(1);
   };
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDate = e.target.value;
     setSelectedDate(newDate);
     setSelectedFilter(newDate ? '' : 'daily');
+    setRecentSalePage(1);
   };
 
   const kpiValue = (value: string) =>
     isLoading ? <span className='text-gray-400 animate-pulse'>...</span> : value;
 
   return (
+    <>
     <div className='p-8 space-y-8 bg-white min-h-screen font-sans'>
       { /* Top Page Filter */ }
       <div>
@@ -474,14 +499,11 @@ const MainDashboard: React.FC = () => {
                 ) : recentSale.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className='text-center py-12 text-gray-400'>
-                      <div className='flex flex-col items-center gap-4'>
-                        <ReceiptText size={40} strokeWidth={0.7} />
-                        <div>ยังไม่มีรายการขายในวันนี้</div>
-                      </div>
+                      <ReceiptText size={40} strokeWidth={0.7} className='mx-auto'/> <br />ยังไม่มีรายการขายในวันนี้
                     </TableCell>
                   </TableRow>
                 ) : (
-                  recentSale.map((item) => (
+                  recentSale.slice((recentSalePage - 1) * PAGE_SIZE, recentSalePage * PAGE_SIZE).map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className='text-left'>{fmtTime(item.time)}</TableCell>
                       <TableCell className='text-left'>{item.order_number}</TableCell>
@@ -493,12 +515,30 @@ const MainDashboard: React.FC = () => {
                 )}
               </TableBody>
             </Table>
+            {(() => {
+              const totalPages = Math.ceil(recentSale.length / PAGE_SIZE);
+              return (
+                <div className='bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500'>
+                  <span>แสดง {Math.min((recentSalePage - 1) * PAGE_SIZE + 1, recentSale.length)} ถึง {Math.min(recentSalePage * PAGE_SIZE, recentSale.length)} จาก {recentSale.length} รายการ</span>
+                  <div className='flex items-center gap-1'>
+                    <button disabled={recentSalePage === 1} onClick={() => setRecentSalePage(1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsLeft size={16} /></button>
+                    <button disabled={recentSalePage === 1} onClick={() => setRecentSalePage((p) => p - 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronLeft size={16} /></button>
+                    {getPageNumbers(recentSalePage, totalPages).map((p, idx) =>
+                      p === '...' ? <span key={`e-${idx}`} className='px-2 text-gray-400'>...</span>
+                      : <button key={p} onClick={() => setRecentSalePage(p as number)} className={cn('px-3 py-1.5 rounded-none font-medium transition-colors cursor-pointer', recentSalePage === p ? 'bg-[#d61c24] text-white' : 'text-gray-600 hover:bg-gray-100')}>{p}</button>
+                    )}
+                    <button disabled={recentSalePage === totalPages} onClick={() => setRecentSalePage((p) => p + 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronRight size={16} /></button>
+                    <button disabled={recentSalePage === totalPages} onClick={() => setRecentSalePage(totalPages)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsRight size={16} /></button>
+                  </div>
+                </div>
+              );
+            })()}
           </Card>
 
           <Card className='col-span-2 overflow-hidden' noPadding>
             <CardHeader className='flex items-center bg-[#F6F3F2]/50'>
               <Heading level='h4'>สินค้าค้างสต๊อกเกิน 180 วัน</Heading>
-              <Button variant='outline' size='sm' onClick={() => navigate(`${basePath}/pos/sales_history`)}
+              <Button variant='outline' size='sm' onClick={() => navigate(`${basePath}/stock`)}
                 className='border-none hover:bg-transparent hover:text-red-700 hover:underline p-0 h-auto font-light'>จัดการสินค้า</Button>
             </CardHeader>
             <Table>
@@ -522,14 +562,11 @@ const MainDashboard: React.FC = () => {
                 ) : agingStock.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className='text-center py-12 text-gray-400'>
-                      <div className='flex flex-col items-center gap-4'>
-                        <PackageOpen size={40} strokeWidth={0.7} />
-                        <div>ไม่มีสินค้าค้างสต๊อกเกิน 180 วัน</div>
-                      </div>
+                      <PackageOpen size={40} strokeWidth={0.7} className='mx-auto'/> <br />ไม่มีสินค้าค้างสต๊อกเกิน 180 วัน
                     </TableCell>
                   </TableRow>
                 ) : (
-                  agingStock.map((item) => (
+                  agingStock.slice((agingStockPage - 1) * PAGE_SIZE, agingStockPage * PAGE_SIZE).map((item) => (
                     <TableRow key={item.product_code}>
                       <TableCell className='pl-6'>{item.rank}</TableCell>
                       <TableCell className='text-left'>{item.product_code}</TableCell>
@@ -546,6 +583,24 @@ const MainDashboard: React.FC = () => {
                 )}
               </TableBody>
             </Table>
+            {(() => {
+              const totalPages = Math.ceil(agingStock.length / PAGE_SIZE);
+              return (
+                <div className='bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500'>
+                  <span>แสดง {Math.min((agingStockPage - 1) * PAGE_SIZE + 1, agingStock.length)} ถึง {Math.min(agingStockPage * PAGE_SIZE, agingStock.length)} จาก {agingStock.length} รายการ</span>
+                  <div className='flex items-center gap-1'>
+                    <button disabled={agingStockPage === 1} onClick={() => setAgingStockPage(1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsLeft size={16} /></button>
+                    <button disabled={agingStockPage === 1} onClick={() => setAgingStockPage((p) => p - 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronLeft size={16} /></button>
+                    {getPageNumbers(agingStockPage, totalPages).map((p, idx) =>
+                      p === '...' ? <span key={`e-${idx}`} className='px-2 text-gray-400'>...</span>
+                      : <button key={p} onClick={() => setAgingStockPage(p as number)} className={cn('px-3 py-1.5 rounded-none font-medium transition-colors cursor-pointer', agingStockPage === p ? 'bg-[#d61c24] text-white' : 'text-gray-600 hover:bg-gray-100')}>{p}</button>
+                    )}
+                    <button disabled={agingStockPage === totalPages} onClick={() => setAgingStockPage((p) => p + 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronRight size={16} /></button>
+                    <button disabled={agingStockPage === totalPages} onClick={() => setAgingStockPage(totalPages)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsRight size={16} /></button>
+                  </div>
+                </div>
+              );
+            })()}
           </Card>
         </div>
 
@@ -590,17 +645,24 @@ const MainDashboard: React.FC = () => {
             )}
 
             {stockAlerts.length > 0 && (
-              <button
-                onClick={() => navigate(`${basePath}/po/new-orders`)}
+              <Button variant='primary' onClick={() => setAlertModalOpen(true)}
                 className='w-full bg-black text-white rounded-none py-3 text-sm font-medium mt-1'
               >
                 สร้างใบสั่งซื้อเลย
-              </button>
+              </Button>
             )}
           </CardContent>
         </Card>
       </div>
     </div>
+
+    <StockAlertPOModal
+      isOpen={alertModalOpen}
+      onClose={() => setAlertModalOpen(false)}
+      stockAlerts={stockAlerts}
+      basePath={basePath}
+    />
+    </>
   );
 };
 

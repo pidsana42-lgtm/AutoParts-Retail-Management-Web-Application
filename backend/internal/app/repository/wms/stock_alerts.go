@@ -36,7 +36,15 @@ func (r *stockAlertRepository) GetByID(id uint) (*entity.StockAlert, error) {
 
 func (r *stockAlertRepository) List(isResolved string) ([]entity.StockAlert, error) {
 	var list []entity.StockAlert
-	query := r.db.Preload("Product")
+	query := r.db.
+		Preload("Product").
+		Preload("Product.Unit").
+		Preload("Product.Inventories", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, product_id, supplier_id").Order("id desc")
+		}).
+		Preload("Product.Inventories.Supplier", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, supplier_name")
+		})
 	if isResolved != "" {
 		query = query.Where("is_resolved = ?", isResolved)
 	}

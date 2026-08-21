@@ -20,7 +20,7 @@ import type { POResponse, POSummaryResponse } from "../../../interface/purchase_
 import { poService } from "../../../service/http/purchase_orders/po_service";
 // Utils
 import { cn } from "../../../utils/component";
-import { formatDate, getThaiMonthOptions, getYearOptions } from "../../../utils/formatdate";
+import { formatDateThai, getThaiMonthOptions, getYearOptions } from "../../../utils/formatdate";
 import { generateLocalId } from "../../../utils/generateId";
 import { usePathBasePrefix  } from "../../../utils/usePathBasePrefix";
 
@@ -504,7 +504,7 @@ const PurchaseOrders: React.FC = () => {
                 return (
                   <TableRow key={po.id} className="hover:bg-gray-50/70">
                     <TableCell className="pl-6 text-gray-900">{po.po_number}</TableCell>
-                    <TableCell className="text-black">{formatDate(po.created_at)}</TableCell>
+                    <TableCell className="text-black">{formatDateThai(po.created_at)}</TableCell>
                     <TableCell><div className="text-black">{po.supplier_name || "ไม่ระบุ"}</div></TableCell>
                     <TableCell className="text-black">{po.creator_name || "ไม่ระบุ"}</TableCell>
                     <TableCell className="text-black">{po.updated_by_name || "ไม่ระบุ"}</TableCell>

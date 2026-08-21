@@ -41,6 +41,10 @@ export interface StockAlertItem {
   product_id: number | null;
   product_code?: string;
   product_name?: string;
+  unit_name?: string;
+  cost_price?: number;
+  supplier_id?: number;
+  supplier_name?: string;
   created_at: string;
 }
 
@@ -109,4 +113,31 @@ export interface TopSellerItem {
   category: string;
   total_sold: number;
   total_revenue: number;
+}
+
+export interface DebtAgingItem {
+  customer_code: string;
+  customer_name: string;
+  total_debt: number;
+  remaining_balance: number;
+  last_purchase_date: string;
+  age_days: number;
+  status: 'ทยอยชำระ' | 'เกินกำหนด' | 'ชำระหมดแล้ว';
+}
+
+export interface DebtAgingQuery {
+  start_date?: string;
+  end_date?: string;
+  status?: string;       // 'เกินกำหนด' | 'ทยอยชำระ' | '' (all)
+  min_age_days?: number; // 0 = no lower bound
+  max_age_days?: number; // 0 = no upper bound
+  page?: number;
+  page_size?: number;
+}
+
+export interface DebtAgingResponse {
+  data: DebtAgingItem[];
+  total: number;
+  total_debtors: number;
+  yearly_target: number;
 }
