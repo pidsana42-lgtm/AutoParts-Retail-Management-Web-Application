@@ -23,6 +23,7 @@ type UpdateCustomerClaimItemDTO struct {
 	UnitPrice   float64 `json:"unit_price"`
 	Reason      string  `json:"reason"`
 	Resolution  string  `json:"resolution"`
+	Status      string  `json:"status"`
 	ClaimType   string  `json:"claim_type"`
 	EvidenceURL string  `json:"evidence_url"`
 }

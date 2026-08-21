@@ -30,10 +30,13 @@ type PreOrderResponseDTO struct {
 	ID            uint                      `json:"id"`
 	PreOrderType  string                    `json:"pre_order_type"`
 	CustomerID    uint                      `json:"customer_id"`
+	CustomerName  string                    `json:"customer_name,omitempty"`
+	CustomerPhone string                    `json:"customer_phone,omitempty"`
 	DepositAmount float64                   `json:"deposit_amount"`
 	Status        string                    `json:"status"`
 	OrderDate     time.Time                 `json:"order_date"`
 	SupplierID    uint                      `json:"supplier_id"`
+	SupplierName  string                    `json:"supplier_name,omitempty"`
 	PreOrderItems []PreOrderItemResponseDTO `json:"pre_order_items"`
 	CreatedAt     time.Time                 `json:"created_at"`
 	UpdatedAt     time.Time                 `json:"updated_at"`
@@ -104,14 +107,29 @@ func ToPreOrderResponseDTO(m *entity.PreOrder) PreOrderResponseDTO {
 		items = append(items, ToPreOrderItemResponseDTO(&item))
 	}
 
+	custName := ""
+	custPhone := ""
+	if m.Customer != nil {
+		custName = m.Customer.CustomerName
+		custPhone = m.Customer.PhoneNumber
+	}
+
+	suppName := ""
+	if m.Supplier != nil {
+		suppName = m.Supplier.SupplierName
+	}
+
 	return PreOrderResponseDTO{
 		ID:            m.ID,
 		PreOrderType:  m.PreOrderType,
 		CustomerID:    m.CustomerID,
+		CustomerName:  custName,
+		CustomerPhone: custPhone,
 		DepositAmount: m.DepositAmount,
 		Status:        m.Status,
 		OrderDate:     m.OrderDate,
 		SupplierID:    m.SupplierID,
+		SupplierName:  suppName,
 		PreOrderItems: items,
 		CreatedAt:     m.CreatedAt,
 		UpdatedAt:     m.UpdatedAt,
