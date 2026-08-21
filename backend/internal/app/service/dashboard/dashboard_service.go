@@ -17,6 +17,8 @@ type DashboardService interface {
 	GetRecentSales(ctx context.Context, query dashDto.SummaryQuery, limit int) ([]dashDto.RecentSaleDTO, error)
 	GetAgingStock(ctx context.Context) ([]dashDto.AgingStockDTO, error)
 	GetStockHealth(ctx context.Context) (*dashDto.StockHealthDTO, error)
+	GetIncomeSummary(ctx context.Context, query dashDto.SummaryQuery) (*dashDto.RevenueBreakdownResponse, error)
+	GetTopSellers(ctx context.Context, query dashDto.SummaryQuery, limit int) ([]dashDto.TopSellerDTO, error)
 }
 
 type dashboardService struct {
@@ -255,6 +257,62 @@ func (s *dashboardService) GetAgingStock(ctx context.Context) ([]dashDto.AgingSt
 
 func (s *dashboardService) GetStockHealth(ctx context.Context) (*dashDto.StockHealthDTO, error) {
 	return s.dashboardRepository.GetStockHealth(ctx)
+}
+
+func (s *dashboardService) GetIncomeSummary(ctx context.Context, query dashDto.SummaryQuery) (*dashDto.RevenueBreakdownResponse, error) {
+	result, err := s.GetSummaryData(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	var general, garage, corporate float64
+	var cash, transfer, credit float64
+	for _, d := range result.SummaryData {
+		general    += d.WalkinCustomerAmount
+		garage    += d.GarageCustomerAmount
+		corporate += d.CorporateCustomerAmount
+		cash      += d.CashAmount
+		transfer  += d.TransferAmount
+		credit    += d.CreditAmount
+	}
+
+	return &dashDto.RevenueBreakdownResponse{
+		CustomerData: []dashDto.ChartDatumDTO{
+			{Name: "ลูกค้าทั่วไป", Value: general,    Fill: "#B70011"},
+			{Name: "ลูกค้าอู่ซ่อมรถ", Value: garage,    Fill: "#FF9999"},
+			{Name: "ลูกค้าบริษัท", Value: corporate, Fill: "#FFC9C9"},
+		},
+		PaymentData: []dashDto.ChartDatumDTO{
+			{Name: enum.PaymentMethodCash,   Value: cash,     Fill: "#005E8D"},
+			{Name: enum.PaymentMethodQR,     Value: transfer, Fill: "#CBE6FF"},
+			{Name: enum.PaymentMethodCredit, Value: credit,   Fill: "#E0ECF8"},
+		},
+	}, nil
+}
+
+
+func (s *dashboardService) GetTopSellers(ctx context.Context, query dashDto.SummaryQuery, limit int) ([]dashDto.TopSellerDTO, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+	var start, end time.Time
+	if query.SummaryDate != "" {
+		d, err := time.ParseInLocation("2006-01-02", query.SummaryDate, now.Location())
+		if err != nil {
+			return nil, err
+		}
+		start, end = d, d.AddDate(0, 0, 1)
+	} else if s2, e2, ok := resolveDateRange(query, now); ok {
+		start, end = s2, e2
+	} else {
+		start, end = today, today.AddDate(0, 0, 1)
+	}
+
+	return s.dashboardRepository.GetTopSellers(ctx, start, end, limit)
 }
 
 // resolveDateRange คำนวณช่วงวันที่จาก weekly/monthly/quarterly/yearly filter

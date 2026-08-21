@@ -83,3 +83,30 @@ export interface AgingStockItem {
   unit: string;
   sunk_value: number;
 }
+
+export interface RevenueBreakdownResponse {
+  customerData: ChartDatum[];
+  paymentData: ChartDatum[];
+}
+
+export interface ChartDatum {
+  name: string;
+  value: number;
+  fill: string;
+}
+
+export interface DonutChartCardProps {
+  title: string;
+  icon: React.ReactNode;
+  data: ChartDatum[];
+  total: number;
+  isLoading?: boolean;
+}
+
+export interface TopSellerItem {
+  id: number;
+  product_name: string;
+  category: string;
+  total_sold: number;
+  total_revenue: number;
+}
