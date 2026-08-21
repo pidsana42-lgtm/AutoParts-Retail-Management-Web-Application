@@ -19,7 +19,7 @@ export const posApiService = {
 
   /** ค้นหาข้อมูลอะไหล่ยนต์ในสต๊อกระบบ */
   searchProducts: (query: string): Promise<POSProductResponse[]> => 
-    apiClient.get<POSProductResponse[]>(`/pos/products?q=${query}`).then((res) => res.data),
+    apiClient.get<POSProductResponse[]>(`/pos/products?q=${encodeURIComponent(query)}`).then((res) => res.data),
 
   /** บันทึกคำสั่งซื้อออเดอร์ขาย POS */
   createPOSOrder: (payload: CreateSaleOrderRequest): Promise<any> => 
@@ -152,18 +152,18 @@ export const calculateValidatedDiscount = (
   const currentCustomerTypeId = customer?.customer_type?.id || activeTypeId;
   const currentCustomerTypeName = customer?.customer_type?.type_name || "";
 
-  // [กฎข้อที่ 1]: ลูกค้ากลุ่มบริษัท (WHOLESALE) ห้ามรับส่วนลดใดๆ ทั้งสิ้นในระบบ
+  // ลูกค้ากลุ่มบริษัท (WHOLESALE) ห้ามรับส่วนลดใดๆ ทั้งสิ้นในระบบ
   if (currentCustomerTypeId === 3 || currentCustomerTypeName === "WHOLESALE") {
     alert("ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น");
     return 0;
   }
 
-  // [กฎข้อที่ 2]: ตรวจสอบสิทธิ์กลุ่มอู่ซ่อมรถ (GARAGE) และต้องเปิดใช้งานระบบส่วนลด (is_discount_enabled)
-  const isDiscountEnabled = customer ? customer.is_discount_enabled : true; // ถ้าเป็น Guest ทั่วไปยอมให้กดส่วนลดได้ตามปกติ
+  // ตรวจสอบสิทธิ์กลุ่มอู่ซ่อมรถ (GARAGE) และต้องเปิดใช้งานระบบส่วนลด (is_discount_enabled)
+  const isDiscountEnabled = customer ? customer.is_discount_enabled : true;
   const isGarageMode = 
     isDiscountEnabled && (
       currentCustomerTypeId === 2 || 
-      currentCustomerTypeName === "GARAGE" ||
+      currentCustomerTypeName === "GARAGE" || 
       (customer?.customer_name?.includes("อู่"))
     );
 

@@ -21,18 +21,28 @@ export function CustomerCard({ customer, address }: CustomerCardProps): React.JS
     maxCreditLimitStr
   } = useCustomerFinancials(customer);
 
+  const displayAddress =
+    address?.trim() ||
+    customer?.shipping_address?.trim() ||
+    customer?.registered_address?.trim() ||
+    customer?.display_address?.trim() ||
+    customer?.address?.trim() ||
+    "ไม่ได้ระบุที่อยู่";
+
   return (
     <div className="bg-[#1C1B1B] text-white p-5 mb-6 border border-zinc-800 shadow-lg relative overflow-hidden">
       
       <div className="flex justify-between items-start">
-        <div>
+        <div className="flex-1 pr-2">
           <Text variant="lead" className="mb-0 leading-tight text-white">{customerName}</Text>
-          <Text variant="xs" className="mb-0 leading-tight text-[#9CA3AF]">โทร: {phoneNumber}</Text>
-          <Text variant="xs" className="mb-0 leading-tight text-[#9CA3AF] truncate max-w-[200px]" title={address || customer?.shipping_address || customer?.registered_address || "ไม่ได้ระบุที่อยู่"}>
-            ที่อยู่: {address || customer?.shipping_address || customer?.registered_address || "ไม่ได้ระบุที่อยู่"}
-          </Text>
+          <Text variant="xs" className="mb-0 leading-tight text-[#9CA3AF] mt-1">โทร: {phoneNumber}</Text>
+          <div className="flex items-start gap-1 mt-1 text-[#9CA3AF]">
+            <Text variant="xs" className="mb-0 leading-normal text-[#9CA3AF] break-words text-[11px]" title={address || customer?.shipping_address || customer?.registered_address || "ไม่ได้ระบุที่อยู่"}>
+            ที่อยู่: {displayAddress|| "ไม่ได้ระบุที่อยู่"}
+            </Text>
+          </div>
         </div>
-        <div className="bg-[#006E0A] text-white text-[10px] px-2.5 py-1 select-none uppercase tracking-wide">
+        <div className="bg-[#006E0A] text-white text-[10px] px-2.5 py-1 select-none uppercase tracking-wide shrink-0">
           {isSpecialPrice ? "ระดับราคาพิเศษ" : "ระดับราคามาตรฐาน"}
         </div>
       </div>
