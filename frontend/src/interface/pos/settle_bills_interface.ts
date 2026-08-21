@@ -2,7 +2,7 @@ export interface UnpaidBillItem {
   order_id: number;
   order_number: string;
   order_date: string;
-  created_at: string;
+  created_at?: string;
   total_amount: number;
   paid_amount: number;
   balance_due: number;
@@ -55,4 +55,29 @@ export interface GenerateSettleQRResponse {
   qr_code: string;
   reference_number: string;
   created_at: string;
+}
+
+// Interface เพิ่มเติมสำหรับการค้นหาและ Dropdown
+export interface SettleCustomerSuggestion {
+  id: number;
+  customer_name: string;
+  phone_number?: string;
+  customer_type?: string;
+  current_debt_amount?: number;
+}
+
+export interface SettleBillSuggestion {
+  order_id: number;
+  order_number: string;
+  order_date: string;
+  customer_id?: number;
+  customer_name: string;
+  balance_due: number;
+  total_amount: number;
+  payment_status: string;
+}
+
+export interface SettleSearchSuggestions {
+  customers: SettleCustomerSuggestion[];
+  bills: SettleBillSuggestion[];
 }
