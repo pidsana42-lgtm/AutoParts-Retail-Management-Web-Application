@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronLeft, Loader2, MapPin, Send, QrCode, Download, Printer, X } from "lucide-react";
+import { ChevronLeft, Loader2, MapPin, Send, QrCode, Download, Printer } from "lucide-react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 
 import Heading from "../../../../components/elements/heading";
@@ -53,9 +53,6 @@ function EmployeeCheckStockExecuteContent() {
 
   // ผลนับที่ส่งไปแล้ว (โหลดมาแสดงตอนตารางถูกล็อกแล้ว: รอตรวจสอบ / เสร็จสิ้น)
   const [submittedRecords, setSubmittedRecords] = useState<CheckStockRecord[]>([]);
-
-  // ให้พนักงานเองเรียกดู/พิมพ์/แชร์ QR ของงานตัวเองได้ด้วย (ไม่ใช่แค่ฝั่งเจ้าของร้าน)
-  const [showQr, setShowQr] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -264,47 +261,29 @@ function EmployeeCheckStockExecuteContent() {
             </Heading>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {qrPayload && (
-            <button
-              type="button"
-              onClick={() => setShowQr(true)}
-              className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50"
-              title="ดู QR Code ของงานนี้"
-            >
-              <QrCode className="h-3.5 w-3.5" />
-              QR
-            </button>
-          )}
-          {getStatusBadge(schedule.status)}
-        </div>
+        {getStatusBadge(schedule.status)}
       </div>
 
-      {showQr && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setShowQr(false)}
-        >
-          <div
-            className="flex w-full max-w-xs flex-col items-center gap-3 rounded-md bg-white p-5 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex w-full items-center justify-between">
-              <span className="text-sm font-semibold text-slate-800">QR Code ของงานนี้</span>
-              <button type="button" onClick={() => setShowQr(false)} className="cursor-pointer text-slate-400 hover:text-slate-700">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+      {qrPayload && (
+        <Card className="border-t-[5px] border-t-blue-600">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <QrCode className="h-4 w-4 text-blue-500" />
+              QR Code สำหรับเช็คสต็อกงานนี้
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-3">
             <div className="rounded-md border border-slate-200 bg-white p-3">
-              <QRCodeSVG value={qrPayload} size={160} level="M" />
+              <QRCodeSVG value={qrPayload} size={140} level="M" />
             </div>
+            {/* ตัวจริงไว้ export/print (ซ่อนไว้ ไม่ต้องโชว์ซ้ำ) */}
             <div className="hidden">
               <QRCodeCanvas id="employee-schedule-qr-canvas" value={qrPayload} size={320} level="H" includeMargin />
             </div>
             <p className="text-center text-xs text-slate-400">
-              ให้คนอื่นสแกนด้วยมือถือเพื่อเข้าหน้าเช็คสต็อกนี้ได้เลย
+              ให้คนอื่นสแกนด้วยมือถือเพื่อเข้าหน้าเช็คสต็อกของงานนี้ได้เลย โดยไม่ต้องล็อกอิน
             </p>
-            <div className="flex w-full gap-2">
+            <div className="flex w-full gap-2 sm:max-w-xs">
               <Button onClick={handleDownloadQR} variant="outline" className="flex flex-1 items-center justify-center gap-1.5">
                 <Download className="h-3.5 w-3.5" />
                 ดาวน์โหลด
@@ -314,8 +293,8 @@ function EmployeeCheckStockExecuteContent() {
                 พิมพ์
               </Button>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {!isEditable && (
