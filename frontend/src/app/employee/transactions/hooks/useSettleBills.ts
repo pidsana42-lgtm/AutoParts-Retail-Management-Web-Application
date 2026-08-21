@@ -1,32 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import apiClient from "../../../../service/http/apiClient";
 import { posApiService } from "../../../../service/http/pos/pos_service";
-import type { UnpaidBillItem } from "../../../../interface/pos/settle_bills_interface";
 import type { CustomerDiscountResponse } from "../../../../interface/pos/customer_interface";
-
-export interface SettleCustomerSuggestion {
-  id: number;
-  customer_name: string;
-  phone_number?: string;
-  customer_type?: string;
-  current_debt_amount?: number;
-}
-
-export interface SettleBillSuggestion {
-  order_id: number;
-  order_number: string;
-  order_date: string;
-  customer_id?: number;
-  customer_name: string;
-  balance_due: number;
-  total_amount: number;
-  payment_status: string;
-}
-
-export interface SettleSearchSuggestions {
-  customers: SettleCustomerSuggestion[];
-  bills: SettleBillSuggestion[];
-}
+import type {
+  UnpaidBillItem,
+  SettleCustomerSuggestion,
+  SettleBillSuggestion,
+  SettleSearchSuggestions,
+} from "../../../../interface/pos/settle_bills_interface";
 
 export const useSettleBills = (initialCustomerId: number | null = null) => {
   // --- Search & Filter States ---
