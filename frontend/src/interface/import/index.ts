@@ -18,6 +18,8 @@ export interface Product {
   category_name?: string;
   sub_category_name?: string;
   cost_price?: number;
+  sale_price?: number;
+  retail_price?: number;
   barcode?: string;
 }
 
