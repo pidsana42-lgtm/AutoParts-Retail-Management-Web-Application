@@ -541,7 +541,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
           <>
             {/* 2. Stats row */}
             <div className="grid grid-cols-4 gap-4">
-          <div className="bg-[#22252a] text-white p-5 col-span-1 relative overflow-hidden">
+          <div className="bg-[#1C1B1B] text-white p-5 col-span-1 relative overflow-hidden">
             <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">รายการทั้งหมด</p>
             <p className="text-4xl font-bold mt-1">{rawClaims.length}</p>
             <p className="text-xs text-gray-500 mt-1">ใบเคลม</p>
@@ -550,19 +550,19 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
             </div>
           </div>
           <div className="bg-white border border-gray-200 border-l-[4px] border-l-amber-400 p-5 shadow-sm">
-            <p className="text-xs text-[#6B7280] font-medium uppercase tracking-wider">รอดำเนินการ</p>
-            <p className="text-3xl font-bold mt-1 text-gray-900">{pendingCount}</p>
-            <p className="text-xs text-gray-400 mt-1">รายการ</p>
+            <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">รอดำเนินการ</p>
+            <p className="text-3xl font-bold mt-1 text-[#1C1B1B]">{pendingCount}</p>
+            <p className="text-xs text-[#5F5E5E] mt-1">รายการ</p>
           </div>
-          <div className="bg-white border border-gray-200 border-l-[4px] border-l-emerald-500 p-5 shadow-sm">
-            <p className="text-xs text-[#6B7280] font-medium uppercase tracking-wider">อนุมัติแล้ว</p>
-            <p className="text-3xl font-bold mt-1 text-gray-900">{approvedCount}</p>
-            <p className="text-xs text-gray-400 mt-1">รายการ</p>
+          <div className="bg-white border border-gray-200 border-l-[4px] border-l-[#259b24] p-5 shadow-sm">
+            <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">อนุมัติแล้ว</p>
+            <p className="text-3xl font-bold mt-1 text-[#259b24]">{approvedCount}</p>
+            <p className="text-xs text-[#5F5E5E] mt-1">รายการ</p>
           </div>
-          <div className="bg-white border border-gray-200 border-l-[4px] border-l-red-500 p-5 shadow-sm">
-            <p className="text-xs text-[#6B7280] font-medium uppercase tracking-wider">ปฏิเสธ</p>
-            <p className="text-3xl font-bold mt-1 text-gray-900">{rejectedCount}</p>
-            <p className="text-xs text-gray-400 mt-1">รายการ</p>
+          <div className="bg-white border border-gray-200 border-l-[4px] border-l-[#e51c23] p-5 shadow-sm">
+            <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">ปฏิเสธ</p>
+            <p className="text-3xl font-bold mt-1 text-[#e51c23]">{rejectedCount}</p>
+            <p className="text-xs text-[#5F5E5E] mt-1">รายการ</p>
           </div>
         </div>
 
@@ -619,8 +619,8 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                 onClick={() => { setStatusFilter(''); setCurrentPage(1); }}
                 className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
                   statusFilter === ''
-                    ? 'bg-[#22252a] text-white border-[#22252a]'
-                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    ? 'bg-[#1C1B1B] text-white border-[#1C1B1B]'
+                    : 'bg-white text-[#1C1B1B] border-gray-200 hover:bg-gray-50'
                 }`}
               >
                 ทั้งหมด ({flatRows.length})
@@ -641,8 +641,8 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                 onClick={() => { setStatusFilter('APPROVED'); setCurrentPage(1); }}
                 className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
                   statusFilter === 'APPROVED'
-                    ? 'bg-emerald-600 text-white border-emerald-600'
-                    : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+                    ? 'bg-[#259b24] text-white border-[#259b24]'
+                    : 'bg-white text-[#259b24] border-[#259b24]/30 hover:bg-[#259b24]/10'
                 }`}
               >
                 อนุมัติแล้ว ({approvedCount})
@@ -652,8 +652,8 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                 onClick={() => { setStatusFilter('REJECTED'); setCurrentPage(1); }}
                 className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
                   statusFilter === 'REJECTED'
-                    ? 'bg-red-600 text-white border-red-600'
-                    : 'bg-white text-red-700 border-red-200 hover:bg-red-50'
+                    ? 'bg-[#e51c23] text-white border-[#e51c23]'
+                    : 'bg-white text-[#e51c23] border-red-200 hover:bg-red-50'
                 }`}
               >
                 ปฏิเสธ ({rejectedCount})
@@ -747,7 +747,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                     <TableCell className="py-3">
                       <p className="font-semibold text-[#1C1B1B] text-sm">{row.productName}</p>
                       {row.resolution && row.resolution !== 'รอการตรวจสอบ' && row.resolution !== '-' && (
-                        <p className="text-[11px] text-emerald-600 mt-0.5">{row.resolution}</p>
+                        <p className="text-[11px] text-[#259b24] mt-0.5">{row.resolution}</p>
                       )}
                     </TableCell>
 
@@ -761,7 +761,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                     </TableCell>
 
                     <TableCell className="py-3">
-                      <p className="text-gray-500 text-sm truncate max-w-[180px]" title={row.reason}>
+                      <p className="text-[#5F5E5E] text-sm truncate max-w-[180px]" title={row.reason}>
                         {row.reason || <span className="text-gray-300">—</span>}
                       </p>
                     </TableCell>
@@ -782,14 +782,14 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                           </button>
                           <button
                             onClick={() => navigate(`${basePath}/edit/${row.claimId}`)}
-                            className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded transition cursor-pointer"
+                            className="p-1.5 text-gray-400 hover:text-[#1C1B1B] hover:bg-gray-100 rounded transition cursor-pointer"
                             title="แก้ไขใบเคลม"
                           >
                             <SquarePen className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDeleteClaim(row.claimId)}
-                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition cursor-pointer"
+                            className="p-1.5 text-gray-300 hover:text-[#e51c23] hover:bg-red-50 rounded transition cursor-pointer"
                             title="ลบใบเคลม"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -961,7 +961,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                         <td className="border border-slate-300 p-2 font-medium text-slate-800">{row.productName}</td>
                         <td className="border border-slate-300 p-2 text-center font-bold">{row.qty}</td>
                         <td className="border border-slate-300 p-2 text-slate-600">{row.reason}</td>
-                        <td className="border border-slate-300 p-2 text-center font-bold text-emerald-700">
+                        <td className="border border-slate-300 p-2 text-center font-bold text-[#259b24]">
                           อนุมัติแล้ว
                         </td>
                         <td className="border border-slate-300 p-2 text-slate-400"></td>
@@ -1007,7 +1007,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
 
         <div className="space-y-6">
           {/* Search Invoice — Top */}
-          <Card className='border-l-[5px] border-l-black bg-white'>
+          <Card className='border-l-[5px] border-l-[#1C1B1B] bg-white'>
             <CardHeader className='items-center justify-start gap-4 mt-2 mb-2'>
               <CardTitle className='text-base text-black'><Search className="h-6 w-6" /></CardTitle>
               <CardTitle className='text-lg text-black'>ค้นหาใบสั่งซื้อ</CardTitle>
@@ -1099,7 +1099,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                     </div>
                     <div>
                       <p className="text-slate-500 font-semibold mb-0.5">วงเงินคงเหลือใช้ได้</p>
-                      <p className="font-bold text-emerald-600">
+                      <p className="font-bold text-[#259b24]">
                         ฿{Math.max(0, (posCustomerCredit.max_credit_limit || 0) - (posCustomerCredit.current_debt_amount || 0)).toLocaleString('th-TH')}
                       </p>
                     </div>
@@ -1284,7 +1284,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                                       <button
                                         type="button"
                                         onClick={() => handleRemoveItemEvidence(idx)}
-                                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 hover:bg-red-600 text-white flex items-center justify-center rounded-full shadow-sm cursor-pointer transition-transform group-hover:scale-110"
+                                        className="absolute -top-2 -right-2 w-5 h-5 bg-[#e51c23] hover:bg-[#c9181f] text-white flex items-center justify-center rounded-full shadow-sm cursor-pointer transition-transform group-hover:scale-110"
                                         title="ลบรูปภาพหลักฐาน"
                                       >
                                         <X size={10} />
@@ -1438,7 +1438,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                     <td className="border border-slate-300 p-2 text-center font-bold">{r.qty}</td>
                     <td className="border border-slate-300 p-2">{r.reason}</td>
                     <td className="border border-slate-300 p-2">{r.customerName}</td>
-                    <td className="border border-slate-300 p-2 text-center font-bold text-emerald-600">อนุมัติเคลมแล้ว</td>
+                    <td className="border border-slate-300 p-2 text-center font-bold text-[#259b24]">อนุมัติเคลมแล้ว</td>
                   </tr>
                 ));
               })()}
