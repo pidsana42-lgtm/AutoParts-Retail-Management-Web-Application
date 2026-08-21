@@ -81,3 +81,15 @@ export interface SettleSearchSuggestions {
   customers: SettleCustomerSuggestion[];
   bills: SettleBillSuggestion[];
 }
+
+export interface SettleBillsSavedSession {
+  searchQuery?: string;
+  customerId?: number | null;
+  customerName?: string;
+  singleBillMode?: boolean;
+  bills?: UnpaidBillItem[];
+  selectedBillIds?: number[];
+  customPayAmounts?: Record<number, number>;
+  customPayDisplay?: Record<number, string>;
+  paymentMethodId?: number;
+}
