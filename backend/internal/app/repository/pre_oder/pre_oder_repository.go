@@ -55,6 +55,7 @@ func (r *preOrderRepository) GetPreOrderByID(id uint) (*entity.PreOrder, error) 
 	err := r.db.Preload("Customer").
 		Preload("Supplier").
 		Preload("PreOrderItems").
+		Preload("PreOrderItems.Product").
 		First(&preOrder, id).Error
 		
 	if err != nil {
@@ -71,6 +72,8 @@ func (r *preOrderRepository) ListPreOrders() ([]entity.PreOrder, error) {
 	err := r.db.Preload("Customer").
 		Preload("Supplier").
 		Preload("PreOrderItems").
+		Preload("PreOrderItems.Product").
+		Order("id DESC").
 		Find(&preOrders).Error
 		
 	return preOrders, err

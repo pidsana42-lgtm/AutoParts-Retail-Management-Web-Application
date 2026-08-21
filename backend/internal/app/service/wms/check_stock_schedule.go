@@ -3,11 +3,14 @@ package wms
 import (
 	"errors"
 	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	wmsDto "backend/internal/app/dto/wms"
 	"backend/internal/app/entity"
 	wmsRepo "backend/internal/app/repository/wms"
+	svcNotification "backend/internal/app/service/notification"
 
 	"gorm.io/gorm"
 )
@@ -27,12 +30,13 @@ type CheckStockScheduleService interface {
 }
 
 type checkStockScheduleService struct {
-	repo wmsRepo.CheckStockScheduleRepository
-	db   *gorm.DB // injected to do simple lookups for UI names and counts
+	repo         wmsRepo.CheckStockScheduleRepository
+	db           *gorm.DB // injected to do simple lookups for UI names and counts
+	notification svcNotification.NotificationService
 }
 
-func NewCheckStockScheduleService(repo wmsRepo.CheckStockScheduleRepository, db *gorm.DB) CheckStockScheduleService {
-	return &checkStockScheduleService{repo: repo, db: db}
+func NewCheckStockScheduleService(repo wmsRepo.CheckStockScheduleRepository, db *gorm.DB, notificationService svcNotification.NotificationService) CheckStockScheduleService {
+	return &checkStockScheduleService{repo: repo, db: db, notification: notificationService}
 }
 
 func (s *checkStockScheduleService) CreateSchedule(req *wmsDto.CheckStockScheduleRequestDTO) error {
@@ -89,16 +93,40 @@ func (s *checkStockScheduleService) GetByID(id uint) (*wmsDto.CheckStockSchedule
 func (s *checkStockScheduleService) UpdateStatus(id uint, status string) error {
 	// กันพนักงานส่งผลนับ ("รอตรวจสอบ") หลังเลยกำหนดเวลาสิ้นสุดที่ตั้งไว้ — กันกรณี client ข้าม UI ยิง API ตรงๆ
 	// (ถ้ายังไม่เคยตั้งเวลาสิ้นสุดไว้จริง (ค่าว่าง/zero value) ถือว่าไม่มีเดดไลน์ ไม่บล็อก)
+	var schedule *entity.CheckStockSchedule
 	if status == "รอตรวจสอบ" {
-		schedule, err := s.repo.GetByID(id)
+		sc, err := s.repo.GetByID(id)
 		if err != nil {
 			return err
 		}
+		schedule = sc
 		if !schedule.Scheduled_End_DateTime.IsZero() && time.Now().After(schedule.Scheduled_End_DateTime) {
 			return errors.New("หมดเวลาที่กำหนดให้ตรวจสอบตารางนี้แล้ว ไม่สามารถส่งผลนับได้")
 		}
 	}
-	return s.repo.UpdateStatus(id, status)
+
+	if err := s.repo.UpdateStatus(id, status); err != nil {
+		return err
+	}
+
+	// พนักงานส่งผลนับมาแล้ว -> แจ้งเตือนเจ้าของร้าน/แอดมินทุกคน (ไม่ไปโผล่ฝั่งพนักงานคนอื่น)
+	if status == "รอตรวจสอบ" && schedule != nil && s.notification != nil {
+		empName := "พนักงาน"
+		if schedule.User != nil {
+			empName = strings.TrimSpace(schedule.User.FirstName + " " + schedule.User.LastName)
+		}
+		if err := s.notification.NotifyOwners(
+			"CHECK_STOCK_SUBMITTED",
+			"มีการส่งผลนับสต็อกมาตรวจสอบ",
+			fmt.Sprintf("%s ส่งผลนับสต็อกมาให้ตรวจสอบแล้ว", empName),
+			fmt.Sprintf("/owner/stock/stock-check/%d", id),
+			&id,
+		); err != nil {
+			log.Printf("[Notification] failed to notify owners (schedule %d): %v", id, err)
+		}
+	}
+
+	return nil
 }
 
 // ApproveSchedule: เจ้าของร้านอนุมัติผลนับสต็อกที่พนักงานส่งมา (สถานะ "รอตรวจสอบ")
@@ -120,7 +148,7 @@ func (s *checkStockScheduleService) ApproveSchedule(id uint) error {
 		return errors.New("ยังไม่มีข้อมูลสินค้าที่นับให้ตรวจสอบ")
 	}
 
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		for _, rec := range records {
 			if rec.ProductID == nil {
 				continue
@@ -131,7 +159,24 @@ func (s *checkStockScheduleService) ApproveSchedule(id uint) error {
 			}
 		}
 		return tx.Model(&entity.CheckStockSchedule{}).Where("id = ?", id).Update("status", "เสร็จสิ้น").Error
-	})
+	}); err != nil {
+		return err
+	}
+
+	// อนุมัติสำเร็จ -> แจ้งเตือนเฉพาะพนักงานที่ส่งผลนับมา (ไม่ไปโผล่หน้าคนอื่น)
+	if schedule.UserID != nil && s.notification != nil {
+		if err := s.notification.NotifyUser(
+			*schedule.UserID,
+			"CHECK_STOCK_APPROVED",
+			"ผลนับสต็อกได้รับการอนุมัติแล้ว",
+			"เจ้าของร้านตรวจสอบและอนุมัติผลนับสต็อกของคุณแล้ว ระบบบันทึกสต็อกใหม่เรียบร้อย",
+			fmt.Sprintf("/employee/wms/check-stock/%d", id),
+			&id,
+		); err != nil {
+			log.Printf("[Notification] failed to notify user %d (schedule %d): %v", *schedule.UserID, id, err)
+		}
+	}
+	return nil
 }
 
 // RejectSchedule: เจ้าของร้านตีกลับผลนับสต็อก ให้พนักงานนับใหม่
@@ -145,7 +190,7 @@ func (s *checkStockScheduleService) RejectSchedule(id uint, note string) error {
 		return errors.New("ตารางนี้ยังไม่ได้ส่งผลนับสต็อกมาให้ตรวจสอบ")
 	}
 
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("check_stock_schedule_id = ?", id).Delete(&entity.CheckStock{}).Error; err != nil {
 			return err
 		}
@@ -158,7 +203,28 @@ func (s *checkStockScheduleService) RejectSchedule(id uint, note string) error {
 			updates["note"] = combined
 		}
 		return tx.Model(&entity.CheckStockSchedule{}).Where("id = ?", id).Updates(updates).Error
-	})
+	}); err != nil {
+		return err
+	}
+
+	// ตีกลับสำเร็จ -> แจ้งเตือนเฉพาะพนักงานที่ส่งผลนับมาให้นับใหม่ (ไม่ไปโผล่หน้าคนอื่น)
+	if schedule.UserID != nil && s.notification != nil {
+		msg := "เจ้าของร้านตีกลับผลนับสต็อกของคุณ กรุณานับใหม่อีกครั้ง"
+		if note != "" {
+			msg += fmt.Sprintf(" (เหตุผล: %s)", note)
+		}
+		if err := s.notification.NotifyUser(
+			*schedule.UserID,
+			"CHECK_STOCK_REJECTED",
+			"ผลนับสต็อกถูกตีกลับ ให้นับใหม่",
+			msg,
+			fmt.Sprintf("/employee/wms/check-stock/%d", id),
+			&id,
+		); err != nil {
+			log.Printf("[Notification] failed to notify user %d (schedule %d): %v", *schedule.UserID, id, err)
+		}
+	}
+	return nil
 }
 
 func (s *checkStockScheduleService) Delete(id uint) error {
@@ -252,9 +318,14 @@ func (s *checkStockScheduleService) toResponse(sc *entity.CheckStockSchedule) *w
 		} else if sc.ShelfID != nil {
 			q = q.Where("shelf_id = ?", sc.ShelfID)
 		} else {
-			q = q.Where("zone_id = ?", sc.ZoneID)
+			// Product ไม่มีคอลัมน์ zone_id ตรงๆ (โซนเชื่อมผ่าน shelf เท่านั้น) ต้อง join เพื่อกรองที่ระดับโซน
+			// ของเดิม query "zone_id = ?" ตรงๆ ทับกับ column ที่ไม่มีจริงในตาราง products ทำให้ query fail เงียบๆ
+			// แล้ว count ค้างเป็น 0 เสมอ (error จาก .Count() ไม่ได้ถูกเช็ค)
+			q = q.Joins("JOIN shelves ON shelves.id = products.shelf_id").Where("shelves.zone_id = ?", sc.ZoneID)
 		}
-		q.Count(&count)
+		if err := q.Count(&count).Error; err != nil {
+			log.Printf("[CheckStockSchedule] failed to count products for schedule %d: %v", sc.ID, err)
+		}
 		res.ProductCount = int(count)
 
 	} else if sc.CheckType == "CATEGORY" {

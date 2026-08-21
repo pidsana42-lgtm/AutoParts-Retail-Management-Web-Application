@@ -7,7 +7,7 @@ import Card from '../../../components/elements/card';
 import Badge from '../../../components/elements/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import { getCustomerClaimById, updateCustomerClaim, updateClaimItemStatus } from '../../../service/http/claim/claim';
-import type { CustomerClaim, CustomerClaimItem } from '../../../interface/claim/claim';
+import type { CustomerClaim } from '../../../interface/claim/claim';
 
 interface ApprovedItemState {
   [itemId: number]: boolean;
@@ -83,12 +83,6 @@ export default function ClaimApprovePage(): React.JSX.Element {
     }
   };
 
-  const claimAmount = (claim?.items ?? []).reduce((sum, item) => {
-    if (approvedItems[item.id ?? 0]) {
-      return sum + (item.qty * (item.unit_price || 0));
-    }
-    return sum;
-  }, 0);
 
   if (loading) {
     return (
@@ -245,13 +239,17 @@ export default function ClaimApprovePage(): React.JSX.Element {
       </Card>
 
       {/* Print-only Document */}
-      <div ref={printRef} className="hidden print:block font-sans text-slate-900 p-4">
+      <div ref={printRef} className="hidden print:block font-sans text-slate-900 p-0">
         <style>{`
           @media print {
+            @page {
+              size: A4 portrait;
+              margin: 12mm 10mm;
+            }
             body * { visibility: hidden; }
             #printable-claim-approval, #printable-claim-approval * { visibility: visible; }
             #printable-claim-approval {
-              position: absolute; left: 0; top: 0; width: 100%; padding: 20px;
+              position: absolute; left: 0; top: 0; width: 100%; padding: 0;
               background: white; color: black; font-size: 12px;
             }
           }
@@ -260,7 +258,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
           <div className="border-b-2 border-slate-800 pb-3 mb-4 flex justify-between items-start">
             <div>
               <h1 className="text-xl font-extrabold text-slate-900">AutoParts Retail Management</h1>
-              <h2 className="text-sm font-bold text-slate-700 mt-0.5">ใบอนุมัติเคลมสินค้า (Claim Approval)</h2>
+              <h2 className="text-sm font-bold text-slate-700 mt-0.5">ใบอนุมัติเคลมสินค้า</h2>
             </div>
             <div className="text-right text-xs text-slate-500">
               <p className="font-bold text-slate-800">วันที่พิมพ์</p>
@@ -320,16 +318,6 @@ export default function ClaimApprovePage(): React.JSX.Element {
               </tr>
             </tfoot>
           </table>
-
-          <div className="mt-8 pt-4 flex justify-between items-end text-xs text-slate-700">
-            <div>
-              <p>หมายเหตุ: __________________________________________________________________</p>
-            </div>
-            <div className="text-center border-t border-slate-400 pt-2 min-w-[220px]">
-              <p className="font-bold">ลายเซ็นเจ้าของร้าน / ผู้อนุมัติ</p>
-              <p className="mt-6">วันที่ ____/____/________</p>
-            </div>
-          </div>
         </div>
       </div>
     </div>

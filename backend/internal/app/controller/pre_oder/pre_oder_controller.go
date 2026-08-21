@@ -1,20 +1,23 @@
 package pre_order
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
 	preOrderDTO "backend/internal/app/dto/pre_oder"
+	svcNotification "backend/internal/app/service/notification"
 	preOrderSvc "backend/internal/app/service/pre_oder"
 	"github.com/gin-gonic/gin"
 )
 
 type PreOrderController struct {
-	svc preOrderSvc.PreOrderService
+	svc          preOrderSvc.PreOrderService
+	notification svcNotification.NotificationService
 }
 
-func NewPreOrderController(svc preOrderSvc.PreOrderService) *PreOrderController {
-	return &PreOrderController{svc: svc}
+func NewPreOrderController(svc preOrderSvc.PreOrderService, notificationService svcNotification.NotificationService) *PreOrderController {
+	return &PreOrderController{svc: svc, notification: notificationService}
 }
 
 func (ctrl *PreOrderController) CreatePreOrder(c *gin.Context) {
@@ -28,6 +31,18 @@ func (ctrl *PreOrderController) CreatePreOrder(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create pre-order: " + err.Error()})
 		return
+	}
+
+	// แจ้งเตือนเฉพาะเจ้าของร้าน/แอดมิน (ไม่ไปโผล่หน้าพนักงานคนอื่น) — ของเดิม broadcast ทุกคน
+	// หมายเหตุ: pre-order ไม่มีการเก็บว่าใครเป็นคนสร้าง จึงแจ้งกลับได้แค่ทางเดียว (สร้าง -> เจ้าของร้าน)
+	msg := fmt.Sprintf("มีรายการสั่งจองใหม่จากลูกค้า %s จำนวน %d รายการ", res.CustomerName, len(res.PreOrderItems))
+	if res.CustomerName == "" {
+		msg = fmt.Sprintf("มีรายการสั่งจองใหม่ จำนวน %d รายการ", len(res.PreOrderItems))
+	}
+	if ctrl.notification != nil {
+		if err := ctrl.notification.NotifyOwners("PRE_ORDER_CREATED", "ใบสั่งจองใหม่", msg, "/owner/pre-orders", nil); err != nil {
+			fmt.Printf("[Notification] failed to notify owners (pre-order %d): %v\n", res.ID, err)
+		}
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
