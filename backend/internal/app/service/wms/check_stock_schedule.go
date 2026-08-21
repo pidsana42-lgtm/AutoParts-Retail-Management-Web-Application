@@ -15,6 +15,16 @@ import (
 	"gorm.io/gorm"
 )
 
+// bangkokTime: แปลงเวลาให้เป็นเขตเวลาไทยก่อนโชว์ในข้อความแจ้งเตือน — time.Time ที่เก็บ/ได้จาก DB เป็น UTC เสมอ
+// ถ้า Format() ตรงๆ โดยไม่แปลงก่อน จะได้เวลาเพี้ยนไป 7 ชั่วโมง (เช่น ตั้ง 13:55 น. จะโชว์เป็น 06:55 น.)
+func bangkokTime(t time.Time) time.Time {
+	loc, err := time.LoadLocation("Asia/Bangkok")
+	if err != nil {
+		loc = time.Local
+	}
+	return t.In(loc)
+}
+
 type CheckStockScheduleService interface {
 	CreateSchedule(req *wmsDto.CheckStockScheduleRequestDTO) error
 	GetByID(id uint) (*wmsDto.CheckStockScheduleResponseDTO, error)
@@ -55,7 +65,25 @@ func (s *checkStockScheduleService) CreateSchedule(req *wmsDto.CheckStockSchedul
 		ProductID:              req.ProductID,
 		UserID:                 req.UserID,
 	}
-	return s.repo.Create(&schedule)
+	if err := s.repo.Create(&schedule); err != nil {
+		return err
+	}
+
+	// เจ้าของร้านมอบหมายงานเช็คสต็อกใหม่ -> แจ้งเตือนพนักงานที่ได้รับมอบหมายทันที (ไม่ไปโผล่หน้าพนักงานคนอื่น)
+	if schedule.UserID != nil && s.notification != nil {
+		if err := s.notification.NotifyUser(
+			*schedule.UserID,
+			"CHECK_STOCK_ASSIGNED",
+			"คุณได้รับมอบหมายงานเช็คสต็อกใหม่",
+			fmt.Sprintf("มีตารางเช็คสต็อกใหม่ กำหนดตรวจวันที่ %s", bangkokTime(schedule.Scheduled_DateTime).Format("02/01/2006 15:04")),
+			fmt.Sprintf("/employee/wms/check-stock/%d", schedule.ID),
+			&schedule.ID,
+		); err != nil {
+			log.Printf("[Notification] failed to notify user %d (schedule %d): %v", *schedule.UserID, schedule.ID, err)
+		}
+	}
+
+	return nil
 }
 
 func (s *checkStockScheduleService) Update(id uint, req *wmsDto.CheckStockScheduleRequestDTO) error {
@@ -68,6 +96,8 @@ func (s *checkStockScheduleService) Update(id uint, req *wmsDto.CheckStockSchedu
 		return errors.New("cannot edit schedule that has already started or is completed")
 	}
 
+	previousUserID := schedule.UserID
+
 	schedule.Scheduled_DateTime = req.Scheduled_DateTime
 	schedule.Scheduled_End_DateTime = req.Scheduled_End_DateTime
 	schedule.Note = req.Note
@@ -79,7 +109,26 @@ func (s *checkStockScheduleService) Update(id uint, req *wmsDto.CheckStockSchedu
 	schedule.ProductID = req.ProductID
 	schedule.UserID = req.UserID
 
-	return s.repo.Update(schedule)
+	if err := s.repo.Update(schedule); err != nil {
+		return err
+	}
+
+	// เจ้าของร้านมอบหมาย/เปลี่ยนตัวพนักงานที่รับผิดชอบ -> แจ้งเตือนพนักงานคนใหม่ (แจ้งเฉพาะตอนเปลี่ยนตัวจริงๆ ไม่ใช่ทุกครั้งที่แก้ไข)
+	isNewAssignment := schedule.UserID != nil && (previousUserID == nil || *previousUserID != *schedule.UserID)
+	if isNewAssignment && s.notification != nil {
+		if err := s.notification.NotifyUser(
+			*schedule.UserID,
+			"CHECK_STOCK_ASSIGNED",
+			"คุณได้รับมอบหมายงานเช็คสต็อก",
+			fmt.Sprintf("มีตารางเช็คสต็อกมอบหมายให้คุณ กำหนดตรวจวันที่ %s", bangkokTime(schedule.Scheduled_DateTime).Format("02/01/2006 15:04")),
+			fmt.Sprintf("/employee/wms/check-stock/%d", schedule.ID),
+			&schedule.ID,
+		); err != nil {
+			log.Printf("[Notification] failed to notify user %d (schedule %d): %v", *schedule.UserID, schedule.ID, err)
+		}
+	}
+
+	return nil
 }
 
 func (s *checkStockScheduleService) GetByID(id uint) (*wmsDto.CheckStockScheduleResponseDTO, error) {
