@@ -3,6 +3,7 @@ package wms
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	wmsDto "backend/internal/app/dto/wms"
@@ -252,9 +253,14 @@ func (s *checkStockScheduleService) toResponse(sc *entity.CheckStockSchedule) *w
 		} else if sc.ShelfID != nil {
 			q = q.Where("shelf_id = ?", sc.ShelfID)
 		} else {
-			q = q.Where("zone_id = ?", sc.ZoneID)
+			// Product ไม่มีคอลัมน์ zone_id ตรงๆ (โซนเชื่อมผ่าน shelf เท่านั้น) ต้อง join เพื่อกรองที่ระดับโซน
+			// ของเดิม query "zone_id = ?" ตรงๆ ทับกับ column ที่ไม่มีจริงในตาราง products ทำให้ query fail เงียบๆ
+			// แล้ว count ค้างเป็น 0 เสมอ (error จาก .Count() ไม่ได้ถูกเช็ค)
+			q = q.Joins("JOIN shelves ON shelves.id = products.shelf_id").Where("shelves.zone_id = ?", sc.ZoneID)
 		}
-		q.Count(&count)
+		if err := q.Count(&count).Error; err != nil {
+			log.Printf("[CheckStockSchedule] failed to count products for schedule %d: %v", sc.ID, err)
+		}
 		res.ProductCount = int(count)
 
 	} else if sc.CheckType == "CATEGORY" {
