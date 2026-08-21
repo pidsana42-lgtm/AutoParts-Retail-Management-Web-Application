@@ -13,12 +13,12 @@ export const getPreOrderById = async (id: number) => {
   return response.data.data;
 };
 
-export const createPreOrder = async (data: PreOrder) => {
+export const createPreOrder = async (data: Partial<PreOrder>) => {
   const response = await apiClient.post<{ data: PreOrder }>('/wms/pre-orders', data);
   return response.data.data;
 };
 
-export const updatePreOrder = async (id: number, data: PreOrder) => {
+export const updatePreOrder = async (id: number, data: Partial<PreOrder>) => {
   const response = await apiClient.put<{ data: PreOrder }>(`/wms/pre-orders/${id}`, data);
   return response.data.data;
 };

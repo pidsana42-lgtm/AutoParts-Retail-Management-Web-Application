@@ -1,22 +1,20 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import apiClient from '../../../service/http/apiClient';
-import { 
-  Plus, Search, Edit, Trash2, ChevronRight, Save, 
-  FileText, BookOpen, Building2, X,
+import {
+  Plus, Search, Edit, Trash2, ChevronRight, Save,
+  FileText, BookOpen, Building2, X, Package,
   CheckCircle, Clock, XCircle, Loader2, AlertCircle, ImageIcon, Truck
 } from 'lucide-react';
-import { 
-  getPreOrders, getPreOrderById, createPreOrder, 
-  updatePreOrder, deletePreOrder 
+import {
+  getPreOrders, getPreOrderById, createPreOrder,
+  updatePreOrder, deletePreOrder
 } from '../../../service/http/pre-order/pre-order';
 import type{ PreOrder, PreOrderItem } from '../../../interface/pre-order/pre-order';
 import Heading from '../../../components/elements/heading';
 import Card from '../../../components/elements/card';
 import Select from '../../../components/elements/select';
 import Button from '../../../components/elements/button';
-import Table from '../../../components/elements/table';
 import GenericTable, { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
-import ProductSearchSelect from '../import-bills/components/product_search_select';
 import type { Product } from '../../../interface/import';
 import type { Catalog, CatalogItem } from '../../../interface/catalog/catalog';
 import { getCatalogs } from '../../../service/http/catalog/catalog_service';
@@ -278,36 +276,8 @@ export default function PreOrderManager() {
     }
   };
 
-  const handleAddItem = () => {
-    const newItem: PreOrderItem = {
-      product_id: 0,
-      product_name: '',
-      product_code: '',
-      quantity: 1,
-      unit_price: 0
-    };
-    setFormItems(prev => [...prev, newItem]);
-  };
-
   const handleRemoveItem = (index: number) => {
     setFormItems(prev => prev.filter((_, idx) => idx !== index));
-  };
-
-  const handleProductSelect = (index: number, newId: number | null) => {
-    if (!newId) return;
-    const prod = products.find(p => p.id === newId);
-    const unitPrice = prod ? (prod.sale_price || prod.retail_price || 0) : 0;
-    setFormItems(prev => {
-      const updated = [...prev];
-      updated[index] = {
-        ...updated[index],
-        product_id: newId,
-        product_name: prod?.product_name || '',
-        product_code: prod?.product_code || '',
-        unit_price: unitPrice,
-      };
-      return updated;
-    });
   };
 
   const handleItemChange = (index: number, field: keyof PreOrderItem, value: any) => {
@@ -880,7 +850,7 @@ export default function PreOrderManager() {
                         const supplierPartCode = (item as any).supplier_part_code || '';
                         const supplierName = (item as any).supplier_name || '';
                         const fromCatalog = !!(item as any).supplier_part_code;
-                        const imgUrl = (item as any).image || matchedProd?.image || '';
+                        const imgUrl = (item as any).image || matchedProd?.thumbnail_url || '';
 
                         return (
                           <TableRow key={idx} className={`hover:bg-gray-50/70 align-middle transition-colors ${fromCatalog ? 'bg-red-50/20' : ''}`}>

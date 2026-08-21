@@ -98,8 +98,8 @@ export const stockCheckService = {
     return res.data;
   },
 
-  createSchedule: async (data: CheckStockScheduleCreateInput): Promise<any> => {
-    const res = await apiClient.post("/wms/check-stock-schedules", data);
+  createSchedule: async (data: CheckStockScheduleCreateInput): Promise<{ message: string; id: number }> => {
+    const res = await apiClient.post<{ message: string; id: number }>("/wms/check-stock-schedules", data);
     return res.data;
   },
 

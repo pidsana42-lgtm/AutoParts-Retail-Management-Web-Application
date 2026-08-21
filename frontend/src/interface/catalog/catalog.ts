@@ -8,6 +8,7 @@ export interface CatalogItem {
   standard_price: number;
   unit: string;
   image?: string;
+  st_no?: string; // รหัสสินค้าฝั่งคู่ค้า (ยังไม่มีคอลัมน์นี้จริงใน backend ตอนนี้ เลยจะว่างเสมอ ใช้ fallback เป็น part_number แทน)
   remark?: string;
   created_at?: string;
   updated_at?: string;
