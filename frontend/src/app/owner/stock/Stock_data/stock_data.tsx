@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Search, Loader2 } from "lucide-react";
+import { Plus, Search, Loader2 } from "lucide-react";
+import Button from "../../../../components/elements/button";
 
 import Card from "../../../../components/elements/card";
 import Heading from "../../../../components/elements/heading";
@@ -48,6 +49,8 @@ function StockDataContent() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [zoneFilter, setZoneFilter] = useState("");
   const [brandFilter, setBrandFilter] = useState("");
+
+  const [addSignal, setAddSignal] = useState(0);
 
   // Data states
   const [categories, setCategories] = useState<Category[]>([]);
@@ -112,6 +115,7 @@ function StockDataContent() {
     setCategoryFilter("");
     setZoneFilter("");
     setBrandFilter("");
+    setAddSignal(0);
   };
 
   if (loading) {
@@ -215,6 +219,21 @@ function StockDataContent() {
               containerClassName="w-56"
             />
           )}
+
+          <div className="flex-none">
+            <Button
+              className="w-full sm:w-auto flex items-center gap-2"
+              onClick={() => setAddSignal(prev => prev + 1)}
+            >
+              <Plus className="h-4 w-4" />
+              {activeTab === "category" && "เพิ่มประเภทสินค้า"}
+              {activeTab === "unit" && "เพิ่มหน่วยสินค้า"}
+              {activeTab === "zone" && "เพิ่มโซน/ชั้นวาง"}
+              {activeTab === "brand" && "เพิ่มแบรนด์/โมเดล"}
+              {activeTab === "supplier" && "เพิ่มบริษัทสั่งซื้อ"}
+              {activeTab === "grade" && "เพิ่มเกรดสินค้า"}
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -226,6 +245,7 @@ function StockDataContent() {
             categoryFilter={categoryFilter}
             categories={categories}
             setCategories={setCategories}
+            addSignal={addSignal}
           />
         )}
         {activeTab === "unit" && (
@@ -233,6 +253,7 @@ function StockDataContent() {
             search={search}
             units={units}
             loadData={loadData}
+            addSignal={addSignal}
           />
         )}
         {activeTab === "zone" && (
@@ -242,6 +263,7 @@ function StockDataContent() {
             zones={zones}
             shelves={shelves}
             loadData={loadData}
+            addSignal={addSignal}
           />
         )}
         {activeTab === "brand" && (
@@ -250,6 +272,7 @@ function StockDataContent() {
             brandFilter={brandFilter}
             brands={brands}
             reloadBrands={reloadBrands}
+            addSignal={addSignal}
           />
         )}
         {activeTab === "supplier" && (
@@ -257,6 +280,7 @@ function StockDataContent() {
             search={search}
             suppliers={suppliers}
             loadData={loadData}
+            addSignal={addSignal}
           />
         )}
         {activeTab === "grade" && (
@@ -264,6 +288,7 @@ function StockDataContent() {
             search={search}
             grades={grades}
             loadData={loadData}
+            addSignal={addSignal}
           />
         )}
       </Card>

@@ -1,6 +1,7 @@
 package wms
 
 import (
+	"io"
 	"log"
 	"net/http"
 
@@ -9,6 +10,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+var allowedProductImageMIME = map[string]bool{
+	"image/jpeg": true,
+	"image/png":  true,
+	"image/webp": true,
+	"image/gif":  true,
+}
 
 type ProductController struct {
 	service wmsSvc.ProductService
@@ -24,11 +32,12 @@ func (ctrl *ProductController) CreateProduct(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := ctrl.service.CreateProduct(&req); err != nil {
+	res, err := ctrl.service.CreateProduct(&req)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"message": "product created successfully"})
+	c.JSON(http.StatusCreated, gin.H{"message": "product created successfully", "data": res})
 }
 
 func (ctrl *ProductController) GetProductByID(c *gin.Context) {
@@ -90,6 +99,59 @@ func (ctrl *ProductController) DeleteProduct(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "product deleted successfully"})
 }
 
+func (ctrl *ProductController) UploadProductImage(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid product ID format"})
+		return
+	}
+
+	fileHeader, err := c.FormFile("image")
+	if err != nil {
+		fileHeader, err = c.FormFile("file")
+	}
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ไม่พบไฟล์รูปภาพในฟิลด์ 'image'"})
+		return
+	}
+	if fileHeader.Size > 5*1024*1024 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ไฟล์รูปภาพต้องไม่เกิน 5MB"})
+		return
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "เปิดไฟล์รูปภาพไม่ได้"})
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "อ่านไฟล์รูปภาพไม่ได้"})
+		return
+	}
+
+	mimeType := fileHeader.Header.Get("Content-Type")
+	if mimeType == "" || mimeType == "application/octet-stream" {
+		mimeType = http.DetectContentType(data)
+	}
+	if !allowedProductImageMIME[mimeType] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รองรับเฉพาะไฟล์ภาพ JPEG, PNG, WEBP หรือ GIF"})
+		return
+	}
+
+	res, err := ctrl.service.UploadProductImage(uri.ID, fileHeader.Filename, mimeType, data)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "product image uploaded successfully", "data": res})
+}
+
 func (ctrl *ProductController) ListProducts(c *gin.Context) {
 	res, err := ctrl.service.ListProducts()
 	if err != nil {
@@ -107,7 +169,6 @@ func (ctrl *ProductController) ListBrands(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, res)
 }
-
 
 func (ctrl *ProductController) CreateBrand(c *gin.Context) {
 	var req wmsDto.BrandRequestDTO

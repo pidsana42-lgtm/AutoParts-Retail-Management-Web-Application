@@ -1,10 +1,22 @@
-import React, { useState, useRef, useEffect, useId } from "react";
+import { useState, useRef, useEffect, useId } from "react";
+import { ImageOff } from "lucide-react";
 import { cn } from "../../../../utils/component";
 
 export interface SelectOption {
   label: string;
   value: string;
   disabled?: boolean;
+  imageUrl?: string;
+}
+
+function OptionThumbnail({ imageUrl, className }: { imageUrl?: string; className?: string }) {
+  return imageUrl ? (
+    <img src={imageUrl} alt="" className={cn("shrink-0 rounded object-cover", className)} />
+  ) : (
+    <span className={cn("flex shrink-0 items-center justify-center rounded bg-slate-100 text-slate-300", className)}>
+      <ImageOff className="h-3 w-3" />
+    </span>
+  );
 }
 
 interface SearchableSelectProps {
@@ -51,12 +63,12 @@ export default function SearchableSelect({
     onChange(opt.value);
   }
 
-  const filteredOptions = options.filter((o) => 
+  const filteredOptions = options.filter((o) =>
     o.label.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const displayLabel =
-    options.find((o) => o.value === value)?.label ?? placeholder ?? "เลือก...";
+  const selectedOption = options.find((o) => o.value === value);
+  const displayLabel = selectedOption?.label ?? placeholder ?? "เลือก...";
 
   const isPlaceholder = !value || value === "";
 
@@ -77,7 +89,7 @@ export default function SearchableSelect({
           aria-expanded={isOpen}
           onClick={() => setIsOpen((prev) => !prev)}
           className={cn(
-            "h-10 w-full rounded-sm border bg-white px-3 pr-9 text-sm text-left",
+            "flex h-10 w-full items-center gap-2 rounded-sm border bg-white px-3 pr-9 text-sm text-left",
             "transition-colors duration-150 ease-out",
             "focus:outline-none focus:ring-2 focus:ring-offset-0",
             "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
@@ -88,7 +100,10 @@ export default function SearchableSelect({
             isOpen && "border-[#B70011] ring-2 ring-red-200"
           )}
         >
-          {displayLabel}
+          {selectedOption?.imageUrl !== undefined && (
+            <OptionThumbnail imageUrl={selectedOption?.imageUrl} className="h-6 w-6" />
+          )}
+          <span className="truncate">{displayLabel}</span>
         </button>
 
         <svg
@@ -147,14 +162,15 @@ export default function SearchableSelect({
                       aria-disabled={opt.disabled}
                       onClick={() => handleSelect(opt)}
                       className={cn(
-                        "px-3 py-2 text-sm cursor-pointer transition-colors",
+                        "flex items-center gap-2 px-3 py-2 text-sm cursor-pointer transition-colors",
                         isSelected
                           ? "bg-[#B70011] text-white font-medium"
                           : "text-slate-800 hover:bg-red-50 hover:text-[#B70011]",
                         opt.disabled && "cursor-not-allowed opacity-40"
                       )}
                     >
-                      {opt.label}
+                      {opt.imageUrl !== undefined && <OptionThumbnail imageUrl={opt.imageUrl} className="h-8 w-8" />}
+                      <span className="truncate">{opt.label}</span>
                     </li>
                   );
                 })

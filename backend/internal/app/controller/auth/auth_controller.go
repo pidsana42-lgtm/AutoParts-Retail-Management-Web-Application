@@ -131,6 +131,6 @@ func (ctrl *AuthController) LineCallback(c *gin.Context) {
 	}
 
 	// Success! Redirect to frontend login callback parser
-	c.Redirect(http.StatusFound, fmt.Sprintf("http://localhost:5173/login?token=%s&role=%s&username=%s&first_name=%s",
-		res.Token, res.Role, res.Username, res.FirstName))
+	c.Redirect(http.StatusFound, fmt.Sprintf("http://localhost:5173/login?token=%s&role=%s&username=%s&first_name=%s&id=%d",
+		res.Token, res.Role, res.Username, res.FirstName, res.ID))
 }

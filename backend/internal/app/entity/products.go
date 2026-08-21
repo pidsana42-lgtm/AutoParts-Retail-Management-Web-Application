@@ -22,22 +22,23 @@ type Product struct {
 	Import_DateTime time.Time `json:"import_datetime"`
 	Note            string    `json:"note"`
 
-	UnitID        uint  `json:"unit_id"`
-	CategoryID    uint  `json:"category_id"`
-	SubCategoryID *uint `json:"sub_category_id" gorm:"default:null"`
-	SubSubCategoryID *uint `json:"sub_sub_category_id" gorm:"default:null"`
-	GradeID       uint  `json:"grade_id"`
-	ShelfID       uint  `json:"shelf_id"`
-	ShelfLevelID  *uint `json:"shelf_level_id" gorm:"default:null"`
+	UnitID             uint   `json:"unit_id"`
+	CategoryID         uint   `json:"category_id"`
+	SubCategoryID      *uint  `json:"sub_category_id" gorm:"default:null"`
+	SubSubCategoryID   *uint  `json:"sub_sub_category_id" gorm:"default:null"`
+	GradeID            uint   `json:"grade_id"`
+	ShelfID            uint   `json:"shelf_id"`
+	ShelfLevelID       *uint  `json:"shelf_level_id" gorm:"default:null"`
+	CompanyProductCode string `json:"company_product_code"`
 
-	Models      []Models     `gorm:"many2many:product_models;" json:"models"`
-	Unit        *Unit        `gorm:"foreignKey:UnitID" json:"unit"`
-	Category    *Category    `gorm:"foreignKey:CategoryID" json:"category"`
-	SubCategory *SubCategory `gorm:"foreignKey:SubCategoryID" json:"sub_category"`
+	Models         []Models        `gorm:"many2many:product_models;" json:"models"`
+	Unit           *Unit           `gorm:"foreignKey:UnitID" json:"unit"`
+	Category       *Category       `gorm:"foreignKey:CategoryID" json:"category"`
+	SubCategory    *SubCategory    `gorm:"foreignKey:SubCategoryID" json:"sub_category"`
 	SubSubCategory *SubSubCategory `gorm:"foreignKey:SubSubCategoryID" json:"sub_sub_category"`
-	Grade       *Grade       `gorm:"foreignKey:GradeID" json:"grade"`
-	Shelf       *Shelf       `gorm:"foreignKey:ShelfID" json:"shelf"`
-	ShelfLevel  *ShelfLevel  `gorm:"foreignKey:ShelfLevelID" json:"shelf_level"`
+	Grade          *Grade          `gorm:"foreignKey:GradeID" json:"grade"`
+	Shelf          *Shelf          `gorm:"foreignKey:ShelfID" json:"shelf"`
+	ShelfLevel     *ShelfLevel     `gorm:"foreignKey:ShelfLevelID" json:"shelf_level"`
 
 	StockAlerts    []StockAlert    `gorm:"foreignKey:ProductID" json:"stock_alerts"`
 	Inventories    []Inventory     `gorm:"foreignKey:ProductID" json:"inventories"`

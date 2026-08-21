@@ -71,7 +71,7 @@ export const PreorderSelectionModal: React.FC<PreorderSelectionModalProps> = ({
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-12 text-gray-500">
+                  <TableCell colSpan={7} className="text-center py-12 text-gray-500">
                     ไม่มีรายการพรีออเดอร์ค้างอยู่ในระบบ
                   </TableCell>
                 </TableRow>

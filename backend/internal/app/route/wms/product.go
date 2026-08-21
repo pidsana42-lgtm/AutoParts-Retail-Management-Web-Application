@@ -3,15 +3,15 @@ package wms
 import (
 	wmsCtrl "backend/internal/app/controller/wms"
 	wmsRepo "backend/internal/app/repository/wms"
-	wmsSvc  "backend/internal/app/service/wms"
+	wmsSvc "backend/internal/app/service/wms"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
 func SetupProductRoutes(r *gin.Engine, db *gorm.DB) {
-	repo       := wmsRepo.NewProductRepository(db)
-	service    := wmsSvc.NewProductService(repo)
+	repo := wmsRepo.NewProductRepository(db)
+	service := wmsSvc.NewProductService(repo)
 	controller := wmsCtrl.NewProductController(service)
 
 	wms := r.Group("/api/wms")
@@ -20,6 +20,7 @@ func SetupProductRoutes(r *gin.Engine, db *gorm.DB) {
 		wms.GET("/products", controller.ListProducts)
 		wms.GET("/products/:id", controller.GetProductByID)
 		wms.PUT("/products/:id", controller.UpdateProduct)
+		wms.POST("/products/:id/images", controller.UploadProductImage)
 		wms.DELETE("/products/:id", controller.DeleteProduct)
 		wms.POST("/brands", controller.CreateBrand)
 		wms.GET("/brands", controller.ListBrands)

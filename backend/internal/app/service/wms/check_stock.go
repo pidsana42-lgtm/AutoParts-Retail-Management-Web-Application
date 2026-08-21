@@ -36,14 +36,9 @@ func (s *checkStockService) CreateCheckStock(req *wmsDto.CheckStockRequestDTO) e
 	if req.SupplierID != 0 {
 		cs.SupplierID = &req.SupplierID
 	}
-	if err := s.repo.Create(&cs); err != nil {
-		return err
-	}
-	// อัพเดต schedule → completed อัตโนมัติ
-	if req.CheckStockScheduleID != nil {
-		return s.scheduleRepo.UpdateStatus(*req.CheckStockScheduleID, "completed")
-	}
-	return nil
+	// หมายเหตุ: ไม่อัพเดตสถานะตารางเช็คสต็อกที่นี่ เพราะ 1 ตารางมีได้หลายสินค้า/หลายการเรียก
+	// ฝั่งพนักงานจะสั่งเปลี่ยนสถานะเป็น "รอตรวจสอบ" เองครั้งเดียวหลังบันทึกครบทุกสินค้าแล้ว (ดู UpdateStatus)
+	return s.repo.Create(&cs)
 }
 
 func (s *checkStockService) GetByID(id uint) (*wmsDto.CheckStockResponseDTO, error) {

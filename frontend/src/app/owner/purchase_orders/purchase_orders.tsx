@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ShoppingBasket, CircleCheck, PenLine, Eye, Printer, Trash2, Info,
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RotateCcw, } from "lucide-react";
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RotateCcw,
+  TrendingUp,
+  TrendingDown, } from "lucide-react";
 // Components
 import Heading from "../../../components/elements/heading";
 import Input   from "../../../components/elements/input";
@@ -18,23 +20,23 @@ import type { POResponse, POSummaryResponse } from "../../../interface/purchase_
 import { poService } from "../../../service/http/purchase_orders/po_service";
 // Utils
 import { cn } from "../../../utils/component";
-import { formatDate } from "../../../utils/formatdate";
+import { formatDate, getThaiMonthOptions, getYearOptions } from "../../../utils/formatdate";
 import { generateLocalId } from "../../../utils/generateId";
 import { usePathBasePrefix  } from "../../../utils/usePathBasePrefix";
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "DRAFT")
-    return <Badge variant="outline" className="text-gray-600 border-none bg-gray-200/50">ฉบับร่าง</Badge> 
+    return <Badge variant="outline" className="text-gray-600 border-none bg-gray-200/50">ฉบับร่าง</Badge>;
   if (status === "PENDING")
     return <Badge variant="outline" className="bg-yellow-100 border-none text-yellow-700">รออนุมัติ</Badge>;
   if (status === "APPROVED")
     return <Badge variant="success">อนุมัติแล้ว</Badge>;
   if (status === "RESUBMITTED")
-    return <Badge variant="outline" className="bg-orange-100 border-none text-orange-700">รอส่งอนุมัติใหม่</Badge>;
-  if (status === "EXPIRED")
-    return <Badge variant="outline">หมดอายุกู้คืน</Badge>;
+    return <Badge variant="destructive">รอส่งอนุมัติใหม่</Badge>;
+  if (status === "CANCELLED")
+    return <Badge variant="outline" className="bg-red-100 border-none text-red-700">ยกเลิกแล้ว</Badge>;
   if (status === "DELETED")
-    return <Badge variant="destructive">อยู่ในถังขยะ</Badge>;
+    return <Badge variant="outline" className="bg-orange-100 border-none text-orange-700">อยู่ในถังขยะ</Badge>;
   return <Badge variant="outline">{status}</Badge>;
 }
 
@@ -85,7 +87,7 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
 
   const handleDelete = async () => {
     if (!id) return;
-    const confirmed = window.confirm('คุณต้องการลบใบสั่งซื้อนี้ใช่หรือไม่? และสามารถกู้คืนได้ภายใน 7 วัน')
+    const confirmed = window.confirm('คุณต้องการลบใบสั่งซื้อนี้ใช่หรือไม่? (สามารถกู้คืนได้จากถังขยะ)')
     if (!confirmed) return;
     try {
       await poService.deletePurchaseOrder(id);
@@ -114,10 +116,10 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
     return (
       <div className="flex items-start justify-center gap-3">
         <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <PenLine className="w-4 h-4"/>
+          <PenLine size={16}/>
         </button>
         <button onClick={handleDelete} className="text-red-600 hover:text-red-700 transition cursor-pointer">
-          <Trash2 className="w-4 h-4" />
+          <Trash2 size={16} />
         </button>
       </div>
     );
@@ -128,10 +130,10 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
     return (
       <div className="flex items-center justify-center gap-3">
         <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <Eye className="w-4 h-4" />
+          <Eye size={16} />
         </button>
         <button onClick={handleApprove} className="text-emerald-600 hover:text-emerald-700 rounded transition cursor-pointer">
-          <CircleCheck className="w-4 h-4" />
+          <CircleCheck size={16} />
         </button>
       </div>
     );
@@ -141,24 +143,32 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
     return (
       <div className="flex items-center justify-center gap-3">
         <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <Eye className="w-4 h-4" />
+          <Eye size={16} />
         </button>
       </div>
     );
   }
 
-  // สถานะ: หมดอายุ
-  if (status === "EXPIRED" || status === "DELETED") {
+  // สถานะ: ยกเลิกแล้ว (ดูได้อย่างเดียว ไม่สามารถกู้คืนได้)
+  if (status === "CANCELLED") {
     return (
       <div className="flex items-center justify-center gap-3">
-        {/* ปุ่มรูปตา: นำทางไปหน้าดูรายละเอียด */}
         <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <Eye className="w-4 h-4" />
+          <Eye size={16} />
         </button>
+      </div>
+    );
+  }
 
-        {/* ปุ่มกู้คืน: ฟังก์ชันสำหรับกู้คืน */}
+  // สถานะ: อยู่ในถังขยะ (กู้คืนได้)
+  if (status === "DELETED") {
+    return (
+      <div className="flex items-center justify-center gap-3">
+        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
+          <Eye size={16} />
+        </button>
         <button onClick={handleRestore} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <RotateCcw className="w-4 h-4" />
+          <RotateCcw size={16} />
         </button>
       </div>
     );
@@ -169,7 +179,7 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
     <div className="flex items-center justify-center gap-3">
       {/* ปุ่มรูปตา: นำทางไปหน้าดูรายละเอียด */}
       <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-700 transition cursor-pointer">
-        <Eye className="w-4 h-4" />
+        <Eye size={16} />
       </button>
       
       {/* ปุ่มเครื่องพิมพ์: เรียกฟังก์ชัน Generate PDF */}
@@ -188,7 +198,7 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
               "disabled:opacity-60 disabled:cursor-not-allowed"
             )}
           >
-            <Printer className="w-4 h-4" />
+            <Printer size={16} />
           </button>
         )}
       />
@@ -217,7 +227,7 @@ const PO_STATUS_OPTIONS = [
   { label: "รออนุมัติ", value: "PENDING" },
   { label: "อนุมัติแล้ว", value: "APPROVED" },
   { label: "รอส่งอนุมัติใหม่", value: "RESUBMITTED" },
-  { label: "หมดอายุ", value: "EXPIRED"}
+  { label: "ยกเลิกแล้ว", value: "CANCELLED" },
 ];
 
 // ─── Page ──────────
@@ -236,6 +246,9 @@ const PurchaseOrders: React.FC = () => {
   const [summary, setSummary] = useState<POSummaryResponse>({
     pending_amount: 0,
     approved_mtd_amount: 0,
+    monthly_approved_count: 0,
+    monthly_approved_last_count: 0,
+    approved_change_percent: 0,
     rejected_mtd_amount: 0,
     rejected_by_supplier: [],
   });
@@ -243,7 +256,10 @@ const PurchaseOrders: React.FC = () => {
   // 2. States สำหรับ Filter
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchId, setSearchId] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
+  const now = new Date();
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
+  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
 
   // 3. States สำหรับ Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -253,7 +269,7 @@ const PurchaseOrders: React.FC = () => {
   const userRole = localStorage.getItem('role');
   const isOwner = userRole === 'Owner';
 
-  // ดึงข้อมูล PO ทั้งหมดของ User
+  // ดึงข้อมูล PO ทั้งหมดของทุก User
   useEffect(() => {
     const fetchPurchaseOrders = async () => {
       setIsLoading(true);
@@ -265,7 +281,8 @@ const PurchaseOrders: React.FC = () => {
           limit: itemsPerPage,
           status: statusFilter,
           search: searchId,
-          date: dateFilter,
+          month: selectedMonth,
+          year: selectedYear,
         });
 
         setOrders(response.data || []);
@@ -284,7 +301,7 @@ const PurchaseOrders: React.FC = () => {
     }, searchId ? 400 : 0);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [currentPage, itemsPerPage, statusFilter, searchId, dateFilter]);
+  }, [currentPage, itemsPerPage, statusFilter, searchId, selectedMonth, selectedYear]);
 
   // ดึงจำนวน PO เดือนนี้ — ทุก role เห็นได้ ไม่ขึ้นกับ isOwner
   useEffect(() => {
@@ -313,6 +330,19 @@ const PurchaseOrders: React.FC = () => {
     fetchSummary();
   }, [isOwner]);
 
+  // ดึงข้อมูลปี พ.ศ. ที่มีทั้งหมดของ po จาก DB
+  useEffect(() => {
+    const fetchAvailableYears = async () => {
+      try {
+        const years = await poService.getAvailableYears();
+        setAvailableYears(years);
+      } catch (err) {
+        console.error("Failed to fetch available years:", err);
+      }
+    };
+    fetchAvailableYears();
+  }, []);
+
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
 
   return (
@@ -323,7 +353,7 @@ const PurchaseOrders: React.FC = () => {
         <Heading level="h1" weight="semibold" className="m-0 text-black">
           จัดการใบสั่งซื้อ
         </Heading>
-        <Button leftIcon={<ShoppingBasket className="h-5 w-5" />} size="md" onClick={() => navigate(`${basePath}/new-orders`)}>
+        <Button leftIcon={<ShoppingBasket size={20} />} size="md" onClick={() => navigate(`${basePath}/new-orders`)}>
           สร้างใบสั่งซื้อใหม่
         </Button>
       </div>
@@ -336,8 +366,9 @@ const PurchaseOrders: React.FC = () => {
             <CardTitle className="text-base text-black">ค้นหาใบสั่งซื้อด้วย</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-4 items-end">
-              <Input
+            <div className="grid grid-cols-5 gap-4 items-end">
+              <div className="col-span-2">
+                <Input
                   label="หมายเลขใบสั่งซื้อ"
                   placeholder="PO-XXXX-XXXX"
                   value={searchId}
@@ -346,70 +377,89 @@ const PurchaseOrders: React.FC = () => {
                     setCurrentPage(1);
                   }}
                 />
-                <Select
-                  label="สถานะใบสั่งซื้อ"
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  options={PO_STATUS_OPTIONS}
-                />
-                <Input
-                  type="date"
-                  label="วันที่สั่งซื้อ"
-                  value={dateFilter}
-                  onChange={(e) => {
-                    setDateFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                />
+              </div>
+              <Select
+                label="สถานะใบสั่งซื้อ"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                options={PO_STATUS_OPTIONS}
+              />
+              <Select
+                label="เดือนที่สั่งซื้อ"
+                value={selectedMonth}
+                onChange={(e) => {
+                  setSelectedMonth(e.target.value);
+                  setCurrentPage(1);
+                }}
+                options={getThaiMonthOptions()}
+              />
+              <Select
+                label="ปีที่สั่งซื้อ"
+                value={selectedYear}
+                onChange={(e) => {
+                  setSelectedYear(e.target.value);
+                  setCurrentPage(1);
+                }}
+                options={getYearOptions(availableYears)}
+              />
             </div>
           </CardContent>
         </Card>
 
         {/* Monthly Stats Card */}
-        <div className="bg-[#22252a] text-white rounded-none p-6 w-1/4 flex flex-col justify-between shadow-sm relative overflow-hidden">
-          <div>
-            <p className="text-sm text-gray-400 font-light">ใบสั่งซื้อที่อนุมัติในเดือนนี้</p>
-            <p className="text-4xl font-bold mt-2 flex items-baseline gap-2">
-              {monthlyTotalCount} <span className="text-lg font-normal text-gray-300">ใบสั่งซื้อ</span>
-            </p>
-          </div>
-          <div className="absolute right-4 bottom-4 opacity-5 pointer-events-none">
-            <ShoppingBasket className="w-24 h-24" />
-          </div>
-        </div>
+        <Card className="relative overflow-hidden border-t-4 border-t-red-600 bg-[#22252a] shadow-sm hover:shadow-md transition-shadow w-1/4">
+          <CardContent className="p-4 flex items-center justify-between h-full">
+            <div>
+              <Heading level="p" className="font-normal uppercase tracking-wider text-slate-400">ใบสั่งซื้อที่อนุมัติในเดือนนี้</Heading>
+              <div className="flex items-end gap-4 mt-3">
+                <span className="text-5xl font-bold text-white leading-none">{monthlyTotalCount}</span>
+                <span className="text-base text-slate-400 mb-1">ใบสั่งซื้อ</span>
+              </div>
+                <div className={`mt-4 flex items-center gap-1 text-sm ${summary.approved_change_percent >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  {summary.approved_change_percent >= 0 ? ( <TrendingUp className="w-4 h-4 text-emerald-500" /> ) : (
+                      <TrendingDown className="w-4 h-4 text-red-500" /> )}
+                  <span>{Math.abs(summary.approved_change_percent).toFixed(1)}%</span>
+                  <span className="text-slate-400">เทียบกับเดือนที่แล้ว</span>
+                </div>
+              </div>
+            <div className="opacity-5 text-white">
+              <ShoppingBasket size={120} strokeWidth={1.5} />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       { /* TODO: แก้ไขเรียกจากฟังก์ชันจริง */ }
       { isOwner && (
         <div className="grid grid-cols-3 gap-6">
-          <Card className="border-l-[5px] border-l-black flex flex-col justify-center h-24 p-5">
-            <p className="text-sm text-[#6B7280] font-medium">รออนุมัติ</p>
-            <p className="text-2xl font-bold mt-1 text-gray-900">
+          <Card className="border-l-[5px] border-l-black flex flex-col justify-between h-24 p-5">
+            <Heading level="p" className="text-[#6B7280] font-medium">รออนุมัติ</Heading>
+            <Heading level="h3" className="font-bold mt-1 text-black">
               ฿{(summary?.pending_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
+            </Heading>
           </Card>
-          <Card className="border-l-[5px] border-l-emerald-500 flex flex-col justify-center h-24 p-5">
-            <p className="text-sm text-[#6B7280] font-medium">อนุมัติแล้ว (MTD)</p>
-            <p className="text-2xl font-bold mt-1 text-gray-900">
+          <Card className="border-l-[5px] border-l-emerald-500 flex flex-col justify-between h-24 p-5">
+            <Heading level="p" className="text-[#6B7280] font-medium">อนุมัติแล้ว (MTD)</Heading>
+            <Heading level="h3" className="font-bold mt-1 text-black">
               ฿{(summary?.approved_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
+            </Heading>
           </Card>
-          <Card 
+          <Card
             onClick={() => openModal(summary?.rejected_by_supplier)}
-            className="border-l-[5px] border-l-red-500 flex flex-col justify-center h-24 p-5 relative group cursor-pointer hover:bg-gray-50/80 transition-all duration-200 select-none"
+            className="border-l-[5px] border-l-red-500 flex flex-col justify-between h-24 p-5 relative group cursor-pointer hover:bg-gray-50/80 transition-all duration-200 select-none"
           >
             <div className="flex justify-between items-center w-full">
-              <p className="text-sm text-[#6B7280] font-medium">ไม่อนุมัติ (MTD)</p>
+              <Heading level="p" className="text-[#6B7280] font-medium">รอส่งอนุมัติใหม่</Heading>
               <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-none flex items-center gap-1">
-                <Info className="w-3 h-3" /> ดูรายละเอียดแยกบริษัท
+                <Info size={12} /> ดูรายละเอียดแยกบริษัท
               </span>
             </div>
-            <p className="text-2xl font-bold mt-1 text-gray-900 group-hover:text-red-600 transition-colors">
+            <Heading level="h3" className="font-bold mt-1 text-black group-hover:text-red-600 transition-colors">
               ฿{(summary?.rejected_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
+            </Heading>
           </Card>
         </div>
       )}
@@ -423,6 +473,7 @@ const PurchaseOrders: React.FC = () => {
               <TableHead>วันที่สร้าง</TableHead>
               <TableHead>ผู้จัดจำหน่าย</TableHead>
               <TableHead>พนักงานผู้สร้าง</TableHead>
+              <TableHead>แก้ไขล่าสุดโดย</TableHead>
               <TableHead className="text-center">รวมรายการ</TableHead>
               <TableHead className="text-center">จำนวนชิ้น</TableHead>
               <TableHead className="text-right pr-6">ราคารวม</TableHead>
@@ -452,37 +503,26 @@ const PurchaseOrders: React.FC = () => {
 
                 return (
                   <TableRow key={po.id} className="hover:bg-gray-50/70">
-                    <TableCell className="pl-6 font-semibold text-gray-900">
-                      {po.po_number}
-                    </TableCell>
-                    <TableCell className="text-gray-500">{formatDate(po.created_at)}</TableCell>
-                    <TableCell>
-                      <div className="font-medium text-gray-900">{po.supplier_name || "ไม่ระบุ"}</div>
-                    </TableCell>
-                    <TableCell className="text-gray-600">
-                      {po.creator_name || "ไม่ระบุ"}
-                    </TableCell>
-                    <TableCell className="text-center font-medium">{totalItemTypes}</TableCell>
-                    <TableCell className="text-center font-medium">{totalQuantity}</TableCell>
-                    <TableCell className="text-right pr-6 font-medium text-gray-900">
+                    <TableCell className="pl-6 text-gray-900">{po.po_number}</TableCell>
+                    <TableCell className="text-black">{formatDate(po.created_at)}</TableCell>
+                    <TableCell><div className="text-black">{po.supplier_name || "ไม่ระบุ"}</div></TableCell>
+                    <TableCell className="text-black">{po.creator_name || "ไม่ระบุ"}</TableCell>
+                    <TableCell className="text-black">{po.updated_by_name || "ไม่ระบุ"}</TableCell>
+                    <TableCell className="text-center text-black">{totalItemTypes}</TableCell>
+                    <TableCell className="text-center text-black">{totalQuantity}</TableCell>
+                    <TableCell className="text-right pr-6 text-black">
                       ฿{Number(po.total_amount).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex justify-center">
-                        <StatusBadge status={po.status} />
-                      </div>
+                    <TableCell className="text-center text-black">
+                      <div className="flex justify-center"><StatusBadge status={po.status} /></div>
                     </TableCell>
-                    <TableCell className="text-center">
-                      <ActionButtons id={po.id} status={po.status} />
-                    </TableCell>
+                    <TableCell className="text-center"><ActionButtons id={po.id} status={po.status} /></TableCell>
                   </TableRow>
                 );
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-12 text-gray-500">
-                  ไม่พบข้อมูลใบสั่งซื้อ
-                </TableCell>
+                <TableCell colSpan={9} className="text-center py-12 text-gray-500">ไม่พบข้อมูลใบสั่งซื้อ</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -517,7 +557,7 @@ const PurchaseOrders: React.FC = () => {
                 aria-label="หน้าแรก"
                 className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
               >
-                <ChevronsLeft className="w-4 h-4" />
+                <ChevronsLeft size={16} />
               </button>
               <button
                 disabled={currentPage === 1}
@@ -525,7 +565,7 @@ const PurchaseOrders: React.FC = () => {
                 aria-label="หน้าก่อนหน้า"
                 className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft size={16} />
               </button>
 
               {getPageNumbers(currentPage, totalPages).map((page, idx) =>
@@ -552,7 +592,7 @@ const PurchaseOrders: React.FC = () => {
                 aria-label="หน้าถัดไป"
                 className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight size={16} />
               </button>
               <button
                 disabled={currentPage === totalPages}
@@ -560,7 +600,7 @@ const PurchaseOrders: React.FC = () => {
                 aria-label="หน้าสุดท้าย"
                 className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
               >
-                <ChevronsRight className="w-4 h-4" />
+                <ChevronsRight size={16} />
               </button>
             </div>
           </div>

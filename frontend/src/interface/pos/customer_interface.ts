@@ -20,6 +20,8 @@ export interface CustomerDiscountResponse {
   ontop_discount_rate?: number;           // สิทธิ์ส่วนลดพิเศษสำหรับกลุ่มอู่ซ่อมรถยนต์
   max_credit_limit: number;
   is_credit_enabled: boolean;
+  shipping_address?: string;
+  registered_address?: string;
 }
 
 // ข้อมูลลูกค้าที่ผ่านการคำนวณและแปลง Format พร้อมใช้บน UI (จาก Custom Hook)
