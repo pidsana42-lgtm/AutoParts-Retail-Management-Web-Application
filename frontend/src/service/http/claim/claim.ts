@@ -108,9 +108,12 @@ export const searchSaleOrders = async (q: string) => {
 };
 
 // ==========================================
-// PO Lookup (for supplier claim form)
+// Customer Credit Lookup (for claim forms)
 // ==========================================
-export const getPOByNumber = async (poNumber: string) => {
-  const response = await apiClient.get<{ data: any }>(`/claims/purchase-orders/number/${poNumber}`);
-  return response.data?.data ?? null;
+export const searchCustomerCreditByPhone = async (phone: string) => {
+  const response = await apiClient.get<any>(`/pos/customer-discount?search=${encodeURIComponent(phone)}`);
+  if (Array.isArray(response.data)) {
+    return response.data[0] || null;
+  }
+  return response.data || null;
 };

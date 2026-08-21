@@ -2,10 +2,12 @@ package claim
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	claimDTO "backend/internal/app/dto/claim"
 	claimRepo "backend/internal/app/repository/claim"
+	"backend/internal/pkg/websocket"
 )
 
 type CustomerClaimService interface {
@@ -30,7 +32,6 @@ func NewCustomerClaimService(repo claimRepo.CustomerClaimRepository, soRepo clai
 
 func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomerClaimDTO) (claimDTO.CustomerClaimResponseDTO, error) {
 	claimEntity := input.ToEntity()
-	claimEntity.Status = "Pending"
 	claimEntity.ClaimDate = time.Now()
 	claimEntity.CreatedBy = 1
 
@@ -58,10 +59,22 @@ func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomer
 	for _, itemInput := range input.Items {
 		itemEntity := itemInput.ToEntity()
 		itemEntity.CustomerClaimID = claimEntity.ID
+		itemEntity.Status = claimEntity.Status // ให้สถานะของ Item ล้อตามสถานะของใบเคลม (เช่น APPROVED หรือ PENDING)
 		if err := s.repo.CreateCustomerClaimItem(&itemEntity); err != nil {
 			return claimDTO.CustomerClaimResponseDTO{}, err
 		}
 	}
+
+	// Broadcast Notification
+	msgType := "info"
+	if claimEntity.Status == "PENDING" {
+		msgType = "warning"
+	}
+	websocket.BroadcastNotification(
+		"มีใบเคลมใหม่",
+		fmt.Sprintf("พนักงานได้สร้างใบเคลมใหม่เลขที่ %s", claimEntity.ClaimNo),
+		msgType,
+	)
 
 	return claimDTO.ToCustomerClaimResponseDTO(&claimEntity), nil
 }
@@ -108,6 +121,42 @@ func (s *customerClaimService) UpdateCustomerClaim(id uint, input claimDTO.Updat
 	return claimDTO.ToCustomerClaimResponseDTO(&updated), nil
 }
 
+func (s *customerClaimService) syncParentClaimStatus(claimID uint) {
+	if claimID == 0 {
+		return
+	}
+	parent, err := s.repo.GetCustomerClaimByID(claimID)
+	if err != nil || parent == nil || len(parent.Items) == 0 {
+		return
+	}
+
+	allApproved := true
+	allRejected := true
+	anyApproved := false
+
+	for _, item := range parent.Items {
+		st := strings.ToUpper(strings.TrimSpace(item.Status))
+		if st != "APPROVED" {
+			allApproved = false
+		} else {
+			anyApproved = true
+		}
+		if st != "REJECTED" {
+			allRejected = false
+		}
+	}
+
+	if allApproved || anyApproved {
+		parent.Status = "APPROVED"
+	} else if allRejected {
+		parent.Status = "REJECTED"
+	} else {
+		parent.Status = "PENDING"
+	}
+
+	_ = s.repo.UpdateCustomerClaim(parent)
+}
+
 func (s *customerClaimService) UpdateCustomerClaimItem(id uint, input claimDTO.UpdateCustomerClaimItemDTO) (claimDTO.CustomerClaimItemResponseDTO, error) {
 	existing, err := s.repo.GetCustomerClaimItemByID(id)
 	if err != nil {
@@ -122,12 +171,19 @@ func (s *customerClaimService) UpdateCustomerClaimItem(id uint, input claimDTO.U
 	if input.Resolution != "" {
 		existing.Resolution = input.Resolution
 	}
+	if input.ClaimType != "" {
+		existing.ClaimType = input.ClaimType
+	}
+	if input.Status != "" {
+		existing.Status = input.Status
+	}
 	if input.EvidenceURL != "" {
 		existing.EvidenceURL = input.EvidenceURL
 	}
 	if err := s.repo.UpdateCustomerClaimItem(existing); err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
+	s.syncParentClaimStatus(existing.CustomerClaimID)
 	return claimDTO.ToCustomerClaimItemResponseDTO(existing), nil
 }
 
@@ -140,6 +196,7 @@ func (s *customerClaimService) UpdateCustomerClaimItemStatus(id uint, status str
 	if err := s.repo.UpdateCustomerClaimItem(existing); err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
+	s.syncParentClaimStatus(existing.CustomerClaimID)
 	return claimDTO.ToCustomerClaimItemResponseDTO(existing), nil
 }
 
