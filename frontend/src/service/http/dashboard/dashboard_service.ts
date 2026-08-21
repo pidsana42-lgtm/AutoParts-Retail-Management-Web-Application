@@ -1,5 +1,6 @@
 import apiClient from '../apiClient';
-import type { DashboardSummaryResponse, StockAlertItem, SummaryQuery, RecentSaleItem, AgingStockItem, StockHealthStats } from '../../../interface/dashboard/dashboard_interface';
+import type { DashboardSummaryResponse, StockAlertItem, SummaryQuery, RecentSaleItem, AgingStockItem, StockHealthStats,
+  RevenueBreakdownResponse, TopSellerItem } from '../../../interface/dashboard/dashboard_interface';
 
 export const dashboardService = {
   getSummaryData: (query: SummaryQuery) =>
@@ -18,4 +19,12 @@ export const dashboardService = {
 
   getAgingStock: () =>
     apiClient.get<{ data: AgingStockItem[] }>('/dashboard/aging-stock'),
+
+  getSummaryIncomeData: (query: SummaryQuery) =>
+    apiClient.get<RevenueBreakdownResponse>('/dashboard/income-summary', { params: query }),
+
+  getTopSellers: (query: SummaryQuery, limit = 10) =>
+    apiClient.get<{ data: TopSellerItem[] }>('/dashboard/top-sellers', {
+      params: { ...query, limit },
+    }),
 };

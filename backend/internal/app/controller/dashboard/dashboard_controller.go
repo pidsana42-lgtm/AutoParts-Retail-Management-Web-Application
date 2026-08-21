@@ -71,3 +71,36 @@ func (ctrl *DashboardController) GetStockHealth(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, data)
 }
+
+func (ctrl *DashboardController) GetIncomeSummary(c *gin.Context) {
+	var query dashDto.SummaryQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบ query ไม่ถูกต้อง: " + err.Error()})
+		return
+	}
+	data, err := ctrl.svc.GetIncomeSummary(c.Request.Context(), query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถโหลดข้อมูลรายได้ได้"})
+		return
+	}
+	c.JSON(http.StatusOK, data)
+}
+
+func (ctrl *DashboardController) GetTopSellers(c *gin.Context) {
+	var query dashDto.SummaryQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบ query ไม่ถูกต้อง: " + err.Error()})
+		return
+	}
+	limitStr := c.DefaultQuery("limit", "10")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 10
+	}
+	data, err := ctrl.svc.GetTopSellers(c.Request.Context(), query, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถโหลดข้อมูลสินค้าขายดีได้"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": data})
+}

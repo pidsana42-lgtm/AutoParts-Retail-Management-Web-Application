@@ -561,7 +561,7 @@ const MainDashboard: React.FC = () => {
           </CardHeader>
           <CardContent className='p-2 gap-2 flex flex-col'>
             {stockAlertLoading ? (
-              <div className='text-center py-8 text-gray-400 text-sm animate-pulse'><Loader2 size={20} className='animate-spin' /></div>
+              <div className='text-center py-8 text-gray-400 text-sm animate-pulse'><Loader2 size={40} className='animate-spin mx-auto' /></div>
             ) : stockAlerts.length === 0 ? (
                 <div className='flex flex-col items-center gap-4 py-12 text-red-300'>
                   <PackageOpen size={60} strokeWidth={0.5} />

@@ -22,6 +22,7 @@ type DashboardRepository interface {
 	GetLiveSummaryForDate(ctx context.Context, date time.Time) (*dashEntity.DailySummary, error)
 	FinalizeDailySummary(ctx context.Context, date time.Time) error
 	GetStockHealth(ctx context.Context) (*dashDto.StockHealthDTO, error)
+	GetTopSellers(ctx context.Context, start, end time.Time, limit int) ([]dashDto.TopSellerDTO, error)
 }
 
 type dashboardRepository struct {
@@ -233,12 +234,12 @@ func (r *dashboardRepository) calculateSummaryForDate(ctx context.Context, date 
 			typeName = c.TypeName.String
 		}
 		switch typeName {
-		case "ลูกค้าอู่":
+		case "GARAGE":
 			summary.GarageCustomerAmount = c.Amount
-		case "ลูกค้าบริษัท":
+		case "WHOLESALE":
 			summary.CorporateCustomerAmount = c.Amount
 		default:
-			// CustomerID = nil (ว่าง) หรือ "ลูกค้าทั่วไป" ถือเป็น walk-in ทั้งคู่
+			// GENERAL หรือ CustomerID = nil (ว่าง) ถือเป็น walk-in ทั้งคู่
 			summary.WalkinCustomerAmount += c.Amount
 		}
 	}
@@ -343,6 +344,48 @@ func (r *dashboardRepository) GetStockHealth(ctx context.Context) (*dashDto.Stoc
 		OutOfStockCount: row.OutOfStockCount,
 		HealthPercent:   healthPct,
 	}, nil
+}
+
+func (r *dashboardRepository) GetTopSellers(ctx context.Context, start, end time.Time, limit int) ([]dashDto.TopSellerDTO, error) {
+	type row struct {
+		ID           uint
+		ProductName  string
+		Category     string
+		TotalSold    int
+		TotalRevenue float64
+	}
+	var rows []row
+	err := r.db.WithContext(ctx).
+		Table("sale_order_items").
+		Select(`
+			products.id AS id,
+			products.product_name AS product_name,
+			COALESCE(categories.category_name, '-') AS category,
+			COALESCE(SUM(sale_order_items.qty), 0) AS total_sold,
+			COALESCE(SUM(sale_order_items.unit_price * sale_order_items.qty), 0) AS total_revenue
+		`).
+		Joins("JOIN sale_orders ON sale_orders.id = sale_order_items.order_id AND sale_orders.deleted_at IS NULL").
+		Joins("JOIN products ON products.id = sale_order_items.product_id AND products.deleted_at IS NULL").
+		Joins("LEFT JOIN categories ON categories.id = products.category_id AND categories.deleted_at IS NULL").
+		Where("sale_order_items.deleted_at IS NULL AND sale_orders.order_date >= ? AND sale_orders.order_date < ? AND sale_orders.status IN ?", start, end, revenueCountedStatuses).
+		Group("products.id, products.product_name, categories.category_name").
+		Order("total_sold DESC").
+		Limit(limit).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make([]dashDto.TopSellerDTO, len(rows))
+	for i, r := range rows {
+		result[i] = dashDto.TopSellerDTO{
+			ID:           r.ID,
+			ProductName:  r.ProductName,
+			Category:     r.Category,
+			TotalSold:    r.TotalSold,
+			TotalRevenue: r.TotalRevenue,
+		}
+	}
+	return result, nil
 }
 
 // GetHistoricalSummaries อ่านจาก daily_summary ตรงๆ (ข้อมูลนิ่งแล้ว ไม่ query สด) เติมวันที่ขาดด้วย 0
