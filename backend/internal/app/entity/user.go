@@ -11,6 +11,9 @@ type User struct {
     Username         string `gorm:"type:varchar(100);not null;uniqueIndex" json:"username" binding:"required"`
     Password         string `gorm:"type:varchar(255);not null" json:"password" binding:"required"`
     LineUserID       string `gorm:"type:varchar(100);uniqueIndex" json:"line_user_id"`
+    // รหัสลับประจำตัว ใช้ทำ QR Code ส่วนตัว: เปิดหน้าเว็บบนคอมที่ล็อกอินอยู่แล้ว โชว์ QR นี้ แล้วเอามือถือสแกน
+    // ก็จะล็อกอินเข้าระบบทันทีโดยไม่ต้องพิมพ์ username/password (ไม่ใส่ uniqueIndex เพราะค่าเริ่มต้นเป็นค่าว่างซ้ำกันได้หลาย row)
+    QrLoginToken     string `gorm:"type:varchar(64);index" json:"-"`
 
     // ระบบกำหนดให้
     StoreConfigID uint        `gorm:"not null" json:"store_config_id"`

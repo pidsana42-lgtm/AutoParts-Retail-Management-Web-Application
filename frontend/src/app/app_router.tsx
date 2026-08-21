@@ -40,6 +40,7 @@ import EmployeePreOrder from './employee/pre-order';
 import EmployeeClaimsPage from './employee/claim/claims';
 import MobileScanPage from './mobile-scan/mobile_scan_page';
 import PublicProductPage from './public-product/public_product_page';
+import QrLoginPage from './qr-login/qr_login_page';
 import SalesCancellationHistory from './employee/pos/sales_cancellation_history';
 import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_history';
 import RepaymentHistory from './employee/transactions/repayment_history';
@@ -218,6 +219,9 @@ export default function AppRouter(): React.JSX.Element {
       {/* หน้ามือถือสำหรับส่งรูปบิล — ไม่ต้อง login */}
       <Route path="/mobile-scan" element={<MobileScanPage />} />
       <Route path="/product/:id" element={<PublicProductPage />} />
+
+      {/* มือถือสแกน QR ส่วนตัวของพนักงาน/เจ้าของร้านมาที่นี่ — แลก token เป็น session ล็อกอินอัตโนมัติ ไม่ต้อง login เอง */}
+      <Route path="/qr-login" element={<QrLoginPage />} />
 
       {/* ถ้าพิมพ์ URL มั่ว ให้ดีดกลับหน้าล็อกอิน */}
       <Route path="*" element={<Navigate to="/login" replace />} />
