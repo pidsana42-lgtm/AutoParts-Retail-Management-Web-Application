@@ -127,24 +127,24 @@ export default function ClaimTrackingTab({
       {/* Tracking Stats Row */}
       <div className="grid grid-cols-4 gap-4">
         <div className="bg-white border border-gray-200 border-l-[4px] border-l-amber-500 p-5 shadow-sm">
-          <p className="text-xs text-[#6B7280] font-medium uppercase tracking-wider">รอรวบรวมส่งบริษัท</p>
+          <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">รอรวบรวมส่งบริษัท</p>
           <p className="text-3xl font-bold mt-1 text-amber-600">{waitingSendCount}</p>
-          <p className="text-xs text-gray-400 mt-1">รายการที่ต้องนำส่ง</p>
+          <p className="text-xs text-[#5F5E5E] mt-1">รายการที่ต้องนำส่ง</p>
         </div>
-        <div className="bg-white border border-gray-200 border-l-[4px] border-l-blue-500 p-5 shadow-sm">
-          <p className="text-xs text-[#6B7280] font-medium uppercase tracking-wider">ส่งบริษัทแล้ว</p>
-          <p className="text-3xl font-bold mt-1 text-blue-600">{sentSupplierCount}</p>
-          <p className="text-xs text-gray-400 mt-1">อยู่ระหว่างรอผลตรวจ/ของใหม่</p>
+        <div className="bg-white border border-gray-200 border-l-[4px] border-l-[#1C1B1B] p-5 shadow-sm">
+          <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">ส่งบริษัทแล้ว</p>
+          <p className="text-3xl font-bold mt-1 text-[#1C1B1B]">{sentSupplierCount}</p>
+          <p className="text-xs text-[#5F5E5E] mt-1">อยู่ระหว่างรอผลตรวจ/ของใหม่</p>
         </div>
-        <div className="bg-white border border-gray-200 border-l-[4px] border-l-purple-500 p-5 shadow-sm">
-          <p className="text-xs text-[#6B7280] font-medium uppercase tracking-wider">ได้รับของเปลี่ยนแล้ว</p>
-          <p className="text-3xl font-bold mt-1 text-purple-600">{replacementReceivedCount}</p>
-          <p className="text-xs text-gray-400 mt-1">รอลูกค้ามารับสินค้า</p>
+        <div className="bg-white border border-gray-200 border-l-[4px] border-l-[#5F5E5E] p-5 shadow-sm">
+          <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">ได้รับของเปลี่ยนแล้ว</p>
+          <p className="text-3xl font-bold mt-1 text-[#5F5E5E]">{replacementReceivedCount}</p>
+          <p className="text-xs text-[#5F5E5E] mt-1">รอลูกค้ามารับสินค้า</p>
         </div>
-        <div className="bg-white border border-gray-200 border-l-[4px] border-l-emerald-500 p-5 shadow-sm">
-          <p className="text-xs text-[#6B7280] font-medium uppercase tracking-wider">เคลมสำเร็จ (ส่งมอบแล้ว)</p>
-          <p className="text-3xl font-bold mt-1 text-emerald-600">{completedCount}</p>
-          <p className="text-xs text-gray-400 mt-1">ปิดงานเรียบร้อย</p>
+        <div className="bg-white border border-gray-200 border-l-[4px] border-l-[#259b24] p-5 shadow-sm">
+          <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">เคลมสำเร็จ (ส่งมอบแล้ว)</p>
+          <p className="text-3xl font-bold mt-1 text-[#259b24]">{completedCount}</p>
+          <p className="text-xs text-[#5F5E5E] mt-1">ปิดงานเรียบร้อย</p>
         </div>
       </div>
 
@@ -168,8 +168,8 @@ export default function ClaimTrackingTab({
               onClick={() => { setTrackingFilter('ALL'); setTrackingPage(1); }}
               className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
                 trackingFilter === 'ALL'
-                  ? 'bg-[#22252a] text-white border-[#22252a]'
-                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                  ? 'bg-[#1C1B1B] text-white border-[#1C1B1B]'
+                  : 'bg-white text-[#1C1B1B] border-gray-200 hover:bg-gray-50'
               }`}
             >
               ทั้งหมด ({allTrackingItems.filter(i => i.itemStatus !== 'REJECTED').length})
@@ -190,8 +190,8 @@ export default function ClaimTrackingTab({
               onClick={() => { setTrackingFilter('SENT_TO_SUPPLIER'); setTrackingPage(1); }}
               className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
                 trackingFilter === 'SENT_TO_SUPPLIER'
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50'
+                  ? 'bg-[#1C1B1B] text-white border-[#1C1B1B]'
+                  : 'bg-white text-[#1C1B1B] border-gray-200 hover:bg-gray-50'
               }`}
             >
               ส่งบริษัทแล้ว ({sentSupplierCount})
@@ -201,8 +201,8 @@ export default function ClaimTrackingTab({
               onClick={() => { setTrackingFilter('REPLACEMENT_RECEIVED'); setTrackingPage(1); }}
               className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
                 trackingFilter === 'REPLACEMENT_RECEIVED'
-                  ? 'bg-purple-600 text-white border-purple-600'
-                  : 'bg-white text-purple-700 border-purple-200 hover:bg-purple-50'
+                  ? 'bg-[#5F5E5E] text-white border-[#5F5E5E]'
+                  : 'bg-white text-[#5F5E5E] border-gray-200 hover:bg-gray-50'
               }`}
             >
               ได้รับของแล้ว ({replacementReceivedCount})
@@ -212,8 +212,8 @@ export default function ClaimTrackingTab({
               onClick={() => { setTrackingFilter('COMPLETED'); setTrackingPage(1); }}
               className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
                 trackingFilter === 'COMPLETED'
-                  ? 'bg-emerald-600 text-white border-emerald-600'
-                  : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+                  ? 'bg-[#259b24] text-white border-[#259b24]'
+                  : 'bg-white text-[#259b24] border-[#259b24]/30 hover:bg-[#259b24]/10'
               }`}
             >
               เคลมสำเร็จ ({completedCount})
@@ -303,15 +303,15 @@ export default function ClaimTrackingTab({
                     {/* Stage Badge */}
                     <TableCell className="text-center">
                       {item.stage === 'COMPLETED' ? (
-                        <span className="px-2.5 py-1 text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                        <span className="px-2.5 py-1 text-[11px] font-bold bg-[#259b24]/10 text-[#259b24] border border-[#259b24]/30 inline-flex items-center gap-1">
                           <CheckCircle2 size={12} /> ส่งมอบลูกค้าแล้ว
                         </span>
                       ) : item.stage === 'REPLACEMENT_RECEIVED' ? (
-                        <span className="px-2.5 py-1 text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 inline-flex items-center gap-1">
+                        <span className="px-2.5 py-1 text-[11px] font-bold bg-gray-100 text-[#5F5E5E] border border-gray-200 inline-flex items-center gap-1">
                           <PackageCheck size={12} /> ได้รับของเปลี่ยนแล้ว
                         </span>
                       ) : item.stage === 'SENT_TO_SUPPLIER' ? (
-                        <span className="px-2.5 py-1 text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1">
+                        <span className="px-2.5 py-1 text-[11px] font-bold bg-gray-100 text-[#1C1B1B] border border-gray-200 inline-flex items-center gap-1">
                           <Truck size={12} /> ส่งบริษัทแล้ว (รอของ)
                         </span>
                       ) : (
