@@ -3,6 +3,7 @@ package pre_order
 import (
 	preOrderCtrl "backend/internal/app/controller/pre_oder"
 	preOrderRepo "backend/internal/app/repository/pre_oder"
+	svcNotification "backend/internal/app/service/notification"
 	preOrderSvc "backend/internal/app/service/pre_oder"
 	"backend/internal/app/enum"
 	"backend/internal/middleware"
@@ -11,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupPreOrderRoutes(r *gin.Engine, db *gorm.DB) {
+func SetupPreOrderRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotification.NotificationService) {
 	// 1. Repository
 	repo := preOrderRepo.NewPreOrderRepository(db)
 
@@ -19,7 +20,7 @@ func SetupPreOrderRoutes(r *gin.Engine, db *gorm.DB) {
 	svc := preOrderSvc.NewPreOrderService(repo)
 
 	// 3. Controller
-	ctrl := preOrderCtrl.NewPreOrderController(svc)
+	ctrl := preOrderCtrl.NewPreOrderController(svc, notificationService)
 
 	preOrderGroup := r.Group("/api/wms/pre-orders")
 	preOrderGroup.Use(

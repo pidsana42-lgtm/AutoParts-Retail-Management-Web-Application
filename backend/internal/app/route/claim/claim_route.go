@@ -4,13 +4,14 @@ import (
 	claimCtrl "backend/internal/app/controller/claim"
 	claimRepo "backend/internal/app/repository/claim"
 	claimSvc "backend/internal/app/service/claim"
+	svcNotification "backend/internal/app/service/notification"
 
 	"backend/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func SetupClaimRoutes(r *gin.Engine, db *gorm.DB) {
+func SetupClaimRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotification.NotificationService) {
 	// 1. Repositories
 	salesReturnRepo := claimRepo.NewSalesReturnRepository(db)
 	supplierClaimRepo := claimRepo.NewSupplierClaimRepository(db)
@@ -21,7 +22,7 @@ func SetupClaimRoutes(r *gin.Engine, db *gorm.DB) {
 	// 2. Services
 	salesReturnSvc := claimSvc.NewSalesReturnService(salesReturnRepo)
 	supplierClaimSvc := claimSvc.NewSupplierClaimService(supplierClaimRepo)
-	customerClaimSvc := claimSvc.NewCustomerClaimService(customerClaimRepo, saleOrderLookupRepo)
+	customerClaimSvc := claimSvc.NewCustomerClaimService(customerClaimRepo, saleOrderLookupRepo, notificationService)
 
 	// 3. Controllers
 	salesReturnCtrl := claimCtrl.NewSalesReturnController(salesReturnSvc)

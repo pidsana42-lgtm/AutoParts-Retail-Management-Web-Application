@@ -117,6 +117,9 @@ func SetupDatabase() {
 
 		// Company Setting
 		&entity.CompanySetting{},
+
+		// Notifications (กระดิ่งแจ้งเตือน)
+		&entity.Notification{},
 	); err != nil {
 		log.Fatalf("failed to migrate schema: %v", err)
 	}

@@ -8,6 +8,7 @@ import (
 	billCtrl "backend/internal/app/controller/import_data"
 	billRepo "backend/internal/app/repository/import_data"
 	billSvc "backend/internal/app/service/import_data"
+	svcNotification "backend/internal/app/service/notification"
 
 	"backend/internal/app/entity"
 	"backend/internal/app/enum"
@@ -16,12 +17,12 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupBillRoutes(r *gin.Engine, db *gorm.DB) {
+func SetupBillRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotification.NotificationService) {
 	// 1. Repository
 	repo := billRepo.NewImportBillRepository(db)
 
 	// 2. Service
-	svc := billSvc.NewImportBillService(repo)
+	svc := billSvc.NewImportBillService(repo, notificationService)
 
 	// 3. Controller
 	ctrl := billCtrl.NewBillController(svc)
