@@ -16,7 +16,8 @@ import (
 )
 
 type CheckStockScheduleService interface {
-	CreateSchedule(req *wmsDto.CheckStockScheduleRequestDTO) error
+	// คืน ID ของตารางที่สร้างเสร็จกลับไปด้วย ให้ frontend พาไปหน้ารายละเอียด (โชว์ QR Code) ได้ทันที
+	CreateSchedule(req *wmsDto.CheckStockScheduleRequestDTO) (uint, error)
 	GetByID(id uint) (*wmsDto.CheckStockScheduleResponseDTO, error)
 	Update(id uint, req *wmsDto.CheckStockScheduleRequestDTO) error
 	UpdateStatus(id uint, status string) error
@@ -39,7 +40,7 @@ func NewCheckStockScheduleService(repo wmsRepo.CheckStockScheduleRepository, db 
 	return &checkStockScheduleService{repo: repo, db: db, notification: notificationService}
 }
 
-func (s *checkStockScheduleService) CreateSchedule(req *wmsDto.CheckStockScheduleRequestDTO) error {
+func (s *checkStockScheduleService) CreateSchedule(req *wmsDto.CheckStockScheduleRequestDTO) (uint, error) {
 	schedule := entity.CheckStockSchedule{
 		Scheduled_DateTime:     req.Scheduled_DateTime,
 		Scheduled_End_DateTime: req.Scheduled_End_DateTime,
@@ -55,7 +56,10 @@ func (s *checkStockScheduleService) CreateSchedule(req *wmsDto.CheckStockSchedul
 		ProductID:              req.ProductID,
 		UserID:                 req.UserID,
 	}
-	return s.repo.Create(&schedule)
+	if err := s.repo.Create(&schedule); err != nil {
+		return 0, err
+	}
+	return schedule.ID, nil
 }
 
 func (s *checkStockScheduleService) Update(id uint, req *wmsDto.CheckStockScheduleRequestDTO) error {
