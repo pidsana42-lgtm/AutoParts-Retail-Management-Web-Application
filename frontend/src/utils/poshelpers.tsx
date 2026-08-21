@@ -133,6 +133,44 @@ export const renderStatusBadge = (status: string, paymentStatus: string) => {
 };
 
 /**
+ * ฟังก์ชัน Render Status Badge สำหรับแสดงสถานะของบิลในหน้ารายการคำขอยกเลิก (Sales Cancellation History)
+ * - PENDING_CANCEL => "รอดำเนินการ" (Warning)
+ * - CANCELLED / ยกเลิก => "อนุมัติแล้ว" (Error/Red)
+ * - COMPLETED / อื่นๆ (กรณีคำขอถูกปฏิเสธ) => "ไม่อนุมัติ" (Neutral/Gray)
+ */
+export const renderCancellationStatusBadge = (
+  status?: string | null,
+  paymentStatus?: string | null,
+  cancelRemark?: string | null,
+  cancelProcessedAt?: any
+) => {
+  const billStatus = (status || "").trim().toUpperCase();
+
+  if (billStatus === "PENDING_CANCEL") {
+    return (
+      <Badge variant="warning" className="rounded-none whitespace-nowrap bg-[#FEF08A] text-[#854D0E] border-none">
+        รอดำเนินการ
+      </Badge>
+    );
+  }
+
+  if (billStatus === "CANCELLED" || billStatus === "ยกเลิก") {
+    return (
+      <Badge variant="error" className="rounded-none whitespace-nowrap bg-[#FEE2E2] text-[#991B1B] border-none">
+        อนุมัติแล้ว
+      </Badge>
+    );
+  }
+
+  // หากเป็น COMPLETED หรือสถานะอื่นๆ ในหน้าคำขอยกเลิก แสดง "ไม่อนุมัติ"
+  return (
+    <Badge variant="neutral" className="rounded-none whitespace-nowrap bg-gray-200 text-gray-700 border-none">
+      ไม่อนุมัติ
+    </Badge>
+  );
+};
+
+/**
  * เลือก Class สีพื้นหลังของ Badge ชำระเงิน
  */
 export const getPaymentBadgeColor = (methodName?: string): string => {

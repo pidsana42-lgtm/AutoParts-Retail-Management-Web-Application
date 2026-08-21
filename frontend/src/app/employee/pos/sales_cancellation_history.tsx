@@ -25,7 +25,7 @@ import {
   TableCell,
 } from "../../../components/elements/table";
 import { cn } from "../../../utils/component";
-import { formatDate, getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge } from "../../../utils/poshelpers";
+import { formatDate, getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge, renderCancellationStatusBadge } from "../../../utils/poshelpers";
 import { useSalesCancellationHistory } from "./hooks/useSalesCancellationHistory";
 import { useSalesHistory } from "./hooks/useSalesHistory";
 import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
@@ -296,7 +296,7 @@ const SalesCancellationHistory: React.FC = () => {
 
                         {/* สถานะ */}
                         <TableCell className="py-3.5 px-3 text-center">
-                        {renderStatusBadge(item.status, item.payment_status)}
+                          {renderCancellationStatusBadge(item.status, item.payment_status, item.cancel_remark, item.cancel_processed_at)}
                         </TableCell>
 
                         {/* จัดการ */}
