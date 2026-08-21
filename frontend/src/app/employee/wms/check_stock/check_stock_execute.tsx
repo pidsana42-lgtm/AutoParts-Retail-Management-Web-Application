@@ -83,9 +83,11 @@ function EmployeeCheckStockExecuteContent() {
   const submitterUserId = isValidQrToken ? schedule?.user_id : Number(user?.id);
 
   // ให้พนักงานเองเรียกดู QR ของงานนี้ได้ด้วย (ไม่ต้องรอเจ้าของร้านโชว์ให้) เผื่ออยากพิมพ์/ส่งต่อเอง
+  // ลิงก์ชี้ไปหน้าแบบไม่มี Sidebar/Navbar ของระบบรวม (/wms/check-stock-scan) เพราะคนสแกนอาจยังไม่ได้ล็อกอิน
+  // เอาไว้เข้าหน้าเช็คสินค้าของงานนี้ตรงๆ อย่างเดียว
   const qrPayload =
     id && schedule?.access_token
-      ? `${window.location.origin}/employee/wms/check-stock/${id}?token=${schedule.access_token}`
+      ? `${window.location.origin}/wms/check-stock-scan/${id}?token=${schedule.access_token}`
       : "";
 
   const handleDownloadQR = () => {
@@ -194,7 +196,14 @@ function EmployeeCheckStockExecuteContent() {
 
       await stockCheckService.updateStatus(Number(id), "รอตรวจสอบ");
       toast({ variant: "success", message: "ส่งผลนับสต็อกให้เจ้าของร้านตรวจสอบแล้ว" });
-      navigate("/employee/wms/check-stock");
+
+      if (isValidQrToken) {
+        // เข้ามาจากการสแกน QR (อาจยังไม่ได้ล็อกอิน) — โหลดตารางนี้ใหม่แล้วอยู่หน้าเดิม ไม่พาออกไปหน้ารายการที่ต้องล็อกอิน
+        const refreshed = await stockCheckService.getScheduleById(Number(id));
+        setSchedule(refreshed);
+      } else {
+        navigate("/employee/wms/check-stock");
+      }
     } catch (err: any) {
       toast({ variant: "error", message: err.response?.data?.error || "ไม่สามารถส่งผลนับสต็อกได้ กรุณาลองใหม่" });
     } finally {
@@ -244,13 +253,15 @@ function EmployeeCheckStockExecuteContent() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate("/employee/wms/check-stock")}
-            className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
-          >
-            <ChevronLeft size={24} className="text-slate-600" />
-          </button>
+          {!isValidQrToken && (
+            <button
+              type="button"
+              onClick={() => navigate("/employee/wms/check-stock")}
+              className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
+            >
+              <ChevronLeft size={24} className="text-slate-600" />
+            </button>
+          )}
           <div>
             <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
               {schedule.target_name || "ตรวจนับสต็อก"}
