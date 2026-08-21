@@ -4,7 +4,7 @@ import {
   Layers, ChevronRight,
   Trash2, ShoppingBag, Eye, X, Loader2, Building2, 
   ChevronDown, ArrowLeft, Upload, Image as ImageIcon,
-  FileText, Sparkles, SlidersHorizontal, Download, Camera,
+  FileText, SlidersHorizontal, Download, Camera,
   RotateCw, ZoomIn, ZoomOut, Save, ArrowRight, LayoutPanelLeft,
   Smartphone
 } from 'lucide-react';
@@ -81,7 +81,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   const [saving, setSaving] = useState<boolean>(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [pdfFileName, setPdfFileName] = useState<string>('');
+  const [, setPdfFileName] = useState<string>(''); // เก็บไว้ใช้ในอนาคต (ตอนนี้ set แล้วยังไม่มี UI แสดงผล)
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
