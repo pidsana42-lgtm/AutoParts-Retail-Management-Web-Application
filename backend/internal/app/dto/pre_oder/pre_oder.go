@@ -34,6 +34,9 @@ type PreOrderResponseDTO struct {
 	CustomerPhone string                    `json:"customer_phone,omitempty"`
 	DepositAmount float64                   `json:"deposit_amount"`
 	Status        string                    `json:"status"`
+	PONumber      string                    `json:"po_number,omitempty"`
+	POStatus      string                    `json:"po_status,omitempty"`
+	POID          *uint                     `json:"po_id,omitempty"`
 	OrderDate     time.Time                 `json:"order_date"`
 	SupplierID    uint                      `json:"supplier_id"`
 	SupplierName  string                    `json:"supplier_name,omitempty"`

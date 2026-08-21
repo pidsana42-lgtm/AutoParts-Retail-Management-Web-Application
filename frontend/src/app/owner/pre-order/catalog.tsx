@@ -609,10 +609,10 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
             <LayoutPanelLeft size={36} className="text-white/20" />
           </div>
 
-          {/* Card 3: รายการอะไหล่ทั้งหมด (Emerald #059669) */}
+          {/* Card 3: รายการอะไหล่ทั้งหมด (Green #259b24) */}
           <div 
             onClick={() => setActiveTab('items')}
-            className="bg-[#059669] hover:bg-[#047857] text-white p-8 rounded-none flex items-center justify-between cursor-pointer transition-all shadow-md group"
+            className="bg-[#259b24] hover:bg-[#1f801e] text-white p-8 rounded-none flex items-center justify-between cursor-pointer transition-all shadow-md group"
           >
             <div className="flex items-center gap-6">
               <div className="bg-white/20 p-4 rounded-none">
@@ -743,7 +743,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                           </span>
                         )}
                         {cat.catalog_file && (
-                          <span className="bg-red-600 text-white text-[10px] font-black px-1.5 py-0.5 flex items-center gap-0.5">
+                          <span className="bg-[#e51c23] text-white text-[10px] font-black px-1.5 py-0.5 flex items-center gap-0.5">
                             <FileText size={10} /> PDF
                           </span>
                         )}
@@ -1081,7 +1081,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                 </div>
               ) : selectedFile?.name.toLowerCase().endsWith('.pdf') ? (
                 <div className="text-center p-8 text-white space-y-3">
-                  <FileText size={56} className="text-red-500 mx-auto" />
+                  <FileText size={56} className="text-[#e51c23] mx-auto" />
                   <p className="font-bold text-sm">{selectedFile.name}</p>
                   <p className="text-xs text-gray-400">ไฟล์ PDF พร้อมสำหรับการส่งให้ AI สแกนดึงข้อมูลอะไหล่</p>
                 </div>
@@ -1508,7 +1508,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                         setPreviewImage(null);
                         setNewCatalog(prev => ({ ...prev, cover_image: '' }));
                       }}
-                      className="text-red-500 hover:text-red-700 text-[11px] font-bold cursor-pointer"
+                      className="text-[#e51c23] hover:text-[#c9181f] text-[11px] font-bold cursor-pointer"
                     >
                       ลบหน้าปก
                     </button>
@@ -1524,7 +1524,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                     <button
                       type="button"
                       onClick={() => coverInputRef.current?.click()}
-                      className="text-xs text-blue-600 hover:underline font-bold"
+                      className="text-xs text-[#1C1B1B] hover:text-[#e51c23] hover:underline font-bold"
                     >
                       เปลี่ยนรูปภาพ
                     </button>
