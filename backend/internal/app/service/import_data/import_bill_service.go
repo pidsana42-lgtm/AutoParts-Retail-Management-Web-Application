@@ -15,6 +15,7 @@ import (
 	importDataDTO "backend/internal/app/dto/import_data"
 	"backend/internal/app/entity"
 	billRepo "backend/internal/app/repository/import_data"
+	svcNotification "backend/internal/app/service/notification"
 )
 
 type ImportBillService interface {
@@ -33,11 +34,12 @@ type ImportBillService interface {
 }
 
 type importBillService struct {
-	repo billRepo.ImportBillRepository
+	repo         billRepo.ImportBillRepository
+	notification svcNotification.NotificationService
 }
 
-func NewImportBillService(repo billRepo.ImportBillRepository) ImportBillService {
-	return &importBillService{repo: repo}
+func NewImportBillService(repo billRepo.ImportBillRepository, notificationService svcNotification.NotificationService) ImportBillService {
+	return &importBillService{repo: repo, notification: notificationService}
 }
 
 func (s *importBillService) CreateBill(input importDataDTO.CreateBillDTO) (importDataDTO.BillResponseDTO, error) {
@@ -335,6 +337,7 @@ func (s *importBillService) processOCRInBackground(jobID uint, fileURL string) {
 			if errSave := s.repo.SaveBillImportJob(job); errSave != nil {
 				log.Printf("[OCR] Error saving job %d status: %v\n", jobID, errSave)
 			}
+			s.notifyBillJobDone(job, false)
 			return
 		}
 		rawJSON = stdout.String()
@@ -356,6 +359,25 @@ func (s *importBillService) processOCRInBackground(jobID uint, fileURL string) {
 		log.Printf("[OCR] Error saving job %d results: %v\n", jobID, errSave)
 	} else {
 		log.Printf("[OCR] Job %d successfully processed\n", jobID)
+	}
+	s.notifyBillJobDone(job, true)
+}
+
+// notifyBillJobDone: แจ้งเตือนกลับไปหาคนที่อัพโหลดบิลนี้ (job.CreatedBy) ว่า OCR ประมวลผลเสร็จแล้ว/ล้มเหลว พร้อมให้เข้าไปตรวจสอบ/ยืนยันต่อ
+func (s *importBillService) notifyBillJobDone(job *entity.BillImportJob, success bool) {
+	if s.notification == nil || job == nil || job.CreatedBy == 0 {
+		return
+	}
+	title := "ประมวลผลบิลเสร็จแล้ว"
+	message := "ระบบอ่านข้อมูลจากบิลที่อัพโหลดเสร็จแล้ว กรุณาตรวจสอบและยืนยันข้อมูลก่อนบันทึกเข้าคลังสินค้า"
+	notifType := "BILL_IMPORT_PROCESSED"
+	if !success {
+		title = "ประมวลผลบิลไม่สำเร็จ"
+		message = "ระบบไม่สามารถอ่านข้อมูลจากบิลที่อัพโหลดได้ กรุณาลองอัพโหลดใหม่ หรือกรอกข้อมูลด้วยตนเอง"
+		notifType = "BILL_IMPORT_FAILED"
+	}
+	if err := s.notification.NotifyUser(job.CreatedBy, notifType, title, message, "/owner/import-bills", nil); err != nil {
+		log.Printf("[Notification] failed to notify user %d (bill import job %d): %v\n", job.CreatedBy, job.ID, err)
 	}
 }
 

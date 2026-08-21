@@ -25,7 +25,16 @@ func (ctrl *CustomerClaimController) CreateCustomerClaim(c *gin.Context) {
 		return
 	}
 
-	res, err := ctrl.svc.CreateCustomerClaim(input)
+	// ตรวจสอบ ID ของ User ที่สร้างใบเคลมจาก JWT Token (ไม่เชื่อค่าที่ client ส่งมาเอง)
+	// ใช้ตอนแจ้งเตือนกลับตอนเจ้าของร้านอนุมัติ/ตีกลับ จะได้ส่งหาคนที่สร้างจริงๆ (ของเดิม hardcode เป็น user 1 เสมอ)
+	var createdBy uint = 1
+	if userID, exists := c.Get("user_id"); exists {
+		if idFloat, ok := userID.(float64); ok {
+			createdBy = uint(idFloat)
+		}
+	}
+
+	res, err := ctrl.svc.CreateCustomerClaim(input, createdBy)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create customer claim: " + err.Error()})
 		return
