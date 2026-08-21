@@ -1,6 +1,7 @@
 package wms
 
 import (
+	"backend/internal/app/cron"
 	wmsCtrl "backend/internal/app/controller/wms"
 	wmsRepo "backend/internal/app/repository/wms"
 	svcNotification "backend/internal/app/service/notification"
@@ -14,6 +15,9 @@ func SetupCheckStockScheduleRoutes(r *gin.Engine, db *gorm.DB, notificationServi
 	repo       := wmsRepo.NewCheckStockScheduleRepository(db)
 	service    := wmsSvc.NewCheckStockScheduleService(repo, db, notificationService)
 	controller := wmsCtrl.NewCheckStockScheduleController(service)
+
+	// เช็คทุก 1 นาทีว่ามีตารางไหนถึงเวลาเริ่มเช็คแล้วบ้าง จะได้แจ้งเตือนพนักงานทัน
+	cron.StartCheckStockDueCron(service)
 
 	wms := r.Group("/api/wms/check-stock-schedules")
 	{

@@ -19,7 +19,9 @@ export interface CheckStockSchedule {
   
   user_id?: number;
   user_full_name: string;
-  
+  // รหัสเฉพาะของตารางนี้ ผูกกับ QR Code ให้พนักงานสแกนเข้าหน้าเช็คสต็อกได้เลยโดยไม่ต้องล็อกอินในมือถือก่อน
+  access_token: string;
+
   target_name: string;
   product_count: number;
 }

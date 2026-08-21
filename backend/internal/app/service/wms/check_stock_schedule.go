@@ -1,6 +1,8 @@
 package wms
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -15,6 +17,25 @@ import (
 	"gorm.io/gorm"
 )
 
+// generateAccessToken: สุ่มรหัสสำหรับผูกกับ QR Code ของตารางเช็คสต็อกแต่ละอัน
+func generateAccessToken() string {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		// แทบไม่เกิดขึ้นจริง แต่กันไว้ไม่ให้ตารางสร้างไม่ได้เพราะ token พัง
+		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
+
+// bangkokTime: แปลงเวลาให้เป็นเขตเวลาไทยก่อนโชว์ในข้อความแจ้งเตือน — time.Time ที่เก็บ/ได้จาก DB เป็น UTC เสมอ
+func bangkokTime(t time.Time) time.Time {
+	loc, err := time.LoadLocation("Asia/Bangkok")
+	if err != nil {
+		loc = time.Local
+	}
+	return t.In(loc)
+}
+
 type CheckStockScheduleService interface {
 	// คืน ID ของตารางที่สร้างเสร็จกลับไปด้วย ให้ frontend พาไปหน้ารายละเอียด (โชว์ QR Code) ได้ทันที
 	CreateSchedule(req *wmsDto.CheckStockScheduleRequestDTO) (uint, error)
@@ -28,6 +49,9 @@ type CheckStockScheduleService interface {
 	ListEmployees() ([]entity.User, error)
 	GetZoneTree() ([]entity.Zone, error)
 	GetCategoryTree() ([]entity.Category, error)
+	// ActivateDueSchedules: หาตารางที่ถึงเวลาเริ่มเช็คแล้วแต่ยัง "รอดำเนินการ" อยู่ -> เปลี่ยนเป็น "กำลังเช็ค" จริงใน DB
+	// (ของเดิมสถานะนี้คำนวณแค่ตอนแสดงผล ไม่เคยบันทึกจริง) แล้วแจ้งเตือนพนักงานที่ได้รับมอบหมายว่าถึงเวลาต้องเช็คแล้ว
+	ActivateDueSchedules() error
 }
 
 type checkStockScheduleService struct {
@@ -55,6 +79,7 @@ func (s *checkStockScheduleService) CreateSchedule(req *wmsDto.CheckStockSchedul
 		SubSubCategoryID:       req.SubSubCategoryID,
 		ProductID:              req.ProductID,
 		UserID:                 req.UserID,
+		AccessToken:            generateAccessToken(),
 	}
 	if err := s.repo.Create(&schedule); err != nil {
 		return 0, err
@@ -231,6 +256,40 @@ func (s *checkStockScheduleService) RejectSchedule(id uint, note string) error {
 	return nil
 }
 
+// ActivateDueSchedules: เรียกจาก cron ทุก 1 นาที (ดู internal/app/cron/check_stock_cron.go)
+// หาตารางที่ยังเป็น "รอดำเนินการ" แต่เวลาที่กำหนดเริ่มเช็คมาถึงแล้ว -> ปิดสถานะเป็น "กำลังเช็ค" จริงใน DB
+// แล้วแจ้งเตือนพนักงานที่ได้รับมอบหมายว่าถึงเวลาต้องเริ่มเช็คสต็อกแล้ว (เดิมมีแค่ตอนมอบหมายงาน ไม่มีตอนถึงเวลาจริง)
+func (s *checkStockScheduleService) ActivateDueSchedules() error {
+	var due []entity.CheckStockSchedule
+	if err := s.db.Preload("User").
+		Where("status = ? AND scheduled_date_time <= ?", "รอดำเนินการ", time.Now()).
+		Find(&due).Error; err != nil {
+		return err
+	}
+
+	for _, sc := range due {
+		if err := s.db.Model(&entity.CheckStockSchedule{}).Where("id = ?", sc.ID).Update("status", "กำลังเช็ค").Error; err != nil {
+			log.Printf("[CheckStockCron] failed to activate schedule %d: %v", sc.ID, err)
+			continue
+		}
+
+		if sc.UserID != nil && s.notification != nil {
+			if err := s.notification.NotifyUser(
+				*sc.UserID,
+				"CHECK_STOCK_TIME_REACHED",
+				"ถึงเวลาเช็คสต็อกแล้ว",
+				fmt.Sprintf("ตารางเช็คสต็อกที่มอบหมายให้คุณ ถึงเวลาเริ่มตรวจแล้ว (เริ่ม %s น.) กรุณาดำเนินการนับสต็อก", bangkokTime(sc.Scheduled_DateTime).Format("15:04")),
+				fmt.Sprintf("/employee/wms/check-stock/%d", sc.ID),
+				&sc.ID,
+			); err != nil {
+				log.Printf("[Notification] failed to notify user %d (schedule %d): %v", *sc.UserID, sc.ID, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 func (s *checkStockScheduleService) Delete(id uint) error {
 	return s.repo.Delete(id)
 }
@@ -289,6 +348,7 @@ func (s *checkStockScheduleService) toResponse(sc *entity.CheckStockSchedule) *w
 	if sc.User != nil {
 		res.UserFullName = sc.User.FirstName + " " + sc.User.LastName
 	}
+	res.AccessToken = sc.AccessToken
 
 	// Update status dynamically if it's pending but time has passed
 	if res.Status == "รอดำเนินการ" && time.Now().After(res.Scheduled_DateTime) {
