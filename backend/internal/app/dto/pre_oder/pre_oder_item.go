@@ -21,13 +21,15 @@ type UpdatePreOrderItemDTO struct {
 }
 
 type PreOrderItemResponseDTO struct {
-	ID         uint      `json:"id"`
-	PreOrderID uint      `json:"pre_order_id"`
-	ProductID  uint      `json:"product_id"`
-	Quantity   int       `json:"quantity"`
-	UnitPrice  float64   `json:"unit_price"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID          uint      `json:"id"`
+	PreOrderID  uint      `json:"pre_order_id"`
+	ProductID   uint      `json:"product_id"`
+	ProductName string    `json:"product_name,omitempty"`
+	ProductCode string    `json:"product_code,omitempty"`
+	Quantity    int       `json:"quantity"`
+	UnitPrice   float64   `json:"unit_price"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 func (d *CreatePreOrderItemDTO) ToEntity() entity.PreOrderItem {
@@ -56,14 +58,23 @@ func (d *UpdatePreOrderItemDTO) ToEntity(existing entity.PreOrderItem) entity.Pr
 }
 
 func ToPreOrderItemResponseDTO(m *entity.PreOrderItem) PreOrderItemResponseDTO {
+	prodName := ""
+	prodCode := ""
+	if m.Product != nil {
+		prodName = m.Product.Product_Name
+		prodCode = m.Product.Product_Code
+	}
+
 	return PreOrderItemResponseDTO{
-		ID:         m.ID,
-		PreOrderID: m.PreOrderID,
-		ProductID:  m.ProductID,
-		Quantity:   m.Quantity,
-		UnitPrice:  m.UnitPrice,
-		CreatedAt:  m.CreatedAt,
-		UpdatedAt:  m.UpdatedAt,
+		ID:          m.ID,
+		PreOrderID:  m.PreOrderID,
+		ProductID:   m.ProductID,
+		ProductName: prodName,
+		ProductCode: prodCode,
+		Quantity:    m.Quantity,
+		UnitPrice:   m.UnitPrice,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
 	}
 }
 

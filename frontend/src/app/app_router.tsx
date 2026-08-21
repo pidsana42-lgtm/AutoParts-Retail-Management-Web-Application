@@ -26,6 +26,7 @@ import EditProductPage from './owner/stock/edit_data_stock/edit_data_stock';
 import ImportBill from './owner/import-bills/import_bill';
 import EditStockBillPage from './owner/import-bills/edit-stock-bill';
 import PreOrder from './owner/pre-order/pre-order';
+import CatalogPage from './owner/pre-order/catalog';
 import ClaimsPage from './owner/claim/claims';
 import ClaimDetailPage from './owner/claim/claim_detail';
 import ClaimEditPage from './owner/claim/claim_edit';
@@ -138,6 +139,7 @@ export default function AppRouter(): React.JSX.Element {
         
         {/* -------- เพิ่ม Route สำหรับหน้าพรีออเดอร์ตรงนี้ครับ -------- */}
         <Route path="/owner/pre-orders" element={<PreOrder />} />
+        <Route path="/owner/pre-orders/catalog" element={<CatalogPage />} />
         {/* --------------------------------------------------- */}
 
         {/* -------- เพิ่ม Route สำหรับหน้าคืนเเละเคลมสินค้าตรงนี้ครับ -------- */}
@@ -205,6 +207,7 @@ export default function AppRouter(): React.JSX.Element {
 
         {/* หน้าพรีออเดอร์สำหรับพนักงาน */}
         <Route path="/employee/pre-orders" element={<EmployeePreOrder />} />
+        <Route path="/employee/pre-orders/catalog" element={<CatalogPage isEmployee={true} />} />
         <Route path="/employee/pre-order" element={<EmployeePreOrder />} />
         <Route path="/employee/claims" element={<EmployeeClaimsPage />} />
         <Route path="/employee/claims/detail/:id" element={<ClaimDetailPage />} />

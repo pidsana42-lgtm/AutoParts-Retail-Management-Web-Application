@@ -25,6 +25,8 @@ interface ManualEntryViewProps {
   handleSaveBill: (isDraft?: boolean, skipCheck?: boolean, skipPriceCheck?: boolean) => void;
   saving: boolean;
   priceMismatchedItems?: PriceMismatchItem[];
+  pendingNewProducts?: any[];
+  setPendingNewProducts?: (v: any[]) => void;
   handleConfirmUpdatePrices?: () => void;
   handleSkipPriceUpdate?: () => void;
   validationWarnings?: string[];
@@ -51,6 +53,8 @@ export default function ManualEntryView({
   handleSaveBill,
   saving,
   priceMismatchedItems = [],
+  pendingNewProducts = [],
+  setPendingNewProducts: _setPendingNewProducts,
   handleConfirmUpdatePrices,
   handleSkipPriceUpdate,
   validationWarnings = [],
@@ -75,7 +79,7 @@ export default function ManualEntryView({
     : 0;
 
 
-  const showBanner = (validationWarnings.length > 0 || priceMismatchedItems.length > 0) && !!handleConfirmValidationSave && !!handleDismissValidation;
+  const showBanner = (validationWarnings.length > 0 || priceMismatchedItems.length > 0 || pendingNewProducts.length > 0) && !!handleConfirmValidationSave && !!handleDismissValidation;
 
   return (
     <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
@@ -507,7 +511,7 @@ export default function ManualEntryView({
                     )}
                     <button
                       type="button"
-                      onClick={() => handleSaveBill(isDraftMode)}
+                      onClick={() => showBanner ? handleSaveBill(false, true, true) : handleSaveBill(isDraftMode)}
                       disabled={saving || formData.items.length === 0}
                       className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
                     >
@@ -516,7 +520,7 @@ export default function ManualEntryView({
                       ) : (
                         <>
                           <Save size={16} />
-                          <span>{isDraftMode ? 'บันทึกเป็นแบบร่าง' : 'บันทึกบิลต่อไป'}</span>
+                          <span>{showBanner ? 'ยืนยันบันทึกข้อมูลต่อไป' : 'บันทึกข้อมูล'}</span>
                         </>
                       )}
                     </button>

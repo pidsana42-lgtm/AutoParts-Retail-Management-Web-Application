@@ -4,6 +4,7 @@ import (
 	"backend/config"
 	"backend/internal/app/route"
 	"backend/internal/middleware"
+	"backend/internal/pkg/websocket"
 	"github.com/gin-gonic/gin"
 	"os"
 )
@@ -12,6 +13,9 @@ func main() {
 	// 1. จัดการเรื่องฐานข้อมูลให้เรียบร้อย (ต่อ DB -> สร้างตาราง -> ยัดข้อมูล Seed)
 	config.ConnectDB()
 	config.SetupDatabase()
+
+	// Initialize WebSocket Hub
+	websocket.InitHub()
 
 	// 2. ตั้งค่าการรัน Gin Engine
 	gin.SetMode(gin.ReleaseMode)
@@ -36,6 +40,9 @@ func main() {
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "pong"})
 	})
+
+	// WebSocket Route
+	r.GET("/ws", websocket.ServeWS)
 
 	// 6. ดึง Port จาก .env ถ้าไม่มีให้ใช้พอร์ต 8080 เป็นค่าเริ่มต้น
 	port := os.Getenv("PORT")
