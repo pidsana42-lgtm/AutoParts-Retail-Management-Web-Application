@@ -2,6 +2,7 @@ package route
 
 import (
 	"backend/internal/app/route/auth"
+	"backend/internal/app/route/catalog"
 	"backend/internal/app/route/claim"
 	"backend/internal/app/route/customer"
 	"backend/internal/app/route/dashboard"
@@ -41,6 +42,8 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	claim.SetupClaimRoutes(r, db)
 	//pre-order routes
 	pre_order.SetupPreOrderRoutes(r, db)
+	//catalog routes
+	catalog.SetupCatalogRoutes(r, db)
 
 	// purchase orders routes
 	purchaseorders.SetupPORoutes(r, db)

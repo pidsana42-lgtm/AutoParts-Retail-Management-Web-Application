@@ -170,7 +170,10 @@ func (ctrl *BillController) ConfirmBillImport(c *gin.Context) {
 		return
 	}
 
-	res, err := ctrl.svc.ConfirmBillImport(uint(id), input)
+	roleVal, _ := c.Get("role")
+	roleStr, _ := roleVal.(string)
+
+	res, err := ctrl.svc.ConfirmBillImport(uint(id), input, roleStr)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to confirm bill import: " + err.Error()})
 		return
