@@ -50,13 +50,18 @@ export default function PosPage(): React.JSX.Element {
 
   // ซิงค์ข้อมูลสิทธิ์ลูกค้าระหว่าง 2 Hooks เวลาเปลี่ยนลูกค้าใหม่หรือเปลี่ยนประเภทลูกค้า (Active Type) 
   React.useEffect(() => {
-  if (!paymentData.customer) {
-    setCustomerForCart(null);
-  } else {
-    setCustomerForCart(paymentData.customer);
-  }
-  setActiveTypeForCart(paymentData.activeTypeId);
-}, [paymentData.customer, paymentData.activeTypeId]);
+    if (!paymentData.customer) {
+      setCustomerForCart(null);
+    } else {
+      setCustomerForCart(paymentData.customer);
+    }
+    setActiveTypeForCart(paymentData.activeTypeId);
+  }, [paymentData.customer, paymentData.activeTypeId]);
+
+  const isCompanyCustomer =
+    paymentData.activeTypeId === 3 ||
+    paymentData.customer?.customer_type?.id === 3 ||
+    paymentData.customer?.customer_type?.type_name === "WHOLESALE";
 
   const subLabelMap: Record<string, string> = {
     GENERAL: "REGULAR",
@@ -142,11 +147,20 @@ export default function PosPage(): React.JSX.Element {
                     {cartHook.suggestions.map((product) => (
                       <div
                         key={product.id}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          cartHook.handleSelectProduct(product);
+                        }}
                         onClick={() => cartHook.handleSelectProduct(product)}
                         className="p-3 hover:bg-gray-50 flex justify-between items-center cursor-pointer transition-colors text-left"
                       >
                         <div className="flex flex-col">
-                          <Text variant="small" className="text-[#1C1B1B] mb-0 leading-tight">{product.product_name}</Text>
+                          <div className="flex items-center gap-2">
+                            <Text variant="small" className="text-[#1C1B1B] mb-0 leading-tight">{product.product_name}</Text>
+                            {product.barcode && (
+                              <Text variant="xs" className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded-none">บาร์โค้ด: {product.barcode}</Text>
+                            )}
+                          </div>
                           <Text variant="xs" className="text-[10px] text-[#6B7280] mb-0.5 mt-1 leading-tight">
                             SKU: {product.product_code} | PN: {product.part_number || "-"}
                           </Text>
@@ -190,21 +204,21 @@ export default function PosPage(): React.JSX.Element {
                     type="number"
                     value={paymentData.billDiscountValue === 0 ? "" : paymentData.billDiscountValue}
                     onChange={(e) => paymentData.handleBillDiscountChange(e.target.value)}
-                    disabled={paymentData.billDiscountType === "none"}
+                    disabled={isCompanyCustomer || paymentData.billDiscountType === "none"}
                     className={`h-9 pl-9 text-sm rounded-none border transition-colors focus:outline-none ${
-                      paymentData.billDiscountType === "none"
+                      isCompanyCustomer || paymentData.billDiscountType === "none"
                         ? "!bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"
                         : "!bg-[#2A2929] text-white "
                     }`}
-                    placeholder={paymentData.billDiscountType === "none" ? "ล็อกไว้" : "0.00"}
+                    placeholder={isCompanyCustomer ? "ไม่มีสิทธิ์ส่วนลด" : paymentData.billDiscountType === "none" ? "ล็อกไว้" : "0.00"}
                   />
                 </div>
                 <button
                   type="button"
-                  disabled={paymentData.billDiscountType === "none"}
+                  disabled={isCompanyCustomer || paymentData.billDiscountType === "none"}
                   onClick={() => paymentData.handleBillDiscountChange(String(paymentData.billDiscountValue))}
                   className={`text-xs px-4 py-2.5 rounded-none shrink-0 transition-colors shadow-sm cursor-pointer ${
-                    paymentData.billDiscountType === "none"
+                    isCompanyCustomer || paymentData.billDiscountType === "none"
                       ? "bg-zinc-700 text-zinc-500 cursor-not-allowed"
                       : "bg-[#E51C23] hover:bg-[#B70011] text-white"
                   }`}
@@ -216,13 +230,54 @@ export default function PosPage(): React.JSX.Element {
 
             <div className="flex flex-col items-end gap-2 text-xs shrink-0">
               <div className="flex bg-[#2D2C2C] rounded-none p-0.5 ">
-                <button type="button" onClick={() => { paymentData.updateSession("billDiscountType", "none"); paymentData.updateSession("billDiscountValue", 0);}} className={`px-3 py-1 rounded-none transition-all cursor-pointer ${paymentData.billDiscountType === "none" ? "bg-[#E51C23] text-white" : "text-[#D1D5DB] hover:text-zinc-200"}`}>ต่อรายการ</button>
-                <button type="button" onClick={() => { paymentData.updateSession("billDiscountType", "amount"); paymentData.updateSession("billDiscountValue", 0);}} className={`px-3 py-1 rounded-none transition-all cursor-pointer ${paymentData.billDiscountType === "amount" ? "bg-[#E51C23] text-white" : "text-[#D1D5DB] hover:text-zinc-200"}`}>บิลทั้งหมด (฿)</button>
-                <button type="button" onClick={() => { paymentData.updateSession("billDiscountType", "percentage"); paymentData.updateSession("billDiscountValue", 0);}} className={`px-3 py-1 rounded-none transition-all cursor-pointer ${paymentData.billDiscountType === "percentage" ? "bg-[#E51C23] text-white" : "text-[#D1D5DB] hover:text-zinc-200"}`}>บิลทั้งหมด (%)</button>
+                <button
+                  type="button"
+                  disabled={isCompanyCustomer}
+                  onClick={() => { paymentData.updateSession("billDiscountType", "none"); paymentData.updateSession("billDiscountValue", 0);}}
+                  className={`px-3 py-1 rounded-none transition-all cursor-pointer ${
+                    isCompanyCustomer
+                      ? "text-zinc-600 cursor-not-allowed"
+                      : paymentData.billDiscountType === "none"
+                      ? "bg-[#E51C23] text-white"
+                      : "text-[#D1D5DB] hover:text-zinc-200"
+                  }`}
+                >
+                  ต่อรายการ
+                </button>
+                <button
+                  type="button"
+                  disabled={isCompanyCustomer}
+                  onClick={() => { paymentData.updateSession("billDiscountType", "amount"); paymentData.updateSession("billDiscountValue", 0);}}
+                  className={`px-3 py-1 rounded-none transition-all cursor-pointer ${
+                    isCompanyCustomer
+                      ? "text-zinc-600 cursor-not-allowed"
+                      : paymentData.billDiscountType === "amount"
+                      ? "bg-[#E51C23] text-white"
+                      : "text-[#D1D5DB] hover:text-zinc-200"
+                  }`}
+                >
+                  บิลทั้งหมด (฿)
+                </button>
+                <button
+                  type="button"
+                  disabled={isCompanyCustomer}
+                  onClick={() => { paymentData.updateSession("billDiscountType", "percentage"); paymentData.updateSession("billDiscountValue", 0);}}
+                  className={`px-3 py-1 rounded-none transition-all cursor-pointer ${
+                    isCompanyCustomer
+                      ? "text-zinc-600 cursor-not-allowed"
+                      : paymentData.billDiscountType === "percentage"
+                      ? "bg-[#E51C23] text-white"
+                      : "text-[#D1D5DB] hover:text-zinc-200"
+                  }`}
+                >
+                  บิลทั้งหมด (%)
+                </button>
               </div>
               <div className="bg-[#2D2C2C] p-2 text-[11px] leading-tight text-[#D1D5DB] max-w-[265px] text-left rounded-none">
                 <span className="text-[#E51C23] mr-1 ">ⓘ</span>
-                {paymentData.billDiscountType === "none" ? (
+                {isCompanyCustomer ? (
+                  <span className="text-zinc-400">ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น</span>
+                ) : paymentData.billDiscountType === "none" ? (
                   <span>เลือกหน่วย (฿ / %) และระบุจำนวนส่วนลดที่ต้องการในแต่ละรายการสินค้า</span>
                 ) : (
                   <span>ส่วนลดกำลังดำเนินการ: (ราคาสินค้า / ยอดรวม) * <span className="text-white">{paymentData.billDiscountValue ? paymentData.billDiscountValue.toFixed(2) : "0.00"}</span> {paymentData.billDiscountType === "percentage" ? "%" : "บาท"} จะถูกหักตามสัดส่วน ดำเนินการต่อในรายการ</span>
@@ -299,11 +354,18 @@ export default function PosPage(): React.JSX.Element {
                         </td>
                         {/* column5 Discount Toggle */}
                         <td className="py-4 px-4 text-center">
-                          <input type="checkbox" checked={item.discount_type !== "none"} className="accent-[#E51C23] h-4 w-4 cursor-pointer" onChange={(e) => cartHook.handleDiscountToggle(index, e.target.checked)} />
+                          <input
+                            type="checkbox"
+                            disabled={isCompanyCustomer}
+                            checked={!isCompanyCustomer && item.discount_type !== "none"}
+                            className={`accent-[#E51C23] h-4 w-4 ${isCompanyCustomer ? "opacity-30 cursor-not-allowed" : "cursor-pointer"}`}
+                            title={isCompanyCustomer ? "ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลด" : "เปิด/ปิดส่วนลด"}
+                            onChange={(e) => cartHook.handleDiscountToggle(index, e.target.checked)}
+                          />
                         </td>
                         {/* column6 Discount Type */}
                         <td className="py-4 px-4 text-center">
-                          {item.discount_type !== "none" ? (
+                          {!isCompanyCustomer && item.discount_type !== "none" ? (
                             <div className="inline-flex bg-[#F6F3F2] p-0.5 rounded-none text-xs">
                               <button type="button" onClick={() => cartHook.handleDiscountTypeChange(index, "amount")} className={`px-2 py-1 transition-all cursor-pointer ${item.discount_type === "amount" ? "bg-[#E51C23] text-white" : "text-[#6B7280] hover:text-gray-600"}`}>฿</button>
                               <button type="button" onClick={() => cartHook.handleDiscountTypeChange(index, "percentage")} className={`px-2 py-1 transition-all cursor-pointer ${item.discount_type === "percentage" ? "bg-[#E51C23] text-white" : "text-[#6B7280] hover:text-gray-600"}`}>%</button>
@@ -312,7 +374,7 @@ export default function PosPage(): React.JSX.Element {
                         </td>
                         {/* column7 Discount Value */}
                         <td className="py-4 px-4 text-center">
-                          {item.discount_type !== "none" ? (
+                          {!isCompanyCustomer && item.discount_type !== "none" ? (
                             <div className="flex flex-col items-center gap-1">
                               <div className="relative inline-flex items-center justify-center px-2 py-1 min-w-[75px] transition-all border bg-gray-100 text-gray-700 border-gray-300 rounded-none">
                                 {item.discount_type === "amount" && item.discount_value > 0 && <span className="mr-0.5 text-gray-500 select-none">-</span>}
@@ -447,39 +509,51 @@ export default function PosPage(): React.JSX.Element {
               paymentData.searchResults &&
               paymentData.searchResults.length > 0 && (
                 <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 shadow-xl max-h-60 overflow-y-auto z-50 rounded-none flex flex-col">
-                  {paymentData.searchResults.map((cust) => (
-                    <div
-                      key={cust.id}
-                      onClick={() => {
-                        paymentData.updateSession("customer", cust);
-                        paymentData.updateSession("searchQuery", cust.customer_name);
-                        paymentData.updateSession(
-                          "customerAddressTemp",
-                          cust.shipping_address || cust.registered_address || ""
+                  {paymentData.searchResults.map((cust) => {
+                    const custAddr =
+                      cust.shipping_address ||
+                      cust.registered_address ||
+                      (cust as any).display_address ||
+                      (cust as any).address ||
+                      "";
+
+                    const handleSelectThisCustomer = () => {
+                      paymentData.updateSession("customer", cust);
+                      paymentData.updateSession("searchQuery", cust.customer_name);
+                      paymentData.updateSession("customerAddressTemp", custAddr);
+                      if (cust.customer_type) {
+                        paymentData.updateSession("activeTypeId", cust.customer_type.id);
+                        paymentData.setSelectedPaymentType(
+                          cust.customer_type.type_name === "GENERAL" ? "CASH" : "CREDIT"
                         );
-                        if (cust.customer_type) {
-                          paymentData.updateSession("activeTypeId", cust.customer_type.id);
-                          paymentData.setSelectedPaymentType(
-                            cust.customer_type.type_name === "GENERAL" ? "CASH" : "CREDIT"
-                          );
-                          paymentData.updateSession("paymentMethodId", 1);
-                        }
-                        if (typeof paymentData.setSearchResults === "function")
-                          paymentData.setSearchResults([]);
-                      }}
-                      className="px-3 py-2 text-xs text-zinc-800 hover:bg-zinc-100 cursor-pointer flex flex-col gap-0.5 border-b border-gray-100 bg-white"
-                    >
-                      <div className="flex justify-between font-medium">
-                        <span className="text-zinc-900">{cust.customer_name}</span>
-                        <span className="text-zinc-500">{cust.phone_number || "ไม่มีเบอร์โทร"}</span>
+                        paymentData.updateSession("paymentMethodId", 1);
+                      }
+                      if (typeof paymentData.setSearchResults === "function")
+                        paymentData.setSearchResults([]);
+                    };
+
+                    return (
+                      <div
+                        key={cust.id}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleSelectThisCustomer();
+                        }}
+                        onClick={handleSelectThisCustomer}
+                        className="px-3 py-2 text-xs text-zinc-800 hover:bg-zinc-100 cursor-pointer flex flex-col gap-0.5 border-b border-gray-100 bg-white"
+                      >
+                        <div className="flex justify-between font-medium">
+                          <span className="text-zinc-900">{cust.customer_name}</span>
+                          <span className="text-zinc-500">{cust.phone_number || "ไม่มีเบอร์โทร"}</span>
+                        </div>
+                        {custAddr ? (
+                          <span className="text-[10px] text-gray-400 truncate">
+                            {custAddr}
+                          </span>
+                        ) : null}
                       </div>
-                      {(cust.shipping_address || cust.registered_address) && (
-                        <span className="text-[10px] text-gray-400 truncate">
-                          {cust.shipping_address || cust.registered_address}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                   <div
                     onClick={(e) => {
                       paymentData.handleSearchCustomer(e);
