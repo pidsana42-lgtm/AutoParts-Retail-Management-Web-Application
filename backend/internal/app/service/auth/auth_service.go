@@ -3,6 +3,8 @@ package auth
 import (
 	authDTO "backend/internal/app/dto/auth"
 	authRepo "backend/internal/app/repository/auth"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"time"
 	"os"
@@ -14,6 +16,19 @@ import (
 type AuthService interface {
     Login(req *authDTO.LoginRequest) (*authDTO.LoginResponse, error)
     LoginWithLine(lineUserID string) (*authDTO.LoginResponse, error)
+    // GetOrCreateQrToken คืน token ประจำตัวของ user (สร้างใหม่ถ้ายังไม่เคยมี) เอาไว้ทำ QR ให้มือถือสแกนล็อกอิน
+    GetOrCreateQrToken(userID uint) (string, error)
+    // RegenerateQrToken สร้าง token ใหม่ทับของเดิม (เผื่อ QR เก่าหลุดไปอยู่ในมือคนอื่น จะได้ยกเลิกอันเก่าได้)
+    RegenerateQrToken(userID uint) (string, error)
+    // LoginWithQrToken แลก token จาก QR ส่วนตัว เป็น session ล็อกอินจริง (ไม่ต้องกรอก username/password)
+    LoginWithQrToken(token string) (*authDTO.LoginResponse, error)
+}
+
+// generateQrLoginToken สุ่มรหัสลับ 32 ไบต์ (แปลงเป็น hex ยาว 64 ตัวอักษร) ใช้แนบไปกับ QR ส่วนตัวของพนักงาน
+func generateQrLoginToken() string {
+    b := make([]byte, 32)
+    _, _ = rand.Read(b)
+    return hex.EncodeToString(b)
 }
 
 type authService struct {
@@ -97,6 +112,69 @@ func (s *authService) LoginWithLine(lineUserID string) (*authDTO.LoginResponse, 
     }
 
     // 3. ส่ง Token และข้อมูลผู้ใช้กลับไป
+    return &authDTO.LoginResponse{
+        ID:        user.ID,
+        Token:     tokenString,
+        Role:      string(user.Role.RoleName),
+        FirstName: user.FirstName,
+        LastName:  user.LastName,
+        Username:  user.Username,
+    }, nil
+}
+
+func (s *authService) GetOrCreateQrToken(userID uint) (string, error) {
+    user, err := s.userRepo.GetByID(userID)
+    if err != nil {
+        return "", errors.New("ไม่พบผู้ใช้งานนี้")
+    }
+
+    if user.QrLoginToken != "" {
+        return user.QrLoginToken, nil
+    }
+
+    token := generateQrLoginToken()
+    if err := s.userRepo.UpdateQrLoginToken(userID, token); err != nil {
+        return "", errors.New("ไม่สามารถสร้าง QR Code ส่วนตัวได้")
+    }
+    return token, nil
+}
+
+func (s *authService) RegenerateQrToken(userID uint) (string, error) {
+    if _, err := s.userRepo.GetByID(userID); err != nil {
+        return "", errors.New("ไม่พบผู้ใช้งานนี้")
+    }
+
+    token := generateQrLoginToken()
+    if err := s.userRepo.UpdateQrLoginToken(userID, token); err != nil {
+        return "", errors.New("ไม่สามารถสร้าง QR Code ส่วนตัวใหม่ได้")
+    }
+    return token, nil
+}
+
+func (s *authService) LoginWithQrToken(token string) (*authDTO.LoginResponse, error) {
+    user, err := s.userRepo.GetByQrLoginToken(token)
+    if err != nil {
+        return nil, errors.New("QR Code นี้ไม่ถูกต้องหรือหมดอายุแล้ว")
+    }
+
+    claims := jwt.MapClaims{
+        "user_id": user.ID,
+        "role":    string(user.Role.RoleName),
+        "exp":     time.Now().Add(time.Hour * 24).Unix(),
+    }
+
+    jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+    secret := os.Getenv("JWT_SECRET")
+    if secret == "" {
+        secret = "replace-with-secure-secret"
+    }
+
+    tokenString, err := jwtToken.SignedString([]byte(secret))
+    if err != nil {
+        return nil, errors.New("ไม่สามารถสร้างรหัสเข้าสู่ระบบได้")
+    }
+
     return &authDTO.LoginResponse{
         ID:        user.ID,
         Token:     tokenString,

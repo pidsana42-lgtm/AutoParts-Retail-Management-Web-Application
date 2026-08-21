@@ -45,6 +45,73 @@ func (c *AuthController) Login(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, res)
 }
 
+// GetQrToken คืน token QR ส่วนตัวของ user ที่ล็อกอินอยู่ (สร้างให้ครั้งแรกถ้ายังไม่เคยมี)
+// ใช้แสดงเป็น QR บนคอมที่ล็อกอินอยู่แล้ว ให้พนักงานเอามือถือมาสแกนเพื่อล็อกอินต่อได้เลย
+func (ctrl *AuthController) GetQrToken(c *gin.Context) {
+	userID, ok := extractUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized: missing user profile"})
+		return
+	}
+
+	token, err := ctrl.authService.GetOrCreateQrToken(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, authDTO.QrTokenResponse{Token: token})
+}
+
+// RegenerateQrToken ยกเลิก QR ส่วนตัวเดิม แล้วออกอันใหม่ (เผื่อ QR เก่าหลุดไปอยู่ในมือคนอื่น)
+func (ctrl *AuthController) RegenerateQrToken(c *gin.Context) {
+	userID, ok := extractUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized: missing user profile"})
+		return
+	}
+
+	token, err := ctrl.authService.RegenerateQrToken(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, authDTO.QrTokenResponse{Token: token})
+}
+
+// QrLogin ให้มือถือที่สแกน QR ส่วนตัวของพนักงานแลก token เป็น session ล็อกอินจริง (ไม่ต้องกรอกรหัสผ่าน)
+func (ctrl *AuthController) QrLogin(c *gin.Context) {
+	var req authDTO.QrLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ไม่พบข้อมูล QR Code"})
+		return
+	}
+
+	res, err := ctrl.authService.LoginWithQrToken(req.Token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+func extractUserID(c *gin.Context) (uint, bool) {
+	raw, exists := c.Get("user_id")
+	if !exists {
+		return 0, false
+	}
+	switch v := raw.(type) {
+	case float64:
+		return uint(v), true
+	case uint:
+		return v, true
+	default:
+		return 0, false
+	}
+}
+
 func (ctrl *AuthController) LineCallback(c *gin.Context) {
 	code := c.Query("code")
 	if code == "" {

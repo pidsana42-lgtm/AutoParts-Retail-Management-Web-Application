@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronLeft, Loader2, MapPin, Send } from "lucide-react";
+import { ChevronLeft, Loader2, MapPin, Send, QrCode, Download, Printer, X } from "lucide-react";
+import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 
 import Heading from "../../../../components/elements/heading";
 import Badge from "../../../../components/elements/badge";
@@ -53,6 +54,9 @@ function EmployeeCheckStockExecuteContent() {
   // ผลนับที่ส่งไปแล้ว (โหลดมาแสดงตอนตารางถูกล็อกแล้ว: รอตรวจสอบ / เสร็จสิ้น)
   const [submittedRecords, setSubmittedRecords] = useState<CheckStockRecord[]>([]);
 
+  // ให้พนักงานเองเรียกดู/พิมพ์/แชร์ QR ของงานตัวเองได้ด้วย (ไม่ใช่แค่ฝั่งเจ้าของร้าน)
+  const [showQr, setShowQr] = useState(false);
+
   useEffect(() => {
     if (!id) return;
     let alive = true;
@@ -80,6 +84,50 @@ function EmployeeCheckStockExecuteContent() {
   const isOwnSchedule = !schedule || isValidQrToken || schedule.user_id === Number(user?.id);
   // ใช้ user_id ของตารางเป็นคนส่งเมื่อเข้าผ่าน QR token, ไม่งั้นใช้คนที่ล็อกอินอยู่ตามปกติ
   const submitterUserId = isValidQrToken ? schedule?.user_id : Number(user?.id);
+
+  // ให้พนักงานเองเรียกดู QR ของงานนี้ได้ด้วย (ไม่ต้องรอเจ้าของร้านโชว์ให้) เผื่ออยากพิมพ์/ส่งต่อเอง
+  const qrPayload =
+    id && schedule?.access_token
+      ? `${window.location.origin}/employee/wms/check-stock/${id}?token=${schedule.access_token}`
+      : "";
+
+  const handleDownloadQR = () => {
+    const canvas = document.getElementById("employee-schedule-qr-canvas") as HTMLCanvasElement;
+    if (canvas) {
+      const url = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `check-stock-qr-${id}.png`;
+      a.click();
+    }
+  };
+
+  const handlePrintQR = () => {
+    const canvas = document.getElementById("employee-schedule-qr-canvas") as HTMLCanvasElement;
+    if (canvas) {
+      const url = canvas.toDataURL("image/png");
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title></title>
+              <style>
+                @page { margin: 0; }
+                html, body { margin: 0; padding: 0; height: 100%; }
+                body { display: flex; justify-content: center; align-items: center; }
+                img { max-width: 100%; max-height: 100%; }
+              </style>
+            </head>
+            <body>
+              <img src="${url}" onload="window.print();window.close();" />
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      }
+    }
+  };
 
   // "รอดำเนินการ" หมายถึงยังไม่ถึงเวลาเริ่ม (backend คำนวณสถานะนี้แบบไดนามิกจากเวลาเริ่มอยู่แล้ว)
   // ส่วนเวลาสิ้นสุดต้องเช็คเองที่นี่ เพราะ backend ไม่มีการเปลี่ยนสถานะอัตโนมัติตอนหมดเขต
@@ -216,8 +264,59 @@ function EmployeeCheckStockExecuteContent() {
             </Heading>
           </div>
         </div>
-        {getStatusBadge(schedule.status)}
+        <div className="flex shrink-0 items-center gap-2">
+          {qrPayload && (
+            <button
+              type="button"
+              onClick={() => setShowQr(true)}
+              className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50"
+              title="ดู QR Code ของงานนี้"
+            >
+              <QrCode className="h-3.5 w-3.5" />
+              QR
+            </button>
+          )}
+          {getStatusBadge(schedule.status)}
+        </div>
       </div>
+
+      {showQr && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowQr(false)}
+        >
+          <div
+            className="flex w-full max-w-xs flex-col items-center gap-3 rounded-md bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex w-full items-center justify-between">
+              <span className="text-sm font-semibold text-slate-800">QR Code ของงานนี้</span>
+              <button type="button" onClick={() => setShowQr(false)} className="cursor-pointer text-slate-400 hover:text-slate-700">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-white p-3">
+              <QRCodeSVG value={qrPayload} size={160} level="M" />
+            </div>
+            <div className="hidden">
+              <QRCodeCanvas id="employee-schedule-qr-canvas" value={qrPayload} size={320} level="H" includeMargin />
+            </div>
+            <p className="text-center text-xs text-slate-400">
+              ให้คนอื่นสแกนด้วยมือถือเพื่อเข้าหน้าเช็คสต็อกนี้ได้เลย
+            </p>
+            <div className="flex w-full gap-2">
+              <Button onClick={handleDownloadQR} variant="outline" className="flex flex-1 items-center justify-center gap-1.5">
+                <Download className="h-3.5 w-3.5" />
+                ดาวน์โหลด
+              </Button>
+              <Button onClick={handlePrintQR} variant="outline" className="flex flex-1 items-center justify-center gap-1.5">
+                <Printer className="h-3.5 w-3.5" />
+                พิมพ์
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!isEditable && (
         <Card className="border-l-[5px] border-l-blue-500 bg-blue-50/40">
