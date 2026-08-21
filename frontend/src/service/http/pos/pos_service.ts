@@ -5,7 +5,7 @@ import type { StoreConfigInterface } from "../../../interface/pos/store_config_i
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
 import type { ConfirmPaymentRequest } from "../../../interface/pos/payment_interface";
 import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, GetSaleHistoryByIDResponse, RevertCancellationRequestResponse } from "../../../interface/pos/sales_history_interface";
-import type { CustomerUnpaidBillsResponse, SettleBillsRequest, SettleBillsResponse } from "../../../interface/pos/settle_bills_interface";
+import type { CustomerUnpaidBillsResponse, SettleBillsRequest, SettleBillsResponse, GenerateSettleQRRequest, GenerateSettleQRResponse } from "../../../interface/pos/settle_bills_interface";
 
 // ==================== API Services ====================
 export const posApiService = {
@@ -103,10 +103,22 @@ export const posApiService = {
       .get<CustomerUnpaidBillsResponse>(`/pos/payments/unpaid-bills/${customerId}`)
       .then((res) => res.data),
 
+  /** ดึงรายการบิลค้างชำระเจาะจงเฉพาะบิลเดียวด้วยเลขที่คำสั่งซื้อ/บาร์โค้ด */
+  getUnpaidBillByOrderNumber: (orderNumber: string): Promise<CustomerUnpaidBillsResponse> =>
+    apiClient
+      .get<CustomerUnpaidBillsResponse>(`/pos/payments/unpaid-order/${encodeURIComponent(orderNumber)}`)
+      .then((res) => res.data),
+
   /** บันทึกรับชำระบิลค้างชำระ */
   settleCustomerBills: (payload: SettleBillsRequest): Promise<SettleBillsResponse> =>
     apiClient
       .post<SettleBillsResponse>("/pos/payments/settle-bills", payload)
+      .then((res) => res.data),
+
+  /** สร้าง PromptPay QR Code สำหรับชำระบิลค้างชำระ (ตัดยอดหนี้) */
+  generateSettleQR: (payload: GenerateSettleQRRequest): Promise<GenerateSettleQRResponse> =>
+    apiClient
+      .post<GenerateSettleQRResponse>("/pos/payments/generate-settle-qr", payload)
       .then((res) => res.data),
 
   /** ค้นหาใบสั่งซื้อขายด้วยหมายเลข invoice */
