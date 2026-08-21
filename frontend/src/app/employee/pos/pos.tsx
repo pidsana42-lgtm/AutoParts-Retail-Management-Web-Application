@@ -415,7 +415,7 @@ export default function PosPage(): React.JSX.Element {
       {/* ─── [โซนฝั่งขวา] : ข้อมูลลูกค้า และสรุปยอดเงิน ─── */}
       <div className="w-full lg:w-[27%] bg-[#F6F3F2] p-6 flex flex-col justify-between shadow-2xl shrink-0 min-h-full">
         <div>
-          <Text variant="small" className="text-gray-500 mb-4 uppercase tracking-wide">
+          <Text variant="small" className="text-[#6B7280] mb-4 uppercase tracking-wide">
             ข้อมูลลูกค้า
           </Text>
           
@@ -592,7 +592,7 @@ export default function PosPage(): React.JSX.Element {
           {/* สรุปยอดชำระสุทธิ */}
           <div className="bg-[#1C1B1B] p-5 my-5 flex justify-between items-center border border-zinc-800">
             <Text variant="small" className="text-[#9CA3AF] uppercase mb-0 tracking-wider">ยอดชำระสุทธิ</Text>
-            <Text variant="muted" className="text-[#FFFFFF] text-2xl mb-0">
+            <Text variant="muted" className="text-white text-2xl mb-0">
               ฿{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </Text>
           </div>

@@ -8,6 +8,7 @@ import type {
   SettleBillSuggestion,
   SettleSearchSuggestions,
   SettleBillsSavedSession,
+  SettleBillSummaryItem,
 } from "../../../../interface/pos/settle_bills_interface";
 
 const SETTLE_SESSION_KEY = "settle_bills_session";
@@ -433,6 +434,24 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
     return rem > 0 ? rem : 0;
   }, [totalSelectedDebt, totalPayAmount]);
 
+  // สร้าง summary ของบิลที่เลือก (รหัสบิล, ยอดชำระ, ยอดคงเหลือ, แบ่งจ่ายหรือไม่)
+  const summaryBills = useMemo<SettleBillSummaryItem[]>(() => {
+   return bills
+      .filter((b) => selectedBillIds.includes(b.order_id))
+      .map((b) => {
+        const payAmt = getBillPayAmount(b);
+        const remAmt = Math.max(0, b.balance_due - payAmt);
+        return {
+          order_id: b.order_id,
+          order_number: b.order_number,
+          balance_due: b.balance_due,
+          pay_amount: payAmt,
+          remaining_amount: remAmt,
+          is_partial: remAmt > 0.009,
+        };
+      });
+  }, [bills, selectedBillIds, getBillPayAmount]);
+
   // จัดการการเปลี่ยนยอดชำระของบิลแต่ละใบ
   const handleBillPayAmountChange = (orderId: number, valueStr: string) => {
     const sanitized = valueStr.replace(/[^0-9.]/g, "");
@@ -654,6 +673,9 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
     totalSelectedDebt,
     totalPayAmount,
     remainingDebtAfterPay,
+    summaryBills, // สรุปบิลที่เลือก
+    selectedCount: selectedBillIds.length, // จำนวนบิลที่เลือก
+    hasSelectedBills: selectedBillIds.length > 0, // มีบิลที่เลือกหรือไม่
     customPayAmounts,
     customPayDisplay,
     getBillPayAmount,
