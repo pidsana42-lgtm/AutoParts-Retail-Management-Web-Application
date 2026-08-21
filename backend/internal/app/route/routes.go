@@ -7,6 +7,7 @@ import (
 	"backend/internal/app/route/customer"
 	"backend/internal/app/route/dashboard"
 	"backend/internal/app/route/import_bill"
+	"backend/internal/app/route/notification"
 	"backend/internal/app/route/oa"
 	"backend/internal/app/route/pos"
 	"backend/internal/app/route/pre_order"
@@ -26,6 +27,9 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	// dashboard routes
 	dashboard.SetupDashboardRoutes(r, db)
 
+	// notification routes (กระดิ่งแจ้งเตือน) — ต้อง setup ก่อน wms เพราะ check-stock ต้องใช้ service ตัวนี้ยิงแจ้งเตือน
+	notificationService := notification.SetupNotificationRoutes(r, db)
+
 	//pos and customer payment routes
 	customer.SetupCustomerRoutes(r, db)
 	pos.SetupPOSRoutes(r, db)
@@ -37,11 +41,11 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	//ของทุกคนก็เพิ่มเอาในนี้เลย comment ระบบตัวเองไว้ด้วยนะ ใน main มันจะได้ไ่ม่เยอะ
 
 	//import bill routes
-	import_bill.SetupBillRoutes(r, db)
+	import_bill.SetupBillRoutes(r, db, notificationService)
 	//claim routes
-	claim.SetupClaimRoutes(r, db)
+	claim.SetupClaimRoutes(r, db, notificationService)
 	//pre-order routes
-	pre_order.SetupPreOrderRoutes(r, db)
+	pre_order.SetupPreOrderRoutes(r, db, notificationService)
 	//catalog routes
 	catalog.SetupCatalogRoutes(r, db)
 
@@ -50,7 +54,7 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 
 	// wms routes
 	wms.SetupProductRoutes(r, db)
-	wms.SetupCheckStockScheduleRoutes(r, db)
+	wms.SetupCheckStockScheduleRoutes(r, db, notificationService)
 	wms.SetupCheckStockRoutes(r, db)
 	wms.SetupStockMovementRoutes(r, db)
 	wms.SetupSupplierRoutes(r, db)

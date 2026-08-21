@@ -1,14 +1,24 @@
 import { Search, Bell, CheckCircle, Info, AlertTriangle, XCircle, Trash2, CheckCheck } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContexts";
-import { useNotification } from "../../contexts/NotificationContext";
+import { useNotification, type AppNotification } from "../../contexts/NotificationContext";
 import { useState, useRef, useEffect } from "react";
 
 export default function Navbar(): React.JSX.Element {
   const { user } = useAuth() as any;
+  const navigate = useNavigate();
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotification();
-  
+
   const [showNotif, setShowNotif] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  const handleNotifClick = (notif: AppNotification) => {
+    markAsRead(notif.id);
+    if (notif.link) {
+      setShowNotif(false);
+      navigate(notif.link);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -107,7 +117,7 @@ export default function Navbar(): React.JSX.Element {
                     <div 
                       key={notif.id} 
                       className={`px-4 py-3 border-b border-gray-50 flex gap-3 cursor-pointer hover:bg-gray-50 transition-colors ${!notif.isRead ? 'bg-blue-50/30' : ''}`}
-                      onClick={() => markAsRead(notif.id)}
+                      onClick={() => handleNotifClick(notif)}
                     >
                       {getNotifIcon(notif.type)}
                       <div className="flex-1">

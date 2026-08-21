@@ -3,15 +3,16 @@ package wms
 import (
 	wmsCtrl "backend/internal/app/controller/wms"
 	wmsRepo "backend/internal/app/repository/wms"
+	svcNotification "backend/internal/app/service/notification"
 	wmsSvc  "backend/internal/app/service/wms"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func SetupCheckStockScheduleRoutes(r *gin.Engine, db *gorm.DB) {
+func SetupCheckStockScheduleRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotification.NotificationService) {
 	repo       := wmsRepo.NewCheckStockScheduleRepository(db)
-	service    := wmsSvc.NewCheckStockScheduleService(repo, db)
+	service    := wmsSvc.NewCheckStockScheduleService(repo, db, notificationService)
 	controller := wmsCtrl.NewCheckStockScheduleController(service)
 
 	wms := r.Group("/api/wms/check-stock-schedules")
