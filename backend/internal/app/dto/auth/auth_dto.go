@@ -15,13 +15,3 @@ type LoginResponse struct {
     LastName string `json:"last_name"`
     Username string `json:"username"`
 }
-
-// หน้าบ้านส่งมาตอนสแกน QR ส่วนตัวของพนักงาน (มือถือ) เพื่อขอแลก token เป็น session ล็อกอินจริง
-type QrLoginRequest struct {
-    Token string `json:"token" binding:"required"`
-}
-
-// ตอบกลับตอนดึง/สร้าง QR login token ของ user ที่ล็อกอินอยู่ (แสดงเป็น QR บนคอม)
-type QrTokenResponse struct {
-    Token string `json:"token"`
-}
