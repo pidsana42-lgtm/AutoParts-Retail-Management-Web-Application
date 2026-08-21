@@ -133,22 +133,22 @@ export default function ClaimApprovePage(): React.JSX.Element {
       </div>
 
       {/* Customer Info */}
-      <Card className="border-l-[5px] border-l-red-800">
+      <Card className="border-l-[5px] border-l-[#e51c23]">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-5">
           <div>
-            <p className="text-xs text-gray-500 font-medium mb-1">เลขที่ใบเคลม</p>
+            <p className="text-xs text-[#5F5E5E] font-medium mb-1">เลขที่ใบเคลม</p>
             <p className="font-bold text-[#e51c23] font-mono text-lg">{claimNo}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-medium mb-1">ลูกค้า</p>
+            <p className="text-xs text-[#5F5E5E] font-medium mb-1">ลูกค้า</p>
             <p className="font-bold text-[#1C1B1B]">{customerName}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-medium mb-1">เบอร์โทร</p>
+            <p className="text-xs text-[#5F5E5E] font-medium mb-1">เบอร์โทร</p>
             <p className="font-bold text-[#1C1B1B]">{customerPhone}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-medium mb-1">วันที่เคลม</p>
+            <p className="text-xs text-[#5F5E5E] font-medium mb-1">วันที่เคลม</p>
             <p className="font-bold text-[#1C1B1B]">
               {new Date(claim.claim_date).toLocaleDateString('th-TH')}
             </p>
@@ -159,16 +159,16 @@ export default function ClaimApprovePage(): React.JSX.Element {
       {/* Items Table */}
       <Card className="overflow-hidden" noPadding>
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-          <Heading level="h2" className="m-0 text-base font-semibold text-black">
+          <Heading level="h2" className="m-0 text-base font-semibold text-[#1C1B1B]">
             รายการสินค้าที่ขอเคลม
           </Heading>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-[#5F5E5E]">
             ติ๊กรายการที่เคลมได้ ไม่ติ๊ก = ปฏิเสธเคลม
           </p>
         </div>
 
         <Table>
-          <TableHeader className="bg-[#f6f3f2] text-[#797878]">
+          <TableHeader className="bg-gray-50 text-[#5F5E5E]">
             <TableRow>
               <TableHead className="pl-6">สินค้า</TableHead>
               <TableHead className="text-center w-24">จำนวน</TableHead>
@@ -179,7 +179,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
           <TableBody className="text-gray-700">
             {(claim.items ?? []).length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-12 text-gray-500">
+                <TableCell colSpan={4} className="text-center py-12 text-[#5F5E5E]">
                   ไม่มีรายการสินค้าในใบเคลมนี้
                 </TableCell>
               </TableRow>
@@ -192,7 +192,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
                   <TableRow key={itemId} className="hover:bg-gray-50/70">
                     <TableCell className="pl-6">
                       <p className="font-semibold text-[#1C1B1B]">{item.product_name || `#${item.product_id}`}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{item.reason}</p>
+                      <p className="text-xs text-[#5F5E5E] mt-0.5">{item.reason}</p>
                     </TableCell>
                     <TableCell className="text-center font-bold text-[#e51c23]">{item.qty}</TableCell>
                     <TableCell className="text-center">
@@ -224,7 +224,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
       </Card>
 
       {/* Summary */}
-      <Card className="bg-[#22252a] text-white p-6">
+      <Card className="bg-[#1C1B1B] text-white p-6">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-gray-400 font-light">รายการสินค้าที่อนุมัติเคลม</p>
@@ -302,7 +302,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
                     <tr key={item.id} className="border-b border-slate-200">
                       <td className="border border-slate-300 p-2 font-medium">{item.product_name || `#${item.product_id}`}</td>
                       <td className="border border-slate-300 p-2 text-center font-bold">{item.qty}</td>
-                      <td className="border border-slate-300 p-2 text-center font-bold text-emerald-600">อนุมัติเคลม</td>
+                      <td className="border border-slate-300 p-2 text-center font-bold text-[#259b24]">อนุมัติเคลม</td>
                     </tr>
                   );
                 })
