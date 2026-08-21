@@ -1,9 +1,10 @@
-import { ChevronLeft, Save, Trash2, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Save, Trash2, AlertCircle } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
 import type { ViewState, Supplier, Product, ScannedBillData } from '../../../../interface/import';
 import ProductSearchSelect from '../components/product_search_select';
 import InlineValidationAlertBanner from '../components/inline_validation_alert_banner';
+import BillSummaryFooterBar from '../components/BillSummaryFooterBar';
 import type { PriceMismatchItem } from '../components/price_update_modal';
 
 interface ManualEntryViewProps {
@@ -78,12 +79,19 @@ export default function ManualEntryView({
 
   return (
     <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
-      <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-none transition-colors cursor-pointer" title="ย้อนกลับ">
-          <ChevronLeft size={24} className="text-[#5F5E5E]" />
+      {/* Breadcrumbs Navigation */}
+      <nav className="flex items-center gap-2 text-xs text-gray-500 mb-4">
+        <button type="button" onClick={() => setCurrentView('home')} className="hover:text-[#e51c23] transition-colors cursor-pointer font-bold">
+          นำเข้าสินค้าจากบิล
         </button>
+        <ChevronRight size={14} className="text-gray-400" />
+        <span className="text-[#1C1B1B] font-bold">กรอกข้อมูลด้วยตนเอง</span>
+      </nav>
+
+      {/* Header */}
+      <div className="mb-8">
         <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
-          นำเข้าใบสั่งซื้อ (กรอกข้อมูลด้วยตนเอง)
+          กรอกข้อมูลบิลนำเข้าด้วยตนเอง
         </Heading>
       </div>
 
@@ -99,7 +107,7 @@ export default function ManualEntryView({
           {/* Form Fields */}
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 border-b border-gray-100">
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-2">ซัพพลายเออร์ (SUPPLIER)</label>
+              <label className="block text-xs font-bold text-gray-700 mb-2">ซัพพลายเออร์</label>
               <input 
                 type="text" 
                 value={formData.supplier_name || ''} 
@@ -125,7 +133,7 @@ export default function ManualEntryView({
               )}
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-2">เลขที่บิล (INVOICE NO.)</label>
+              <label className="block text-xs font-bold text-gray-700 mb-2">เลขที่บิล</label>
               <input 
                 type="text" 
                 value={formData.bill_no} 
@@ -134,7 +142,7 @@ export default function ManualEntryView({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-2">วันที่ครบกำหนดในบิล (DUE DATE)</label>
+              <label className="block text-xs font-bold text-gray-700 mb-2">วันที่ครบกำหนดในบิล</label>
               <input 
                 type="date" 
                 value={formData.due_date} 
@@ -143,7 +151,7 @@ export default function ManualEntryView({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-2">อ้างอิงใบสั่งซื้อระบบ (PO ID)</label>
+              <label className="block text-xs font-bold text-gray-700 mb-2">อ้างอิงใบสั่งซื้อระบบ</label>
               <select
                 value={poReference}
                 onChange={(e) => setPoReference(e.target.value)}
@@ -158,7 +166,7 @@ export default function ManualEntryView({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-2">ขนส่งโดย (TRANSPORT BY)</label>
+              <label className="block text-xs font-bold text-gray-700 mb-2">ขนส่งโดย</label>
               <input 
                 type="text" 
                 value={formData.transport_by} 
@@ -167,7 +175,7 @@ export default function ManualEntryView({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-2">วันที่รับสินค้า (RECEIVE DATE)</label>
+              <label className="block text-xs font-bold text-gray-700 mb-2">วันที่รับสินค้า</label>
               <input 
                 type="date" 
                 value={formData.receive_date ? formData.receive_date.split('T')[0] : ''} 
@@ -182,15 +190,15 @@ export default function ManualEntryView({
             <Table className="min-w-[1250px] text-left text-sm border-collapse">
               <TableHeader className="bg-gray-100 text-[#5F5E5E] border-b border-gray-200 text-xs uppercase tracking-wider">
                 <TableRow>
-                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[150px]">รหัสสินค้าคู่ค้า (SUPPLIER CODE)</TableHead>
-                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[260px]">ชื่อสินค้าตามบิล (SUPPLIER ITEM)</TableHead>
-                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[280px]">จับคู่สินค้าในร้าน (MATCHED PRODUCT)</TableHead>
-                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[160px]">บาร์โค้ด (BARCODE)</TableHead>
+                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[150px]">รหัสสินค้าคู่ค้า</TableHead>
+                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[260px]">ชื่อสินค้าตามบิล</TableHead>
+                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[280px]">จับคู่สินค้าในร้าน</TableHead>
+                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[160px]">บาร์โค้ด</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่หลัก</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่ย่อย</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">จำนวน</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[110px]">ราคา/หน่วย</TableHead>
-                  <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">ยอดรวม (TOTAL)</TableHead>
+                  <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">ยอดรวม</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-center text-[#5F5E5E] w-12">ลบ</TableHead>
                 </TableRow>
               </TableHeader>
@@ -228,13 +236,20 @@ export default function ManualEntryView({
                         />
                       </TableCell>
                       <TableCell className="py-2.5 px-3">
-                        <input 
-                          type="text"
-                          value={item.company_product_name || ''}
-                          onChange={(e) => handleItemChange(idx, 'company_product_name', e.target.value)}
-                          placeholder="ชื่อสินค้าในบิล"
-                          className="bg-white border border-gray-300 rounded-none focus:border-[#e51c23] focus:ring-1 focus:ring-[#e51c23] w-full text-sm font-medium text-[#1C1B1B] px-3 py-1.5 shadow-2xs"
-                        />
+                        <div className="flex flex-col gap-1">
+                          <input 
+                            type="text"
+                            value={item.company_product_name || ''}
+                            onChange={(e) => handleItemChange(idx, 'company_product_name', e.target.value)}
+                            placeholder="ชื่อสินค้าในบิล"
+                            className="bg-white border border-gray-300 rounded-none focus:border-[#e51c23] focus:ring-1 focus:ring-[#e51c23] w-full text-sm font-medium text-[#1C1B1B] px-3 py-1.5 shadow-2xs"
+                          />
+                          {item.pre_order_item_id && (
+                            <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 border border-purple-200 w-fit">
+                              ★ สินค้าพรีออเดอร์ของลูกค้า
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="py-2.5 px-3">
                         <ProductSearchSelect
@@ -378,98 +393,122 @@ export default function ManualEntryView({
                           </TableCell>
                         </>
                       )}
-                    <TableCell className="py-2 px-4 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveRow(idx)}
-                        className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
-                        title="ลบรายการสินค้า"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                );
-              }))}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* Add Row Button */}
-          <div className="p-4 border-b border-gray-100 flex justify-start bg-gray-50">
-            <button
-              type="button"
-              onClick={handleAddRow}
-              className="text-sm text-[#e51c23] hover:text-[#c9181f] font-bold flex items-center gap-1 hover:underline cursor-pointer"
-            >
-              + เพิ่มรายการสินค้า (Add Row)
-            </button>
-          </div>
-
-
-
-          {/* Inline Alert Banner — informational only, action buttons stay in footer */}
-          {(validationWarnings.length > 0 || priceMismatchedItems.length > 0) && (
-            <div className="px-6 pt-4">
-              <InlineValidationAlertBanner
-                warnings={validationWarnings}
-                mismatchedItems={priceMismatchedItems}
-                onDismiss={handleDismissValidation}
-                isDraftMode={isDraftMode}
-                isEmployee={isEmployee}
-              />
+                      <TableCell className="py-2 px-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveRow(idx)}
+                          className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                          title="ลบรายการสินค้า"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                }))}
+                </TableBody>
+              </Table>
             </div>
-          )}
 
-          {/* Summary & Submit */}
-          <div className="border-t border-gray-100 p-6 flex justify-between items-end bg-[#fafafa] rounded-none mt-auto">
-            <div className="text-sm text-[#5F5E5E] space-y-2 text-left">
-              <p>จำนวนรายการทั้งหมด : <span className="text-[#1C1B1B] font-bold">{formData.items.length} รายการ</span></p>
-              <p>มูลค่าสินค้า (SUBTOTAL) : <span className="text-[#1C1B1B] font-bold">฿{(calcSubtotal > 0 ? calcSubtotal : (formData.subtotal || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span></p>
+            {/* Add Row Button */}
+            <div className="p-4 border-b border-gray-100 flex justify-start bg-gray-50">
+              <button
+                type="button"
+                onClick={handleAddRow}
+                className="text-sm text-[#e51c23] hover:text-[#c9181f] font-bold flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                + เพิ่มรายการสินค้า (Add Row)
+              </button>
             </div>
-            <div className="text-right flex items-end gap-4">
-              <div>
-                <p className="text-sm text-[#e51c23] font-bold mb-1 text-left">ยอดเงินสุทธิรวม:</p>
-                <p className="text-xl text-[#e51c23] font-bold">{(calcTotalAmount > 0 ? calcTotalAmount : (formData.total_amount || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</p>
+
+            {/* Inline Alert Banner — informational only, action buttons stay in footer */}
+            {(validationWarnings.length > 0 || priceMismatchedItems.length > 0) && (
+              <div className="px-6 pt-4">
+                <InlineValidationAlertBanner
+                  warnings={validationWarnings}
+                  mismatchedItems={priceMismatchedItems}
+                  onDismiss={handleDismissValidation}
+                  isDraftMode={isDraftMode}
+                  isEmployee={isEmployee}
+                />
               </div>
-              {/* Footer buttons — change context when banner is active */}
-              {showBanner ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleDismissValidation}
-                    disabled={saving}
-                    className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
-                  >
-                    ยกเลิก
-                  </button>
-                  {priceMismatchedItems.length > 0 && !isEmployee && !isDraftMode && (
-                    <>
+            )}
+
+            {/* Summary & Submit */}
+            <BillSummaryFooterBar
+              totalItems={formData.items.length}
+              subtotal={calcSubtotal > 0 ? calcSubtotal : (formData.subtotal || 0)}
+              totalAmount={calcTotalAmount > 0 ? calcTotalAmount : (formData.total_amount || 0)}
+              onCancel={showBanner ? handleDismissValidation : () => setCurrentView('home')}
+              disabled={saving}
+              className="mt-auto"
+            >
+                {/* Footer buttons — change context when banner is active */}
+                {showBanner ? (
+                  <>
+                    {priceMismatchedItems.length > 0 && !isEmployee && !isDraftMode && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleSkipPriceUpdate}
+                          disabled={saving}
+                          className="bg-[#1C1B1B] hover:bg-gray-800 text-white px-6 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+                        >
+                          <Save size={16} />
+                          <span>บันทึกโดยไม่อัปเดตราคาทุน</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleConfirmUpdatePrices}
+                          disabled={saving}
+                          className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+                        >
+                          <Save size={16} />
+                          <span>อัปเดตราคาทุนและบันทึก</span>
+                        </button>
+                      </>
+                    )}
+                    {(priceMismatchedItems.length === 0 || isEmployee) && (
                       <button
                         type="button"
-                        onClick={handleSkipPriceUpdate}
-                        disabled={saving}
-                        className="bg-[#1C1B1B] hover:bg-gray-800 text-white px-6 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
-                      >
-                        <Save size={16} />
-                        <span>บันทึกโดยไม่อัปเดตราคาทุน</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleConfirmUpdatePrices}
+                        onClick={handleConfirmValidationSave}
                         disabled={saving}
                         className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
                       >
-                        <Save size={16} />
-                        <span>อัปเดตราคาทุนและบันทึก</span>
+                        {saving ? (
+                          <span>กำลังบันทึก...</span>
+                        ) : (
+                          <>
+                            <Save size={16} />
+                            <span>
+                              {isDraftMode
+                                ? 'ยืนยันบันทึกเป็นแบบร่าง'
+                                : isEmployee
+                                  ? 'ยืนยันส่งให้ Owner ตรวจสอบ'
+                                  : 'ยืนยันบันทึก'}
+                            </span>
+                          </>
+                        )}
                       </button>
-                    </>
-                  )}
-                  {(priceMismatchedItems.length === 0 || isEmployee) && (
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {!isDraftMode && (
+                      <button
+                        type="button"
+                        onClick={() => handleSaveBill(true)}
+                        disabled={saving || formData.items.length === 0}
+                        className="bg-[#1C1B1B] hover:bg-gray-800 text-white px-6 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+                      >
+                        <Save size={16} />
+                        <span>บันทึกเป็นแบบร่าง</span>
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={handleConfirmValidationSave}
-                      disabled={saving}
+                      onClick={() => handleSaveBill(isDraftMode)}
+                      disabled={saving || formData.items.length === 0}
                       className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
                     >
                       {saving ? (
@@ -477,58 +516,13 @@ export default function ManualEntryView({
                       ) : (
                         <>
                           <Save size={16} />
-                          <span>
-                            {isDraftMode
-                              ? 'ยืนยันบันทึกเป็นแบบร่าง'
-                              : isEmployee
-                                ? 'ยืนยันส่งให้ Owner ตรวจสอบ'
-                                : 'ยืนยันบันทึก'}
-                          </span>
+                          <span>{isDraftMode ? 'บันทึกเป็นแบบร่าง' : 'บันทึกบิลต่อไป'}</span>
                         </>
                       )}
                     </button>
-                  )}
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentView('home')}
-                    disabled={saving}
-                    className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer"
-                  >
-                    ยกเลิก
-                  </button>
-                  {!isDraftMode && (
-                    <button
-                      type="button"
-                      onClick={() => handleSaveBill(true)}
-                      disabled={saving || formData.items.length === 0}
-                      className="bg-[#1C1B1B] hover:bg-gray-800 text-white px-6 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
-                    >
-                      <Save size={16} />
-                      <span>บันทึกเป็นแบบร่าง</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleSaveBill(isDraftMode)}
-                    disabled={saving || formData.items.length === 0}
-                    className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
-                  >
-                    {saving ? (
-                      <span>กำลังบันทึก...</span>
-                    ) : (
-                      <>
-                        <Save size={16} />
-                        <span>{isDraftMode ? 'บันทึกเป็นแบบร่าง' : 'บันทึกบิลต่อไป'}</span>
-                      </>
-                    )}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
+                  </>
+                )}
+            </BillSummaryFooterBar>
         </div>
       </div>
     </div>

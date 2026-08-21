@@ -1,4 +1,4 @@
-import { ChevronLeft, Loader2, FileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, FileText } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import Card from '../../../../components/elements/card';
 import Badge from '../../../../components/elements/badge';
@@ -34,12 +34,20 @@ export default function POView({
 
   return (
     <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
-      {/* Header Bar */}
-      <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-none transition-colors">
-          <ChevronLeft size={24} className="text-gray-600" />
+      {/* Breadcrumbs Navigation */}
+      <nav className="flex items-center gap-2 text-xs text-gray-500 mb-4">
+        <button type="button" onClick={() => setCurrentView('home')} className="hover:text-[#e51c23] transition-colors cursor-pointer font-bold">
+          นำเข้าสินค้าจากบิล
         </button>
-        <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">นำเข้าสินค้าด้วยใบสั่งซื้อ</Heading>
+        <ChevronRight size={14} className="text-gray-400" />
+        <span className="text-[#1C1B1B] font-bold">อ้างอิงใบสั่งซื้อ (PO)</span>
+      </nav>
+
+      {/* Header Bar */}
+      <div className="mb-8">
+        <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
+          นำเข้าบิลโดยอ้างอิงใบสั่งซื้อ (PO)
+        </Heading>
       </div>
 
       {/* Content Box */}
@@ -102,51 +110,85 @@ export default function POView({
               <Table>
                 <TableHeader className="bg-gray-100 text-[#5F5E5E]">
                   <TableRow>
-                    <TableHead className="pl-6">เลขที่ใบสั่งซื้อ (PO NO.)</TableHead>
-                    <TableHead>ผู้จัดจำหน่าย (SUPPLIER)</TableHead>
-                    <TableHead>วันที่ออกเอกสาร (DATE)</TableHead>
-                    <TableHead className="text-right">ยอดเงินรวม (TOTAL)</TableHead>
-                    <TableHead className="text-center">สถานะบิล (BILL STATUS)</TableHead>
-                    <TableHead className="text-center pr-6">ดำเนินการ (ACTION)</TableHead>
+                    <TableHead className="pl-6">เลขที่ใบสั่งซื้อ</TableHead>
+                    <TableHead>ผู้จัดจำหน่าย</TableHead>
+                    <TableHead>สินค้าสั่งจอง</TableHead>
+                    <TableHead>วันที่ออกเอกสาร</TableHead>
+                    <TableHead className="text-right">ยอดเงินรวม</TableHead>
+                    <TableHead className="text-center">สถานะ PO</TableHead>
+                    <TableHead className="text-center pr-6">ดำเนินการ</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="text-gray-700">
-                  {filteredPOs.map((po) => (
-                    <TableRow key={po.id} className="hover:bg-gray-50/70 transition-colors">
-                      <TableCell className="pl-6 font-semibold text-[#1C1B1B]">{po.order_number}</TableCell>
-                      <TableCell>{po.supplier_name || 'ไม่ระบุ'}</TableCell>
-                      <TableCell className="text-xs text-[#5F5E5E]">{formatDate(po.created_at)}</TableCell>
-                      <TableCell className="text-right font-medium text-[#1C1B1B]">
-                        ฿{po.total_amount?.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge 
-                          variant={
-                            po.status === 'APPROVED' 
-                              ? 'success' 
-                              : po.status === 'PENDING'
-                              ? 'warning'
-                              : po.status === 'REJECTED'
-                              ? 'error'
-                              : 'neutral'
-                          }
-                          size="md"
-                        >
-                          {po.status === 'APPROVED' ? 'อนุมัติแล้ว' : po.status === 'PENDING' ? 'รออนุมัติ' : po.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center pr-6">
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => handleSelectPO(po.id)}
-                          className="shadow-sm"
-                        >
-                          ดึงข้อมูลเข้าบิล
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredPOs.map((po) => {
+                    const poItems = po.purchase_order_items || po.items || po.po_items || [];
+                    const preOrderCount = poItems.filter((i: any) => i.pre_order_item_id || i.pre_order_id).length;
+                    const totalCount = poItems.length;
+                    const hasPreOrder = preOrderCount > 0 || Boolean(po.has_pre_order || po.pre_order_id);
+                    const isPartial = hasPreOrder && preOrderCount > 0 && preOrderCount < totalCount;
+                    const isFullyReceived = po.status === 'COMPLETED' || po.status === 'RECEIVED';
+
+                    return (
+                      <TableRow key={po.id} className="hover:bg-gray-50/70 transition-colors">
+                        <TableCell className="pl-6 font-bold text-[#1C1B1B]">
+                          <div>{po.order_number}</div>
+                          {hasPreOrder && (
+                            <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 border border-purple-200 inline-block mt-0.5">
+                              {isPartial ? `พรีออเดอร์บางส่วน (${preOrderCount}/${totalCount} รายการ)` : `พรีออเดอร์ทั้งหมด`}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>{po.supplier_name || 'ไม่ระบุ'}</TableCell>
+                        <TableCell>
+                          {hasPreOrder ? (
+                            <div className="flex flex-col gap-1">
+                              <span className={`inline-flex items-center text-[11px] font-bold px-2 py-0.5 border ${
+                                isFullyReceived 
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}>
+                                {isFullyReceived 
+                                  ? `✓ สินค้าพรีมาถึงร้านแล้ว (${preOrderCount || 'ครบถ้วน'})` 
+                                  : `⏳ อยู่ระหว่างรอนำเข้าสต็อก (${preOrderCount || 'มีรายการพรี'})`}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">- (สต็อกทั่วไป)</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-[#5F5E5E]">{formatDate(po.created_at)}</TableCell>
+                        <TableCell className="text-right font-medium text-[#1C1B1B]">
+                          ฿{po.total_amount?.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge 
+                            variant={
+                              po.status === 'APPROVED' || po.status === 'COMPLETED' || po.status === 'RECEIVED'
+                                ? 'success' 
+                                : po.status === 'PENDING'
+                                ? 'warning'
+                                : po.status === 'REJECTED'
+                                ? 'error'
+                                : 'neutral'
+                            }
+                            size="md"
+                          >
+                            {po.status === 'APPROVED' ? 'อนุมัติแล้ว' : po.status === 'COMPLETED' || po.status === 'RECEIVED' ? 'นำเข้าสำเร็จ' : po.status === 'PENDING' ? 'รออนุมัติ' : po.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center pr-6">
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleSelectPO(po.id)}
+                            className="shadow-sm font-bold text-xs"
+                          >
+                            ดึงข้อมูลเข้าบิล
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </Card>

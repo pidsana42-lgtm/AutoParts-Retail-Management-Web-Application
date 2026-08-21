@@ -32,3 +32,75 @@ type ConfirmPaymentResponse struct {
 	OrderID   uint      `json:"order_id"`
 	PaidAt    time.Time `json:"paid_at"`
 }
+
+//  DTO สำหรับดึงบิลค้างชำระของลูกค้า (Unpaid Bills)
+type UnpaidBillItem struct {
+	OrderID       uint      `json:"order_id"`
+	OrderNumber   string    `json:"order_number"`
+	OrderDate     time.Time `json:"order_date"`
+	TotalAmount   float64   `json:"total_amount"`
+	PaidAmount    float64   `json:"paid_amount"`
+	BalanceDue    float64   `json:"balance_due"`
+	PaymentStatus string    `json:"payment_status"` // unpaid, partial
+}
+
+type CustomerUnpaidBillsResponse struct {
+	CustomerID   uint             `json:"customer_id"`
+	CustomerName string           `json:"customer_name"`
+	TotalDebt    float64          `json:"total_debt"`
+	Bills        []UnpaidBillItem `json:"bills"`
+}
+
+// DTO สำหรับบันทึกเคลียร์บิล 
+type SettleBillAllocation struct {
+	OrderID   uint    `json:"order_id" binding:"required"`
+	PayAmount float64 `json:"pay_amount" binding:"required,gt=0"`
+}
+
+type SettleBillsRequest struct {
+	CustomerID      uint                   `json:"customer_id" binding:"required"`
+	ReceivedByID    uint                   `json:"received_by_id" binding:"required"`
+	PaymentMethodID uint                   `json:"payment_method_id" binding:"required"`
+	TotalReceived   float64                `json:"total_received" binding:"required,gt=0"`
+	TransactionRef  *string                `json:"transaction_ref"`
+	Allocations     []SettleBillAllocation `json:"allocations" binding:"required,min=1"`
+}
+
+type SettleBillsResponse struct {
+	ReceiptID       uint      `json:"receipt_id"`
+	ReceiptNumber   string    `json:"receipt_number"`
+	CustomerID      uint      `json:"customer_id"`
+	TotalReceived   float64   `json:"total_received"`
+	SettledBillsCount int     `json:"settled_bills_count"`
+	PaidAt          time.Time `json:"paid_at"`
+}
+
+// DTO สำหรับประวัติการรับชำระเงิน 
+type PaymentHistoryItem struct {
+	ReceiptID       uint      `json:"receipt_id"`
+	ReceiptNumber   string    `json:"receipt_number"`
+	PaidAt          time.Time `json:"paid_at"`
+	CustomerName    string    `json:"customer_name"`
+	PaymentMethod   string    `json:"payment_method"`
+	OrderNumbers    string    `json:"order_numbers"` // รวมเลขบิล เช่น "INV-001, INV-002"
+	TotalReceived   float64   `json:"total_received"`
+	Status          string    `json:"status"` // completed, cancelled
+	ReceivedByName  string    `json:"received_by_name"`
+}
+
+// DTO สำหรับยกเลิกการชำระเงิน (Cancel Payment)
+type CancelPaymentReceiptRequest struct {
+	CancelledByID uint   `json:"cancelled_by_id" binding:"required"`
+	Reason        string `json:"reason" binding:"required"`
+}
+
+type CancelledPaymentItem struct {
+	ReceiptID       uint       `json:"receipt_id"`
+	ReceiptNumber   string     `json:"receipt_number"`
+	OriginalPaidAt  time.Time  `json:"original_paid_at"`
+	CustomerName    string     `json:"customer_name"`
+	TotalAmount     float64    `json:"total_amount"`
+	CancelledAt     *time.Time `json:"cancelled_at"`
+	CancelledByName string     `json:"cancelled_by_name"`
+	CancelReason    string     `json:"cancel_reason"`
+}

@@ -8,8 +8,10 @@ type CreateSaleOrderRequest struct {
 	PaymentMethodID uint       `json:"payment_method_id" binding:"required"` // ID วิธีชำระเงิน (1=เงินสด, 2=QR, 3=เงินเชื่อ)
 	DueDate         *time.Time `gorm:"type:datetime" json:"due_date"`
 
-	CustomerNameTemp  string `json:"customer_name_temp"`
-	CustomerPhoneTemp string `json:"customer_phone_temp"`
+	CustomerNameTemp    string `json:"customer_name_temp"`
+	CustomerPhoneTemp   string `json:"customer_phone_temp"`
+	CustomerAddressTemp string `json:"customer_address_temp"`
+
 	// ส่วนลดท้ายบิลรวม (จากแถบสีดำตรงกลางจอ)
 	BillDiscountType  string  `json:"bill_discount_type" binding:"required"` // 'none' (ไม่ลด), 'percentage' (ลด%), 'amount' (ลดบาท)
 	BillDiscountValue float64 `json:"bill_discount_value"`                   // ค่าตัวเลขส่วนลดท้ายบิลที่พนักงานคีย์ลงไป
@@ -50,4 +52,16 @@ func ToPaymentMethodResponseList(methods []entity.PaymentMethod) []PaymentMethod
 	return list
 }
 
-
+type UpdateSaleOrderRequest struct {
+	CustomerID          uint                   `json:"customer_id"`
+	PaymentMethodID     uint                   `json:"payment_method_id" binding:"required"`
+	DueDate             *time.Time             `gorm:"type:datetime" json:"due_date"`
+	CustomerNameTemp    string                 `json:"customer_name_temp"`
+	CustomerPhoneTemp   string                 `json:"customer_phone_temp"`
+	CustomerAddressTemp string                 `json:"customer_address_temp"`
+	BillDiscountType    string                 `json:"bill_discount_type" binding:"required"`
+	BillDiscountValue   float64                `json:"bill_discount_value"`
+	ReceivedAmount      float64                `json:"received_amount"`
+	Note                string                 `json:"note"`
+	Items               []SaleOrderItemRequest `json:"items" binding:"required,gt=0"`
+}

@@ -9,6 +9,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import type { ViewState, Supplier, Product, ScannedBillData } from '../../../../interface/import';
 import ProductSearchSelect from '../components/product_search_select';
 import InlineValidationAlertBanner from '../components/inline_validation_alert_banner';
+import BillSummaryFooterBar from '../components/BillSummaryFooterBar';
 import type { PriceMismatchItem } from '../components/price_update_modal';
 
 interface ScanViewProps {
@@ -166,16 +167,23 @@ export default function ScanView({
         </div>
       )}
 
-      <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-none transition-colors cursor-pointer" title="ย้อนกลับ">
-          <ChevronLeft size={24} className="text-[#5F5E5E]" />
+      {/* Breadcrumbs Navigation */}
+      <nav className="flex items-center gap-2 text-xs text-gray-500 mb-4">
+        <button type="button" onClick={() => setCurrentView('home')} className="hover:text-[#e51c23] transition-colors cursor-pointer font-bold">
+          นำเข้าสินค้าจากบิล
         </button>
+        <ChevronRight size={14} className="text-gray-400" />
+        <span className="text-[#1C1B1B] font-bold">สแกนและสกัดไฟล์บิล</span>
+      </nav>
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
         <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
-          ระบบสแกนนำเข้าใบสั่งซื้อ (รูปภาพ / PDF)
+          สแกนและนำเข้าไฟล์บิลสินค้า
         </Heading>
         <button
           onClick={() => setShowQR(true)}
-          className="ml-auto flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-bold rounded-none transition-colors cursor-pointer"
+          className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-bold rounded-none transition-colors cursor-pointer"
           title="เปิดบนมือถือผ่าน QR Code"
         >
           <Smartphone size={16} />
@@ -419,7 +427,7 @@ export default function ScanView({
               {/* Form Fields */}
               <div className="p-6 grid grid-cols-2 gap-6 border-b border-gray-100">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-2">ซัพพลายเออร์ (SUPPLIER)</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-2">ซัพพลายเออร์</label>
                   <input 
                     type="text" 
                     value={formData.supplier_name || ''} 
@@ -445,7 +453,7 @@ export default function ScanView({
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-2">เลขที่บิล (INVOICE NO.)</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-2">เลขที่บิล</label>
                   <input 
                     type="text" 
                     value={formData.bill_no} 
@@ -454,7 +462,7 @@ export default function ScanView({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-2">วันที่ครบกำหนดในบิล (DUE DATE)</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-2">วันที่ครบกำหนดในบิล</label>
                   <input 
                     type="date" 
                     value={formData.due_date} 
@@ -463,7 +471,7 @@ export default function ScanView({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-2">อ้างอิงใบสั่งซื้อระบบ (PO ID)</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-2">อ้างอิงใบสั่งซื้อระบบ</label>
                   <select
                     value={poReference}
                     onChange={(e) => setPoReference(e.target.value)}
@@ -478,7 +486,7 @@ export default function ScanView({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-2">ขนส่งโดย (TRANSPORT BY)</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-2">ขนส่งโดย</label>
                   <input 
                     type="text" 
                     value={formData.transport_by} 
@@ -487,7 +495,7 @@ export default function ScanView({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-2">วันที่รับสินค้า (RECEIVE DATE)</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-2">วันที่รับสินค้า</label>
                   <input 
                     type="date" 
                     value={formData.receive_date ? formData.receive_date.split('T')[0] : ''} 
@@ -502,15 +510,15 @@ export default function ScanView({
                 <Table className="min-w-[1250px] text-left text-sm border-collapse">
                   <TableHeader className="bg-gray-100 text-[#5F5E5E] border-b border-gray-200 text-xs uppercase tracking-wider">
                     <TableRow>
-                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[150px]">รหัสสินค้าคู่ค้า (SUPPLIER CODE)</TableHead>
-                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[260px]">ชื่อสินค้าตามบิล (SUPPLIER ITEM)</TableHead>
-                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[280px]">จับคู่สินค้าในร้าน (MATCHED PRODUCT)</TableHead>
-                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[160px]">บาร์โค้ด (BARCODE)</TableHead>
+                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[150px]">รหัสสินค้าคู่ค้า</TableHead>
+                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[260px]">ชื่อสินค้าตามบิล</TableHead>
+                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[280px]">จับคู่สินค้าในร้าน</TableHead>
+                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[160px]">บาร์โค้ด</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่หลัก</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่ย่อย</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">จำนวน</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[110px]">ราคา/หน่วย</TableHead>
-                      <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">ยอดรวม (TOTAL)</TableHead>
+                      <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">ยอดรวม</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-center text-[#5F5E5E] w-12">ลบ</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -738,27 +746,17 @@ export default function ScanView({
               )}
 
               {/* Summary & Submit */}
-              <div className="border-t border-gray-100 p-6 flex justify-between items-end bg-[#fafafa] rounded-none mt-auto">
-                <div className="text-sm text-[#5F5E5E] space-y-2 text-left">
-                  <p>จำนวนรายการทั้งหมด : <span className="text-[#1C1B1B] font-bold">{formData.items.length} รายการ</span></p>
-                  <p>มูลค่าสินค้า (SUBTOTAL) : <span className="text-[#1C1B1B] font-bold">฿{(calcSubtotal > 0 ? calcSubtotal : (formData.subtotal || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span></p>
-                </div>
-                <div className="text-right flex items-end gap-4">
-                  <div>
-                    <p className="text-sm text-[#e51c23] font-bold mb-1 text-left">ยอดเงินสุทธิรวม:</p>
-                    <p className="text-xl text-[#e51c23] font-bold">{(calcTotalAmount > 0 ? calcTotalAmount : (formData.total_amount || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</p>
-                  </div>
+              <BillSummaryFooterBar
+                totalItems={formData.items.length}
+                subtotal={calcSubtotal > 0 ? calcSubtotal : (formData.subtotal || 0)}
+                totalAmount={calcTotalAmount > 0 ? calcTotalAmount : (formData.total_amount || 0)}
+                onCancel={showBanner ? handleDismissValidation : () => setCurrentView('home')}
+                disabled={saving}
+                className="mt-auto"
+              >
                   {/* Footer buttons — change context when banner is active */}
                   {showBanner ? (
                     <>
-                      <button
-                        type="button"
-                        onClick={handleDismissValidation}
-                        disabled={saving}
-                        className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
-                      >
-                        ยกเลิก
-                      </button>
                       {priceMismatchedItems.length > 0 && !isEmployee && !isDraftMode && (
                         <>
                           <button
@@ -801,14 +799,6 @@ export default function ScanView({
                     </>
                   ) : (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => setCurrentView('home')}
-                        disabled={saving}
-                        className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer"
-                      >
-                        ยกเลิก
-                      </button>
                       {!isDraftMode && (
                         <button
                           type="button"
@@ -852,8 +842,7 @@ export default function ScanView({
                       </button>
                     </>
                   )}
-                </div>
-              </div>
+              </BillSummaryFooterBar>
             </div>
           )}
         </div>
