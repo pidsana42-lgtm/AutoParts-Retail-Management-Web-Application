@@ -305,6 +305,16 @@ func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, stat
 		po.Approved_by = &updatedBy
 		now := time.Now()
 		po.Approved_at = &now
+
+		var preOrderItemIDs []uint
+		for _, item := range po.PO_Items {
+			if item.PreOrderItemID != nil {
+				preOrderItemIDs = append(preOrderItemIDs, *item.PreOrderItemID)
+			}
+		}
+		if len(preOrderItemIDs) > 0 {
+			_ = s.preOrderRepo.UpdateItemsStatusByIDs(ctx, preOrderItemIDs, "ORDERED")
+		}
 	}
 	return s.poRepository.UpdatePO(ctx, po)
 }

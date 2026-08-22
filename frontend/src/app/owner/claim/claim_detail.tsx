@@ -344,7 +344,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
                     </div>
                     <div>
                       <p className="text-[#5F5E5E] font-bold mb-1">วงเงินคงเหลือใช้ได้</p>
-                      <p className="font-bold text-emerald-600">
+                      <p className="font-bold text-[#259b24]">
                         ฿{Math.max(0, (posCustomerCredit.max_credit_limit || 0) - (posCustomerCredit.current_debt_amount || 0)).toLocaleString('th-TH')}
                       </p>
                     </div>
@@ -452,7 +452,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
                                 <button
                                   type="button"
                                   onClick={() => handleRemovePhoto(idx)}
-                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white flex items-center justify-center rounded-full cursor-pointer hover:bg-red-600"
+                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#e51c23] text-white flex items-center justify-center rounded-full cursor-pointer hover:bg-[#c9181f]"
                                   title="ลบรูปภาพ"
                                 >
                                   <X size={10} />
@@ -493,10 +493,10 @@ export default function ClaimDetailPage(): React.JSX.Element {
                               onChange={e => handleItemChange(idx, 'status', e.target.value)}
                               className={`border px-2 py-1 text-xs font-bold focus:outline-none rounded-none cursor-pointer ${
                                 (item.status || itemStatus || '').toUpperCase() === 'APPROVED'
-                                  ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                                  ? 'border-[#259b24]/30 bg-[#259b24]/10 text-[#259b24]'
                                   : (item.status || itemStatus || '').toUpperCase() === 'REJECTED'
-                                  ? 'border-red-500 bg-red-50 text-red-800'
-                                  : 'border-gray-300 bg-white text-gray-800'
+                                  ? 'border-red-200 bg-red-50 text-[#e51c23]'
+                                  : 'border-gray-300 bg-white text-[#1C1B1B]'
                               }`}
                             >
                               <option value="Approved">อนุมัติแล้ว</option>
@@ -634,7 +634,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
                       </td>
                       <td className="border border-slate-300 p-2 text-center font-bold">{item.qty}</td>
                       <td className="border border-slate-300 p-2">{item.reason}</td>
-                      <td className="border border-slate-300 p-2 text-center font-bold text-emerald-600">อนุมัติเคลม</td>
+                      <td className="border border-slate-300 p-2 text-center font-bold text-[#259b24]">อนุมัติเคลม</td>
                     </tr>
                   );
                 });

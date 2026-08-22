@@ -19,7 +19,9 @@ export interface CheckStockSchedule {
   
   user_id?: number;
   user_full_name: string;
-  
+  // รหัสเฉพาะของตารางนี้ ผูกกับ QR Code ให้พนักงานสแกนเข้าหน้าเช็คสต็อกได้เลยโดยไม่ต้องล็อกอินในมือถือก่อน
+  access_token: string;
+
   target_name: string;
   product_count: number;
 }
@@ -98,8 +100,8 @@ export const stockCheckService = {
     return res.data;
   },
 
-  createSchedule: async (data: CheckStockScheduleCreateInput): Promise<any> => {
-    const res = await apiClient.post("/wms/check-stock-schedules", data);
+  createSchedule: async (data: CheckStockScheduleCreateInput): Promise<{ message: string; id: number }> => {
+    const res = await apiClient.post<{ message: string; id: number }>("/wms/check-stock-schedules", data);
     return res.data;
   },
 

@@ -100,7 +100,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
 
   // Price Mismatch States
   const [priceMismatchedItems, setPriceMismatchedItems] = useState<PriceMismatchItem[]>([]);
-  const [pendingNewProducts, setPendingNewProducts] = useState<any[]>([]);
+  const [, setPendingNewProducts] = useState<any[]>([]); // เก็บไว้ใช้ในอนาคต (ตอนนี้ set แล้วยังไม่มี UI แสดงผล)
   const [showPriceUpdateModal, setShowPriceUpdateModal] = useState<boolean>(false);
   const [onConfirmPriceUpdateAction, setOnConfirmPriceUpdateAction] = useState<((selectedIds: number[]) => void) | null>(null);
 
