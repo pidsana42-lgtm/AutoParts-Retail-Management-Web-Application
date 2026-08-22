@@ -12,7 +12,6 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  RotateCcw,
   ScanBarcode,
   X,
 } from "lucide-react";
@@ -50,7 +49,6 @@ const OwnerSalesCancellationHistory: React.FC = () => {
     searchQuery,
     startDate,
     endDate,
-    customerType,
     status,
     employeeId,
     employeeList,
@@ -58,7 +56,6 @@ const OwnerSalesCancellationHistory: React.FC = () => {
     setSearchQuery,
     setStartDate,
     setEndDate,
-    setCustomerType,
     setStatus,
     handleSelectAll,
     handleSelectRow,
