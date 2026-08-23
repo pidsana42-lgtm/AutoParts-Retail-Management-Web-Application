@@ -6,6 +6,7 @@ import (
 	poRepo 		"backend/internal/app/repository/purchase_orders"
 	poEntity 	"backend/internal/app/entity"
 	preOrderRepo "backend/internal/app/repository/pre_oder"
+	wmsRepo 	"backend/internal/app/repository/wms"
 	"gorm.io/gorm"
 	"strings"
 	"context"
@@ -34,30 +35,33 @@ type PurchaseOrderService interface {
 
 // purchaseOrderService ตัว Struct หลักที่จะทำงานจริง (Implement Interface ด้านบน)
 type purchaseOrderService struct {
-	poRepository poRepo.PurchaseOrderRepository
-	productRepo  poRepo.ProductRepository
-	inventoryRepo poRepo.InventoryRepository
-	supplierRepo poRepo.SupplierRepository
-	userRepo     poRepo.UserRepository
-	preOrderRepo preOrderRepo.PreOrderRepository
+	poRepository    poRepo.PurchaseOrderRepository
+	productRepo     poRepo.ProductRepository
+	inventoryRepo   poRepo.InventoryRepository
+	supplierRepo    poRepo.SupplierRepository
+	userRepo        poRepo.UserRepository
+	preOrderRepo    preOrderRepo.PreOrderRepository
+	stockAlertRepo  wmsRepo.StockAlertRepository
 }
 
 // NewPurchaseOrderService ฟังก์ชัน Constructor สำหรับทำ DI
 func NewPOService(
-	poRepo        poRepo.PurchaseOrderRepository,
-	productRepo   poRepo.ProductRepository,
-	inventoryRepo poRepo.InventoryRepository,
-	supplierRepo  poRepo.SupplierRepository,
-	preOrderRepo  preOrderRepo.PreOrderRepository,
-	userRepo      poRepo.UserRepository,
+	poRepo          poRepo.PurchaseOrderRepository,
+	productRepo     poRepo.ProductRepository,
+	inventoryRepo   poRepo.InventoryRepository,
+	supplierRepo    poRepo.SupplierRepository,
+	preOrderRepo    preOrderRepo.PreOrderRepository,
+	userRepo        poRepo.UserRepository,
+	stockAlertRepo  wmsRepo.StockAlertRepository,
 ) PurchaseOrderService {
 	return &purchaseOrderService{
-		poRepository: poRepo,
-		productRepo:  productRepo,
-		inventoryRepo: inventoryRepo,
-		supplierRepo: supplierRepo,
-		preOrderRepo: preOrderRepo,
-		userRepo:     userRepo,
+		poRepository:   poRepo,
+		productRepo:    productRepo,
+		inventoryRepo:  inventoryRepo,
+		supplierRepo:   supplierRepo,
+		preOrderRepo:   preOrderRepo,
+		userRepo:       userRepo,
+		stockAlertRepo: stockAlertRepo,
 	}
 }
 
@@ -305,6 +309,17 @@ func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, stat
 		po.Approved_by = &updatedBy
 		now := time.Now()
 		po.Approved_at = &now
+
+		// Resolve stock alerts ที่ผูกกับ PO นี้ทั้งหมด
+		var alertIDs []uint
+		for _, item := range po.PO_Items {
+			if item.AlertID != nil {
+				alertIDs = append(alertIDs, *item.AlertID)
+			}
+		}
+		if len(alertIDs) > 0 {
+			_ = s.stockAlertRepo.ResolveByIDs(alertIDs)
+		}
 	}
 	return s.poRepository.UpdatePO(ctx, po)
 }

@@ -5,7 +5,6 @@ import { TrendingUp, TrendingDown, Banknote, Users, Loader2, Eye, Trophy, FileTe
 import Button from '../../../components/elements/button';
 import { Card, CardHeader } from '../../../components/elements/card';
 import Heading from '../../../components/elements/heading';
-import Input from '../../../components/elements/input';
 import { Table, TableHeader, TableHead, TableBody, TableCell, TableRow } from '../../../components/elements/table';
 import DonutChartCard from './hooks/DonutchartCard';
 // Hooks
@@ -16,6 +15,8 @@ import { dashboardService } from '../../../service/http/dashboard/dashboard_serv
 import type { DashboardSummaryItem, SummaryQuery, StockHealthStats, TopSellerItem } from '../../../interface/dashboard/dashboard_interface';
 // Utils
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
+import Input from '../../../components/elements/input';
+import { formatDateThai, getTodayDateString } from '../../../utils/formatdate';
 import { exportTopSellerPdf } from '../../../utils/print';
 
 const Filter = [
@@ -35,10 +36,6 @@ const PageFilter = [
 const fmt = (n: number) =>
   n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const todayLocalDate = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 
 const SaleDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -70,7 +67,7 @@ const SaleDashboard: React.FC = () => {
       case 'monthly':   return { monthly_summary: '1' };
       case 'quarterly': return { quarterly_summary: '1' };
       case 'yearly':    return { yearly_summary: '1' };
-      default:          return { summary_date: todayLocalDate() };
+      default:          return { summary_date: getTodayDateString() };
     }
   }, [selectedFilter, selectedDate]);
 
@@ -197,7 +194,7 @@ const SaleDashboard: React.FC = () => {
 
   const handleExportPdf = () => {
     const periodLabel = selectedDate
-      ? selectedDate
+      ? formatDateThai(selectedDate)
       : Filter.find((f) => f.value === selectedFilter)?.label ?? 'ทั้งหมด';
     setExportingPdf(true);
     exportTopSellerPdf(topSellerProduct, periodLabel);

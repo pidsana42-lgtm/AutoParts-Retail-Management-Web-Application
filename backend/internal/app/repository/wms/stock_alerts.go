@@ -11,6 +11,7 @@ type StockAlertRepository interface {
 	GetByID(id uint) (*entity.StockAlert, error)
 	List(isResolved string) ([]entity.StockAlert, error)
 	Update(sa *entity.StockAlert) error
+	ResolveByIDs(ids []uint) error
 }
 
 type stockAlertRepository struct {
@@ -53,4 +54,13 @@ func (r *stockAlertRepository) List(isResolved string) ([]entity.StockAlert, err
 
 func (r *stockAlertRepository) Update(sa *entity.StockAlert) error {
 	return r.db.Save(sa).Error
+}
+
+func (r *stockAlertRepository) ResolveByIDs(ids []uint) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.db.Model(&entity.StockAlert{}).
+		Where("id IN ?", ids).
+		Update("is_resolved", "true").Error
 }

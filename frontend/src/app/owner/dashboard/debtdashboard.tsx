@@ -17,7 +17,7 @@ import { dashboardService } from '../../../service/http/dashboard/dashboard_serv
 import type { SummaryQuery, DebtAgingQuery } from '../../../interface/dashboard/dashboard_interface';
 // Utils
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
-import { formatDateThai } from '../../../utils/formatdate';
+import { formatDateThai, getTodayDateString } from '../../../utils/formatdate';
 import { exportDebtAgingPdf } from '../../../utils/print';
 import { cn } from '../../../utils/component';
 
@@ -73,10 +73,6 @@ const PAGE_SIZE = 25;
 const fmt = (n: number) =>
   n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const todayStr = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 
 const triggerDownload = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob);
@@ -129,7 +125,7 @@ const DebtDashboard: React.FC = () => {
       case 'monthly': return { monthly_summary: '1' };
       case 'quarterly': return { quarterly_summary: '1' };
       case 'yearly': return { yearly_summary: '1' };
-      default: return { summary_date: todayStr() };
+      default: return { summary_date: getTodayDateString() };
     }
   }, [selectedFilter, customDate]);
 
@@ -305,7 +301,7 @@ const DebtDashboard: React.FC = () => {
       </div>
 
       {/* Debt Aging Table */}
-      <Card noPadding className='overflow-hidden'>
+      <Card noPadding>
         <CardHeader className='flex items-center justify-between bg-white px-6 py-4'>
           <div className='flex items-baseline gap-4'>
             <Heading level='h4' weight='bold'>รายงานการวิเคราะห์อายุหนี้</Heading>
@@ -424,6 +420,7 @@ const DebtDashboard: React.FC = () => {
           </div>
         )}
 
+        <div className='overflow-hidden'>
         <Table>
           <TableHeader className='bg-[#F6F3F2] text-[#797878]'>
             <TableRow>
@@ -473,6 +470,7 @@ const DebtDashboard: React.FC = () => {
             )}
           </TableBody>
         </Table>
+        </div>
 
         {/* Pagination */}
         <div className='bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500'>

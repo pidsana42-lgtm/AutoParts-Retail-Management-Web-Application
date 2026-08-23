@@ -13,6 +13,7 @@ interface Props {
   onClose: () => void;
   stockAlerts: StockAlertItem[];
   basePath: string;
+  onPOCreated?: (alertIds: number[]) => void;
 }
 
 interface SupplierGroup {
@@ -21,7 +22,7 @@ interface SupplierGroup {
   items: StockAlertItem[];
 }
 
-export default function StockAlertPOModal({ isOpen, onClose, stockAlerts, basePath }: Props) {
+export default function StockAlertPOModal({ isOpen, onClose, stockAlerts, basePath, onPOCreated }: Props) {
   const navigate = useNavigate();
   const [selected, setSelected] = useState<Record<number, boolean>>({});
   const [activeTab, setActiveTab] = useState(0);
@@ -78,6 +79,7 @@ export default function StockAlertPOModal({ isOpen, onClose, stockAlerts, basePa
       };
     });
 
+    onPOCreated?.(chosenAlerts.map((a) => a.id));
     navigate(`${basePath}/new-orders`, {
       state: {
         supplierId: group.supplierId != null ? String(group.supplierId) : '',

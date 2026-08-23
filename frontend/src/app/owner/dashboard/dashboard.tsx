@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TriangleAlert, TrendingUp, TrendingDown, CheckCircle2, Loader2, FileInput, CreditCard, ClipboardList, PackageOpen, ReceiptText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { TriangleAlert, TrendingUp, TrendingDown, CheckCircle2, Loader2, FileInput, CreditCard, ClipboardList, PackageOpen, ReceiptText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ShoppingCart } from 'lucide-react';
 // Hooks
 import { useDashboardMetrics } from '../../owner/dashboard/hooks/useDashboardMetrics';
 // Components
 import Button from '../../../components/elements/button';
-import Heading from '../../../components/elements/heading';
 import Input   from '../../../components/elements/input';
+import Heading from '../../../components/elements/heading';
 import { Badge } from '../../../components/elements/badge';
 import Card, { CardContent, CardHeader } from '../../../components/elements/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/elements/table';
@@ -15,6 +15,7 @@ import { dashboardService } from '../../../service/http/dashboard/dashboard_serv
 import type { DashboardSummaryItem, SummaryQuery, StockAlertItem, RecentSaleItem, AgingStockItem, StockHealthStats } from '../../../interface/dashboard/dashboard_interface';
 // Utils
 import { cn } from '../../../utils/component';
+import { formatDateThai, getTodayDateString } from '../../../utils/formatdate';
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 // Modal
 import StockAlertPOModal from './components/StockAlertPOModal';
@@ -34,14 +35,12 @@ const PageFilter = [
 ];
 
 const PAGE_SIZE = 10;
+const PO_BADGE_LS_KEY = 'dashboard_po_created_alerts';
+const PO_BADGE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 const fmt = (n: number) =>
   n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const todayLocalDate = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 
 function getPageNumbers(current: number, total: number): (number | '...')[] {
   const delta = 1;
@@ -82,11 +81,34 @@ const MainDashboard: React.FC = () => {
   // State รายการขายล่าสุด
   const [recentSale, setRecentSale] = useState<RecentSaleItem[]>([]);
   const [recentSaleLoading, setRecentSaleLoading] = useState(false);
-  const fmtTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const isFilterToday = selectedFilter === 'daily' && !selectedDate;
+  const fmtTime = (iso: string) => {
+    const d = new Date(iso);
+    if (isFilterToday) {
+      return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+    return d.toLocaleString('th-TH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
   // Stste รายการค้างสต๊อกเกิน 180 วัน
   const [agingStock, setAgingStock] = useState<AgingStockItem[]>([]);
   const [agingStockLoading, setAgingStockLoading] = useState(false);
+
+  // State ติดตาม alert ที่สร้าง PO ไปแล้ว (เก็บใน localStorage 7 วัน)
+  const [poCreatedAlertIds, setPoCreatedAlertIds] = useState<Set<number>>(() => {
+    try {
+      const raw = localStorage.getItem(PO_BADGE_LS_KEY);
+      if (!raw) return new Set<number>();
+      const map: Record<string, number> = JSON.parse(raw);
+      const now = Date.now();
+      return new Set(
+        Object.entries(map)
+          .filter(([, ts]) => now - ts < PO_BADGE_EXPIRY_MS)
+          .map(([id]) => Number(id))
+      );
+    } catch {
+      return new Set<number>();
+    }
+  });
 
   // Pagination
   const [recentSalePage, setRecentSalePage] = useState(1);
@@ -100,7 +122,7 @@ const MainDashboard: React.FC = () => {
       case 'monthly':   return { monthly_summary: '1' };
       case 'quarterly': return { quarterly_summary: '1' };
       case 'yearly':    return { yearly_summary: '1' };
-      default:          return { summary_date: todayLocalDate() };
+      default:          return { summary_date: getTodayDateString() };
     }
   };
 
@@ -250,6 +272,21 @@ const MainDashboard: React.FC = () => {
     };
     fetchTrend();
   }, [summaryData, selectedFilter, selectedDate]);
+
+  const handlePOCreated = (alertIds: number[]) => {
+    setPoCreatedAlertIds((prev) => {
+      const next = new Set(prev);
+      alertIds.forEach((id) => next.add(id));
+      return next;
+    });
+    try {
+      const raw = localStorage.getItem(PO_BADGE_LS_KEY);
+      const map: Record<string, number> = raw ? JSON.parse(raw) : {};
+      const now = Date.now();
+      alertIds.forEach((id) => { map[String(id)] = now; });
+      localStorage.setItem(PO_BADGE_LS_KEY, JSON.stringify(map));
+    } catch { /* ignore */ }
+  };
 
   const handleFilterClick = (value: string) => {
     setSelectedFilter(value);
@@ -484,7 +521,7 @@ const MainDashboard: React.FC = () => {
             <Table>
               <TableHeader className='bg-[#F6F3F2] text-[#797878]'>
                 <TableRow>
-                  <TableHead className='pl-6'>เวลา</TableHead>
+                  <TableHead className='pl-6'>{isFilterToday ? 'เวลา' : 'วันที่/เวลา'}</TableHead>
                   <TableHead className='text-left'>เลขที่บิล</TableHead>
                   <TableHead className='text-right'>ยอดสุทธิ (บาท)</TableHead>
                   <TableHead className='text-center'>สถานะ</TableHead>
@@ -572,7 +609,7 @@ const MainDashboard: React.FC = () => {
                       <TableCell className='text-left'>{item.product_code}</TableCell>
                       <TableCell className='text-left'>{item.product_name}</TableCell>
                       <TableCell className='text-center'>
-                        {item.last_sold_date ? new Date(item.last_sold_date).toLocaleDateString('th-TH') : 'ไม่เคยขาย'}
+                        {item.last_sold_date ? formatDateThai(item.last_sold_date) : 'ไม่เคยขาย'}
                       </TableCell>
                       <TableCell className='text-center'>{item.days_aging}</TableCell>
                       <TableCell className='text-center'>{item.remaining_qty}</TableCell>
@@ -623,25 +660,39 @@ const MainDashboard: React.FC = () => {
                   <div>ไม่มีสินค้าใกล้หมดสต๊อก</div>
                 </div>
             ) : (
-              stockAlerts.map((item) => (
-                <div
-                  key={item.id}
-                  className='bg-red-50 border-l-4 border-red-500 rounded-sm px-4 py-3 flex items-center justify-between'
-                >
-                  <div>
-                    <Heading level='h6' weight='semibold' className='m-0 text-black'>
-                      {item.product_name}
-                    </Heading>
-                    <Heading level='p' weight='semibold' className='m-0 mt-0.5 text-red-600 text-xs'>
-                      SKU: {item.product_code}
-                    </Heading>
+              stockAlerts.map((item) => {
+                const hasPO = poCreatedAlertIds.has(item.id);
+                return (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      'rounded-sm px-4 py-3 flex items-center justify-between',
+                      hasPO
+                        ? 'bg-amber-50 border-l-4 border-amber-400'
+                        : 'bg-red-50 border-l-4 border-red-500'
+                    )}
+                  >
+                    <div>
+                      <Heading level='h6' weight='semibold' className='m-0 text-black'>
+                        {item.product_name}
+                      </Heading>
+                      <Heading level='p' weight='semibold' className='m-0 mt-0.5 text-red-600 text-xs'>
+                        SKU: {item.product_code}
+                      </Heading>
+                      {hasPO && (
+                        <span className='inline-flex items-center gap-1 mt-1 text-xs text-amber-700 font-medium'>
+                          <ShoppingCart size={11} />
+                          สร้าง PO แล้ว
+                        </span>
+                      )}
+                    </div>
+                    <div className='text-right'>
+                      <Heading level='p' className='m-0 text-gray-500 text-xs'>เหลืออีก</Heading>
+                      <Heading level='h3' className={cn('m-0', hasPO ? 'text-amber-500' : 'text-red-600')}>{item.quantity_at_alert}</Heading>
+                    </div>
                   </div>
-                  <div className='text-right'>
-                    <Heading level='p' className='m-0 text-gray-500 text-xs'>เหลืออีก</Heading>
-                    <Heading level='h3' className='m-0 text-red-600'>{item.quantity_at_alert}</Heading>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
 
             {stockAlerts.length > 0 && (
@@ -661,6 +712,7 @@ const MainDashboard: React.FC = () => {
       onClose={() => setAlertModalOpen(false)}
       stockAlerts={stockAlerts}
       basePath={basePath}
+      onPOCreated={handlePOCreated}
     />
     </>
   );
