@@ -29,8 +29,10 @@ export default function DateRangePicker({
   className,
 }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const [draft, setDraft] = useState({ start: startDate, end: endDate });
   const containerRef = useRef<HTMLDivElement>(null);
+  const POPOVER_HEIGHT = 220; // approximate popover height in px
 
   // sync draft when props change from outside
   useEffect(() => {
@@ -49,6 +51,15 @@ export default function DateRangePicker({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open, startDate, endDate]);
+
+  const handleOpen = () => {
+    if (!open && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setOpenUpward(spaceBelow < POPOVER_HEIGHT);
+    }
+    setOpen((o) => !o);
+  };
 
   const handleApply = () => {
     onStartDateChange(draft.start);
@@ -72,7 +83,7 @@ export default function DateRangePicker({
       {/* Trigger */}
       <button
         type='button'
-        onClick={() => setOpen((o) => !o)}
+        onClick={handleOpen}
         className='flex items-center gap-2 bg-[#F6F3F2] px-3 py-2 border-b-2 border-red-500 rounded-none text-sm text-gray-600 hover:bg-gray-200 transition'
       >
         <Calendar size={15} className='text-gray-400 shrink-0' />
@@ -82,7 +93,10 @@ export default function DateRangePicker({
 
       {/* Popover */}
       {open && (
-        <div className='absolute left-0 top-full mt-2 z-50 bg-white border border-gray-200 rounded-none shadow-lg p-4 min-w-70'>
+        <div className={cn(
+          'absolute left-0 z-50 bg-white border border-gray-200 rounded-none shadow-lg p-4 min-w-70',
+          openUpward ? 'bottom-full mb-2' : 'top-full mt-2'
+        )}>
           <p className='text-xs font-medium text-gray-500 mb-3'>เลือกช่วงวันที่</p>
           <div className='space-y-3'>
             <div>

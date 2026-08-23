@@ -522,29 +522,32 @@ func (r *dashboardRepository) GetTotalDebtors(ctx context.Context) (int64, error
 
 // GetHistoricalSummaries อ่านจาก daily_summary ตรงๆ (ข้อมูลนิ่งแล้ว ไม่ query สด) เติมวันที่ขาดด้วย 0
 func (r *dashboardRepository) GetHistoricalSummaries(ctx context.Context, start, end time.Time) ([]dashEntity.DailySummary, error) {
+	// 1. ดึงเฉพาะแถวที่มีข้อมูลจริงในช่วง [start, end)
+	var existing []dashEntity.DailySummary
+	if err := r.db.WithContext(ctx).
+		Where("summary_date >= ? AND summary_date < ?", start, end).
+		Find(&existing).Error; err != nil {
+		return nil, err
+	}
+
+	// 2. index ด้วย date string เพื่อ lookup O(1)
+	byDate := make(map[string]dashEntity.DailySummary, len(existing))
+	for _, s := range existing {
+		byDate[s.SummaryDate.Format("2006-01-02")] = s
+	}
+
+	// 3. วนทุกวันใน [start, end) จาก end-1 ลงมา เติม zero สำหรับวันที่ไม่มีข้อมูล
 	var result []dashEntity.DailySummary
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT
-			gs::date AS summary_date,
-			COALESCE(ds.total_orders, 0) AS total_orders,
-			COALESCE(ds.total_items_sold, 0) AS total_items_sold,
-			COALESCE(ds.overdue_debt_count, 0) AS overdue_debt_count,
-			COALESCE(ds.total_revenue, 0) AS total_revenue,
-			COALESCE(ds.total_cost, 0) AS total_cost,
-			COALESCE(ds.gross_profit, 0) AS gross_profit,
-			COALESCE(ds.margin_percent, 0) AS margin_percent,
-			COALESCE(ds.cash_amount, 0) AS cash_amount,
-			COALESCE(ds.transfer_amount, 0) AS transfer_amount,
-			COALESCE(ds.credit_amount, 0) AS credit_amount,
-			COALESCE(ds.walkin_customer_amount, 0) AS walkin_customer_amount,
-			COALESCE(ds.garage_customer_amount, 0) AS garage_customer_amount,
-			COALESCE(ds.corporate_customer_amount, 0) AS corporate_customer_amount,
-			COALESCE(ds.return_amount, 0) AS return_amount,
-			COALESCE(ds.collected_debt_amount, 0) AS collected_debt_amount,
-			COALESCE(ds.total_outstanding_debt, 0) AS total_outstanding_amount
-		FROM generate_series(?::date, (?::date - interval '1 day'), interval '1 day') AS gs
-		LEFT JOIN daily_summary ds ON ds.summary_date = gs::date AND ds.deleted_at IS NULL
-		ORDER BY gs DESC
-	`, start, end).Scan(&result).Error
-	return result, err
+	for d := end.AddDate(0, 0, -1); !d.Before(start); d = d.AddDate(0, 0, -1) {
+		key := d.Format("2006-01-02")
+		if s, ok := byDate[key]; ok {
+			result = append(result, s)
+		} else {
+			result = append(result, dashEntity.DailySummary{
+				SummaryDate: time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location()),
+			})
+		}
+	}
+
+	return result, nil
 }
