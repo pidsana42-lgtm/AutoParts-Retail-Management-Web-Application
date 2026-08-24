@@ -17,6 +17,7 @@ import os
 import sys
 import json
 import io
+import datetime
 import traceback
 from typing import Optional, List, Dict, Any
 import requests
@@ -60,18 +61,22 @@ def get_db_connection():
     return engine
 
 # Google API Credentials Helper
+# Resolve service account relative to THIS file so any working directory works.
+SERVICE_ACCOUNT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "service_account.json")
+
 def get_google_api_key():
     return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_STUDIO") or os.getenv("GOOGLE_API_KEY")
 
 def get_google_service_credentials():
     """Attempts to get Google credentials via Service Account or OAuth if available."""
-    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "service_account.json")
+    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", SERVICE_ACCOUNT_PATH)
     if os.path.exists(creds_path):
         from google.oauth2 import service_account
         return service_account.Credentials.from_service_account_file(
             creds_path,
             scopes=[
-                "https://www.googleapis.com/auth/drive.readonly",
+                # drive (full) เพื่อให้อัปโหลดไฟล์ไปยังโฟลเดอร์ที่ถูกแชร์ให้บอทได้
+                "https://www.googleapis.com/auth/drive",
                 "https://www.googleapis.com/auth/spreadsheets"
             ]
         )
@@ -163,6 +168,63 @@ def google_drive_get_file_info(file_id: str) -> Dict[str, Any]:
         return {"status": "error", "message": "Google credentials not configured."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@mcp.tool()
+def google_drive_upload_file(file_path: str, folder_name: str = "", description: str = "") -> Dict[str, Any]:
+    """
+    Upload a local file to Google Drive so it appears in the owner's Drive.
+
+    Args:
+        file_path: Local path of the file to upload (e.g. '/tmp/report.xlsx').
+        folder_name: Target folder name in Drive (e.g. 'POS', 'Bill-import'). Empty = My Drive root.
+        description: Optional file description.
+    """
+    try:
+        creds = get_google_service_credentials()
+        if not creds:
+            return {"status": "error", "message": "Service account not configured."}
+        if not os.path.exists(file_path):
+            return {"status": "error", "message": f"ไม่พบไฟล์: {file_path}"}
+
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaFileUpload
+
+        service = build("drive", "v3", credentials=creds)
+
+        metadata: Dict[str, Any] = {"name": os.path.basename(file_path)}
+        if description:
+            metadata["description"] = description
+
+        if folder_name:
+            q = f"name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            found = service.files().list(q=q, pageSize=1, fields="files(id, name)").execute().get("files", [])
+            if not found:
+                return {"status": "error", "message": f"ไม่พบโฟลเดอร์ชื่อ '{folder_name}' ใน Drive (ต้องแชร์โฟลเดอร์ให้บอทก่อน)"}
+            metadata["parents"] = [found[0]["id"]]
+
+        mime_map = {
+            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xls": "application/vnd.ms-excel",
+            ".csv": "text/csv",
+            ".pdf": "application/pdf",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".txt": "text/plain",
+            ".json": "application/json",
+        }
+        ext = os.path.splitext(file_path)[1].lower()
+        media = MediaFileUpload(file_path, mimetype=mime_map.get(ext, "application/octet-stream"), resumable=False)
+
+        created = service.files().create(body=metadata, media_body=media, fields="id, name, webViewLink, size").execute()
+        return {
+            "status": "success",
+            "message": f"อัปโหลด '{created.get('name')}' ขึ้น Google Drive เรียบร้อย",
+            "file": created,
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e), "traceback": traceback.format_exc()}
 
 
 # ==============================================================================
@@ -373,6 +435,210 @@ def google_charts_generate_report(report_type: str = "brand_stock", chart_type: 
         return {"status": "error", "message": str(e), "traceback": traceback.format_exc()}
 
 
+@mcp.tool()
+def build_dashboard_tool(spreadsheet_id: str = "") -> Dict[str, Any]:
+    """
+    สร้างแดชบอร์ดสรุปร้านค้าลง Google Sheets: ตัวเลขสำคัญ (สต็อก, ใกล้หมด, พรีออเดอร์)
+    + กราฟ 4 ใบฝังในชีต + ตารางข้อมูลดิบ — เขียนลงแท็บ 'Dashboard' ของไฟล์ที่ระบุ
+    ถ้าไม่ระบุ spreadsheet_id จะค้นหาไฟล์ชื่อ 'ผู้ช่วย AI' ใน Drive อัตโนมัติ
+    """
+    try:
+        creds = get_google_service_credentials()
+        if not creds:
+            return {"status": "error", "message": "Service account not configured."}
+        from googleapiclient.discovery import build
+        from decimal import Decimal
+
+        drive = build("drive", "v3", credentials=creds)
+        sid = spreadsheet_id
+        if not sid:
+            found = drive.files().list(
+                q="name contains 'ผู้ช่วย AI' and trashed = false",
+                pageSize=1, fields="files(id, name)"
+            ).execute().get("files", [])
+            if not found:
+                return {"status": "error", "message": "ไม่พบไฟล์ 'ผู้ช่วย AI' — ระบุ spreadsheet_id หรือแชร์ไฟล์ให้บอทก่อน"}
+            sid = found[0]["id"]
+
+        # 1) รายงาน 4 แบบ
+        reports = {}
+        for rt in ["brand_stock", "category_stock", "pre_orders_status", "catalogs_summary"]:
+            ct = "pie" if rt == "pre_orders_status" else "bar"
+            r = google_charts_generate_report(report_type=rt, chart_type=ct)
+            if r.get("status") != "success":
+                return {"status": "error", "message": f"รายงาน {rt} ล้มเหลว: {r.get('message')}"}
+            reports[rt] = r
+
+        # 2) ตัวเลขสำคัญ
+        from sqlalchemy import text
+        engine = get_db_connection()
+        with engine.connect() as conn:
+            q = lambda s: conn.execute(text(s)).scalar()
+            total_products = q("SELECT COUNT(*) FROM products WHERE deleted_at IS NULL")
+            total_qty = q("SELECT COALESCE(SUM(quantity),0) FROM products WHERE deleted_at IS NULL")
+            low_stock = q("SELECT COUNT(*) FROM products WHERE deleted_at IS NULL AND quantity <= limit_quantity")
+            total_catalogs = q("SELECT COUNT(*) FROM catalogs WHERE deleted_at IS NULL")
+            po_pending = q("SELECT COUNT(*) FROM pre_orders WHERE deleted_at IS NULL AND status = 'PENDING'")
+
+        now = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+
+        # 3) เตรียมแท็บ Dashboard + แท็บข้อมูลกราฟ (ซ่อน)
+        sheets = build("sheets", "v4", credentials=creds)
+        meta = sheets.spreadsheets().get(spreadsheetId=sid).execute()
+        sheet_ids = {s["properties"]["title"]: s["properties"]["sheetId"] for s in meta["sheets"]}
+        TAB = "Dashboard"
+        DATA_TAB = "_chart_data"
+        add_reqs = []
+        if TAB not in sheet_ids:
+            add_reqs.append({"addSheet": {"properties": {"title": TAB}}})
+        if DATA_TAB not in sheet_ids:
+            add_reqs.append({"addSheet": {"properties": {"title": DATA_TAB}}})
+        if add_reqs:
+            sheets.spreadsheets().batchUpdate(spreadsheetId=sid, body={"requests": add_reqs}).execute()
+            meta = sheets.spreadsheets().get(spreadsheetId=sid).execute()
+            sheet_ids = {s["properties"]["title"]: s["properties"]["sheetId"] for s in meta["sheets"]}
+        dash_id = sheet_ids[TAB]
+        data_id = sheet_ids[DATA_TAB]
+
+        # 4) เรียง layout
+        rows = [[] for _ in range(120)]
+        def put(r, c, v):
+            if isinstance(v, Decimal):
+                v = float(v)
+            if v is None:
+                v = ""
+            row = rows[r - 1]
+            while len(row) < c:
+                row.append("")
+            row[c - 1] = v
+
+        put(1, 1, "📊 DASHBOARD ร้านอะไหล่ — โดยผู้ช่วย AI")
+        put(2, 1, f"อัปเดตล่าสุด: {now}")
+        put(4, 1, "📌 ตัวเลขสำคัญ")
+        put(5, 1, "สินค้าในระบบ"); put(5, 2, total_products)
+        put(5, 4, "ชิ้นรวมในสต็อก"); put(5, 5, total_qty)
+        put(5, 7, "⚠️ ใกล้หมดสต็อก"); put(5, 8, low_stock)
+        put(6, 1, "เล่มแคตตาล็อก"); put(6, 2, total_catalogs)
+        put(6, 4, "พรีออเดอร์รอดำเนินการ"); put(6, 5, po_pending)
+        put(8, 1, "📈 กราฟสรุป")
+
+        r = 43
+        put(r, 1, "📋 ตารางข้อมูลดิบ"); r += 2
+        for key, label in [("brand_stock", "แบรนด์"), ("category_stock", "หมวดหมู่"),
+                           ("pre_orders_status", "สถานะพรีออเดอร์"), ("catalogs_summary", "แคตตาล็อก")]:
+            put(r, 1, f"— {label} —"); r += 1
+            for row in reports[key]["data"]:
+                for ci, v in enumerate(row):
+                    put(r, 1 + ci, v)
+                r += 1
+            r += 1
+
+        max_len = max(len(x) for x in rows)
+        grid = [row + [""] * (max_len - len(row)) for row in rows]
+        sheets.spreadsheets().values().update(
+            spreadsheetId=sid, range=f"{TAB}!A1",
+            valueInputOption="USER_ENTERED",
+            body={"values": grid}
+        ).execute()
+
+        # 5) ข้อมูลดิบของกราฟ -> แท็บ _chart_data (block ละ 30 แถว)
+        ROW_STRIDE = 30
+        blocks = [
+            ("brand_stock", reports["brand_stock"]["data"]),
+            ("category_stock", reports["category_stock"]["data"]),
+            ("pre_orders_status", reports["pre_orders_status"]["data"]),
+            ("catalogs_summary", reports["catalogs_summary"]["data"]),
+        ]
+        data_values = [[""] * 2 for _ in range(ROW_STRIDE * len(blocks))]
+        ranges = {}
+        for i, (name, tbl) in enumerate(blocks):
+            base = i * ROW_STRIDE
+            for ri, rowv in enumerate(tbl):
+                for ci, v in enumerate(rowv[:2]):
+                    if isinstance(v, Decimal):
+                        v = float(v)
+                    data_values[base + ri][ci] = v
+            ranges[name] = {
+                "startRowIndex": base,
+                "endRowIndex": base + len(tbl),
+                "startColumnIndex": 0,
+                "endColumnIndex": 2,
+            }
+        sheets.spreadsheets().values().update(
+            spreadsheetId=sid, range=f"{DATA_TAB}!A1",
+            valueInputOption="RAW",
+            body={"values": data_values}
+        ).execute()
+
+        # 6) กราฟ native ของ Sheets (ลบของเก่าก่อน กันซ้อนทับ)
+        dash_meta = next(s for s in meta["sheets"] if s["properties"]["title"] == TAB)
+        requests_ = [{"deleteEmbeddedObject": {"objectId": c["chartId"]}} for c in dash_meta.get("charts", [])]
+
+        def chart_req(title, name, ctype, anchor_row, anchor_col):
+            rng = ranges[name]
+            def src(col):
+                return {"sheetId": data_id, **{k: rng[k] for k in
+                        ("startRowIndex", "endRowIndex")}, "startColumnIndex": col, "endColumnIndex": col + 1}
+            if ctype == "pie":
+                spec = {
+                    "title": title,
+                    "pieChart": {
+                        "legendPosition": "RIGHT_LEGEND",
+                        "domain": {"sourceRange": {"sources": [src(0)]}},
+                        "series": {"sourceRange": {"sources": [src(1)]}},
+                    },
+                }
+            else:
+                spec = {
+                    "title": title,
+                    "basicChart": {
+                        "chartType": "COLUMN",
+                        "legendPosition": "BOTTOM_LEGEND",
+                        "domains": [{"domain": {"sourceRange": {"sources": [src(0)]}}}],
+                        "series": [{"series": {"sourceRange": {"sources": [src(1)]}}}],
+                        "headerCount": 1,
+                    },
+                }
+            return {"addChart": {"chart": {
+                "spec": spec,
+                "position": {"overlayPosition": {
+                    "anchorCell": {"sheetId": dash_id, "rowIndex": anchor_row, "columnIndex": anchor_col},
+                    "offsetXPixels": 10,
+                    "offsetYPixels": 10,
+                    "widthPixels": 600,
+                    "heightPixels": 330,
+                }},
+            }}}
+
+        chart_layout = [
+            ("brand_stock", "bar", 8, 11),
+            ("category_stock", "bar", 8, 1),
+            ("pre_orders_status", "pie", 25, 1),
+            ("catalogs_summary", "bar", 25, 11),
+        ]
+        for name, ctype, ar, ac in chart_layout:
+            requests_.append(chart_req(reports[name]["title"], name, ctype, ar, ac))
+        requests_.append({
+            "updateSheetProperties": {
+                "properties": {"sheetId": data_id, "hidden": True},
+                "fields": "hidden",
+            }
+        })
+        sheets.spreadsheets().batchUpdate(spreadsheetId=sid, body={"requests": requests_}).execute()
+        chart_count = len(chart_layout)
+
+        return {
+            "status": "success",
+            "message": f"สร้างแดชบอร์ดเรียบร้อย — สินค้า {total_products} | ชิ้นรวม {total_qty} | ใกล้หมด {low_stock} | PO ค้าง {po_pending}",
+            "spreadsheet_id": sid,
+            "sheet_url": f"https://docs.google.com/spreadsheets/d/{sid}/edit",
+            "charts_created": chart_count,
+            "updated_at": now,
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e), "traceback": traceback.format_exc()}
+
+
 # ==============================================================================
 # MCP TOOLS: 3. GOOGLE VISUAL & GEMINI VISION AI
 # ==============================================================================
@@ -525,27 +791,110 @@ def list_catalogs_tool(search: str = "", brand: str = "") -> Dict[str, Any]:
 
 @mcp.tool()
 def search_inventory_tool(query: str = "", limit: int = 25) -> Dict[str, Any]:
-    """Search warehouse inventory for products by name, product code, barcode, brand, or category."""
+    """Search warehouse inventory for products by name, product code, part number, or barcode."""
     try:
         from sqlalchemy import text
         engine = get_db_connection()
         with engine.connect() as conn:
             sql = """
-                SELECT p.id, p.product_code, p.product_name, p.brand, p.category, 
-                       p.quantity, p.min_quantity, p.cost_price, p.retail_price,
-                       p.location_zone, p.unit
+                SELECT p.id, p.product_code, p.part_number, p.product_name, p.barcode,
+                       p.quantity, p.limit_quantity, p.cost_price, p.sale_price, p.is_active
                 FROM products p
                 WHERE p.deleted_at IS NULL
             """
             params = {"limit": limit}
             if query:
-                sql += " AND (p.product_code ILIKE :q OR p.product_name ILIKE :q OR p.brand ILIKE :q)"
+                sql += """ AND (p.product_code ILIKE :q OR p.product_name ILIKE :q
+                           OR p.part_number ILIKE :q OR p.barcode ILIKE :q)"""
                 params["q"] = f"%{query}%"
             sql += " ORDER BY p.id ASC LIMIT :limit"
 
             rows = conn.execute(text(sql), params).fetchall()
             products = [dict(r._mapping) for r in rows]
             return {"status": "success", "count": len(products), "products": products}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# ==============================================================================
+# LINE OA Tools — ลูกค้าที่ติดต่อผ่าน LINE Official Account
+# ==============================================================================
+
+def get_line_channel_token():
+    return os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+
+
+@mcp.tool()
+def line_list_customers(limit: int = 25) -> Dict[str, Any]:
+    """List customers who contacted via LINE OA — display name, linked customer, unread messages, last message time."""
+    try:
+        from sqlalchemy import text
+        engine = get_db_connection()
+        with engine.connect() as conn:
+            sql = """
+                SELECT lu.line_user_id, lu.display_name, lu.customer_id,
+                       c.customer_name, c.phone_number,
+                       (SELECT COUNT(*) FROM line_messages lm
+                        WHERE lm.line_user_id = lu.line_user_id AND lm.sender = 'user' AND lm.is_read = false) AS unread_count,
+                       (SELECT MAX(lm.created_at) FROM line_messages lm
+                        WHERE lm.line_user_id = lu.line_user_id) AS last_message_at
+                FROM line_users lu
+                LEFT JOIN customers c ON c.id = lu.customer_id
+                WHERE lu.deleted_at IS NULL
+                ORDER BY last_message_at DESC NULLS LAST
+                LIMIT :limit
+            """
+            rows = conn.execute(text(sql), {"limit": limit}).fetchall()
+            customers = [dict(r._mapping) for r in rows]
+            return {"status": "success", "count": len(customers), "customers": customers}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@mcp.tool()
+def line_get_chat_history(line_user_id: str, limit: int = 30) -> Dict[str, Any]:
+    """Read recent chat history with a LINE customer (returned oldest → newest)."""
+    try:
+        from sqlalchemy import text
+        engine = get_db_connection()
+        with engine.connect() as conn:
+            sql = """
+                SELECT sender, message_type, message_content, is_read, created_at
+                FROM line_messages
+                WHERE line_user_id = :lid AND deleted_at IS NULL
+                ORDER BY created_at DESC
+                LIMIT :limit
+            """
+            rows = conn.execute(text(sql), {"lid": line_user_id, "limit": limit}).fetchall()
+            messages = [dict(r._mapping) for r in rows][::-1]  # oldest → newest
+            return {"status": "success", "count": len(messages), "messages": messages}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@mcp.tool()
+def line_send_message(line_user_id: str, text: str) -> Dict[str, Any]:
+    """Send a REAL LINE push message to a customer. Only use when the owner explicitly asks to send a message."""
+    try:
+        token = get_line_channel_token()
+        if not token:
+            return {"status": "error", "message": "LINE_CHANNEL_ACCESS_TOKEN not configured"}
+        import requests as http
+        resp = http.post(
+            "https://api.line.me/v2/bot/message/push",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "to": line_user_id,
+                "messages": [{"type": "text", "text": text}],
+            },
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            return {"status": "success", "message": "ส่งข้อความ LINE เรียบร้อยแล้ว"}
+        return {"status": "error", "message": f"LINE API error {resp.status_code}: {resp.text[:200]}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -564,7 +913,7 @@ def check_system_diagnostics_tool() -> Dict[str, Any]:
         db_ok = False
 
     gemini_key = bool(get_google_api_key())
-    service_acc = os.path.exists(os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "service_account.json"))
+    service_acc = os.path.exists(os.getenv("GOOGLE_APPLICATION_CREDENTIALS", SERVICE_ACCOUNT_PATH))
 
     return {
         "status": "healthy" if db_ok and gemini_key else "degraded",

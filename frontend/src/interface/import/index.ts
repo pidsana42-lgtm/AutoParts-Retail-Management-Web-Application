@@ -1,4 +1,20 @@
-export type ViewState = 'home' | 'scan' | 'excel' | 'po' | 'manual' | 'approve';
+export type ViewState = 'home' | 'scan' | 'excel' | 'mapping' | 'po' | 'manual' | 'approve';
+
+export interface ExcelImportPreview {
+  fileName: string;
+  sheetNames: string[];
+  activeSheet: string;
+  headers: string[];
+  rows: any[][];
+}
+
+export interface ColumnMapping {
+  code: string;
+  name: string;
+  quantity: string;
+  unit: string;
+  price: string;
+}
 
 export interface Supplier {
   id: number;
@@ -21,6 +37,7 @@ export interface Product {
   sale_price?: number;
   retail_price?: number;
   barcode?: string;
+  image?: string;
 }
 
 export interface BillItemDTO {

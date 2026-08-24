@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "autoparts": {
+      "command": "/opt/anaconda3/bin/python3",
+      "args": ["/Users/phonsirithabunsri/Desktop/Desktop/AutoParts-Retail-Management-Web-Application/backend/model/mcp_server.py"],
+      "cwd": "/Users/phonsirithabunsri/Desktop/Desktop/AutoParts-Retail-Management-Web-Application",
+      "timeout": 120000
+    }
+  }
+}
