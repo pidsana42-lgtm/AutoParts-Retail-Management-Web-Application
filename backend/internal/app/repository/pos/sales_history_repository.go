@@ -293,7 +293,16 @@ func (r *salesHistoryRepository) GetCancellationRequests(req pos.SalesHistoryFil
 
     // 4. กรองตามสถานะคำขอยกเลิก (Status)
     if req.Status != "" {
-        query = query.Where("sale_orders.status = ?", strings.ToLower(req.Status))
+        cleanStatus := strings.ToUpper(strings.TrimSpace(req.Status))
+        if cleanStatus == "REJECTED" || cleanStatus == "ไม่อนุมัติ" {
+            query = query.Where("sale_orders.status = ? AND (sale_orders.cancel_processed_at IS NOT NULL OR sale_orders.cancel_remark IS NOT NULL)", enum.OrderCompleted)
+        } else if cleanStatus == "CANCELLED" || cleanStatus == "อนุมัติแล้ว" {
+            query = query.Where("sale_orders.status = ?", enum.OrderCancelled)
+        } else if cleanStatus == "PENDING_CANCEL" || cleanStatus == "รอดำเนินการ" {
+            query = query.Where("sale_orders.status = ?", enum.OrderPendingCancel)
+        } else {
+            query = query.Where("sale_orders.status = ?", strings.ToLower(req.Status))
+        }
     }
 
     // 4.5 กรองตามพนักงานที่ส่งคำขอยกเลิก (EmployeeID)
@@ -362,7 +371,16 @@ func (r *salesHistoryRepository) GetMyCancellationRequests(userID uint, req pos.
 
     // 4. กรองตามสถานะคำขอยกเลิก (Status)
     if req.Status != "" {
-        query = query.Where("sale_orders.status = ?", strings.ToLower(req.Status))
+        cleanStatus := strings.ToUpper(strings.TrimSpace(req.Status))
+        if cleanStatus == "REJECTED" || cleanStatus == "ไม่อนุมัติ" {
+            query = query.Where("sale_orders.status = ? AND (sale_orders.cancel_processed_at IS NOT NULL OR sale_orders.cancel_remark IS NOT NULL)", enum.OrderCompleted)
+        } else if cleanStatus == "CANCELLED" || cleanStatus == "อนุมัติแล้ว" {
+            query = query.Where("sale_orders.status = ?", enum.OrderCancelled)
+        } else if cleanStatus == "PENDING_CANCEL" || cleanStatus == "รอดำเนินการ" {
+            query = query.Where("sale_orders.status = ?", enum.OrderPendingCancel)
+        } else {
+            query = query.Where("sale_orders.status = ?", strings.ToLower(req.Status))
+        }
     }
 
     // นับจำนวนรายการทั้งหมด

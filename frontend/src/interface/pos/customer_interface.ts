@@ -22,6 +22,8 @@ export interface CustomerDiscountResponse {
   is_credit_enabled: boolean;
   shipping_address?: string;
   registered_address?: string;
+  display_address?: string;
+  address?: string;
 }
 
 // ข้อมูลลูกค้าที่ผ่านการคำนวณและแปลง Format พร้อมใช้บน UI (จาก Custom Hook)
