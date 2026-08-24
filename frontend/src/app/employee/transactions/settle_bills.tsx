@@ -619,7 +619,7 @@ export default function SettleBillsPage(): React.JSX.Element {
               {/* Header */}
               <div className="bg-[#1C1B1B] px-6 py-4 flex justify-between items-center">
                 <Text variant="lead" className="text-white mb-0 font-medium">
-                  รับชำระหนี้ ({paymentMethodId === 1 ? "เงินสด" : "QR CODE"})
+                  รับชำระหนี้ ({paymentMethodId === 1 ? "เงินสด" : "QR CODE"}) 
                 </Text>
                 <button type="button" onClick={handleCloseModal} className="text-[#9CA3AF] hover:text-white text-xl cursor-pointer">
                   <X size={20} />
@@ -632,11 +632,11 @@ export default function SettleBillsPage(): React.JSX.Element {
                   <div className="flex justify-between items-start text-xs">
                     <div>
                       <Text variant="xs" className="text-[#6B7280] mb-0.5">ลูกค้า / อู่:</Text>
-                      <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">{customerName || "ลูกค้าทั่วไป"}</Text>
+                      <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">{customerName || "ลูกค้าขาจร"}</Text>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right mr-2">
                       <Text variant="xs" className="text-[#6B7280] mb-0.5">รายการบิลที่เลือก:</Text>
-                      <Text variant="xs" className="text-[#E51C23] font-semibold mb-0">{selectedBillIds.length} บิล</Text>
+                      <Text variant="xs" className="text-[#E51C23] font-normal mb-0">{selectedBillIds.length} บิล</Text>
                     </div>
                   </div>
 
@@ -651,15 +651,15 @@ export default function SettleBillsPage(): React.JSX.Element {
                         return (
                           <div key={`modal-bill-${b.order_id}`} className="pt-1.5 first:pt-0 flex justify-between items-center text-xs">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-[11px] font-semibold text-[#1C1B1B]">
+                              <span className="font-normal text-[12px] font-semibold text-[#1C1B1B]">
                                 {b.order_number}
                               </span>
                               {isPartial ? (
-                                <span className="text-[10px] text-amber-700 bg-amber-100/70 px-1.5 py-0.5 rounded font-normal">
+                                <span className="text-[10px] text-amber-700 bg-amber-100/70 px-1.5 py-0.5 rounded-none font-normal">
                                   แบ่งจ่าย (เหลือ ฿{remAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })})
                                 </span>
                               ) : (
-                                <span className="text-[10px] text-emerald-700 bg-emerald-100/70 px-1.5 py-0.5 rounded font-normal">
+                                <span className="text-[10px] text-[#006E0A] bg-emerald-50 px-1.5 py-0.5 rounded-none font-normal">
                                   เต็มจำนวน
                                 </span>
                               )}
@@ -696,6 +696,7 @@ export default function SettleBillsPage(): React.JSX.Element {
                       </div>
                     </div>
 
+                    {/* ส่วนรับเงินมา */}
                     <div className="flex flex-col gap-1.5">
                       <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">รับเงินมา</Text>
                       <div className="grid grid-cols-2 gap-4">
@@ -733,9 +734,9 @@ export default function SettleBillsPage(): React.JSX.Element {
                                 setReceivedAmount(newTotal);
                                 setDisplayValue(newTotal.toFixed(2));
                               }}
-                              className="flex items-center justify-center px-2 py-3 bg-[#E5E2E1] rounded-none text-xs font-medium text-[#1C1B1B] hover:bg-[#D9D9D9] transition-all truncate cursor-pointer"
+                              className="flex items-center justify-center px-2 py-4 bg-[#E5E2E1] rounded-none text-xs font-medium text-[#1C1B1B] hover:bg-[#D9D9D9] transition-all truncate"
                             >
-                              +{amount}
+                              {amount} บาท
                             </button>
                           ))}
                           <button
@@ -744,7 +745,7 @@ export default function SettleBillsPage(): React.JSX.Element {
                               setReceivedAmount(totalPayAmount);
                               setDisplayValue(totalPayAmount.toFixed(2));
                             }}
-                            className="col-span-3 py-2 bg-zinc-800 text-white hover:bg-zinc-900 text-xs font-medium rounded-none transition-colors cursor-pointer"
+                            className="col-span-3 py-2 bg-[#1C1B1B] text-white hover:bg-zinc-900 text-xs font-normal rounded-none transition-colors cursor-pointer"
                           >
                             จ่ายพอดี (฿{totalPayAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })})
                           </button>
@@ -776,7 +777,7 @@ export default function SettleBillsPage(): React.JSX.Element {
                     <div className="grid grid-cols-2 gap-4">
                       {/* กรอบรูป QR Code จริง */}
                       <div className="flex flex-col items-center justify-center space-y-3">
-                        <div className="relative w-52 h-52 p-2 border border-gray-200 flex items-center justify-center bg-white shadow-inner">
+                        <div className="relative w-52 h-52 p-2 flex items-center justify-center">
                           {isLoadingQR ? (
                             <div className="flex flex-col items-center justify-center space-y-2">
                               <Loader2 size={36} className="animate-spin text-[#E51C23]" />
