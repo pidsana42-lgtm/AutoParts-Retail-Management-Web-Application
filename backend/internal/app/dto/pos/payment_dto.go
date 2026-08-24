@@ -3,18 +3,24 @@ package pos
 import "time"
 
 type GenerateQRRequest struct {
-	OrderID      uint `json:"order_id" binding:"required"`
-	ReceivedByID uint `json:"received_by_id" binding:"required"`
+	OrderID      uint `json:"order_id"`
+	ReceivedByID uint `json:"received_by_id"`
+}
+
+type GenerateSettleQRRequest struct {
+	Amount       float64 `json:"amount" binding:"required,gt=0"`
+	CustomerID   *uint   `json:"customer_id"`
+	ReceivedByID uint    `json:"received_by_id"`
 }
 
 type GenerateQRResponse struct {
 	Status          string    `json:"status"`
-	PaymentID       uint      `json:"payment_id"`
-	OrderID         uint      `json:"order_id"`
+	PaymentID       uint      `json:"payment_id,omitempty"`
+	OrderID         uint      `json:"order_id,omitempty"`
 	Amount          float64   `json:"amount"`
 	QRCode          string    `json:"qr_code"`
 	ReferenceNumber string    `json:"reference_number"`
-	TransactionRef  *string   `json:"transaction_ref"`
+	TransactionRef  *string   `json:"transaction_ref,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 }
 
@@ -42,6 +48,8 @@ type UnpaidBillItem struct {
 	PaidAmount    float64   `json:"paid_amount"`
 	BalanceDue    float64   `json:"balance_due"`
 	PaymentStatus string    `json:"payment_status"` // unpaid, partial
+	PhoneNumber   string    `json:"phone_number"`
+	CustomerType  string    `json:"customer_type"`
 }
 
 type CustomerUnpaidBillsResponse struct {
@@ -86,6 +94,7 @@ type PaymentHistoryItem struct {
 	TotalReceived   float64   `json:"total_received"`
 	Status          string    `json:"status"` // completed, cancelled
 	ReceivedByName  string    `json:"received_by_name"`
+	PaymentType     string    `json:"payment_type,omitempty"`
 }
 
 // DTO สำหรับยกเลิกการชำระเงิน (Cancel Payment)

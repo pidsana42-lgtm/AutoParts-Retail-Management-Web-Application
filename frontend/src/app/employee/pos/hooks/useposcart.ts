@@ -83,7 +83,20 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
       return;
     }
 
+    const currentCustomerTypeId = customer?.customer_type?.id || activeTypeId;
+    const currentCustomerTypeName = customer?.customer_type?.type_name || "";
+    const isCompany = currentCustomerTypeId === 3 || currentCustomerTypeName === "WHOLESALE";
+
     const updatedCart = cart.map((item) => {
+      // ลูกค้ากลุ่มบริษัท ไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น
+      if (isCompany) {
+        return {
+          ...item,
+          discount_type: "none" as const,
+          discount_value: 0,
+        };
+      }
+
       const mockProduct = {
         id: item.product_id,
         product_code: item.product_code,
@@ -265,6 +278,15 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
   //ฟังก์ชันดักจับปุ่มติ๊กถูก (Checkbox DISC?) ประจำแถวสินค้า 
   //เพื่อสลับเปิดให้ลดราคา/ปิดราคาเต็ม โดยดึงยอดลดมาตรฐานมาใส่ หรือปรับค่าให้คืนเป็น 0 เสมอ
   const handleDiscountToggle = (index: number, isChecked: boolean) => {
+    const currentCustomerTypeId = customer?.customer_type?.id || activeTypeId;
+    const currentCustomerTypeName = customer?.customer_type?.type_name || "";
+    const isCompany = currentCustomerTypeId === 3 || currentCustomerTypeName === "WHOLESALE";
+
+    if (isCompany && isChecked) {
+      alert("ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น");
+      return;
+    }
+
     setCart((prev) =>
       prev.map((item, i) => {
         if (i !== index) return item;
@@ -297,6 +319,15 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
           customer,
           activeTypeId
         );
+
+        // ถ้าค่าเริ่มต้นเป็น none (เช่น ลูกค้าทั่วไป ขาจร) ให้เปิดส่วนลดเป็น percentage พร้อมค่าเริ่มต้นตาม max_discount_rate ของสินค้า
+        if (discountConfig.type === "none") {
+          return {
+            ...item,
+            discount_type: "percentage",
+            discount_value: item.max_discount_rate ?? 0,
+          };
+        }
 
         return {
           ...item,

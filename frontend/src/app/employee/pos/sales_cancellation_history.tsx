@@ -25,7 +25,7 @@ import {
   TableCell,
 } from "../../../components/elements/table";
 import { cn } from "../../../utils/component";
-import { getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge } from "../../../utils/poshelpers";
+import { formatDate, getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge, renderCancellationStatusBadge } from "../../../utils/poshelpers";
 import { useSalesCancellationHistory } from "./hooks/useSalesCancellationHistory";
 import { useSalesHistory } from "./hooks/useSalesHistory";
 import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
@@ -102,7 +102,7 @@ const SalesCancellationHistory: React.FC = () => {
                 {/* 1. ค้นหาเลขบิล/ชื่อลูกค้า (col-span-3) */}
                 <div className="md:col-span-3 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">
-                    ค้นหาเลขคำสั่งซื้อ/ชื่อลูกค้า
+                    ค้นหาเลขคำสั่งซื้อ/ชื่อลูกค้า 
                   </label>
                   <div className="relative flex-1">
                     <ScanBarcode className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={18} />
@@ -257,7 +257,13 @@ const SalesCancellationHistory: React.FC = () => {
                         {/* วันที่ทำรายการยกเลิก */}
                         <TableCell className="py-3.5 px-3">
                           <Text variant="xs" className="font-light text-[#5B5B5B] mb-0">
-                            {item.order_date ? new Date(item.order_date).toLocaleString("th-TH") : "-"}
+                            {formatDate(
+                              item.cancel_processed_at ||
+                              item.cancel_requested_at ||
+                              item.order_date ||
+                              item.created_at ||
+                              ""
+                            )}
                           </Text>
                         </TableCell>
 
@@ -290,7 +296,7 @@ const SalesCancellationHistory: React.FC = () => {
 
                         {/* สถานะ */}
                         <TableCell className="py-3.5 px-3 text-center">
-                        {renderStatusBadge(item.status, item.payment_status)}
+                          {renderCancellationStatusBadge(item.status, item.payment_status, item.cancel_remark, item.cancel_processed_at)}
                         </TableCell>
 
                         {/* จัดการ */}
