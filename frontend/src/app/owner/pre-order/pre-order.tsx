@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import apiClient from '../../../service/http/apiClient';
 import { 
   Plus, Search, Edit, Trash2, ChevronRight, Save, 
   FileText, BookOpen, Building2, X,
-  CheckCircle, Clock, XCircle, Loader2, AlertCircle, ImageIcon, Truck
+  Loader2, AlertCircle, ImageIcon, Package
 } from 'lucide-react';
 import { 
   getPreOrders, getPreOrderById, createPreOrder, 
@@ -16,7 +16,6 @@ import Card from '../../../components/elements/card';
 import Select from '../../../components/elements/select';
 import Button from '../../../components/elements/button';
 import GenericTable, { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
-import ProductSearchSelect from '../import-bills/components/product_search_select';
 import type { Product } from '../../../interface/import';
 import type { Catalog, CatalogItem } from '../../../interface/catalog/catalog';
 import { getCatalogs } from '../../../service/http/catalog/catalog_service';
@@ -314,36 +313,8 @@ export default function PreOrderManager() {
     }
   };
 
-  const handleAddItem = () => {
-    const newItem: PreOrderItem = {
-      product_id: 0,
-      product_name: '',
-      product_code: '',
-      quantity: 1,
-      unit_price: 0
-    };
-    setFormItems(prev => [...prev, newItem]);
-  };
-
   const handleRemoveItem = (index: number) => {
     setFormItems(prev => prev.filter((_, idx) => idx !== index));
-  };
-
-  const handleProductSelect = (index: number, newId: number | null) => {
-    if (!newId) return;
-    const prod = products.find(p => p.id === newId);
-    const unitPrice = prod ? (prod.sale_price || prod.retail_price || 0) : 0;
-    setFormItems(prev => {
-      const updated = [...prev];
-      updated[index] = {
-        ...updated[index],
-        product_id: newId,
-        product_name: prod?.product_name || '',
-        product_code: prod?.product_code || '',
-        unit_price: unitPrice,
-      };
-      return updated;
-    });
   };
 
   const handleItemChange = (index: number, field: keyof PreOrderItem, value: any) => {
@@ -505,14 +476,14 @@ export default function PreOrderManager() {
         if (po.status === 'COMPLETED') {
           return (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-[#259b24]/10 text-[#259b24] border border-[#259b24]/30">
-              <CheckCircle size={14} /> ส่งมอบแล้ว
+              ส่งมอบแล้ว
             </span>
           );
         }
         if (po.status === 'CANCELLED') {
           return (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-red-50 text-[#e51c23] border border-red-200">
-              <XCircle size={14} /> ยกเลิก
+              ยกเลิก
             </span>
           );
         }
@@ -520,7 +491,7 @@ export default function PreOrderManager() {
           return (
             <div className="flex flex-col items-start gap-0.5">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                <Truck size={14} /> รอสินค้า
+                รอสินค้า
               </span>
               {po.po_number && (
                 <span className="text-[10px] text-[#5F5E5E] font-mono font-semibold">
@@ -533,7 +504,7 @@ export default function PreOrderManager() {
         return (
           <div className="flex flex-col items-start gap-0.5">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-              <Clock size={14} /> รออนุมัติสั่งซื้อ
+              รออนุมัติสั่งซื้อ
             </span>
             {po.po_number && (
               <span className="text-[10px] text-[#5F5E5E] font-mono font-semibold">
@@ -603,7 +574,7 @@ export default function PreOrderManager() {
           <Card className="overflow-hidden border border-gray-200 shadow-xs" noPadding>
             {/* Header Toolbar: Search on Left, Filter Tabs on Right */}
             <div className="p-4 bg-gray-50/80 border-b border-gray-200 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
-              <div className="relative w-full md:w-80">
+              <div className="relative flex-1 min-w-[240px]">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"

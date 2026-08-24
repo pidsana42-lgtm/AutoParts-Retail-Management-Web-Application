@@ -235,9 +235,151 @@ def get_line_user_context(line_user_id):
         print(f"Error fetching line user context: {e}", file=sys.stderr)
     return ""
 
+# ==============================================================================
+# MCP Tools Bridge — ให้ Gemini เรียก tool จาก mcp_server.py ผ่าน Function Calling
+# ==============================================================================
+
+def _get_mcp_registry():
+    """name -> (callable, function_declaration) ของ tool ที่ปลอดภัยพอจะเปิดผ่าน LINE"""
+    import mcp_server
+    return {
+        "build_dashboard_tool": (
+            mcp_server.build_dashboard_tool,
+            {
+                "name": "build_dashboard_tool",
+                "description": (
+                    "สร้าง/อัปเดตแดชบอร์ดร้านค้าลง Google Sheets: ตัวเลขสำคัญ "
+                    "(สินค้า, สต็อกรวม, ใกล้หมด, พรีออเดอร์ค้าง) พร้อมกราฟ 4 ใบ "
+                    "ใช้เมื่อผู้ใช้ขอ 'แดชบอร์ด' 'ภาพรวมร้าน' 'รายงานสรุป'"
+                ),
+                "parameters": {"type": "OBJECT", "properties": {}},
+            },
+        ),
+        "search_inventory_tool": (
+            mcp_server.search_inventory_tool,
+            {
+                "name": "search_inventory_tool",
+                "description": "ค้นหาสินค้า/อะไหล่ในคลัง ตามชื่อสินค้า รหัสสินค้า part number หรือบาร์โค้ด พร้อมบอกจำนวนคงเหลือและราคา",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "query": {"type": "STRING", "description": "ชื่อ/รหัสอะไหล่ที่ต้องการค้นหา"},
+                        "limit": {"type": "NUMBER", "description": "จำนวนผลลัพธ์สูงสุด (default 25)"},
+                    },
+                },
+            },
+        ),
+        "list_catalogs_tool": (
+            mcp_server.list_catalogs_tool,
+            {
+                "name": "list_catalogs_tool",
+                "description": "แสดงรายการเล่มแคตตาล็อกอะไหล่ทั้งหมดในระบบ ค้นหาได้ตามชื่อ/รหัส/แบรนด์",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "search": {"type": "STRING", "description": "คำค้นชื่อ/รหัสแคตตาล็อก"},
+                        "brand": {"type": "STRING", "description": "ชื่อแบรนด์ หรือ ALL"},
+                    },
+                },
+            },
+        ),
+        "check_system_diagnostics_tool": (
+            mcp_server.check_system_diagnostics_tool,
+            {
+                "name": "check_system_diagnostics_tool",
+                "description": "ตรวจสถานะระบบ: DB, Google Sheets/Drive, Gemini Vision",
+                "parameters": {"type": "OBJECT", "properties": {}},
+            },
+        ),
+    }
+
+
+LINE_STYLE_NOTE = (
+    "\n(ตอบเป็นภาษาไทย สไตล์แชท LINE: ไม่ใช้ markdown ** หรือ # หัวข้อ ไม่ต้องล้อม URL ด้วยอะไร "
+    "ใช้ emoji นำรายการ เช่น 📌 📈 ✅ สรุปสั้น กระชับ อ่านง่าย)"
+)
+
+
+def run_mcp_tools(query_text, customer_context=""):
+    """พยายามตอบด้วย MCP tools ก่อน — ถ้าโมเดลไม่เรียก tool คืนค่า None เพื่อ fallback Text-to-SQL"""
+    if MOCK_MODE or (not LIGHTNING_API_KEY and not GEMINI_API_KEY):
+        return None
+    try:
+        if GEMINI_API_KEY:
+            genai.configure(api_key=GEMINI_API_KEY)
+        registry = _get_mcp_registry()
+        declarations = [d for _, d in registry.values()]
+        model = genai.GenerativeModel(
+            GEMINI_MODEL,
+            tools=[{"function_declarations": declarations}],
+        )
+        system_note = (
+            "You are the AI assistant of an auto parts retail shop. "
+            f"Caller context: {customer_context or 'unknown LINE user'}. "
+            "If one of the available tools can fulfill the user's request, call it. "
+            "Otherwise do not force a tool call."
+        )
+        prompt = f"{system_note}\nUser: {query_text}"
+        response = model.generate_content(prompt)
+
+        calls = []
+        try:
+            for p in response.candidates[0].content.parts:
+                fc = getattr(p, "function_call", None)
+                if fc is not None and fc.name:
+                    calls.append(fc)
+        except Exception:
+            calls = []
+        if not calls:
+            return None
+
+        resp_parts = []
+        for fc in calls:
+            fn = registry.get(fc.name, (None,))[0]
+            args = dict(fc.args or {})
+            if fn is None:
+                out = {"status": "error", "message": f"unknown tool {fc.name}"}
+            else:
+                try:
+                    out = fn(**args)
+                except TypeError:
+                    out = fn()
+            resp_parts.append(genai.protos.Part(
+                function_response={
+                    "name": fc.name,
+                    "response": {"result": json.dumps(out, ensure_ascii=False, default=str)[:6000]},
+                }
+            ))
+
+        contents = [
+            genai.protos.Content(role="user", parts=[genai.protos.Part(text=prompt)]),
+            response.candidates[0].content,
+            genai.protos.Content(role="user", parts=resp_parts + [genai.protos.Part(text=LINE_STYLE_NOTE)]),
+        ]
+        final = model.generate_content(contents)
+        reply = ""
+        try:
+            reply = (final.text or "").strip()
+        except Exception:
+            reply = ""
+        if not reply:
+            reply = "✅ เรียกใช้งาน " + ", ".join(c.name for c in calls) + " เรียบร้อย"
+        return reply
+    except Exception as e:
+        print(f"MCP tools bridge failed: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        return None
+
+
 def run_agent(query_text, line_user_id=None):
-    # 1. Fetch customer context from DB if line_user_id is provided
+    # 0. Try serving via MCP tools (Gemini Function Calling) — dashboard, inventory, catalogs
     customer_context = get_line_user_context(line_user_id) if line_user_id else ""
+    mcp_reply = run_mcp_tools(query_text, customer_context)
+    if mcp_reply:
+        print("Served via MCP tools.", file=sys.stderr)
+        return mcp_reply
+
+    # 1. Fetch customer context from DB if line_user_id is provided
     
     # 2. Generate database SQL query based on question
     sql = generate_sql(query_text, customer_context)

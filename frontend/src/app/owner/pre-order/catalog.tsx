@@ -3,8 +3,8 @@ import {
   BookOpen, Search, Plus, Edit,
   Layers, ChevronRight,
   Trash2, ShoppingBag, Eye, X, Loader2, Building2, 
-  ChevronDown, ArrowLeft, Upload, Image as ImageIcon,
-  FileText, Sparkles, SlidersHorizontal, Download, Camera,
+  ChevronDown, Upload, Image as ImageIcon,
+  FileText, SlidersHorizontal, Download, Camera,
   RotateCw, ZoomIn, ZoomOut, Save, ArrowRight, LayoutPanelLeft,
   Smartphone
 } from 'lucide-react';
@@ -32,7 +32,6 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
 
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [selectedBrand, setSelectedBrand] = useState<string>('ALL');
   const [selectedSupplier, setSelectedSupplier] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
@@ -81,8 +80,8 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   const [saving, setSaving] = useState<boolean>(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [pdfFileName, setPdfFileName] = useState<string>('');
-  
+  const [, setPdfFileName] = useState<string>('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -697,9 +696,6 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
                       
                       <div className="absolute top-3 left-3 flex items-center gap-1.5 flex-wrap">
-                        <span className="bg-[#e51c23] text-white text-[10px] font-black px-2 py-0.5 uppercase tracking-wider">
-                          {cat.brand}
-                        </span>
                         {cat.category && (
                           <span className="bg-white/20 backdrop-blur-xs text-white text-[10px] font-medium px-2 py-0.5">
                             {cat.category}
@@ -980,12 +976,12 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
           {/* LEFT PANEL: Interactive Image / Document Viewer with Zoom & Rotate */}
           <div 
             style={{ width: `${leftWidth}%` }} 
-            className="bg-gray-900 border border-gray-800 p-4 flex flex-col justify-between shadow-md"
+            className="bg-white border border-gray-200 p-4 flex flex-col justify-between shadow-md"
           >
             {/* Viewer Control Bar */}
-            <div className="flex items-center justify-between pb-3 border-b border-gray-800 text-white text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200 text-[#1C1B1B] text-xs">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-gray-300">
+                <span className="font-bold text-[#5F5E5E]">
                   {selectedFile ? selectedFile.name : 'ตัวอย่างเอกสารหน้าแคตตาล็อก'}
                 </span>
                 {selectedFile && (
@@ -999,18 +995,18 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                 <button
                   type="button"
                   onClick={() => setZoom(prev => Math.max(0.5, prev - 0.2))}
-                  className="p-1.5 hover:bg-gray-800 text-gray-300 hover:text-white transition-colors"
+                  className="p-1.5 hover:bg-gray-100 text-gray-500 hover:text-[#1C1B1B] transition-colors"
                   title="Zoom Out"
                 >
                   <ZoomOut size={16} />
                 </button>
-                <span className="text-[11px] font-mono text-gray-400 w-10 text-center">
+                <span className="text-[11px] font-mono text-gray-500 w-10 text-center">
                   {Math.round(zoom * 100)}%
                 </span>
                 <button
                   type="button"
                   onClick={() => setZoom(prev => Math.min(3, prev + 0.2))}
-                  className="p-1.5 hover:bg-gray-800 text-gray-300 hover:text-white transition-colors"
+                  className="p-1.5 hover:bg-gray-100 text-gray-500 hover:text-[#1C1B1B] transition-colors"
                   title="Zoom In"
                 >
                   <ZoomIn size={16} />
@@ -1018,7 +1014,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                 <button
                   type="button"
                   onClick={() => setRotate(prev => (prev + 90) % 360)}
-                  className="p-1.5 hover:bg-gray-800 text-gray-300 hover:text-white transition-colors ml-1"
+                  className="p-1.5 hover:bg-gray-100 text-gray-500 hover:text-[#1C1B1B] transition-colors ml-1"
                   title="Rotate"
                 >
                   <RotateCw size={16} />
@@ -1039,33 +1035,33 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                   <img 
                     src={previewImage} 
                     alt="Catalog scan" 
-                    className="max-h-[600px] object-contain shadow-2xl border border-gray-700" 
+                    className="max-h-[600px] object-contain shadow-md border border-gray-200" 
                   />
                 </div>
               ) : selectedFile?.name.toLowerCase().endsWith('.pdf') ? (
-                <div className="text-center p-8 text-white space-y-3">
+                <div className="text-center p-8 text-[#1C1B1B] space-y-3">
                   <FileText size={56} className="text-[#e51c23] mx-auto" />
                   <p className="font-bold text-sm">{selectedFile.name}</p>
-                  <p className="text-xs text-gray-400">ไฟล์ PDF พร้อมสำหรับการส่งให้ AI สแกนดึงข้อมูลอะไหล่</p>
+                  <p className="text-xs text-gray-500">ไฟล์ PDF พร้อมสำหรับการส่งให้ AI สแกนดึงข้อมูลอะไหล่</p>
                 </div>
               ) : (
                 <div 
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-700 hover:border-gray-500 p-12 text-center cursor-pointer transition-colors text-gray-400 space-y-3"
+                  className="border-2 border-dashed border-gray-300 hover:border-[#e51c23] p-12 text-center cursor-pointer transition-colors text-gray-500 space-y-3"
                 >
-                  <Camera size={44} className="mx-auto text-gray-500" />
-                  <p className="font-bold text-sm text-white">คลิกเพื่อเลือกไฟล์ภาพ หรือไฟล์ PDF แคตตาล็อก</p>
+                  <Camera size={44} className="mx-auto text-gray-400" />
+                  <p className="font-bold text-sm text-[#1C1B1B]">คลิกเพื่อเลือกไฟล์ภาพ หรือไฟล์ PDF แคตตาล็อก</p>
                 </div>
               )}
             </div>
 
             {/* Viewer Footer Bar with Trigger Button */}
-            <div className="pt-3 border-t border-gray-800 flex items-center justify-between gap-3">
+            <div className="pt-3 border-t border-gray-200 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="text-xs text-gray-300 hover:text-white flex items-center gap-1.5 py-2 px-3 bg-gray-800 hover:bg-gray-700 font-bold transition-colors cursor-pointer"
+                  className="text-xs text-[#1C1B1B] flex items-center gap-1.5 py-2 px-3 bg-gray-100 hover:bg-gray-200 font-bold transition-colors cursor-pointer"
                 >
                   <Upload size={14} /> {selectedFile ? 'เลือกไฟล์อื่น' : 'อัปโหลดไฟล์'}
                 </button>
