@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import hashlib
 import numpy as np
 import traceback
 
@@ -47,6 +48,7 @@ class ProductMatcher:
         self.model = None
         self.tokenizer = None
         self.use_onnx = False
+        self.model_id = "none"
         self.product_data = []
         self.product_embeddings = None
         self.fallback_matcher = TFIDFMatcher()
@@ -99,9 +101,68 @@ class ProductMatcher:
             print(f"Could not load ONNX model: {e}")
             print("Falling back to local TF-IDF text similarity matcher.")
 
-    def fit(self, products, corrections=[]):
+    def _content_hash(self, text):
+        """Hash of the embedded text + model id — changing the model invalidates the cache automatically."""
+        raw = f"{self.model_id}|{text}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _target_key(self, item):
+        """Stable key per corpus item: products keyed by id, corrections by supplier+content."""
+        if item.get("type") == "product":
+            return f"product:{item.get('id')}"
+        raw = f"{item.get('supplier_id')}|{item.get('name', '')}|{item.get('code', '')}"
+        return "correction:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+
+    def _load_cached_embeddings(self, persist_engine, keys):
+        """Load {target_key: (content_hash, vector)} rows from DB for the current corpus."""
+        stored = {}
+        from sqlalchemy import text as sql_text
+        chunk_size = 500
+        with persist_engine.connect() as conn:
+            for start in range(0, len(keys), chunk_size):
+                chunk = keys[start:start + chunk_size]
+                rows = conn.execute(
+                    sql_text("SELECT target_key, content_hash, embedding FROM product_embeddings WHERE target_key = ANY(:keys)"),
+                    {"keys": chunk}
+                ).fetchall()
+                for key, chash, emb in rows:
+                    if emb is not None:
+                        stored[key] = (chash, np.array(emb, dtype=np.float32))
+        return stored
+
+    def _save_embeddings(self, persist_engine, rows):
+        """Upsert newly computed embeddings into the DB."""
+        from sqlalchemy import text as sql_text
+        upsert_sql = sql_text("""
+            INSERT INTO product_embeddings (target_key, content_hash, target_type, target_id, embedding)
+            VALUES (:key, :chash, :ttype, :tid, CAST(:emb AS JSONB))
+            ON CONFLICT (target_key) DO UPDATE SET
+                content_hash = EXCLUDED.content_hash,
+                target_type = EXCLUDED.target_type,
+                target_id = EXCLUDED.target_id,
+                embedding = EXCLUDED.embedding,
+                updated_at = CURRENT_TIMESTAMP
+        """)
+        with persist_engine.begin() as conn:
+            for row in rows:
+                conn.execute(upsert_sql, row)
+
+    def _cleanup_stale_embeddings(self, persist_engine, current_keys):
+        """Delete cached rows that no longer belong to any active product/correction."""
+        if not current_keys:
+            return
+        from sqlalchemy import text as sql_text
+        with persist_engine.begin() as conn:
+            conn.execute(
+                sql_text("DELETE FROM product_embeddings WHERE target_key != ALL(:keys)"),
+                {"keys": list(current_keys)}
+            )
+
+    def fit(self, products, corrections=[], persist_engine=None):
         """
         Calculates embeddings for all active products and corrected mappings.
+        If persist_engine is given, reuses vectors stored in product_embeddings and
+        only embeds products/corrections that are new or whose text changed.
         """
         self.product_data = products
         self.corrections = corrections
@@ -149,7 +210,59 @@ class ProductMatcher:
             return
 
         try:
-            self.product_embeddings = self._get_embeddings_batch(corpus)
+            vectors = [None] * len(corpus)
+            keys = [self._target_key(item) for item in self.combined_data]
+
+            # 1. Reuse vectors that are already persisted and unchanged
+            cached_count = 0
+            need_embed_idx = list(range(len(corpus)))
+            if persist_engine is not None:
+                try:
+                    stored = self._load_cached_embeddings(persist_engine, keys)
+                    need_embed_idx = []
+                    for i, item in enumerate(self.combined_data):
+                        chash = self._content_hash(corpus[i])
+                        entry = stored.get(keys[i])
+                        if entry and entry[0] == chash:
+                            vectors[i] = entry[1]
+                            cached_count += 1
+                        else:
+                            need_embed_idx.append(i)
+                    print(f"[EmbeddingCache] Reused {cached_count}/{len(corpus)} vectors from DB, embedding {len(need_embed_idx)} new/changed items.")
+                except Exception as cache_err:
+                    print(f"[EmbeddingCache] Load failed — embedding everything this round: {cache_err}")
+                    need_embed_idx = list(range(len(corpus)))
+                    vectors = [None] * len(corpus)
+
+            # 2. Embed only what is missing/changed
+            if need_embed_idx:
+                new_embs = self._get_embeddings_batch([corpus[i] for i in need_embed_idx])
+                for j, i in enumerate(need_embed_idx):
+                    vectors[i] = new_embs[j]
+
+                # 3. Persist newly computed vectors
+                if persist_engine is not None:
+                    try:
+                        rows = []
+                        for j, i in enumerate(need_embed_idx):
+                            item = self.combined_data[i]
+                            rows.append({
+                                "key": keys[i],
+                                "chash": self._content_hash(corpus[i]),
+                                "ttype": item.get("type", "product"),
+                                "tid": int(item.get("id") or 0),
+                                "emb": json.dumps([round(float(v), 6) for v in vectors[i]]),
+                            })
+                        self._save_embeddings(persist_engine, rows)
+                        try:
+                            self._cleanup_stale_embeddings(persist_engine, keys)
+                        except Exception as clean_err:
+                            print(f"[EmbeddingCache] Stale cleanup skipped: {clean_err}")
+                        print(f"[EmbeddingCache] Persisted {len(rows)} embeddings to DB.")
+                    except Exception as save_err:
+                        print(f"[EmbeddingCache] Save failed (non-fatal): {save_err}")
+
+            self.product_embeddings = np.vstack(vectors)
             print(f"Successfully generated Gemma ONNX embeddings for {len(products)} products and {len(corrections)} corrections.")
         except Exception as e:
             print(f"Failed to generate ONNX embeddings during fit: {e}")

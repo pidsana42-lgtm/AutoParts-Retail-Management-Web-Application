@@ -56,9 +56,16 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotifica
 			}
 			c.JSON(200, categories)
 		})
+	}
 
-		// Custom route to update product cost price directly from import bill workflow
-		importDataGroup.PUT("/products/:id/cost-price", func(c *gin.Context) {
+	// Owner-only: ปรับราคาทุนสินค้าเมื่อราคาในบิลไม่ตรงกับระบบ — เฉพาะเจ้าของเท่านั้น
+	ownerOnlyGroup := r.Group("/api/import-data")
+	ownerOnlyGroup.Use(
+		middleware.AuthMiddleware(),
+		middleware.RequireRoles(string(enum.RoleOwner)),
+	)
+	{
+		ownerOnlyGroup.PUT("/products/:id/cost-price", func(c *gin.Context) {
 			var uri struct {
 				ID uint `uri:"id" binding:"required"`
 			}

@@ -4,6 +4,7 @@ export interface CatalogItem {
   part_number: string;
   part_name: string;
   brand: string;
+  st_no?: string;
   compatible_cars?: string;
   standard_price: number;
   unit: string;
