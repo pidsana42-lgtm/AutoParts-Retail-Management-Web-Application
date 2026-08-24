@@ -20,7 +20,7 @@ type PaymentService interface {
 	GetUnpaidBillsByCustomer(customerID uint) (*posDto.CustomerUnpaidBillsResponse, error)
 	GetUnpaidBillByOrderNumber(orderNumber string) (*posDto.CustomerUnpaidBillsResponse, error)
 	SettleCustomerBills(req posDto.SettleBillsRequest) (*posDto.SettleBillsResponse, error)
-	GetPaymentHistory(search, startDate, endDate string) ([]posDto.PaymentHistoryItem, error)
+	GetPaymentHistory(search, startDate, endDate string, employeeID uint) ([]posDto.PaymentHistoryItem, error)
 	GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentHistoryItem, error)
 	GetCancelledPaymentHistory(search, startDate, endDate string) ([]posDto.CancelledPaymentItem, error)
 	CancelPaymentReceipt(repaymentID uint, req posDto.CancelPaymentReceiptRequest) error
@@ -557,15 +557,15 @@ func (s *paymentService) SettleCustomerBills(req posDto.SettleBillsRequest) (*po
 // -------------------------------------------------------------
 // 4. ประวัติการรับชำระเงิน (Payment History)
 // -------------------------------------------------------------
-func (s *paymentService) GetPaymentHistory(search, startDate, endDate string) ([]posDto.PaymentHistoryItem, error) {
+func (s *paymentService) GetPaymentHistory(search, startDate, endDate string, employeeID uint) ([]posDto.PaymentHistoryItem, error) {
 	// 1. ดึงประวัติจาก payment_repayments (การเคลียร์บิลเงินเชื่อ)
-	repayments, err := s.paymentRepo.GetRepaymentHistory(search, startDate, endDate)
+	repayments, err := s.paymentRepo.GetRepaymentHistory(search, startDate, endDate, employeeID)
 	if err != nil {
 		return nil, err
 	}
 
 	// 2. ดึงประวัติจาก payments (การชำระเงินสด / QR Code หน้าร้าน)
-	payments, err := s.paymentRepo.GetDirectPaymentHistory(search, startDate, endDate)
+	payments, err := s.paymentRepo.GetDirectPaymentHistory(search, startDate, endDate, employeeID)
 	if err != nil {
 		return nil, err
 	}
@@ -602,6 +602,7 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string) ([
 			OrderNumbers:   r.Order.OrderNumber,
 			TotalReceived:  r.AmountPaid,
 			Status:         r.Status,
+			ReceivedByID:   r.RecordedByID,
 			ReceivedByName: recName,
 			PaymentType:    "repayment",
 		})
@@ -647,6 +648,7 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string) ([
 			OrderNumbers:   p.Order.OrderNumber,
 			TotalReceived:  p.Amount,
 			Status:         status,
+			ReceivedByID:   p.ReceivedByID,
 			ReceivedByName: recName,
 			PaymentType:    "payment",
 		})
@@ -691,6 +693,7 @@ func (s *paymentService) GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentH
 			OrderNumbers:   r.Order.OrderNumber,
 			TotalReceived:  r.AmountPaid,
 			Status:         r.Status,
+			ReceivedByID:   r.RecordedByID,
 			ReceivedByName: recName,
 			PaymentType:    "repayment",
 		}, nil
@@ -740,6 +743,7 @@ func (s *paymentService) GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentH
 		OrderNumbers:   p.Order.OrderNumber,
 		TotalReceived:  p.Amount,
 		Status:         status,
+		ReceivedByID:   p.ReceivedByID,
 		ReceivedByName: recName,
 		PaymentType:    "payment",
 	}, nil

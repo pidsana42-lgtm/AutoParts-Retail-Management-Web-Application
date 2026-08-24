@@ -28,8 +28,8 @@ type PaymentRepository interface {
     CreateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error
     GetRepaymentByID(repaymentID uint) (*entity.PaymentRepayment, error)
     UpdateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error
-    GetRepaymentHistory(search, startDate, endDate string) ([]entity.PaymentRepayment, error)
-    GetDirectPaymentHistory(search, startDate, endDate string) ([]entity.Payment, error)
+    GetRepaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.PaymentRepayment, error)
+    GetDirectPaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.Payment, error)
     GetCancelledRepaymentHistory(search, startDate, endDate string) ([]entity.PaymentRepayment, error)
 }
 
@@ -181,9 +181,13 @@ func (r *paymentRepository) UpdateRepaymentWithTx(tx *gorm.DB, repayment *entity
     return tx.Save(repayment).Error
 }
 
-func (r *paymentRepository) GetRepaymentHistory(search, startDate, endDate string) ([]entity.PaymentRepayment, error) {
+func (r *paymentRepository) GetRepaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.PaymentRepayment, error) {
     var repayments []entity.PaymentRepayment
     query := r.db.Preload("Order").Preload("Order.Customer").Preload("PaymentMethod").Preload("RecordedBy").Where("payment_repayments.status = ?", "completed")
+
+    if employeeID > 0 {
+        query = query.Where("payment_repayments.recorded_by_id = ?", employeeID)
+    }
 
     if search != "" {
         likeSearch := "%" + search + "%"
@@ -203,7 +207,7 @@ func (r *paymentRepository) GetRepaymentHistory(search, startDate, endDate strin
     return repayments, err
 }
 
-func (r *paymentRepository) GetDirectPaymentHistory(search, startDate, endDate string) ([]entity.Payment, error) {
+func (r *paymentRepository) GetDirectPaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.Payment, error) {
     var payments []entity.Payment
     query := r.db.Preload("Order").
         Preload("Order.Customer").
@@ -211,6 +215,10 @@ func (r *paymentRepository) GetDirectPaymentHistory(search, startDate, endDate s
         Preload("ReceivedBy").
         Joins("JOIN sale_orders ON sale_orders.id = payments.order_id").
         Where("payments.paid_at IS NOT NULL AND sale_orders.status != ?", "cancelled")
+
+    if employeeID > 0 {
+        query = query.Where("payments.received_by_id = ?", employeeID)
+    }
 
     if search != "" {
         likeSearch := "%" + search + "%"
