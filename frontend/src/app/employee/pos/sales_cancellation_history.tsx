@@ -289,7 +289,7 @@ const SalesCancellationHistory: React.FC = () => {
 
                         {/* ผู้ยกเลิก */}
                         <TableCell className="py-3.5 px-3 text-center">
-                          <Text variant="xs" className="text-[#5B5B5B] mb-0">
+                          <Text variant="xs" className="font-normal text-[#1C1B1B] mb-0">
                             {item.canceller || "-"}
                           </Text>
                         </TableCell>

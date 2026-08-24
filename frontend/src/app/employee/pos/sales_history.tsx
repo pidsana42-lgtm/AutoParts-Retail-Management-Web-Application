@@ -318,7 +318,7 @@ export default function TransactionHistoryPage() {
                       {/* 3.5 พนักงานขาย */}
                       <TableCell className="py-3.5 px-4 truncate">
                         <Text
-                          variant="small"
+                          variant="xs"
                           className="font-normal text-[#1C1B1B] mb-0"
                         >
                           {item.created_by_name || "-"}
@@ -525,38 +525,24 @@ export default function TransactionHistoryPage() {
                 <div className="p-6 space-y-6">
                   {/* ข้อมูลลูกค้า */}
                   <div>
-                    <Text
-                      variant="xs"
-                      className="font-normal text-[#E51C23] mb-2"
-                    >
+                    <Text variant="xs" className="font-normal text-[#E51C23] mb-2">
                       ข้อมูลลูกค้า
                     </Text>
-                    <Card className="bg-[#F6F3F2] rounded-none  border-gray-100 border-l-3 border-l-[#E51C23] shadow-none">
+                    <Card className="bg-[#F6F3F2] rounded-none border-gray-100 border-l-3 border-l-[#E51C23] shadow-none">
                       <CardContent className="p-4 space-y-1">
-                        <Text
-                          variant="small"
-                          className="font-medium text-[#1C1B1B] mb-0"
-                        >
-                          {getDisplayCustomerName(
-                            orderDetail as unknown as SalesHistoryItemResponse,
-                          )}
+                        <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
+                          {getDisplayCustomerName(orderDetail)}
                         </Text>
-                        <Text variant="small" className="text-[#6B7280] mb-0">
-                          {orderDetail.phone_number ||
-                            orderDetail.customer_phone_temp ||
-                            "-"}
+                        <Text variant="xs" className="text-[#6B7280] mb-0">
+                          เบอร์โทร: {orderDetail.phone_number || orderDetail.customer_phone_temp || "-"}
                         </Text>
                         {orderDetail.customer_type_name && (
                           <Text variant="xs" className="text-[#6B7280] mb-0">
                             ประเภท: {orderDetail.customer_type_name}
                           </Text>
                         )}
-
                         {orderDetail.address && (
-                          <Text
-                            variant="xs"
-                            className="text-[#6B7280] mb-0 truncate"
-                          >
+                          <Text variant="xs" className="text-[#6B7280] mb-0 truncate">
                             ที่อยู่: {orderDetail.address}
                           </Text>
                         )}
@@ -713,7 +699,7 @@ export default function TransactionHistoryPage() {
 
                     // 1. เคสรายการอยู่ระหว่างรออนุมัติการยกเลิก (PENDING_CANCEL)
                     if (status === "PENDING_CANCEL") {
-                      // 👑 1.1 ถ้าผู้ใช้เป็น OWNER / ADMIN: แยกเป็น 2 ส่วน (กล่องสรุปข้อมูล + ฟอร์มการดำเนินการ)
+                      // 1.1 ถ้าผู้ใช้เป็น OWNER / ADMIN: แยกเป็น 2 ส่วน (กล่องสรุปข้อมูล + ฟอร์มการดำเนินการ)
                       if (isOwnerOrAdmin) {
                         return (
                           <div className="space-y-4">
@@ -796,7 +782,7 @@ export default function TransactionHistoryPage() {
                         );
                       }
 
-                      // 🧑‍💼 1.2 ถ้าเป็น EMPLOYEE / STAFF: ดูได้อย่างเดียวว่า รออนุมัติ
+                      // 🧑1.2 ถ้าเป็น EMPLOYEE / STAFF: ดูได้อย่างเดียวว่า รออนุมัติ
                       return (
                         <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-2">
                           <div className="flex items-center justify-between">
