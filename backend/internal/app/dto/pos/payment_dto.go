@@ -95,6 +95,7 @@ type PaymentHistoryItem struct {
 	OrderNumbers   string    `json:"order_numbers"` // รวมเลขบิล เช่น "INV-001, INV-002"
 	TotalReceived  float64   `json:"total_received"`
 	Status         string    `json:"status"` // completed, cancelled
+	ReceivedByID   uint      `json:"received_by_id"`
 	ReceivedByName string    `json:"received_by_name"`
 	PaymentType    string    `json:"payment_type,omitempty"`
 }

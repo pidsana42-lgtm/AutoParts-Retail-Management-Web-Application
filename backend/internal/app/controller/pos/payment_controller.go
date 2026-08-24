@@ -2,10 +2,12 @@ package pos
 
 import (
 	"net/http"
-	posDto "backend/internal/app/dto/pos"
-	posService "backend/internal/app/service/pos"
-
 	"strconv" //(String Conversion) ใช้แปลง string → uint
+	"strings"
+
+	posDto "backend/internal/app/dto/pos"
+	"backend/internal/app/enum"
+	posService "backend/internal/app/service/pos"
 
 	"github.com/gin-gonic/gin"
 )
@@ -138,7 +140,45 @@ func (ctrl *paymentController) GetPaymentHistory(c *gin.Context) {
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
 
-	res, err := ctrl.paymentService.GetPaymentHistory(search, startDate, endDate)
+	roleVal, exists := c.Get("role")
+	var isOwnerOrAdmin bool
+	if exists {
+		if roleStr, ok := roleVal.(string); ok {
+			if strings.EqualFold(roleStr, string(enum.RoleOwner)) || strings.EqualFold(roleStr, string(enum.RoleAdmin)) {
+				isOwnerOrAdmin = true
+			}
+		}
+	}
+
+	var employeeID uint = 0
+	if !isOwnerOrAdmin {
+		// ถ้าเป็นพนักงาน ให้เห็นเฉพาะรายการที่ตนเองเป็นผู้รับเงิน/บันทึกรายการ
+		userIDVal, exists := c.Get("user_id")
+		if exists {
+			switch v := userIDVal.(type) {
+			case float64:
+				employeeID = uint(v)
+			case uint:
+				employeeID = v
+			case int:
+				employeeID = uint(v)
+			case int64:
+				employeeID = uint(v)
+			}
+		} else {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลสิทธิ์ของผู้ใช้งานในระบบ"})
+			return
+		}
+	} else {
+		// ถ้าเป็น Owner/Admin และมีการระบุ employee_id มาใน query string
+		if empParam := c.Query("employee_id"); empParam != "" {
+			if empID, err := strconv.ParseUint(empParam, 10, 32); err == nil {
+				employeeID = uint(empID)
+			}
+		}
+	}
+
+	res, err := ctrl.paymentService.GetPaymentHistory(search, startDate, endDate, employeeID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -158,6 +198,38 @@ func (ctrl *paymentController) GetPaymentHistoryByID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	roleVal, exists := c.Get("role")
+	var isOwnerOrAdmin bool
+	if exists {
+		if roleStr, ok := roleVal.(string); ok {
+			if strings.EqualFold(roleStr, string(enum.RoleOwner)) || strings.EqualFold(roleStr, string(enum.RoleAdmin)) {
+				isOwnerOrAdmin = true
+			}
+		}
+	}
+
+	if !isOwnerOrAdmin {
+		userIDVal, exists := c.Get("user_id")
+		if exists {
+			var userID uint
+			switch v := userIDVal.(type) {
+			case float64:
+				userID = uint(v)
+			case uint:
+				userID = v
+			case int:
+				userID = uint(v)
+			case int64:
+				userID = uint(v)
+			}
+			if res.ReceivedByID > 0 && res.ReceivedByID != userID {
+				c.JSON(http.StatusForbidden, gin.H{"error": "คุณไม่มีสิทธิ์เข้าถึงรายการชำระเงินของพนักงานท่านอื่น"})
+				return
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, res)
 }
 

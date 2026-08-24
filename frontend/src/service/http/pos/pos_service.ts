@@ -125,9 +125,14 @@ export const posApiService = {
       .then((res) => res.data),
 
   /** ดึงประวัติการรับชำระเงินทั้งหมด */
-  getPaymentHistory: (): Promise<PaymentHistoryItem[]> =>
+  getPaymentHistory: (params?: {
+    search?: string;
+    start_date?: string;
+    end_date?: string;
+    employee_id?: number;
+  }): Promise<PaymentHistoryItem[]> =>
     apiClient
-      .get<PaymentHistoryItem[] | { data: PaymentHistoryItem[] }>("/pos/payments/history")
+      .get<PaymentHistoryItem[] | { data: PaymentHistoryItem[] }>("/pos/payments/history", { params })
       .then((res) => (Array.isArray(res.data) ? res.data : (res.data as any)?.data || [])),
 
   /** ยกเลิกสลิป/ใบเสร็จรับเงิน */

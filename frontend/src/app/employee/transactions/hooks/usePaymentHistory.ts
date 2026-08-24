@@ -34,7 +34,11 @@ export function usePaymentHistory() {
     try {
       setIsLoading(true);
       setError(null);
-      const data = await posApiService.getPaymentHistory();
+      const params: any = {};
+      if (employeeId) {
+        params.employee_id = Number(employeeId);
+      }
+      const data = await posApiService.getPaymentHistory(params);
       setItems(data);
     } catch (err: any) {
       console.error("Failed to fetch payment history:", err);
@@ -42,7 +46,7 @@ export function usePaymentHistory() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [employeeId]);
 
   useEffect(() => {
     fetchHistory();
@@ -63,8 +67,8 @@ export function usePaymentHistory() {
 
       let matchEmployee = true;
       if (employeeId) {
-        if ((item as any).received_by_id !== undefined) {
-          matchEmployee = String((item as any).received_by_id) === String(employeeId);
+        if (item.received_by_id !== undefined && item.received_by_id !== null) {
+          matchEmployee = String(item.received_by_id) === String(employeeId);
         } else {
           const targetEmp = employeeList.find((e) => e.value === String(employeeId));
           matchEmployee = targetEmp
