@@ -72,7 +72,7 @@ export default function Navbar(): React.JSX.Element {
       {/* ฝั่งขวา: แจ้งเตือน & โปรไฟล์ */}
       <div className="flex items-center space-x-4 shrink-0">
         <div className="relative" ref={notifRef}>
-          <div 
+          <div
             className="cursor-pointer text-[#4B5563] hover:text-gray-800 transition-colors p-1"
             onClick={() => setShowNotif(!showNotif)}
           >
@@ -90,14 +90,14 @@ export default function Navbar(): React.JSX.Element {
               <div className="px-4 py-2 flex items-center justify-between border-b border-gray-50">
                 <h3 className="text-sm font-bold text-gray-800">การแจ้งเตือน</h3>
                 <div className="flex gap-2">
-                  <button 
+                  <button
                     onClick={markAllAsRead}
                     className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center"
                     title="อ่านทั้งหมด"
                   >
                     <CheckCheck className="w-3 h-3 mr-0.5" /> อ่านทั้งหมด
                   </button>
-                  <button 
+                  <button
                     onClick={clearAll}
                     className="text-[10px] text-gray-400 hover:text-red-500 flex items-center ml-2"
                     title="ล้างทั้งหมด"
@@ -106,7 +106,7 @@ export default function Navbar(): React.JSX.Element {
                   </button>
                 </div>
               </div>
-              
+
               <div className="max-h-80 overflow-y-auto">
                 {notifications.length === 0 ? (
                   <div className="px-4 py-8 text-center text-gray-400 text-xs">
@@ -114,8 +114,8 @@ export default function Navbar(): React.JSX.Element {
                   </div>
                 ) : (
                   notifications.map(notif => (
-                    <div 
-                      key={notif.id} 
+                    <div
+                      key={notif.id}
                       className={`px-4 py-3 border-b border-gray-50 flex gap-3 cursor-pointer hover:bg-gray-50 transition-colors ${!notif.isRead ? 'bg-blue-50/30' : ''}`}
                       onClick={() => handleNotifClick(notif)}
                     >

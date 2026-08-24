@@ -21,6 +21,7 @@ export interface Product {
   sale_price?: number;
   retail_price?: number;
   barcode?: string;
+  thumbnail_url?: string;
 }
 
 export interface BillItemDTO {

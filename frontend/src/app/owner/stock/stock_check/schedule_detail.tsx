@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, Loader2, MapPin, Package, ClipboardCheck } from "lucide-react";
+import { ChevronLeft, Loader2, MapPin, Package, ClipboardCheck, Download, Printer, QrCode } from "lucide-react";
+import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 
 import Heading from "../../../../components/elements/heading";
 import Badge from "../../../../components/elements/badge";
@@ -102,6 +103,51 @@ function ScheduleDetailContent() {
     return map;
   }, [products]);
 
+  // QR Code พาไปหน้าติ๊กเช็คสต็อกของพนักงานโดยตรง — เป็นหน้าเปล่าไม่มี Sidebar/Navbar ของระบบรวม (/wms/check-stock-scan)
+  // แนบ access_token ไปด้วย ให้พนักงานสแกนแล้วเข้าหน้าเช็คสต็อกได้เลยโดยไม่ต้องล็อกอินในมือถือก่อน
+  const qrPayload =
+    id && schedule?.access_token
+      ? `${window.location.origin}/wms/check-stock-scan/${id}?token=${schedule.access_token}`
+      : "";
+
+  const handleDownloadQR = () => {
+    const canvas = document.getElementById("schedule-qr-canvas") as HTMLCanvasElement;
+    if (canvas) {
+      const url = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `check-stock-qr-${id}.png`;
+      a.click();
+    }
+  };
+
+  const handlePrintQR = () => {
+    const canvas = document.getElementById("schedule-qr-canvas") as HTMLCanvasElement;
+    if (canvas) {
+      const url = canvas.toDataURL("image/png");
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title></title>
+              <style>
+                @page { margin: 0; }
+                html, body { margin: 0; padding: 0; height: 100%; }
+                body { display: flex; justify-content: center; align-items: center; }
+                img { max-width: 100%; max-height: 100%; }
+              </style>
+            </head>
+            <body>
+              <img src="${url}" onload="window.print();window.close();" />
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      }
+    }
+  };
+
   const handleApprove = async () => {
     if (!id) return;
     const confirmed = window.confirm(
@@ -167,6 +213,10 @@ function ScheduleDetailContent() {
   const createdStr = schedule.created_at
     ? new Date(schedule.created_at).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" })
     : "-";
+
+  // งานเสร็จสิ้นแล้ว หรือหมดเวลาตรวจแล้ว -> QR ใช้สแกนต่อไม่ได้อีก จึงไม่ต้องโชว์ให้สับสน
+  const hasEnded = !!endObj && new Date() > endObj;
+  const qrExpired = schedule.status === "เสร็จสิ้น" || hasEnded;
 
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
@@ -332,6 +382,40 @@ function ScheduleDetailContent() {
 
         {/* Right: ข้อมูลตารางเช็ค */}
         <div className="flex w-full flex-col gap-6 lg:w-1/3">
+          {qrPayload && !qrExpired && (
+            <Card className="border-t-[5px] border-t-blue-600">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <QrCode className="h-4 w-4 text-blue-500" />
+                  QR Code สำหรับเช็คสต็อก
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col items-center gap-3">
+                <div className="rounded-md border border-slate-200 bg-white p-3">
+                  <QRCodeSVG value={qrPayload} size={140} level="M" />
+                </div>
+                {/* ตัวจริงไว้ export/print (ซ่อนไว้ ไม่ต้องโชว์ซ้ำ) */}
+                <div className="hidden">
+                  <QRCodeCanvas id="schedule-qr-canvas" value={qrPayload} size={320} level="H" includeMargin />
+                </div>
+                <p className="text-center text-xs text-slate-400">
+                  ให้พนักงานที่รับมอบหมายสแกนด้วยมือถือ จะเข้าหน้าติ๊กเช็คสต็อกของตารางนี้ทันที
+                  {schedule.user_full_name ? ` (${schedule.user_full_name})` : ""}
+                </p>
+                <div className="flex w-full gap-2">
+                  <Button onClick={handleDownloadQR} variant="outline" className="flex flex-1 items-center justify-center gap-1.5">
+                    <Download className="h-3.5 w-3.5" />
+                    ดาวน์โหลด
+                  </Button>
+                  <Button onClick={handlePrintQR} variant="outline" className="flex flex-1 items-center justify-center gap-1.5">
+                    <Printer className="h-3.5 w-3.5" />
+                    พิมพ์
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="border-t-[5px] border-t-red-800">
             <CardHeader>
               <CardTitle className="text-lg">ข้อมูลตารางเช็ค</CardTitle>
@@ -348,8 +432,8 @@ function ScheduleDetailContent() {
                 </div>
                 <div className="flex items-center justify-between border-t border-slate-100 pt-4">
                   <div>
-                    <p className="text-xs text-slate-400">จำนวนสินค้า</p>
-                    <p className="font-medium text-slate-700">{schedule.product_count} ชิ้น</p>
+                    <p className="text-xs text-slate-400">รายการสินค้า</p>
+                    <p className="font-medium text-slate-700">{schedule.product_count} รายการ</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-slate-400">พนักงานที่รับมอบหมาย</p>

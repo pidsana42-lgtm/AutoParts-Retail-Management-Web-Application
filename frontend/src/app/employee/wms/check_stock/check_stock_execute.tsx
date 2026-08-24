@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, Loader2, MapPin, Send } from "lucide-react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ChevronLeft, Loader2, MapPin, Send, QrCode, Download, Printer } from "lucide-react";
+import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 
 import Heading from "../../../../components/elements/heading";
 import Badge from "../../../../components/elements/badge";
@@ -34,9 +35,11 @@ function getStatusBadge(status: string) {
 
 function EmployeeCheckStockExecuteContent() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const urlToken = searchParams.get("token");
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, role } = useAuth() as any;
   const { products, zones, categories, loading: loadingOptions } = useCheckStockOptions();
 
   const [schedule, setSchedule] = useState<CheckStockSchedule | null>(null);
@@ -73,7 +76,60 @@ function EmployeeCheckStockExecuteContent() {
     };
   }, [id]);
 
-  const isOwnSchedule = !schedule || schedule.user_id === Number(user?.id);
+  // สแกน QR ที่มี token ประจำตารางนี้มาถูกต้อง -> ถือว่าเป็นพนักงานที่ได้รับมอบหมายเลย ไม่ต้องล็อกอินในมือถือก่อน
+  const isValidQrToken = !!schedule && !!urlToken && schedule.access_token === urlToken;
+  // เจ้าของร้าน/แอดมินเข้าดูได้ทุกตาราง ไม่ว่าจะมอบหมายให้ใครก็ตาม (ไม่ต้องพึ่ง token ก็เข้าได้)
+  const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
+  const isOwnerOrAdmin = currentRole === "OWNER" || currentRole === "ADMIN";
+  const isOwnSchedule = !schedule || isValidQrToken || isOwnerOrAdmin || schedule.user_id === Number(user?.id);
+  // ใช้ user_id ของตารางเป็นคนส่งเมื่อเข้าผ่าน QR token, ไม่งั้นใช้คนที่ล็อกอินอยู่ตามปกติ
+  const submitterUserId = isValidQrToken ? schedule?.user_id : Number(user?.id);
+
+  // ให้พนักงานเองเรียกดู QR ของงานนี้ได้ด้วย (ไม่ต้องรอเจ้าของร้านโชว์ให้) เผื่ออยากพิมพ์/ส่งต่อเอง
+  // ลิงก์ชี้ไปหน้าแบบไม่มี Sidebar/Navbar ของระบบรวม (/wms/check-stock-scan) เพราะคนสแกนอาจยังไม่ได้ล็อกอิน
+  // เอาไว้เข้าหน้าเช็คสินค้าของงานนี้ตรงๆ อย่างเดียว
+  const qrPayload =
+    id && schedule?.access_token
+      ? `${window.location.origin}/wms/check-stock-scan/${id}?token=${schedule.access_token}`
+      : "";
+
+  const handleDownloadQR = () => {
+    const canvas = document.getElementById("employee-schedule-qr-canvas") as HTMLCanvasElement;
+    if (canvas) {
+      const url = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `check-stock-qr-${id}.png`;
+      a.click();
+    }
+  };
+
+  const handlePrintQR = () => {
+    const canvas = document.getElementById("employee-schedule-qr-canvas") as HTMLCanvasElement;
+    if (canvas) {
+      const url = canvas.toDataURL("image/png");
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title></title>
+              <style>
+                @page { margin: 0; }
+                html, body { margin: 0; padding: 0; height: 100%; }
+                body { display: flex; justify-content: center; align-items: center; }
+                img { max-width: 100%; max-height: 100%; }
+              </style>
+            </head>
+            <body>
+              <img src="${url}" onload="window.print();window.close();" />
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      }
+    }
+  };
 
   // "รอดำเนินการ" หมายถึงยังไม่ถึงเวลาเริ่ม (backend คำนวณสถานะนี้แบบไดนามิกจากเวลาเริ่มอยู่แล้ว)
   // ส่วนเวลาสิ้นสุดต้องเช็คเองที่นี่ เพราะ backend ไม่มีการเปลี่ยนสถานะอัตโนมัติตอนหมดเขต
@@ -113,7 +169,7 @@ function EmployeeCheckStockExecuteContent() {
   const allCounted = scheduleProducts.length > 0 && countedItems === scheduleProducts.length;
 
   const handleSubmit = async () => {
-    if (!id || !schedule || !user) return;
+    if (!id || !schedule || !submitterUserId) return;
     if (!allCounted) {
       toast({ variant: "error", message: "กรุณากรอกจำนวนที่นับได้ให้ครบทุกรายการก่อนส่งตรวจสอบ" });
       return;
@@ -126,7 +182,6 @@ function EmployeeCheckStockExecuteContent() {
     try {
       setSubmitting(true);
       const now = new Date().toISOString();
-      const userId = Number(user.id);
 
       await Promise.all(
         scheduleProducts.map((p) =>
@@ -136,7 +191,7 @@ function EmployeeCheckStockExecuteContent() {
             reason: notes[p.ID] || "",
             adjustment_datetime: now,
             product_id: p.ID,
-            user_id: userId,
+            user_id: submitterUserId,
             check_stock_schedule_id: Number(id),
           })
         )
@@ -144,7 +199,14 @@ function EmployeeCheckStockExecuteContent() {
 
       await stockCheckService.updateStatus(Number(id), "รอตรวจสอบ");
       toast({ variant: "success", message: "ส่งผลนับสต็อกให้เจ้าของร้านตรวจสอบแล้ว" });
-      navigate("/employee/wms/check-stock");
+
+      if (isValidQrToken) {
+        // เข้ามาจากการสแกน QR (อาจยังไม่ได้ล็อกอิน) — โหลดตารางนี้ใหม่แล้วอยู่หน้าเดิม ไม่พาออกไปหน้ารายการที่ต้องล็อกอิน
+        const refreshed = await stockCheckService.getScheduleById(Number(id));
+        setSchedule(refreshed);
+      } else {
+        navigate("/employee/wms/check-stock");
+      }
     } catch (err: any) {
       toast({ variant: "error", message: err.response?.data?.error || "ไม่สามารถส่งผลนับสต็อกได้ กรุณาลองใหม่" });
     } finally {
@@ -194,13 +256,15 @@ function EmployeeCheckStockExecuteContent() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate("/employee/wms/check-stock")}
-            className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
-          >
-            <ChevronLeft size={24} className="text-slate-600" />
-          </button>
+          {!isValidQrToken && (
+            <button
+              type="button"
+              onClick={() => navigate("/employee/wms/check-stock")}
+              className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
+            >
+              <ChevronLeft size={24} className="text-slate-600" />
+            </button>
+          )}
           <div>
             <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
               {schedule.target_name || "ตรวจนับสต็อก"}
@@ -213,6 +277,40 @@ function EmployeeCheckStockExecuteContent() {
         </div>
         {getStatusBadge(schedule.status)}
       </div>
+
+      {/* ซ่อน QR เมื่อ: เข้ามาจากการสแกนอยู่แล้ว (ไม่ต้องโชว์ซ้ำในมือถือ), งานเสร็จสิ้นแล้ว, หรือหมดเวลาตรวจแล้ว (QR ใช้ต่อไม่ได้อีก) */}
+      {qrPayload && !isValidQrToken && schedule.status !== "เสร็จสิ้น" && !hasEnded && (
+        <Card className="border-t-[5px] border-t-blue-600">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <QrCode className="h-4 w-4 text-blue-500" />
+              QR Code สำหรับเช็คสต็อกงานนี้
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-3">
+            <div className="rounded-md border border-slate-200 bg-white p-3">
+              <QRCodeSVG value={qrPayload} size={140} level="M" />
+            </div>
+            {/* ตัวจริงไว้ export/print (ซ่อนไว้ ไม่ต้องโชว์ซ้ำ) */}
+            <div className="hidden">
+              <QRCodeCanvas id="employee-schedule-qr-canvas" value={qrPayload} size={320} level="H" includeMargin />
+            </div>
+            <p className="text-center text-xs text-slate-400">
+              ให้คนอื่นสแกนด้วยมือถือเพื่อเข้าหน้าเช็คสต็อกของงานนี้ได้เลย โดยไม่ต้องล็อกอิน
+            </p>
+            <div className="flex w-full gap-2 sm:max-w-xs">
+              <Button onClick={handleDownloadQR} variant="outline" className="flex flex-1 items-center justify-center gap-1.5">
+                <Download className="h-3.5 w-3.5" />
+                ดาวน์โหลด
+              </Button>
+              <Button onClick={handlePrintQR} variant="outline" className="flex flex-1 items-center justify-center gap-1.5">
+                <Printer className="h-3.5 w-3.5" />
+                พิมพ์
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {!isEditable && (
         <Card className="border-l-[5px] border-l-blue-500 bg-blue-50/40">

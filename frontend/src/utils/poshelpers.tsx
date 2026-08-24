@@ -1,5 +1,4 @@
 // src/utils/posHelpers.tsx
-import React from "react";
 import Badge from "../components/elements/badge";
 import type { SalesHistoryItemResponse } from "../interface/pos/sales_history_interface";
 

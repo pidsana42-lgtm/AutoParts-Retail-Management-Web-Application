@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
-  ChevronLeft, ChevronRight, Search, RefreshCw, 
+  ChevronRight, Search, RefreshCw, 
   Edit3, CheckCircle2, DollarSign, Tag
 } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';

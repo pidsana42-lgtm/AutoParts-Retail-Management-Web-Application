@@ -28,5 +28,9 @@ type CheckStockSchedule struct {
 	UserID *uint `json:"user_id"`
 	User   *User `gorm:"foreignKey:UserID" json:"user"`
 
+	// AccessToken: รหัสเฉพาะของตารางนี้ ผูกไปกับ QR Code ให้พนักงานที่ได้รับมอบหมายสแกนแล้วเข้าหน้าเช็คสต็อกได้เลย
+	// โดยไม่ต้องล็อกอินในมือถือก่อน (สร้างครั้งเดียวตอนสร้างตาราง ใช้ซ้ำได้ตลอดอายุของตารางนี้)
+	AccessToken string `gorm:"uniqueIndex;size:64" json:"access_token"`
+
 	CheckStocks []CheckStock `gorm:"foreignKey:CheckStockScheduleID" json:"check_stocks"`
 }
