@@ -824,9 +824,13 @@ export default function PosPage(): React.JSX.Element {
                       </div>
 
                       {/* ข้อความใต้ QR Code */}
-                      <div className="text-center space-y-0.5">
-                        <Text variant="small" className="font-medium text-[#1C1B1B] leading-tight block">เจเจ อะไหล่ยนต์</Text>
-                        <Text variant="xs" className="font-normal text-[#6B7280] leading-tight block">ชื่อบัญชี เจเจ อะไหล่ยนต์</Text>
+                      <div className="text-center space-y-0.5 max-w-[220px]">
+                        <Text variant="small" className="font-medium text-[#1C1B1B] leading-tight block mb-0">เจเจ อะไหล่ยนต์</Text>
+                        <Text variant="xs" className="font-normal text-[#6B7280] leading-tight block mb-0">ชื่อบัญชี เจเจ อะไหล่ยนต์</Text>
+                        {/* Ref No. ด้านล่างสุด */}
+                        {paymentData.qrCodeData?.refNo && (
+                          <span className="text-[10px] text-gray-400 font-mono block truncate">Ref No: {paymentData.qrCodeData.refNo}</span>
+                        )}
                       </div>
                     </div>
 
@@ -866,14 +870,6 @@ export default function PosPage(): React.JSX.Element {
                       </div>
                     </div>
                   </div>
-
-                  {/* Ref No. ด้านล่างสุด */}
-                  {paymentData.qrCodeData?.refNo && (
-                    <div className="mt-5 pt-3 border-t border-gray-100 flex justify-between items-center">
-                      <Text variant="xs">PromptPay Reference</Text>
-                      <Text variant="xs">Ref No: <span className="text-[#1C1B1B] font-semibold">{paymentData.qrCodeData.refNo}</span></Text>
-                    </div>
-                  )}
                 </div>
                 )}
 
