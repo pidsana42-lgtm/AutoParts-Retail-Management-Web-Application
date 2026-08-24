@@ -294,13 +294,15 @@ export default function HomeView({
                       >
                         <Eye size={20} />
                       </button>
-                      <button
-                        onClick={() => handleDeleteBill(row.id)}
-                        className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
-                        title="ลบบิล"
-                      >
-                        <Trash2 size={20} />
-                      </button>
+                      {(!isEmployee || needsApproval(row)) && (
+                        <button
+                          onClick={() => handleDeleteBill(row.id)}
+                          className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                          title={isEmployee ? "ลบบิล (เฉพาะบิลที่ยังไม่อนุมัติ)" : "ลบบิล"}
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

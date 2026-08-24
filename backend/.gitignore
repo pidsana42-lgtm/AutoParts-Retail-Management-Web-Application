@@ -57,3 +57,6 @@ uploads/
 # Service Account & Keys
 model/service_account.json
 service_account.json
+.DS_Store
+
+backend/model/service_account.json
