@@ -520,14 +520,38 @@ func (s *paymentService) SettleCustomerBills(req posDto.SettleBillsRequest) (*po
 		return nil, err
 	}
 
-	return &posDto.SettleBillsResponse{
-		ReceiptID:         lastRepaymentID,
-		ReceiptNumber:     lastReceiptNo,
-		CustomerID:        req.CustomerID,
-		TotalReceived:     req.TotalReceived,
-		SettledBillsCount: len(req.Allocations),
-		PaidAt:            now,
-	}, nil
+    createdRepayment, err := s.paymentRepo.GetRepaymentByID(lastRepaymentID)
+    
+    staffName := ""
+    customerName := ""
+
+    if err == nil && createdRepayment != nil {
+        // ดึงชื่อพนักงานผู้รับเงิน
+        if createdRepayment.RecordedBy.FirstName != "" || createdRepayment.RecordedBy.LastName != "" {
+            staffName = strings.TrimSpace(createdRepayment.RecordedBy.FirstName + " " + createdRepayment.RecordedBy.LastName)
+        } else {
+            staffName = createdRepayment.RecordedBy.Username
+        }
+
+        // ดึงชื่อลูกค้า
+        if createdRepayment.Order.Customer.ID != 0 && createdRepayment.Order.Customer.CustomerName != "" {
+            customerName = createdRepayment.Order.Customer.CustomerName
+        } else if createdRepayment.Order.CustomerNameTemp != nil {
+            customerName = *createdRepayment.Order.CustomerNameTemp
+        }
+    }
+
+    return &posDto.SettleBillsResponse{
+        ReceiptID:         lastRepaymentID,
+        ReceiptNumber:     lastReceiptNo,
+        CustomerID:        req.CustomerID,
+        CustomerName:      customerName,
+        TotalReceived:     req.TotalReceived,
+        SettledBillsCount: len(req.Allocations),
+        ReceivedByID:      req.ReceivedByID,
+        ReceivedByName:    staffName, 
+        PaidAt:            now,
+    }, nil
 }
 
 // -------------------------------------------------------------

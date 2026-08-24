@@ -231,30 +231,14 @@ export default function TransactionHistoryPage() {
               {/* Header Table */}
               <TableHeader className="bg-[#F6F3F2] rounded-none border-b border-gray-200 text-[11px] text-[#6B7280] uppercase tracking-wider">
                 <TableRow>
-                  <TableHead className="py-3 px-3 w-[14%]">
-                    หมายเลขคำสั่งซื้อ
-                  </TableHead>
-                  <TableHead className="py-3 px-3 w-[12%]">
-                    วันที่ทำรายการ
-                  </TableHead>
-                  <TableHead className="py-3 px-3 w-[20%]">
-                    ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท
-                  </TableHead>
-                  <TableHead className="py-3  text-left px-3 w-[12%]">
-                    พนักงานขาย
-                  </TableHead>
-                  <TableHead className="py-3 px-3 text-right w-[10%]">
-                    จำนวนเงิน
-                  </TableHead>
-                  <TableHead className="py-3 px-3 text-center w-[12%]">
-                    การชำระเงิน
-                  </TableHead>
-                  <TableHead className="py-3 px-3 text-center w-[12%]">
-                    สถานะ
-                  </TableHead>
-                  <TableHead className="py-3 px-3 text-center w-[8%]">
-                    จัดการ
-                  </TableHead>
+                  <TableHead className="py-3 px-3 w-[14%]">หมายเลขคำสั่งซื้อ</TableHead>
+                  <TableHead className="py-3 px-3 w-[12%]">วันที่ทำรายการ</TableHead>
+                  <TableHead className="py-3 px-3 w-[20%]">ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท</TableHead>
+                  <TableHead className="py-3  text-left px-3 w-[12%]">พนักงานขาย</TableHead>
+                  <TableHead className="py-3 px-3 text-right w-[10%]">จำนวนเงิน</TableHead>
+                  <TableHead className="py-3 px-3 text-center w-[12%]">การชำระเงิน</TableHead>
+                  <TableHead className="py-3 px-3 text-center w-[12%]">สถานะ</TableHead>
+                  <TableHead className="py-3 px-3 text-center w-[8%]">จัดการ</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -264,7 +248,7 @@ export default function TransactionHistoryPage() {
                   <TableRow>
                     <TableCell colSpan={8} className="py-12 text-center">
                       <Text variant="small" className="text-gray-500 mb-0">
-                        กำลังโหลดข้อมูล...
+                        กำลังโหลดข้อมูลประวัติการขาย...
                       </Text>
                     </TableCell>
                   </TableRow>
