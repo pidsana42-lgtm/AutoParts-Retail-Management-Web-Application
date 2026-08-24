@@ -54,4 +54,6 @@ uploads/
 *.xls
 
 # System Files
-.DS_Store
+# Service Account & Keys
+model/service_account.json
+service_account.json
