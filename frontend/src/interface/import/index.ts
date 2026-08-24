@@ -38,6 +38,8 @@ export interface Product {
   retail_price?: number;
   barcode?: string;
   image?: string;
+  thumbnail_url?: string;
+  image_url?: string;
 }
 
 export interface BillItemDTO {
