@@ -2,14 +2,24 @@
 import Badge from "../components/elements/badge";
 import type { SalesHistoryItemResponse } from "../interface/pos/sales_history_interface";
 
+/** Type กลางสำหรับดึงชื่อลูกค้า */
+export type CustomerNameEntity = {
+  customer_name?: string | null;
+  customer_name_temp?: string | null;
+};
+
 /** ฟังก์ชันช่วยดึงชื่อลูกค้าที่ถูกต้องในการแสดงผล */
-export const getDisplayCustomerName = (item: SalesHistoryItemResponse): string => {
+export const getDisplayCustomerName = (item?: CustomerNameEntity | null): string => {
+  if (!item) return "ลูกค้าทั่วไป";
+
   if (item.customer_name && item.customer_name.trim() !== "") {
-    return item.customer_name;
+    return item.customer_name.trim();
   }
+
   if (item.customer_name_temp && item.customer_name_temp.trim() !== "") {
-    return `${item.customer_name_temp} (ขาจร)`;
+    return `${item.customer_name_temp.trim()} (ขาจร)`;
   }
+
   return "ลูกค้าทั่วไป";
 };
 
