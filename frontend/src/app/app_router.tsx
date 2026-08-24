@@ -45,7 +45,7 @@ import SalesCancellationHistory from './employee/pos/sales_cancellation_history'
 import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_history';
 import SettleBills from './employee/transactions/settle_bills';
 import PaymentHistory from './employee/transactions/payment_history';
-import OwnerPaymentHistory from './owner/transactions/payment_history';
+//import OwnerPaymentHistory from './owner/transactions/payment_history';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -178,7 +178,7 @@ export default function AppRouter(): React.JSX.Element {
           isAdminOrOwner ? <SettleBills /> : <Navigate to={firstMenuPath} replace />
         } />
         <Route path="/owner/transactions/payment-history" element={
-          isAdminOrOwner ? <OwnerPaymentHistory /> : <Navigate to={firstMenuPath} replace />
+          isAdminOrOwner ? <PaymentHistory /> : <Navigate to={firstMenuPath} replace />
         } />
         {/* --------------------------------------------------- */}
 

@@ -172,18 +172,21 @@ export const getMenuByRole = (role: string): MenuItem[] => {
             };
           }
 
-          if (menu.path.includes("/transactions/payment-history")) {
-            updatedMenu.path = isOwnerOrAdmin
-              ? "/owner/transactions/payment-history"
-              : "/employee/transactions/payment-history";
-          }
-
           if (sub.path.includes("sales_history")) {
             return {
               ...sub,
               path: isOwnerOrAdmin
                 ? "/owner/pos/sales_history"
                 : "/employee/pos/sales_history",
+            };
+          }
+
+          if (sub.path.includes("payment-history")) {
+            return {
+              ...sub,
+              path: isOwnerOrAdmin
+                ? "/owner/transactions/payment-history"
+                : "/employee/transactions/payment-history",
             };
           }
 
