@@ -94,6 +94,7 @@ type PaymentHistoryItem struct {
 	TotalReceived   float64   `json:"total_received"`
 	Status          string    `json:"status"` // completed, cancelled
 	ReceivedByName  string    `json:"received_by_name"`
+	PaymentType     string    `json:"payment_type,omitempty"`
 }
 
 // DTO สำหรับยกเลิกการชำระเงิน (Cancel Payment)

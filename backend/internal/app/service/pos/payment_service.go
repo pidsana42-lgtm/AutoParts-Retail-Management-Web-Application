@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -533,12 +534,21 @@ func (s *paymentService) SettleCustomerBills(req posDto.SettleBillsRequest) (*po
 // 4. ประวัติการรับชำระเงิน (Payment History)
 // -------------------------------------------------------------
 func (s *paymentService) GetPaymentHistory(search, startDate, endDate string) ([]posDto.PaymentHistoryItem, error) {
+	// 1. ดึงประวัติจาก payment_repayments (การเคลียร์บิลเงินเชื่อ)
 	repayments, err := s.paymentRepo.GetRepaymentHistory(search, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
 
+	// 2. ดึงประวัติจาก payments (การชำระเงินสด / QR Code หน้าร้าน)
+	payments, err := s.paymentRepo.GetDirectPaymentHistory(search, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
 	var list []posDto.PaymentHistoryItem
+
+	// Map Repayments
 	for _, r := range repayments {
 		paidTime := r.CreatedAt
 		if r.PaidAt != nil {
@@ -569,46 +579,145 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string) ([
 			TotalReceived:  r.AmountPaid,
 			Status:         r.Status,
 			ReceivedByName: recName,
+			PaymentType:    "repayment",
 		})
 	}
+
+	// Map Direct Payments
+	for _, p := range payments {
+		paidTime := p.CreatedAt
+		if p.PaidAt != nil {
+			paidTime = *p.PaidAt
+		}
+
+		custName := ""
+		if p.Order.Customer.ID != 0 && p.Order.Customer.CustomerName != "" {
+			custName = p.Order.Customer.CustomerName
+		} else if p.Order.CustomerNameTemp != nil {
+			custName = *p.Order.CustomerNameTemp
+		}
+
+		recName := ""
+		if p.ReceivedBy.FirstName != "" || p.ReceivedBy.LastName != "" {
+			recName = strings.TrimSpace(p.ReceivedBy.FirstName + " " + p.ReceivedBy.LastName)
+		} else {
+			recName = p.ReceivedBy.Username
+		}
+
+		receiptNo := p.ReferenceNumber
+		if receiptNo == "" {
+			receiptNo = fmt.Sprintf("PAY-%s", p.Order.OrderNumber)
+		}
+
+		status := "completed"
+		if p.Order.Status == "cancelled" {
+			status = "cancelled"
+		}
+
+		list = append(list, posDto.PaymentHistoryItem{
+			ReceiptID:      p.ID,
+			ReceiptNumber:  receiptNo,
+			PaidAt:         paidTime,
+			CustomerName:   custName,
+			PaymentMethod:  p.PaymentMethod.MethodName,
+			OrderNumbers:   p.Order.OrderNumber,
+			TotalReceived:  p.Amount,
+			Status:         status,
+			ReceivedByName: recName,
+			PaymentType:    "payment",
+		})
+	}
+
+	// เรียงลำดับประวัติการชำระเงินตามเวลาล่าสุด (PaidAt Descending)
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].PaidAt.After(list[j].PaidAt)
+	})
+
 	return list, nil
 }
 
 func (s *paymentService) GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentHistoryItem, error) {
 	r, err := s.paymentRepo.GetRepaymentByID(receiptID)
-	if err != nil {
-		return nil, err
+	if err == nil && r != nil && r.ID != 0 {
+		paidTime := r.CreatedAt
+		if r.PaidAt != nil {
+			paidTime = *r.PaidAt
+		}
+
+		custName := ""
+		if r.Order.Customer.ID != 0 && r.Order.Customer.CustomerName != "" {
+			custName = r.Order.Customer.CustomerName
+		} else if r.Order.CustomerNameTemp != nil {
+			custName = *r.Order.CustomerNameTemp
+		}
+
+		recName := ""
+		if r.RecordedBy.FirstName != "" || r.RecordedBy.LastName != "" {
+			recName = strings.TrimSpace(r.RecordedBy.FirstName + " " + r.RecordedBy.LastName)
+		} else {
+			recName = r.RecordedBy.Username
+		}
+
+		return &posDto.PaymentHistoryItem{
+			ReceiptID:      r.ID,
+			ReceiptNumber:  r.ReceiptNumber,
+			PaidAt:         paidTime,
+			CustomerName:   custName,
+			PaymentMethod:  r.PaymentMethod.MethodName,
+			OrderNumbers:   r.Order.OrderNumber,
+			TotalReceived:  r.AmountPaid,
+			Status:         r.Status,
+			ReceivedByName: recName,
+			PaymentType:    "repayment",
+		}, nil
 	}
 
-	paidTime := r.CreatedAt
-	if r.PaidAt != nil {
-		paidTime = *r.PaidAt
+	// ถ้าไม่พบใน PaymentRepayment ให้ค้นหาใน Payment (Direct Payment)
+	p, err := s.paymentRepo.GetPaymentWithDetailsByID(receiptID)
+	if err != nil {
+		return nil, fmt.Errorf("ไม่พบข้อมูลการชำระเงินรหัส %d", receiptID)
+	}
+
+	paidTime := p.CreatedAt
+	if p.PaidAt != nil {
+		paidTime = *p.PaidAt
 	}
 
 	custName := ""
-	if r.Order.Customer.ID != 0 && r.Order.Customer.CustomerName != "" {
-		custName = r.Order.Customer.CustomerName
-	} else if r.Order.CustomerNameTemp != nil {
-		custName = *r.Order.CustomerNameTemp
+	if p.Order.Customer.ID != 0 && p.Order.Customer.CustomerName != "" {
+		custName = p.Order.Customer.CustomerName
+	} else if p.Order.CustomerNameTemp != nil {
+		custName = *p.Order.CustomerNameTemp
 	}
 
 	recName := ""
-	if r.RecordedBy.FirstName != "" || r.RecordedBy.LastName != "" {
-		recName = strings.TrimSpace(r.RecordedBy.FirstName + " " + r.RecordedBy.LastName)
+	if p.ReceivedBy.FirstName != "" || p.ReceivedBy.LastName != "" {
+		recName = strings.TrimSpace(p.ReceivedBy.FirstName + " " + p.ReceivedBy.LastName)
 	} else {
-		recName = r.RecordedBy.Username
+		recName = p.ReceivedBy.Username
+	}
+
+	receiptNo := p.ReferenceNumber
+	if receiptNo == "" {
+		receiptNo = fmt.Sprintf("PAY-%s", p.Order.OrderNumber)
+	}
+
+	status := "completed"
+	if p.Order.Status == "cancelled" {
+		status = "cancelled"
 	}
 
 	return &posDto.PaymentHistoryItem{
-		ReceiptID:      r.ID,
-		ReceiptNumber:  r.ReceiptNumber,
+		ReceiptID:      p.ID,
+		ReceiptNumber:  receiptNo,
 		PaidAt:         paidTime,
 		CustomerName:   custName,
-		PaymentMethod:  r.PaymentMethod.MethodName,
-		OrderNumbers:   r.Order.OrderNumber,
-		TotalReceived:  r.AmountPaid,
-		Status:         r.Status,
+		PaymentMethod:  p.PaymentMethod.MethodName,
+		OrderNumbers:   p.Order.OrderNumber,
+		TotalReceived:  p.Amount,
+		Status:         status,
 		ReceivedByName: recName,
+		PaymentType:    "payment",
 	}, nil
 }
 
