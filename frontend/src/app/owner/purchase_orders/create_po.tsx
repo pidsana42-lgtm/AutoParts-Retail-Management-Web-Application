@@ -1,6 +1,6 @@
 // React Libraries
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Building2, ChartNoAxesCombined, Info, ScanBarcode, ShoppingBag, ChevronRight, ShoppingCart, Plus, Minus, Trash2, MessageSquareMore} from 'lucide-react';
 // Components
 import Heading from '../../../components/elements/heading';
@@ -25,6 +25,7 @@ import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 const CreatePurchaseOrders: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const basePath = usePathBasePrefix();
     // States ของ API
     const [item, setItem] = useState<LocalPOItem[]>([]);
@@ -84,27 +85,21 @@ const CreatePurchaseOrders: React.FC = () => {
         fetchSuppliers();
     }, []);
 
-    // รอแก้เป็นส่งมาจากหน้า stock alerts
-    // useEffect(() => {
-    //     const fetchAlertsAutomatically = async () => {
-    //         // 1. ถ้ายังไม่ได้เลือกบริษัท หรือเคลียร์ค่าทิ้ง ให้หยุดการทำงาน
-    //         if (!listsSupplier) return;
+    // Pre-fill จาก stock alert modal ของ dashboard (navigate state)
+    useEffect(() => {
+        const state = location.state as {
+            supplierId?: string;
+            preselectedItems?: LocalPOItem[];
+        } | null;
+        if (!state?.supplierId) return;
 
-    //         try {
-    //             // 2. ไปดึงข้อมูลจาก API
-    //             const alertItems = await poService.getStockAlertsBySupplier(listsSupplier);
-                
-    //             // 3. เอาข้อมูลมาใส่ตาราง => ใช้ setItem(alertItems) เพื่อล้างของเก่าแล้วใส่ของบริษัทใหม่
-    //             // หรือใช้ setItem(prev => [...prev, ...alertItems]) ถ้าอยากให้ต่อท้ายของเดิม
-    //             setItem(alertItems); 
-                
-    //         } catch (error) {
-    //             console.error("โหลด Stock Alert อัตโนมัติล้มเหลว:", error);
-    //         }
-    //     };
-
-    //     fetchAlertsAutomatically();
-    // }, [listsSupplier]);
+        setlistsSupplier(state.supplierId);
+        if (state.preselectedItems && state.preselectedItems.length > 0) {
+            setItem(state.preselectedItems);
+        }
+        // ล้าง state ออกจาก history เพื่อกัน re-fill เมื่อ navigate back
+        window.history.replaceState({}, '');
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ดึงข้อมูลคาดการณ์ระยะเวลาจัดส่งของ Supplier ที่เลือก
     useEffect(() => {
@@ -360,7 +355,7 @@ const CreatePurchaseOrders: React.FC = () => {
                         </CardContent>
                     </Card>
                     {listsSupplier && (
-                        <div className='bg-[#22252a] text-white rounded-md p-6 h-fit shadow-sm relative overflow-hidden'>
+                        <div className='bg-[#22252a] text-white rounded-none p-6 h-fit shadow-sm relative overflow-hidden'>
                             <div className='absolute right-4 top-4 opacity-5 pointer-events-none'>
                                 <ChartNoAxesCombined size={48} />
                             </div>
@@ -443,7 +438,7 @@ const CreatePurchaseOrders: React.FC = () => {
                             
                             {/* เพิ่ม Dropdown แสดงผลลัพธ์การค้นหา */}
                             {searchResults.length > 0 && (
-                                <div className='absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg'>
+                                <div className='absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-none shadow-lg'>
                                     {searchResults.map((product, index) => (
                                         <div 
                                             key={product.id}
@@ -453,7 +448,14 @@ const CreatePurchaseOrders: React.FC = () => {
                                             onMouseEnter={() => setHighlightedIndex(index)}
                                             onClick={() => handleSelectProduct(product)}
                                         >
-                                            {product.name} (รหัส: {product.code})
+                                            <div className='flex flex-row font-normal text-black items-baseline justify-between'>
+                                                <div>{product.name}</div>
+                                                <span className='text-red-600'>฿{product.price.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            </div>
+                                            <div className='flex flex-row items-baseline justify-between text-gray-500 text-xs font-light'>
+                                                <span>SKU: {product.code}</span>
+                                                <span>คงเหลือ: {product.stock_qty}</span>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

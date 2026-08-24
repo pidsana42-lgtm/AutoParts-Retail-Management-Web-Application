@@ -11,6 +11,7 @@ type StockAlertRepository interface {
 	GetByID(id uint) (*entity.StockAlert, error)
 	List(isResolved string) ([]entity.StockAlert, error)
 	Update(sa *entity.StockAlert) error
+	ResolveByIDs(ids []uint) error
 }
 
 type stockAlertRepository struct {
@@ -36,7 +37,15 @@ func (r *stockAlertRepository) GetByID(id uint) (*entity.StockAlert, error) {
 
 func (r *stockAlertRepository) List(isResolved string) ([]entity.StockAlert, error) {
 	var list []entity.StockAlert
-	query := r.db.Preload("Product")
+	query := r.db.
+		Preload("Product").
+		Preload("Product.Unit").
+		Preload("Product.Inventories", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, product_id, supplier_id").Order("id desc")
+		}).
+		Preload("Product.Inventories.Supplier", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, supplier_name")
+		})
 	if isResolved != "" {
 		query = query.Where("is_resolved = ?", isResolved)
 	}
@@ -45,4 +54,13 @@ func (r *stockAlertRepository) List(isResolved string) ([]entity.StockAlert, err
 
 func (r *stockAlertRepository) Update(sa *entity.StockAlert) error {
 	return r.db.Save(sa).Error
+}
+
+func (r *stockAlertRepository) ResolveByIDs(ids []uint) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.db.Model(&entity.StockAlert{}).
+		Where("id IN ?", ids).
+		Update("is_resolved", "true").Error
 }
