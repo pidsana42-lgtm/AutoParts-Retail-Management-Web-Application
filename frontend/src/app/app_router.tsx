@@ -4,6 +4,7 @@ import MainLayout from '../components/layer/main_layout';
 import Login from './login/Login';
 import MainDashboard from './owner/dashboard/dashboard'; 
 import SaleDashboard from './owner/dashboard/saledashboard';
+import DebtDashboard from './owner/dashboard/debtdashboard';
 import Pos from './employee/pos/pos'; 
 import SalesHistory from './employee/pos/sales_history';
 import { getMenuByRole } from '../config/menu'; 
@@ -83,6 +84,9 @@ export default function AppRouter(): React.JSX.Element {
         } />
         <Route path="/owner/dashboard/salesdashboard" element={
           isAdminOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/dashboard/debtdashboard" element={
+          isAdminOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/owner/storeconfig" element={<StoreConfig />} />
@@ -186,6 +190,9 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/employee/dashboard/salesdashboard" element={
           !isAdminOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
+        <Route path="/employee/dashboard/debtdashboard" element={
+          !isAdminOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
+        } />
 
         <Route path="/employee/orders" element={<PurchaseOrders />} />
         <Route path="/employee/new-orders" element={<CreatePurchaseOrders />} />
@@ -218,6 +225,10 @@ export default function AppRouter(): React.JSX.Element {
       {/* หน้ามือถือสำหรับส่งรูปบิล — ไม่ต้อง login */}
       <Route path="/mobile-scan" element={<MobileScanPage />} />
       <Route path="/product/:id" element={<PublicProductPage />} />
+
+      {/* มือถือสแกน QR ของตารางเช็คสต็อกมาที่นี่ — ไม่ครอบด้วย MainLayout (ไม่มี Sidebar/Navbar ของระบบรวม)
+          โชว์ตรงหน้าเช็คสินค้าของงานนั้นเลย ใช้ component เดียวกับหน้าในระบบ (ตัว component เองเช็ค token ให้เข้าได้โดยไม่ต้องล็อกอิน) */}
+      <Route path="/wms/check-stock-scan/:id" element={<EmployeeCheckStockExecutePage />} />
 
       {/* ถ้าพิมพ์ URL มั่ว ให้ดีดกลับหน้าล็อกอิน */}
       <Route path="*" element={<Navigate to="/login" replace />} />

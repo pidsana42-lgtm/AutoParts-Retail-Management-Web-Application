@@ -3,7 +3,9 @@ package dashboard
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -22,6 +24,9 @@ type DashboardRepository interface {
 	GetLiveSummaryForDate(ctx context.Context, date time.Time) (*dashEntity.DailySummary, error)
 	FinalizeDailySummary(ctx context.Context, date time.Time) error
 	GetStockHealth(ctx context.Context) (*dashDto.StockHealthDTO, error)
+	GetTopSellers(ctx context.Context, start, end time.Time, limit int) ([]dashDto.TopSellerDTO, error)
+	GetDebtAging(ctx context.Context, query dashDto.DebtAgingQuery) ([]dashDto.DebtAgingItemDTO, int64, error)
+	GetTotalDebtors(ctx context.Context) (int64, error)
 }
 
 type dashboardRepository struct {
@@ -233,12 +238,12 @@ func (r *dashboardRepository) calculateSummaryForDate(ctx context.Context, date 
 			typeName = c.TypeName.String
 		}
 		switch typeName {
-		case "ลูกค้าอู่":
+		case "GARAGE":
 			summary.GarageCustomerAmount = c.Amount
-		case "ลูกค้าบริษัท":
+		case "WHOLESALE":
 			summary.CorporateCustomerAmount = c.Amount
 		default:
-			// CustomerID = nil (ว่าง) หรือ "ลูกค้าทั่วไป" ถือเป็น walk-in ทั้งคู่
+			// GENERAL หรือ CustomerID = nil (ว่าง) ถือเป็น walk-in ทั้งคู่
 			summary.WalkinCustomerAmount += c.Amount
 		}
 	}
@@ -345,31 +350,204 @@ func (r *dashboardRepository) GetStockHealth(ctx context.Context) (*dashDto.Stoc
 	}, nil
 }
 
+func (r *dashboardRepository) GetTopSellers(ctx context.Context, start, end time.Time, limit int) ([]dashDto.TopSellerDTO, error) {
+	type row struct {
+		ID           uint
+		ProductName  string
+		Category     string
+		TotalSold    int
+		TotalRevenue float64
+	}
+	var rows []row
+	err := r.db.WithContext(ctx).
+		Table("sale_order_items").
+		Select(`
+			products.id AS id,
+			products.product_name AS product_name,
+			COALESCE(categories.category_name, '-') AS category,
+			COALESCE(SUM(sale_order_items.qty), 0) AS total_sold,
+			COALESCE(SUM(sale_order_items.unit_price * sale_order_items.qty), 0) AS total_revenue
+		`).
+		Joins("JOIN sale_orders ON sale_orders.id = sale_order_items.order_id AND sale_orders.deleted_at IS NULL").
+		Joins("JOIN products ON products.id = sale_order_items.product_id AND products.deleted_at IS NULL").
+		Joins("LEFT JOIN categories ON categories.id = products.category_id AND categories.deleted_at IS NULL").
+		Where("sale_order_items.deleted_at IS NULL AND sale_orders.order_date >= ? AND sale_orders.order_date < ? AND sale_orders.status IN ?", start, end, revenueCountedStatuses).
+		Group("products.id, products.product_name, categories.category_name").
+		Order("total_sold DESC").
+		Limit(limit).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make([]dashDto.TopSellerDTO, len(rows))
+	for i, r := range rows {
+		result[i] = dashDto.TopSellerDTO{
+			ID:           r.ID,
+			ProductName:  r.ProductName,
+			Category:     r.Category,
+			TotalSold:    r.TotalSold,
+			TotalRevenue: r.TotalRevenue,
+		}
+	}
+	return result, nil
+}
+
+// GetDebtAging คืนรายชื่อลูกหนี้ที่ยังค้างชำระ พร้อม pagination
+func (r *dashboardRepository) GetDebtAging(ctx context.Context, query dashDto.DebtAgingQuery) ([]dashDto.DebtAgingItemDTO, int64, error) {
+	page := query.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := query.PageSize
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+	offset := (page - 1) * pageSize
+
+	baseWhere := `
+		so.deleted_at IS NULL
+		AND so.balance_due > 0
+		AND so.customer_id IS NOT NULL
+		AND so.status NOT IN ('` + string(enum.OrderCancelled) + `','` + string(enum.OrderRefunded) + `')`
+
+	var dateArgs []interface{}
+	dateFilter := ""
+	if query.StartDate != "" {
+		dateFilter += " AND so.order_date >= ?"
+		dateArgs = append(dateArgs, query.StartDate)
+	}
+	if query.EndDate != "" {
+		dateFilter += " AND so.order_date < (? ::date + interval '1 day')"
+		dateArgs = append(dateArgs, query.EndDate)
+	}
+
+	// Build HAVING clause for status and age-day filters (aggregates — cannot go in WHERE)
+	statusExpr := `CASE WHEN BOOL_OR(so.due_date IS NOT NULL AND so.due_date < NOW()) THEN 'เกินกำหนด' ELSE 'ทยอยชำระ' END`
+	ageExpr    := `(CURRENT_DATE - MIN(so.order_date::DATE))`
+
+	var havingParts []string
+	var havingArgs  []interface{}
+	if query.Status != "" {
+		havingParts = append(havingParts, statusExpr+" = ?")
+		havingArgs  = append(havingArgs, query.Status)
+	}
+	if query.MinAgeDays > 0 {
+		havingParts = append(havingParts, ageExpr+" >= ?")
+		havingArgs  = append(havingArgs, query.MinAgeDays)
+	}
+	if query.MaxAgeDays > 0 {
+		havingParts = append(havingParts, ageExpr+" <= ?")
+		havingArgs  = append(havingArgs, query.MaxAgeDays)
+	}
+	havingSQL := ""
+	if len(havingParts) > 0 {
+		havingSQL = " HAVING " + strings.Join(havingParts, " AND ")
+	}
+
+	// count — wrap grouped subquery so HAVING is applied before counting
+	countSQL := fmt.Sprintf(`
+		SELECT COUNT(*) FROM (
+			SELECT c.id
+			FROM sale_orders so
+			JOIN customers c ON c.id = so.customer_id AND c.deleted_at IS NULL
+			WHERE %s%s
+			GROUP BY c.id, c.customer_name
+			%s
+		) sub`, baseWhere, dateFilter, havingSQL)
+	countArgs := append(dateArgs, havingArgs...)
+	var total int64
+	if err := r.db.WithContext(ctx).Raw(countSQL, countArgs...).Scan(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// data
+	dataSQL := fmt.Sprintf(`
+		SELECT
+			LPAD(CAST(c.id AS VARCHAR), 5, '0') AS customer_code,
+			c.customer_name,
+			SUM(so.total_amount) AS total_debt,
+			SUM(so.balance_due)  AS remaining_balance,
+			TO_CHAR(MAX(so.order_date), 'YYYY-MM-DD') AS last_purchase_date,
+			(CURRENT_DATE - MIN(so.order_date::DATE)) AS age_days,
+			CASE WHEN BOOL_OR(so.due_date IS NOT NULL AND so.due_date < NOW()) THEN 'เกินกำหนด' ELSE 'ทยอยชำระ' END AS status
+		FROM sale_orders so
+		JOIN customers c ON c.id = so.customer_id AND c.deleted_at IS NULL
+		WHERE %s%s
+		GROUP BY c.id, c.customer_name
+		%s
+		ORDER BY
+			CASE WHEN BOOL_OR(so.due_date IS NOT NULL AND so.due_date < NOW()) THEN 0 ELSE 1 END ASC,
+			SUM(so.balance_due) DESC
+		LIMIT ? OFFSET ?`, baseWhere, dateFilter, havingSQL)
+
+	dataArgs := append(append(dateArgs, havingArgs...), pageSize, offset)
+	type row struct {
+		CustomerCode     string  `gorm:"column:customer_code"`
+		CustomerName     string  `gorm:"column:customer_name"`
+		TotalDebt        float64 `gorm:"column:total_debt"`
+		RemainingBalance float64 `gorm:"column:remaining_balance"`
+		LastPurchaseDate string  `gorm:"column:last_purchase_date"`
+		AgeDays          int     `gorm:"column:age_days"`
+		Status           string  `gorm:"column:status"`
+	}
+	var rows []row
+	if err := r.db.WithContext(ctx).Raw(dataSQL, dataArgs...).Scan(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]dashDto.DebtAgingItemDTO, len(rows))
+	for i, rw := range rows {
+		result[i] = dashDto.DebtAgingItemDTO{
+			CustomerCode:     rw.CustomerCode,
+			CustomerName:     rw.CustomerName,
+			TotalDebt:        rw.TotalDebt,
+			RemainingBalance: rw.RemainingBalance,
+			LastPurchaseDate: rw.LastPurchaseDate,
+			AgeDays:          rw.AgeDays,
+			Status:           rw.Status,
+		}
+	}
+	return result, total, nil
+}
+
+// GetTotalDebtors คืนจำนวนลูกหนี้ทั้งหมด (ไม่กรองวัน) สำหรับ KPI card
+func (r *dashboardRepository) GetTotalDebtors(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&dashEntity.SaleOrder{}).
+		Where("deleted_at IS NULL AND balance_due > 0 AND customer_id IS NOT NULL AND status NOT IN ?", debtExcludedStatuses).
+		Distinct("customer_id").
+		Count(&count).Error
+	return count, err
+}
+
 // GetHistoricalSummaries อ่านจาก daily_summary ตรงๆ (ข้อมูลนิ่งแล้ว ไม่ query สด) เติมวันที่ขาดด้วย 0
 func (r *dashboardRepository) GetHistoricalSummaries(ctx context.Context, start, end time.Time) ([]dashEntity.DailySummary, error) {
+	// 1. ดึงเฉพาะแถวที่มีข้อมูลจริงในช่วง [start, end)
+	var existing []dashEntity.DailySummary
+	if err := r.db.WithContext(ctx).
+		Where("summary_date >= ? AND summary_date < ?", start, end).
+		Find(&existing).Error; err != nil {
+		return nil, err
+	}
+
+	// 2. index ด้วย date string เพื่อ lookup O(1)
+	byDate := make(map[string]dashEntity.DailySummary, len(existing))
+	for _, s := range existing {
+		byDate[s.SummaryDate.Format("2006-01-02")] = s
+	}
+
+	// 3. วนทุกวันใน [start, end) จาก end-1 ลงมา เติม zero สำหรับวันที่ไม่มีข้อมูล
 	var result []dashEntity.DailySummary
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT
-			gs::date AS summary_date,
-			COALESCE(ds.total_orders, 0) AS total_orders,
-			COALESCE(ds.total_items_sold, 0) AS total_items_sold,
-			COALESCE(ds.overdue_debt_count, 0) AS overdue_debt_count,
-			COALESCE(ds.total_revenue, 0) AS total_revenue,
-			COALESCE(ds.total_cost, 0) AS total_cost,
-			COALESCE(ds.gross_profit, 0) AS gross_profit,
-			COALESCE(ds.margin_percent, 0) AS margin_percent,
-			COALESCE(ds.cash_amount, 0) AS cash_amount,
-			COALESCE(ds.transfer_amount, 0) AS transfer_amount,
-			COALESCE(ds.credit_amount, 0) AS credit_amount,
-			COALESCE(ds.walkin_customer_amount, 0) AS walkin_customer_amount,
-			COALESCE(ds.garage_customer_amount, 0) AS garage_customer_amount,
-			COALESCE(ds.corporate_customer_amount, 0) AS corporate_customer_amount,
-			COALESCE(ds.return_amount, 0) AS return_amount,
-			COALESCE(ds.collected_debt_amount, 0) AS collected_debt_amount,
-			COALESCE(ds.total_outstanding_debt, 0) AS total_outstanding_amount
-		FROM generate_series(?::date, (?::date - interval '1 day'), interval '1 day') AS gs
-		LEFT JOIN daily_summary ds ON ds.summary_date = gs::date AND ds.deleted_at IS NULL
-		ORDER BY gs DESC
-	`, start, end).Scan(&result).Error
-	return result, err
+	for d := end.AddDate(0, 0, -1); !d.Before(start); d = d.AddDate(0, 0, -1) {
+		key := d.Format("2006-01-02")
+		if s, ok := byDate[key]; ok {
+			result = append(result, s)
+		} else {
+			result = append(result, dashEntity.DailySummary{
+				SummaryDate: time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location()),
+			})
+		}
+	}
+
+	return result, nil
 }

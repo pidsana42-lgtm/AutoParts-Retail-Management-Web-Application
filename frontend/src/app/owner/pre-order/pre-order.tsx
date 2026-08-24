@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import apiClient from '../../../service/http/apiClient';
-import { 
-  Plus, Search, Edit, Trash2, ChevronRight, Save, 
-  FileText, BookOpen, Building2, X,
-  CheckCircle, Clock, XCircle, Loader2, AlertCircle, ImageIcon
+import {
+  Plus, Search, Edit, Trash2, ChevronRight, Save,
+  FileText, BookOpen, Building2, X, Package,
+  CheckCircle, Clock, XCircle, Loader2, AlertCircle, ImageIcon, Truck
 } from 'lucide-react';
-import { 
-  getPreOrders, getPreOrderById, createPreOrder, 
-  updatePreOrder, deletePreOrder 
+import {
+  getPreOrders, getPreOrderById, createPreOrder,
+  updatePreOrder, deletePreOrder
 } from '../../../service/http/pre-order/pre-order';
 import type{ PreOrder, PreOrderItem } from '../../../interface/pre-order/pre-order';
 import Heading from '../../../components/elements/heading';
@@ -15,8 +15,6 @@ import Card from '../../../components/elements/card';
 import Select from '../../../components/elements/select';
 import Button from '../../../components/elements/button';
 import GenericTable, { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
-import ProductSearchSelect from '../import-bills/components/product_search_select';
-import BillSummaryFooterBar from '../import-bills/components/BillSummaryFooterBar';
 import type { Product } from '../../../interface/import';
 import type { Catalog, CatalogItem } from '../../../interface/catalog/catalog';
 import { getCatalogs } from '../../../service/http/catalog/catalog_service';
@@ -278,36 +276,8 @@ export default function PreOrderManager() {
     }
   };
 
-  const handleAddItem = () => {
-    const newItem: PreOrderItem = {
-      product_id: 0,
-      product_name: '',
-      product_code: '',
-      quantity: 1,
-      unit_price: 0
-    };
-    setFormItems(prev => [...prev, newItem]);
-  };
-
   const handleRemoveItem = (index: number) => {
     setFormItems(prev => prev.filter((_, idx) => idx !== index));
-  };
-
-  const handleProductSelect = (index: number, newId: number | null) => {
-    if (!newId) return;
-    const prod = products.find(p => p.id === newId);
-    const unitPrice = prod ? (prod.sale_price || prod.retail_price || 0) : 0;
-    setFormItems(prev => {
-      const updated = [...prev];
-      updated[index] = {
-        ...updated[index],
-        product_id: newId,
-        product_name: prod?.product_name || '',
-        product_code: prod?.product_code || '',
-        unit_price: unitPrice,
-      };
-      return updated;
-    });
   };
 
   const handleItemChange = (index: number, field: keyof PreOrderItem, value: any) => {
@@ -391,12 +361,31 @@ export default function PreOrderManager() {
   const filteredOrders = preOrders.filter(po => {
     const cust = getCustomerInfo(po);
     const q = searchQuery.toLowerCase();
-    return (
+    const matchesSearch = (
       cust.name.toLowerCase().includes(q) || 
       cust.phone.includes(q) || 
       String(po.id).includes(q) ||
-      `PRE-${String(po.id).padStart(5, '0')}`.toLowerCase().includes(q)
+      `PRE-${String(po.id).padStart(5, '0')}`.toLowerCase().includes(q) ||
+      (po.po_number && po.po_number.toLowerCase().includes(q))
     );
+
+    if (!matchesSearch) return false;
+
+    if (!statusFilter) return true;
+    if (statusFilter === 'PO_PENDING') {
+      return (
+        po.status === 'PO_PENDING' || 
+        po.status === 'PENDING' || 
+        po.po_status === 'PENDING' || 
+        po.po_status === 'DRAFT' || 
+        !po.po_status
+      );
+    }
+    if (statusFilter === 'ORDERED') {
+      return po.status === 'ORDERED' || po.po_status === 'APPROVED';
+    }
+
+    return po.status === statusFilter;
   });
 
   const columns = [
@@ -446,24 +435,48 @@ export default function PreOrderManager() {
     {
       key: 'status',
       header: 'สถานะ',
-      render: (po: PreOrder) => (
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold ${
-          po.status === 'COMPLETED' 
-            ? 'bg-[#259b24]/10 text-[#259b24] border border-[#259b24]/30' 
-            : po.status === 'CANCELLED' 
-              ? 'bg-red-50 text-red-600 border border-red-100' 
-              : 'bg-amber-50 text-amber-600 border border-amber-100'
-        }`}>
-          {po.status === 'COMPLETED' ? (
-            <CheckCircle size={14} />
-          ) : po.status === 'CANCELLED' ? (
-            <XCircle size={14} />
-          ) : (
-            <Clock size={14} />
-          )}
-          {po.status === 'COMPLETED' ? 'ส่งมอบแล้ว' : po.status === 'CANCELLED' ? 'ยกเลิก' : 'กำลังจัดหาอะไหล่'}
-        </span>
-      )
+      render: (po: PreOrder) => {
+        if (po.status === 'COMPLETED') {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-[#259b24]/10 text-[#259b24] border border-[#259b24]/30">
+              <CheckCircle size={14} /> ส่งมอบแล้ว
+            </span>
+          );
+        }
+        if (po.status === 'CANCELLED') {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-red-50 text-[#e51c23] border border-red-200">
+              <XCircle size={14} /> ยกเลิก
+            </span>
+          );
+        }
+        if (po.status === 'ORDERED' || po.po_status === 'APPROVED') {
+          return (
+            <div className="flex flex-col items-start gap-0.5">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                <Truck size={14} /> รอสินค้า
+              </span>
+              {po.po_number && (
+                <span className="text-[10px] text-[#5F5E5E] font-mono font-semibold">
+                  PO: {po.po_number}
+                </span>
+              )}
+            </div>
+          );
+        }
+        return (
+          <div className="flex flex-col items-start gap-0.5">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+              <Clock size={14} /> รออนุมัติสั่งซื้อ
+            </span>
+            {po.po_number && (
+              <span className="text-[10px] text-[#5F5E5E] font-mono font-semibold">
+                PO: {po.po_number}
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     {
       key: 'actions',
@@ -477,7 +490,7 @@ export default function PreOrderManager() {
               e.stopPropagation();
               handleEdit(po.id!);
             }} 
-            className="p-1.5 hover:bg-slate-100 rounded text-slate-600 transition-colors cursor-pointer"
+            className="p-1.5 hover:bg-gray-100 rounded-none text-[#5F5E5E] hover:text-[#1C1B1B] transition-colors cursor-pointer"
             title="แก้ไข"
           >
             <Edit size={16} />
@@ -488,7 +501,7 @@ export default function PreOrderManager() {
               e.stopPropagation();
               handleDelete(po.id!);
             }} 
-            className="p-1.5 hover:bg-red-50 rounded text-red-600 transition-colors cursor-pointer"
+            className="p-1.5 hover:bg-red-50 rounded-none text-[#5F5E5E] hover:text-[#e51c23] transition-colors cursor-pointer"
             title="ลบ"
           >
             <Trash2 size={16} />
@@ -528,7 +541,7 @@ export default function PreOrderManager() {
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="ค้นหาชื่อลูกค้า, เบอร์โทร หรือเลขใบจอง..."
+                  placeholder="ค้นหาชื่อลูกค้า, เบอร์โทร, เลขใบจอง หรือเลข PO..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-white border border-gray-300 rounded-none pl-9 pr-3 py-2 text-xs font-medium text-[#1C1B1B] focus:border-[#e51c23] outline-none"
@@ -538,9 +551,8 @@ export default function PreOrderManager() {
               <div className="flex items-center gap-1.5 overflow-x-auto">
                 {[
                   { label: 'ทั้งหมด', value: '' },
-                  { label: 'ค้างส่งสินค้า', value: 'PENDING' },
-                  { label: 'ส่งมอบแล้ว', value: 'COMPLETED' },
-                  { label: 'ยกเลิก', value: 'CANCELLED' }
+                  { label: 'รออนุมัติสั่งซื้อ', value: 'PO_PENDING' },
+                  { label: 'รอสินค้า', value: 'ORDERED' }
                 ].map((st) => (
                   <button
                     key={st.value}
@@ -632,8 +644,8 @@ export default function PreOrderManager() {
                   
                   {/* First Name Autocomplete */}
                   <div className="relative flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-slate-700">
-                      ชื่อ ผู้สั่งจอง <span className="text-red-500">*</span>
+                    <label className="text-sm font-bold text-[#1C1B1B]">
+                      ชื่อ ผู้สั่งจอง <span className="text-[#e51c23]">*</span>
                     </label>
                     <input
                       type="text"
@@ -671,7 +683,7 @@ export default function PreOrderManager() {
                                 }}
                               >
                                 <span className="font-bold text-[#1C1B1B]">{c.customer_name}</span>
-                                {phone && <span className="text-gray-500 text-xs ml-2">({phone})</span>}
+                                {phone && <span className="text-[#5F5E5E] text-xs ml-2">({phone})</span>}
                               </div>
                             );
                           })
@@ -682,7 +694,7 @@ export default function PreOrderManager() {
                   
                   {/* Last Name */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-slate-700">
+                    <label className="text-sm font-bold text-[#1C1B1B]">
                       นามสกุล
                     </label>
                     <input
@@ -696,7 +708,7 @@ export default function PreOrderManager() {
                   
                   {/* Phone Number */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-slate-700">
+                    <label className="text-sm font-bold text-[#1C1B1B]">
                       เบอร์โทรศัพท์
                     </label>
                     <input
@@ -716,7 +728,7 @@ export default function PreOrderManager() {
                 
                 {/* Search Box (Left Aligned) */}
                 <div className="relative z-20 w-full md:w-[400px]">
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-[#1C1B1B] mb-1">
                     ค้นหาสินค้า (สต็อก + แคตตาล็อก)
                   </label>
                   <div className="flex items-center bg-white border border-gray-300 focus-within:border-[#e51c23] rounded-none px-3 py-2 shadow-xs transition-colors h-10 w-full">
@@ -760,12 +772,12 @@ export default function PreOrderManager() {
                           <div className="flex flex-col gap-0.5">
                             <span className="font-bold text-[#1C1B1B]">{res.name}</span>
                             <div className="flex items-center gap-2">
-                              <span className={`font-mono font-bold text-[10px] px-1 rounded-sm ${res.type === 'STOCK' ? 'text-gray-500 bg-gray-100' : 'text-blue-600 bg-blue-50'}`}>
+                              <span className={`font-mono font-bold text-[10px] px-1 rounded-none ${res.type === 'STOCK' ? 'text-[#5F5E5E] bg-gray-100' : 'text-[#e51c23] bg-red-50 border border-red-100'}`}>
                                 {res.code}
                               </span>
                               {res.category && <span className="text-[10px] text-gray-400">{res.category}</span>}
                               {res.type === 'CATALOG' && (
-                                <span className="text-[10px] font-bold text-blue-500 flex items-center gap-0.5">
+                                <span className="text-[10px] font-bold text-[#e51c23] flex items-center gap-0.5">
                                   <BookOpen size={10} /> จากแคตตาล็อก
                                 </span>
                               )}
@@ -823,7 +835,7 @@ export default function PreOrderManager() {
                               <button
                                 type="button"
                                 onClick={() => { setShowCatalogModal(true); setCatalogSearch(''); setCatalogItemSearch(''); setSelectedCatalogId(null); }}
-                                className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 text-xs font-bold rounded-none shadow-xs cursor-pointer inline-flex items-center gap-1.5 transition-colors"
+                                className="bg-white border border-gray-300 hover:bg-gray-50 text-[#1C1B1B] px-4 py-2 text-xs font-bold rounded-none shadow-xs cursor-pointer inline-flex items-center gap-1.5 transition-colors"
                               >
                                 <BookOpen size={14} /> เลือกจากแคตตาล็อก
                               </button>
@@ -838,21 +850,21 @@ export default function PreOrderManager() {
                         const supplierPartCode = (item as any).supplier_part_code || '';
                         const supplierName = (item as any).supplier_name || '';
                         const fromCatalog = !!(item as any).supplier_part_code;
-                        const imgUrl = (item as any).image || matchedProd?.image || '';
+                        const imgUrl = (item as any).image || matchedProd?.thumbnail_url || '';
 
                         return (
-                          <TableRow key={idx} className={`hover:bg-gray-50/70 align-middle transition-colors ${fromCatalog ? 'bg-blue-50/30' : ''}`}>
+                          <TableRow key={idx} className={`hover:bg-gray-50/70 align-middle transition-colors ${fromCatalog ? 'bg-red-50/20' : ''}`}>
                             {/* # */}
-                            <TableCell className="py-3 px-3 text-center text-xs font-bold text-gray-500">
+                            <TableCell className="py-3 px-3 text-center text-xs font-bold text-[#5F5E5E]">
                               {idx + 1}
                             </TableCell>
 
                             {/* ภาพสินค้า */}
                             <TableCell className="py-2.5 px-3 text-center">
                               {imgUrl ? (
-                                <img src={imgUrl} alt={item.product_name} className="w-16 h-10 object-contain bg-white border border-gray-200 p-0.5 mx-auto rounded shadow-xs" />
+                                <img src={imgUrl} alt={item.product_name} className="w-16 h-10 object-contain bg-white border border-gray-200 p-0.5 mx-auto rounded-none shadow-xs" />
                               ) : (
-                                <div className="w-16 h-10 bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center mx-auto text-gray-300 rounded">
+                                <div className="w-16 h-10 bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center mx-auto text-gray-300 rounded-none">
                                   <ImageIcon size={14} />
                                 </div>
                               )}
@@ -863,14 +875,14 @@ export default function PreOrderManager() {
                               <div>
                                 <p className="font-bold text-xs text-[#1C1B1B]">{item.product_name}</p>
                                 {fromCatalog && (
-                                  <span className="text-[10px] text-blue-600 font-bold bg-blue-50 border border-blue-100 px-1.5 py-0.5 inline-block mt-0.5">จากแคตตาล็อก</span>
+                                  <span className="text-[10px] text-[#e51c23] font-bold bg-red-50 border border-red-100 px-1.5 py-0.5 inline-block mt-0.5">จากแคตตาล็อก</span>
                                 )}
                               </div>
                             </TableCell>
 
                             {/* รหัสสินค้า */}
                             <TableCell className="py-2.5 px-3">
-                              <span className="font-mono text-xs font-bold text-gray-700 bg-gray-100 px-2 py-1 border border-gray-200 inline-block">
+                              <span className="font-mono text-xs font-bold text-[#1C1B1B] bg-gray-100 px-2 py-1 border border-gray-200 inline-block">
                                 {code}
                               </span>
                             </TableCell>
@@ -889,8 +901,8 @@ export default function PreOrderManager() {
                             {/* บริษัทคู่ค้า */}
                             <TableCell className="py-2.5 px-3">
                               {supplierName ? (
-                                <span className="text-xs text-gray-700 font-bold flex items-center gap-1">
-                                  <Building2 size={12} className="text-gray-400 shrink-0" />
+                                <span className="text-xs text-[#1C1B1B] font-bold flex items-center gap-1">
+                                  <Building2 size={12} className="text-[#5F5E5E] shrink-0" />
                                   {supplierName}
                                 </span>
                               ) : (
@@ -914,7 +926,7 @@ export default function PreOrderManager() {
                               <button
                                 type="button"
                                 onClick={() => handleRemoveItem(idx)}
-                                className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition-colors cursor-pointer inline-flex items-center justify-center"
+                                className="text-gray-400 hover:text-[#e51c23] hover:bg-red-50 p-1.5 rounded transition-colors cursor-pointer inline-flex items-center justify-center"
                               >
                                 <Trash2 size={15} />
                               </button>
@@ -928,32 +940,49 @@ export default function PreOrderManager() {
               </div>
             </Card>
 
-            {/* Bottom Summary and Actions using BillSummaryFooterBar */}
-            <BillSummaryFooterBar
-              totalItems={formItems.length}
-              subtotal={formItems.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0), 0)}
-              totalAmount={formItems.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0), 0)}
-              onCancel={() => setView('list')}
-            >
-              <Button 
-                type="submit" 
-                variant="primary" 
-                disabled={saving}
-                className="gap-2 text-xs font-bold shadow-xs px-6 py-3 rounded-none h-[42px]"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="animate-spin" size={16} />
-                    <span>กำลังบันทึก...</span>
-                  </>
-                ) : (
-                  <>
-                    <Save size={16} />
-                    <span>บันทึกใบสั่งจอง</span>
-                  </>
-                )}
-              </Button>
-            </BillSummaryFooterBar>
+            {/* Bottom Summary and Actions (Without Price) */}
+            <div className="border-t border-gray-100 p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#fafafa] rounded-none mt-6 gap-4">
+              <div className="text-sm text-[#5F5E5E] space-y-1 text-left">
+                <p>
+                  จำนวนรายการทั้งหมด :{' '}
+                  <span className="text-[#1C1B1B] font-bold">{formItems.length} รายการ</span>
+                </p>
+                <p>
+                  จำนวนชิ้นรวม :{' '}
+                  <span className="text-[#1C1B1B] font-bold">
+                    {formItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)} ชิ้น
+                  </span>
+                </p>
+              </div>
+              <div className="flex items-center gap-3 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setView('list')}
+                  disabled={saving}
+                  className="bg-white border border-gray-300 text-[#1C1B1B] hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50 h-[42px]"
+                >
+                  ยกเลิก
+                </button>
+                <Button 
+                  type="submit" 
+                  variant="primary" 
+                  disabled={saving}
+                  className="gap-2 text-xs font-bold shadow-xs px-6 py-3 rounded-none h-[42px] bg-[#e51c23] hover:bg-[#c9181f] text-white"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="animate-spin" size={16} />
+                      <span>กำลังบันทึก...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save size={16} />
+                      <span>บันทึกใบสั่งจอง</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
 
           </div>
         </form>
@@ -1064,7 +1093,7 @@ export default function PreOrderManager() {
                             {items.length === 0 ? (
                               <tr><td colSpan={6} className="py-10 text-center text-gray-400">ไม่พบรายการ</td></tr>
                             ) : items.map((it, i) => (
-                              <tr key={i} className="hover:bg-blue-50/40 transition-colors">
+                              <tr key={i} className="hover:bg-red-50/30 transition-colors">
                                 <td className="py-2 px-3">
                                   {it.image ? (
                                     <img src={it.image} alt={it.part_name} className="w-12 h-12 object-cover bg-white border border-gray-200" />

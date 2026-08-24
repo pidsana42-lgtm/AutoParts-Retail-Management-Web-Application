@@ -12,7 +12,6 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  RotateCcw,
   ScanBarcode,
   X,
 } from "lucide-react";
@@ -25,7 +24,7 @@ import {
   TableCell,
 } from "../../../components/elements/table";
 import { cn } from "../../../utils/component";
-import { getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge } from "../../../utils/poshelpers";
+import { formatDate, getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge, renderCancellationStatusBadge } from "../../../utils/poshelpers";
 
 // นำเข้า Custom Hook ของเจ้าของร้าน
 import { useOwnerSalesCancellationHistory } from "./hooks/useOwnerSalesCancellationHistory";
@@ -50,7 +49,6 @@ const OwnerSalesCancellationHistory: React.FC = () => {
     searchQuery,
     startDate,
     endDate,
-    customerType,
     status,
     employeeId,
     employeeList,
@@ -58,7 +56,6 @@ const OwnerSalesCancellationHistory: React.FC = () => {
     setSearchQuery,
     setStartDate,
     setEndDate,
-    setCustomerType,
     setStatus,
     handleSelectAll,
     handleSelectRow,
@@ -255,7 +252,13 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                     {/* วันที่ทำรายการยกเลิก */}
                     <TableCell className="py-3.5 px-3">
                       <Text variant="xs" className="font-light text-[#5B5B5B] mb-0">
-                        {item.order_date ? new Date(item.order_date).toLocaleString("th-TH") : "-"}
+                        {formatDate(
+                          item.cancel_processed_at ||
+                          item.cancel_requested_at ||
+                          item.order_date ||
+                          item.created_at ||
+                          ""
+                        )}
                       </Text>
                     </TableCell>
 
@@ -288,7 +291,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
 
                     {/* สถานะ */}
                     <TableCell className="py-3.5 px-3 text-center">
-                      {renderStatusBadge(item.status, item.payment_status)}
+                      {renderCancellationStatusBadge(item.status, item.payment_status, item.cancel_remark, item.cancel_processed_at)}
                     </TableCell>
 
                     {/* จัดการ */}
@@ -647,6 +650,40 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                             </span>{" "}
                             {orderDetail.cancel_reason || "-"}
                           </div>
+                        </Card>
+                      );
+                    }
+
+                    if (status === "COMPLETED" || status === "สำเร็จ" || Boolean(orderDetail.cancel_remark) || Boolean(orderDetail.cancel_processed_at)) {
+                      return (
+                        <Card className="p-4 bg-[#FCF7F7] border border-[#F5DFDF] rounded-none shadow-none space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Text variant="small" className="font-normal text-[#E51C23] mb-0">
+                              สถานะคำขอ: ไม่อนุมัติการยกเลิก (ปฏิเสธคำขอ)
+                            </Text>
+                            <Badge
+                              variant="neutral"
+                              className="bg-gray-200 text-gray-700 border-none text-[10px] font-light rounded-none py-0.5 px-2"
+                            >
+                              ไม่อนุมัติ
+                            </Badge>
+                          </div>
+                          {orderDetail.cancel_reason && (
+                            <div className="text-xs text-[#5F5E5E] bg-[#FAF2F2] p-2.5 border-l-2 border-gray-400">
+                              <span className="font-normal text-[#1C1B1B]">
+                                เหตุผลที่พนักงานขอ:
+                              </span>{" "}
+                              {orderDetail.cancel_reason}
+                            </div>
+                          )}
+                          {orderDetail.cancel_remark && (
+                            <div className="text-xs text-[#5F5E5E] bg-[#FAF2F2] p-2.5 border-l-2 border-red-400">
+                              <span className="font-normal text-[#1C1B1B]">
+                                เหตุผลที่ปฏิเสธ:
+                              </span>{" "}
+                              {orderDetail.cancel_remark}
+                            </div>
+                          )}
                         </Card>
                       );
                     }

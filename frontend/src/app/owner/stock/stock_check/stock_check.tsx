@@ -325,7 +325,7 @@ function StockCheckContent() {
             <TableRow>
               <TableHead className="pl-6">วันที่กำหนด</TableHead>
               <TableHead>เป้าหมายการตรวจ</TableHead>
-              <TableHead>จำนวนสินค้า</TableHead>
+              <TableHead>รายการสินค้า</TableHead>
               <TableHead>พนักงานที่รับมอบหมาย</TableHead>
               <TableHead>สถานะ</TableHead>
               <TableHead className="text-center pr-6">จัดการ</TableHead>
@@ -386,7 +386,7 @@ function StockCheckContent() {
                     </TableCell>
                     <TableCell>
                       <div className="font-bold text-gray-800">
-                        {sc.product_count} <span className="text-gray-500 font-normal">ชิ้น</span>
+                        {sc.product_count} <span className="text-gray-500 font-normal">รายการ</span>
                       </div>
                     </TableCell>
                     <TableCell>

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Loader2, FileText } from 'lucide-react';
+import { ChevronRight, Loader2, FileText } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import Card from '../../../../components/elements/card';
 import Badge from '../../../../components/elements/badge';

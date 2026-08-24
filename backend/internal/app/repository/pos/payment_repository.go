@@ -13,6 +13,7 @@ type PaymentRepository interface {
 	GetOrderById(orderID uint) (*entity.SaleOrder, error)
 	GetPaymentByOrderId(orderID uint) (*entity.Payment, error)
 	GetPaymentByID(paymentID uint) (*entity.Payment, error)
+	GetPaymentWithDetailsByID(paymentID uint) (*entity.Payment, error)
 	CreatePayment(payment *entity.Payment) error
 	CreatePaymentWithTx(tx *gorm.DB, payment *entity.Payment) error 
 	UpdatePayment(payment *entity.Payment) error
@@ -23,10 +24,12 @@ type PaymentRepository interface {
 	GetStoreConfig() (*entity.StoreConfig, error)
 
 	GetUnpaidOrdersByCustomerID(customerID uint) ([]entity.SaleOrder, error)
+	GetUnpaidOrderByOrderNumber(orderNumber string) (*entity.SaleOrder, error)
     CreateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error
     GetRepaymentByID(repaymentID uint) (*entity.PaymentRepayment, error)
     UpdateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error
     GetRepaymentHistory(search, startDate, endDate string) ([]entity.PaymentRepayment, error)
+    GetDirectPaymentHistory(search, startDate, endDate string) ([]entity.Payment, error)
     GetCancelledRepaymentHistory(search, startDate, endDate string) ([]entity.PaymentRepayment, error)
 }
 
@@ -53,6 +56,12 @@ func (r *paymentRepository) GetPaymentByOrderId(orderID uint) (*entity.Payment, 
 func (r *paymentRepository) GetPaymentByID(paymentID uint) (*entity.Payment, error) {
 	var payment entity.Payment
 	err := r.db.First(&payment, paymentID).Error
+	return &payment, err
+}
+
+func (r *paymentRepository) GetPaymentWithDetailsByID(paymentID uint) (*entity.Payment, error) {
+	var payment entity.Payment
+	err := r.db.Preload("Order").Preload("Order.Customer").Preload("PaymentMethod").Preload("ReceivedBy").First(&payment, paymentID).Error
 	return &payment, err
 }
 
@@ -139,10 +148,23 @@ func (r *paymentRepository) GetStoreConfig() (*entity.StoreConfig, error) {
 func (r *paymentRepository) GetUnpaidOrdersByCustomerID(customerID uint) ([]entity.SaleOrder, error) {
     var orders []entity.SaleOrder
     err := r.db.Preload("Customer").
-        Where("customer_id = ? AND payment_status IN ('unpaid', 'partial') AND status != 'cancelled'", customerID).
+        Preload("Customer.CustomerType"). 
+        Where("customer_id = ? AND payment_status IN ('unpaid', 'partial') AND status NOT IN ('cancelled', 'pending_cancel')", customerID).
         Order("created_at asc").
         Find(&orders).Error
     return orders, err
+}
+
+func (r *paymentRepository) GetUnpaidOrderByOrderNumber(orderNumber string) (*entity.SaleOrder, error) {
+    var order entity.SaleOrder
+    err := r.db.Preload("Customer").
+        Preload("Customer.CustomerType").
+        Where("order_number = ? AND payment_status IN ('unpaid', 'partial') AND status NOT IN ('cancelled', 'pending_cancel')", orderNumber).
+        First(&order).Error
+    if err != nil {
+        return nil, err
+    }
+    return &order, nil
 }
 
 func (r *paymentRepository) CreateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error {
@@ -172,9 +194,40 @@ func (r *paymentRepository) GetRepaymentHistory(search, startDate, endDate strin
 
     if startDate != "" && endDate != "" {
         query = query.Where("payment_repayments.created_at BETWEEN ? AND ?", startDate+" 00:00:00", endDate+" 23:59:59")
+    } else if startDate != "" {
+        query = query.Where("payment_repayments.created_at >= ?", startDate+" 00:00:00")
+    } else if endDate != "" {
+        query = query.Where("payment_repayments.created_at <= ?", endDate+" 23:59:59")
     }
     err := query.Order("payment_repayments.created_at desc").Find(&repayments).Error
     return repayments, err
+}
+
+func (r *paymentRepository) GetDirectPaymentHistory(search, startDate, endDate string) ([]entity.Payment, error) {
+    var payments []entity.Payment
+    query := r.db.Preload("Order").
+        Preload("Order.Customer").
+        Preload("PaymentMethod").
+        Preload("ReceivedBy").
+        Joins("JOIN sale_orders ON sale_orders.id = payments.order_id").
+        Where("payments.paid_at IS NOT NULL AND sale_orders.status != ?", "cancelled")
+
+    if search != "" {
+        likeSearch := "%" + search + "%"
+        query = query.Joins("LEFT JOIN customers ON customers.id = sale_orders.customer_id").
+            Where("payments.reference_number LIKE ? OR sale_orders.order_number LIKE ? OR customers.customer_name LIKE ? OR sale_orders.customer_name_temp LIKE ?", likeSearch, likeSearch, likeSearch, likeSearch)
+    }
+
+    if startDate != "" && endDate != "" {
+        query = query.Where("payments.paid_at BETWEEN ? AND ? OR (payments.paid_at IS NULL AND payments.created_at BETWEEN ? AND ?)", startDate+" 00:00:00", endDate+" 23:59:59", startDate+" 00:00:00", endDate+" 23:59:59")
+    } else if startDate != "" {
+        query = query.Where("payments.paid_at >= ? OR (payments.paid_at IS NULL AND payments.created_at >= ?)", startDate+" 00:00:00", startDate+" 00:00:00")
+    } else if endDate != "" {
+        query = query.Where("payments.paid_at <= ? OR (payments.paid_at IS NULL AND payments.created_at <= ?)", endDate+" 23:59:59", endDate+" 23:59:59")
+    }
+
+    err := query.Order("payments.paid_at desc, payments.created_at desc").Find(&payments).Error
+    return payments, err
 }
 
 func (r *paymentRepository) GetCancelledRepaymentHistory(search, startDate, endDate string) ([]entity.PaymentRepayment, error) {
@@ -190,6 +243,10 @@ func (r *paymentRepository) GetCancelledRepaymentHistory(search, startDate, endD
 
     if startDate != "" && endDate != "" {
         query = query.Where("payment_repayments.cancelled_at BETWEEN ? AND ?", startDate+" 00:00:00", endDate+" 23:59:59")
+    } else if startDate != "" {
+        query = query.Where("payment_repayments.cancelled_at >= ?", startDate+" 00:00:00")
+    } else if endDate != "" {
+        query = query.Where("payment_repayments.cancelled_at <= ?", endDate+" 23:59:59")
     }
     err := query.Order("payment_repayments.cancelled_at desc").Find(&repayments).Error
     return repayments, err

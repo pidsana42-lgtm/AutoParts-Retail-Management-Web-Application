@@ -24,11 +24,14 @@ func SetupPaymentRoutes(r *gin.Engine, db *gorm.DB) {
 	{
 		// กระบวนการชำระเงินหน้าร้าน กับ QR
 		paymentGroup.POST("/generate-qr", paymentCtrl.GenerateQR)
+		paymentGroup.POST("/generate-settle-qr", paymentCtrl.GenerateSettleQR)
 		paymentGroup.PATCH("/confirm", paymentCtrl.ConfirmPayment)
 
 		// ระบบเคลียร์บิลเงินเชื่อ 
 		// ดึงรายการบิลที่ค้างชำระของลูกค้าคนนั้นๆ มาติ๊กเลือกจ่าย
 		paymentGroup.GET("/unpaid-bills/:customer_id", paymentCtrl.GetUnpaidBillsByCustomer)
+		// ดึงบิลค้างชำระเฉพาะบิลเดียวด้วยเลขที่คำสั่งซื้อ/บาร์โค้ด
+		paymentGroup.GET("/unpaid-order/:order_number", paymentCtrl.GetUnpaidBillByOrderNumber)
 		// บันทึกการเคลียร์บิล (รองรับการรวมหลายบิล / จ่ายบางส่วน)
 		paymentGroup.POST("/settle-bills", paymentCtrl.SettleCustomerBills)
 
