@@ -29,5 +29,10 @@ func SetupDashboardRoutes(r *gin.Engine, db *gorm.DB) {
 		dashboardGroup.GET("/recent-sales", ctrl.GetRecentSales)
 		dashboardGroup.GET("/aging-stock", ctrl.GetAgingStock)
 		dashboardGroup.GET("/stock-health", ctrl.GetStockHealth)
+		dashboardGroup.GET("/income-summary", ctrl.GetIncomeSummary)
+		dashboardGroup.GET("/top-sellers", ctrl.GetTopSellers)
+		dashboardGroup.GET("/debt-aging", ctrl.GetDebtAging)
+		dashboardGroup.GET("/debt-aging/export/excel", ctrl.ExportDebtAgingExcel)
+		dashboardGroup.GET("/debt-aging/export/pdf", ctrl.ExportDebtAgingPdf)
 	}
 }
