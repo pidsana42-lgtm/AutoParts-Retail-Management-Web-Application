@@ -55,3 +55,5 @@ uploads/
 
 # System Files
 .DS_Store
+
+backend/model/service_account.json
