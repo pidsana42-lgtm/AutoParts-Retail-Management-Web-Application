@@ -121,6 +121,20 @@ def init_db():
                         );
                     """))
                     
+                    # Persistent embedding cache for the product matcher (survives restarts,
+                    # only new/changed products get re-embedded — see embedder.ProductMatcher.fit)
+                    transaction_conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS product_embeddings (
+                            id SERIAL PRIMARY KEY,
+                            target_key VARCHAR(80) NOT NULL UNIQUE,
+                            target_type VARCHAR(16) NOT NULL DEFAULT 'product',
+                            target_id INTEGER NOT NULL DEFAULT 0,
+                            content_hash VARCHAR(64) NOT NULL,
+                            embedding JSONB NOT NULL,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+                    """))
+                    
                     transaction_conn.execute(text("SELECT setval(pg_get_serial_sequence('bill_images', 'id'), COALESCE(MAX(id), 1)) FROM bill_images;"))
                     transaction_conn.execute(text("SELECT setval(pg_get_serial_sequence('bill_import_jobs', 'id'), COALESCE(MAX(id), 1)) FROM bill_import_jobs;"))
                     print("Database migrated and sequences synchronized successfully!")
@@ -980,11 +994,12 @@ def match_bill_products(result):
             return result
             
         # 2. Fit pre-loaded global matcher with both base products and corrections
+        # (persist_engine=engine → reuse cached embeddings from product_embeddings table)
         global global_matcher
         if global_matcher is None:
             from embedder import ProductMatcher
             global_matcher = ProductMatcher()
-        global_matcher.fit(db_products, corrections)
+        global_matcher.fit(db_products, corrections, persist_engine=engine)
         
         # 3. Match each item using global_matcher
         supplier_id = int(result.get("supplier_id") or 1)

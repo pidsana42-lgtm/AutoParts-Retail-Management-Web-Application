@@ -569,7 +569,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
         {/* 3. Search & Filter Bar */}
         <div className="bg-white border border-gray-200 p-3.5 flex flex-col md:flex-row gap-3 items-center justify-between shadow-sm">
           <div className="flex flex-1 items-center gap-3 w-full">
-            <div ref={searchRef} className="relative flex-1 max-w-md">
+            <div ref={searchRef} className="relative flex-1 min-w-[240px]">
               <Input
                 type="text"
                 placeholder="ค้นหาเลขที่ใบเคลม, ชื่อลูกค้า, สินค้า..."
@@ -781,7 +781,9 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                             <Eye className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => navigate(`${basePath}/edit/${row.claimId}`)}
+                            onClick={() => canApprove
+                              ? navigate(`${basePath}/detail/${row.claimId}?edit=1`)
+                              : navigate(`${basePath}/edit/${row.claimId}`)}
                             className="p-1.5 text-gray-400 hover:text-[#1C1B1B] hover:bg-gray-100 rounded transition cursor-pointer"
                             title="แก้ไขใบเคลม"
                           >

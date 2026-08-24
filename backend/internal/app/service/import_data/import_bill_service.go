@@ -3,6 +3,7 @@ package import_data
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,9 +15,13 @@ import (
 
 	importDataDTO "backend/internal/app/dto/import_data"
 	"backend/internal/app/entity"
+	"backend/internal/app/enum"
 	billRepo "backend/internal/app/repository/import_data"
 	svcNotification "backend/internal/app/service/notification"
 )
+
+// ErrBillDeleteForbidden ใช้เมื่อผู้ใช้ที่ไม่ใช่เจ้าของพยายามลบบิลที่อนุมัติแล้ว
+var ErrBillDeleteForbidden = errors.New("FORBIDDEN: พนักงานลบได้เฉพาะบิลที่ยังไม่อนุมัติเท่านั้น")
 
 type ImportBillService interface {
 	CreateBill(input importDataDTO.CreateBillDTO) (importDataDTO.BillResponseDTO, error)
@@ -27,7 +32,7 @@ type ImportBillService interface {
 	ConfirmBillImport(id uint, input importDataDTO.ConfirmBillImportDTO, role string) (importDataDTO.ConfirmBillImportResponseDTO, error)
 	CreateBillItem(input importDataDTO.CreateBillItemDTO) (importDataDTO.BillItemResponseDTO, error)
 	UpdateBill(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.BillResponseDTO, error)
-	DeleteBill(id uint) error
+	DeleteBill(id uint, role string) error
 	ListPurchaseOrders() ([]importDataDTO.PurchaseOrderImportDTO, error)
 	GetPurchaseOrderByID(id uint) (importDataDTO.PurchaseOrderImportDTO, error)
 	UpdateProduct(id uint, input importDataDTO.UpdateImportProductDTO) error
@@ -242,7 +247,18 @@ func (s *importBillService) UpdateBill(id uint, input importDataDTO.ConfirmBillI
 	return importDataDTO.ToBillResponseDTO(&bill), nil
 }
 
-func (s *importBillService) DeleteBill(id uint) error {
+func (s *importBillService) DeleteBill(id uint, role string) error {
+	// พนักงานลบได้เฉพาะบิลที่ยังไม่อนุมัติ — บิลที่อนุมัติแล้ว (is_verified / payment_status=approved) ลบได้เฉพาะเจ้าของ
+	isOwner := strings.EqualFold(role, string(enum.RoleOwner)) || strings.EqualFold(role, string(enum.RoleAdmin))
+	if !isOwner {
+		bill, err := s.repo.GetBillByID(id)
+		if err != nil {
+			return err
+		}
+		if bill.IsVerified || strings.EqualFold(bill.PaymentStatus, "approved") {
+			return ErrBillDeleteForbidden
+		}
+	}
 	return s.repo.DeleteBill(id)
 }
 
