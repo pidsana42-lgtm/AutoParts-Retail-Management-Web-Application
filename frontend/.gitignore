@@ -26,7 +26,3 @@ dist-ssr
 .DS_Store
 
 .env
-# Models (Note: It is recommended to place these in backend/.gitignore or root .gitignore)
-backend/model/*.gguf
-backend/model/Gemma-4-E4B-it-PARL-Q4_K_M.gguf
-backend/model/Gemma-4-E4B-it-PARL-mmproj.gguf
