@@ -1,21 +1,24 @@
 package pos
 
 import (
-	"errors"
-	"fmt"
-	"strings"
-	"time"
 	posDto "backend/internal/app/dto/pos"
 	"backend/internal/app/entity"
 	posRepository "backend/internal/app/repository/pos"
+	"errors"
+	"fmt"
 	"os"
+	"sort"
+	"strings"
+	"time"
 )
 
 type PaymentService interface {
 	GeneratePromptPayQR(req posDto.GenerateQRRequest) (*posDto.GenerateQRResponse, error)
+	GenerateSettleQR(req posDto.GenerateSettleQRRequest) (*posDto.GenerateQRResponse, error)
 	ConfirmPayment(req posDto.ConfirmPaymentRequest) (*posDto.ConfirmPaymentResponse, error)
 
 	GetUnpaidBillsByCustomer(customerID uint) (*posDto.CustomerUnpaidBillsResponse, error)
+	GetUnpaidBillByOrderNumber(orderNumber string) (*posDto.CustomerUnpaidBillsResponse, error)
 	SettleCustomerBills(req posDto.SettleBillsRequest) (*posDto.SettleBillsResponse, error)
 	GetPaymentHistory(search, startDate, endDate string) ([]posDto.PaymentHistoryItem, error)
 	GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentHistoryItem, error)
@@ -81,6 +84,9 @@ func (s *paymentService) GeneratePromptPayQR(req posDto.GenerateQRRequest) (*pos
 
 	// 5. Gen QR Code
 	merchantPromptPayNo := os.Getenv("PromptPayNo") // เบอร์พร้อมเพย์ร้าน
+	// if merchantPromptPayNo == "" {
+	// 	merchantPromptPayNo = "0812345678"
+	// }
 	qrBase64, err := s.paymentRepo.GeneratePromptPayQR(merchantPromptPayNo, amount)
 	if err != nil {
 		return nil, fmt.Errorf("ไม่สามารถสร้าง QR Code ได้: %v", err)
@@ -98,6 +104,32 @@ func (s *paymentService) GeneratePromptPayQR(req posDto.GenerateQRRequest) (*pos
 	}, nil
 }
 
+func (s *paymentService) GenerateSettleQR(req posDto.GenerateSettleQRRequest) (*posDto.GenerateQRResponse, error) {
+	if req.Amount <= 0 {
+		return nil, errors.New("ยอดเงินต้องมากกว่า 0 บาท")
+	}
+
+	merchantPromptPayNo := os.Getenv("PromptPayNo")
+	// if merchantPromptPayNo == "" {
+	// 	merchantPromptPayNo = "0812345678"
+	// }
+
+	qrBase64, err := s.paymentRepo.GeneratePromptPayQR(merchantPromptPayNo, req.Amount)
+	if err != nil {
+		return nil, fmt.Errorf("ไม่สามารถสร้าง QR Code ได้: %v", err)
+	}
+
+	refNo := fmt.Sprintf("REF-SETTLE-%d", time.Now().Unix())
+
+	return &posDto.GenerateQRResponse{
+		Status:          "pending",
+		Amount:          req.Amount,
+		QRCode:          qrBase64,
+		ReferenceNumber: refNo,
+		CreatedAt:       time.Now(),
+	}, nil
+}
+
 func (s *paymentService) ConfirmPayment(req posDto.ConfirmPaymentRequest) (*posDto.ConfirmPaymentResponse, error) {
 	tx := s.paymentRepo.BeginTransaction()
 	defer func() {
@@ -112,10 +144,9 @@ func (s *paymentService) ConfirmPayment(req posDto.ConfirmPaymentRequest) (*posD
 		return nil, fmt.Errorf("ไม่พบออเดอร์ที่เกี่ยวข้อง: %v", err)
 	}
 
-    
-    if req.PaymentMethodID > 0 {
-        order.PaymentMethodID = &req.PaymentMethodID
-    }
+	if req.PaymentMethodID > 0 {
+		order.PaymentMethodID = &req.PaymentMethodID
+	}
 
 	// ---------------------------------------------------------------------
 	// เคสที่ 1: ชำระด้วย "เงินเชื่อ" (CREDIT - PaymentMethodID == 3)
@@ -164,23 +195,23 @@ func (s *paymentService) ConfirmPayment(req posDto.ConfirmPaymentRequest) (*posD
 		order.BalanceDue = order.TotalAmount // ยอดค้างชำระเท่ากับยอดรวมบิล
 		order.ChangeAmount = 0.00
 
-        if err := s.paymentRepo.UpdateOrderWithTx(tx, order); err != nil {
-            tx.Rollback()
-            return nil, fmt.Errorf("อัปเดตสถานะออเดอร์เงินเชื่อล้มเหลว: %v", err)
-        }
+		if err := s.paymentRepo.UpdateOrderWithTx(tx, order); err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("อัปเดตสถานะออเดอร์เงินเชื่อล้มเหลว: %v", err)
+		}
 
-        // หากเคยสร้าง Record ใน payments ไว้ (เช่น กดดู QR Code ก่อนสลับมาเงินเชื่อ) 
-        // ให้อัปเดต PaymentMethodID ให้ตรงกันด้วย
-        existingPayment, err := s.paymentRepo.GetPaymentByOrderId(req.OrderID)
-        if err == nil && existingPayment != nil {
-            existingPayment.PaymentMethodID = req.PaymentMethodID
-            _ = s.paymentRepo.UpdatePaymentWithTx(tx, existingPayment)
-        }
+		// หากเคยสร้าง Record ใน payments ไว้ (เช่น กดดู QR Code ก่อนสลับมาเงินเชื่อ)
+		// ให้อัปเดต PaymentMethodID ให้ตรงกันด้วย
+		existingPayment, err := s.paymentRepo.GetPaymentByOrderId(req.OrderID)
+		if err == nil && existingPayment != nil {
+			existingPayment.PaymentMethodID = req.PaymentMethodID
+			_ = s.paymentRepo.UpdatePaymentWithTx(tx, existingPayment)
+		}
 
-        if err := tx.Commit().Error; err != nil {
-            tx.Rollback()
-            return nil, fmt.Errorf("Commit Transaction ล้มเหลว: %v", err)
-        }
+		if err := tx.Commit().Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("Commit Transaction ล้มเหลว: %v", err)
+		}
 
 		return &posDto.ConfirmPaymentResponse{
 			Message: "บันทึกรายการขายเชื่อสำเร็จ",
@@ -226,15 +257,15 @@ func (s *paymentService) ConfirmPayment(req posDto.ConfirmPaymentRequest) (*posD
 		}
 	}
 
-    if payment.PaidAt != nil {
-        tx.Rollback()
-        return nil, fmt.Errorf("รายการชำระเงินนี้ได้รับการยืนยันไปแล้ว")
-    }
+	if payment.PaidAt != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("รายการชำระเงินนี้ได้รับการยืนยันไปแล้ว")
+	}
 
-    // บังคับอัปเดต PaymentMethodID ของ Payment Record เป็นวิธีชำระเงินล่าสุดเสมอ
-    if req.PaymentMethodID > 0 {
-        payment.PaymentMethodID = req.PaymentMethodID
-    }
+	// บังคับอัปเดต PaymentMethodID ของ Payment Record เป็นวิธีชำระเงินล่าสุดเสมอ
+	if req.PaymentMethodID > 0 {
+		payment.PaymentMethodID = req.PaymentMethodID
+	}
 
 	now := time.Now()
 	payment.PaidAt = &now
@@ -280,15 +311,22 @@ func (s *paymentService) ConfirmPayment(req posDto.ConfirmPaymentRequest) (*posD
 // 2. ดึงรายการบิลค้างชำระของลูกค้า (Unpaid Orders) GET /api/pos/payments/unpaid-bills/:customer_id
 // -------------------------------------------------------------
 func (s *paymentService) GetUnpaidBillsByCustomer(customerID uint) (*posDto.CustomerUnpaidBillsResponse, error) {
+	// 1. ดึงข้อมูลลูกค้าโดยตรงจากฐานข้อมูล
+	var customer entity.Customer
+	customerName := ""
+	if err := s.paymentRepo.BeginTransaction().First(&customer, customerID).Error; err == nil {
+		customerName = customer.CustomerName
+	}
+
+	// 2. ดึงรายการบิล
 	orders, err := s.paymentRepo.GetUnpaidOrdersByCustomerID(customerID)
 	if err != nil {
 		return nil, err
 	}
 
 	var totalDebt float64
-	var billItems []posDto.UnpaidBillItem
+	billItems := make([]posDto.UnpaidBillItem, 0)
 
-	customerName := ""
 	for _, o := range orders {
 		if customerName == "" {
 			if o.Customer.ID != 0 && o.Customer.CustomerName != "" {
@@ -297,6 +335,21 @@ func (s *paymentService) GetUnpaidBillsByCustomer(customerID uint) (*posDto.Cust
 				customerName = *o.CustomerNameTemp
 			}
 		}
+
+		// ดึงเบอร์โทรศัพท์
+		phone := ""
+		if o.Customer.ID != 0 && o.Customer.PhoneNumber != "" {
+			phone = o.Customer.PhoneNumber
+		} else if o.CustomerPhoneTemp != nil {
+			phone = *o.CustomerPhoneTemp
+		}
+
+		// ดึงประเภทลูกค้า
+		customerType := ""
+		if o.Customer.CustomerType.ID != 0 {
+			customerType = o.Customer.CustomerType.TypeLabel
+		}
+
 		totalDebt += o.BalanceDue
 		billItems = append(billItems, posDto.UnpaidBillItem{
 			OrderID:       o.ID,
@@ -306,6 +359,8 @@ func (s *paymentService) GetUnpaidBillsByCustomer(customerID uint) (*posDto.Cust
 			PaidAmount:    o.PaidAmount,
 			BalanceDue:    o.BalanceDue,
 			PaymentStatus: string(o.PaymentStatus),
+			PhoneNumber:   phone,        // เพิ่มฟิลด์นี้
+			CustomerType:  customerType, // เพิ่มฟิลด์นี้
 		})
 	}
 
@@ -314,6 +369,65 @@ func (s *paymentService) GetUnpaidBillsByCustomer(customerID uint) (*posDto.Cust
 		CustomerName: customerName,
 		TotalDebt:    totalDebt,
 		Bills:        billItems,
+	}, nil
+}
+
+func (s *paymentService) GetUnpaidBillByOrderNumber(orderNumber string) (*posDto.CustomerUnpaidBillsResponse, error) {
+	order, err := s.paymentRepo.GetUnpaidOrderByOrderNumber(orderNumber)
+	if err != nil {
+		// เช็คกรณีพิเศษเพื่อแจ้งเตือนให้ผู้ใช้เข้าใจชัดเจน
+		var anyOrder entity.SaleOrder
+		if errCheck := s.paymentRepo.BeginTransaction().Where("order_number = ?", orderNumber).First(&anyOrder).Error; errCheck == nil {
+			if anyOrder.Status == "cancelled" || anyOrder.Status == "pending_cancel" {
+				return nil, errors.New("บิลนี้ถูกยกเลิกแล้ว ไม่สามารถทำรายการได้")
+			}
+			if anyOrder.PaymentStatus == "paid" || anyOrder.BalanceDue <= 0 {
+				return nil, errors.New("บิลนี้ชำระเงินครบถ้วนแล้ว ไม่มียอดค้างชำระ")
+			}
+		}
+		return nil, fmt.Errorf("ไม่พบบิลเลขที่ %s หรือบิลนี้ไม่มียอดค้างชำระ", orderNumber)
+	}
+
+	customerID := uint(0)
+	customerName := ""
+	if order.CustomerID != nil {
+		customerID = *order.CustomerID
+	}
+	if order.Customer.ID != 0 && order.Customer.CustomerName != "" {
+		customerName = order.Customer.CustomerName
+	} else if order.CustomerNameTemp != nil {
+		customerName = *order.CustomerNameTemp
+	}
+
+	phone := ""
+	if order.Customer.ID != 0 && order.Customer.PhoneNumber != "" {
+		phone = order.Customer.PhoneNumber
+	} else if order.CustomerPhoneTemp != nil {
+		phone = *order.CustomerPhoneTemp
+	}
+
+	customerType := ""
+	if order.Customer.CustomerType.ID != 0 {
+		customerType = order.Customer.CustomerType.TypeLabel
+	}
+
+	billItem := posDto.UnpaidBillItem{
+		OrderID:       order.ID,
+		OrderNumber:   order.OrderNumber,
+		OrderDate:     order.CreatedAt,
+		TotalAmount:   order.TotalAmount,
+		PaidAmount:    order.PaidAmount,
+		BalanceDue:    order.BalanceDue,
+		PaymentStatus: string(order.PaymentStatus),
+		PhoneNumber:   phone,
+		CustomerType:  customerType,
+	}
+
+	return &posDto.CustomerUnpaidBillsResponse{
+		CustomerID:   customerID,
+		CustomerName: customerName,
+		TotalDebt:    order.BalanceDue,
+		Bills:        []posDto.UnpaidBillItem{billItem},
 	}, nil
 }
 
@@ -328,20 +442,30 @@ func (s *paymentService) SettleCustomerBills(req posDto.SettleBillsRequest) (*po
 		}
 	}()
 
-    now := time.Now()
-    var lastRepaymentID uint
-    var lastReceiptNo string // ประกาศตัวแปรเก็บเลขที่ใบเสร็จสำหรับส่งกลับ response
+	now := time.Now()
+	var lastRepaymentID uint
+	var lastReceiptNo string // ประกาศตัวแปรเก็บเลขที่ใบเสร็จสำหรับส่งกลับ response
 
-    for _, alloc := range req.Allocations {
-        order, err := s.paymentRepo.GetOrderById(alloc.OrderID)
-        if err != nil {
-            tx.Rollback()
-            return nil, fmt.Errorf("ไม่พบบิลเลขที่ %d", alloc.OrderID)
-        }
+	for _, alloc := range req.Allocations {
+		order, err := s.paymentRepo.GetOrderById(alloc.OrderID)
+		if err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("ไม่พบบิลเลขที่ %d", alloc.OrderID)
+		}
 
-        // ย้ายมาสร้างตรงนี้เพื่อให้มีตัวแปร order ให้ใช้งาน
-        receiptNo := fmt.Sprintf("RE-%s-%d", strings.TrimPrefix(order.OrderNumber, "INV"), now.Unix())
-        lastReceiptNo = receiptNo
+		if alloc.PayAmount <= 0 {
+			tx.Rollback()
+			return nil, fmt.Errorf("ยอดชำระของบิล %s ต้องมากกว่า 0 บาท", order.OrderNumber)
+		}
+
+		if alloc.PayAmount > order.BalanceDue {
+			tx.Rollback()
+			return nil, fmt.Errorf("ยอดชำระของบิล %s (%.2f บาท) เกินยอดค้างชำระ (%.2f บาท)", order.OrderNumber, alloc.PayAmount, order.BalanceDue)
+		}
+
+		// ย้ายมาสร้างตรงนี้เพื่อให้มีตัวแปร order ให้ใช้งาน
+		receiptNo := fmt.Sprintf("RE-%s-%d", strings.TrimPrefix(order.OrderNumber, "INV"), now.Unix())
+		lastReceiptNo = receiptNo
 
 		repayment := entity.PaymentRepayment{
 			ReceiptNumber:   receiptNo,
@@ -396,26 +520,35 @@ func (s *paymentService) SettleCustomerBills(req posDto.SettleBillsRequest) (*po
 		return nil, err
 	}
 
-    return &posDto.SettleBillsResponse{
-        ReceiptID:         lastRepaymentID,
-        ReceiptNumber:     lastReceiptNo,
-        CustomerID:        req.CustomerID,
-        TotalReceived:     req.TotalReceived,
-        SettledBillsCount: len(req.Allocations),
-        PaidAt:            now,
-    }, nil
+	return &posDto.SettleBillsResponse{
+		ReceiptID:         lastRepaymentID,
+		ReceiptNumber:     lastReceiptNo,
+		CustomerID:        req.CustomerID,
+		TotalReceived:     req.TotalReceived,
+		SettledBillsCount: len(req.Allocations),
+		PaidAt:            now,
+	}, nil
 }
 
 // -------------------------------------------------------------
 // 4. ประวัติการรับชำระเงิน (Payment History)
 // -------------------------------------------------------------
 func (s *paymentService) GetPaymentHistory(search, startDate, endDate string) ([]posDto.PaymentHistoryItem, error) {
+	// 1. ดึงประวัติจาก payment_repayments (การเคลียร์บิลเงินเชื่อ)
 	repayments, err := s.paymentRepo.GetRepaymentHistory(search, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
 
+	// 2. ดึงประวัติจาก payments (การชำระเงินสด / QR Code หน้าร้าน)
+	payments, err := s.paymentRepo.GetDirectPaymentHistory(search, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
 	var list []posDto.PaymentHistoryItem
+
+	// Map Repayments
 	for _, r := range repayments {
 		paidTime := r.CreatedAt
 		if r.PaidAt != nil {
@@ -446,46 +579,145 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string) ([
 			TotalReceived:  r.AmountPaid,
 			Status:         r.Status,
 			ReceivedByName: recName,
+			PaymentType:    "repayment",
 		})
 	}
+
+	// Map Direct Payments
+	for _, p := range payments {
+		paidTime := p.CreatedAt
+		if p.PaidAt != nil {
+			paidTime = *p.PaidAt
+		}
+
+		custName := ""
+		if p.Order.Customer.ID != 0 && p.Order.Customer.CustomerName != "" {
+			custName = p.Order.Customer.CustomerName
+		} else if p.Order.CustomerNameTemp != nil {
+			custName = *p.Order.CustomerNameTemp
+		}
+
+		recName := ""
+		if p.ReceivedBy.FirstName != "" || p.ReceivedBy.LastName != "" {
+			recName = strings.TrimSpace(p.ReceivedBy.FirstName + " " + p.ReceivedBy.LastName)
+		} else {
+			recName = p.ReceivedBy.Username
+		}
+
+		receiptNo := p.ReferenceNumber
+		if receiptNo == "" {
+			receiptNo = fmt.Sprintf("PAY-%s", p.Order.OrderNumber)
+		}
+
+		status := "completed"
+		if p.Order.Status == "cancelled" {
+			status = "cancelled"
+		}
+
+		list = append(list, posDto.PaymentHistoryItem{
+			ReceiptID:      p.ID,
+			ReceiptNumber:  receiptNo,
+			PaidAt:         paidTime,
+			CustomerName:   custName,
+			PaymentMethod:  p.PaymentMethod.MethodName,
+			OrderNumbers:   p.Order.OrderNumber,
+			TotalReceived:  p.Amount,
+			Status:         status,
+			ReceivedByName: recName,
+			PaymentType:    "payment",
+		})
+	}
+
+	// เรียงลำดับประวัติการชำระเงินตามเวลาล่าสุด (PaidAt Descending)
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].PaidAt.After(list[j].PaidAt)
+	})
+
 	return list, nil
 }
 
 func (s *paymentService) GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentHistoryItem, error) {
 	r, err := s.paymentRepo.GetRepaymentByID(receiptID)
-	if err != nil {
-		return nil, err
+	if err == nil && r != nil && r.ID != 0 {
+		paidTime := r.CreatedAt
+		if r.PaidAt != nil {
+			paidTime = *r.PaidAt
+		}
+
+		custName := ""
+		if r.Order.Customer.ID != 0 && r.Order.Customer.CustomerName != "" {
+			custName = r.Order.Customer.CustomerName
+		} else if r.Order.CustomerNameTemp != nil {
+			custName = *r.Order.CustomerNameTemp
+		}
+
+		recName := ""
+		if r.RecordedBy.FirstName != "" || r.RecordedBy.LastName != "" {
+			recName = strings.TrimSpace(r.RecordedBy.FirstName + " " + r.RecordedBy.LastName)
+		} else {
+			recName = r.RecordedBy.Username
+		}
+
+		return &posDto.PaymentHistoryItem{
+			ReceiptID:      r.ID,
+			ReceiptNumber:  r.ReceiptNumber,
+			PaidAt:         paidTime,
+			CustomerName:   custName,
+			PaymentMethod:  r.PaymentMethod.MethodName,
+			OrderNumbers:   r.Order.OrderNumber,
+			TotalReceived:  r.AmountPaid,
+			Status:         r.Status,
+			ReceivedByName: recName,
+			PaymentType:    "repayment",
+		}, nil
 	}
 
-	paidTime := r.CreatedAt
-	if r.PaidAt != nil {
-		paidTime = *r.PaidAt
+	// ถ้าไม่พบใน PaymentRepayment ให้ค้นหาใน Payment (Direct Payment)
+	p, err := s.paymentRepo.GetPaymentWithDetailsByID(receiptID)
+	if err != nil {
+		return nil, fmt.Errorf("ไม่พบข้อมูลการชำระเงินรหัส %d", receiptID)
+	}
+
+	paidTime := p.CreatedAt
+	if p.PaidAt != nil {
+		paidTime = *p.PaidAt
 	}
 
 	custName := ""
-	if r.Order.Customer.ID != 0 && r.Order.Customer.CustomerName != "" {
-		custName = r.Order.Customer.CustomerName
-	} else if r.Order.CustomerNameTemp != nil {
-		custName = *r.Order.CustomerNameTemp
+	if p.Order.Customer.ID != 0 && p.Order.Customer.CustomerName != "" {
+		custName = p.Order.Customer.CustomerName
+	} else if p.Order.CustomerNameTemp != nil {
+		custName = *p.Order.CustomerNameTemp
 	}
 
 	recName := ""
-	if r.RecordedBy.FirstName != "" || r.RecordedBy.LastName != "" {
-		recName = strings.TrimSpace(r.RecordedBy.FirstName + " " + r.RecordedBy.LastName)
+	if p.ReceivedBy.FirstName != "" || p.ReceivedBy.LastName != "" {
+		recName = strings.TrimSpace(p.ReceivedBy.FirstName + " " + p.ReceivedBy.LastName)
 	} else {
-		recName = r.RecordedBy.Username
+		recName = p.ReceivedBy.Username
+	}
+
+	receiptNo := p.ReferenceNumber
+	if receiptNo == "" {
+		receiptNo = fmt.Sprintf("PAY-%s", p.Order.OrderNumber)
+	}
+
+	status := "completed"
+	if p.Order.Status == "cancelled" {
+		status = "cancelled"
 	}
 
 	return &posDto.PaymentHistoryItem{
-		ReceiptID:      r.ID,
-		ReceiptNumber:  r.ReceiptNumber,
+		ReceiptID:      p.ID,
+		ReceiptNumber:  receiptNo,
 		PaidAt:         paidTime,
 		CustomerName:   custName,
-		PaymentMethod:  r.PaymentMethod.MethodName,
-		OrderNumbers:   r.Order.OrderNumber,
-		TotalReceived:  r.AmountPaid,
-		Status:         r.Status,
+		PaymentMethod:  p.PaymentMethod.MethodName,
+		OrderNumbers:   p.Order.OrderNumber,
+		TotalReceived:  p.Amount,
+		Status:         status,
 		ReceivedByName: recName,
+		PaymentType:    "payment",
 	}, nil
 }
 

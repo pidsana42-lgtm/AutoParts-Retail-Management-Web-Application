@@ -21,23 +21,17 @@ export default function ApproveView({
   bill,
   products,
   onApprove,
-  onReject,
   onBack,
   formatDate,
   getSupplierName,
 }: ApproveViewProps) {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState<'approve' | 'reject' | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
   const [imgError, setImgError] = useState(false);
 
   const handleApprove = async () => {
-    setLoading('approve');
-    try { await onApprove(bill.id); } finally { setLoading(null); }
-  };
-
-  const handleReject = async () => {
-    setLoading('reject');
-    try { await onReject(bill.id); } finally { setLoading(null); }
+    setLoading(true);
+    try { await onApprove(bill.id); } finally { setLoading(false); }
   };
 
   const imageUrl = bill.bill_image?.image_url
@@ -235,7 +229,7 @@ export default function ApproveView({
               disabled={!!loading}
               className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
             >
-              {loading === 'approve' ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
               <span>อนุมัติบิล</span>
             </button>
           </BillSummaryFooterBar>

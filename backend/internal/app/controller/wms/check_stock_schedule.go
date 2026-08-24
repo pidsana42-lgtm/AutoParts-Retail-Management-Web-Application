@@ -23,11 +23,12 @@ func (ctrl *CheckStockScheduleController) CreateSchedule(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := ctrl.service.CreateSchedule(&req); err != nil {
+	id, err := ctrl.service.CreateSchedule(&req)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"message": "schedule created successfully"})
+	c.JSON(http.StatusCreated, gin.H{"message": "schedule created successfully", "id": id})
 }
 
 func (ctrl *CheckStockScheduleController) UpdateSchedule(c *gin.Context) {

@@ -5,6 +5,7 @@ import type { StoreConfigInterface } from "../../../interface/pos/store_config_i
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
 import type { ConfirmPaymentRequest } from "../../../interface/pos/payment_interface";
 import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, GetSaleHistoryByIDResponse, RevertCancellationRequestResponse } from "../../../interface/pos/sales_history_interface";
+import type { CustomerUnpaidBillsResponse, SettleBillsRequest, SettleBillsResponse, GenerateSettleQRRequest, GenerateSettleQRResponse } from "../../../interface/pos/settle_bills_interface";
 
 // ==================== API Services ====================
 export const posApiService = {
@@ -13,12 +14,15 @@ export const posApiService = {
     apiClient.get<StoreConfigInterface>("/pos/store-config").then((res) => res.data),
 
   /** ค้นหาข้อมูลสิทธิ์ส่วนลดและโปรไฟล์ลูกค้า */
-  searchCustomerDiscount: (query: string): Promise<CustomerDiscountResponse> => 
-    apiClient.get<CustomerDiscountResponse>(`/pos/customer-discount?search=${query}`).then((res) => res.data),
+  searchCustomerDiscount: (query: string): Promise<CustomerDiscountResponse[]> => 
+    apiClient
+      .get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${encodeURIComponent(query)}`)
+      .then((res) => res.data || [])
+      .catch(() => []),
 
   /** ค้นหาข้อมูลอะไหล่ยนต์ในสต๊อกระบบ */
   searchProducts: (query: string): Promise<POSProductResponse[]> => 
-    apiClient.get<POSProductResponse[]>(`/pos/products?q=${query}`).then((res) => res.data),
+    apiClient.get<POSProductResponse[]>(`/pos/products?q=${encodeURIComponent(query)}`).then((res) => res.data),
 
   /** บันทึกคำสั่งซื้อออเดอร์ขาย POS */
   createPOSOrder: (payload: CreateSaleOrderRequest): Promise<any> => 
@@ -96,6 +100,30 @@ export const posApiService = {
       .get<any[]>("/pos/employees")
       .then((res) => res.data),
 
+  /** ดึงรายการบิลค้างชำระของลูกค้าตาม customer_id */
+  getUnpaidBillsByCustomer: (customerId: number): Promise<CustomerUnpaidBillsResponse> =>
+    apiClient
+      .get<CustomerUnpaidBillsResponse>(`/pos/payments/unpaid-bills/${customerId}`)
+      .then((res) => res.data),
+
+  /** ดึงรายการบิลค้างชำระเจาะจงเฉพาะบิลเดียวด้วยเลขที่คำสั่งซื้อ/บาร์โค้ด */
+  getUnpaidBillByOrderNumber: (orderNumber: string): Promise<CustomerUnpaidBillsResponse> =>
+    apiClient
+      .get<CustomerUnpaidBillsResponse>(`/pos/payments/unpaid-order/${encodeURIComponent(orderNumber)}`)
+      .then((res) => res.data),
+
+  /** บันทึกรับชำระบิลค้างชำระ */
+  settleCustomerBills: (payload: SettleBillsRequest): Promise<SettleBillsResponse> =>
+    apiClient
+      .post<SettleBillsResponse>("/pos/payments/settle-bills", payload)
+      .then((res) => res.data),
+
+  /** สร้าง PromptPay QR Code สำหรับชำระบิลค้างชำระ (ตัดยอดหนี้) */
+  generateSettleQR: (payload: GenerateSettleQRRequest): Promise<GenerateSettleQRResponse> =>
+    apiClient
+      .post<GenerateSettleQRResponse>("/pos/payments/generate-settle-qr", payload)
+      .then((res) => res.data),
+
   /** ค้นหาใบสั่งซื้อขายด้วยหมายเลข invoice */
   getSaleOrderByNumber: async (orderNumber: string): Promise<any | null> => {
     const endpoints = [
@@ -127,18 +155,18 @@ export const calculateValidatedDiscount = (
   const currentCustomerTypeId = customer?.customer_type?.id || activeTypeId;
   const currentCustomerTypeName = customer?.customer_type?.type_name || "";
 
-  // [กฎข้อที่ 1]: ลูกค้ากลุ่มบริษัท (WHOLESALE) ห้ามรับส่วนลดใดๆ ทั้งสิ้นในระบบ
+  // ลูกค้ากลุ่มบริษัท (WHOLESALE) ห้ามรับส่วนลดใดๆ ทั้งสิ้นในระบบ
   if (currentCustomerTypeId === 3 || currentCustomerTypeName === "WHOLESALE") {
     alert("ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น");
     return 0;
   }
 
-  // [กฎข้อที่ 2]: ตรวจสอบสิทธิ์กลุ่มอู่ซ่อมรถ (GARAGE) และต้องเปิดใช้งานระบบส่วนลด (is_discount_enabled)
-  const isDiscountEnabled = customer ? customer.is_discount_enabled : true; // ถ้าเป็น Guest ทั่วไปยอมให้กดส่วนลดได้ตามปกติ
+  // ตรวจสอบสิทธิ์กลุ่มอู่ซ่อมรถ (GARAGE) และต้องเปิดใช้งานระบบส่วนลด (is_discount_enabled)
+  const isDiscountEnabled = customer ? customer.is_discount_enabled : true;
   const isGarageMode = 
     isDiscountEnabled && (
       currentCustomerTypeId === 2 || 
-      currentCustomerTypeName === "GARAGE" ||
+      currentCustomerTypeName === "GARAGE" || 
       (customer?.customer_name?.includes("อู่"))
     );
 

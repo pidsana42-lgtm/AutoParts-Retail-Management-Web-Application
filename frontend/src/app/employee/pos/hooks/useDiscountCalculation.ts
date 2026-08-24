@@ -16,7 +16,7 @@ export function useDiscountCalculation() {
     return 0;
   };
 
-  // เช็คกฎเหล็ก (ห้ามขายส่งลด / คุมเพดานอู่)
+  // เช็คกฎเหล็ก (คุมเพดานส่วนลดของสินค้า + โควตาพิเศษของกลุ่มอู่ซ่อมรถ)
   const validateLineDiscountPolicy = ({
     rawValue,
     discountType,
@@ -37,11 +37,13 @@ export function useDiscountCalculation() {
     const lineTotal = unitPrice * qty;
     let allowedMaxRate = maxDiscountRate ?? 2.0;
 
-    // กฎโหมดอู่ซ่อมรถ (+3.0%)
+    // กฎโหมดอู่ซ่อมรถ (+ ontop)
+    const isDiscountEnabled = customer ? customer.is_discount_enabled : true;
     const isGarageMode =
-      currentCustomerTypeId === 2 ||
-      currentCustomerTypeName === "GARAGE" ||
-      customer?.customer_name?.includes("อู่");
+      isDiscountEnabled &&
+      (currentCustomerTypeId === 2 ||
+        currentCustomerTypeName === "GARAGE" ||
+        customer?.customer_name?.includes("อู่"));
 
     if (isGarageMode) {
       const ontopRate = customer ? ((customer as any).ontop_discount_rate ?? 3.0) : 3.0;
@@ -60,9 +62,10 @@ export function useDiscountCalculation() {
       const maxDiscountBaht = (lineTotal * allowedMaxRate) / 100;
       return {
         isValid: false,
-        errorMsg: discountType === "percentage" 
-          ? `ไม่สามารถให้ส่วนลดเกินข้อกำหนดสิทธิ์ลูกค้าได้ (สูงสุดไม่เกิน ${allowedMaxRate.toFixed(2)}%)`
-          : `ไม่สามารถให้ส่วนลดเกินข้อกำหนดสิทธิ์ลูกค้าได้ (สูงสุดไม่เกิน ฿${maxDiscountBaht.toFixed(2)})`
+        errorMsg:
+          discountType === "percentage"
+            ? `ไม่สามารถให้ส่วนลดเกินเพดานของสินค้านี้ได้ (สูงสุดไม่เกิน ${allowedMaxRate.toFixed(2)}%)`
+            : `ไม่สามารถให้ส่วนลดเกินเพดานของสินค้านี้ได้ (สูงสุดไม่เกิน ฿${maxDiscountBaht.toFixed(2)})`,
       };
     }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Plus, Trash2, SquarePen, Loader2 } from "lucide-react";
+import { Trash2, SquarePen, Loader2 } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";

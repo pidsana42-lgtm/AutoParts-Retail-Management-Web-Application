@@ -1,4 +1,3 @@
-import React, { useState } from "react";
 import {
   Eye,
   ChevronLeft,
@@ -29,7 +28,7 @@ import { cn } from "../../../utils/component";
 
 // นำเข้า Hook & Helpers
 import { useSalesHistory } from "./hooks/useSalesHistory";
-import { getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge, getPaymentBadgeColor } from "../../../utils/poshelpers";
+import { getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge } from "../../../utils/poshelpers";
 import { formatDate } from "../../../utils/date";
 import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
 import { useUserRole } from "../../../hooks/useUserRole";
@@ -52,13 +51,15 @@ export default function TransactionHistoryPage() {
     employeeId,
     employeeList,
     startDate,
+    endDate,
     page,
     limit,
     setSearch,
     setCustomerType,
     setPaymentMethod,
     setEmployeeId,
-    setStartDate,
+    setStartDate,    
+    setEndDate,    
     setPage,
     setLimit,
     handleApplyFilter,

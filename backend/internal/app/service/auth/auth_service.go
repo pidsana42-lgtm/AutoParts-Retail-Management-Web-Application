@@ -106,3 +106,4 @@ func (s *authService) LoginWithLine(lineUserID string) (*authDTO.LoginResponse, 
         Username:  user.Username,
     }, nil
 }
+

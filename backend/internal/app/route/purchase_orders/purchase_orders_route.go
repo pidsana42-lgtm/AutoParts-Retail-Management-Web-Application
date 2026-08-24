@@ -5,6 +5,7 @@ import (
 	poRepo "backend/internal/app/repository/purchase_orders"
 	poSvc "backend/internal/app/service/purchase_orders"
 	preOrderRepo "backend/internal/app/repository/pre_oder"
+	wmsRepo "backend/internal/app/repository/wms"
 
 	"backend/internal/app/enum"
 	"backend/internal/middleware"
@@ -19,6 +20,7 @@ func SetupPORoutes(r *gin.Engine, db *gorm.DB) {
 	userRepository := poRepo.NewUserRepository(db)
 	inventoryRepository := poRepo.NewInventoryRepository(db)
 	preOrderRepository := preOrderRepo.NewPreOrderRepository(db)
+	stockAlertRepository := wmsRepo.NewStockAlertRepository(db)
 	poService := poSvc.NewPOService(
 		poRepository,
 		productRepository,
@@ -26,6 +28,7 @@ func SetupPORoutes(r *gin.Engine, db *gorm.DB) {
 		supplierRepository,
 		preOrderRepository,
 		userRepository,
+		stockAlertRepository,
 	)
 
 	poController := poCtrl.NewPOController(poService)
