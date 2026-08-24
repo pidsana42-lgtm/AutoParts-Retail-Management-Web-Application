@@ -86,7 +86,7 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 		}
 
 		productName := product.Product_Name
-		productCode := product.Product_Code
+		productCode := product.CompanyProductCode
 		var unitName string
 		if product.Unit != nil {
 			unitName = product.Unit.Unit_Name
@@ -533,7 +533,7 @@ func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto
 			item := poEntity.POItems{
 				ProductID:                    it.ProductID,
 				Product_name_snapshot:        product.Product_Name,
-				Supply_product_code_snapshot: product.Product_Code, 
+				Supply_product_code_snapshot: product.CompanyProductCode,
 				Quantity:                     float64(it.Quantity),
 				Unit:                         unitName,
 				UnitPrice:                    it.UnitPrice,
