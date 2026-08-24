@@ -2,6 +2,7 @@ import { ChevronRight, Save, Trash2, AlertCircle } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
 import type { ViewState, Supplier, Product, ScannedBillData } from '../../../../interface/import';
+import { validateBillItems, type ItemIssue } from '../../../../utils/excelImport';
 import ProductSearchSelect from '../components/product_search_select';
 import InlineValidationAlertBanner from '../components/inline_validation_alert_banner';
 import BillSummaryFooterBar from '../components/BillSummaryFooterBar';
@@ -80,6 +81,12 @@ export default function ManualEntryView({
 
 
   const showBanner = (validationWarnings.length > 0 || priceMismatchedItems.length > 0 || pendingNewProducts.length > 0) && !!handleConfirmValidationSave && !!handleDismissValidation;
+
+  // Row validation — แสดง error รายแถวแบบ inline (ไม่ block การบันทึก)
+  const itemIssues: Record<number, ItemIssue> = formData ? validateBillItems(formData.items) : {};
+  const issueCount = Object.keys(itemIssues).length;
+  const issueField = (idx: number, field: string): boolean => !!itemIssues[idx]?.fields.includes(field);
+  const errInputClass = 'border-red-400 bg-red-50/40 focus:border-red-500 focus:ring-red-400';
 
   return (
     <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
@@ -189,6 +196,25 @@ export default function ManualEntryView({
             </div>
           </div>
 
+          {/* Row Issues Summary */}
+          {issueCount > 0 && (
+            <div className="mx-6 mt-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-none flex items-start gap-2">
+              <AlertCircle size={16} className="shrink-0 text-amber-500 mt-0.5" />
+              <div>
+                <span className="font-bold">พบข้อมูลที่ควรตรวจสอบ {issueCount} รายการ</span>
+                <ul className="list-disc ml-4 mt-1 space-y-0.5">
+                  {Object.entries(itemIssues).slice(0, 5).map(([idx, issue]) => (
+                    <li key={idx}>
+                      แถวที่ {Number(idx) + 1}: {issue.messages.join(' · ')}
+                    </li>
+                  ))}
+                  {issueCount > 5 && <li>และอีก {issueCount - 5} รายการ (ดูในตารางด้านล่าง)</li>}
+                </ul>
+                <p className="mt-1 text-amber-600">* ยังสามารถบันทึกได้ แตะที่ช่องสีแดงในตารางเพื่อแก้ไข</p>
+              </div>
+            </div>
+          )}
+
           {/* Items Table */}
           <div className="flex-1 overflow-y-auto max-h-[400px]">
             <Table className="min-w-[1250px] text-left text-sm border-collapse">
@@ -231,13 +257,18 @@ export default function ManualEntryView({
                     return (
                       <TableRow key={idx} className="hover:bg-gray-50/80 align-top transition-colors">
                       <TableCell className="py-2.5 px-3">
-                        <input 
-                          type="text"
-                          value={item.company_product_code || ''}
-                          onChange={(e) => handleItemChange(idx, 'company_product_code', e.target.value)}
-                          placeholder="รหัสสินค้าคู่ค้า"
-                          className="bg-white border border-gray-300 rounded-none focus:border-[#e51c23] focus:ring-1 focus:ring-[#e51c23] w-full text-sm font-mono text-[#1C1B1B] px-3 py-1.5 shadow-2xs"
-                        />
+                        <div className="flex flex-col gap-1">
+                          <input 
+                            type="text"
+                            value={item.company_product_code || ''}
+                            onChange={(e) => handleItemChange(idx, 'company_product_code', e.target.value)}
+                            placeholder="รหัสสินค้าคู่ค้า"
+                            className={`bg-white border rounded-none focus:ring-1 w-full text-sm font-mono text-[#1C1B1B] px-3 py-1.5 shadow-2xs ${issueField(idx, 'code') ? errInputClass : 'border-gray-300 focus:border-[#e51c23] focus:ring-[#e51c23]'}`}
+                          />
+                          {issueField(idx, 'code') && itemIssues[idx] && (
+                            <span className="text-[10px] font-bold text-red-600">{itemIssues[idx].messages.find((m) => m.includes('รหัส')) || itemIssues[idx].messages[0]}</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="py-2.5 px-3">
                         <div className="flex flex-col gap-1">
@@ -246,8 +277,11 @@ export default function ManualEntryView({
                             value={item.company_product_name || ''}
                             onChange={(e) => handleItemChange(idx, 'company_product_name', e.target.value)}
                             placeholder="ชื่อสินค้าในบิล"
-                            className="bg-white border border-gray-300 rounded-none focus:border-[#e51c23] focus:ring-1 focus:ring-[#e51c23] w-full text-sm font-medium text-[#1C1B1B] px-3 py-1.5 shadow-2xs"
+                            className={`bg-white border rounded-none focus:ring-1 w-full text-sm font-medium text-[#1C1B1B] px-3 py-1.5 shadow-2xs ${issueField(idx, 'name') ? errInputClass : 'border-gray-300 focus:border-[#e51c23] focus:ring-[#e51c23]'}`}
                           />
+                          {issueField(idx, 'name') && (
+                            <span className="text-[10px] font-bold text-red-600">กรอกชื่อสินค้า</span>
+                          )}
                           {item.pre_order_item_id && (
                             <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 border border-purple-200 w-fit">
                               ★ สินค้าพรีออเดอร์ของลูกค้า
@@ -373,7 +407,7 @@ export default function ManualEntryView({
                                 type="number" 
                                 value={item.order_quantity ?? 0}
                                 onChange={(e) => handleItemChange(idx, 'order_quantity', e.target.value)}
-                                className="bg-white border border-gray-300 rounded-none focus:border-[#e51c23] focus:ring-1 focus:ring-[#e51c23] w-14 text-right text-sm text-[#1C1B1B] p-1.5 font-medium"
+                                className={`bg-white border rounded-none focus:ring-1 w-14 text-right text-sm text-[#1C1B1B] p-1.5 font-medium ${issueField(idx, 'quantity') ? errInputClass : 'border-gray-300 focus:border-[#e51c23] focus:ring-[#e51c23]'}`}
                               />
                               <input 
                                 type="text" 
@@ -389,7 +423,7 @@ export default function ManualEntryView({
                               step="0.01"
                               value={item.price_per_unit ?? 0}
                               onChange={(e) => handleItemChange(idx, 'price_per_unit', e.target.value)}
-                              className="bg-white border border-gray-300 rounded-none focus:border-[#e51c23] focus:ring-1 focus:ring-[#e51c23] w-20 text-right text-sm text-[#1C1B1B] font-bold p-1.5"
+                              className={`bg-white border rounded-none focus:ring-1 w-20 text-right text-sm text-[#1C1B1B] font-bold p-1.5 ${issueField(idx, 'price') ? errInputClass : 'border-gray-300 focus:border-[#e51c23] focus:ring-[#e51c23]'}`}
                             />
                           </TableCell>
                           <TableCell className="py-2 px-4 text-right font-bold text-[#1C1B1B] text-sm">

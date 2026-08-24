@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import apiClient from '../../../service/http/apiClient';
-import {
-  Plus, Search, Edit, Trash2, ChevronRight, Save,
-  FileText, BookOpen, Building2, X, Package,
-  CheckCircle, Clock, XCircle, Loader2, AlertCircle, ImageIcon, Truck
+import { 
+  Plus, Search, Edit, Trash2, ChevronRight, Save, 
+  FileText, BookOpen, Building2, X,
+  Loader2, AlertCircle, ImageIcon, Package
 } from 'lucide-react';
 import {
   getPreOrders, getPreOrderById, createPreOrder,
@@ -26,9 +27,8 @@ interface Customer {
   phone_number?: string;
 }
 
-
-
 export default function PreOrderManager() {
+  const location = useLocation();
   const [preOrders, setPreOrders] = useState<PreOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -62,6 +62,43 @@ export default function PreOrderManager() {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [formStatus, setFormStatus] = useState<string>('PENDING');
   const [formItems, setFormItems] = useState<PreOrderItem[]>([]);
+
+  // Handle prefill item from catalog navigation (Leave customer info blank for user to fill)
+  useEffect(() => {
+    if (location.state && (location.state as any).prefillItem) {
+      const catItem = (location.state as any).prefillItem;
+      const catalog = (location.state as any).catalog;
+
+      // Reset customer name and fields (leave empty as requested)
+      setEditingId(null);
+      setFormType('WALK_IN');
+      setFormCustomerId(0);
+      setFormCustomerFirstName('');
+      setFormCustomerLastName('');
+      setFormCustomerPhone('');
+      setFormStatus('PENDING');
+
+      const cleanSupplierCode = catItem.st_no || (catItem.remark ? catItem.remark.replace(/^S\.T\.\s*NO:\s*/i, '').split('|')[0].trim() : '') || catItem.part_number;
+
+      const newItem: PreOrderItem = {
+        product_id: 0,
+        product_name: catItem.part_name || catItem.part_number,
+        product_code: catItem.part_number,
+        quantity: 1,
+        unit_price: catItem.standard_price || 0,
+        supplier_part_code: cleanSupplierCode,
+        supplier_name: catalog?.supplier_name || catItem.supplier_name || '',
+        image: catItem.image || catItem.image_thumbnail || '',
+      } as any;
+
+      setFormItems([newItem]);
+      setView('form');
+      setErrorMsg(null);
+
+      // Clean state so refreshing won't re-trigger
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   // Fetch initial data
   useEffect(() => {
@@ -439,14 +476,14 @@ export default function PreOrderManager() {
         if (po.status === 'COMPLETED') {
           return (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-[#259b24]/10 text-[#259b24] border border-[#259b24]/30">
-              <CheckCircle size={14} /> ส่งมอบแล้ว
+              ส่งมอบแล้ว
             </span>
           );
         }
         if (po.status === 'CANCELLED') {
           return (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-red-50 text-[#e51c23] border border-red-200">
-              <XCircle size={14} /> ยกเลิก
+              ยกเลิก
             </span>
           );
         }
@@ -454,7 +491,7 @@ export default function PreOrderManager() {
           return (
             <div className="flex flex-col items-start gap-0.5">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                <Truck size={14} /> รอสินค้า
+                รอสินค้า
               </span>
               {po.po_number && (
                 <span className="text-[10px] text-[#5F5E5E] font-mono font-semibold">
@@ -467,7 +504,7 @@ export default function PreOrderManager() {
         return (
           <div className="flex flex-col items-start gap-0.5">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-              <Clock size={14} /> รออนุมัติสั่งซื้อ
+              รออนุมัติสั่งซื้อ
             </span>
             {po.po_number && (
               <span className="text-[10px] text-[#5F5E5E] font-mono font-semibold">
@@ -537,7 +574,7 @@ export default function PreOrderManager() {
           <Card className="overflow-hidden border border-gray-200 shadow-xs" noPadding>
             {/* Header Toolbar: Search on Left, Filter Tabs on Right */}
             <div className="p-4 bg-gray-50/80 border-b border-gray-200 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
-              <div className="relative w-full md:w-80">
+              <div className="relative flex-1 min-w-[240px]">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
@@ -724,10 +761,9 @@ export default function PreOrderManager() {
 
             {/* Card: รายการสินค้า */}
             <Card title="รายการสินค้าสั่งจอง">
-              <div className="mb-4 flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
-                
-                {/* Search Box (Left Aligned) */}
-                <div className="relative z-20 w-full md:w-[400px]">
+              <div className="pb-4">
+                {/* Unified Search Input (Stock + Catalog) */}
+                <div className="relative w-full max-w-md">
                   <label className="block text-xs font-bold text-[#1C1B1B] mb-1">
                     ค้นหาสินค้า (สต็อก + แคตตาล็อก)
                   </label>
@@ -795,19 +831,6 @@ export default function PreOrderManager() {
                     </div>
                   )}
                 </div>
-
-                {/* Catalog Button */}
-                <div className="mt-5">
-                  <Button 
-                    type="button"
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => { setShowCatalogModal(true); setCatalogSearch(''); setCatalogItemSearch(''); setSelectedCatalogId(null); }}
-                    className="gap-1.5 font-bold shadow-xs border-gray-300 text-gray-700 hover:bg-gray-50 shrink-0 h-10 px-4"
-                  >
-                    <BookOpen size={15} /> เปิดดูแคตตาล็อก
-                  </Button>
-                </div>
               </div>
               <div className="overflow-x-auto min-h-[220px]">
                 <Table className="min-w-[800px] text-left text-sm border-collapse">
@@ -829,17 +852,7 @@ export default function PreOrderManager() {
                         <TableCell colSpan={8} className="py-12 text-center text-gray-500 bg-gray-50/50">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <AlertCircle size={36} className="text-gray-400" />
-                            <p className="font-bold text-[#1C1B1B] text-sm">ยังไม่มีรายการสินค้าสั่งจอง</p>
-                            <p className="text-xs text-[#5F5E5E]">ค้นหาและเลือกสินค้าจากช่องค้นหาด้านบน หรือเลือกจากแคตตาล็อกคู่ค้า</p>
-                            <div className="flex items-center gap-2 mt-3">
-                              <button
-                                type="button"
-                                onClick={() => { setShowCatalogModal(true); setCatalogSearch(''); setCatalogItemSearch(''); setSelectedCatalogId(null); }}
-                                className="bg-white border border-gray-300 hover:bg-gray-50 text-[#1C1B1B] px-4 py-2 text-xs font-bold rounded-none shadow-xs cursor-pointer inline-flex items-center gap-1.5 transition-colors"
-                              >
-                                <BookOpen size={14} /> เลือกจากแคตตาล็อก
-                              </button>
-                            </div>
+                            <p className="text-xs text-[#5F5E5E]">พิมพ์ค้นหาและเลือกสินค้าจากช่องค้นหาด้านบนเพื่อเพิ่มรายการ</p>
                           </div>
                         </TableCell>
                       </TableRow>

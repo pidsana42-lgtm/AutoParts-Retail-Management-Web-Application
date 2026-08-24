@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Search, Loader2, Truck, CheckCircle2, Clock, PackageCheck,
+  Search, Loader2, Truck,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from 'lucide-react';
 import Input from '../../../components/elements/input';
@@ -232,7 +232,6 @@ export default function ClaimTrackingTab({
               <TableHead className="text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">สินค้าที่เคลม</TableHead>
               <TableHead className="text-center w-20 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">จำนวน</TableHead>
               <TableHead className="w-28 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">ประเภทเคลม</TableHead>
-              <TableHead className="text-center w-48 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">ขั้นตอนปัจจุบัน</TableHead>
               <TableHead className="text-center pr-6 w-52 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">อัปเดตขั้นตอน</TableHead>
             </TableRow>
           </TableHeader>
@@ -240,7 +239,7 @@ export default function ClaimTrackingTab({
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-16">
+                <TableCell colSpan={6} className="text-center py-16">
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 size={22} className="animate-spin text-[#e51c23]" />
                     <span className="text-sm text-gray-400">กำลังโหลดข้อมูลติดตาม...</span>
@@ -249,7 +248,7 @@ export default function ClaimTrackingTab({
               </TableRow>
             ) : paginatedTrackingRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-16">
+                <TableCell colSpan={6} className="text-center py-16">
                   <div className="flex flex-col items-center gap-2">
                     <Truck size={28} className="text-gray-200" />
                     <span className="text-sm text-gray-400 font-medium">ไม่มีรายการสินค้าที่ต้องติดตามในสถานะนี้</span>
@@ -298,27 +297,6 @@ export default function ClaimTrackingTab({
 
                     <TableCell>
                       <TypeBadge type={item.claimType} />
-                    </TableCell>
-
-                    {/* Stage Badge */}
-                    <TableCell className="text-center">
-                      {item.stage === 'COMPLETED' ? (
-                        <span className="px-2.5 py-1 text-[11px] font-bold bg-[#259b24]/10 text-[#259b24] border border-[#259b24]/30 inline-flex items-center gap-1">
-                          <CheckCircle2 size={12} /> ส่งมอบลูกค้าแล้ว
-                        </span>
-                      ) : item.stage === 'REPLACEMENT_RECEIVED' ? (
-                        <span className="px-2.5 py-1 text-[11px] font-bold bg-gray-100 text-[#5F5E5E] border border-gray-200 inline-flex items-center gap-1">
-                          <PackageCheck size={12} /> ได้รับของเปลี่ยนแล้ว
-                        </span>
-                      ) : item.stage === 'SENT_TO_SUPPLIER' ? (
-                        <span className="px-2.5 py-1 text-[11px] font-bold bg-gray-100 text-[#1C1B1B] border border-gray-200 inline-flex items-center gap-1">
-                          <Truck size={12} /> ส่งบริษัทแล้ว (รอของ)
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-1 text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 inline-flex items-center gap-1">
-                          <Clock size={12} /> รอรวบรวมส่งบริษัท
-                        </span>
-                      )}
                     </TableCell>
 
                     {/* Update Stage Action */}
