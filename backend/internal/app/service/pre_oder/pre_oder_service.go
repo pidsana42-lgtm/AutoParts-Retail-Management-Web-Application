@@ -163,7 +163,37 @@ func (s *preOrderService) GetPreOrderByID(id uint) (preOrderDTO.PreOrderResponse
 	if err != nil {
 		return preOrderDTO.PreOrderResponseDTO{}, err
 	}
-	return preOrderDTO.ToPreOrderResponseDTO(entity), nil
+	dto := preOrderDTO.ToPreOrderResponseDTO(entity)
+
+	var itemIDs []uint
+	for _, it := range entity.PreOrderItems {
+		itemIDs = append(itemIDs, it.ID)
+	}
+
+	if len(itemIDs) > 0 {
+		linkedPOs, _ := s.repo.GetLinkedPOsByItemIDs(context.Background(), itemIDs)
+		for _, itID := range itemIDs {
+			if po, ok := linkedPOs[itID]; ok && po.ID != 0 {
+				dto.PONumber = po.PO_number
+				dto.POStatus = string(po.Status)
+				poID := po.ID
+				dto.POID = &poID
+
+				if dto.Status != "COMPLETED" && dto.Status != "CANCELLED" {
+					if po.Status == "APPROVED" {
+						dto.Status = "ORDERED"
+					} else if po.Status == "PENDING" {
+						dto.Status = "PO_PENDING"
+					} else if po.Status == "DRAFT" {
+						dto.Status = "PO_DRAFT"
+					}
+				}
+				break
+			}
+		}
+	}
+
+	return dto, nil
 }
 
 func (s *preOrderService) ListPreOrders() ([]preOrderDTO.PreOrderResponseDTO, error) {
@@ -171,9 +201,41 @@ func (s *preOrderService) ListPreOrders() ([]preOrderDTO.PreOrderResponseDTO, er
 	if err != nil {
 		return nil, err
 	}
+
+	var allItemIDs []uint
+	for _, ent := range entities {
+		for _, it := range ent.PreOrderItems {
+			allItemIDs = append(allItemIDs, it.ID)
+		}
+	}
+
+	linkedPOs, _ := s.repo.GetLinkedPOsByItemIDs(context.Background(), allItemIDs)
+
 	res := make([]preOrderDTO.PreOrderResponseDTO, len(entities))
 	for i := range entities {
-		res[i] = preOrderDTO.ToPreOrderResponseDTO(&entities[i])
+		dto := preOrderDTO.ToPreOrderResponseDTO(&entities[i])
+
+		for _, it := range entities[i].PreOrderItems {
+			if po, ok := linkedPOs[it.ID]; ok && po.ID != 0 {
+				dto.PONumber = po.PO_number
+				dto.POStatus = string(po.Status)
+				poID := po.ID
+				dto.POID = &poID
+
+				if dto.Status != "COMPLETED" && dto.Status != "CANCELLED" {
+					if po.Status == "APPROVED" {
+						dto.Status = "ORDERED"
+					} else if po.Status == "PENDING" {
+						dto.Status = "PO_PENDING"
+					} else if po.Status == "DRAFT" {
+						dto.Status = "PO_DRAFT"
+					}
+				}
+				break
+			}
+		}
+
+		res[i] = dto
 	}
 	return res, nil
 }

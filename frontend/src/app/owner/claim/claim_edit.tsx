@@ -328,7 +328,7 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
                               <button
                                 type="button"
                                 onClick={() => handleRemovePhoto(idx)}
-                                className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white flex items-center justify-center rounded-full cursor-pointer hover:bg-red-600"
+                                className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#e51c23] text-white flex items-center justify-center rounded-full cursor-pointer hover:bg-[#c9181f]"
                                 title="ลบรูปภาพ"
                               >
                                 <X size={10} />
@@ -357,9 +357,9 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
                               onChange={e => handleItemChange(idx, 'status', e.target.value)}
                               className={`border px-2 py-1.5 text-xs font-bold focus:outline-none rounded-none cursor-pointer ${
                                 itemStatusUp === 'APPROVED'
-                                  ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                                  ? 'border-[#259b24]/30 bg-[#259b24]/10 text-[#259b24]'
                                   : itemStatusUp === 'REJECTED'
-                                  ? 'border-red-300 bg-red-50 text-red-800'
+                                  ? 'border-red-200 bg-red-50 text-[#e51c23]'
                                   : 'border-amber-300 bg-amber-50 text-amber-800'
                               }`}
                             >
@@ -368,9 +368,9 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
                               <option value="Rejected">ปฏิเสธ</option>
                             </select>
                           ) : itemStatusUp === 'APPROVED' ? (
-                            <span className="text-xs font-bold text-emerald-700">อนุมัติแล้ว</span>
+                            <span className="text-xs font-bold text-[#259b24]">อนุมัติแล้ว</span>
                           ) : itemStatusUp === 'REJECTED' ? (
-                            <span className="text-xs font-bold text-red-600">ปฏิเสธ</span>
+                            <span className="text-xs font-bold text-[#e51c23]">ปฏิเสธ</span>
                           ) : (
                             <span className="text-xs font-bold text-amber-600">รอดำเนินการ</span>
                           )}
