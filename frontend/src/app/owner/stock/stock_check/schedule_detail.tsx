@@ -432,8 +432,8 @@ function ScheduleDetailContent() {
                 </div>
                 <div className="flex items-center justify-between border-t border-slate-100 pt-4">
                   <div>
-                    <p className="text-xs text-slate-400">จำนวนสินค้า</p>
-                    <p className="font-medium text-slate-700">{schedule.product_count} ชิ้น</p>
+                    <p className="text-xs text-slate-400">รายการสินค้า</p>
+                    <p className="font-medium text-slate-700">{schedule.product_count} รายการ</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-slate-400">พนักงานที่รับมอบหมาย</p>

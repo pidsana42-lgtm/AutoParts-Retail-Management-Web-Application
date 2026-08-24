@@ -394,21 +394,48 @@ func (s *checkStockScheduleService) toResponse(sc *entity.CheckStockSchedule) *w
 	}
 
 	// Derive TargetName and ProductCount based on CheckType
-	if sc.CheckType == "LOCATION" && sc.ZoneID != nil {
-		var zone entity.Zone
-		s.db.First(&zone, sc.ZoneID)
-		target := fmt.Sprintf("Zone %s", zone.Zone_Name)
+	// หมายเหตุ: ของเดิมเช็คแค่ "sc.ZoneID != nil" เป็นเงื่อนไขเข้าบล็อกนี้ทั้งก้อน แต่ตอนสร้าง/แก้ไขตาราง
+	// ถ้าเลือกที่ระดับ "ตู้/ชั้นวาง" (shelf) หรือ "ชั้นระดับ" (shelf level) โดยตรงจาก tree เลือกโซน
+	// หน้าบ้านจะส่งมาแค่ shelf_id หรือ shelf_level_id เท่านั้น ไม่ได้แนบ zone_id มาด้วย (ดู add_check_stock_schedule.tsx)
+	// ทำให้เงื่อนไขนี้ไม่ผ่าน เลยข้ามการคำนวณทั้งชื่อเป้าหมายและจำนวนสินค้าไปเฉยๆ (โชว์ว่างเปล่า/0 ชิ้น)
+	// แก้โดยเช็คแค่ประเภทเป็น LOCATION แล้วไล่หาโซนจากต้นทางที่มีจริง (shelf level -> shelf -> zone) แทน
+	if sc.CheckType == "LOCATION" && (sc.ZoneID != nil || sc.ShelfID != nil || sc.ShelfLevelID != nil) {
+		var zoneName, shelfName, levelName string
+		resolvedZoneID := sc.ZoneID
 
-		var shelf entity.Shelf
-		if sc.ShelfID != nil {
-			s.db.First(&shelf, sc.ShelfID)
-			target += fmt.Sprintf(" - %s", shelf.Shelf_Name)
+		if sc.ShelfLevelID != nil {
+			var level entity.ShelfLevel
+			if err := s.db.Preload("Shelf.Zone").First(&level, sc.ShelfLevelID).Error; err == nil {
+				levelName = level.Level_Name
+				if level.Shelf != nil {
+					shelfName = level.Shelf.Shelf_Name
+					if level.Shelf.Zone != nil {
+						zoneName = level.Shelf.Zone.Zone_Name
+					}
+					resolvedZoneID = &level.Shelf.ZoneID
+				}
+			}
+		} else if sc.ShelfID != nil {
+			var shelf entity.Shelf
+			if err := s.db.Preload("Zone").First(&shelf, sc.ShelfID).Error; err == nil {
+				shelfName = shelf.Shelf_Name
+				if shelf.Zone != nil {
+					zoneName = shelf.Zone.Zone_Name
+				}
+				resolvedZoneID = &shelf.ZoneID
+			}
+		} else if sc.ZoneID != nil {
+			var zone entity.Zone
+			s.db.First(&zone, sc.ZoneID)
+			zoneName = zone.Zone_Name
 		}
 
-		var level entity.ShelfLevel
-		if sc.ShelfLevelID != nil {
-			s.db.First(&level, sc.ShelfLevelID)
-			target += fmt.Sprintf(" - %s", level.Level_Name)
+		target := fmt.Sprintf("Zone %s", zoneName)
+		if shelfName != "" {
+			target += fmt.Sprintf(" - %s", shelfName)
+		}
+		if levelName != "" {
+			target += fmt.Sprintf(" - %s", levelName)
 		}
 		res.TargetName = target
 
@@ -418,11 +445,11 @@ func (s *checkStockScheduleService) toResponse(sc *entity.CheckStockSchedule) *w
 			q = q.Where("shelf_level_id = ?", sc.ShelfLevelID)
 		} else if sc.ShelfID != nil {
 			q = q.Where("shelf_id = ?", sc.ShelfID)
-		} else {
+		} else if resolvedZoneID != nil {
 			// Product ไม่มีคอลัมน์ zone_id ตรงๆ (โซนเชื่อมผ่าน shelf เท่านั้น) ต้อง join เพื่อกรองที่ระดับโซน
 			// ของเดิม query "zone_id = ?" ตรงๆ ทับกับ column ที่ไม่มีจริงในตาราง products ทำให้ query fail เงียบๆ
 			// แล้ว count ค้างเป็น 0 เสมอ (error จาก .Count() ไม่ได้ถูกเช็ค)
-			q = q.Joins("JOIN shelves ON shelves.id = products.shelf_id").Where("shelves.zone_id = ?", sc.ZoneID)
+			q = q.Joins("JOIN shelves ON shelves.id = products.shelf_id").Where("shelves.zone_id = ?", resolvedZoneID)
 		}
 		if err := q.Count(&count).Error; err != nil {
 			log.Printf("[CheckStockSchedule] failed to count products for schedule %d: %v", sc.ID, err)
