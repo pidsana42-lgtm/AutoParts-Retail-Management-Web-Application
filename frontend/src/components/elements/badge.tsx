@@ -23,11 +23,16 @@ const badgeVariants = cva(
         credit:      "bg-[#2563EB] text-white font-light",         // เงินเชื่อ
         transfer:    "bg-gray-400 text-white font-light",         // เงินโอน/สแกน QR
         cash:        "bg-[#259B24] text-white font-light",        // เงินสด
+
+        // ธุรกรรมการรับชำระ
+        payment:     "bg-blue-100 text-blue-700 ",      // ชำระสดหน้าร้าน
+        repayment:   "bg-green-100 text-green-700 ", // เคลียร์หนี้เงินเชื่อ
       },
       size: {
         sm: "w-20 px-1.5 py-0.5 text-xs",
         md: "w-28 px-2 py-0.5 text-xs",
         lg: "w-32 px-2.5 py-1 text-sm",
+        auto: "w-auto px-2 py-0.5 text-[10px]", // ขนาด auto สำหรับ Badge ป้ายกำกับ
       },
     },
     defaultVariants: {
@@ -51,11 +56,14 @@ const dotVariants = cva("rounded-full shrink-0", {
       credit:      "bg-white",
       transfer:    "bg-white",
       cash:        "bg-white",
+      payment:     "bg-blue-500",
+      repayment:   "bg-emerald-500",
     },
     size: {
       sm: "h-1 w-1",
       md: "h-1.5 w-1.5",
       lg: "h-2 w-2",
+      auto: "h-1.5 w-1.5",
     },
   },
   defaultVariants: {

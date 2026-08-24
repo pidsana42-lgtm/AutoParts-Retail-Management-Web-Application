@@ -165,7 +165,7 @@ export const renderCancellationStatusBadge = (
 
   if (billStatus === "CANCELLED" || billStatus === "ยกเลิก") {
     return (
-      <Badge variant="error" className="rounded-none whitespace-nowrap bg-[#FEE2E2] text-[#991B1B] border-none">
+      <Badge variant="error" className="rounded-none whitespace-nowrap bg-[#FEE2E2] text-[#E51C23] border-none">
         อนุมัติแล้ว
       </Badge>
     );

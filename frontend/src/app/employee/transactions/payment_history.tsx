@@ -44,7 +44,7 @@ export default function PaymentHistoryPage() {
     totalPages,
     isLoading,
     error,
-    search,
+    search, 
     typeFilter,
     paymentMethod,
     employeeId,
@@ -281,32 +281,24 @@ export default function PaymentHistoryPage() {
 
                       {/* 4. ประเภทการชำระ */}
                       <TableCell className="py-3.5 px-4">
-                        <Badge
-                          variant="neutral"
-                          className={cn(
-                            "text-[10px] font-light rounded-none py-0.5 px-2",
-                            item.payment_type === "payment"
-                              ? "bg-blue-50 text-blue-700 border border-blue-200"
-                              : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          )}
-                        >
+                        <Badge variant={item.payment_type}>
                           {item.payment_type === "payment" ? "ชำระสดหน้าร้าน" : "เคลียร์หนี้เงินเชื่อ"}
                         </Badge>
                       </TableCell>
 
                       {/* 5. ผู้บันทึกยอด */}
                       <TableCell className="py-3.5 px-4 truncate">
-                        <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
+                        <Text variant="xs" className="font-normal text-[#1C1B1B] mb-0">
                           {item.received_by_name || "-"}
                         </Text>
                       </TableCell>
 
                       {/* 6. ยอดเงินที่รับ */}
                       <TableCell className="py-3.5 px-4 text-right">
-                        <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
+                        <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
                           {formatCurrency(item.total_received)}
                         </Text>
-                      </TableCell>
+                      </TableCell> 
 
                       {/* 7. ช่องทางชำระเงิน */}
                       <TableCell className="py-3.5 px-4 text-center">
@@ -473,7 +465,7 @@ export default function PaymentHistoryPage() {
                   <Card className="bg-[#F6F3F2] rounded-none border-gray-100 border-l-3 border-l-[#E51C23] shadow-none">
                     <CardContent className="p-4 space-y-1">
                       <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
-                        {selectedReceipt.customer_name || "ลูกค้าทั่วไป"}
+                        {getDisplayCustomerName(selectedReceipt)}
                       </Text>
                       <Text variant="xs" className="text-[#6B7280] mb-0">
                         หมายเลขบิลที่เกี่ยวข้อง: {selectedReceipt.order_numbers || "-"}
@@ -482,7 +474,7 @@ export default function PaymentHistoryPage() {
                         วันที่ชำระ: {formatDate(selectedReceipt.paid_at)}
                       </Text>
                       <Text variant="xs" className="text-[#6B7280] mb-0">
-                        ผู้บันทึกรายการ: {selectedReceipt.received_by_name || "-"}
+                        ผู้บันทึกยอด: {selectedReceipt.received_by_name || "-"}
                       </Text>
                     </CardContent>
                   </Card>
@@ -504,8 +496,8 @@ export default function PaymentHistoryPage() {
                       <Text variant="small" className="font-normal text-white mb-0">
                         ยอดเงินที่รับชำระ
                       </Text>
-                      <Text variant="small" className="font-bold text-white mb-0">
-                        ฿{formatCurrency(selectedReceipt.total_received)}
+                      <Text variant="small" className="font-normal text-white mb-0">
+                        {formatCurrency(selectedReceipt.total_received)}
                       </Text>
                     </div>
 
