@@ -2,7 +2,7 @@ import React from "react";
 import Text from "../../../components/elements/text";
 import Heading from "../../../components/elements/heading";
 
-const RepaymentHistory: React.FC = () => {
+const PaymentHistory: React.FC = () => {
   return (
     <div className="relative flex min-h-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
@@ -23,5 +23,5 @@ const RepaymentHistory: React.FC = () => {
     </div>
   );
 } 
-export default RepaymentHistory;
+export default PaymentHistory;
 

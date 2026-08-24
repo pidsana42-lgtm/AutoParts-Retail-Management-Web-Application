@@ -74,7 +74,12 @@ export const SIDEBAR_MENUS: MenuItem[] = [
       { icon: FileX, path: "/employee/pos/sales_cancellation_history", label: "ประวัติยกเลิกการขาย" },
     ],
   },
-  { icon: ReceiptText, label: "รายการธุรกรรม / การเงิน", path: "/employee/transactions/settle-bills", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],},
+  { icon: ReceiptText, label: "รายการธุรกรรม / การเงิน", path: "/employee/transactions/settle-bills", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],
+    subs: [
+      { icon: History, path: "/employee/transactions/payment-history", label: "ประวัติการชำระเงิน" },
+      // { icon: FileX, path: "/employee/pos/sales_cancellation_history", label: "ประวัติยกเลิกการขาย" },
+    ],
+  },
 
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/owner/orders", roles: ["OWNER", "ADMIN"] },
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/employee/orders", roles: ["EMPLOYEE"] },
@@ -165,6 +170,12 @@ export const getMenuByRole = (role: string): MenuItem[] => {
                 ? "/owner/pos/sales_cancellation_history"
                 : "/employee/pos/sales_cancellation_history",
             };
+          }
+
+          if (menu.path.includes("/transactions/payment-history")) {
+            updatedMenu.path = isOwnerOrAdmin
+              ? "/owner/transactions/payment-history"
+              : "/employee/transactions/payment-history";
           }
 
           if (sub.path.includes("sales_history")) {
