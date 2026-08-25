@@ -108,7 +108,8 @@ export function usePaymentHistory() {
   // พนักงานส่งคำขอยกเลิกใบเสร็จ (Repayment)
   const handleRequestCancelReceipt = async () => {
     if (!selectedReceipt) return;
-    if (!cancelReason.trim()) {
+    const reason = cancelReason.trim() || cancelRemark.trim();
+    if (!reason) {
       alert("กรุณาระบุเหตุผลในการขอยกเลิกรายการ");
       return;
     }
@@ -116,12 +117,13 @@ export function usePaymentHistory() {
     try {
       setIsCancelling(true);
       await posApiService.requestCancelPaymentReceipt(selectedReceipt.receipt_id, {
-        reason: cancelReason,
+        reason: reason,
       });
 
       alert("ส่งคำขอยกเลิกใบเสร็จรับเงินไปยังเจ้าของร้านเรียบร้อยแล้ว");
       setSelectedReceipt(null);
       setCancelReason("");
+      setCancelRemark("");
       fetchHistory();
     } catch (err: any) {
       alert(err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการส่งคำขอยกเลิก");
@@ -140,6 +142,8 @@ export function usePaymentHistory() {
       await posApiService.revertCancelPaymentReceiptRequest(selectedReceipt.receipt_id);
       alert("ดึงคำขอยกเลิกใบเสร็จรับเงินกลับเรียบร้อยแล้ว");
       setSelectedReceipt(null);
+      setCancelReason("");
+      setCancelRemark("");
       fetchHistory();
     } catch (err: any) {
       alert(err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการดึงคำขอยกเลิกกลับ");
@@ -153,10 +157,12 @@ export function usePaymentHistory() {
     if (!selectedReceipt) return;
     if (!confirm("ยืนยันการอนุมัติยกเลิกใบเสร็จนี้? ระบบจะทำการคืนยอดหนี้กลับไปยังบัญชีลูกค้า")) return;
 
+    const remark = cancelRemark.trim() || cancelReason.trim();
+
     try {
       setIsCancelling(true);
       await posApiService.approveCancelPaymentReceipt(selectedReceipt.receipt_id, {
-        remark: cancelRemark,
+        remark: remark || undefined,
       });
 
       alert("อนุมัติยกเลิกใบเสร็จรับเงินและคืนยอดหนี้เรียบร้อยแล้ว");
@@ -174,11 +180,12 @@ export function usePaymentHistory() {
   // เจ้าของร้านปฏิเสธคำขอยกเลิก
   const handleRejectCancelReceipt = async () => {
     if (!selectedReceipt) return;
+    const remark = cancelRemark.trim() || cancelReason.trim();
 
     try {
       setIsCancelling(true);
       await posApiService.rejectCancelPaymentReceipt(selectedReceipt.receipt_id, {
-        remark: cancelRemark,
+        remark: remark || undefined,
       });
 
       alert("ปฏิเสธคำขอยกเลิกใบเสร็จรับเงินเรียบร้อยแล้ว");
@@ -196,7 +203,8 @@ export function usePaymentHistory() {
   // เจ้าของร้านยกเลิกโดยตรง (Direct Cancel)
   const handleCancelReceipt = async () => {
     if (!selectedReceipt) return;
-    if (!cancelReason.trim()) {
+    const reason = cancelReason.trim() || cancelRemark.trim();
+    if (!reason) {
       alert("กรุณาระบุเหตุผลในการยกเลิกรายการ");
       return;
     }
@@ -206,13 +214,14 @@ export function usePaymentHistory() {
       const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
       await posApiService.cancelPaymentReceipt(selectedReceipt.receipt_id, {
         cancelled_by_id: currentUser.id || 1,
-        reason: cancelReason,
+        reason: reason,
         payment_type: selectedReceipt.payment_type,
       });
 
       alert("ยกเลิกรายการรับชำระเงินและคืนยอดหนี้เรียบร้อยแล้ว");
       setSelectedReceipt(null);
       setCancelReason("");
+      setCancelRemark("");
       fetchHistory();
     } catch (err: any) {
       alert(err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการยกเลิกรายการ");
