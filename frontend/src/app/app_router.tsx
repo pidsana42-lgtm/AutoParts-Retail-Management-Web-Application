@@ -45,7 +45,7 @@ import SalesCancellationHistory from './employee/pos/sales_cancellation_history'
 import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_history';
 import SettleBills from './employee/transactions/settle_bills';
 import PaymentHistory from './employee/transactions/payment_history';
-//import OwnerPaymentHistory from './owner/transactions/payment_history';
+import { PaymentCancellationHistory } from './employee/transactions/payment_cancellation_history';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -173,12 +173,16 @@ export default function AppRouter(): React.JSX.Element {
         {/* -------- หน้ารายการธุรกรรม / การเงิน -------- */}
         <Route path="/employee/transactions/settle-bills" element={<SettleBills />} />
         <Route path="/employee/transactions/payment-history" element={<PaymentHistory />} />
+        <Route path="/employee/transactions/payment-cancellation-history" element={<PaymentCancellationHistory />} />
 
         <Route path="/owner/transactions/settle-bills" element={
           isAdminOrOwner ? <SettleBills /> : <Navigate to={firstMenuPath} replace />
         } />
         <Route path="/owner/transactions/payment-history" element={
           isAdminOrOwner ? <PaymentHistory /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/transactions/payment-cancellation-history" element={
+          isAdminOrOwner ? <PaymentCancellationHistory /> : <Navigate to={firstMenuPath} replace />
         } />
         {/* --------------------------------------------------- */}
 
