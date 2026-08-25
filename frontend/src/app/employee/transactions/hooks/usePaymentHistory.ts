@@ -17,6 +17,7 @@ export function usePaymentHistory() {
   // Filter States
   const [search, setSearch] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [employeeId, setEmployeeId] = useState<string>("");
   const [startDate, setStartDate] = useState<string>(getDaysAgoDateString(30));
@@ -66,6 +67,7 @@ export function usePaymentHistory() {
         (item.customer_name && item.customer_name.toLowerCase().includes(q));
 
       const matchType = !typeFilter || item.payment_type === typeFilter;
+      const matchStatus = !statusFilter || item.status === statusFilter;
       const matchMethod = !paymentMethod || item.payment_method.includes(paymentMethod);
 
       let matchEmployee = true;
@@ -88,9 +90,9 @@ export function usePaymentHistory() {
         matchDate = matchDate && new Date(item.paid_at) <= new Date(`${endDate}T23:59:59`);
       }
 
-      return matchSearch && matchType && matchMethod && matchEmployee && matchDate;
+      return matchSearch && matchType && matchStatus && matchMethod && matchEmployee && matchDate;
     });
-  }, [items, search, typeFilter, paymentMethod, employeeId, employeeList, startDate, endDate]);
+  }, [items, search, typeFilter, statusFilter, paymentMethod, employeeId, employeeList, startDate, endDate]);
 
   const totalRows = filteredItems.length;
   const totalPages = Math.ceil(totalRows / limit) || 1;
@@ -238,6 +240,7 @@ export function usePaymentHistory() {
     error,
     search,
     typeFilter,
+    statusFilter,
     paymentMethod,
     employeeId,
     employeeList,
@@ -252,6 +255,7 @@ export function usePaymentHistory() {
     isOwnerOrAdmin,
     setSearch,
     setTypeFilter,
+    setStatusFilter,
     setPaymentMethod,
     setEmployeeId,
     setStartDate,

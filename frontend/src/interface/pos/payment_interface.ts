@@ -22,6 +22,9 @@ export interface PaymentHistoryItem {
   cancel_requested_by_id?: number;
   cancel_requested_by_name?: string;
   cancel_requested_at?: string;
+  cancelled_by_id?: number;
+  cancelled_by_name?: string;
+  cancelled_at?: string;
   cancel_remark?: string;
 }
 

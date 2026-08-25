@@ -7,6 +7,7 @@ import type { StoreConfigInterface } from "../../../../interface/pos/store_confi
 import type { CreateSaleOrderRequest } from "../../../../interface/pos/pos_interface";
 import type { CartItem } from "../../../../interface/pos/usePosCart.interface";
 import type { PosSession } from "../../../../interface/pos/pos_session_interface"; 
+import { getCurrentUserId } from "../../../../utils/auth"; 
 
 interface UsePosPaymentProps {
   cart: CartItem[];
@@ -639,7 +640,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         order_id: orderId,
         payment_method_id: activePaymentMethodId,
         received_amount: finalTotal,
-        received_by_id: 1, 
+        received_by_id: getCurrentUserId() || 1, 
       });
 
       alert("ยืนยันการชำระเงินและจบการขายสำเร็จ!");
