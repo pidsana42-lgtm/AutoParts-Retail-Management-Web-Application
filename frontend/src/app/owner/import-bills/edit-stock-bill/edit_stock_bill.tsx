@@ -327,23 +327,13 @@ export default function EditStockBillPage() {
       </nav>
 
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
-            จัดการการเปลี่ยนแปลงราคาในบิล
-          </Heading>
-          <p className="text-xs text-[#5F5E5E] mt-1">
-            เลือกรายการสินค้าฝั่งซ้ายเพื่อตรวจสอบ และปรับแก้ไขรายละเอียด ราคาทุน และราคาขายรายสินค้าฝั่งขวา
-          </p>
-        </div>
-
-        <button
-          onClick={fetchData}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#1C1B1B] hover:bg-gray-800 text-white text-xs font-bold rounded-none border border-gray-700 transition-colors cursor-pointer"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          <span>รีเฟรชข้อมูลคลัง</span>
-        </button>
+      <div className="mb-6">
+        <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
+          จัดการการเปลี่ยนแปลงราคาในบิล
+        </Heading>
+        <p className="text-xs text-[#5F5E5E] mt-1">
+          เลือกรายการสินค้าฝั่งซ้ายเพื่อตรวจสอบ และปรับแก้ไขรายละเอียด ราคาทุน และราคาขายรายสินค้าฝั่งขวา
+        </p>
       </div>
 
       {/* Mismatch Alert Banner Component */}
@@ -358,7 +348,7 @@ export default function EditStockBillPage() {
       )}
 
       {/* 2-Column Full Page Layout (Split View) */}
-      <Card className="overflow-hidden rounded-none border border-gray-200 shadow-sm flex flex-col md:flex-row min-h-[75vh]" noPadding>
+      <Card className="overflow-hidden rounded-none border border-gray-200 shadow-sm flex flex-col md:flex-row h-[75vh]" noPadding>
         
         {/* LEFT COLUMN: Sidebar list of bill items (ฝั่งซ้าย: แท็บรายการสินค้าในบิล) */}
         <div className="w-full md:w-80 lg:w-96 bg-gray-50 border-r border-gray-200 flex flex-col shrink-0">
@@ -523,7 +513,7 @@ export default function EditStockBillPage() {
                       type="number"
                       step="any"
                       required
-                      value={formData.cost_price || ''}
+                      value={formData.cost_price}
                       onChange={(e) => setFormData({ ...formData, cost_price: Number(e.target.value) })}
                       placeholder="เช่น 600"
                     />
@@ -532,7 +522,7 @@ export default function EditStockBillPage() {
                       type="number"
                       step="any"
                       required
-                      value={formData.sale_price || ''}
+                      value={formData.sale_price}
                       onChange={(e) => setFormData({ ...formData, sale_price: Number(e.target.value) })}
                       placeholder="เช่น 900"
                     />
@@ -544,14 +534,14 @@ export default function EditStockBillPage() {
                   <Input
                     label="จำนวนคงเหลือในคลัง"
                     type="number"
-                    value={formData.quantity || ''}
+                    value={formData.quantity}
                     onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
                     placeholder="เช่น 50"
                   />
                   <Input
                     label="จำนวนขั้นต่ำแจ้งเตือนสต็อก"
                     type="number"
-                    value={formData.limit_quantity || ''}
+                    value={formData.limit_quantity}
                     onChange={(e) => setFormData({ ...formData, limit_quantity: Number(e.target.value) })}
                     placeholder="เช่น 5"
                   />

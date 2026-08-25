@@ -223,10 +223,10 @@ export default function ManualEntryView({
                   <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[150px]">รหัสสินค้าคู่ค้า</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[260px]">ชื่อสินค้าตามบิล</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[280px]">จับคู่สินค้าในร้าน</TableHead>
-                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[160px]">บาร์โค้ด</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่หลัก</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่ย่อย</TableHead>
-                  <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">จำนวน</TableHead>
+                  <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[80px]">จำนวน</TableHead>
+                  <TableHead className="py-3.5 px-4 font-bold text-center text-[#5F5E5E] min-w-[70px]">หน่วย</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[110px]">ราคา/หน่วย</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">ยอดรวม</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-center text-[#5F5E5E] w-12">ลบ</TableHead>
@@ -283,8 +283,8 @@ export default function ManualEntryView({
                             <span className="text-[10px] font-bold text-red-600">กรอกชื่อสินค้า</span>
                           )}
                           {item.pre_order_item_id && (
-                            <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 border border-purple-200 w-fit">
-                              ★ สินค้าพรีออเดอร์ของลูกค้า
+                            <span className="text-[10px] font-bold text-purple-700">
+                              สินค้าพรีออเดอร์ของลูกค้า
                             </span>
                           )}
                         </div>
@@ -302,48 +302,14 @@ export default function ManualEntryView({
                         {item.product_id ? (
                           (() => {
                             const prod = products.find(p => p.id === Number(item.product_id));
-                            if (!prod) return <span className="text-gray-400">-</span>;
-
-                            const paddedId = String(prod.id).padStart(6, '0');
-                            const code = prod.barcode || prod.product_code || '';
-                            const sanitized = code.replace(/[^a-zA-Z0-9_\-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-                            const baseName = sanitized ? `prod_${paddedId}_${sanitized}` : `prod_${paddedId}_PROD-${paddedId}`;
-                            const barcodeImgUrl = `/barcode/${baseName}.png`;
-
-                            return (
-                              <div className="flex flex-col items-center gap-1">
-                                <img 
-                                  src={barcodeImgUrl} 
-                                  alt={prod.barcode} 
-                                  className="max-h-8 object-contain bg-white p-0.5 border border-gray-200"
-                                  onError={(e) => {
-                                    (e.target as HTMLElement).style.display = 'none';
-                                  }}
-                                />
-                                <span className="font-mono text-xs font-semibold text-[#1C1B1B]">
-                                  {prod.barcode || '-'}
-                                </span>
-                              </div>
-                            );
-                          })()
-                        ) : (
-                          <span className="text-xs text-black">
-                            [สร้างให้อัตโนมัติ]
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2.5 px-3">
-                        {item.product_id ? (
-                          (() => {
-                            const prod = products.find(p => p.id === Number(item.product_id));
                             if (prod) {
                               return (
-                                <span className="text-xs text-[#5F5E5E] bg-gray-100 px-2 py-1 rounded-none font-medium inline-block truncate max-w-[140px]" title={prod.category_name}>
+                                <span className="text-sm text-[#1C1B1B] font-medium">
                                   {prod.category_name || 'ไม่ระบุหมวดหมู่'}
                                 </span>
                               );
                             }
-                            return <span className="text-gray-400 text-xs">-</span>;
+                            return <span className="text-gray-400 text-sm">-</span>;
                           })()
                          ) : (
                            <select
@@ -369,12 +335,12 @@ export default function ManualEntryView({
                             const prod = products.find(p => p.id === Number(item.product_id));
                             if (prod && prod.sub_category_name) {
                               return (
-                                <span className="text-xs text-gray-500 pl-1 truncate max-w-[140px]" title={prod.sub_category_name}>
-                                  └─ {prod.sub_category_name}
+                                <span className="text-sm text-[#1C1B1B] font-medium">
+                                  {prod.sub_category_name}
                                 </span>
                               );
                             }
-                            return <span className="text-gray-400 text-xs">-</span>;
+                            return <span className="text-gray-400 text-sm">-</span>;
                           })()
                         ) : (
                           <select
@@ -396,26 +362,26 @@ export default function ManualEntryView({
                         )}
                       </TableCell>
                       {Number(item.order_quantity) === 0 ? (
-                        <TableCell colSpan={3} className="py-2.5 px-3 text-center font-bold text-[#e51c23] bg-red-50/20">
+                        <TableCell colSpan={4} className="py-2.5 px-3 text-center font-bold text-[#e51c23] bg-red-50/20">
                           ไม่มีสินค้า
                         </TableCell>
                       ) : (
                         <>
                           <TableCell className="py-2.5 px-3 text-right">
-                            <div className="flex items-center gap-1 justify-end">
-                              <input 
-                                type="number" 
-                                value={item.order_quantity ?? 0}
-                                onChange={(e) => handleItemChange(idx, 'order_quantity', e.target.value)}
-                                className={`bg-white border rounded-none focus:ring-1 w-14 text-right text-sm text-[#1C1B1B] p-1.5 font-medium ${issueField(idx, 'quantity') ? errInputClass : 'border-gray-300 focus:border-[#e51c23] focus:ring-[#e51c23]'}`}
-                              />
-                              <input 
-                                type="text" 
-                                value={item.unit || ''}
-                                onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
-                                className="bg-white border border-gray-300 rounded-none focus:border-[#e51c23] focus:ring-1 focus:ring-[#e51c23] w-12 text-center text-sm text-[#5F5E5E] p-1.5 font-medium"
-                              />
-                            </div>
+                            <input
+                              type="number"
+                              value={item.order_quantity ?? 0}
+                              onChange={(e) => handleItemChange(idx, 'order_quantity', e.target.value)}
+                              className={`bg-white border rounded-none focus:ring-1 w-16 text-right text-sm text-[#1C1B1B] p-1.5 font-medium ${issueField(idx, 'quantity') ? errInputClass : 'border-gray-300 focus:border-[#e51c23] focus:ring-[#e51c23]'}`}
+                            />
+                          </TableCell>
+                          <TableCell className="py-2.5 px-3 text-center">
+                            <input
+                              type="text"
+                              value={item.unit || ''}
+                              onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
+                              className="bg-white border border-gray-300 rounded-none focus:border-[#e51c23] focus:ring-1 focus:ring-[#e51c23] w-14 text-center text-sm text-[#5F5E5E] p-1.5 font-medium"
+                            />
                           </TableCell>
                           <TableCell className="py-2.5 px-3 text-right">
                             <input 

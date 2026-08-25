@@ -27,7 +27,7 @@ export default function POView({
 }: POViewProps) {
   const filteredPOs = poList.filter(po => {
     const q = poSearchQuery.toLowerCase();
-    const num = (po.order_number || '').toLowerCase();
+    const num = (po.po_number || '').toLowerCase();
     const name = (po.supplier_name || '').toLowerCase();
     return num.includes(q) || name.includes(q);
   });
@@ -82,10 +82,10 @@ export default function POView({
                 <button
                   key={po.id}
                   type="button"
-                  onClick={() => setPoSearchQuery(po.order_number || '')}
+                  onClick={() => setPoSearchQuery(po.po_number || '')}
                   className="bg-gray-100 hover:bg-[#e51c23] hover:text-white text-gray-700 px-2.5 py-1 font-mono text-[11px] font-bold rounded-none transition-colors border border-gray-200 cursor-pointer"
                 >
-                  {po.order_number}
+                  {po.po_number}
                 </button>
               ))}
             </div>
@@ -131,7 +131,7 @@ export default function POView({
                     return (
                       <TableRow key={po.id} className="hover:bg-gray-50/70 transition-colors">
                         <TableCell className="pl-6 font-bold text-[#1C1B1B]">
-                          <div>{po.order_number}</div>
+                          <div>{po.po_number}</div>
                           {hasPreOrder && (
                             <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 border border-purple-200 inline-block mt-0.5">
                               {isPartial ? `พรีออเดอร์บางส่วน (${preOrderCount}/${totalCount} รายการ)` : `พรีออเดอร์ทั้งหมด`}
@@ -147,9 +147,9 @@ export default function POView({
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
                                   : 'bg-amber-50 text-amber-700 border-amber-200'
                               }`}>
-                                {isFullyReceived 
-                                  ? `✓ สินค้าพรีมาถึงร้านแล้ว (${preOrderCount || 'ครบถ้วน'})` 
-                                  : `⏳ อยู่ระหว่างรอนำเข้าสต็อก (${preOrderCount || 'มีรายการพรี'})`}
+                                {isFullyReceived
+                                  ? `สินค้าพรีมาถึงร้านแล้ว (${preOrderCount || 'ครบถ้วน'})`
+                                  : `อยู่ระหว่างรอนำเข้าสต็อก (${preOrderCount || 'มีรายการพรี'})`}
                               </span>
                             </div>
                           ) : (

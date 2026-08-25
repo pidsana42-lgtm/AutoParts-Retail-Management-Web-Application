@@ -1244,7 +1244,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
         return;
       }
 
-      const poItems = poData.purchase_order_items || poData.items || [];
+      const poItems = poData.po_items || poData.purchase_order_items || poData.items || [];
       setOriginalPOItems(poItems);
 
       const mappedItems: BillItemDTO[] = poItems.map((item: any, idx: number) => {
@@ -1252,10 +1252,10 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
         const price = Number(item.unit_price) || 0;
         return {
           item_sequence: idx + 1,
-          company_product_code: item.product_code || '',
-          company_product_name: item.product_name || '',
+          company_product_code: item.product_name_code_snapshot || item.product_code || '',
+          company_product_name: item.product_name_snapshot || item.product_name || '',
           order_quantity: qty,
-          unit: 'ชิ้น',
+          unit: item.unit || 'ชิ้น',
           conversion_factor: 1,
           price_per_unit: price,
           discount_amount: 0,
@@ -1270,7 +1270,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
       const subtotal = mappedItems.reduce((sum, i) => sum + i.net_amount, 0);
 
       setFormData({
-        bill_no: `PO-IMPORT-${poData.order_number || poId}`,
+        bill_no: `PO-IMPORT-${poData.po_number || poData.order_number || poId}`,
         total_amount: poData.total_amount || subtotal,
         due_date: new Date().toISOString().split('T')[0],
         transport_by: '',
@@ -1403,6 +1403,16 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
   const validateBillBeforeSave = (): string[] => {
     const warnings: string[] = [];
     if (!formData) return warnings;
+
+    const billNo = String(formData.bill_no || '').trim().toLowerCase();
+    if (billNo) {
+      const duplicate = bills.find(b =>
+        String(b.bill_no || '').trim().toLowerCase() === billNo && b.id !== editingBillId
+      );
+      if (duplicate) {
+        warnings.push(`เลขที่บิล "${formData.bill_no}" มีอยู่ในระบบแล้ว หากยืนยันบันทึกต่อ ข้อมูลบิลเดิม (${duplicate.bill_no}) จะถูกเขียนทับด้วยข้อมูลนี้`);
+      }
+    }
 
     let calcSubtotal = 0;
     formData.items.forEach(item => {

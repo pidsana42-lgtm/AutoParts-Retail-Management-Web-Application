@@ -202,14 +202,32 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
     }
   });
 
-  // Split-Screen Resize Logic
+  // Split-Screen Resize Logic (measure against the split container, not the window)
   const handleMouseDown = () => setIsResizing(true);
-  const handleMouseUp = () => setIsResizing(false);
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isResizing) return;
-    const newWidth = (e.clientX / window.innerWidth) * 100;
-    if (newWidth >= 25 && newWidth <= 75) setLeftWidth(newWidth);
-  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      const container = document.getElementById('split-pane-container');
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const newWidth = ((e.clientX - rect.left) / rect.width) * 100;
+      if (newWidth >= 25 && newWidth <= 75) setLeftWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      if (isResizing) setIsResizing(false);
+    };
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   const handleOpenDetail = (catalog: Catalog) => {
     setActiveCatalog(catalog);
@@ -885,8 +903,6 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
     return (
       <div 
         className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300 font-sans"
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
       >
         <input
           type="file"
@@ -972,7 +988,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         </div>
 
         {/* Split Screen Container */}
-        <div className="flex flex-col lg:flex-row gap-6 min-h-[750px] relative">
+        <div id="split-pane-container" className="flex flex-col lg:flex-row gap-6 min-h-[750px] relative">
           {/* LEFT PANEL: Interactive Image / Document Viewer with Zoom & Rotate */}
           <div 
             style={{ width: `${leftWidth}%` }} 
