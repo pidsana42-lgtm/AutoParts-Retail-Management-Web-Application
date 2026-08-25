@@ -425,7 +425,12 @@ func (ctrl *paymentController) CancelPaymentReceipt(c *gin.Context) {
 	}
 	var req posDto.CancelPaymentReceiptRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูล Request ไม่ถูกต้อง"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเหตุผลในการยกเลิกใบเสร็จรับเงิน"})
+		return
+	}
+
+	if strings.TrimSpace(req.Reason) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเหตุผลในการยกเลิกใบเสร็จรับเงิน"})
 		return
 	}
 
@@ -447,8 +452,11 @@ func (ctrl *paymentController) CancelPaymentReceipt(c *gin.Context) {
 		case int64:
 			currentUserID = uint(v)
 		}
-		req.CancelledByID = currentUserID
 	}
+	if currentUserID == 0 {
+		currentUserID = 1
+	}
+	req.CancelledByID = currentUserID
 
 	if err := ctrl.paymentService.CancelPaymentReceipt(uint(receiptID), req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

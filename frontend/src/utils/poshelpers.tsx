@@ -1,6 +1,6 @@
 // src/utils/posHelpers.tsx
 import Badge from "../components/elements/badge";
-import type { SalesHistoryItemResponse } from "../interface/pos/sales_history_interface";
+//import type { SalesHistoryItemResponse } from "../interface/pos/sales_history_interface";
 
 /** Type กลางสำหรับดึงชื่อลูกค้า */
 export type CustomerNameEntity = {
@@ -219,4 +219,10 @@ export const getPaymentBadgeColor = (methodName?: string): string => {
     default:
       return "bg-[#259B24]";
   }
+};
+
+export const formatCurrency = (amount: number | string | undefined | null): string => {
+  const val = typeof amount === "number" ? amount : parseFloat(String(amount || 0));
+  if (isNaN(val)) return "฿0.00";
+  return `฿${val.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };

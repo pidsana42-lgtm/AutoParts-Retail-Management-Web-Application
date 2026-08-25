@@ -193,6 +193,7 @@ export const getMenuByRole = (role: string): MenuItem[] => {
           if (sub.path.includes("payment-cancellation-history")) {
             return {
               ...sub,
+              label: isOwnerOrAdmin ? "คำขอยกเลิกการชำระเงิน" : "ประวัติยกเลิกการชำระเงิน",
               path: isOwnerOrAdmin
                 ? "/owner/transactions/payment-cancellation-history"
                 : "/employee/transactions/payment-cancellation-history",

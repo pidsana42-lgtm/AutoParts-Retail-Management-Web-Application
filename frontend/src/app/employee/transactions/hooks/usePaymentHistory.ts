@@ -4,6 +4,7 @@ import type { PaymentHistoryItem } from "../../../../interface/pos/payment_inter
 import { useEmployeeOptions } from "../../../../hooks/useEmployeeOptions";
 import { getTodayDateString, getDaysAgoDateString } from "../../../../utils/date";
 import { useUserRole } from "../../../../hooks/useUserRole";
+import { getCurrentUserId } from "../../../../utils/auth";
 
 export function usePaymentHistory() {
   const { isOwnerOrAdmin } = useUserRole();
@@ -215,7 +216,7 @@ export function usePaymentHistory() {
       setIsCancelling(true);
       const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
       await posApiService.cancelPaymentReceipt(selectedReceipt.receipt_id, {
-        cancelled_by_id: currentUser.id || 1,
+        cancelled_by_id: getCurrentUserId() || currentUser.id || 1,
         reason: reason,
         payment_type: selectedReceipt.payment_type,
       });

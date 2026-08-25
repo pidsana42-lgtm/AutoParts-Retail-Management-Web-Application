@@ -45,7 +45,7 @@ import SalesCancellationHistory from './employee/pos/sales_cancellation_history'
 import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_history';
 import SettleBills from './employee/transactions/settle_bills';
 import PaymentHistory from './employee/transactions/payment_history';
-import { PaymentCancellationHistory } from './employee/transactions/payment_cancellation_history';
+import PaymentCancellationHistory from './employee/transactions/payment_cancellation_history';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
