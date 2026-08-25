@@ -139,9 +139,9 @@ export const renderStatusBadge = (status: string, paymentStatus: string) => {
  */
 export const renderCancellationStatusBadge = (
   status?: string | null,
-  paymentStatus?: string | null,
-  cancelRemark?: string | null,
-  cancelProcessedAt?: any
+  _paymentStatus?: string | null,
+  _cancelRemark?: string | null,
+  _cancelProcessedAt?: any
 ) => {
   const billStatus = (status || "").trim().toUpperCase();
 

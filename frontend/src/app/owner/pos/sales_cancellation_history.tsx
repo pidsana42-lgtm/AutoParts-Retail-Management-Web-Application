@@ -24,7 +24,7 @@ import {
   TableCell,
 } from "../../../components/elements/table";
 import { cn } from "../../../utils/component";
-import { formatDate, getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge, renderCancellationStatusBadge } from "../../../utils/poshelpers";
+import { formatDate, getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderCancellationStatusBadge } from "../../../utils/poshelpers";
 
 // นำเข้า Custom Hook ของเจ้าของร้าน
 import { useOwnerSalesCancellationHistory } from "./hooks/useOwnerSalesCancellationHistory";
