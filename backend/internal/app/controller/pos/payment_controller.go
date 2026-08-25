@@ -22,6 +22,10 @@ type PaymentController interface {
 	GetPaymentHistory(c *gin.Context)
 	GetPaymentHistoryByID(c *gin.Context)
 	GetCancelledPaymentHistory(c *gin.Context)
+	RequestCancelPaymentReceipt(c *gin.Context)
+	RevertCancelPaymentReceiptRequest(c *gin.Context)
+	ApproveCancelPaymentReceipt(c *gin.Context)
+	RejectCancelPaymentReceipt(c *gin.Context)
 	CancelPaymentReceipt(c *gin.Context)
 }
 
@@ -247,7 +251,172 @@ func (ctrl *paymentController) GetCancelledPaymentHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-// POST /api/pos/payments/history/:id/cancel ยกเลิกการชำระเงิน
+// POST /api/pos/payments/history/:id/request-cancel พนักงานส่งคำขอยกเลิกใบเสร็จ (Repayment)
+func (ctrl *paymentController) RequestCancelPaymentReceipt(c *gin.Context) {
+	receiptID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรหัสใบเสร็จไม่ถูกต้อง (ต้องเป็นตัวเลข)"})
+		return
+	}
+
+	var req posDto.RequestCancelPaymentReceiptRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเหตุผลในการขอยกเลิกใบเสร็จรับเงิน"})
+		return
+	}
+
+	if strings.TrimSpace(req.Reason) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเหตุผลในการขอยกเลิกใบเสร็จรับเงิน"})
+		return
+	}
+
+	// ดึง User ID จาก Token Context
+	var currentUserID uint
+	if userIDVal, exists := c.Get("user_id"); exists {
+		switch v := userIDVal.(type) {
+		case float64:
+			currentUserID = uint(v)
+		case uint:
+			currentUserID = v
+		case int:
+			currentUserID = uint(v)
+		case int64:
+			currentUserID = uint(v)
+		}
+	}
+
+	if currentUserID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งานในระบบ"})
+		return
+	}
+
+	// ตรวจสอบว่ารายการนี้เป็น Direct Payment หรือไม่
+	repayment, err := ctrl.paymentService.GetPaymentHistoryByID(uint(receiptID))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if repayment.PaymentType == "payment" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รายการชำระเงินสดหน้าร้านไม่สามารถขอยกเลิกจากหน้านี้ได้ กรุณาไปทำรายการที่ 'ประวัติการขายสินค้า' (Sales History) แทน เพื่อความถูกต้องของสต็อกสินค้า"})
+		return
+	}
+
+	// ตรวจสอบ Role ถ้าเป็นพนักงาน ต้องเป็นรายการที่ตนเองบันทึก
+	roleVal, exists := c.Get("role")
+	var isOwnerOrAdmin bool
+	if exists {
+		if roleStr, ok := roleVal.(string); ok {
+			if strings.EqualFold(roleStr, string(enum.RoleOwner)) || strings.EqualFold(roleStr, string(enum.RoleAdmin)) {
+				isOwnerOrAdmin = true
+			}
+		}
+	}
+	if !isOwnerOrAdmin && repayment.ReceivedByID > 0 && repayment.ReceivedByID != currentUserID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "คุณไม่มีสิทธิ์ส่งคำขอยกเลิกรายการรับชำระเงินของพนักงานท่านอื่น"})
+		return
+	}
+
+	if err := ctrl.paymentService.RequestCancelPaymentReceipt(uint(receiptID), currentUserID, req.Reason); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "ส่งคำขอยกเลิกใบเสร็จรับเงินไปยังเจ้าของร้านเรียบร้อยแล้ว"})
+}
+
+// POST /api/pos/payments/history/:id/cancel-request/revert พนักงานดึงคำขอยกเลิกกลับ
+func (ctrl *paymentController) RevertCancelPaymentReceiptRequest(c *gin.Context) {
+	receiptID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรหัสใบเสร็จไม่ถูกต้อง (ต้องเป็นตัวเลข)"})
+		return
+	}
+
+	var currentUserID uint
+	if userIDVal, exists := c.Get("user_id"); exists {
+		switch v := userIDVal.(type) {
+		case float64:
+			currentUserID = uint(v)
+		case uint:
+			currentUserID = v
+		case int:
+			currentUserID = uint(v)
+		case int64:
+			currentUserID = uint(v)
+		}
+	}
+
+	roleVal, exists := c.Get("role")
+	var isOwnerOrAdmin bool
+	if exists {
+		if roleStr, ok := roleVal.(string); ok {
+			if strings.EqualFold(roleStr, string(enum.RoleOwner)) || strings.EqualFold(roleStr, string(enum.RoleAdmin)) {
+				isOwnerOrAdmin = true
+			}
+		}
+	}
+
+	if err := ctrl.paymentService.RevertCancelPaymentReceiptRequest(uint(receiptID), currentUserID, isOwnerOrAdmin); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "ดึงคำขอยกเลิกใบเสร็จรับเงินกลับเรียบร้อยแล้ว"})
+}
+
+// POST /api/pos/payments/history/:id/approve-cancel เจ้าของร้านอนุมัติการยกเลิกใบเสร็จ (คืนยอดหนี้)
+func (ctrl *paymentController) ApproveCancelPaymentReceipt(c *gin.Context) {
+	receiptID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรหัสใบเสร็จไม่ถูกต้อง (ต้องเป็นตัวเลข)"})
+		return
+	}
+
+	var req posDto.ProcessCancelPaymentReceiptRequest
+	_ = c.ShouldBindJSON(&req) // Remark เป็น Optional
+
+	var currentUserID uint
+	if userIDVal, exists := c.Get("user_id"); exists {
+		switch v := userIDVal.(type) {
+		case float64:
+			currentUserID = uint(v)
+		case uint:
+			currentUserID = v
+		case int:
+			currentUserID = uint(v)
+		case int64:
+			currentUserID = uint(v)
+		}
+	}
+
+	if err := ctrl.paymentService.ApproveCancelPaymentReceipt(uint(receiptID), currentUserID, req.Remark); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "อนุมัติการยกเลิกใบเสร็จรับเงินและคืนยอดหนี้สำเร็จ"})
+}
+
+// POST /api/pos/payments/history/:id/reject-cancel เจ้าของร้านปฏิเสธคำขอยกเลิกใบเสร็จ
+func (ctrl *paymentController) RejectCancelPaymentReceipt(c *gin.Context) {
+	receiptID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรหัสใบเสร็จไม่ถูกต้อง (ต้องเป็นตัวเลข)"})
+		return
+	}
+
+	var req posDto.ProcessCancelPaymentReceiptRequest
+	_ = c.ShouldBindJSON(&req)
+
+	if err := ctrl.paymentService.RejectCancelPaymentReceipt(uint(receiptID), req.Remark); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "ปฏิเสธคำขอยกเลิกใบเสร็จรับเงินเรียบร้อยแล้ว"})
+}
+
+// POST /api/pos/payments/history/:id/cancel ยกเลิกการชำระเงิน (Direct Cancel หรือสำหรับ Owner)
 func (ctrl *paymentController) CancelPaymentReceipt(c *gin.Context) {
 	receiptID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -258,6 +427,27 @@ func (ctrl *paymentController) CancelPaymentReceipt(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูล Request ไม่ถูกต้อง"})
 		return
+	}
+
+	// บล็อกการยกเลิกกรณีเป็นเงินสดหน้าร้าน (Direct Payment)
+	if strings.EqualFold(req.PaymentType, "payment") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รายการชำระเงินสดหน้าร้านไม่สามารถยกเลิกจากหน้านี้ได้ กรุณาไปทำรายการที่ 'ประวัติการขายสินค้า' (Sales History) แทน เพื่อความถูกต้องของสต็อกสินค้า"})
+		return
+	}
+
+	var currentUserID uint = req.CancelledByID
+	if userIDVal, exists := c.Get("user_id"); exists {
+		switch v := userIDVal.(type) {
+		case float64:
+			currentUserID = uint(v)
+		case uint:
+			currentUserID = v
+		case int:
+			currentUserID = uint(v)
+		case int64:
+			currentUserID = uint(v)
+		}
+		req.CancelledByID = currentUserID
 	}
 
 	if err := ctrl.paymentService.CancelPaymentReceipt(uint(receiptID), req); err != nil {

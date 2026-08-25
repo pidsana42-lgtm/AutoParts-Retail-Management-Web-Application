@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { posApiService } from "../../../../service/http/pos/pos_service"; 
 import type { SalesHistoryFilterRequest, SalesHistoryItemResponse, GetSaleHistoryByIDResponse } from "../../../../interface/pos/sales_history_interface";
 
 export const useSalesHistory = () => {
+  const [searchParams] = useSearchParams();
+
   //คำนวณหา วันที่ย้อนหลังไป 30 วัน นับจากวันนี้
   const get30DaysAgoDateString = () => {
     const date = new Date();
@@ -122,6 +125,32 @@ export const useSalesHistory = () => {
 
     fetchDetail();
   }, [selectedOrderId]);
+
+  // ดักจับ URL Search Params เพื่อเลือกบิลและเปิด Drawer อัตโนมัติ (เช่น กระโดดมาจากหน้าประวัติการชำระเงิน)
+  useEffect(() => {
+    const orderParam = searchParams.get("order_number") || searchParams.get("order_id");
+    if (orderParam) {
+      setSearch(orderParam);
+      const autoLoadOrder = async () => {
+        setIsDetailLoading(true);
+        try {
+          const data = await posApiService.getSalesHistoryById(orderParam as any);
+          if (data && data.id) {
+            setSelectedOrderId(data.id);
+            setOrderDetail(data);
+            if (data.cancel_reason) {
+              setCancelReason(data.cancel_reason);
+            }
+          }
+        } catch (err) {
+          console.error("Failed to auto load order from url param:", err);
+        } finally {
+          setIsDetailLoading(false);
+        }
+      };
+      autoLoadOrder();
+    }
+  }, [searchParams]);
 
   // เพิ่ม Live Search / Auto Search เมื่อยิงบาร์โค้ดหรือพิมพ์ในช่องค้นหา
   useEffect(() => {
