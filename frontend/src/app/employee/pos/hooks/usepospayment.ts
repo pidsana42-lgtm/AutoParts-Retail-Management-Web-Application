@@ -425,7 +425,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       payment_method_id: finalPaymentMethodId,
       bill_discount_type: posSession.billDiscountType,
       bill_discount_value: posSession.billDiscountValue,
-      note: "บันทึกบิลขายส่งผ่านระบบ POS หน้าร้าน",
+      note: "",
       items: computedItems as any,
     };
 

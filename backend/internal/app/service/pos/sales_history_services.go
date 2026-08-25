@@ -4,11 +4,13 @@ import (
 	"backend/internal/app/dto/pos"
 	"backend/internal/app/entity"
 	salesHistoryRepo "backend/internal/app/repository/pos"
-	"math"
 	"context"
-	"backend/internal/app/enum"
 	"errors"
+	"fmt"
+	"math"
+	"strings"
 	"time"
+	"backend/internal/app/enum"
 )
 
 type SalesHistoryService interface {
@@ -199,8 +201,35 @@ func (s *salesHistoryService) RevertCancellationRequest(ctx context.Context, ide
 		return nil, errors.New("ไม่มีสิทธิ์ดึงคำขอยกเลิกนี้กลับ เนื่องจากคุณไม่ได้เป็นผู้ส่งคำขอ")
 	}
 
-	// ถ้าผ่านเงื่อนไขทั้งหมด สั่ง Repository ให้อัปเดตข้อมูลใน Database
-	err = s.salesHistoryRepo.RevertCancelOrder(order.ID)
+	// ดึงชื่อผู้ทำรายการกู้คืน
+	reverterName := "พนักงาน"
+	user, errUser := s.salesHistoryRepo.GetUserByID(userID)
+	if errUser == nil && user != nil {
+		if user.FirstName != "" || user.LastName != "" {
+			reverterName = strings.TrimSpace(user.FirstName + " " + user.LastName)
+		} else if user.Username != "" {
+			reverterName = user.Username
+		}
+	} else if order.CancelRequestedBy != nil {
+		if order.CancelRequestedBy.FirstName != "" || order.CancelRequestedBy.LastName != "" {
+			reverterName = strings.TrimSpace(order.CancelRequestedBy.FirstName + " " + order.CancelRequestedBy.LastName)
+		} else if order.CancelRequestedBy.Username != "" {
+			reverterName = order.CancelRequestedBy.Username
+		}
+	}
+
+	now := time.Now()
+	revertNote := fmt.Sprintf("กู้คืนคำขอยกเลิกทำรายการโดย: %s (เมื่อ %s)", reverterName, now.Format("02/01/2006 15:04 น."))
+
+	var newNote string
+	if order.Note != "" && strings.Contains(order.Note, "กู้คืน") {
+		newNote = order.Note + " | " + revertNote
+	} else {
+		newNote = revertNote
+	}
+
+	// สั่ง Repository ให้อัปเดตข้อมูลใน Database
+	err = s.salesHistoryRepo.RevertCancelOrder(order.ID, newNote)
 	if err != nil {
 		return nil, err
 	}

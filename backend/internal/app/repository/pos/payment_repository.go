@@ -292,6 +292,7 @@ func (r *paymentRepository) RequestCancelRepayment(repaymentID uint, userID uint
             "cancel_reason":          reason,
             "cancel_requested_at":    now,
             "cancel_requested_by_id": userID,
+            "cancel_remark":          nil,
         }).Error
 }
 
