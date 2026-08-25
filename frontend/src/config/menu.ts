@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, Boxes, MonitorSmartphone,
   ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight, CircleCheck, History,
-  FileX, ReceiptText, BookOpen
+  FileX, ReceiptText, BookOpen, RotateCcw, MonitorCog
 
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -76,8 +76,16 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   },
   { icon: ReceiptText, label: "รายการธุรกรรม / การเงิน", path: "/employee/transactions/settle-bills", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],},
 
-  { icon: ShoppingCart, label: "สั่งซื้อ", path: "/owner/orders", roles: ["OWNER", "ADMIN"] },
-  { icon: ShoppingCart, label: "สั่งซื้อ", path: "/employee/orders", roles: ["EMPLOYEE"] },
+  { icon: ShoppingCart, label: "สั่งซื้อ", path: "/owner/orders", roles: ["OWNER", "ADMIN"],
+    subs: [
+      { icon: RotateCcw, path: "/owner/orders/restore", label: "กู้คืนใบสั่งซื้อ" },
+    ],
+   },
+  { icon: ShoppingCart, label: "สั่งซื้อ", path: "/employee/orders", roles: ["EMPLOYEE"],
+    subs: [
+      { icon: RotateCcw, path: "/owner/orders/restore", label: "กู้คืนใบสั่งซื้อ" },
+    ],
+   },
   { 
     icon: FileClock, 
     label: "พรีออเดอร์", 
@@ -115,6 +123,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
     roles: ["OWNER", "ADMIN"],
     subs: [
       { path: "/owner/storeconfig", label: "จัดการสิทธิ์ส่วนลดลูกค้าอู่" },
+      { icon: MonitorCog, path: "/owner/companysetting", label: "ตั้งค่าร้านค้า" },
     ],
   },
 ];

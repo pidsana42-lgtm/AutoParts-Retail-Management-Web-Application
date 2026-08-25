@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShoppingBasket, CircleCheck, PenLine, Eye, Printer, Trash2, Info,
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RotateCcw,
-  TrendingUp,
-  TrendingDown, } from "lucide-react";
+import { ShoppingBasket, CircleCheck, PenLine, Eye, Printer, Trash2, Info, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+  TrendingUp, TrendingDown,
+  ReceiptText, } from "lucide-react";
 // Components
 import Heading from "../../../components/elements/heading";
 import Input   from "../../../components/elements/input";
@@ -33,10 +32,6 @@ function StatusBadge({ status }: { status: string }) {
     return <Badge variant="success">อนุมัติแล้ว</Badge>;
   if (status === "RESUBMITTED")
     return <Badge variant="destructive">รอส่งอนุมัติใหม่</Badge>;
-  if (status === "CANCELLED")
-    return <Badge variant="outline" className="bg-red-100 border-none text-red-700">ยกเลิกแล้ว</Badge>;
-  if (status === "DELETED")
-    return <Badge variant="outline" className="bg-orange-100 border-none text-orange-700">อยู่ในถังขยะ</Badge>;
   return <Badge variant="outline">{status}</Badge>;
 }
 
@@ -98,19 +93,6 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
     }
   }
 
-  const handleRestore = async () => {
-    if (!id) return;
-    const confirmed = window.confirm('คุณต้องการกู้คืนใบสั่งซื้อที่หมดอายุนี้ใช่หรือไม่? (ระบบจะเปลี่ยนสถานะกลับเป็นฉบับร่าง)');
-    if (!confirmed) return;
-    try {
-      await poService.updatePOStatus(id, 'DRAFT');
-      alert('กู้คืนใบสั่งซื้อสำเร็จ');
-      window.location.reload(); 
-    } catch {
-      alert('ไม่สามารถอนุมัติใบสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง');
-    }
-  };
-
   // สถานะ: ฉบับร่าง หรือไม่ผ่านอนุมัติ รอส่งพิจารณาใหม่
   if (status === "DRAFT" || status === "RESUBMITTED") {
     return (
@@ -144,31 +126,6 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
       <div className="flex items-center justify-center gap-3">
         <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
           <Eye size={16} />
-        </button>
-      </div>
-    );
-  }
-
-  // สถานะ: ยกเลิกแล้ว (ดูได้อย่างเดียว ไม่สามารถกู้คืนได้)
-  if (status === "CANCELLED") {
-    return (
-      <div className="flex items-center justify-center gap-3">
-        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <Eye size={16} />
-        </button>
-      </div>
-    );
-  }
-
-  // สถานะ: อยู่ในถังขยะ (กู้คืนได้)
-  if (status === "DELETED") {
-    return (
-      <div className="flex items-center justify-center gap-3">
-        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <Eye size={16} />
-        </button>
-        <button onClick={handleRestore} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <RotateCcw size={16} />
         </button>
       </div>
     );
@@ -227,7 +184,6 @@ const PO_STATUS_OPTIONS = [
   { label: "รออนุมัติ", value: "PENDING" },
   { label: "อนุมัติแล้ว", value: "APPROVED" },
   { label: "รอส่งอนุมัติใหม่", value: "RESUBMITTED" },
-  { label: "ยกเลิกแล้ว", value: "CANCELLED" },
 ];
 
 // ─── Page ──────────
@@ -344,9 +300,12 @@ const PurchaseOrders: React.FC = () => {
   }, []);
 
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const displayOrders = statusFilter === "all"
+    ? orders.filter(po => po.status !== "CANCELLED" && po.status !== "DELETED")
+    : orders;
 
   return (
-    <div className="p-8 space-y-6 bg-gray-50 min-h-screen font-sans">
+    <div className="p-8 space-y-6 bg-white min-h-screen font-sans">
 
       {/* 1. Header */}
       <div className="flex items-center justify-between">
@@ -438,13 +397,13 @@ const PurchaseOrders: React.FC = () => {
           <Card className="border-l-[5px] border-l-black flex flex-col justify-between h-24 p-5">
             <Heading level="p" className="text-[#6B7280] font-medium">รออนุมัติ</Heading>
             <Heading level="h3" className="font-bold mt-1 text-black">
-              ฿{(summary?.pending_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ฿ {(summary?.pending_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Heading>
           </Card>
           <Card className="border-l-[5px] border-l-emerald-500 flex flex-col justify-between h-24 p-5">
             <Heading level="p" className="text-[#6B7280] font-medium">อนุมัติแล้ว (MTD)</Heading>
             <Heading level="h3" className="font-bold mt-1 text-black">
-              ฿{(summary?.approved_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ฿ {(summary?.approved_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Heading>
           </Card>
           <Card
@@ -458,7 +417,7 @@ const PurchaseOrders: React.FC = () => {
               </span>
             </div>
             <Heading level="h3" className="font-bold mt-1 text-black group-hover:text-red-600 transition-colors">
-              ฿{(summary?.rejected_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ฿ {(summary?.rejected_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Heading>
           </Card>
         </div>
@@ -495,8 +454,8 @@ const PurchaseOrders: React.FC = () => {
                   {error}
                 </TableCell>
               </TableRow>
-            ) : orders.length > 0 ? (
-              orders.map((po) => {
+            ) : displayOrders.length > 0 ? (
+              displayOrders.map((po) => {
                 // คำนวณจำนวนรายการและจำนวนชิ้นจาก array po_items
                 const totalItemTypes = po.po_items?.length || 0;
                 const totalQuantity = po.po_items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
@@ -522,7 +481,9 @@ const PurchaseOrders: React.FC = () => {
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-12 text-gray-500">ไม่พบข้อมูลใบสั่งซื้อ</TableCell>
+                <TableCell colSpan={9} className="text-center py-12 text-gray-400">
+                  <ReceiptText size={40} strokeWidth={0.7} className='mx-auto'/> <br />ไม่พบข้อมูลใบสั่งซื้อ
+                  </TableCell>
               </TableRow>
             )}
           </TableBody>

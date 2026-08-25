@@ -12,6 +12,7 @@ import (
 
 const claimEvidenceBucket = "G03-Capstone"
 const productImageBucket = "G03-Capstone"
+const companyLogoBucket = "G03-Capstone"
 
 // UploadToSupabase uploads raw bytes to a Supabase Storage bucket and returns the public URL.
 func UploadToSupabase(bucket, filename, mimeType string, data []byte) (string, error) {
@@ -70,3 +71,9 @@ func UploadClaimEvidence(filename, mimeType string, data []byte) (string, error)
 func UploadProductImage(filename, mimeType string, data []byte) (string, error) {
 	return UploadToSupabase(productImageBucket, filename, mimeType, data)
 }
+
+// UploadCompanyLogo stores company logo images under the shared Supabase bucket.
+func UploadCompanyLogo(filename, mimeType string, data []byte) (string, error) {
+	return UploadToSupabase(companyLogoBucket, filename, mimeType, data)
+}
+
