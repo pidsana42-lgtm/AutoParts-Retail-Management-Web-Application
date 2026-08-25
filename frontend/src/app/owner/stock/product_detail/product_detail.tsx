@@ -412,6 +412,24 @@ export default function ProductDetailPage() {
                         </span>
                       </div>
                     )}
+                    {product.Suppliers && product.Suppliers.length > 0 && (
+                      <div className="col-span-2">
+                        <span className="text-slate-400">ผู้จำหน่าย:</span>
+                        <div className="mt-1 flex flex-col gap-1">
+                          {product.Suppliers.map((s) => (
+                            <div
+                              key={s.SupplierID}
+                              className="flex items-center justify-between rounded-sm border border-slate-100 bg-slate-50 px-2 py-1"
+                            >
+                              <span className="font-medium text-slate-700">{s.SupplierName || `Supplier #${s.SupplierID}`}</span>
+                              <span className="text-slate-500">
+                                {s.Quantity} {product.Unit || "ชิ้น"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

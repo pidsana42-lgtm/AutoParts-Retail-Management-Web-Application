@@ -9,6 +9,7 @@ import (
 type NotificationRepository interface {
 	Create(n *entity.Notification) error
 	ListForOwners(limit int) ([]entity.Notification, error)
+	// ListForUser: ของพนักงานคนนั้นโดยตรง (target_user_id) รวมกับของกลุ่มพนักงานทั้งหมด (for_employees) ให้เห็นทั้งคู่
 	ListForUser(userID uint, limit int) ([]entity.Notification, error)
 	UnreadCountForOwners() (int64, error)
 	UnreadCountForUser(userID uint) (int64, error)
@@ -37,7 +38,7 @@ func (r *notificationRepository) ListForOwners(limit int) ([]entity.Notification
 
 func (r *notificationRepository) ListForUser(userID uint, limit int) ([]entity.Notification, error) {
 	var list []entity.Notification
-	err := r.db.Where("target_user_id = ?", userID).Order("created_at desc").Limit(limit).Find(&list).Error
+	err := r.db.Where("target_user_id = ? OR for_employees = ?", userID, true).Order("created_at desc").Limit(limit).Find(&list).Error
 	return list, err
 }
 
@@ -49,7 +50,9 @@ func (r *notificationRepository) UnreadCountForOwners() (int64, error) {
 
 func (r *notificationRepository) UnreadCountForUser(userID uint) (int64, error) {
 	var count int64
-	err := r.db.Model(&entity.Notification{}).Where("target_user_id = ? AND is_read = ?", userID, false).Count(&count).Error
+	err := r.db.Model(&entity.Notification{}).
+		Where("(target_user_id = ? OR for_employees = ?) AND is_read = ?", userID, true, false).
+		Count(&count).Error
 	return count, err
 }
 
@@ -62,5 +65,9 @@ func (r *notificationRepository) MarkAllReadForOwners() error {
 }
 
 func (r *notificationRepository) MarkAllReadForUser(userID uint) error {
-	return r.db.Model(&entity.Notification{}).Where("target_user_id = ? AND is_read = ?", userID, false).Update("is_read", true).Error
+	// หมายเหตุ: for_employees เป็นแจ้งเตือนกลุ่ม (ทุกพนักงานเห็นแถวเดียวกัน) พอพนักงานคนใดคนหนึ่งกด "อ่านทั้งหมด"
+	// แถวกลุ่มนี้จะถูก mark read ไปเลย (คนอื่นก็จะเห็นเป็นอ่านแล้วด้วย) เหมือนพฤติกรรมเดิมของ ForOwners
+	return r.db.Model(&entity.Notification{}).
+		Where("(target_user_id = ? OR for_employees = ?) AND is_read = ?", userID, true, false).
+		Update("is_read", true).Error
 }

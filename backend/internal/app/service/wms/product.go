@@ -35,6 +35,9 @@ type ProductService interface {
 	CreateModel(req *wmsDto.ModelRequestDTO) (*entity.Models, error)
 	UpdateModel(id uint, req *wmsDto.ModelRequestDTO) error
 	DeleteModel(id uint) error
+
+	// ReceiveStock: รับสินค้าเข้าเพิ่มให้สินค้าที่มีอยู่แล้วในระบบ (หน้า "เพิ่มข้อมูลสินค้า" โหมด "สินค้าที่มีอยู่แล้ว")
+	ReceiveStock(id uint, req *wmsDto.ReceiveStockRequestDTO) (*wmsDto.ProductListResponseDTO, error)
 }
 
 type productService struct {
@@ -46,6 +49,9 @@ func NewProductService(repo wmsRepo.ProductRepository) ProductService {
 }
 
 func (s *productService) CreateProduct(req *wmsDto.ProductRequestDTO) (*wmsDto.ProductListResponseDTO, error) {
+	if err := validateSupplierQuantities(req.Suppliers, req.Quantity); err != nil {
+		return nil, err
+	}
 	product := req.ToEntity()
 	for _, id := range req.ModelIDs {
 		product.Models = append(product.Models, entity.Models{
@@ -57,6 +63,9 @@ func (s *productService) CreateProduct(req *wmsDto.ProductRequestDTO) (*wmsDto.P
 	}
 	err := s.repo.CreateProduct(&product)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.ReplaceProductSuppliers(product.ID, buildInventories(req.Suppliers)); err != nil {
 		return nil, err
 	}
 	triggerBarcodeGen([]uint{product.ID})
@@ -79,6 +88,9 @@ func (s *productService) GetProductByID(id uint) (*wmsDto.ProductListResponseDTO
 }
 
 func (s *productService) UpdateProduct(id uint, req *wmsDto.ProductRequestDTO) error {
+	if err := validateSupplierQuantities(req.Suppliers, req.Quantity); err != nil {
+		return err
+	}
 	product := req.ToEntity()
 	product.ID = id
 	for _, modelId := range req.ModelIDs {
@@ -93,12 +105,52 @@ func (s *productService) UpdateProduct(id uint, req *wmsDto.ProductRequestDTO) e
 	if err != nil {
 		return err
 	}
+	if err := s.repo.ReplaceProductSuppliers(id, buildInventories(req.Suppliers)); err != nil {
+		return err
+	}
 	triggerBarcodeGen([]uint{id})
 	return nil
 }
 
+// validateSupplierQuantities: ยอดรวมจำนวนที่รับมาจาก Supplier แต่ละเจ้า ต้องไม่เกินจำนวนสินค้าทั้งหมดที่มีจริง
+// (กันกรอกจำนวนต่อเจ้ารวมกันแล้วเกินยอดคงเหลือจริงของสินค้า)
+func validateSupplierQuantities(suppliers []wmsDto.ProductSupplierInput, totalQuantity int) error {
+	sum := 0
+	for _, sup := range suppliers {
+		sum += sup.Quantity
+	}
+	if sum > totalQuantity {
+		return fmt.Errorf("จำนวนสินค้าที่รับมาจาก Supplier รวมกัน (%d) เกินจำนวนสินค้าทั้งหมด (%d)", sum, totalQuantity)
+	}
+	return nil
+}
+
+// buildInventories: แปลงรายชื่อ Supplier+จำนวนที่ฟอร์มส่งมา ให้เป็นแถว Inventory พร้อมบันทึก
+func buildInventories(suppliers []wmsDto.ProductSupplierInput) []entity.Inventory {
+	inventories := make([]entity.Inventory, 0, len(suppliers))
+	for _, sup := range suppliers {
+		inventories = append(inventories, entity.Inventory{
+			SupplierID:            sup.SupplierID,
+			Inventory_Quantity:    sup.Quantity,
+			Last_Updated_DateTime: time.Now(),
+		})
+	}
+	return inventories
+}
+
 func (s *productService) DeleteProduct(id uint) error {
 	return s.repo.DeleteProduct(id)
+}
+
+// ReceiveStock: รับสินค้าเข้าเพิ่มให้สินค้าที่มีอยู่แล้ว — บวกจำนวนรวม + จำนวนต่อ Supplier เข้ากับยอดเดิม (ไม่แทนที่)
+func (s *productService) ReceiveStock(id uint, req *wmsDto.ReceiveStockRequestDTO) (*wmsDto.ProductListResponseDTO, error) {
+	if err := validateSupplierQuantities(req.Suppliers, req.Quantity); err != nil {
+		return nil, err
+	}
+	if err := s.repo.ReceiveStock(id, req.Quantity, buildInventories(req.Suppliers)); err != nil {
+		return nil, err
+	}
+	return s.GetProductByID(id)
 }
 
 func (s *productService) UploadProductImage(productID uint, originalFilename, mimeType string, data []byte) (*wmsDto.ProductImageResponseDTO, error) {

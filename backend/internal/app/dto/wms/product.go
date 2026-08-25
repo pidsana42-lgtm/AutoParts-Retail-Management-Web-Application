@@ -1,6 +1,8 @@
 package wms
 
 import (
+	"strings"
+
 	"backend/internal/app/entity"
 )
 
@@ -26,6 +28,22 @@ type ProductRequestDTO struct {
 	GradeID          uint   `json:"grade_id" binding:"required"`
 	ShelfID          uint   `json:"shelf_id" binding:"required"`
 	ShelfLevelID     *uint  `json:"shelf_level_id"`
+
+	// สินค้าชิ้นนี้รับมาจาก Supplier ไหนบ้าง (1 สินค้ามีได้หลายเจ้า แยกจำนวนต่อเจ้า) — ไม่บังคับ เผื่อยังไม่ทราบตอนเพิ่มสินค้า
+	Suppliers []ProductSupplierInput `json:"suppliers"`
+}
+
+// ProductSupplierInput: ผู้จำหน่าย 1 รายที่สินค้านี้รับมาจาก พร้อมจำนวนที่รับจากเจ้านั้น
+type ProductSupplierInput struct {
+	SupplierID uint `json:"supplier_id" binding:"required"`
+	Quantity   int  `json:"quantity" binding:"min=0"`
+}
+
+// ReceiveStockRequestDTO: รับสินค้าเข้าเพิ่มให้สินค้าที่มีอยู่แล้วในระบบ (ไม่ใช่สร้างสินค้าใหม่)
+// บวกจำนวนที่รับเพิ่มเข้ากับยอดคงเหลือเดิม + บวกจำนวนต่อ Supplier เข้ากับของเดิม (ไม่ใช่แทนที่)
+type ReceiveStockRequestDTO struct {
+	Quantity  int                     `json:"quantity" binding:"required,gt=0"`
+	Suppliers []ProductSupplierInput  `json:"suppliers"`
 }
 
 func (r *ProductRequestDTO) ToEntity() entity.Product {
@@ -76,9 +94,18 @@ type ProductListResponseDTO struct {
 	ShelfName          string `json:"shelf_name"`
 	ShelfLevelName     string `json:"shelf_level_name"`
 	ZoneName           string `json:"zone_name"`
-	ThumbnailUrl       string `json:"thumbnail_url"`
-	SupplierName       string `json:"supplier_name"`
-	Note               string `json:"note"`
+	ThumbnailUrl string `json:"thumbnail_url"`
+	// SupplierName: รวมชื่อ Supplier ทุกเจ้าที่สินค้านี้รับมาจาก คั่นด้วย ", " (เผื่อหน้าตาราง/ตัวกรองเดิมที่คาดหวังค่าเดียว)
+	SupplierName string                     `json:"supplier_name"`
+	Suppliers    []ProductSupplierResponseDTO `json:"suppliers"`
+	Note         string                     `json:"note"`
+}
+
+// ProductSupplierResponseDTO: รายละเอียด Supplier แต่ละเจ้าที่สินค้านี้รับมาจาก (จากตาราง Inventory)
+type ProductSupplierResponseDTO struct {
+	SupplierID   uint   `json:"supplier_id"`
+	SupplierName string `json:"supplier_name"`
+	Quantity     int    `json:"quantity"`
 }
 
 type ProductImageResponseDTO struct {
@@ -157,7 +184,21 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 		d.ThumbnailUrl = p.ProductImages[0].Image_URL
 	}
 
-	if len(p.Inventories) > 0 && p.Inventories[0].Supplier != nil {
-		d.SupplierName = p.Inventories[0].Supplier.SupplierName
+	d.Suppliers = make([]ProductSupplierResponseDTO, 0, len(p.Inventories))
+	supplierNames := make([]string, 0, len(p.Inventories))
+	for _, inv := range p.Inventories {
+		name := ""
+		if inv.Supplier != nil {
+			name = inv.Supplier.SupplierName
+		}
+		d.Suppliers = append(d.Suppliers, ProductSupplierResponseDTO{
+			SupplierID:   inv.SupplierID,
+			SupplierName: name,
+			Quantity:     inv.Inventory_Quantity,
+		})
+		if name != "" {
+			supplierNames = append(supplierNames, name)
+		}
 	}
+	d.SupplierName = strings.Join(supplierNames, ", ")
 }

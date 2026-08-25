@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getGradesList, getUnitsList } from "../../../../service/http/wms/product";
+import { getGradesList, getUnitsList, getSuppliersList } from "../../../../service/http/wms/product";
 import { stockDataService } from "../../../../service/http/wms/stock_data_service";
 import type { CascaderOption } from "../../../../components/elements/cascader";
 
@@ -14,6 +14,7 @@ interface ProductFormOptions {
   grades: SelectOption[];
   units: SelectOption[];
   zones: CascaderOption[];
+  suppliers: SelectOption[];
   loading: boolean;
 }
 
@@ -25,6 +26,7 @@ export function useProductFormOptions(): ProductFormOptions {
   const [grades, setGrades] = useState<SelectOption[]>([]);
   const [units, setUnits] = useState<SelectOption[]>([]);
   const [zones, setZones] = useState<CascaderOption[]>([]);
+  const [suppliers, setSuppliers] = useState<SelectOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -80,11 +82,12 @@ export function useProductFormOptions(): ProductFormOptions {
           }
         });
 
-        const [gradeList, unitList, shelfList, zoneList] = await Promise.all([
+        const [gradeList, unitList, shelfList, zoneList, supplierList] = await Promise.all([
           getGradesList(),
           getUnitsList(),
           stockDataService.getShelves(),
           stockDataService.getZones(),
+          getSuppliersList(),
         ]);
 
         // โซนจัดเก็บ: โซน -> ตู้/ชั้นวาง -> ระดับชั้น — prefix เหตุผลเดียวกับหมวดหมู่ด้านบน
@@ -111,6 +114,7 @@ export function useProductFormOptions(): ProductFormOptions {
         setGrades(gradeList.map((g) => ({ label: g.name, value: String(g.id) })));
         setUnits(unitList.map((u) => ({ label: u.name, value: String(u.id) })));
         setZones(Array.from(zMap.values()));
+        setSuppliers(supplierList.map((s) => ({ label: s.name, value: String(s.id) })));
       } catch (err) {
         console.error("Failed to load product form reference data:", err);
       } finally {
@@ -124,5 +128,5 @@ export function useProductFormOptions(): ProductFormOptions {
     };
   }, []);
 
-  return { models, categories, grades, units, zones, loading };
+  return { models, categories, grades, units, zones, suppliers, loading };
 }
