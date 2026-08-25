@@ -30,14 +30,16 @@ import {
   formatCurrency,
   getPageNumbers,
   getPaymentVariant,
-  renderPaymentStatusBadge,
+  renderCancellationStatusBadge,
 } from "../../../utils/poshelpers";
 import { usePaymentCancellationHistory } from "./hooks/usePaymentCancellationHistory";
 import { useUserRole } from "../../../hooks/useUserRole";
+import { useEmployeeOptions } from "../../../hooks/useEmployeeOptions";
 import type { PaymentHistoryItem } from "../../../interface/pos/payment_interface";
 
 const PaymentCancellationHistory: React.FC = () => {
   const { isOwnerOrAdmin } = useUserRole();
+  const { employeeList } = useEmployeeOptions();
   const {
     dataList,
     selectedIds,
@@ -65,15 +67,20 @@ const PaymentCancellationHistory: React.FC = () => {
     setStatus,
     paymentType,
     setPaymentType,
+    employeeId,
+    setEmployeeId,
     handleSearch,
     selectedReceipt,
     setSelectedReceipt,
     cancelRemark,
     setCancelRemark,
+    cancelReason,
+    setCancelReason,
     isProcessing,
     handleApproveCancel,
     handleRejectCancel,
     handleRevertCancel,
+    handleResubmitCancel,
   } = usePaymentCancellationHistory();
 
   return (
@@ -97,7 +104,7 @@ const PaymentCancellationHistory: React.FC = () => {
             <CardContent className="p-6 md:p-8">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 {/* 1. ค้นหาเลขที่ใบเสร็จ/บิล/ชื่อลูกค้า */}
-                <div className="md:col-span-3 flex flex-col gap-1.5">
+                <div className="md:col-span-5 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     ค้นหาเลขที่ใบเสร็จ / บิล / ลูกค้า
                   </label>
@@ -113,7 +120,24 @@ const PaymentCancellationHistory: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 2. วันที่เริ่มต้น */}
+                {/* 2. ผู้ขอยกเลิก / ผู้ทำรายการ */}
+                {isOwnerOrAdmin && (
+                  <div className="md:col-span-2 flex flex-col gap-1.5">
+                    <label className="text-xs font-normal text-[#5F5E5E]">ผู้ขอยกเลิก / ผู้ทำรายการ</label> 
+                    <Select
+                      value={employeeId}
+                      onChange={(e: any) => setEmployeeId(e.target.value)}
+                    placeholder="ผู้ทำรายการทุกคน"
+                    className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none"
+                    options={[
+                      { label: "ผู้ทำรายการทุกคน", value: "" },
+                      ...employeeList, // แสดงรายชื่อพนักงานที่ดึงมาจาก API
+                    ]}
+                  />
+                </div>
+                )}
+
+                {/* 3. วันที่เริ่มต้น */}
                 <div className="md:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">วันที่เริ่มต้น</label>
                   <Input
@@ -124,7 +148,7 @@ const PaymentCancellationHistory: React.FC = () => {
                   />
                 </div>
 
-                {/* 3. วันที่สิ้นสุด */}
+                {/* 4. วันที่สิ้นสุด */}
                 <div className="md:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">วันที่สิ้นสุด</label>
                   <Input
@@ -135,35 +159,19 @@ const PaymentCancellationHistory: React.FC = () => {
                   />
                 </div>
 
-                {/* 4. ประเภทธุรกรรม */}
-                <div className="md:col-span-2 flex flex-col gap-1.5">
-                  <label className="text-xs font-normal text-[#5F5E5E]">ประเภทการรับชำระ</label>
-                  <Select
-                    value={paymentType}
-                    onChange={(e: any) => setPaymentType(e.target.value)}
-                    placeholder="ทั้งหมด"
-                    className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none"
-                    options={[
-                      { label: "ทั้งหมด", value: "" },
-                      { label: "ชำระสดหน้าร้าน", value: "payment" },
-                      { label: "เคลียร์หนี้เงินเชื่อ", value: "repayment" },
-                    ]}
-                  />
-                </div>
-
                 {/* 5. สถานะ */}
                 <div className="md:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">สถานะคำขอ</label>
                   <Select
                     value={status}
                     onChange={(e: any) => setStatus(e.target.value)}
-                    placeholder="ทั้งหมด"
+                    placeholder="สถานะทั้งหมด"
                     className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none"
                     options={[
                       { label: "ทั้งหมด", value: "" },
-                      { label: "รออนุมัติยกเลิก", value: "pending_cancel" },
-                      { label: "ยกเลิกแล้ว", value: "cancelled" },
-                      { label: "ปฏิเสธคำขอ", value: "rejected" },
+                      { label: "รออนุมัติ", value: "pending_cancel" },
+                      { label: "อนุมัติแล้ว", value: "cancelled" },
+                      { label: "ไม่อนุมัติ", value: "rejected" },
                     ]}
                   />
                 </div>
@@ -200,7 +208,7 @@ const PaymentCancellationHistory: React.FC = () => {
                   <TableHead className="py-3 px-3">ชื่อลูกค้า / บิลที่ชำระ</TableHead>
                   <TableHead className="py-3 px-3 text-right">ยอดเงิน</TableHead>
                   <TableHead className="py-3 px-3 text-left">ผู้ขอยกเลิก</TableHead>
-                  <TableHead className="py-3 px-3">สถานะ</TableHead> 
+                  <TableHead className="py-3 px-3 text-center">สถานะ</TableHead> 
                   <TableHead className="py-3 px-3 text-center">จัดการ</TableHead>
                 </TableRow>
               </TableHeader>
@@ -283,8 +291,8 @@ const PaymentCancellationHistory: React.FC = () => {
                         </TableCell>
 
                         {/* 6. สถานะ */}
-                        <TableCell className="py-3.5 px-3">
-                          {renderPaymentStatusBadge(item.status)}
+                        <TableCell className="py-3.5 px-3 text-center">
+                          {renderCancellationStatusBadge(item.status, "", item.cancel_remark, item.cancelled_at)}
                         </TableCell>
 
                         {/* 7. จัดการ */}
@@ -535,7 +543,7 @@ const PaymentCancellationHistory: React.FC = () => {
                               <Badge variant="warning">รออนุมัติ</Badge>
                             </div>
 
-                            <div className="text-xs text-[#1C1B1B] bg-[#FFFBEB] space-y-1.5">
+                            <div className="text-xs text-[#1C1B1B]">
                               <div>
                                 <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
                                 <span className="text-[#1C1B1B]">{selectedReceipt.cancel_requested_by_name || "-"}</span>
@@ -587,14 +595,7 @@ const PaymentCancellationHistory: React.FC = () => {
                                 {isProcessing ? "กำลังดำเนินการ..." : "ปฏิเสธคำขอ"}
                               </Button>
 
-                              <Button
-                                type="button"
-                                variant="outline-cancel"
-                                onClick={() => setSelectedReceipt(null)}
-                                className="text-xs px-4 h-10 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal rounded-none"
-                              >
-                                ปิด
-                              </Button>
+                              
                             </div>
                           </div>
                         </div>
@@ -612,7 +613,7 @@ const PaymentCancellationHistory: React.FC = () => {
                             <Badge variant="warning">รออนุมัติ</Badge>
                           </div>
 
-                          <div className="text-xs text-[#1C1B1B] bg-[#FFFBEB] space-y-1.5">
+                          <div className="text-xs text-[#1C1B1B] bg-[#FFFBEB]">
                             <div>
                               <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
                               <span className="text-[#1C1B1B]">{selectedReceipt.cancel_requested_by_name || "-"}</span>
@@ -653,42 +654,90 @@ const PaymentCancellationHistory: React.FC = () => {
                     );
                   }
 
-                  // 2. สถานะ ปฏิเสธคำขอ (Rejected: completed with cancel_remark)
+                  // 2. สถานะ ไม่อนุมัติ / ปฏิเสธคำขอ (Rejected: completed with cancel_remark)
                   if (selectedReceipt.cancel_remark && itemStatus !== "cancelled") {
                     return (
-                      <div className="space-y-3">
-                        <Card className="p-4 bg-[#F8F9FA] border border-gray-200 rounded-none shadow-none space-y-2">
+                      <div className="space-y-4 pt-2">
+                        <Card className="p-4 bg-[#FCF7F7] border border-[#F5DFDF] rounded-none shadow-none space-y-2">
                           <div className="flex items-center justify-between">
-                            <Text variant="small" className="font-normal text-[#5F5E5E] mb-0">
-                              สถานะคำขอ: คำขอยกเลิกถูกปฏิเสธ
+                            <Text variant="small" className="font-normal text-[#E51C23] mb-0">
+                              สถานะ: คำขอยกเลิกก่อนหน้านี้ถูกปฏิเสธ
                             </Text>
-                            <Badge variant="neutral">ปฏิเสธคำขอ</Badge>
+                            <Badge
+                              variant="neutral"
+                              size="auto"
+                              className="bg-[#E51C23] text-white border-none text-[10px] font-normal rounded-none py-0.5 px-2"
+                            >
+                              ไม่อนุมัติ
+                            </Badge>
                           </div>
 
-                          <div className="text-xs text-[#1C1B1B] bg-white p-3 border border-gray-100 space-y-1.5">
+                          <div className="text-xs text-[#1C1B1B]">
+                            {selectedReceipt.cancel_requested_by_name && (
+                              <div>
+                                <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอเดิม:</span>{" "}
+                                <span className="text-[#1C1B1B]">{selectedReceipt.cancel_requested_by_name}</span>
+                              </div>
+                            )}
+                            {selectedReceipt.cancel_reason && (
+                              <div>
+                                <span className="font-normal text-[#1C1B1B]">เหตุผลที่พนักงานระบุ:</span>{" "}
+                                <span className="text-[#1C1B1B]">{selectedReceipt.cancel_reason}</span>
+                              </div>
+                            )}
                             <div>
-                              <span className="font-normal text-[#5F5E5E]">ผู้ส่งคำขอเดิม:</span>{" "}
-                              <span className="text-[#1C1B1B]">{selectedReceipt.cancel_requested_by_name || "-"}</span>
+                              <span className="font-normal text-[#1C1B1B]">เหตุผลจากเจ้าของร้าน:</span>{" "}
+                              <span className="text-[#1C1B1B]">{selectedReceipt.cancel_remark || "-"}</span>
                             </div>
-                            <div>
-                              <span className="font-normal text-[#5F5E5E]">เหตุผลที่ขอยกเลิก:</span>{" "}
-                              <span className="text-[#1C1B1B]">{selectedReceipt.cancel_reason || "-"}</span>
-                            </div>
-                            <div>
-                              <span className="font-normal text-[#E51C23]">เหตุผลที่ปฏิเสธ:</span>{" "}
-                              <span className="text-[#1C1B1B]">{selectedReceipt.cancel_remark}</span>
-                            </div>
+                            {(selectedReceipt.cancelled_at || selectedReceipt.cancel_requested_at) && (
+                              <Text variant="xs" className="text-[#1C1B1B] pt-0.5 mb-0">
+                                ปฏิเสธคำขอเมื่อ: {formatDate(selectedReceipt.cancelled_at || selectedReceipt.cancel_requested_at || "")}
+                              </Text>
+                            )}
                           </div>
                         </Card>
 
-                        <Button
-                          type="button"
-                          variant="outline-cancel"
-                          onClick={() => setSelectedReceipt(null)}
-                          className="w-full text-xs h-10 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal rounded-none cursor-pointer"
-                        >
-                          ปิด
-                        </Button>
+                        <div className="space-y-3">
+                          <Text
+                            variant="xs"
+                            className="font-normal text-[#E51C23] uppercase tracking-wider mb-1"
+                          >
+                            ระบุเหตุผลเพื่อยื่นขอยกเลิกใหม่อีกครั้ง
+                          </Text>
+
+                          <textarea
+                            rows={3}
+                            value={cancelReason}
+                            onChange={(e) => setCancelReason(e.target.value)}
+                            placeholder="ตัวอย่าง: คีย์ข้อมูลผิดพลาด / ตรวจสอบยอดหนี้ใหม่อีกครั้ง..."
+                            className="w-full p-2.5 text-xs font-light bg-[#F6F3F2] border border-[#E51C23] rounded-none focus:outline-none text-[#1C1B1B] placeholder-[#6B7280] resize-none"
+                          />
+
+                          <div className="flex gap-3 pt-1">
+                            <Button
+                              type="button"
+                              variant="solid-red"
+                              onClick={handleResubmitCancel}
+                              disabled={isProcessing}
+                              className="flex-1 text-sm h-11 font-normal rounded-none cursor-pointer"
+                            >
+                              {isProcessing
+                                ? "กำลังดำเนินการ..."
+                                : isOwnerOrAdmin
+                                  ? "อนุมัติยกเลิกรายการ (คืนหนี้)"
+                                  : "ยืนยันการขออนุมัติยกเลิก"}
+                            </Button>
+
+                            <Button
+                              type="button"
+                              variant="outline-cancel"
+                              onClick={() => setSelectedReceipt(null)}
+                              className="text-sm px-6 h-11 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal rounded-none cursor-pointer"
+                            >
+                              ปิด
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     );
                   }
@@ -701,10 +750,16 @@ const PaymentCancellationHistory: React.FC = () => {
                           <Text variant="small" className="font-normal text-[#E51C23] mb-0">
                             สถานะคำขอ: รายการนี้ถูกยกเลิกแล้ว
                           </Text>
-                          <Badge variant="destructive">ยกเลิกแล้ว</Badge>
+                          <Badge
+                            variant="neutral"
+                            size="auto"
+                            className="bg-[#E51C23] text-white border-none text-[10px] font-normal rounded-none py-0.5 px-2"
+                          >
+                            อนุมัติแล้ว
+                          </Badge>
                         </div>
 
-                        <div className="text-xs text-[#1C1B1B] bg-[#FAF2F2] space-y-1.5">
+                        <div className="text-xs text-[#1C1B1B]">
                           <div>
                             <span className="font-normal text-[#1C1B1B]">ผู้ขอยกเลิก:</span>{" "}
                             <span className="text-[#1C1B1B]">{selectedReceipt.cancel_requested_by_name || "-"}</span>

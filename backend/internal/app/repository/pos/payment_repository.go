@@ -316,10 +316,12 @@ func (r *paymentRepository) RevertCancelRepayment(repaymentID uint) error {
 
 // เจ้าของร้านปฏิเสธคำขอยกเลิก (เปลี่ยนสถานะกลับเป็น completed)
 func (r *paymentRepository) RejectCancelRepayment(repaymentID uint, remark string) error {
+    now := time.Now()
     return r.db.Model(&entity.PaymentRepayment{}).
         Where("id = ?", repaymentID).
         Updates(map[string]interface{}{
             "status":        "completed",
             "cancel_remark": remark,
+            "cancelled_at":  &now,
         }).Error
 }

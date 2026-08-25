@@ -151,16 +151,18 @@ export const renderPaymentTypeBadge = (type: string) => {
   );
 };
 
-export const renderPaymentStatusBadge = (status: string) => {
+export const renderPaymentStatusBadge = (status?: string | null, cancelRemark?: string | null) => {
   const s = (status || "").toLowerCase();
-  switch (s) {
-    case "pending_cancel":
-      return <Badge variant="warning">รออนุมัติยกเลิก</Badge>;
-    case "cancelled":
-      return <Badge variant="error">ยกเลิกแล้ว</Badge>;
-    default:
-      return <Badge variant="success">สำเร็จ</Badge>;
+  if (s === "pending_cancel") {
+    return <Badge variant="warning">รออนุมัติยกเลิก</Badge>;
   }
+  if (s === "cancelled") {
+    return <Badge variant="error">ยกเลิกแล้ว</Badge>;
+  }
+  if (s === "rejected" || (s === "completed" && Boolean(cancelRemark && cancelRemark.trim() !== ""))) {
+    return <Badge variant="neutral">ไม่อนุมัติยกเลิก</Badge>;
+  }
+  return <Badge variant="success">สำเร็จ</Badge>;
 };
 
 /**

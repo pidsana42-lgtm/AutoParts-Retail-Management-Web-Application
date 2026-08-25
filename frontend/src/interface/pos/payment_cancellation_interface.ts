@@ -29,6 +29,8 @@ export interface UsePaymentCancellationHistoryReturn {
   setStatus: (status: string) => void;
   paymentType: string;
   setPaymentType: (type: string) => void;
+  employeeId: string;
+  setEmployeeId: (id: string) => void;
   handleSelectAll: () => void;
   handleSelectRow: (id: number) => void;
   handleSearch: () => void;
@@ -39,10 +41,13 @@ export interface UsePaymentCancellationHistoryReturn {
   setSelectedReceipt: (item: PaymentHistoryItem | null) => void;
   cancelRemark: string;
   setCancelRemark: (remark: string) => void;
+  cancelReason: string;
+  setCancelReason: (reason: string) => void;
   isProcessing: boolean;
   handleApproveCancel: () => Promise<void>;
   handleRejectCancel: () => Promise<void>;
   handleRevertCancel: () => Promise<void>;
+  handleResubmitCancel: () => Promise<void>;
   handleBatchApprove: () => Promise<void>;
   handleBatchReject: () => Promise<void>;
   handleBatchRevert: () => Promise<void>;

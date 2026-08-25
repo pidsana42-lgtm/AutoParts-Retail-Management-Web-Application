@@ -109,7 +109,7 @@ const SalesCancellationHistory: React.FC = () => {
             <CardContent className="p-6 md:p-8">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 {/* 1. ค้นหาเลขบิล/ชื่อลูกค้า (col-span-3) */}
-                <div className="md:col-span-3 flex flex-col gap-1.5">
+                <div className="md:col-span-5 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     ค้นหาเลขคำสั่งซื้อ/ชื่อลูกค้า 
                   </label>
@@ -147,7 +147,7 @@ const SalesCancellationHistory: React.FC = () => {
                   />
                 </div>
 
-                {/* 4. ประเภทลูกค้า (col-span-2) */}
+                {/* 4. ประเภทลูกค้า (col-span-2)
                 <div className="md:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">ประเภทลูกค้า</label>
                   <Select
@@ -162,7 +162,7 @@ const SalesCancellationHistory: React.FC = () => {
                       { label: "ลูกค้าบริษัท", value: "WHOLESALE" },
                     ]}
                   />
-                </div>
+                </div> */}
 
                 {/* 5. สถานะการยกเลิก (col-span-2) เปลี่ยนจากช่องชำระเงินมาเป็นอันนี้แทน */}
                 <div className="md:col-span-2 flex flex-col gap-1.5">
@@ -842,7 +842,7 @@ const SalesCancellationHistory: React.FC = () => {
                               </Badge>
                             </div>
 
-                            <div className="text-xs text-[#1C1B1B] bg-[#FAF2F2]">
+                            <div className="text-xs text-[#1C1B1B]">
                               {orderDetail.canceller && (
                                 <div>
                                   <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
