@@ -3,13 +3,14 @@ export interface CatalogItem {
   catalog_id?: number;
   part_number: string;
   part_name: string;
-  brand: string;
-  st_no?: string;
+  brand?: string;
+  supplier_name?: string;
+  st_no?: string; // รหัสสินค้าฝั่งคู่ค้า (ยังไม่มีคอลัมน์นี้จริงใน backend ตอนนี้ เลยจะว่างเสมอ ใช้ fallback เป็น part_number แทน)
   compatible_cars?: string;
   standard_price: number;
   unit: string;
   image?: string;
-  st_no?: string; // รหัสสินค้าฝั่งคู่ค้า (ยังไม่มีคอลัมน์นี้จริงใน backend ตอนนี้ เลยจะว่างเสมอ ใช้ fallback เป็น part_number แทน)
+  image_thumbnail?: string;
   remark?: string;
   created_at?: string;
   updated_at?: string;

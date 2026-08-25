@@ -863,7 +863,7 @@ export default function PreOrderManager() {
                         const supplierPartCode = (item as any).supplier_part_code || '';
                         const supplierName = (item as any).supplier_name || '';
                         const fromCatalog = !!(item as any).supplier_part_code;
-                        const imgUrl = (item as any).image || matchedProd?.thumbnail_url || '';
+                        const imgUrl = (item as any).image || matchedProd?.thumbnail_url || matchedProd?.image || '';
 
                         return (
                           <TableRow key={idx} className={`hover:bg-gray-50/70 align-middle transition-colors ${fromCatalog ? 'bg-red-50/20' : ''}`}>
