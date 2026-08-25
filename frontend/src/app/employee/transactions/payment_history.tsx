@@ -31,7 +31,7 @@ import { cn } from "../../../utils/component";
 // Hooks & Helpers
 import { usePaymentHistory } from "./hooks/usePaymentHistory";
 import type { PaymentHistoryItem } from "../../../interface/pos/payment_interface";
-import { getDisplayCustomerName, getPageNumbers, getPaymentVariant } from "../../../utils/poshelpers";
+import { getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderPaymentStatusBadge, renderPaymentTypeBadge } from "../../../utils/poshelpers";
 import { formatDate } from "../../../utils/date";
 import { useUserRole } from "../../../hooks/useUserRole";
 
@@ -48,6 +48,7 @@ export default function PaymentHistoryPage() {
     error,
     search, 
     typeFilter,
+    statusFilter,
     paymentMethod,
     employeeId,
     employeeList,
@@ -61,6 +62,7 @@ export default function PaymentHistoryPage() {
     isCancelling,
     setSearch,
     setTypeFilter,
+    setStatusFilter,
     setPaymentMethod,
     setEmployeeId,
     setStartDate,
@@ -170,7 +172,7 @@ export default function PaymentHistoryPage() {
                   />
                 </div>
 
-                <div className="md:col-span-3 lg:col-span-3 flex flex-col gap-1.5">
+                <div className="md:col-span-6 lg:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     ประเภทการรับชำระ
                   </label>
@@ -187,7 +189,25 @@ export default function PaymentHistoryPage() {
                   />
                 </div>
 
-                <div className="md:col-span-3 lg:col-span-3 flex flex-col gap-1.5">
+                <div className="md:col-span-6 lg:col-span-2 flex flex-col gap-1.5">
+                  <label className="text-xs font-normal text-[#5F5E5E]">
+                    สถานะรายการ
+                  </label>
+                  <Select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    placeholder="ทุกสถานะ"
+                    className="bg-white border-none rounded-none h-10 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0 cursor-pointer"
+                    options={[
+                      { label: "ทุกสถานะ", value: "" },
+                      { label: "สำเร็จ", value: "completed" },
+                      { label: "รออนุมัติยกเลิก", value: "pending_cancel" },
+                      { label: "ยกเลิกแล้ว", value: "cancelled" },
+                    ]}
+                  />
+                </div>
+
+                <div className="md:col-span-6 lg:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     ช่องทางชำระเงิน
                   </label>
@@ -204,7 +224,7 @@ export default function PaymentHistoryPage() {
                   />
                 </div>
 
-                <div className="md:col-span-12 lg:col-span-2">
+                <div className="md:col-span-6 lg:col-span-2">
                   <Button
                     onClick={handleApplyFilter}
                     className="w-full h-10 rounded-none bg-[#E51C23] hover:bg-[#c9151b] text-white text-sm font-normal transition-colors border-none shadow-none cursor-pointer"
@@ -218,24 +238,25 @@ export default function PaymentHistoryPage() {
 
           {/* Data Table */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
-            <Table className="!w-full !min-w-0 table-fixed text-left border-collapse">
+            <Table className="text-left border-collapse">
               <TableHeader className="bg-[#F6F3F2] rounded-none border-b border-gray-200 text-[11px] text-[#6B7280] uppercase tracking-wider">
                 <TableRow>
-                  <TableHead className="py-3 px-3 w-[15%]">เลขที่ใบเสร็จ</TableHead>
-                  <TableHead className="py-3 px-3 w-[13%]">วันที่ - เวลา</TableHead>
-                  <TableHead className="py-3 px-3 w-[18%]">ชื่อลูกค้า / บิลที่ชำระ</TableHead>
-                  <TableHead className="py-3 px-3 w-[12%]">ประเภทการชำระ</TableHead>
-                  <TableHead className="py-3 px-3 text-left w-[12%]">ผู้บันทึกยอด</TableHead>
-                  <TableHead className="py-3 px-3 text-right w-[11%]">ยอดเงินที่รับ</TableHead>
-                  <TableHead className="py-3 px-3 text-center w-[11%]">ช่องทาง</TableHead>
-                  <TableHead className="py-3 px-3 text-center w-[8%]">จัดการ</TableHead>
+                  <TableHead className="py-3 px-3 ">เลขที่ใบเสร็จ</TableHead>
+                  <TableHead className="py-3 px-3 ">วันที่ - เวลา</TableHead>
+                  <TableHead className="py-3 px-3">ชื่อลูกค้า / บิลที่ชำระ</TableHead>
+                  <TableHead className="py-3 px-3 text-center">ประเภทการชำระ</TableHead>
+                  <TableHead className="py-3 px-3 text-center">สถานะ</TableHead>
+                  <TableHead className="py-3 px-3  text-left">ผู้บันทึกยอด</TableHead>
+                  <TableHead className="py-3 px-3 text-right">ยอดเงินที่รับ</TableHead>
+                  <TableHead className="py-3 px-3 text-center">การชำระเงิน</TableHead>
+                  <TableHead className="py-3 px-3  text-center">จัดการ</TableHead>
                 </TableRow>
               </TableHeader>
 
               <TableBody className="divide-y divide-gray-200">
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-12 text-center">
+                    <TableCell colSpan={9} className="py-12 text-center">
                       <Text variant="small" className="text-gray-500 mb-0">
                         กำลังโหลดข้อมูลประวัติการชำระเงิน...
                       </Text>
@@ -243,7 +264,7 @@ export default function PaymentHistoryPage() {
                   </TableRow>
                 ) : error ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-12 text-center">
+                    <TableCell colSpan={9} className="py-12 text-center">
                       <Text variant="small" className="text-red-500 mb-0">
                         {error}
                       </Text>
@@ -251,7 +272,7 @@ export default function PaymentHistoryPage() {
                   </TableRow>
                 ) : items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-12 text-center">
+                    <TableCell colSpan={9} className="py-12 text-center">
                       <Text variant="small" className="text-gray-400 mb-0">
                         ไม่พบรายการประวัติการชำระเงิน
                       </Text>
@@ -264,71 +285,62 @@ export default function PaymentHistoryPage() {
                       className="hover:bg-slate-50 transition-colors"
                     >
                       {/* 1. เลขที่ใบเสร็จ */}
-                      <TableCell className="py-3.5 px-4">
-                        <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
+                      <TableCell className="py-3.5 px-3">
+                        <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 whitespace-nowrap">
                           {item.receipt_number}
                         </Text>
                       </TableCell>
 
                       {/* 2. วันที่ทำรายการ */}
-                      <TableCell className="py-3.5 px-4">
-                        <Text variant="xs" className="font-light text-[#5B5B5B] mb-0">
+                      <TableCell className="py-3.5 px-3">
+                        <Text variant="xs" className="font-light text-[#5B5B5B] mb-0 whitespace-nowrap">
                           {formatDate(item.paid_at)}
                         </Text>
                       </TableCell>
 
                       {/* 3. ชื่อลูกค้า + เลขที่บิล */}
-                      <TableCell className="py-3.5 px-4 truncate">
-                        <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate">
+                      <TableCell className="py-3.5 px-3">
+                        <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate max-w-[200px]">
                           {getDisplayCustomerName(item)}
                         </Text>
-                        <Text variant="xs" className="font-light text-[#A8A29E] mb-0">
+                        <Text variant="xs" className="font-light text-[#A8A29E] mb-0 truncate max-w-[200px]">
                           บิล: {item.order_numbers || "-"}
                         </Text>
                       </TableCell>
 
                       {/* 4. ประเภทการชำระ */}
-                      <TableCell className="py-3.5 px-4">
-                        <div className="flex flex-col gap-1 items-start">
-                          <Badge variant={item.payment_type}>
-                            {item.payment_type === "payment" ? "ชำระสดหน้าร้าน" : "เคลียร์หนี้เงินเชื่อ"}
-                          </Badge>
-                          {item.status === "pending_cancel" && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-normal bg-amber-50 text-amber-700 border border-amber-300">
-                              รออนุมัติยกเลิก
-                            </span>
-                          )}
-                          {item.status === "cancelled" && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-normal bg-red-50 text-red-700 border border-red-300">
-                              ยกเลิกแล้ว
-                            </span>
-                          )}
-                        </div>
+                      <TableCell className="py-3.5 px-3">
+                        {renderPaymentTypeBadge(item.payment_type)}
                       </TableCell>
 
-                      {/* 5. ผู้บันทึกยอด */}
-                      <TableCell className="py-3.5 px-4 truncate">
-                        <Text variant="xs" className="font-normal text-[#1C1B1B] mb-0">
+                      {/* 5. สถานะ */}
+                      <TableCell className="py-3.5 px-3">
+                        {renderPaymentStatusBadge(item.status)}
+                      </TableCell>
+
+                      {/* 6. ผู้บันทึกยอด */}
+                      <TableCell className="py-3.5 px-3">
+                        <Text variant="xs" className="font-normal text-[#1C1B1B] mb-0 whitespace-nowrap">
                           {item.received_by_name || "-"}
                         </Text>
                       </TableCell>
 
-                      {/* 6. ยอดเงินที่รับ */}
-                      <TableCell className="py-3.5 px-4 text-right">
-                        <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
+                      {/* 7. ยอดเงินที่รับ */}
+                      <TableCell className="py-3.5 px-3 text-right">
+                        <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 whitespace-nowrap">
                           {formatCurrency(item.total_received)}
                         </Text>
                       </TableCell> 
 
-                      {/* 7. ช่องทางชำระเงิน */}
-                      <TableCell className="py-3.5 px-4 text-center">
-                        <Badge variant={getPaymentVariant(item.payment_method)}>
+                      {/* 8. ช่องทางชำระเงิน */}
+                      <TableCell className="py-3.5 px-3 text-center">
+                        <Badge variant={getPaymentVariant(item.payment_method)} className="rounded-none whitespace-nowrap">
                           {item.payment_method || "เงินสด"}
                         </Badge>
                       </TableCell>
 
-                      {/* 8. ปุ่มดูรายละเอียด / ยกเลิก */}
-                      <TableCell className="py-3.5 px-4 text-center">
+                      {/* 9. ปุ่มดูรายละเอียด */}
+                      <TableCell className="py-3.5 px-3 text-center">
                         <button
                           type="button"
                           className="inline-flex items-center justify-center p-1.5 text-[#E51C23] hover:text-[#c9151b] hover:bg-red-50 transition-colors cursor-pointer rounded-full"
@@ -529,26 +541,6 @@ export default function PaymentHistoryPage() {
                   </CardContent>
                 </Card>
 
-                {/* 1. กรณีรายการถูกยกเลิกไปแล้ว */}
-                {selectedReceipt.status === "cancelled" && (
-                  <div className="p-4 bg-red-50 border border-red-200 text-xs text-red-700 space-y-2">
-                    <div className="font-semibold text-sm text-red-800">รายการนี้ถูกยกเลิกแล้ว</div>
-                    <div className="text-red-600">
-                      ใบเสร็จนี้ถูกยกเลิกและระบบได้คืนยอดหนี้กลับไปยังลูกค้าเรียบร้อยแล้ว
-                    </div>
-                    {selectedReceipt.cancel_reason && (
-                      <div className="text-gray-600 pt-1 border-t border-red-100">
-                        <span className="font-medium text-gray-700">เหตุผลที่ขอยกเลิก:</span> {selectedReceipt.cancel_reason}
-                      </div>
-                    )}
-                    {selectedReceipt.cancel_remark && (
-                      <div className="text-gray-600">
-                        <span className="font-medium text-gray-700">หมายเหตุการอนุมัติ:</span> {selectedReceipt.cancel_remark}
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {/* 2. กรณีเป็น Direct Payment (ชำระสดหน้าร้าน) -> มีปุ่มเด้งไปหน้าประวัติการขายสินค้าและเลือกบิลให้อัตโนมัติ */}
                 {selectedReceipt.payment_type === "payment" && selectedReceipt.status !== "cancelled" && (
                   <div className="p-4 bg-[#F6F3F2] border-l-3 border-[#E51C23] space-y-3">
@@ -743,6 +735,67 @@ export default function PaymentHistoryPage() {
                       </div>
                     )}
                   </>
+                )}
+
+                {/* 4. กรณีรายการถูกยกเลิกแล้ว (cancelled ทั้ง payment และ repayment) */}
+                {selectedReceipt.status === "cancelled" && (
+                  <div className="space-y-4 pt-2">
+                    <Card className="p-4 bg-[#FCF7F7] border border-[#F5DFDF] rounded-none shadow-none space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Text variant="small" className="font-normal text-[#E51C23] mb-0">
+                          สถานะ: รายการรับชำระนี้ถูกยกเลิกแล้ว
+                        </Text>
+                        <Badge
+                          variant="neutral"
+                          size="auto"
+                          className="bg-[#E51C23] text-white border-none text-[10px] font-normal rounded-none py-0.5 px-2"
+                        >
+                          ยกเลิกแล้ว
+                        </Badge>
+                      </div>
+
+                      <div className="text-xs text-[#1C1B1B] space-y-1">
+                        {selectedReceipt.cancel_requested_by_name && (
+                          <div>
+                            <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอยกเลิก:</span>{" "}
+                            <span className="text-[#1C1B1B]">{selectedReceipt.cancel_requested_by_name}</span>
+                          </div>
+                        )}
+                        {selectedReceipt.cancel_reason && (
+                          <div>
+                            <span className="font-normal text-[#1C1B1B]">เหตุผลการยกเลิก:</span>{" "}
+                            <span className="text-[#1C1B1B]">{selectedReceipt.cancel_reason}</span>
+                          </div>
+                        )}
+                        {selectedReceipt.cancelled_by_name && (
+                          <div>
+                            <span className="font-normal text-[#1C1B1B]">ผู้อนุมัติยกเลิก:</span>{" "}
+                            <span className="text-[#1C1B1B]">{selectedReceipt.cancelled_by_name}</span>
+                          </div>
+                        )}
+                        {(selectedReceipt.cancelled_at || selectedReceipt.cancel_requested_at) && (
+                          <div className="text-[11px] text-[#1C1B1B] pt-0.5">
+                            ยกเลิกเมื่อ: {formatDate(selectedReceipt.cancelled_at || selectedReceipt.cancel_requested_at || "")}
+                          </div>
+                        )}
+                        {selectedReceipt.cancel_remark && (
+                          <div>
+                            <span className="font-normal text-[#1C1B1B]">หมายเหตุการอนุมัติ:</span>{" "}
+                            <span className="text-[#1C1B1B]">{selectedReceipt.cancel_remark}</span>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+
+                    <Button
+                      type="button"
+                      variant="outline-cancel"
+                      onClick={() => setSelectedReceipt(null)}
+                      className="w-full text-xs h-10 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal rounded-none"
+                    >
+                      ปิด
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>

@@ -261,9 +261,10 @@ func (s *paymentService) ConfirmPayment(req posDto.ConfirmPaymentRequest) (*posD
 		}
 	}
 
-	if payment.PaidAt != nil {
-		tx.Rollback()
-		return nil, fmt.Errorf("รายการชำระเงินนี้ได้รับการยืนยันไปแล้ว")
+	if req.ReceivedByID > 0 {
+		payment.ReceivedByID = req.ReceivedByID
+	} else if payment.ReceivedByID == 0 {
+		payment.ReceivedByID = order.CreatedByID
 	}
 
 	// บังคับอัปเดต PaymentMethodID ของ Payment Record เป็นวิธีชำระเงินล่าสุดเสมอ
@@ -272,7 +273,9 @@ func (s *paymentService) ConfirmPayment(req posDto.ConfirmPaymentRequest) (*posD
 	}
 
 	now := time.Now()
-	payment.PaidAt = &now
+	if payment.PaidAt == nil {
+		payment.PaidAt = &now
+	}
 	if req.ReceivedAmount > 0 {
 		payment.ReceivedAmount = req.ReceivedAmount
 		if req.ReceivedAmount > payment.Amount {
@@ -606,6 +609,15 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string, em
 			}
 		}
 
+		var cancelByName string
+		if r.CancelledBy != nil {
+			if r.CancelledBy.FirstName != "" || r.CancelledBy.LastName != "" {
+				cancelByName = strings.TrimSpace(r.CancelledBy.FirstName + " " + r.CancelledBy.LastName)
+			} else {
+				cancelByName = r.CancelledBy.Username
+			}
+		}
+
 		list = append(list, posDto.PaymentHistoryItem{
 			ReceiptID:             r.ID,
 			ReceiptNumber:         r.ReceiptNumber,
@@ -622,6 +634,9 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string, em
 			CancelRequestedByID:   r.CancelRequestedByID,
 			CancelRequestedByName: reqByName,
 			CancelRequestedAt:     r.CancelRequestedAt,
+			CancelledByID:         r.CancelledByID,
+			CancelledByName:       cancelByName,
+			CancelledAt:           r.CancelledAt,
 			CancelRemark:          r.CancelRemark,
 		})
 	}
@@ -653,22 +668,52 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string, em
 		}
 
 		status := "completed"
+		var cancelReason string
+		var cancelRemark string
+		var cancelReqByName string
+		var cancelReqAt *time.Time
+		var cancelReqByID *uint
+		var cancelAt *time.Time
+
 		if p.Order.Status == "cancelled" {
 			status = "cancelled"
+			if p.Order.CancelReason != nil {
+				cancelReason = *p.Order.CancelReason
+			}
+			if p.Order.CancelRemark != nil {
+				cancelRemark = *p.Order.CancelRemark
+			}
+			cancelReqAt = p.Order.CancelRequestedAt
+			cancelReqByID = p.Order.CancelRequestedByID
+			cancelAt = p.Order.CancelProcessedAt
+
+			if p.Order.CancelRequestedBy != nil {
+				if p.Order.CancelRequestedBy.FirstName != "" || p.Order.CancelRequestedBy.LastName != "" {
+					cancelReqByName = strings.TrimSpace(p.Order.CancelRequestedBy.FirstName + " " + p.Order.CancelRequestedBy.LastName)
+				} else {
+					cancelReqByName = p.Order.CancelRequestedBy.Username
+				}
+			}
 		}
 
 		list = append(list, posDto.PaymentHistoryItem{
-			ReceiptID:      p.ID,
-			ReceiptNumber:  receiptNo,
-			PaidAt:         paidTime,
-			CustomerName:   custName,
-			PaymentMethod:  p.PaymentMethod.MethodName,
-			OrderNumbers:   p.Order.OrderNumber,
-			TotalReceived:  p.Amount,
-			Status:         status,
-			ReceivedByID:   p.ReceivedByID,
-			ReceivedByName: recName,
-			PaymentType:    "payment",
+			ReceiptID:             p.ID,
+			ReceiptNumber:         receiptNo,
+			PaidAt:                paidTime,
+			CustomerName:          custName,
+			PaymentMethod:         p.PaymentMethod.MethodName,
+			OrderNumbers:          p.Order.OrderNumber,
+			TotalReceived:         p.Amount,
+			Status:                status,
+			ReceivedByID:          p.ReceivedByID,
+			ReceivedByName:        recName,
+			PaymentType:           "payment",
+			CancelReason:          cancelReason,
+			CancelRequestedByID:   cancelReqByID,
+			CancelRequestedByName: cancelReqByName,
+			CancelRequestedAt:     cancelReqAt,
+			CancelledAt:           cancelAt,
+			CancelRemark:          cancelRemark,
 		})
 	}
 
@@ -711,6 +756,15 @@ func (s *paymentService) GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentH
 			}
 		}
 
+		var cancelByName string
+		if r.CancelledBy != nil {
+			if r.CancelledBy.FirstName != "" || r.CancelledBy.LastName != "" {
+				cancelByName = strings.TrimSpace(r.CancelledBy.FirstName + " " + r.CancelledBy.LastName)
+			} else {
+				cancelByName = r.CancelledBy.Username
+			}
+		}
+
 		return &posDto.PaymentHistoryItem{
 			ReceiptID:             r.ID,
 			ReceiptNumber:         r.ReceiptNumber,
@@ -727,6 +781,9 @@ func (s *paymentService) GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentH
 			CancelRequestedByID:   r.CancelRequestedByID,
 			CancelRequestedByName: reqByName,
 			CancelRequestedAt:     r.CancelRequestedAt,
+			CancelledByID:         r.CancelledByID,
+			CancelledByName:       cancelByName,
+			CancelledAt:           r.CancelledAt,
 			CancelRemark:          r.CancelRemark,
 		}, nil
 	}
@@ -762,22 +819,52 @@ func (s *paymentService) GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentH
 	}
 
 	status := "completed"
+	var cancelReason string
+	var cancelRemark string
+	var cancelReqByName string
+	var cancelReqAt *time.Time
+	var cancelReqByID *uint
+	var cancelAt *time.Time
+
 	if p.Order.Status == "cancelled" {
 		status = "cancelled"
+		if p.Order.CancelReason != nil {
+			cancelReason = *p.Order.CancelReason
+		}
+		if p.Order.CancelRemark != nil {
+			cancelRemark = *p.Order.CancelRemark
+		}
+		cancelReqAt = p.Order.CancelRequestedAt
+		cancelReqByID = p.Order.CancelRequestedByID
+		cancelAt = p.Order.CancelProcessedAt
+
+		if p.Order.CancelRequestedBy != nil {
+			if p.Order.CancelRequestedBy.FirstName != "" || p.Order.CancelRequestedBy.LastName != "" {
+				cancelReqByName = strings.TrimSpace(p.Order.CancelRequestedBy.FirstName + " " + p.Order.CancelRequestedBy.LastName)
+			} else {
+				cancelReqByName = p.Order.CancelRequestedBy.Username
+			}
+		}
 	}
 
 	return &posDto.PaymentHistoryItem{
-		ReceiptID:      p.ID,
-		ReceiptNumber:  receiptNo,
-		PaidAt:         paidTime,
-		CustomerName:   custName,
-		PaymentMethod:  p.PaymentMethod.MethodName,
-		OrderNumbers:   p.Order.OrderNumber,
-		TotalReceived:  p.Amount,
-		Status:         status,
-		ReceivedByID:   p.ReceivedByID,
-		ReceivedByName: recName,
-		PaymentType:    "payment",
+		ReceiptID:             p.ID,
+		ReceiptNumber:         receiptNo,
+		PaidAt:                paidTime,
+		CustomerName:          custName,
+		PaymentMethod:         p.PaymentMethod.MethodName,
+		OrderNumbers:          p.Order.OrderNumber,
+		TotalReceived:         p.Amount,
+		Status:                status,
+		ReceivedByID:          p.ReceivedByID,
+		ReceivedByName:        recName,
+		PaymentType:           "payment",
+		CancelReason:          cancelReason,
+		CancelRequestedByID:   cancelReqByID,
+		CancelRequestedByName: cancelReqByName,
+		CancelRequestedAt:     cancelReqAt,
+		CancelledAt:           cancelAt,
+		CancelRemark:          cancelRemark,
 	}, nil
 }
 

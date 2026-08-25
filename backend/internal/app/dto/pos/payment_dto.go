@@ -102,6 +102,9 @@ type PaymentHistoryItem struct {
 	CancelRequestedByID   *uint      `json:"cancel_requested_by_id,omitempty"`
 	CancelRequestedByName string     `json:"cancel_requested_by_name,omitempty"`
 	CancelRequestedAt     *time.Time `json:"cancel_requested_at,omitempty"`
+	CancelledByID         *uint      `json:"cancelled_by_id,omitempty"`
+	CancelledByName       string     `json:"cancelled_by_name,omitempty"`
+	CancelledAt           *time.Time `json:"cancelled_at,omitempty"`
 	CancelRemark          string     `json:"cancel_remark,omitempty"`
 }
 

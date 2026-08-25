@@ -66,7 +66,12 @@ func (r *paymentRepository) GetPaymentByID(paymentID uint) (*entity.Payment, err
 
 func (r *paymentRepository) GetPaymentWithDetailsByID(paymentID uint) (*entity.Payment, error) {
 	var payment entity.Payment
-	err := r.db.Preload("Order").Preload("Order.Customer").Preload("PaymentMethod").Preload("ReceivedBy").First(&payment, paymentID).Error
+	err := r.db.Preload("Order").
+		Preload("Order.Customer").
+		Preload("Order.CancelRequestedBy").
+		Preload("PaymentMethod").
+		Preload("ReceivedBy").
+		First(&payment, paymentID).Error
 	return &payment, err
 }
 
@@ -199,7 +204,7 @@ func (r *paymentRepository) GetRepaymentHistory(search, startDate, endDate strin
         Preload("PaymentMethod").
         Preload("RecordedBy").
         Preload("CancelRequestedBy").
-        Where("payment_repayments.status IN (?)", []string{"completed", "pending_cancel"})
+        Preload("CancelledBy")
 
     if employeeID > 0 {
         query = query.Where("payment_repayments.recorded_by_id = ?", employeeID)
@@ -227,10 +232,11 @@ func (r *paymentRepository) GetDirectPaymentHistory(search, startDate, endDate s
     var payments []entity.Payment
     query := r.db.Preload("Order").
         Preload("Order.Customer").
+        Preload("Order.CancelRequestedBy").
         Preload("PaymentMethod").
         Preload("ReceivedBy").
         Joins("JOIN sale_orders ON sale_orders.id = payments.order_id").
-        Where("payments.paid_at IS NOT NULL AND sale_orders.status != ?", "cancelled")
+        Where("payments.paid_at IS NOT NULL")
 
     if employeeID > 0 {
         query = query.Where("payments.received_by_id = ?", employeeID)

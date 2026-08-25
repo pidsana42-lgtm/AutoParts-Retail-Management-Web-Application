@@ -141,6 +141,28 @@ export const renderStatusBadge = (status: string, paymentStatus: string) => {
   );
 };
 
+
+export const renderPaymentTypeBadge = (type: string) => {
+  const isPayment = (type || "").toLowerCase() === "payment";
+  return (
+    <Badge variant={isPayment ? "payment" : "repayment"}>
+      {isPayment ? "ชำระสดหน้าร้าน" : "เคลียร์หนี้เงินเชื่อ"}
+    </Badge>
+  );
+};
+
+export const renderPaymentStatusBadge = (status: string) => {
+  const s = (status || "").toLowerCase();
+  switch (s) {
+    case "pending_cancel":
+      return <Badge variant="warning">รออนุมัติยกเลิก</Badge>;
+    case "cancelled":
+      return <Badge variant="error">ยกเลิกแล้ว</Badge>;
+    default:
+      return <Badge variant="success">สำเร็จ</Badge>;
+  }
+};
+
 /**
  * ฟังก์ชัน Render Status Badge สำหรับแสดงสถานะของบิลในหน้ารายการคำขอยกเลิก (Sales Cancellation History)
  * - PENDING_CANCEL => "รอดำเนินการ" (Warning)

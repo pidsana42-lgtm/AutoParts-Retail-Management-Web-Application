@@ -649,6 +649,7 @@ const SalesCancellationHistory: React.FC = () => {
 
                   {/* Dynamic Cancel Form / Status Section */}
                   {(() => {
+                    if (!orderDetail) return null;
                     const status = (orderDetail.status || "").trim().toUpperCase();
                     const hasBeenRejected = Boolean(orderDetail.cancel_remark);
 
@@ -657,24 +658,24 @@ const SalesCancellationHistory: React.FC = () => {
                         return (
                           <div className="space-y-4">
                             <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <Text variant="small" className="font-normal text-[#854D0E] mb-0">
-                                    สถานะคำขอ: คำขอยกเลิกจากพนักงาน
-                                    </Text>
-                                    <Badge
-                                    variant="warning"
-                                    className="bg-[#FEF08A] text-[#854D0E] border-none text-[10px] font-light rounded-none py-0.5 px-2"
-                                    >
-                                    {getStatusText ? getStatusText(orderDetail.status) : orderDetail.status}
-                                    </Badge>
-                                </div>
+                              <div className="flex items-center justify-between">
+                                <Text variant="small" className="font-normal text-[#854D0E] mb-0">
+                                  สถานะคำขอ: คำขอยกเลิกจากพนักงาน
+                                </Text>
+                                <Badge
+                                  variant="warning"
+                                  className="bg-[#FEF08A] text-[#854D0E] border-none text-[10px] font-light rounded-none py-0.5 px-2"
+                                >
+                                  {getStatusText ? getStatusText(orderDetail.status) : orderDetail.status}
+                                </Badge>
+                              </div>
 
-                                <div className="text-xs text-[#1C1B1B] bg-[#FFFBEB] p-2.5 border-l-2 border-[#EAB308]">
-                                    <span className="font-normal text-[#1C1B1B]">
-                                    เหตุผลที่พนักงานขอ:
-                                    </span>{" "}
-                                    {orderDetail.cancel_reason || "-"}
-                                </div>
+                              <div className="text-xs text-[#1C1B1B] bg-[#FFFBEB] p-2.5 border-l-2 border-[#EAB308]">
+                                <span className="font-normal text-[#1C1B1B]">
+                                  เหตุผลที่พนักงานขอ:
+                                </span>{" "}
+                                {orderDetail.cancel_reason || "-"}
+                              </div>
                             </Card>
 
                             <div className="space-y-3 pt-1">
@@ -721,50 +722,63 @@ const SalesCancellationHistory: React.FC = () => {
                       }
 
                       return (
-                        <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-2">
-                          <div className="flex items-center justify-between">
-                            <Text variant="small" className="font-normal text-[#854D0E] mb-0">
-                              สถานะคำขอ: อยู่ระหว่างรออนุมัติ
-                            </Text>
-                            <Badge
-                              variant="warning"
-                              size="auto"
-                              className="bg-[#FEF08A] text-[#854D0E] border-none text-[10px] font-normal rounded-none py-0.5 px-2"
-                            >
-                              {getStatusText ? getStatusText(orderDetail.status) : orderDetail.status}
-                            </Badge>
-                          </div>
-
-                          <div className="text-xs text-[#1C1B1B]">
-                            {orderDetail.canceller && (
-                              <div>
-                                <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
-                                <span className="text-[#1C1B1B]">{orderDetail.canceller}</span>
-                              </div>
-                            )}
-                            <div>
-                              <span className="font-normal text-[#1C1B1B]">เหตุผลที่ระบุ:</span>{" "}
-                              <span className="text-[#1C1B1B]">{orderDetail.cancel_reason || "-"}</span>
-                            </div>
-                            {orderDetail.cancel_requested_at && (
-                              <Text variant="xs" className="text-[#1C1B1B] pt-0.5 mb-0">
-                                ส่งคำขอเมื่อ: {formatDate(orderDetail.cancel_requested_at)}
+                        <div className="space-y-3">
+                          {/* 1. ส่วน Card แสดงรายละเอียดสถานะ */}
+                          <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Text variant="small" className="font-normal text-[#854D0E] mb-0">
+                                สถานะคำขอ: อยู่ระหว่างรออนุมัติ
                               </Text>
-                            )}
-                          </div>
+                              <Badge
+                                variant="warning"
+                                size="auto"
+                                className="bg-[#FEF08A] text-[#854D0E] border-none text-[10px] font-normal rounded-none py-0.5 px-2"
+                              >
+                                {getStatusText ? getStatusText(orderDetail.status) : orderDetail.status}
+                              </Badge>
+                            </div>
 
-                          <div className="pt-2">
+                            <div className="text-xs text-[#1C1B1B] bg-[#FFFBEB] space-y-1.5">
+                              {orderDetail.canceller && (
+                                <div>
+                                  <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
+                                  <span className="text-[#1C1B1B]">{orderDetail.canceller}</span>
+                                </div>
+                              )}
+                              <div>
+                                <span className="font-normal text-[#1C1B1B]">เหตุผลที่ระบุ:</span>{" "}
+                                <span className="text-[#1C1B1B]">{orderDetail.cancel_reason || "-"}</span>
+                              </div>
+                              {orderDetail.cancel_requested_at && (
+                                <Text variant="xs" className="text-[#1C1B1B] pt-0.5 mb-0">
+                                  ส่งคำขอเมื่อ: {formatDate(orderDetail.cancel_requested_at)}
+                                </Text>
+                              )}
+                            </div>
+                          </Card>
+
+                          {/* 2. ปุ่ม Action ด้านล่าง (อยู่นอก Card) */}
+                          <div className="flex gap-2 pt-1">
                             <Button
                               type="button"
                               variant="solid-red"
                               onClick={handleRevertCancelDrawer}
                               disabled={isCancelling}
-                              className="w-full text-xs h-10 font-normal"
+                              className="flex-1 text-xs h-10 font-normal rounded-none"
                             >
                               {isCancelling ? "กำลังดำเนินการ..." : "ดึงคำขอยกเลิกกลับ (กู้คืนคำขอ)"}
                             </Button>
+
+                            <Button
+                              type="button"
+                              variant="outline-cancel"
+                              onClick={() => setSelectedOrderId(null)}
+                              className="text-xs px-4 h-10 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal rounded-none"
+                            >
+                              ปิด
+                            </Button>
                           </div>
-                        </Card>
+                        </div>
                       );
                     }
 
@@ -793,9 +807,9 @@ const SalesCancellationHistory: React.FC = () => {
                               <span className="font-normal text-[#1C1B1B]">เหตุผลการยกเลิก:</span>{" "}
                               <span className="text-[#1C1B1B]">{orderDetail.cancel_reason || "-"}</span>
                             </div>
-                            {(orderDetail.cancel_processed_at || orderDetail.cancelled_at || orderDetail.cancel_requested_at) && (
+                            {(orderDetail.cancel_processed_at || orderDetail.cancel_requested_at) && (
                               <Text variant="xs" className="text-[#1C1B1B] pt-0.5 mb-0">
-                                อนุมัติเมื่อ: {formatDate(orderDetail.cancel_processed_at || orderDetail.cancelled_at || orderDetail.cancel_requested_at || "")}
+                                อนุมัติเมื่อ: {formatDate(orderDetail.cancel_processed_at || orderDetail.cancel_requested_at || "")}
                               </Text>
                             )}
                             {orderDetail.cancel_remark && (
@@ -845,9 +859,9 @@ const SalesCancellationHistory: React.FC = () => {
                                 <span className="font-normal text-[#1C1B1B]">เหตุผลจากเจ้าของร้าน:</span>{" "}
                                 <span className="text-[#1C1B1B]">{orderDetail.cancel_remark || "-"}</span>
                               </div>
-                              {(orderDetail.cancel_processed_at || orderDetail.rejected_at) && (
+                              {orderDetail.cancel_processed_at && (
                                 <Text variant="xs" className="text-[#1C1B1B] pt-0.5 mb-0">
-                                  ปฏิเสธคำขอเมื่อ: {formatDate(orderDetail.cancel_processed_at || orderDetail.rejected_at || "")}
+                                  ปฏิเสธคำขอเมื่อ: {formatDate(orderDetail.cancel_processed_at)}
                                 </Text>
                               )}
                             </div>

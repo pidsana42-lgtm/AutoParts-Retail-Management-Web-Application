@@ -811,47 +811,61 @@ export default function TransactionHistoryPage() {
 
                       // 1.2 ถ้าเป็น EMPLOYEE / STAFF: ดูได้อย่างเดียวว่า รออนุมัติ
                       return (
-                        <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-2">
-                          <div className="flex items-center justify-between">
-                            <Text variant="small" className="font-normal text-[#854D0E] mb-0">
-                              สถานะ: รอเจ้าของร้านอนุมัติการยกเลิก
-                            </Text>
-                            <Badge
-                              variant="warning"
-                              size="auto"
-                              className="bg-[#FEF08A] text-[#854D0E] border-none text-[10px] font-normal rounded-none py-0.5 px-2"
-                            >
-                              {getStatusText(orderDetail.status)}
-                            </Badge>
-                          </div>
-                          <div className="text-xs text-[#1C1B1B] bg-[#FFFBEB]">
-                            <div>
-                              <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
-                              <span className="text-[#1C1B1B]">{orderDetail.canceller || "-"}</span>
-                            </div>
-                            <div>
-                              <span className="font-normal text-[#1C1B1B]">เหตุผลที่ระบุ:</span>{" "}
-                              <span className="text-[#1C1B1B]">{orderDetail.cancel_reason || "-"}</span>
-                            </div>
-                            {orderDetail.cancel_requested_at && (
-                              <Text variant="xs" className="text-[#1C1B1B] pt-0.5">
-                                ส่งคำขอเมื่อ: {formatDate(orderDetail.cancel_requested_at)}
+                        <div className="space-y-3">
+                          {/* 1. ส่วน Card แสดงรายละเอียดสถานะ */}
+                          <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Text variant="small" className="font-normal text-[#854D0E] mb-0">
+                                สถานะ: รอเจ้าของร้านอนุมัติการยกเลิก
                               </Text>
-                            )}
-                          </div>
+                              <Badge
+                                variant="warning"
+                                size="auto"
+                                className="bg-[#FEF08A] text-[#854D0E] border-none text-[10px] font-normal rounded-none py-0.5 px-2"
+                              >
+                                {getStatusText(orderDetail.status)}
+                              </Badge>
+                            </div>
 
-                          <div className="pt-2">
+                            <div className="text-xs text-[#1C1B1B] bg-[#FFFBEB]">
+                              <div>
+                                <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
+                                <span className="text-[#1C1B1B]">{orderDetail.canceller || "-"}</span>
+                              </div>
+                              <div>
+                                <span className="font-normal text-[#1C1B1B]">เหตุผลที่ระบุ:</span>{" "}
+                                <span className="text-[#1C1B1B]">{orderDetail.cancel_reason || "-"}</span>
+                              </div>
+                              {orderDetail.cancel_requested_at && (
+                                <Text variant="xs" className="text-[#1C1B1B] pt-0.5 mb-0">
+                                  ส่งคำขอเมื่อ: {formatDate(orderDetail.cancel_requested_at)}
+                                </Text>
+                              )}
+                            </div>
+                          </Card>
+
+                          {/* 2. ปุ่ม Action ด้านล่าง (อยู่นอก Card) */}
+                          <div className="flex gap-2 pt-1">
                             <Button
                               type="button"
                               variant="solid-red"
                               onClick={handleRevertCancel}
                               disabled={isCancelling}
-                              className="w-full text-xs h-10 font-normal"
+                              className="flex-1 text-xs h-10 font-normal rounded-none"
                             >
                               {isCancelling ? "กำลังดำเนินการ..." : "ดึงคำขอยกเลิกกลับ (กู้คืนคำขอ)"}
                             </Button>
+
+                            <Button
+                              type="button"
+                              variant="outline-cancel"
+                              onClick={() => setSelectedOrderId(null)}
+                              className="text-xs px-4 h-10 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal rounded-none"
+                            >
+                              ปิด
+                            </Button>
                           </div>
-                        </Card>
+                        </div>
                       );
                     }
 
