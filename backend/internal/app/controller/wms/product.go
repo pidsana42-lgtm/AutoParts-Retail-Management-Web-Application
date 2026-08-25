@@ -84,6 +84,28 @@ func (ctrl *ProductController) UpdateProduct(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "product updated successfully"})
 }
 
+// ReceiveStock: รับสินค้าเข้าเพิ่มให้สินค้าที่มีอยู่แล้ว (หน้า "เพิ่มข้อมูลสินค้า" โหมด "สินค้าที่มีอยู่แล้ว")
+func (ctrl *ProductController) ReceiveStock(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid product ID format"})
+		return
+	}
+	var req wmsDto.ReceiveStockRequestDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	res, err := ctrl.service.ReceiveStock(uri.ID, &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "รับสินค้าเข้าเพิ่มสำเร็จ", "data": res})
+}
+
 func (ctrl *ProductController) DeleteProduct(c *gin.Context) {
 	var uri struct {
 		ID uint `uri:"id" binding:"required"`
