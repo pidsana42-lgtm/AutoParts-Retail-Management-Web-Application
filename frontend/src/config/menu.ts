@@ -77,7 +77,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   { icon: ReceiptText, label: "รายการธุรกรรม / การเงิน", path: "/employee/transactions/settle-bills", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],
     subs: [
       { icon: History, path: "/employee/transactions/payment-history", label: "ประวัติการชำระเงิน" },
-      // { icon: FileX, path: "/employee/pos/sales_cancellation_history", label: "ประวัติยกเลิกการขาย" },
+      { icon: FileX, path: "/employee/transactions/payment-cancellation-history", label: "ประวัติยกเลิกการชำระเงิน" },
     ],
   },
 
@@ -187,6 +187,15 @@ export const getMenuByRole = (role: string): MenuItem[] => {
               path: isOwnerOrAdmin
                 ? "/owner/transactions/payment-history"
                 : "/employee/transactions/payment-history",
+            };
+          }
+
+          if (sub.path.includes("payment-cancellation-history")) {
+            return {
+              ...sub,
+              path: isOwnerOrAdmin
+                ? "/owner/transactions/payment-cancellation-history"
+                : "/employee/transactions/payment-cancellation-history",
             };
           }
 
