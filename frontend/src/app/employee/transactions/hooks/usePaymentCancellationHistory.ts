@@ -2,8 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { posApiService } from "../../../../service/http/pos/pos_service";
 import type { PaymentHistoryItem } from "../../../../interface/pos/payment_interface";
 import type { UsePaymentCancellationHistoryReturn } from "../../../../interface/pos/payment_cancellation_interface";
+import { useEmployeeOptions } from "../../../../hooks/useEmployeeOptions";
+import { useUserRole } from "../../../../hooks/useUserRole";
+import { getCurrentUserId } from "../../../../utils/auth";
 
 export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryReturn => {
+  const { isOwnerOrAdmin } = useUserRole();
+  const { employeeList } = useEmployeeOptions();
   const [dataList, setDataList] = useState<PaymentHistoryItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -18,10 +23,12 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
   const [endDate, setEndDate] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [paymentType, setPaymentType] = useState<string>("");
+  const [employeeId, setEmployeeId] = useState<string>("");
 
   // Drawer & Action States
   const [selectedReceipt, setSelectedReceipt] = useState<PaymentHistoryItem | null>(null);
   const [cancelRemark, setCancelRemark] = useState<string>("");
+  const [cancelReason, setCancelReason] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   const fetchCancellationHistory = useCallback(async () => {
@@ -56,6 +63,27 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
         filtered = filtered.filter((item) => (item.payment_type || "").toLowerCase() === paymentType.toLowerCase());
       }
 
+      if (employeeId) {
+        const targetEmp = employeeList.find((e) => e.value === String(employeeId));
+        const targetLabel = (targetEmp?.label || "").toLowerCase().trim();
+
+        filtered = filtered.filter((item) => {
+          // ใช้ ID ของคนที่แสดงในคอลัมน์ผู้ขอยกเลิก (ถ้ามี cancel_requested_by_id ให้ใช้อันนั้น ถ้าไม่มีให้ใช้ cancelled_by_id)
+          const activeRequesterId = item.cancel_requested_by_id ?? item.cancelled_by_id;
+          if (activeRequesterId !== undefined && activeRequesterId !== null) {
+            if (String(activeRequesterId) === String(employeeId)) return true;
+          }
+
+          // Fallback: ตรวจสอบจากชื่อผู้ที่แสดงในคอลัมน์
+          const displayName = (item.cancel_requested_by_name || item.cancelled_by_name || "").toLowerCase().trim();
+          if (targetLabel && displayName) {
+            if (displayName.includes(targetLabel) || targetLabel.includes(displayName)) return true;
+          }
+
+          return false;
+        });
+      }
+
       setTotalRows(filtered.length);
 
       // Client-side Pagination
@@ -67,7 +95,7 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
     } finally {
       setIsLoading(false);
     }
-  }, [page, limit, searchQuery, startDate, endDate, status, paymentType]);
+  }, [page, limit, searchQuery, startDate, endDate, status, paymentType, employeeId]);
 
   useEffect(() => {
     fetchCancellationHistory();
@@ -173,7 +201,7 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
     setIsProcessing(true);
     try {
       for (const id of selectedIds) {
-        await posApiService.rejectCancelPaymentReceipt(id, { remark: "ปฏิเสธคำขอยกเลิกแบบกลุ่ม" });
+        await posApiService.rejectCancelPaymentReceipt(id, { remark: "ข้อความอัตโนมัติ ปฏิเสธคำขอยกเลิก" });
       }
       alert(`ปฏิเสธคำขอยกเลิกเรียบร้อยแล้ว ${selectedIds.length} รายการ`);
       setSelectedIds([]);
@@ -203,6 +231,40 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
     }
   };
 
+  const handleResubmitCancel = async () => {
+    if (!selectedReceipt) return;
+    const reason = cancelReason.trim();
+    if (!reason) {
+      alert("กรุณาระบุเหตุผลในการขอยกเลิกรายการ");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      if (isOwnerOrAdmin) {
+        await posApiService.cancelPaymentReceipt(selectedReceipt.receipt_id, {
+          cancelled_by_id: getCurrentUserId() || 1,
+          reason: reason,
+          payment_type: selectedReceipt.payment_type,
+        });
+        alert("ยกเลิกรายการรับชำระเงินและคืนยอดหนี้เรียบร้อยแล้ว");
+      } else {
+        await posApiService.requestCancelPaymentReceipt(selectedReceipt.receipt_id, {
+          reason: reason,
+        });
+        alert("ยื่นคำขอยกเลิกใบเสร็จรับเงินใหม่อีกครั้งเรียบร้อยแล้ว");
+      }
+
+      setSelectedReceipt(null);
+      setCancelReason("");
+      fetchCancellationHistory();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || err?.response?.data?.message || "เกิดข้อผิดพลาดในการดำเนินการ");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return {
     dataList,
     selectedIds,
@@ -225,6 +287,8 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
     setStatus,
     paymentType,
     setPaymentType,
+    employeeId,
+    setEmployeeId,
     handleSelectAll,
     handleSelectRow,
     handleSearch,
@@ -233,10 +297,13 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
     setSelectedReceipt,
     cancelRemark,
     setCancelRemark,
+    cancelReason,
+    setCancelReason,
     isProcessing,
     handleApproveCancel,
     handleRejectCancel,
     handleRevertCancel,
+    handleResubmitCancel,
     handleBatchApprove,
     handleBatchReject,
     handleBatchRevert,

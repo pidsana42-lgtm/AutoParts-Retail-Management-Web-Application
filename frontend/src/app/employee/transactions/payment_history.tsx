@@ -754,7 +754,7 @@ export default function PaymentHistoryPage() {
                         </Badge>
                       </div>
 
-                      <div className="text-xs text-[#1C1B1B] space-y-1">
+                      <div className="text-xs text-[#1C1B1B] ">
                         {selectedReceipt.cancel_requested_by_name && (
                           <div>
                             <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอยกเลิก:</span>{" "}
@@ -786,15 +786,6 @@ export default function PaymentHistoryPage() {
                         )}
                       </div>
                     </Card>
-
-                    <Button
-                      type="button"
-                      variant="outline-cancel"
-                      onClick={() => setSelectedReceipt(null)}
-                      className="w-full text-xs h-10 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal rounded-none"
-                    >
-                      ปิด
-                    </Button>
                   </div>
                 )}
               </div>

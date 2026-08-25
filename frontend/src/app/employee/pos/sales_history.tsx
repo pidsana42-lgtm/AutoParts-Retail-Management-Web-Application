@@ -748,7 +748,7 @@ export default function TransactionHistoryPage() {
                                 </Badge>
                               </div>
 
-                              <div className="text-xs text-[#1C1B1B] bg-[#FFFBEB]">
+                              <div className="text-xs text-[#1C1B1B] ">
                                 <div>
                                   <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
                                   <span className="text-[#1C1B1B]">{orderDetail.canceller || "-"}</span>
@@ -827,7 +827,7 @@ export default function TransactionHistoryPage() {
                               </Badge>
                             </div>
 
-                            <div className="text-xs text-[#1C1B1B] bg-[#FFFBEB]">
+                            <div className="text-xs text-[#1C1B1B]">
                               <div>
                                 <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
                                 <span className="text-[#1C1B1B]">{orderDetail.canceller || "-"}</span>

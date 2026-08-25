@@ -127,7 +127,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
 
             {/* พนักงานผู้ส่งคำขอ */}
             <div className="md:col-span-2 flex flex-col gap-1.5">
-              <Text variant="xs" className="text-[#5F5E5E]">พนักงานผู้ทำรายการ</Text>
+              <Text variant="xs" className="text-[#5F5E5E]">พนักงานผู้ทำรายการ</Text> 
               <Select
                 value={employeeId}
                 onChange={(e: any) => setEmployeeId(e.target.value)}
@@ -211,7 +211,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
               <TableHead className="py-3 px-3 w-[14%]">วันที่ทำรายการยกเลิก</TableHead>
               <TableHead className="py-3 px-3 w-[26%]">ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท</TableHead>
               <TableHead className="py-3 px-3 text-right w-[12%]">จำนวนเงิน</TableHead>
-              <TableHead className="py-3 px-3 text-center w-[12%]">ผู้ยกเลิก</TableHead>
+              <TableHead className="py-3 px-3 text-center w-[12%]">ผู้ยกขอเลิก</TableHead>
               <TableHead className="py-3 px-3 text-center w-[10%]">สถานะ</TableHead>
               <TableHead className="py-3 px-3 text-center w-[8%]">จัดการ</TableHead>
             </TableRow>
@@ -624,7 +624,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                               </Badge>
                             </div>
 
-                            <div className="text-xs text-[#1C1B1B] bg-[#FFFBEB]">
+                            <div className="text-xs text-[#1C1B1B]">
                               <div>
                                 <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
                                 <span className="text-[#1C1B1B]">{orderDetail.canceller || "-"}</span>
