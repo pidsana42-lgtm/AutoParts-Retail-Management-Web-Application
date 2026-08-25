@@ -120,7 +120,7 @@ type ProcessCancelPaymentReceiptRequest struct {
 
 // DTO สำหรับยกเลิกการชำระเงิน (Cancel Payment)
 type CancelPaymentReceiptRequest struct {
-	CancelledByID uint   `json:"cancelled_by_id" binding:"required"`
+	CancelledByID uint   `json:"cancelled_by_id"`
 	Reason        string `json:"reason" binding:"required"`
 	PaymentType   string `json:"payment_type,omitempty"`
 }
