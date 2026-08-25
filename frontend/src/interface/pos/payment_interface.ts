@@ -14,10 +14,23 @@ export interface PaymentHistoryItem {
   payment_method: string;
   order_numbers: string;
   total_received: number;
-  status: string;
+  status: "completed" | "pending_cancel" | "cancelled" | string;
   received_by_id?: number;
   received_by_name: string;
   payment_type: "payment" | "repayment";
+  cancel_reason?: string;
+  cancel_requested_by_id?: number;
+  cancel_requested_by_name?: string;
+  cancel_requested_at?: string;
+  cancel_remark?: string;
+}
+
+export interface RequestCancelPaymentReceiptRequest {
+  reason: string;
+}
+
+export interface ProcessCancelPaymentReceiptRequest {
+  remark?: string;
 }
 
 export interface CancelPaymentReceiptRequest {

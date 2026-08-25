@@ -8,6 +8,8 @@ import {
   X,
 } from "lucide-react";
 
+import { useNavigate } from "react-router-dom";
+
 // Components
 import Heading from "../../../components/elements/heading";
 import Text from "../../../components/elements/text";
@@ -35,6 +37,7 @@ import { useUserRole } from "../../../hooks/useUserRole";
 
 
 export default function PaymentHistoryPage() {
+  const navigate = useNavigate();
   const { isOwnerOrAdmin } = useUserRole();
 
   const {
@@ -54,6 +57,7 @@ export default function PaymentHistoryPage() {
     limit,
     selectedReceipt,
     cancelReason,
+    cancelRemark,
     isCancelling,
     setSearch,
     setTypeFilter,
@@ -65,7 +69,12 @@ export default function PaymentHistoryPage() {
     setLimit,
     setSelectedReceipt,
     setCancelReason,
+    setCancelRemark,
     handleApplyFilter,
+    handleRequestCancelReceipt,
+    handleRevertCancelRequest,
+    handleApproveCancelReceipt,
+    handleRejectCancelReceipt,
     handleCancelReceipt,
   } = usePaymentHistory();
 
@@ -280,9 +289,21 @@ export default function PaymentHistoryPage() {
 
                       {/* 4. ประเภทการชำระ */}
                       <TableCell className="py-3.5 px-4">
-                        <Badge variant={item.payment_type}>
-                          {item.payment_type === "payment" ? "ชำระสดหน้าร้าน" : "เคลียร์หนี้เงินเชื่อ"}
-                        </Badge>
+                        <div className="flex flex-col gap-1 items-start">
+                          <Badge variant={item.payment_type}>
+                            {item.payment_type === "payment" ? "ชำระสดหน้าร้าน" : "เคลียร์หนี้เงินเชื่อ"}
+                          </Badge>
+                          {item.status === "pending_cancel" && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-normal bg-amber-50 text-amber-700 border border-amber-300">
+                              รออนุมัติยกเลิก
+                            </span>
+                          )}
+                          {item.status === "cancelled" && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-normal bg-red-50 text-red-700 border border-red-300">
+                              ยกเลิกแล้ว
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
 
                       {/* 5. ผู้บันทึกยอด */}
@@ -508,42 +529,200 @@ export default function PaymentHistoryPage() {
                   </CardContent>
                 </Card>
 
-                {/* สิทธิ์ Owner/Admin ในการขอยกเลิกใบเสร็จ */}
-                {isOwnerOrAdmin && (
-                  <div className="space-y-3 pt-2">
-                    <Text variant="xs" className="font-normal text-[#E51C23] uppercase tracking-wider mb-1">
-                      ระบุเหตุผลในการยกเลิกใบเสร็จรับเงิน (ทำให้ยอดหนี้กลับมาค้างชำระ)
-                    </Text>
-
-                    <textarea
-                      rows={3}
-                      value={cancelReason}
-                      onChange={(e) => setCancelReason(e.target.value)}
-                      placeholder="ตัวอย่าง: คีย์รับเงินผิดคน / ลูกค้าแจ้งขอแก้ไขช่องทางจ่ายเงิน..."
-                      className="w-full p-2.5 text-xs font-light bg-[#F6F3F2] border border-[#E51C23] rounded-none focus:outline-none text-[#1C1B1B] placeholder-[#6B7280] resize-none"
-                    />
-
-                    <div className="flex gap-3 pt-1">
-                      <Button
-                        type="button"
-                        variant="solid-red"
-                        onClick={handleCancelReceipt}
-                        disabled={isCancelling}
-                        className="flex-1 text-sm h-11 font-normal"
-                      >
-                        {isCancelling ? "กำลังยกเลิกรายการ..." : "ยืนยันยกเลิกใบเสร็จนี้"}
-                      </Button>
-
-                      <Button
-                        type="button"
-                        variant="outline-cancel"
-                        onClick={() => setSelectedReceipt(null)}
-                        className="text-sm px-6 h-11 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal"
-                      >
-                        ปิด
-                      </Button>
+                {/* 1. กรณีรายการถูกยกเลิกไปแล้ว */}
+                {selectedReceipt.status === "cancelled" && (
+                  <div className="p-4 bg-red-50 border border-red-200 text-xs text-red-700 space-y-2">
+                    <div className="font-semibold text-sm text-red-800">รายการนี้ถูกยกเลิกแล้ว</div>
+                    <div className="text-red-600">
+                      ใบเสร็จนี้ถูกยกเลิกและระบบได้คืนยอดหนี้กลับไปยังลูกค้าเรียบร้อยแล้ว
                     </div>
+                    {selectedReceipt.cancel_reason && (
+                      <div className="text-gray-600 pt-1 border-t border-red-100">
+                        <span className="font-medium text-gray-700">เหตุผลที่ขอยกเลิก:</span> {selectedReceipt.cancel_reason}
+                      </div>
+                    )}
+                    {selectedReceipt.cancel_remark && (
+                      <div className="text-gray-600">
+                        <span className="font-medium text-gray-700">หมายเหตุการอนุมัติ:</span> {selectedReceipt.cancel_remark}
+                      </div>
+                    )}
                   </div>
+                )}
+
+                {/* 2. กรณีเป็น Direct Payment (ชำระสดหน้าร้าน) -> มีปุ่มเด้งไปหน้าประวัติการขายสินค้าและเลือกบิลให้อัตโนมัติ */}
+                {selectedReceipt.payment_type === "payment" && selectedReceipt.status !== "cancelled" && (
+                  <div className="p-4 bg-[#FFFBEB] border-l-4 border-[#EAB308] border-y border-r border-amber-200 text-xs text-[#854D0E] space-y-3">
+                    <div>
+                      <div className="font-semibold text-sm text-amber-900">
+                        ชำระเงินสด/QR หน้าร้าน (Direct Payment)
+                      </div>
+                      <p className="text-xs text-amber-800 leading-relaxed mt-1">
+                        รายการนี้เป็นการชำระเงินสำหรับบิลขายหน้าร้านโดยตรง เพื่อความถูกต้องของสต็อกสินค้าและระบบบัญชี การยกเลิกต้องดำเนินการผ่านเมนู <span className="font-semibold text-[#E51C23]">"ประวัติการขายสินค้า"</span> (Sales History) เพื่อคืนสินค้าเข้าสต็อก
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="solid-red"
+                      onClick={() => {
+                        const targetOrder = selectedReceipt.order_numbers || selectedReceipt.receipt_number;
+                        const targetPath = isOwnerOrAdmin
+                          ? `/owner/pos/sales_history?order_number=${encodeURIComponent(targetOrder)}`
+                          : `/employee/pos/sales_history?order_number=${encodeURIComponent(targetOrder)}`;
+                        setSelectedReceipt(null);
+                        navigate(targetPath);
+                      }}
+                      className="w-full text-xs h-10 font-normal flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      <span>ไปยังหน้าประวัติการขายเพื่อขอยกเลิกบิลนี้</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* 3. กรณีเป็น Repayment (เคลียร์บิลเงินเชื่อ) */}
+                {selectedReceipt.payment_type === "repayment" && (
+                  <>
+                    {/* 3.1 อยู่ในสถานะ รออนุมัติการยกเลิก (pending_cancel) */}
+                    {selectedReceipt.status === "pending_cancel" && (
+                      <div className="space-y-4 pt-1">
+                        <div className="p-4 bg-amber-50 border-l-4 border-amber-500 border-y border-r border-amber-200 text-xs text-amber-900 space-y-2">
+                          <div className="font-semibold text-sm text-amber-950 flex items-center justify-between">
+                            <span>สถานะ: รอเจ้าของร้านอนุมัติการยกเลิก</span>
+                          </div>
+                          {selectedReceipt.cancel_requested_by_name && (
+                            <div className="text-amber-800">
+                              <span className="font-medium">ผู้ส่งคำขอ:</span> {selectedReceipt.cancel_requested_by_name}
+                            </div>
+                          )}
+                          <div className="text-amber-800">
+                            <span className="font-medium">เหตุผลที่ระบุ:</span> {selectedReceipt.cancel_reason || "-"}
+                          </div>
+                          {selectedReceipt.cancel_requested_at && (
+                            <div className="text-amber-700 text-[11px]">
+                              ส่งคำขอเมื่อ: {formatDate(selectedReceipt.cancel_requested_at)}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* สำหรับ Owner/Admin: แสดงปุ่มอนุมัติและปฏิเสธ */}
+                        {isOwnerOrAdmin ? (
+                          <div className="space-y-3 pt-1">
+                            <Text variant="xs" className="font-normal text-[#1C1B1B] uppercase tracking-wider mb-1">
+                              หมายเหตุการดำเนินการ (ถ้ามี)
+                            </Text>
+                            <Input
+                              placeholder="ระบุหมายเหตุการอนุมัติหรือเหตุผลที่ปฏิเสธ..."
+                              value={cancelRemark}
+                              onChange={(e) => setCancelRemark(e.target.value)}
+                              className="w-full text-xs bg-[#F6F3F2] border-gray-300 rounded-none focus:outline-none"
+                            />
+                            <div className="flex gap-2 pt-1">
+                              <Button
+                                type="button"
+                                variant="solid-red"
+                                onClick={handleApproveCancelReceipt}
+                                disabled={isCancelling}
+                                className="flex-1 text-xs h-10 font-normal"
+                              >
+                                {isCancelling ? "กำลังดำเนินการ..." : "อนุมัติยกเลิก (คืนหนี้)"}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline-cancel"
+                                onClick={handleRejectCancelReceipt}
+                                disabled={isCancelling}
+                                className="text-xs px-4 h-10 border border-amber-400 text-amber-800 hover:bg-amber-50 font-normal"
+                              >
+                                ปฏิเสธ
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline-cancel"
+                                onClick={() => setSelectedReceipt(null)}
+                                className="text-xs px-4 h-10 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal"
+                              >
+                                ปิด
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          /* สำหรับ Employee: แสดงปุ่มดึงคำขอยกเลิกกลับ */
+                          <div className="flex gap-3 pt-1">
+                            <Button
+                              type="button"
+                              variant="outline-cancel"
+                              onClick={handleRevertCancelRequest}
+                              disabled={isCancelling}
+                              className="flex-1 text-xs h-10 border border-amber-500 text-amber-800 hover:bg-amber-50 font-normal"
+                            >
+                              {isCancelling ? "กำลังดำเนินการ..." : "ดึงคำขอยกเลิกกลับ"}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline-cancel"
+                              onClick={() => setSelectedReceipt(null)}
+                              className="text-xs px-6 h-10 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal"
+                            >
+                              ปิด
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 3.2 สถานะ ปกติ (completed) ยังไม่มีคำขอยกเลิก */}
+                    {selectedReceipt.status === "completed" && (
+                      <div className="space-y-3 pt-2">
+                        <Text variant="xs" className="font-normal text-[#E51C23] uppercase tracking-wider mb-1">
+                          {isOwnerOrAdmin
+                            ? "ระบุเหตุผลในการยกเลิกใบเสร็จรับเงิน (ทำให้ยอดหนี้กลับมาค้างชำระทันที)"
+                            : "ระบุเหตุผลในการส่งคำขอยกเลิกใบเสร็จรับเงิน (ส่งไปยังเจ้าของร้าน)"}
+                        </Text>
+
+                        <textarea
+                          rows={3}
+                          value={cancelReason}
+                          onChange={(e) => setCancelReason(e.target.value)}
+                          placeholder="ตัวอย่าง: คีย์รับเงินผิดคน / ลูกค้าแจ้งขอแก้ไขช่องทางจ่ายเงิน..."
+                          className="w-full p-2.5 text-xs font-light bg-[#F6F3F2] border border-[#E51C23] rounded-none focus:outline-none text-[#1C1B1B] placeholder-[#6B7280] resize-none"
+                        />
+
+                        <div className="flex gap-3 pt-1">
+                          {isOwnerOrAdmin ? (
+                            <Button
+                              type="button"
+                              variant="solid-red"
+                              onClick={handleCancelReceipt}
+                              disabled={isCancelling}
+                              className="flex-1 text-sm h-11 font-normal"
+                            >
+                              {isCancelling ? "กำลังยกเลิกรายการ..." : "ยืนยันยกเลิกใบเสร็จนี้ (คืนหนี้ทันที)"}
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="solid-red"
+                              onClick={handleRequestCancelReceipt}
+                              disabled={isCancelling}
+                              className="flex-1 text-sm h-11 font-normal"
+                            >
+                              {isCancelling ? "กำลังส่งคำขอ..." : "ส่งคำขอยกเลิกใบเสร็จ (รออนุมัติ)"}
+                            </Button>
+                          )}
+
+                          <Button
+                            type="button"
+                            variant="outline-cancel"
+                            onClick={() => setSelectedReceipt(null)}
+                            className="text-sm px-6 h-11 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal"
+                          >
+                            ปิด
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

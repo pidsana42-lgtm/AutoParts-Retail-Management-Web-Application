@@ -3,8 +3,10 @@ import { posApiService } from "../../../../service/http/pos/pos_service";
 import type { PaymentHistoryItem } from "../../../../interface/pos/payment_interface";
 import { useEmployeeOptions } from "../../../../hooks/useEmployeeOptions";
 import { getTodayDateString, getDaysAgoDateString } from "../../../../utils/date";
+import { useUserRole } from "../../../../hooks/useUserRole";
 
 export function usePaymentHistory() {
+  const { isOwnerOrAdmin } = useUserRole();
   const [items, setItems] = useState<PaymentHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +29,7 @@ export function usePaymentHistory() {
   // Drawer / Action States
   const [selectedReceipt, setSelectedReceipt] = useState<PaymentHistoryItem | null>(null);
   const [cancelReason, setCancelReason] = useState<string>("");
+  const [cancelRemark, setCancelRemark] = useState<string>("");
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
 
   // โหลดประวัติการชำระเงิน
@@ -89,9 +92,10 @@ export function usePaymentHistory() {
     });
   }, [items, search, typeFilter, paymentMethod, employeeId, employeeList, startDate, endDate]);
 
-  // Pagination Slicing
   const totalRows = filteredItems.length;
-  const totalPages = Math.max(1, Math.ceil(totalRows / limit));
+  const totalPages = Math.ceil(totalRows / limit) || 1;
+
+  // Pagination Slicing
   const paginatedItems = useMemo(() => {
     const start = (page - 1) * limit;
     return filteredItems.slice(start, start + limit);
@@ -101,7 +105,95 @@ export function usePaymentHistory() {
     setPage(1);
   };
 
-  // ยกเลิกใบเสร็จรับเงิน
+  // พนักงานส่งคำขอยกเลิกใบเสร็จ (Repayment)
+  const handleRequestCancelReceipt = async () => {
+    if (!selectedReceipt) return;
+    if (!cancelReason.trim()) {
+      alert("กรุณาระบุเหตุผลในการขอยกเลิกรายการ");
+      return;
+    }
+
+    try {
+      setIsCancelling(true);
+      await posApiService.requestCancelPaymentReceipt(selectedReceipt.receipt_id, {
+        reason: cancelReason,
+      });
+
+      alert("ส่งคำขอยกเลิกใบเสร็จรับเงินไปยังเจ้าของร้านเรียบร้อยแล้ว");
+      setSelectedReceipt(null);
+      setCancelReason("");
+      fetchHistory();
+    } catch (err: any) {
+      alert(err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการส่งคำขอยกเลิก");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  // พนักงานดึงคำขอยกเลิกกลับ
+  const handleRevertCancelRequest = async () => {
+    if (!selectedReceipt) return;
+    if (!confirm("คุณต้องการดึงคำขอยกเลิกใบเสร็จนี้กลับใช่หรือไม่?")) return;
+
+    try {
+      setIsCancelling(true);
+      await posApiService.revertCancelPaymentReceiptRequest(selectedReceipt.receipt_id);
+      alert("ดึงคำขอยกเลิกใบเสร็จรับเงินกลับเรียบร้อยแล้ว");
+      setSelectedReceipt(null);
+      fetchHistory();
+    } catch (err: any) {
+      alert(err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการดึงคำขอยกเลิกกลับ");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  // เจ้าของร้านอนุมัติการยกเลิก (คืนยอดหนี้)
+  const handleApproveCancelReceipt = async () => {
+    if (!selectedReceipt) return;
+    if (!confirm("ยืนยันการอนุมัติยกเลิกใบเสร็จนี้? ระบบจะทำการคืนยอดหนี้กลับไปยังบัญชีลูกค้า")) return;
+
+    try {
+      setIsCancelling(true);
+      await posApiService.approveCancelPaymentReceipt(selectedReceipt.receipt_id, {
+        remark: cancelRemark,
+      });
+
+      alert("อนุมัติยกเลิกใบเสร็จรับเงินและคืนยอดหนี้เรียบร้อยแล้ว");
+      setSelectedReceipt(null);
+      setCancelRemark("");
+      setCancelReason("");
+      fetchHistory();
+    } catch (err: any) {
+      alert(err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการอนุมัติยกเลิก");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  // เจ้าของร้านปฏิเสธคำขอยกเลิก
+  const handleRejectCancelReceipt = async () => {
+    if (!selectedReceipt) return;
+
+    try {
+      setIsCancelling(true);
+      await posApiService.rejectCancelPaymentReceipt(selectedReceipt.receipt_id, {
+        remark: cancelRemark,
+      });
+
+      alert("ปฏิเสธคำขอยกเลิกใบเสร็จรับเงินเรียบร้อยแล้ว");
+      setSelectedReceipt(null);
+      setCancelRemark("");
+      setCancelReason("");
+      fetchHistory();
+    } catch (err: any) {
+      alert(err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการปฏิเสธคำขอ");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  // เจ้าของร้านยกเลิกโดยตรง (Direct Cancel)
   const handleCancelReceipt = async () => {
     if (!selectedReceipt) return;
     if (!cancelReason.trim()) {
@@ -111,19 +203,19 @@ export function usePaymentHistory() {
 
     try {
       setIsCancelling(true);
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
       await posApiService.cancelPaymentReceipt(selectedReceipt.receipt_id, {
-        cancelled_by_id: user.id || 1,
+        cancelled_by_id: currentUser.id || 1,
         reason: cancelReason,
         payment_type: selectedReceipt.payment_type,
       });
 
-      alert("ยกเลิกรายการรับชำระเงินเรียบร้อยแล้ว");
+      alert("ยกเลิกรายการรับชำระเงินและคืนยอดหนี้เรียบร้อยแล้ว");
       setSelectedReceipt(null);
       setCancelReason("");
       fetchHistory();
     } catch (err: any) {
-      alert(err.response?.data?.message || "เกิดข้อผิดพลาดในการยกเลิกรายการ");
+      alert(err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการยกเลิกรายการ");
     } finally {
       setIsCancelling(false);
     }
@@ -146,7 +238,9 @@ export function usePaymentHistory() {
     limit,
     selectedReceipt,
     cancelReason,
+    cancelRemark,
     isCancelling,
+    isOwnerOrAdmin,
     setSearch,
     setTypeFilter,
     setPaymentMethod,
@@ -157,7 +251,12 @@ export function usePaymentHistory() {
     setLimit,
     setSelectedReceipt,
     setCancelReason,
+    setCancelRemark,
     handleApplyFilter,
+    handleRequestCancelReceipt,
+    handleRevertCancelRequest,
+    handleApproveCancelReceipt,
+    handleRejectCancelReceipt,
     handleCancelReceipt,
     fetchHistory,
   };
