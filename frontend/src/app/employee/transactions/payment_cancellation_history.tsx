@@ -103,8 +103,8 @@ const PaymentCancellationHistory: React.FC = () => {
           <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
             <CardContent className="p-6 md:p-8">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                {/* 1. ค้นหาเลขที่ใบเสร็จ/บิล/ชื่อลูกค้า */}
-                <div className="md:col-span-5 flex flex-col gap-1.5">
+                {/* 1. ค้นหาเลขที่ใบเสร็จ/บิล/ลูกค้า (ปรับ col-span ตาม role) */}
+                <div className={cn("flex flex-col gap-1.5", isOwnerOrAdmin ? "md:col-span-3" : "md:col-span-5")}>
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     ค้นหาเลขที่ใบเสร็จ / บิล / ลูกค้า
                   </label>
@@ -120,21 +120,21 @@ const PaymentCancellationHistory: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 2. ผู้ขอยกเลิก / ผู้ทำรายการ */}
+                {/* 2. ผู้ขอยกเลิก / ผู้ทำรายการ (เฉพาะ Owner/Admin: 2 cols) */}
                 {isOwnerOrAdmin && (
                   <div className="md:col-span-2 flex flex-col gap-1.5">
                     <label className="text-xs font-normal text-[#5F5E5E]">ผู้ขอยกเลิก / ผู้ทำรายการ</label> 
                     <Select
                       value={employeeId}
                       onChange={(e: any) => setEmployeeId(e.target.value)}
-                    placeholder="ผู้ทำรายการทุกคน"
-                    className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none"
-                    options={[
-                      { label: "ผู้ทำรายการทุกคน", value: "" },
-                      ...employeeList, // แสดงรายชื่อพนักงานที่ดึงมาจาก API
-                    ]}
-                  />
-                </div>
+                      placeholder="ผู้ทำรายการทุกคน"
+                      className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none"
+                      options={[
+                        { label: "ผู้ทำรายการทุกคน", value: "" },
+                        ...employeeList, // แสดงรายชื่อพนักงานที่ดึงมาจาก API
+                      ]}
+                    />
+                  </div>
                 )}
 
                 {/* 3. วันที่เริ่มต้น */}
