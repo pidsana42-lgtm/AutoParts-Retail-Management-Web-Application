@@ -20,6 +20,7 @@ func SetupProductRoutes(r *gin.Engine, db *gorm.DB) {
 		wms.GET("/products", controller.ListProducts)
 		wms.GET("/products/:id", controller.GetProductByID)
 		wms.PUT("/products/:id", controller.UpdateProduct)
+		wms.POST("/products/:id/receive-stock", controller.ReceiveStock)
 		wms.POST("/products/:id/images", controller.UploadProductImage)
 		wms.DELETE("/products/:id", controller.DeleteProduct)
 		wms.POST("/brands", controller.CreateBrand)

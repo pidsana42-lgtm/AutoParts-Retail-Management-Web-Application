@@ -25,7 +25,7 @@ import {
   TableCell,
 } from "../../../components/elements/table";
 import { cn } from "../../../utils/component";
-import { formatDate, getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge, renderCancellationStatusBadge } from "../../../utils/poshelpers";
+import { formatDate, getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderCancellationStatusBadge } from "../../../utils/poshelpers";
 import { useSalesCancellationHistory } from "./hooks/useSalesCancellationHistory";
 import { useSalesHistory } from "./hooks/useSalesHistory";
 import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";

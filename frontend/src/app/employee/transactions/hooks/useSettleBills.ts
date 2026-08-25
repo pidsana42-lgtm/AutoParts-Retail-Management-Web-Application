@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import apiClient from "../../../../service/http/apiClient";
 import { posApiService } from "../../../../service/http/pos/pos_service";
-import type { CustomerDiscountResponse } from "../../../../interface/pos/customer_interface";
 import type {
   UnpaidBillItem,
   SettleCustomerSuggestion,

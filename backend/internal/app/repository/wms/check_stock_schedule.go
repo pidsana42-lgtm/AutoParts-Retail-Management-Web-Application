@@ -41,7 +41,11 @@ func (r *checkStockScheduleRepository) UpdateStatus(id uint, status string) erro
 }
 
 func (r *checkStockScheduleRepository) Update(schedule *entity.CheckStockSchedule) error {
-	return r.db.Save(schedule).Error
+	// Omit("User") กันบั๊ก: GetByID() ข้างบน Preload("User") ไว้ พอมาเรียก Save() ตรงๆ
+	// GORM จะเห็นว่า schedule.User (ข้อมูลพนักงานคนเดิมที่ preload มา) ยัง populate อยู่
+	// แล้ว auto-save association ทับ user_id กลับไปเป็นพนักงานคนเดิมเสมอ ต่อให้ schedule.UserID
+	// ถูกเซ็ตเป็นพนักงานคนใหม่แล้วก็ตาม (เปลี่ยนพนักงานผ่านหน้าแก้ไขจะไม่มีผลจริงในฐานข้อมูล)
+	return r.db.Omit("User").Save(schedule).Error
 }
 
 func (r *checkStockScheduleRepository) Delete(id uint) error {
