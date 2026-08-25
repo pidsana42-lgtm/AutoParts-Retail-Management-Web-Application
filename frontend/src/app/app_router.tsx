@@ -146,6 +146,8 @@ export default function AppRouter(): React.JSX.Element {
         {/* -------- เพิ่ม Route สำหรับหน้าพรีออเดอร์ตรงนี้ครับ -------- */}
         <Route path="/owner/pre-orders" element={<PreOrder />} />
         <Route path="/owner/pre-orders/catalog" element={<CatalogPage />} />
+        <Route path="/owner/pre-order" element={<PreOrder />} />
+        <Route path="/owner/pre-order/catalog" element={<CatalogPage />} />
         {/* --------------------------------------------------- */}
 
         {/* -------- เพิ่ม Route สำหรับหน้าคืนเเละเคลมสินค้าตรงนี้ครับ -------- */}
