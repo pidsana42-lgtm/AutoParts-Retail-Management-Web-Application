@@ -587,7 +587,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     const activePaymentMethodId = paymentMethodId || posSession.paymentMethodId;
 
     if (activePaymentMethodId === 1) {
-      if (!receivedAmount || receivedAmount <= 0) {
+      if (finalTotal > 0 && (!receivedAmount || receivedAmount <= 0)) {
         alert("กรุณากรอกจำนวนเงินที่รับมา");
         return false;
       }
