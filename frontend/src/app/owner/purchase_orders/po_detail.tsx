@@ -1,7 +1,3 @@
-/* 
-    สำหรับให้ Owner เข้ามาดูรายละเอียดและกดอนุมัติ / ไม่อนุมัติ
-*/
-
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useParams } from 'react-router-dom';
 import { Building2, ChevronRight, ClipboardClock, FileText, User, Trash2, Minus, Plus, Search, ChevronDown, MessageSquareWarning } from 'lucide-react';
@@ -188,11 +184,9 @@ function OrderDetail() {
         if (!confirmed) return;
         setActiveAction('restore');
         try {
-            // สมมติว่าต้องการให้กลับไปเป็นฉบับร่าง (DRAFT) เมื่อกดกู้คืน
-            await poService.updatePOStatus(id, 'DRAFT');
+            await poService.restorePurchaseOrder(id);
             alert('กู้คืนใบสั่งซื้อสำเร็จ');
-            // รีโหลดข้อมูลใหม่ (หรือจะใช้ navigate กลับไปหน้าหลักก็ได้)
-            window.location.reload(); 
+            navigate(`${basePath}/orders/restore`);
         } catch {
             setError('ไม่สามารถกู้คืนใบสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง');
         } finally {
@@ -322,13 +316,21 @@ function OrderDetail() {
     };
 
     return (
-        <div className='p-8 space-y-6 bg-gray-50 min-h-screen relative pb-28'>
+        <div className='p-8 space-y-6 bg-white min-h-screen relative pb-28'>
             { /* Header */ }
             <div className='flex items-center justify-between'>
                 <div className='flex-col space-y-2'>
                     <nav className='flex items-center text-sm text-gray-500 gap-2 font-light'>
-                        <Link to={`${basePath}/orders`} className='...'>จัดการใบสั่งซื้อ</Link>
-                        <ChevronRight className='w-4 h-4 text-gray-400' />
+                        {po.status === 'DELETED' || po.status === 'CANCELLED' ? (
+                            <Link to={`${basePath}/orders/restore`} className='hover:text-black transition-colors'>
+                                กู้คืนใบสั่งซื้อ
+                            </Link>
+                        ) : (
+                            <Link to={`${basePath}/orders`} className='hover:text-black transition-colors'>
+                                จัดการใบสั่งซื้อ
+                            </Link>
+                        )}
+                        <ChevronRight size={16} className='text-gray-400' />
                         <span className="text-black font-normal">{isEditable ? 'ตรวจสอบใบสั่งซื้อสินค้า' : 'รายละเอียดใบสั่งซื้อสินค้า'}</span>
                     </nav>
                     <Heading level='h1' weight='semibold' className='m-0 text-black'>
@@ -727,7 +729,7 @@ function OrderDetail() {
 
             {canRestore && (
                 <div className='sticky bottom-0 z-20 bg-gray-50 py-4 border-t border-gray-200 flex justify-between'>
-                    <Button variant='outline' className='w-40' onClick={() => navigate(`${basePath}/orders`)} disabled={!!activeAction}>
+                    <Button variant='outline' className='w-40' onClick={() => navigate(`${basePath}/orders/restore`)} disabled={!!activeAction}>
                         ย้อนกลับ
                     </Button>
                     <div className='flex gap-4'>

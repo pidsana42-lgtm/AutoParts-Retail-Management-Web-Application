@@ -187,7 +187,18 @@ export const poService = {
     }
   },
 
-  // 13. ดึงจำนวนใบสั่งซื้อทั้งหมดของเดือนนี้ (ทุก role เรียกได้ ไม่ต้องเป็น Owner)
+  // 13. กู้คืนใบสั่งซื้อที่ถูกลบ (เปลี่ยนสถานะกลับเป็น DRAFT)
+  restorePurchaseOrder: async (id: number | string): Promise<{ message: string }> => {
+    try {
+      const response = await apiClient.patch<{ message: string }>(`/po/${id}/restore`);
+      return response.data;
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการกู้คืนใบสั่งซื้อ:", error);
+      throw error;
+    }
+  },
+
+  // 14. ดึงจำนวนใบสั่งซื้อทั้งหมดของเดือนนี้ (ทุก role เรียกได้ ไม่ต้องเป็น Owner)
   getMonthlyCount: async (): Promise<{ total_count: number }> => {
     try {
       const response = await apiClient.get<{ total_count: number }>(`/po/monthly-count`);

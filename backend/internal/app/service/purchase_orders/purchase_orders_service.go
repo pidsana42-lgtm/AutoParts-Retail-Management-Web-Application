@@ -369,6 +369,7 @@ func (s *purchaseOrderService) ListPOs(ctx context.Context, query poDto.ListPOQu
 			CreatorID:    p.Created_by,
 			CreatorName:  creatorName,
 			CreatedAt:    p.CreatedAt,
+			UpdatedAt:    p.UpdatedAt,
 			POItems:      itemResponses,
 		}
 

@@ -46,6 +46,8 @@ import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_histor
 import RepaymentHistory from './employee/transactions/repayment_history';
 import OwnerRepaymentHistory from './owner/transactions/repayment_history';
 import SettleBills from './employee/transactions/settle_bills';
+import DeletedPoHistory from './owner/purchase_orders/restore_po';
+import CompanySetting from './owner/companysetting/companysetting';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -77,6 +79,10 @@ export default function AppRouter(): React.JSX.Element {
         
         {/* หน้าแรกสุด (/) ดีดส่งไปที่เมนูแรกสุดใน Sidebar ของ Role นั้นๆ */}
         <Route path="/" element={<Navigate to={firstMenuPath} replace />} />
+
+        <Route path="/owner/companysetting" element={
+          isAdminOrOwner ? <CompanySetting /> : <Navigate to={firstMenuPath} replace />} 
+        />
 
         {/* เฉพาะ OWNER หรือ ADMIN เท่านั้นที่เข้าได้ */}
         <Route path="/owner/dashboard/maindashboard" element={
@@ -183,6 +189,8 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/owner/orders" element={<PurchaseOrders />} />
         <Route path="/owner/new-orders" element={<CreatePurchaseOrders />} />
         <Route path="/owner/orders/:id" element={<OrderDetail />} />
+        <Route path="/owner/orders/restore" element={<DeletedPoHistory />} />
+
         {/* แดชบอร์ดของฝั่งพนักงาน */}
         <Route path="/employee/dashboard/maindashboard" element={
           !isAdminOrOwner ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
