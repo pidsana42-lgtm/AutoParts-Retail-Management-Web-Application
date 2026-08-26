@@ -1,5 +1,7 @@
 # Environment & Secrets
 .env*
+*service_account*.json
+model/service_account*.json
 
 # AI & ML Models (Large model files & weights)
 *.gguf
