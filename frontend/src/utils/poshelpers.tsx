@@ -226,5 +226,5 @@ export const getPaymentBadgeColor = (methodName?: string): string => {
 export const formatCurrency = (amount: number | string | undefined | null): string => {
   const val = typeof amount === "number" ? amount : parseFloat(String(amount || 0));
   if (isNaN(val)) return "฿0.00";
-  return `฿${val.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${val.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
