@@ -1,16 +1,25 @@
 // src/utils/posHelpers.tsx
-import React from "react";
 import Badge from "../components/elements/badge";
-import type { SalesHistoryItemResponse } from "../interface/pos/sales_history_interface";
+//import type { SalesHistoryItemResponse } from "../interface/pos/sales_history_interface";
+
+/** Type กลางสำหรับดึงชื่อลูกค้า */
+export type CustomerNameEntity = {
+  customer_name?: string | null;
+  customer_name_temp?: string | null;
+};
 
 /** ฟังก์ชันช่วยดึงชื่อลูกค้าที่ถูกต้องในการแสดงผล */
-export const getDisplayCustomerName = (item: SalesHistoryItemResponse): string => {
+export const getDisplayCustomerName = (item?: CustomerNameEntity | null): string => {
+  if (!item) return "ลูกค้าทั่วไป";
+
   if (item.customer_name && item.customer_name.trim() !== "") {
-    return item.customer_name;
+    return item.customer_name.trim();
   }
+
   if (item.customer_name_temp && item.customer_name_temp.trim() !== "") {
-    return `${item.customer_name_temp} (ขาจร)`;
+    return `${item.customer_name_temp.trim()} (ขาจร)`;
   }
+
   return "ลูกค้าทั่วไป";
 };
 
@@ -132,6 +141,30 @@ export const renderStatusBadge = (status: string, paymentStatus: string) => {
   );
 };
 
+
+export const renderPaymentTypeBadge = (type: string) => {
+  const isPayment = (type || "").toLowerCase() === "payment";
+  return (
+    <Badge variant={isPayment ? "payment" : "repayment"}>
+      {isPayment ? "ชำระสดหน้าร้าน" : "เคลียร์หนี้เงินเชื่อ"}
+    </Badge>
+  );
+};
+
+export const renderPaymentStatusBadge = (status?: string | null, cancelRemark?: string | null) => {
+  const s = (status || "").toLowerCase();
+  if (s === "pending_cancel") {
+    return <Badge variant="warning">รออนุมัติยกเลิก</Badge>;
+  }
+  if (s === "cancelled") {
+    return <Badge variant="error">ยกเลิกแล้ว</Badge>;
+  }
+  if (s === "rejected" || (s === "completed" && Boolean(cancelRemark && cancelRemark.trim() !== ""))) {
+    return <Badge variant="neutral">ไม่อนุมัติยกเลิก</Badge>;
+  }
+  return <Badge variant="success">สำเร็จ</Badge>;
+};
+
 /**
  * ฟังก์ชัน Render Status Badge สำหรับแสดงสถานะของบิลในหน้ารายการคำขอยกเลิก (Sales Cancellation History)
  * - PENDING_CANCEL => "รอดำเนินการ" (Warning)
@@ -156,7 +189,7 @@ export const renderCancellationStatusBadge = (
 
   if (billStatus === "CANCELLED" || billStatus === "ยกเลิก") {
     return (
-      <Badge variant="error" className="rounded-none whitespace-nowrap bg-[#FEE2E2] text-[#991B1B] border-none">
+      <Badge variant="error" className="rounded-none whitespace-nowrap bg-[#FEE2E2] text-[#E51C23] border-none">
         อนุมัติแล้ว
       </Badge>
     );
@@ -188,4 +221,10 @@ export const getPaymentBadgeColor = (methodName?: string): string => {
     default:
       return "bg-[#259B24]";
   }
+};
+
+export const formatCurrency = (amount: number | string | undefined | null): string => {
+  const val = typeof amount === "number" ? amount : parseFloat(String(amount || 0));
+  if (isNaN(val)) return "฿0.00";
+  return `${val.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };

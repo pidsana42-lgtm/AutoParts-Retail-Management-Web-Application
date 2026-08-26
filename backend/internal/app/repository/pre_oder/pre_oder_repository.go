@@ -17,6 +17,7 @@ type PreOrderRepository interface {
 	GetLineUserIDByCustomerID(customerID uint) (string, error)
 	ListByStatus(ctx context.Context, status string) ([]entity.PreOrder, error)
 	UpdateItemsStatusByIDs(ctx context.Context, ids []uint, status string) error
+	GetLinkedPOsByItemIDs(ctx context.Context, itemIDs []uint) (map[uint]entity.PO, error)
 }
 
 // 2. สร้าง Struct สำหรับ Implement Interface
@@ -55,6 +56,7 @@ func (r *preOrderRepository) GetPreOrderByID(id uint) (*entity.PreOrder, error) 
 	err := r.db.Preload("Customer").
 		Preload("Supplier").
 		Preload("PreOrderItems").
+		Preload("PreOrderItems.Product").
 		First(&preOrder, id).Error
 		
 	if err != nil {
@@ -71,6 +73,8 @@ func (r *preOrderRepository) ListPreOrders() ([]entity.PreOrder, error) {
 	err := r.db.Preload("Customer").
 		Preload("Supplier").
 		Preload("PreOrderItems").
+		Preload("PreOrderItems.Product").
+		Order("id DESC").
 		Find(&preOrders).Error
 		
 	return preOrders, err
@@ -126,4 +130,28 @@ func (r *preOrderRepository) UpdateItemsStatusByIDs(ctx context.Context, ids []u
 		Model(&entity.PreOrderItem{}).
 		Where("id IN ?", ids).
 		Update("status", status).Error
+}
+
+// 11. Implement Method: ดึงข้อมูล PO ที่ถูกผูกกับ PreOrderItems
+func (r *preOrderRepository) GetLinkedPOsByItemIDs(ctx context.Context, itemIDs []uint) (map[uint]entity.PO, error) {
+	result := make(map[uint]entity.PO)
+	if len(itemIDs) == 0 {
+		return result, nil
+	}
+
+	var poItems []entity.POItems
+	err := r.db.WithContext(ctx).
+		Preload("PO").
+		Where("pre_order_item_id IN ? AND po_id IS NOT NULL", itemIDs).
+		Find(&poItems).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, item := range poItems {
+		if item.PreOrderItemID != nil && item.PO != nil {
+			result[*item.PreOrderItemID] = *item.PO
+		}
+	}
+	return result, nil
 }

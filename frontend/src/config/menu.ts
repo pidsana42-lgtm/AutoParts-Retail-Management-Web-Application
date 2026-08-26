@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, Boxes, MonitorSmartphone,
   ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight, CircleCheck, History,
-  FileX, ReceiptText
+  FileX, ReceiptText, BookOpen
 
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -74,12 +74,35 @@ export const SIDEBAR_MENUS: MenuItem[] = [
       { icon: FileX, path: "/employee/pos/sales_cancellation_history", label: "ประวัติยกเลิกการขาย" },
     ],
   },
-  { icon: ReceiptText, label: "รายการธุรกรรม / การเงิน", path: "/employee/transactions/settle-bills", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],},
+  { icon: ReceiptText, label: "รายการธุรกรรม / การเงิน", path: "/employee/transactions/settle-bills", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],
+    subs: [
+      { icon: History, path: "/employee/transactions/payment-history", label: "ประวัติการชำระเงิน" },
+      { icon: FileX, path: "/employee/transactions/payment-cancellation-history", label: "ประวัติยกเลิกการชำระเงิน" },
+    ],
+  },
 
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/owner/orders", roles: ["OWNER", "ADMIN"] },
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/employee/orders", roles: ["EMPLOYEE"] },
-  { icon: FileClock, label: "พรีออเดอร์", path: "/owner/pre-orders", roles: ["OWNER", "ADMIN"] },
-  { icon: FileClock, label: "พรีออเดอร์", path: "/employee/pre-orders", roles: ["EMPLOYEE", "STAFF"] },
+  { 
+    icon: FileClock, 
+    label: "พรีออเดอร์", 
+    path: "/owner/pre-orders", 
+    roles: ["OWNER", "ADMIN"],
+    subs: [
+      { icon: FileClock, path: "/owner/pre-orders", label: "รายการสั่งจองสินค้า" },
+      { icon: BookOpen, path: "/owner/pre-orders/catalog", label: "แคตตาล็อกสินค้า" },
+    ]
+  },
+  { 
+    icon: FileClock, 
+    label: "พรีออเดอร์", 
+    path: "/employee/pre-orders", 
+    roles: ["EMPLOYEE", "STAFF"],
+    subs: [
+      { icon: FileClock, path: "/employee/pre-orders", label: "รายการสั่งจองสินค้า" },
+      { icon: BookOpen, path: "/employee/pre-orders/catalog", label: "แคตตาล็อกสินค้า" },
+    ]
+  },
   { 
     icon: RefreshCw, 
     label: "คืน และ เคลมสินค้า", 
@@ -128,9 +151,14 @@ export const getMenuByRole = (role: string): MenuItem[] => {
           : "/employee/transactions/settle-bills";
       }
 
+      // 3. สลับ Main Path ของ คืน และ เคลมสินค้า ตาม Role
+      if (menu.path.includes("/claims") || menu.path.includes("/returns")) {
+        updatedMenu.path = isOwnerOrAdmin ? "/owner/claims" : "/employee/claims";
+      }
+
       if (!updatedMenu.subs) return updatedMenu;
 
-      // 3. สลับ Sub-menu Path & Label ตาม Role
+      // 4. สลับ Sub-menu Path & Label ตาม Role
       return {
         ...updatedMenu,
         subs: updatedMenu.subs.map((sub) => {
@@ -150,6 +178,39 @@ export const getMenuByRole = (role: string): MenuItem[] => {
               path: isOwnerOrAdmin
                 ? "/owner/pos/sales_history"
                 : "/employee/pos/sales_history",
+            };
+          }
+
+          if (sub.path.includes("payment-history")) {
+            return {
+              ...sub,
+              path: isOwnerOrAdmin
+                ? "/owner/transactions/payment-history"
+                : "/employee/transactions/payment-history",
+            };
+          }
+
+          if (sub.path.includes("payment-cancellation-history")) {
+            return {
+              ...sub,
+              label: isOwnerOrAdmin ? "คำขอยกเลิกการชำระเงิน" : "ประวัติยกเลิกการชำระเงิน",
+              path: isOwnerOrAdmin
+                ? "/owner/transactions/payment-cancellation-history"
+                : "/employee/transactions/payment-cancellation-history",
+            };
+          }
+
+          if (sub.path.includes("claims")) {
+            return {
+              ...sub,
+              path: isOwnerOrAdmin ? "/owner/claims" : "/employee/claims",
+            };
+          }
+
+          if (sub.path.includes("returns")) {
+            return {
+              ...sub,
+              path: isOwnerOrAdmin ? "/owner/returns" : "/employee/returns",
             };
           }
 

@@ -873,7 +873,7 @@ export default function SettleBillsPage(): React.JSX.Element {
                   size="md"
                   disabled={isSubmitting || totalPayAmount <= 0 || (paymentMethodId === 1 && receivedAmount < totalPayAmount)}
                   isLoading={isSubmitting}
-                  onClick={() => handleFinalConfirm(1)}
+                  onClick={() => handleFinalConfirm()}
                   leftIcon={<Printer className="w-4 h-4" />}
                   className="flex-1 py-3 bg-[#E51C23] hover:bg-red-700 text-white font-normal text-sm rounded-none cursor-pointer disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >

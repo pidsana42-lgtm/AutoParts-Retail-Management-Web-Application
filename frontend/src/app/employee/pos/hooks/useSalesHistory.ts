@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { posApiService } from "../../../../service/http/pos/pos_service"; 
 import type { SalesHistoryFilterRequest, SalesHistoryItemResponse, GetSaleHistoryByIDResponse } from "../../../../interface/pos/sales_history_interface";
 
 export const useSalesHistory = () => {
+  const [searchParams] = useSearchParams();
+
   //คำนวณหา วันที่ย้อนหลังไป 30 วัน นับจากวันนี้
   const get30DaysAgoDateString = () => {
     const date = new Date();
@@ -45,6 +48,7 @@ export const useSalesHistory = () => {
   const [orderDetail, setOrderDetail] = useState<GetSaleHistoryByIDResponse | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [cancelRemark, setCancelRemark] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
 
   // ดึงรายชื่อพนักงานเมื่อหน้าเว็บโหลด
@@ -99,9 +103,11 @@ export const useSalesHistory = () => {
 
   // เพิ่ม: Effect ดึงข้อมูลรายละเอียดออเดอร์เมื่อ selectedOrderId เปลี่ยนแปลง
   useEffect(() => {
+    setCancelReason("");
+    setCancelRemark("");
+
     if (!selectedOrderId) {
       setOrderDetail(null);
-      setCancelReason("");
       return;
     }
 
@@ -110,9 +116,6 @@ export const useSalesHistory = () => {
       try {
         const data = await posApiService.getSalesHistoryById(selectedOrderId);
         setOrderDetail(data);
-        if (data.cancel_reason) {
-          setCancelReason(data.cancel_reason);
-        }
       } catch (err) {
         console.error("Failed to fetch order detail:", err);
       } finally {
@@ -122,6 +125,31 @@ export const useSalesHistory = () => {
 
     fetchDetail();
   }, [selectedOrderId]);
+
+  // ดักจับ URL Search Params เพื่อเลือกบิลและเปิด Drawer อัตโนมัติ (เช่น กระโดดมาจากหน้าประวัติการชำระเงิน)
+  useEffect(() => {
+    const orderParam = searchParams.get("order_number") || searchParams.get("order_id");
+    if (orderParam) {
+      setSearch(orderParam);
+      const autoLoadOrder = async () => {
+        setIsDetailLoading(true);
+        try {
+          const data = await posApiService.getSalesHistoryById(orderParam as any);
+          if (data && data.id) {
+            setSelectedOrderId(data.id);
+            setOrderDetail(data);
+            setCancelReason("");
+            setCancelRemark("");
+          }
+        } catch (err) {
+          console.error("Failed to auto load order from url param:", err);
+        } finally {
+          setIsDetailLoading(false);
+        }
+      };
+      autoLoadOrder();
+    }
+  }, [searchParams]);
 
   // เพิ่ม Live Search / Auto Search เมื่อยิงบาร์โค้ดหรือพิมพ์ในช่องค้นหา
   useEffect(() => {
@@ -158,7 +186,8 @@ export const useSalesHistory = () => {
   // 1. Handler สำหรับ พนักงาน (Employee/Staff): ส่งคำขอยกเลิกรายการ (เข้าสถานะ PENDING_CANCEL)
   const handleRequestCancel = async () => {
     if (!selectedOrderId) return;
-    if (!cancelReason.trim()) {
+    const reasonToSend = cancelReason.trim() || cancelRemark.trim();
+    if (!reasonToSend) {
       alert("กรุณาระบุเหตุผลในการขอยกเลิกรายการ");
       return;
     }
@@ -166,26 +195,33 @@ export const useSalesHistory = () => {
     setIsCancelling(true);
     try {
       await posApiService.requestCancelSaleOrder(selectedOrderId, {
-        reason: cancelReason.trim(),
+        reason: reasonToSend,
       });
 
       alert("ส่งคำขอยกเลิกรายการเรียบร้อยแล้ว รอการอนุมัติจากเจ้าของร้าน");
       
       setSelectedOrderId(null);
       setCancelReason("");
+      setCancelRemark("");
       fetchSalesHistory();
     } catch (err: any) {
       console.error("Failed to request cancel order:", err);
-      alert(err?.response?.data?.message || "ไม่สามารถส่งคำขอยกเลิกรายการได้");
+      alert(err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถส่งคำขอยกเลิกรายการได้");
     } finally {
       setIsCancelling(false);
     }
   };
 
-  //  2. Handler สำหรับ เจ้าของร้าน (Owner/Admin): อนุมัติยกเลิกรายการและคืนสต็อกทันที
+  // 2. Handler สำหรับ เจ้าของร้าน (Owner/Admin): อนุมัติยกเลิกรายการ (หรือยกเลิกบิลโดยตรง)
   const handleDirectCancelByOwner = async () => {
     if (!selectedOrderId) return;
-    if (!cancelReason.trim()) {
+
+    const currentStatus = (orderDetail?.status || "").trim().toUpperCase();
+    const isPending = currentStatus === "PENDING_CANCEL";
+
+    // ถ้าเป็นบิลปกติที่ยังไม่ได้ส่งคำขอ (Owner ขอยกเลิกเองโดยตรง) จำเป็นต้องมีเหตุผล
+    const reasonOrRemark = cancelRemark.trim() || cancelReason.trim();
+    if (!isPending && !reasonOrRemark) {
       alert("กรุณาระบุเหตุผลในการยกเลิกรายการ");
       return;
     }
@@ -193,17 +229,18 @@ export const useSalesHistory = () => {
     setIsCancelling(true);
     try {
       await posApiService.approveCancelSaleOrder(selectedOrderId, {
-        remark: cancelReason.trim(),
+        remark: reasonOrRemark || undefined,
       });
 
       alert("ยกเลิกรายการขายและคืนสินค้าเข้าสต็อกเรียบร้อยแล้ว");
       
       setSelectedOrderId(null);
       setCancelReason("");
+      setCancelRemark("");
       fetchSalesHistory();
     } catch (err: any) {
       console.error("Failed to cancel order directly:", err);
-      alert(err?.response?.data?.message || "ไม่สามารถยกเลิกรายการได้");
+      alert(err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถยกเลิกรายการได้");
     } finally {
       setIsCancelling(false);
     }
@@ -212,8 +249,9 @@ export const useSalesHistory = () => {
   // 3. Handler สำหรับ เจ้าของร้าน (Owner/Admin): ปฏิเสธคำขอยกเลิกรายการขาย
   const handleRejectCancelByOwner = async () => {
     if (!selectedOrderId) return;
-    if (!cancelReason.trim()) {
-      alert("กรุณาระบุเหตุผลในการปฏิเสธคำขอ");
+    const remarkToSend = cancelRemark.trim() || cancelReason.trim();
+    if (!remarkToSend) {
+      alert("กรุณาระบุหมายเหตุหรือเหตุผลในการปฏิเสธคำขอ");
       return;
     }
 
@@ -221,17 +259,39 @@ export const useSalesHistory = () => {
     try {
       // ยิง API ปฏิเสธคำขอยกเลิก ( Reject )
       await posApiService.rejectCancelSaleOrder(selectedOrderId, {
-        remark: cancelReason.trim(),
+        remark: remarkToSend,
       });
 
       alert("ปฏิเสธคำขอยกเลิกรายการเรียบร้อยแล้ว");
       
       setSelectedOrderId(null);
       setCancelReason("");
+      setCancelRemark("");
       fetchSalesHistory(); // รีโหลดตารางใหม่
     } catch (err: any) {
       console.error("Failed to reject cancel order:", err);
-      alert(err?.response?.data?.message || "ไม่สามารถปฏิเสธคำขอยกเลิกรายการได้");
+      alert(err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถปฏิเสธคำขอยกเลิกรายการได้");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  // 4. Handler สำหรับ พนักงาน (Employee): ดึงคำขอยกเลิกกลับ (กู้คืนคำขอ)
+  const handleRevertCancel = async () => {
+    if (!selectedOrderId) return;
+    if (!confirm("คุณต้องการดึงคำขอยกเลิกรายการนี้กลับใช่หรือไม่?")) return;
+
+    setIsCancelling(true);
+    try {
+      await posApiService.revertCancellationRequest(selectedOrderId);
+      alert("ดึงคำขอยกเลิกบิลกลับสำเร็จ");
+      setSelectedOrderId(null);
+      setCancelReason("");
+      setCancelRemark("");
+      fetchSalesHistory();
+    } catch (err: any) {
+      console.error("Failed to revert cancel request:", err);
+      alert(err?.response?.data?.message || err?.response?.data?.error || "เกิดข้อผิดพลาดในการดึงคำขอกลับ");
     } finally {
       setIsCancelling(false);
     }
@@ -299,10 +359,13 @@ export const useSalesHistory = () => {
     isDetailLoading,
     cancelReason,
     setCancelReason,
+    cancelRemark,
+    setCancelRemark,
     isCancelling,
     handleRequestCancel,        // สำหรับ Employee (ส่งเรื่องรออนุมัติ)
-    handleDirectCancelByOwner,  //  สำหรับ Owner (อนุมัติทันที)
-    handleRejectCancelByOwner,  //  สำหรับ Owner (ปฏิเสธคำขอ)
+    handleDirectCancelByOwner,  // สำหรับ Owner (อนุมัติทันที)
+    handleRejectCancelByOwner,  // สำหรับ Owner (ปฏิเสธคำขอ)
+    handleRevertCancel,         // สำหรับ Employee (กู้คืนคำขอ / ดึงคำขอยกเลิกกลับ)
     getStatusText,
   };
 };

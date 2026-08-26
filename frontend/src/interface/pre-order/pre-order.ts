@@ -16,6 +16,9 @@ export interface PreOrder {
   customer_phone?: string;
   deposit_amount: number;
   status: string;
+  po_number?: string;
+  po_status?: string;
+  po_id?: number;
   order_date?: string;
   supplier_id: number;
   supplier_name?: string;

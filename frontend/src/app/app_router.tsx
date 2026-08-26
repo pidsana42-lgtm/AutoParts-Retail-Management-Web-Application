@@ -4,6 +4,7 @@ import MainLayout from '../components/layer/main_layout';
 import Login from './login/Login';
 import MainDashboard from './owner/dashboard/dashboard'; 
 import SaleDashboard from './owner/dashboard/saledashboard';
+import DebtDashboard from './owner/dashboard/debtdashboard';
 import Pos from './employee/pos/pos'; 
 import SalesHistory from './employee/pos/sales_history';
 import { getMenuByRole } from '../config/menu'; 
@@ -25,6 +26,7 @@ import EditProductPage from './owner/stock/edit_data_stock/edit_data_stock';
 import ImportBill from './owner/import-bills/import_bill';
 import EditStockBillPage from './owner/import-bills/edit-stock-bill';
 import PreOrder from './owner/pre-order/pre-order';
+import CatalogPage from './owner/pre-order/catalog';
 import ClaimsPage from './owner/claim/claims';
 import ClaimDetailPage from './owner/claim/claim_detail';
 import ClaimEditPage from './owner/claim/claim_edit';
@@ -41,9 +43,9 @@ import MobileScanPage from './mobile-scan/mobile_scan_page';
 import PublicProductPage from './public-product/public_product_page';
 import SalesCancellationHistory from './employee/pos/sales_cancellation_history';
 import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_history';
-import RepaymentHistory from './employee/transactions/repayment_history';
-import OwnerRepaymentHistory from './owner/transactions/repayment_history';
 import SettleBills from './employee/transactions/settle_bills';
+import PaymentHistory from './employee/transactions/payment_history';
+import PaymentCancellationHistory from './employee/transactions/payment_cancellation_history';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -82,6 +84,9 @@ export default function AppRouter(): React.JSX.Element {
         } />
         <Route path="/owner/dashboard/salesdashboard" element={
           isAdminOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/dashboard/debtdashboard" element={
+          isAdminOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/owner/storeconfig" element={<StoreConfig />} />
@@ -134,6 +139,9 @@ export default function AppRouter(): React.JSX.Element {
         
         {/* -------- เพิ่ม Route สำหรับหน้าพรีออเดอร์ตรงนี้ครับ -------- */}
         <Route path="/owner/pre-orders" element={<PreOrder />} />
+        <Route path="/owner/pre-orders/catalog" element={<CatalogPage />} />
+        <Route path="/owner/pre-order" element={<PreOrder />} />
+        <Route path="/owner/pre-order/catalog" element={<CatalogPage />} />
         {/* --------------------------------------------------- */}
 
         {/* -------- เพิ่ม Route สำหรับหน้าคืนเเละเคลมสินค้าตรงนี้ครับ -------- */}
@@ -164,13 +172,17 @@ export default function AppRouter(): React.JSX.Element {
 
         {/* -------- หน้ารายการธุรกรรม / การเงิน -------- */}
         <Route path="/employee/transactions/settle-bills" element={<SettleBills />} />
-        <Route path="/employee/transactions/repayment-history" element={<RepaymentHistory />} />
+        <Route path="/employee/transactions/payment-history" element={<PaymentHistory />} />
+        <Route path="/employee/transactions/payment-cancellation-history" element={<PaymentCancellationHistory />} />
 
         <Route path="/owner/transactions/settle-bills" element={
           isAdminOrOwner ? <SettleBills /> : <Navigate to={firstMenuPath} replace />
         } />
-        <Route path="/owner/transactions/repayment-history" element={
-          isAdminOrOwner ? <OwnerRepaymentHistory /> : <Navigate to={firstMenuPath} replace />
+        <Route path="/owner/transactions/payment-history" element={
+          isAdminOrOwner ? <PaymentHistory /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/transactions/payment-cancellation-history" element={
+          isAdminOrOwner ? <PaymentCancellationHistory /> : <Navigate to={firstMenuPath} replace />
         } />
         {/* --------------------------------------------------- */}
 
@@ -183,6 +195,9 @@ export default function AppRouter(): React.JSX.Element {
         } />
         <Route path="/employee/dashboard/salesdashboard" element={
           !isAdminOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/employee/dashboard/debtdashboard" element={
+          !isAdminOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/employee/orders" element={<PurchaseOrders />} />
@@ -198,6 +213,7 @@ export default function AppRouter(): React.JSX.Element {
 
         {/* หน้าพรีออเดอร์สำหรับพนักงาน */}
         <Route path="/employee/pre-orders" element={<EmployeePreOrder />} />
+        <Route path="/employee/pre-orders/catalog" element={<CatalogPage isEmployee={true} />} />
         <Route path="/employee/pre-order" element={<EmployeePreOrder />} />
         <Route path="/employee/claims" element={<EmployeeClaimsPage />} />
         <Route path="/employee/claims/detail/:id" element={<ClaimDetailPage />} />
@@ -215,6 +231,10 @@ export default function AppRouter(): React.JSX.Element {
       {/* หน้ามือถือสำหรับส่งรูปบิล — ไม่ต้อง login */}
       <Route path="/mobile-scan" element={<MobileScanPage />} />
       <Route path="/product/:id" element={<PublicProductPage />} />
+
+      {/* มือถือสแกน QR ของตารางเช็คสต็อกมาที่นี่ — ไม่ครอบด้วย MainLayout (ไม่มี Sidebar/Navbar ของระบบรวม)
+          โชว์ตรงหน้าเช็คสินค้าของงานนั้นเลย ใช้ component เดียวกับหน้าในระบบ (ตัว component เองเช็ค token ให้เข้าได้โดยไม่ต้องล็อกอิน) */}
+      <Route path="/wms/check-stock-scan/:id" element={<EmployeeCheckStockExecutePage />} />
 
       {/* ถ้าพิมพ์ URL มั่ว ให้ดีดกลับหน้าล็อกอิน */}
       <Route path="*" element={<Navigate to="/login" replace />} />

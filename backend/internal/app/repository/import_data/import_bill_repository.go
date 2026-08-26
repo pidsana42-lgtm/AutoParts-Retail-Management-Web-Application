@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 	"backend/internal/app/entity"
+	"backend/internal/app/enum"
 )
 
 type ImportBillRepository interface {
@@ -18,7 +19,7 @@ type ImportBillRepository interface {
 	GetBillImportJobByID(id uint) (*entity.BillImportJob, error)
 	SaveBillImportJob(job *entity.BillImportJob) error
 	CreateBillItem(item *entity.BillItem) error
-	ConfirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob) error
+	ConfirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob, role string) error
 
 	GetBillByID(id uint) (*entity.Bill, error)
 	UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem) error
@@ -73,7 +74,7 @@ func (r *billRepository) CreateBillItem(item *entity.BillItem) error {
 	return r.db.Create(item).Error
 }
 
-func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob) error {
+func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob, role string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		bill.BillNo = strings.TrimSpace(bill.BillNo)
 		if bill.BillNo == "" {
@@ -157,6 +158,8 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 			}
 		}
 
+		var changedItems []entity.BillItem
+
 		for i := range items {
 			items[i].BillID = bill.ID
 
@@ -211,6 +214,11 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				if err := tx.Model(&prod).Update("quantity", prod.Quantity+items[i].OrderQuantity).Error; err != nil {
 					return err
 				}
+				if items[i].PricePerUnit > 0 && items[i].PricePerUnit != prod.Cost_price {
+					changed := items[i]
+					changed.ProductID = prod.ID
+					changedItems = append(changedItems, changed)
+				}
 			} else {
 				return err
 			}
@@ -239,6 +247,24 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				`
 				if err := tx.Exec(sqlStr, bill.SupplierID, aiName, aiCode, items[i].CompanyProductName, items[i].CompanyProductCode, items[i].ProductID).Error; err != nil {
 					println("Warning: failed to save product mapping correction: ", err.Error())
+				}
+			}
+		}
+
+		isOwner := strings.EqualFold(role, string(enum.RoleOwner)) || strings.EqualFold(role, string(enum.RoleAdmin)) || strings.EqualFold(role, "Owner") || strings.EqualFold(role, "Admin")
+		autoApprove := isOwner || len(changedItems) == 0
+		if autoApprove {
+			if err := tx.Model(&entity.Bill{}).Where("id = ?", bill.ID).Update("is_verified", true).Error; err != nil {
+				return err
+			}
+			bill.IsVerified = true
+			for _, item := range changedItems {
+				if item.ProductID > 0 {
+					if err := tx.Model(&entity.Product{}).
+						Where("id = ?", item.ProductID).
+						Update("cost_price", item.PricePerUnit).Error; err != nil {
+						return err
+					}
 				}
 			}
 		}

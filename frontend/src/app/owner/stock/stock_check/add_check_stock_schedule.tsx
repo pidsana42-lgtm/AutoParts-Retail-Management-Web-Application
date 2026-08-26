@@ -88,9 +88,10 @@ function AddCheckStockScheduleContent() {
 
     try {
       setSubmitting(true);
-      await stockCheckService.createSchedule(payload);
+      const res = await stockCheckService.createSchedule(payload);
       toast({ variant: "success", message: "สร้างตารางเช็คสต็อกสำเร็จ" });
-      navigate("/owner/stock/stock-check");
+      // พาไปหน้ารายละเอียดตารางที่เพิ่งสร้างทันที เพื่อให้เห็น QR Code สำหรับสแกนเช็คสต็อกได้เลย
+      navigate(`/owner/stock/stock-check/${res.id}`);
     } catch (err: any) {
       toast({ variant: "error", message: err.response?.data?.error || "เกิดข้อผิดพลาดในการบันทึก" });
     } finally {

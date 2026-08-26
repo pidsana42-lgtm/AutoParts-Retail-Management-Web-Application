@@ -123,7 +123,7 @@ export default function PublicProductPage() {
         <header className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-normal text-blue-700">
+              <p className="text-sm font-semibold uppercase tracking-normal text-red-700">
                 {product.product_code || product.barcode || `ID ${product.id}`}
               </p>
               <h1 className="mt-2 text-2xl font-bold leading-tight text-gray-950 sm:text-3xl">
@@ -185,7 +185,7 @@ export default function PublicProductPage() {
 function InfoItem({ icon, label, value }: { icon: React.ReactElement; label: string; value: string }) {
   return (
     <div className="flex min-h-20 gap-3 rounded-md border border-gray-100 bg-gray-50 p-3">
-      <span className="mt-0.5 text-blue-700 [&_svg]:h-5 [&_svg]:w-5" aria-hidden="true">
+      <span className="mt-0.5 text-red-700 [&_svg]:h-5 [&_svg]:w-5" aria-hidden="true">
         {icon}
       </span>
       <div className="min-w-0">

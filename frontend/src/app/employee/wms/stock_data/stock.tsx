@@ -5,13 +5,10 @@ import {
   TriangleAlert,
   Landmark,
   Filter,
-  SquarePen,
-  Trash2,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Plus,
   Eye,
 } from "lucide-react";
 
@@ -21,7 +18,6 @@ import Text from "../../../../components/elements/text";
 import Input from "../../../../components/elements/input";
 import Select from "../../../../components/elements/select";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../../components/elements/table";
-import Button from "../../../../components/elements/button";
 import TreeSelect from "../../../../components/elements/tree_select";
 import type { CascaderOption } from "../../../../components/elements/cascader";
 
@@ -126,10 +122,6 @@ export default function StockPage() {
 
   const [suppliers, setSuppliers] = useState<{ label: string; value: string }[]>([]);
   const [formCascaderOptions, setFormCascaderOptions] = useState<CascaderOption[]>([]);
-
-  const handleEditClick = (product: StockItem) => {
-    navigate(`/owner/stock/${product.ID}/edit`);
-  };
 
   const handleViewClick = (product: StockItem) => {
     navigate(`/employee/wms/stock-data/${product.ID}`);

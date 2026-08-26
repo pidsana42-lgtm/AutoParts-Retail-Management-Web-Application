@@ -75,6 +75,7 @@ type SalesHistoryItemResponse struct {
 	CancelRemark      *string    `json:"cancel_remark"`
 	CancelProcessedAt *time.Time `json:"cancel_processed_at"`
 	Canceller         string     `json:"canceller"`
+	Note              string     `json:"note"`
 }
 
 // SalesHistoryPaginationResponse โครงสร้างข้อมูลครอบทั้งหมดที่มีข้อมูล Pagination แปะไปด้วย
@@ -168,6 +169,7 @@ func ToSalesHistoryItemResponse(order entity.SaleOrder) SalesHistoryItemResponse
 		CancelRemark:      order.CancelRemark,
 		CancelProcessedAt: order.CancelProcessedAt,
 		Canceller:         canceller,
+		Note:              order.Note,
 	}
 }
 
