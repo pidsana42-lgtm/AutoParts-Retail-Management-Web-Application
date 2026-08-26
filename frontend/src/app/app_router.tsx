@@ -46,6 +46,7 @@ import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_histor
 import SettleBills from './employee/transactions/settle_bills';
 import PaymentHistory from './employee/transactions/payment_history';
 import PaymentCancellationHistory from './employee/transactions/payment_cancellation_history';
+import CustomerRegistration from './employee/customer/customer_registration';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -183,6 +184,16 @@ export default function AppRouter(): React.JSX.Element {
         } />
         <Route path="/owner/transactions/payment-cancellation-history" element={
           isAdminOrOwner ? <PaymentCancellationHistory /> : <Navigate to={firstMenuPath} replace />
+        } />
+        {/* --------------------------------------------------- */}
+
+        {/* ------------------ ข้อมูลลูกค้า ----------------- */}
+        {/* พนักงาน */}
+        <Route path="/employee/customers/customer-registration" element={<CustomerRegistration />} />
+
+        {/* เจ้าของร้าน */}
+        <Route path="/owner/customers/customer-registration" element={
+          isAdminOrOwner ? <CustomerRegistration /> : <Navigate to={firstMenuPath} replace />
         } />
         {/* --------------------------------------------------- */}
 

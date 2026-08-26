@@ -84,7 +84,7 @@ const PaymentCancellationHistory: React.FC = () => {
   } = usePaymentCancellationHistory();
 
   return (
-    <div className="relative flex min-h-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-x-hidden">
+    <div className="relative flex min-h-screen bg-white text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
         <main className="p-6 space-y-6 flex-1">
           {/* Header */}

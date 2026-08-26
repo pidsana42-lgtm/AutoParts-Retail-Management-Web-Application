@@ -1,0 +1,529 @@
+import { useRef, useState } from "react";
+import {
+  UploadCloud,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Filter,
+  Download,
+  Eye,
+  X,
+} from "lucide-react";
+
+// Components
+import Heading from "../../../components/elements/heading";
+import Text from "../../../components/elements/text";
+import Input from "../../../components/elements/input";
+import Select from "../../../components/elements/select";
+import Button from "../../../components/elements/button";
+import Badge from "../../../components/elements/badge";
+import {
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from "../../../components/elements/table";
+import { Card, CardContent } from "../../../components/elements/card";
+
+// Hook & Types
+import { useCustomerRegistration } from "./hook/useCustomerRegustration";
+import type { CustomerListItem } from "../../../interface/customer/customer_interface";
+
+export default function CustomerRegistration() {
+  const {
+    types,
+    customers,
+    loading,
+    submitting,
+    formData,
+    idCardFile,
+    handleInputChange,
+    handleFileChange,
+    handleReset,
+    handleSubmit,
+  } = useCustomerRegistration();
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Table pagination & details modal state
+  const [page, setPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(10);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerListItem | null>(null);
+
+  // Pagination calculations
+  const totalRows = customers.length;
+  const totalPages = Math.ceil(totalRows / limit) || 1;
+  const paginatedCustomers = customers.slice((page - 1) * limit, page * limit);
+
+  // Helper สำหรับ Badge ประเภทลูกค้า
+  const getCustomerTypeBadge = (typeName?: string, typeLabel?: string) => {
+    const name = typeName?.toUpperCase() || "";
+    if (name === "GARAGE" || typeLabel?.includes("อู่")) {
+      return (
+        <Badge variant="warning" className="rounded-none font-normal text-[11px]">
+          {typeLabel || "ลูกค้าอู่"}
+        </Badge>
+      );
+    }
+    if (name === "WHOLESALE" || typeLabel?.includes("บริษัท")) {
+      return (
+        <Badge variant="neutral" className="rounded-none font-normal text-[11px] bg-slate-700 text-white">
+          {typeLabel || "ลูกค้าบริษัท"}
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline" className="rounded-none font-normal text-[11px]">
+        {typeLabel || "ลูกค้าทั่วไป"}
+      </Badge>
+    );
+  };
+
+  return (
+    <div className="relative flex min-h-screen bg-white text-slate-800 font-sans overflow-x-hidden">
+      <div className="flex-1 flex flex-col min-w-0">
+        <main className="p-6 space-y-6 flex-1">
+          {/* Section Header */}
+          <div>
+            <Text variant="xs" className="text-[#E51C23] uppercase tracking-wider mb-0">
+              การลงทะเบียนนิติบุคคลเชิงพาณิชย์ใหม่หรือลูกค้าปลีกรายใหม่
+            </Text>
+            <Heading level="h1" weight="normal" className="mb-0 text-[#1C1B1B]">
+              การลงทะเบียนสมาชิกใหม่
+            </Heading>
+          </div>
+
+          {/* Form Bar */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 1: ข้อมูลทั่วไป */}
+              <Card className="bg-white rounded-none shadow-none border-y border-r border-gray-200 overflow-hidden">
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center gap-2 pb-3">
+                    <span className="bg-[#1C1B1B] text-white text-sm px-2 py-1 rounded-none font-normal">
+                      01
+                    </span>
+                    <Heading level="h3" weight="normal" className=" text-[#1C1B1B] mb-0">
+                      ข้อมูลทั่วไป
+                    </Heading>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-[#5F5E5E]">ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท *</label>
+                    <Input
+                      name="customer_name"
+                      placeholder="ระบุชื่อ-นามสกุล หรือชื่อนิติบุคคล"
+                      value={formData.customer_name}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full h-10 bg-white border border-gray-200 rounded-none text-sm text-[#1C1B1B] focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-[#5F5E5E]">ประเภทลูกค้า *</label>
+                    <Select
+                      value={String(formData.customer_type_id)}
+                      onChange={(e: any) =>
+                        handleInputChange({
+                          target: { name: "customer_type_id", value: e.target.value },
+                        } as any)
+                      }
+                      className="w-full h-10 bg-white border border-gray-200 rounded-none text-sm text-[#1C1B1B] cursor-pointer"
+                      options={types.map((t) => ({
+                        label: t.type_label || t.type_name,
+                        value: String(t.id),
+                      }))}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-[#5F5E5E]">หมายเลขโทรศัพท์หลัก *</label>
+                    <Input
+                      type="tel"
+                      name="phone_number"
+                      placeholder="0XX-XXX-XXXX"
+                      value={formData.phone_number}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full h-10 bg-white border border-gray-200 rounded-none text-sm text-[#1C1B1B] focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 02: ข้อมูลส่วนบุคคล */}
+              <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center gap-2 border-b border-gray-200/80 pb-3">
+                    <span className="bg-[#1C1B1B] text-white text-xs px-2 py-0.5 rounded-none font-bold">
+                      02
+                    </span>
+                    <Heading level="h3" weight="normal" className="text-sm font-bold text-[#1C1B1B] mb-0">
+                      ข้อมูลส่วนบุคคล / ทะเบียน
+                    </Heading>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-[#5F5E5E]">
+                      บัตรประจำตัวประชาชน / เลขประจำตัวผู้เสียภาษี (13 หลัก) *
+                    </label>
+                    <Input
+                      name="id_card_number_customer"
+                      placeholder="X-XXXX-XXXXX-XX-X"
+                      value={formData.id_card_number_customer}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full h-10 bg-white border border-gray-200 rounded-none text-sm text-[#1C1B1B] focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-[#5F5E5E]">ที่อยู่ตามทะเบียนบ้าน *</label>
+                      <textarea
+                        name="registered_address"
+                        rows={3}
+                        placeholder="ป้อนที่อยู่เต็มตามบัตรประชาชน..."
+                        value={formData.registered_address}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full p-2.5 bg-white border border-gray-200 rounded-none text-sm text-[#1C1B1B] focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23] resize-none outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-[#5F5E5E]">ที่อยู่จัดส่ง / ที่ตั้งอู่ *</label>
+                      <textarea
+                        name="shipping_address"
+                        rows={3}
+                        placeholder="ที่อยู่ปลายทางการจัดส่งหรือที่ตั้งหน้าร้าน..."
+                        value={formData.shipping_address}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full p-2.5 bg-white border border-gray-200 rounded-none text-sm text-[#1C1B1B] focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23] resize-none outline-none"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* 03: การอัปโหลดเอกสาร */}
+            <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center gap-2 border-b border-gray-200/80 pb-3">
+                  <span className="bg-[#1C1B1B] text-white text-xs px-2 py-0.5 rounded-none font-bold">
+                    03
+                  </span>
+                  <Heading level="h3" weight="normal" className="text-sm font-bold text-[#1C1B1B] mb-0">
+                    การอัปโหลดเอกสาร
+                  </Heading>
+                </div>
+
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border border-dashed border-gray-300 bg-white hover:bg-red-50/20 transition-colors p-8 flex flex-col items-center justify-center cursor-pointer"
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept="image/*,.pdf"
+                    className="hidden"
+                  />
+                  <UploadCloud className="w-10 h-10 text-[#E51C23] mb-2 stroke-[1.5]" />
+                  <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
+                    {idCardFile ? idCardFile.name : "คลิกเพื่ออัปโหลดสำเนาบัตรประชาชน / ภ.พ.20"}
+                  </Text>
+                  <Text variant="xs" className="text-[#6B7280] mb-0">
+                    PDF, JPG, PNG (ขนาดไม่เกิน 10MB)
+                  </Text>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Form Actions */}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline-cancel"
+                onClick={handleReset}
+                className="px-6 h-10 border border-gray-200 text-[#5F5E5E] hover:bg-gray-100 font-normal rounded-none"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                variant="solid-red"
+                disabled={submitting}
+                className="px-6 h-10 bg-[#E51C23] hover:bg-[#c9151b] text-white font-normal rounded-none"
+              >
+                {submitting ? "กำลังบันทึก..." : "บันทึกการลงทะเบียนสมาชิก"}
+              </Button>
+            </div>
+          </form>
+
+          {/* Customer Table List */}
+          <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
+            {/* Table Control Header */}
+            <div className="p-4 bg-[#F6F3F2] border-b border-gray-200 flex justify-between items-center">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-none text-slate-700 hover:bg-gray-50 transition"
+                >
+                  <Filter className="w-3.5 h-3.5 text-[#5F5E5E]" /> กรองข้อมูล
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-none text-slate-700 hover:bg-gray-50 transition"
+                >
+                  <Download className="w-3.5 h-3.5 text-[#5F5E5E]" /> ส่งออก CSV
+                </button>
+              </div>
+            </div>
+
+            {/* Table Content */}
+            <Table className="!w-full !min-w-0 table-fixed text-left border-collapse">
+              <TableHeader className="bg-[#F6F3F2] border-b border-gray-200 text-[11px] text-[#6B7280] uppercase tracking-wider">
+                <TableRow>
+                  <TableHead className="py-3 px-4 w-[25%]">ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท</TableHead>
+                  <TableHead className="py-3 px-4 w-[15%]">หมายเลขโทรศัพท์</TableHead>
+                  <TableHead className="py-3 px-4 w-[18%]">หมายเลขประจำตัวประชาชน</TableHead>
+                  <TableHead className="py-3 px-4 w-[22%]">ที่อยู่</TableHead>
+                  <TableHead className="py-3 px-4 text-center w-[12%]">ประเภทลูกค้า</TableHead>
+                  <TableHead className="py-3 px-4 text-center w-[8%]">จัดการ</TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody className="divide-y divide-gray-200">
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-12 text-center">
+                      <Text variant="small" className="text-gray-500 mb-0">
+                        กำลังโหลดข้อมูลสมาชิก...
+                      </Text>
+                    </TableCell>
+                  </TableRow>
+                ) : paginatedCustomers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-12 text-center">
+                      <Text variant="small" className="text-gray-400 mb-0">
+                        ยังไม่มีข้อมูลสมาชิกในระบบ
+                      </Text>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedCustomers.map((c) => (
+                    <TableRow key={c.id} className="hover:bg-slate-50 transition-colors">
+                      <TableCell className="py-3.5 px-4 truncate">
+                        <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate">
+                          {c.customer_name}
+                        </Text>
+                        <Text variant="xs" className="font-light text-[#A8A29E] mb-0">
+                          UID: C-{String(c.id).padStart(3, "0")}
+                        </Text>
+                      </TableCell>
+                      <TableCell className="py-3.5 px-4 text-sm text-[#1C1B1B]">
+                        {c.phone_number || "-"}
+                      </TableCell>
+                      <TableCell className="py-3.5 px-4 text-sm text-[#5F5E5E]">
+                        {c.id_card_number_customer || "-"}
+                      </TableCell>
+                      <TableCell className="py-3.5 px-4 truncate">
+                        <Text variant="xs" className="text-[#5F5E5E] truncate mb-0">
+                          {c.display_address || "-"}
+                        </Text>
+                      </TableCell>
+                      <TableCell className="py-3.5 px-4 text-center">
+                        {getCustomerTypeBadge(c.customer_type?.type_name, c.customer_type_label || c.customer_type?.type_label)}
+                      </TableCell>
+                      <TableCell className="py-3.5 px-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCustomer(c)}
+                          className="inline-flex items-center justify-center p-1.5 text-[#E51C23] hover:text-[#c9151b] hover:bg-red-50 transition-colors rounded-full"
+                          title="ดูรายละเอียดลูกค้า"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+
+            {/* Pagination Controls */}
+            {!loading && totalRows > 0 && (
+              <div className="bg-[#FCFBFA] px-6 py-4 border-t border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
+                <div className="flex items-center gap-4">
+                  <Text variant="xs" className="text-[#5F5E5E] mb-0">
+                    แสดง {Math.min((page - 1) * limit + 1, totalRows)} ถึง{" "}
+                    {Math.min(page * limit, totalRows)} จาก {totalRows} รายการ
+                  </Text>
+                  <div className="flex items-center gap-2">
+                    <Text variant="xs" className="text-[#5F5E5E] mb-0">รายการต่อหน้า:</Text>
+                    <select
+                      value={limit}
+                      onChange={(e) => {
+                        setLimit(Number(e.target.value));
+                        setPage(1);
+                      }}
+                      className="border border-gray-200 rounded-none px-2 py-1 text-gray-700 bg-white cursor-pointer"
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={page === 1}
+                    onClick={() => setPage(1)}
+                    className="p-1.5 text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer"
+                  >
+                    <ChevronsLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={page === 1}
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                    className="p-1.5 text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="px-3 py-1 font-medium bg-[#E51C23] text-white text-xs">
+                    {page}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={page === totalPages}
+                    onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                    className="p-1.5 text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={page === totalPages}
+                    onClick={() => setPage(totalPages)}
+                    className="p-1.5 text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer"
+                  >
+                    <ChevronsRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </Card>
+        </main>
+      </div>
+
+      {/* ==================== SLIDE-OVER CUSTOMER DETAILS DRAWER ==================== */}
+      {selectedCustomer && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-none cursor-pointer"
+            onClick={() => setSelectedCustomer(null)}
+          />
+
+          <aside className="relative z-10 w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200">
+            <div className="flex-1 overflow-y-auto">
+              <div className="p-5 border-b border-[#E7BDB8] flex items-start justify-between bg-white">
+                <div>
+                  <Heading level="h3" weight="normal" className="text-xl text-[#1C1B1B] mb-0.5">
+                    โปรไฟล์ลูกค้า
+                  </Heading>
+                  <Text variant="xs" className="text-[#6B7280]">
+                    UID: C-{String(selectedCustomer.id).padStart(3, "0")}
+                  </Text>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCustomer(null)}
+                  className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div>
+                  <Text variant="xs" className="font-normal text-[#E51C23] mb-2">
+                    ข้อมูลสมาชิก
+                  </Text>
+                  <Card className="bg-[#F6F3F2] rounded-none border-gray-100 border-l-4 border-l-[#E51C23] shadow-none">
+                    <CardContent className="p-4 space-y-1">
+                      <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
+                        {selectedCustomer.customer_name}
+                      </Text>
+                      <Text variant="xs" className="text-[#6B7280] mb-0">
+                        เบอร์โทรศัพท์: {selectedCustomer.phone_number}
+                      </Text>
+                      <Text variant="xs" className="text-[#6B7280] mb-0">
+                        เลขประจำตัว: {selectedCustomer.id_card_number_customer || "-"}
+                      </Text>
+                      <Text variant="xs" className="text-[#6B7280] mb-0">
+                        ประเภท: {selectedCustomer.customer_type_label || selectedCustomer.customer_type?.type_label || "-"}
+                      </Text>
+                      <Text variant="xs" className="text-[#6B7280] mb-0">
+                        ที่อยู่: {selectedCustomer.display_address || "-"}
+                      </Text>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div>
+                  <Text variant="xs" className="font-normal text-[#E51C23] mb-2">
+                    สิทธิประโยชน์และวงเงิน
+                  </Text>
+                  <Card className="bg-[#1C1B1B] text-white rounded-none shadow-none">
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex justify-between">
+                        <Text variant="xs" className="text-[#9CA3AF] mb-0">วงเงินเครดิตสูงสุด</Text>
+                        <Text variant="xs" className="text-white mb-0">
+                          {(selectedCustomer.max_credit_limit || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
+                        </Text>
+                      </div>
+                      <div className="flex justify-between">
+                        <Text variant="xs" className="text-[#9CA3AF] mb-0">ยอดหนี้ค้างชำระปัจจุบัน</Text>
+                        <Text variant="xs" className="text-red-400 font-semibold mb-0">
+                          {(selectedCustomer.current_debt_amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
+                        </Text>
+                      </div>
+                      <div className="border-t border-gray-700 pt-2 flex justify-between">
+                        <Text variant="xs" className="text-[#9CA3AF] mb-0">ส่วนลด On-Top</Text>
+                        <Text variant="xs" className="text-green-400 mb-0">
+                          {selectedCustomer.ontop_discount_rate || 0}%
+                        </Text>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+              <Button
+                type="button"
+                variant="outline-cancel"
+                onClick={() => setSelectedCustomer(null)}
+                className="px-6 h-10 border border-gray-200 text-[#5F5E5E] hover:bg-gray-100 font-normal rounded-none"
+              >
+                ปิดหน้าต่าง
+              </Button>
+            </div>
+          </aside>
+        </div>
+      )}
+    </div>
+  );
+}
