@@ -170,7 +170,13 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
           p.part_number?.toLowerCase() === cleanedQuery.toLowerCase() ||
           p.product_name?.toLowerCase() === cleanedQuery.toLowerCase()
       ) || products[0];
-      // โซนที่ 3 & 4: คำนวณและเช็คความปลอดภัย (มีของซ้ำไหม/สิทธิ์ส่วนลดได้เท่าไหร่)
+      // โซนที่ 3 & 4: คำนวณและเช็คความปลอดภัย (มีของซ้ำไหม/สิทธิ์ส่วนลดได้เท่าไหร่/สต็อกเหลือไหม)
+      const maxStock = product.quantity ?? 0;
+      if (maxStock <= 0) {
+        alert(`สินค้า ${product.product_name || product.product_code} หมดสต็อก (คงเหลือ 0 ชิ้น) ไม่สามารถเพิ่มลงในบิลได้`);
+        return;
+      }
+
       const discountConfig = getDefaultProductDiscount(product, customer, activeTypeId);
       const existingIndex = cart.findIndex((item) => item.product_id === product.id);
       
@@ -179,6 +185,11 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
         // เคส 1: สินค้าเดิมมีอยู่แล้ว ทำการบวกจำนวนชิ้นเพิ่มขึ้น 1
         const newCart = [...cart];
         const item = newCart[existingIndex];
+
+        if (item.qty + 1 > maxStock) {
+          alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+          return;
+        }
 
         newCart[existingIndex] = {
           ...item,
@@ -411,12 +422,23 @@ const timer = setTimeout(async () => {
 }, [searchQuery]);
 
 const handleSelectProduct = (product: any) => {
+    const maxStock = product.quantity ?? 0;
+    if (maxStock <= 0) {
+      alert(`สินค้า ${product.product_name || product.product_code} หมดสต็อก (คงเหลือ 0 ชิ้น) ไม่สามารถเพิ่มลงในบิลได้`);
+      return;
+    }
+
     const discountConfig = getDefaultProductDiscount(product, customer, activeTypeId);
     const existingIndex = cart.findIndex((item) => item.product_id === product.id);
 
     if (existingIndex > -1) {
       const newCart = [...cart];
       const item = newCart[existingIndex];
+
+      if (item.qty + 1 > maxStock) {
+        alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+        return;
+      }
 
       newCart[existingIndex] = {
         ...item,

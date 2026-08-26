@@ -3,7 +3,7 @@ import type { CreateSaleOrderRequest, SaleOrderItemRequest, UpdateSaleOrderReque
 import type { POSProductResponse } from "../../../interface/pos/product_interface";
 import type { StoreConfigInterface } from "../../../interface/pos/store_config_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
-import type { ConfirmPaymentRequest } from "../../../interface/pos/payment_interface";
+import type { CancelledPaymentItem, CancelPaymentReceiptRequest, ConfirmPaymentRequest, PaymentHistoryItem, RequestCancelPaymentReceiptRequest, ProcessCancelPaymentReceiptRequest } from "../../../interface/pos/payment_interface";
 import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, GetSaleHistoryByIDResponse, RevertCancellationRequestResponse } from "../../../interface/pos/sales_history_interface";
 import type { CustomerUnpaidBillsResponse, SettleBillsRequest, SettleBillsResponse, GenerateSettleQRRequest, GenerateSettleQRResponse } from "../../../interface/pos/settle_bills_interface";
 
@@ -123,6 +123,53 @@ export const posApiService = {
     apiClient
       .post<GenerateSettleQRResponse>("/pos/payments/generate-settle-qr", payload)
       .then((res) => res.data),
+
+  /** ดึงประวัติการรับชำระเงินทั้งหมด */
+  getPaymentHistory: (params?: {
+    search?: string;
+    start_date?: string;
+    end_date?: string;
+    employee_id?: number;
+  }): Promise<PaymentHistoryItem[]> =>
+    apiClient
+      .get<PaymentHistoryItem[] | { data: PaymentHistoryItem[] }>("/pos/payments/history", { params })
+      .then((res) => (Array.isArray(res.data) ? res.data : (res.data as any)?.data || [])),
+
+  /** พนักงานส่งคำขอยกเลิกใบเสร็จ (Repayment) */
+  requestCancelPaymentReceipt: (receiptId: number, payload: RequestCancelPaymentReceiptRequest): Promise<any> =>
+    apiClient
+      .post(`/pos/payments/history/${receiptId}/request-cancel`, payload)
+      .then((res) => res.data),
+
+  /** พนักงานดึงคำขอยกเลิกใบเสร็จกลับ */
+  revertCancelPaymentReceiptRequest: (receiptId: number): Promise<any> =>
+    apiClient
+      .post(`/pos/payments/history/${receiptId}/cancel-request/revert`)
+      .then((res) => res.data),
+
+  /** เจ้าของร้านอนุมัติการยกเลิกใบเสร็จ (คืนยอดหนี้) */
+  approveCancelPaymentReceipt: (receiptId: number, payload?: ProcessCancelPaymentReceiptRequest): Promise<any> =>
+    apiClient
+      .post(`/pos/payments/history/${receiptId}/approve-cancel`, payload || {})
+      .then((res) => res.data),
+
+  /** เจ้าของร้านปฏิเสธคำขอยกเลิกใบเสร็จ */
+  rejectCancelPaymentReceipt: (receiptId: number, payload?: ProcessCancelPaymentReceiptRequest): Promise<any> =>
+    apiClient
+      .post(`/pos/payments/history/${receiptId}/reject-cancel`, payload || {})
+      .then((res) => res.data),
+
+  /** ยกเลิกสลิป/ใบเสร็จรับเงิน (Direct Cancel) */
+  cancelPaymentReceipt: (receiptId: number, payload: CancelPaymentReceiptRequest): Promise<any> =>
+    apiClient
+      .post(`/pos/payments/history/${receiptId}/cancel`, payload)
+      .then((res) => res.data),
+
+  /** ดูประวัติใบเสร็จที่เคยถูกยกเลิก */
+  getCancelledPaymentHistory: (): Promise<CancelledPaymentItem[]> =>
+    apiClient
+      .get<CancelledPaymentItem[]>("/pos/payments/cancellations")
+      .then((res) => (Array.isArray(res.data) ? res.data : (res.data as any)?.data || [])),
 
   /** ค้นหาใบสั่งซื้อขายด้วยหมายเลข invoice */
   getSaleOrderByNumber: async (orderNumber: string): Promise<any | null> => {

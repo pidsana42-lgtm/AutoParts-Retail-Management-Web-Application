@@ -29,9 +29,13 @@ type PaymentRepayment struct {
     RecordedByID uint `gorm:"not null" json:"recorded_by_id" binding:"required"`
     RecordedBy   User `gorm:"foreignKey:RecordedByID" json:"recorded_by"`
 
-    Status        string     `gorm:"type:varchar(20);not null;default:'completed'" json:"status"` // 'completed' หรือ 'cancelled'
-    CancelledByID *uint      `json:"cancelled_by_id"`
-    CancelledBy   *User      `gorm:"foreignKey:CancelledByID" json:"cancelled_by"`
-    CancelledAt   *time.Time `gorm:"type:timestamptz" json:"cancelled_at"`
-    CancelReason  string     `gorm:"type:text" json:"cancel_reason"`
+    Status              string     `gorm:"type:varchar(20);not null;default:'completed'" json:"status"` // 'completed', 'pending_cancel', 'cancelled'
+    CancelReason        string     `gorm:"type:text" json:"cancel_reason"`
+    CancelRequestedByID *uint      `json:"cancel_requested_by_id"`
+    CancelRequestedBy   *User      `gorm:"foreignKey:CancelRequestedByID" json:"cancel_requested_by"`
+    CancelRequestedAt   *time.Time `gorm:"type:timestamptz" json:"cancel_requested_at"`
+    CancelledByID       *uint      `json:"cancelled_by_id"`
+    CancelledBy         *User      `gorm:"foreignKey:CancelledByID" json:"cancelled_by"`
+    CancelledAt         *time.Time `gorm:"type:timestamptz" json:"cancelled_at"`
+    CancelRemark        string     `gorm:"type:text" json:"cancel_remark"`
 }

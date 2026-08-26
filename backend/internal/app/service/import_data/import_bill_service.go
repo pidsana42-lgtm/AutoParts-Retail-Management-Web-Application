@@ -3,6 +3,7 @@ package import_data
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,8 +15,13 @@ import (
 
 	importDataDTO "backend/internal/app/dto/import_data"
 	"backend/internal/app/entity"
+	"backend/internal/app/enum"
 	billRepo "backend/internal/app/repository/import_data"
+	svcNotification "backend/internal/app/service/notification"
 )
+
+// ErrBillDeleteForbidden ใช้เมื่อผู้ใช้ที่ไม่ใช่เจ้าของพยายามลบบิลที่อนุมัติแล้ว
+var ErrBillDeleteForbidden = errors.New("FORBIDDEN: พนักงานลบได้เฉพาะบิลที่ยังไม่อนุมัติเท่านั้น")
 
 type ImportBillService interface {
 	CreateBill(input importDataDTO.CreateBillDTO) (importDataDTO.BillResponseDTO, error)
@@ -23,21 +29,22 @@ type ImportBillService interface {
 	CreateBillImage(input importDataDTO.CreateBillImageDTO) (importDataDTO.BillImageResponseDTO, error)
 	CreateBillImportJob(input importDataDTO.CreateBillImportJobDTO) (importDataDTO.BillImportJobResponseDTO, error)
 	GetBillImportJob(id uint) (importDataDTO.BillImportJobResponseDTO, error)
-	ConfirmBillImport(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.ConfirmBillImportResponseDTO, error)
+	ConfirmBillImport(id uint, input importDataDTO.ConfirmBillImportDTO, role string) (importDataDTO.ConfirmBillImportResponseDTO, error)
 	CreateBillItem(input importDataDTO.CreateBillItemDTO) (importDataDTO.BillItemResponseDTO, error)
 	UpdateBill(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.BillResponseDTO, error)
-	DeleteBill(id uint) error
+	DeleteBill(id uint, role string) error
 	ListPurchaseOrders() ([]importDataDTO.PurchaseOrderImportDTO, error)
 	GetPurchaseOrderByID(id uint) (importDataDTO.PurchaseOrderImportDTO, error)
 	UpdateProduct(id uint, input importDataDTO.UpdateImportProductDTO) error
 }
 
 type importBillService struct {
-	repo billRepo.ImportBillRepository
+	repo         billRepo.ImportBillRepository
+	notification svcNotification.NotificationService
 }
 
-func NewImportBillService(repo billRepo.ImportBillRepository) ImportBillService {
-	return &importBillService{repo: repo}
+func NewImportBillService(repo billRepo.ImportBillRepository, notificationService svcNotification.NotificationService) ImportBillService {
+	return &importBillService{repo: repo, notification: notificationService}
 }
 
 func (s *importBillService) CreateBill(input importDataDTO.CreateBillDTO) (importDataDTO.BillResponseDTO, error) {
@@ -105,7 +112,7 @@ func (s *importBillService) CreateBillItem(input importDataDTO.CreateBillItemDTO
 	return importDataDTO.ToBillItemResponseDTO(&item), nil
 }
 
-func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.ConfirmBillImportResponseDTO, error) {
+func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.ConfirmBillImportDTO, role string) (importDataDTO.ConfirmBillImportResponseDTO, error) {
 	var job *entity.BillImportJob
 	var err error
 	if id > 0 {
@@ -158,7 +165,7 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 		job.DraftJSON = input.DraftJSON
 	}
 
-	err = s.repo.ConfirmBillImportTransaction(&bill, billItems, job)
+	err = s.repo.ConfirmBillImportTransaction(&bill, billItems, job, role)
 	if err != nil {
 		return importDataDTO.ConfirmBillImportResponseDTO{}, err
 	}
@@ -240,7 +247,18 @@ func (s *importBillService) UpdateBill(id uint, input importDataDTO.ConfirmBillI
 	return importDataDTO.ToBillResponseDTO(&bill), nil
 }
 
-func (s *importBillService) DeleteBill(id uint) error {
+func (s *importBillService) DeleteBill(id uint, role string) error {
+	// พนักงานลบได้เฉพาะบิลที่ยังไม่อนุมัติ — บิลที่อนุมัติแล้ว (is_verified / payment_status=approved) ลบได้เฉพาะเจ้าของ
+	isOwner := strings.EqualFold(role, string(enum.RoleOwner)) || strings.EqualFold(role, string(enum.RoleAdmin))
+	if !isOwner {
+		bill, err := s.repo.GetBillByID(id)
+		if err != nil {
+			return err
+		}
+		if bill.IsVerified || strings.EqualFold(bill.PaymentStatus, "approved") {
+			return ErrBillDeleteForbidden
+		}
+	}
 	return s.repo.DeleteBill(id)
 }
 
@@ -335,6 +353,7 @@ func (s *importBillService) processOCRInBackground(jobID uint, fileURL string) {
 			if errSave := s.repo.SaveBillImportJob(job); errSave != nil {
 				log.Printf("[OCR] Error saving job %d status: %v\n", jobID, errSave)
 			}
+			s.notifyBillJobDone(job, false)
 			return
 		}
 		rawJSON = stdout.String()
@@ -356,6 +375,25 @@ func (s *importBillService) processOCRInBackground(jobID uint, fileURL string) {
 		log.Printf("[OCR] Error saving job %d results: %v\n", jobID, errSave)
 	} else {
 		log.Printf("[OCR] Job %d successfully processed\n", jobID)
+	}
+	s.notifyBillJobDone(job, true)
+}
+
+// notifyBillJobDone: แจ้งเตือนกลับไปหาคนที่อัพโหลดบิลนี้ (job.CreatedBy) ว่า OCR ประมวลผลเสร็จแล้ว/ล้มเหลว พร้อมให้เข้าไปตรวจสอบ/ยืนยันต่อ
+func (s *importBillService) notifyBillJobDone(job *entity.BillImportJob, success bool) {
+	if s.notification == nil || job == nil || job.CreatedBy == 0 {
+		return
+	}
+	title := "ประมวลผลบิลเสร็จแล้ว"
+	message := "ระบบอ่านข้อมูลจากบิลที่อัพโหลดเสร็จแล้ว กรุณาตรวจสอบและยืนยันข้อมูลก่อนบันทึกเข้าคลังสินค้า"
+	notifType := "BILL_IMPORT_PROCESSED"
+	if !success {
+		title = "ประมวลผลบิลไม่สำเร็จ"
+		message = "ระบบไม่สามารถอ่านข้อมูลจากบิลที่อัพโหลดได้ กรุณาลองอัพโหลดใหม่ หรือกรอกข้อมูลด้วยตนเอง"
+		notifType = "BILL_IMPORT_FAILED"
+	}
+	if err := s.notification.NotifyUser(job.CreatedBy, notifType, title, message, "/owner/import-bills", nil); err != nil {
+		log.Printf("[Notification] failed to notify user %d (bill import job %d): %v\n", job.CreatedBy, job.ID, err)
 	}
 }
 

@@ -17,10 +17,11 @@ type SalesHistoryRepository interface {
 	RequestCancelOrder(orderID uint, userID uint, reason string) error
 	ApproveCancelOrder(order *entity.SaleOrder, remark string) error
 	RejectCancelOrder(orderID uint, remark string) error
-	RevertCancelOrder(orderID uint) error
+	RevertCancelOrder(orderID uint, note string) error
 	GetCancellationRequests(req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error)
 	GetMyCancellationRequests(userID uint, req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error)
 	GetEmployees() ([]entity.User, error)
+	GetUserByID(userID uint) (*entity.User, error)
 }
 
 type salesHistoryRepository struct {
@@ -189,7 +190,9 @@ func (r *salesHistoryRepository) RequestCancelOrder(orderID uint, userID uint, r
             "status":                 enum.OrderPendingCancel,
             "cancel_reason":          reason,
             "cancel_requested_at":    now,
-            "cancel_requested_by_id": userID, 
+            "cancel_requested_by_id": userID,
+            "cancel_remark":          nil,
+            "cancel_processed_at":    nil,
         }).Error
 }
 
@@ -405,15 +408,19 @@ func (r *salesHistoryRepository) GetMyCancellationRequests(userID uint, req pos.
     return orders, totalRows, nil
 }
 
-func (r *salesHistoryRepository) RevertCancelOrder(orderID uint) error {
+func (r *salesHistoryRepository) RevertCancelOrder(orderID uint, note string) error {
+	updates := map[string]interface{}{
+		"status":                 enum.OrderCompleted, // เปลี่ยนกลับเป็น Completed
+		"cancel_reason":          nil,                 // ล้างเหตุผลการยกเลิก
+		"cancel_requested_at":    nil,                 // ล้างวันที่ขอยกเลิก
+		"cancel_requested_by_id": nil,                 // ล้างผู้ขอยกเลิก
+	}
+	if note != "" {
+		updates["note"] = note
+	}
 	return r.db.Model(&entity.SaleOrder{}).
 		Where("id = ?", orderID).
-		Updates(map[string]interface{}{
-			"status":                 enum.OrderCompleted, // เปลี่ยนกลับเป็น Completed
-			"cancel_reason":          nil, // ล้างเหตุผลการยกเลิก
-			"cancel_requested_at":    nil, // ล้างวันที่ขอยกเลิก
-			"cancel_requested_by_id": nil, // ล้างผู้ขอยกเลิก
-		}).Error
+		Updates(updates).Error
 }
 
 func (r *salesHistoryRepository) GetEmployees() ([]entity.User, error) {
@@ -422,4 +429,10 @@ func (r *salesHistoryRepository) GetEmployees() ([]entity.User, error) {
 		Where("roles.role_name IN ?", []string{"Employee", "Owner", "Admin"}).
 		Find(&users).Error
 	return users, err
+}
+
+func (r *salesHistoryRepository) GetUserByID(userID uint) (*entity.User, error) {
+	var user entity.User
+	err := r.db.Where("id = ?", userID).First(&user).Error
+	return &user, err
 }

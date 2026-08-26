@@ -21,18 +21,22 @@ import type {
   Product, 
   BillItemDTO, 
   ScannedBillData, 
-  SavedBill 
+  SavedBill,
+  ExcelImportPreview,
+  ColumnMapping
 } from '../../../interface/import';
 
 import HomeView from './views/home_view';
 import ScanView from './views/scan_view';
 import ExcelView from './views/excel_view';
+import MappingView from './views/mapping_view';
 import POView from './views/po_view';
 import ManualEntryView from './views/manual_entry_view';
 import ApproveView from './views/approve_view';
 import ValidationModal from './components/validation_modal';
 import PriceUpdateModal from './components/price_update_modal';
 import type { PriceMismatchItem } from './components/price_update_modal';
+import { guessColumnMapping, normalizeDateValue, REQUIRED_MAPPING_FIELDS } from '../../../utils/excelImport';
 
 const isPlaceholder = (val: any): boolean => {
   if (!val) return true;
@@ -61,6 +65,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
   const getViewFromPath = (path: string): ViewState => {
     if (path.endsWith('/scan')) return 'scan';
     if (path.endsWith('/excel')) return 'excel';
+    if (path.endsWith('/mapping')) return 'mapping';
     if (path.endsWith('/manual')) return 'manual';
     if (path.endsWith('/po')) return 'po';
     return 'home';
@@ -78,6 +83,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
     let targetPath = basePath;
     if (view === 'scan') targetPath = `${basePath}/scan`;
     else if (view === 'excel') targetPath = `${basePath}/excel`;
+    else if (view === 'mapping') targetPath = `${basePath}/mapping`;
     else if (view === 'manual') targetPath = `${basePath}/manual`;
     else if (view === 'po') targetPath = `${basePath}/po`;
     
@@ -100,6 +106,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
 
   // Price Mismatch States
   const [priceMismatchedItems, setPriceMismatchedItems] = useState<PriceMismatchItem[]>([]);
+  const [, setPendingNewProducts] = useState<any[]>([]); // เก็บไว้ใช้ในอนาคต (ตอนนี้ set แล้วยังไม่มี UI แสดงผล)
   const [showPriceUpdateModal, setShowPriceUpdateModal] = useState<boolean>(false);
   const [onConfirmPriceUpdateAction, setOnConfirmPriceUpdateAction] = useState<((selectedIds: number[]) => void) | null>(null);
 
@@ -109,6 +116,11 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Excel Import States
+  const [excelPreview, setExcelPreview] = useState<ExcelImportPreview | null>(null);
+  const [excelMapping, setExcelMapping] = useState<ColumnMapping | null>(null);
+  const [excelBillMeta, setExcelBillMeta] = useState<{ bill_no: string; supplier_name: string; due_date: string; receive_date: string } | null>(null);
 
   // Batch Mode States
   const [batchImages, setBatchImages] = useState<File[]>([]);
@@ -989,22 +1001,22 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
           }
           workbook = XLSX.read(text, { type: 'string' });
         } else {
-          // Binary Excel files (.xlsx, .xls)
+          // Binary Excel files (.xlsx, .xls) — cellDates so date cells arrive as Date objects
           const data = new Uint8Array(buffer);
-          workbook = XLSX.read(data, { type: 'array' });
+          workbook = XLSX.read(data, { type: 'array', cellDates: true });
         }
 
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
 
+        const allRows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', blankrows: false });
+
         // ตรวจหา header row จริง — รองรับไฟล์ที่มีข้อมูลบริษัทอยู่บนสุด
-        const rawRows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-        
         let headerRowIdx = -1;
         let maxMatchCount = 0;
 
-        for (let i = 0; i < Math.min(rawRows.length, 30); i++) {
-          const row = rawRows[i];
+        for (let i = 0; i < Math.min(allRows.length, 30); i++) {
+          const row = allRows[i];
           if (!Array.isArray(row) || row.length < 2) continue;
 
           let matchCount = 0;
@@ -1035,15 +1047,15 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
           }
         }
 
-        // ดึงข้อมูลบริษัท เลขที่บิล วันที่ จากส่วนหัวข้อไฟล์ (ถ้ามี)
+        // ดึงข้อมูลบริษัท เลขที่บิล วันที่ จากส่วนหัวของไฟล์ (ถ้ามี)
         let extractedBillNo = '';
         let extractedSupplierName = '';
         let extractedDueDate = '';
         let extractedReceiveDate = '';
 
-        const scanHeaderLimit = headerRowIdx > 0 ? headerRowIdx : Math.min(rawRows.length, 15);
+        const scanHeaderLimit = headerRowIdx > 0 ? headerRowIdx : Math.min(allRows.length, 15);
         for (let r = 0; r < scanHeaderLimit; r++) {
-          const row = rawRows[r];
+          const row = allRows[r];
           if (!row || row.length < 2) continue;
           const label = String(row[0] || '').trim().toLowerCase();
           const val = String(row[1] || row[2] || '').trim();
@@ -1054,170 +1066,174 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
           } else if (label.includes('ชื่อบริษัท') || label.includes('company name') || label.includes('ผู้จัดจำหน่าย') || label.includes('supplier')) {
             extractedSupplierName = val;
           } else if (label.includes('ครบกำหนด') || label.includes('due date')) {
-            extractedDueDate = val;
+            extractedDueDate = normalizeDateValue(row[1] || row[2]);
           } else if (label.includes('วันที่รับ') || label.includes('bill date') || label.includes('date')) {
-            extractedReceiveDate = val;
+            extractedReceiveDate = normalizeDateValue(row[1] || row[2]);
           }
         }
 
-        const rows = XLSX.utils.sheet_to_json(worksheet, {
-          range: headerRowIdx >= 0 ? headerRowIdx : 0,
-          defval: '',
-        });
+        // ถ้าหา header row ไม่เจอเลย → สร้างชื่อคอลัมน์สังเคราะห์ และให้ทุกแถวเป็นข้อมูล (ระบบจะเดาจากเนื้อหา cell แทน)
+        const hasHeaderRow = headerRowIdx >= 0;
+        const maxCols = allRows.reduce((max: number, r: any[]) => Math.max(max, Array.isArray(r) ? r.length : 0), 0);
+        const headers = hasHeaderRow
+          ? (allRows[headerRowIdx] || []).map((h: any, idx: number) => {
+              const text = String(h ?? '').trim();
+              return text || `(คอลัมน์ ${idx + 1})`;
+            })
+          : Array.from({ length: maxCols }, (_, idx) => `(คอลัมน์ ${idx + 1})`);
+        const dataRows = (hasHeaderRow ? allRows.slice(headerRowIdx + 1) : allRows).filter(
+          (row: any[]) => Array.isArray(row) && row.some((cell: any) => String(cell ?? '').trim() !== '')
+        );
 
-        if (rows.length === 0) {
-          alert('ไม่พบข้อมูลในไฟล์ หรือรูปแบบไฟล์ไม่ถูกต้อง');
+        if (dataRows.length === 0) {
+          setErrorMsg('ไม่พบข้อมูลรายการสินค้าในไฟล์ กรุณาตรวจสอบว่าไฟล์มีแถวหัวตารางและข้อมูลรายการสินค้า');
           return;
         }
 
-        const getSimilarity = (s1: string, s2: string): number => {
-          const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9ก-๙]/g, '');
-          const w1 = clean(s1);
-          const w2 = clean(s2);
-          
-          if (w1 === w2) return 1.0;
-          if (w1.includes(w2) || w2.includes(w1)) return 0.8;
-          
-          const track = Array(w2.length + 1).fill(null).map(() =>
-            Array(w1.length + 1).fill(null)
-          );
-          for (let i = 0; i <= w1.length; i += 1) track[0][i] = i;
-          for (let j = 0; j <= w2.length; j += 1) track[j][0] = j;
-          for (let j = 1; j <= w2.length; j += 1) {
-            for (let i = 1; i <= w1.length; i += 1) {
-              const indicator = w1[i - 1] === w2[j - 1] ? 0 : 1;
-              track[j][i] = Math.min(
-                track[j][i - 1] + 1,
-                track[j - 1][i] + 1,
-                track[j - 1][i - 1] + indicator
-              );
-            }
-          }
-          const distance = track[w2.length][w1.length];
-          const maxLength = Math.max(w1.length, w2.length);
-          return maxLength === 0 ? 0 : 1 - (distance / maxLength);
+        const billMeta = {
+          bill_no: extractedBillNo,
+          supplier_name: extractedSupplierName,
+          due_date: extractedDueDate,
+          receive_date: extractedReceiveDate,
         };
 
-        const parseNum = (val: any, defaultVal = 0): number => {
-          if (val === null || val === undefined || val === '') return defaultVal;
-          if (typeof val === 'number') return isNaN(val) ? defaultVal : val;
-          const cleaned = String(val).replace(/[^0-9.-]/g, '');
-          const parsed = parseFloat(cleaned);
-          return isNaN(parsed) ? defaultVal : parsed;
-        };
+        // เดาการจับคู่คอลัมน์อัตโนมัติ — ถ้ามั่นใจพอ นำเข้าหน้ากรอกข้อมูลได้เลยโดยไม่ต้องผ่านหน้าจับคู่
+        const { mapping: guessedMapping, confidence } = guessColumnMapping(headers, dataRows);
+        const allRequiredFound = REQUIRED_MAPPING_FIELDS.every((f) => !!guessedMapping[f]);
+        const CONFIDENT_THRESHOLD = 0.55;
 
-        const mappedItems: BillItemDTO[] = rows.map((row: any, index: number) => {
-          const findValue = (keywords: string[]) => {
-            const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9ก-๙]/g, '');
-            let matchedKey = Object.keys(row).find(key => 
-              keywords.some(kw => clean(key) === clean(kw))
-            );
-            if (!matchedKey) {
-              matchedKey = Object.keys(row).find(key => 
-                keywords.some(kw => clean(key).includes(clean(kw)))
-              );
-            }
-            if (matchedKey) return row[matchedKey];
-
-            let bestKey = '';
-            let bestScore = 0;
-            for (const key of Object.keys(row)) {
-              for (const kw of keywords) {
-                const score = getSimilarity(key, kw);
-                if (score > bestScore) {
-                  bestScore = score;
-                  bestKey = key;
-                }
-              }
-            }
-
-            if (bestScore > 0.55 && bestKey) {
-              return row[bestKey];
-            }
-            return '';
-          };
-
-          const code = findValue(['code', 'product_code', 'รหัส', 'รหัสสินค้า', 'part_number', 'part_no', 'sku', 'รหัสอะไหล่']);
-          const name = findValue(['name', 'product_name', 'ชื่อ', 'ชื่อสินค้า', 'description', 'detail', 'รายการ', 'ชื่ออะไหล่', 'คำอธิบาย']);
-          const qty = parseNum(findValue(['quantity', 'qty', 'จำนวน', 'จำนวนต่อหน่วย', 'ordered', 'vol', 'ยอดสั่งซื้อ']), 1);
-          const unit = findValue(['unit', 'หน่วย', 'uom', 'pack', 'ขนาดบรรจุ']) || 'ชิ้น';
-          const price = parseNum(findValue(['price', 'rate', 'ราคา', 'ราคาต่อหน่วย', 'cost', 'unit_cost', 'ราคา/หน่วย', 'unit price', 'unitcost']), 0);
-
-          return {
-            item_sequence: index + 1,
-            company_product_code: String(code || '').trim(),
-            company_product_name: String(name || '').trim(),
-            order_quantity: qty,
-            unit: String(unit || 'ชิ้น').trim(),
-            conversion_factor: 1,
-            price_per_unit: price,
-            discount_amount: 0,
-            net_amount: qty * price,
-            is_freebie: false,
-            remark: '',
-            product_id: null
-          };
-        });
-
-        // กรองเฉพาะแถวที่เป็นรายการสินค้าจริง (ตัดแถวส่วนหัว/ส่วนสรุปที่หลุดเข้ามาออก)
-        const validMappedItems = mappedItems.filter((item) => {
-          const code = item.company_product_code.trim();
-          const name = item.company_product_name.trim();
-          if (!code && !name) return false;
-
-          const lowerName = name.toLowerCase();
-          const lowerCode = code.toLowerCase();
-          const metadataKeywords = ['ที่อยู่', 'เบอร์โทร', 'อีเมล', 'เลขที่บิล', 'วันที่', 'เครดิต', 'ผู้จัดจำหน่าย', 'บริษัท', 'รวมเงิน', 'ภาษี', 'ยอดสุทธิ', 'total', 'subtotal', 'vat', 'address', 'phone', 'email', 'invoice'];
-          if (metadataKeywords.some(kw => lowerName.startsWith(kw) || lowerCode.startsWith(kw))) {
-            return false;
-          }
-          return true;
-        }).map((item, idx) => ({ ...item, item_sequence: idx + 1 }));
-
-        const subtotal = validMappedItems.reduce((sum, item) => sum + item.net_amount, 0);
-
-        let matchedSupplierId = suppliers[0]?.id || 1;
-        let supplierName = extractedSupplierName || suppliers[0]?.supplier_name || '';
-
-        if (extractedSupplierName) {
-          const found = suppliers.find(s => 
-            s.supplier_name.toLowerCase().replace(/บริษัท|จำกัด|บจก\.|หจก\./g, '').trim() === 
-            extractedSupplierName.toLowerCase().replace(/บริษัท|จำกัด|บจก\.|หจก\./g, '').trim()
-          );
-          if (found) {
-            matchedSupplierId = found.id;
-            supplierName = found.supplier_name;
-          }
+        if (allRequiredFound && confidence >= CONFIDENT_THRESHOLD) {
+          applyExcelMapping(guessedMapping, billMeta, { headers, rows: dataRows, fileName: file.name });
+          return;
         }
 
-        setFormData({
-          bill_no: extractedBillNo || ('IMPORT-' + Math.floor(1000 + Math.random() * 9000)),
-          supplier_id: matchedSupplierId,
-          supplier_name: supplierName,
-          total_amount: subtotal,
-          due_date: extractedDueDate || new Date().toISOString().split('T')[0],
-          transport_by: '',
-          subtotal: subtotal,
-          discount_total: 0,
-          receive_date: extractedReceiveDate || new Date().toISOString().split('T')[0],
-          vat_amount: 0,
-          grand_total: subtotal,
-          payment_status: 'unpaid',
-          items: validMappedItems,
-          db_job_id: 0,
-          bill_image_id: 0,
-          filename: file.name
+        setExcelBillMeta(billMeta);
+        setExcelPreview({
+          fileName: file.name,
+          sheetNames: workbook.SheetNames,
+          activeSheet: sheetName,
+          headers,
+          rows: dataRows,
         });
-
-        setPreviewUrl(null);
-        setCurrentView('manual');
+        setExcelMapping(guessedMapping);
         setErrorMsg(null);
+        setCurrentView('mapping');
       } catch (error) {
         console.error(error);
-        alert('เกิดข้อผิดพลาดในการอ่านไฟล์: ' + String(error));
+        setErrorMsg('เกิดข้อผิดพลาดในการอ่านไฟล์: ' + String(error));
       }
     };
     reader.readAsArrayBuffer(file);
+  };
+
+  // นำผลลัพธ์การจับคู่คอลัมน์มาสร้างรายการบิล พร้อมตรวจสอบแถวที่ข้อมูลไม่ครบ
+  // overrides ใช้กรณีเรียกจาก processExcelFile (state ยังไม่ทัน update)
+  const applyExcelMapping = (
+    mappingOverride?: ColumnMapping,
+    billMetaOverride?: { bill_no: string; supplier_name: string; due_date: string; receive_date: string },
+    previewOverride?: { headers: string[]; rows: any[][]; fileName: string }
+  ) => {
+    const activeMapping = mappingOverride || excelMapping;
+    const meta = billMetaOverride || excelBillMeta;
+    const preview = previewOverride || excelPreview;
+    if (!preview || !activeMapping) return;
+
+    try {
+      const colIndexOf = (field: keyof ColumnMapping): number => {
+        const header = activeMapping[field];
+        return header ? preview.headers.indexOf(header) : -1;
+      };
+      const cellOf = (row: any[], field: keyof ColumnMapping): any => {
+        const idx = colIndexOf(field);
+        return idx >= 0 ? row[idx] : '';
+      };
+
+      const parseNum = (val: any, defaultVal = 0): number => {
+        if (val === null || val === undefined || val === '') return defaultVal;
+        if (typeof val === 'number') return isNaN(val) ? defaultVal : val;
+        const cleaned = String(val).replace(/[^0-9.-]/g, '');
+        const parsed = parseFloat(cleaned);
+        return isNaN(parsed) ? defaultVal : parsed;
+      };
+
+      const mappedItems: BillItemDTO[] = preview.rows.map((row: any[], index: number) => {
+        const qty = parseNum(cellOf(row, 'quantity'), 1);
+        const price = parseNum(cellOf(row, 'price'), 0);
+
+        return {
+          item_sequence: index + 1,
+          company_product_code: String(cellOf(row, 'code') || '').trim(),
+          company_product_name: String(cellOf(row, 'name') || '').trim(),
+          order_quantity: qty,
+          unit: String(cellOf(row, 'unit') || 'ชิ้น').trim(),
+          conversion_factor: 1,
+          price_per_unit: price,
+          discount_amount: 0,
+          net_amount: qty * price,
+          is_freebie: false,
+          remark: '',
+          product_id: null
+        };
+      });
+
+      // กรองเฉพาะแถวที่เป็นรายการสินค้าจริง (ตัดแถวส่วนหัว/ส่วนสรุปที่หลุดเข้ามาออก)
+      const validMappedItems = mappedItems.filter((item) => {
+        const code = item.company_product_code.trim();
+        const name = item.company_product_name.trim();
+        if (!code && !name) return false;
+
+        const lowerName = name.toLowerCase();
+        const lowerCode = code.toLowerCase();
+        const metadataKeywords = ['ที่อยู่', 'เบอร์โทร', 'อีเมล', 'เลขที่บิล', 'วันที่', 'เครดิต', 'ผู้จัดจำหน่าย', 'บริษัท', 'รวมเงิน', 'ภาษี', 'ยอดสุทธิ', 'total', 'subtotal', 'vat', 'address', 'phone', 'email', 'invoice'];
+        if (metadataKeywords.some(kw => lowerName.startsWith(kw) || lowerCode.startsWith(kw))) {
+          return false;
+        }
+        return true;
+      }).map((item, idx) => ({ ...item, item_sequence: idx + 1 }));
+
+      const subtotal = validMappedItems.reduce((sum, item) => sum + item.net_amount, 0);
+
+      let matchedSupplierId = suppliers[0]?.id || 1;
+      let supplierName = meta?.supplier_name || suppliers[0]?.supplier_name || '';
+
+      if (meta?.supplier_name) {
+        const found = suppliers.find(s => 
+          s.supplier_name.toLowerCase().replace(/บริษัท|จำกัด|บจก\.|หจก\./g, '').trim() === 
+          String(meta?.supplier_name).toLowerCase().replace(/บริษัท|จำกัด|บจก\.|หจก\./g, '').trim()
+        );
+        if (found) {
+          matchedSupplierId = found.id;
+          supplierName = found.supplier_name;
+        }
+      }
+
+      setFormData({
+        bill_no: meta?.bill_no || ('IMPORT-' + Math.floor(1000 + Math.random() * 9000)),
+        supplier_id: matchedSupplierId,
+        supplier_name: supplierName,
+        total_amount: subtotal,
+        due_date: meta?.due_date || new Date().toISOString().split('T')[0],
+        transport_by: '',
+        subtotal: subtotal,
+        discount_total: 0,
+        receive_date: meta?.receive_date || new Date().toISOString().split('T')[0],
+        vat_amount: 0,
+        grand_total: subtotal,
+        payment_status: 'unpaid',
+        items: validMappedItems,
+        db_job_id: 0,
+        bill_image_id: 0,
+        filename: preview.fileName
+      });
+
+      setPreviewUrl(null);
+      setCurrentView('manual');
+      setErrorMsg(null);
+    } catch (error) {
+      console.error(error);
+      setErrorMsg('เกิดข้อผิดพลาดในการประมวลผลไฟล์: ' + String(error));
+      setCurrentView('excel');
+    }
   };
 
   const handleSelectPO = async (poId: number) => {
@@ -1499,16 +1515,23 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
       setIsDraftMode(false);
       const warnings = validateBillBeforeSave();
       const mismatches = getPriceMismatchedItems(formData);
+      const newProds = (formData.items ?? []).filter((item: any) => !item.product_id);
 
-      if (warnings.length > 0 || mismatches.length > 0) {
+      if (warnings.length > 0 || mismatches.length > 0 || newProds.length > 0) {
+        if (newProds.length > 0) setPendingNewProducts(newProds);
+        if (mismatches.length > 0) setPriceMismatchedItems(mismatches);
         if (warnings.length > 0) {
           setValidationWarnings(warnings);
-        } else {
-          setValidationWarnings(['ตรวจพบราคานำเข้าในบิลไม่ตรงกับราคาทุนในคลังสินค้า']);
+        } else if (mismatches.length > 0 || newProds.length > 0) {
+          setValidationWarnings(['ตรวจพบข้อมูลที่ต้องการการยืนยันก่อนบันทึก']);
         }
         setSaving(false);
         return;
       }
+      // ไม่มีการเปลี่ยนแปลง — clear แล้วบันทึกตรง
+      setPendingNewProducts([]);
+      setPriceMismatchedItems([]);
+      setValidationWarnings([]);
     }
 
     setSaving(true);
@@ -1823,6 +1846,18 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
         <ExcelView
           setCurrentView={setCurrentView}
           processExcelFile={processExcelFile}
+          errorMsg={errorMsg}
+          onDismissError={() => setErrorMsg(null)}
+        />
+      )}
+
+      {currentView === 'mapping' && (
+        <MappingView
+          setCurrentView={setCurrentView}
+          preview={excelPreview}
+          mapping={excelMapping}
+          onMappingChange={setExcelMapping}
+          onConfirm={() => applyExcelMapping()}
         />
       )}
 

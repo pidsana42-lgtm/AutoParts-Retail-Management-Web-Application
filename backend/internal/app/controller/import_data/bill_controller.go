@@ -1,6 +1,7 @@
 package import_data
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	importDataDTO "backend/internal/app/dto/import_data"
 	importDataSvc "backend/internal/app/service/import_data"
+	"backend/internal/app/enum"
 	"backend/internal/pkg/storage"
 	"github.com/gin-gonic/gin"
 )
@@ -70,6 +72,16 @@ func (ctrl *BillController) UpdateBill(c *gin.Context) {
 		return
 	}
 
+	// การอนุมัติบิล (payment_status=approved / is_verified=true) ทำได้เฉพาะเจ้าของเท่านั้น
+	roleVal, _ := c.Get("role")
+	roleStr, _ := roleVal.(string)
+	if roleStr != string(enum.RoleOwner) {
+		if input.Bill.PaymentStatus == "approved" || input.Bill.IsVerified {
+			c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะเจ้าของร้านเท่านั้นที่อนุมัติบิลได้"})
+			return
+		}
+	}
+
 	res, err := ctrl.svc.UpdateBill(uint(id), input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update bill: " + err.Error()})
@@ -90,8 +102,15 @@ func (ctrl *BillController) DeleteBill(c *gin.Context) {
 		return
 	}
 
-	err = ctrl.svc.DeleteBill(uint(id))
+	roleVal, _ := c.Get("role")
+	roleStr, _ := roleVal.(string)
+
+	err = ctrl.svc.DeleteBill(uint(id), roleStr)
 	if err != nil {
+		if errors.Is(err, importDataSvc.ErrBillDeleteForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "พนักงานลบได้เฉพาะบิลที่ยังไม่อนุมัติเท่านั้น"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete bill: " + err.Error()})
 		return
 	}
@@ -170,7 +189,10 @@ func (ctrl *BillController) ConfirmBillImport(c *gin.Context) {
 		return
 	}
 
-	res, err := ctrl.svc.ConfirmBillImport(uint(id), input)
+	roleVal, _ := c.Get("role")
+	roleStr, _ := roleVal.(string)
+
+	res, err := ctrl.svc.ConfirmBillImport(uint(id), input, roleStr)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to confirm bill import: " + err.Error()})
 		return

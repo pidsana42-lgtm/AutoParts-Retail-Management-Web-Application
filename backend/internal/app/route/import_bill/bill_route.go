@@ -8,6 +8,7 @@ import (
 	billCtrl "backend/internal/app/controller/import_data"
 	billRepo "backend/internal/app/repository/import_data"
 	billSvc "backend/internal/app/service/import_data"
+	svcNotification "backend/internal/app/service/notification"
 
 	"backend/internal/app/entity"
 	"backend/internal/app/enum"
@@ -16,12 +17,12 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupBillRoutes(r *gin.Engine, db *gorm.DB) {
+func SetupBillRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotification.NotificationService) {
 	// 1. Repository
 	repo := billRepo.NewImportBillRepository(db)
 
 	// 2. Service
-	svc := billSvc.NewImportBillService(repo)
+	svc := billSvc.NewImportBillService(repo, notificationService)
 
 	// 3. Controller
 	ctrl := billCtrl.NewBillController(svc)
@@ -55,9 +56,16 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB) {
 			}
 			c.JSON(200, categories)
 		})
+	}
 
-		// Custom route to update product cost price directly from import bill workflow
-		importDataGroup.PUT("/products/:id/cost-price", func(c *gin.Context) {
+	// Owner-only: ปรับราคาทุนสินค้าเมื่อราคาในบิลไม่ตรงกับระบบ — เฉพาะเจ้าของเท่านั้น
+	ownerOnlyGroup := r.Group("/api/import-data")
+	ownerOnlyGroup.Use(
+		middleware.AuthMiddleware(),
+		middleware.RequireRoles(string(enum.RoleOwner)),
+	)
+	{
+		ownerOnlyGroup.PUT("/products/:id/cost-price", func(c *gin.Context) {
 			var uri struct {
 				ID uint `uri:"id" binding:"required"`
 			}

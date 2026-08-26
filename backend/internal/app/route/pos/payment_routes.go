@@ -39,15 +39,24 @@ func SetupPaymentRoutes(r *gin.Engine, db *gorm.DB) {
 		paymentGroup.GET("/history", paymentCtrl.GetPaymentHistory)
 		paymentGroup.GET("/history/:id", paymentCtrl.GetPaymentHistoryByID)
 
+		// พนักงานส่งคำขอยกเลิกใบเสร็จ (Repayment)
+		paymentGroup.POST("/history/:id/request-cancel", paymentCtrl.RequestCancelPaymentReceipt)
+		// พนักงานดึงคำขอยกเลิกกลับ (เมื่อยังอยู่สถานะ pending_cancel)
+		paymentGroup.POST("/history/:id/cancel-request/revert", paymentCtrl.RevertCancelPaymentReceiptRequest)
+
 		// หน้าประวัติและคำขอยกเลิกการชำระเงิน 
 		// ดูประวัติรายการที่เคยถูกยกเลิกไปแล้ว
 		paymentGroup.GET("/cancellations", paymentCtrl.GetCancelledPaymentHistory)
 
-		// ส่วนการกดยกเลิกใบเสร็จ/การชำระเงิน (สงวนสิทธิ์เฉพาะ Owner / Admin)
+		// ส่วนการอนุมัติ / ปฏิเสธ / ยกเลิกโดยเจ้าของร้าน (สงวนสิทธิ์เฉพาะ Owner / Admin)
 		ownerOnly := paymentGroup.Group("")
 		ownerOnly.Use(middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)))
 		{
-			// ยกเลิกสลิป/ใบเสร็จรับเงิน (ทำให้ยอดหนี้กลับมาค้างชำระ)
+			// อนุมัติการยกเลิกใบเสร็จรับเงิน (ทำให้ยอดหนี้กลับมาค้างชำระ)
+			ownerOnly.POST("/history/:id/approve-cancel", paymentCtrl.ApproveCancelPaymentReceipt)
+			// ปฏิเสธคำขอยกเลิกใบเสร็จรับเงิน
+			ownerOnly.POST("/history/:id/reject-cancel", paymentCtrl.RejectCancelPaymentReceipt)
+			// ยกเลิกโดยตรงโดยเจ้าของร้าน
 			ownerOnly.POST("/history/:id/cancel", paymentCtrl.CancelPaymentReceipt)
 		}
 	}
