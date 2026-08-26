@@ -5,6 +5,7 @@ import { ChevronLeft, Download, Printer, X, Loader2 } from "lucide-react";
 
 import Heading from "../../../../components/elements/heading";
 import Button from "../../../../components/elements/button";
+import VariantCodeBadge from "../../../../components/elements/variant_code_badge";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
 import { getProductById } from "../../../../service/http/wms/product";
 import type { StockItem } from "../../../../interface/wms/product";
@@ -419,12 +420,19 @@ export default function ProductDetailPage() {
                           {product.Suppliers.map((s) => (
                             <div
                               key={s.SupplierID}
-                              className="flex items-center justify-between rounded-sm border border-slate-100 bg-slate-50 px-2 py-1"
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-slate-100 bg-slate-50 px-2 py-1"
                             >
-                              <span className="font-medium text-slate-700">{s.SupplierName || `Supplier #${s.SupplierID}`}</span>
-                              <span className="text-slate-500">
-                                {s.Quantity} {product.Unit || "ชิ้น"}
-                              </span>
+                              <div className="flex flex-col leading-tight">
+                                <span className="font-medium text-slate-700">
+                                  {s.SupplierName || `Supplier #${s.SupplierID}`}
+                                </span>
+                                <span className="text-xs text-slate-500">
+                                  คงเหลือ {s.Quantity} {product.Unit || "ชิ้น"}
+                                </span>
+                              </div>
+                              {s.VariantCode && (
+                                <VariantCodeBadge code={s.VariantCode} label="รหัสล็อตบริษัทนี้" />
+                              )}
                             </div>
                           ))}
                         </div>

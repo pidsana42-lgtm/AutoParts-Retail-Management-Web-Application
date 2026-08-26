@@ -777,6 +777,21 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
     updateBatchResultForActiveIndex(updatedForm);
   };
 
+  // ตั้งหมวดหมู่หลัก + ย่อยของรายการในครั้งเดียว (ใช้กับ TreeSelect แบบ cascading ของหน้ากรอกบิล)
+  const handleItemCategoryChange = (index: number, categoryId: number | null, subCategoryId: number | null) => {
+    if (!formData) return;
+    const updatedItems = [...formData.items];
+    updatedItems[index] = {
+      ...updatedItems[index],
+      category_id: categoryId,
+      sub_category_id: subCategoryId
+    };
+
+    const updatedForm = { ...formData, items: updatedItems };
+    setFormData(updatedForm);
+    updateBatchResultForActiveIndex(updatedForm);
+  };
+
   const handleAddRow = () => {
     if (!formData) return;
     const newRow: BillItemDTO = {
@@ -1823,6 +1838,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
           products={products}
           categories={categories}
           handleItemChange={handleItemChange}
+          handleItemCategoryChange={handleItemCategoryChange}
           handleRemoveRow={handleRemoveRow}
           handleAddRow={handleAddRow}
           exportBillItemsToExcel={exportBillItemsToExcel}

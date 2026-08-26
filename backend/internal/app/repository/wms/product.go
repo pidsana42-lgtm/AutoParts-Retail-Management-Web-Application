@@ -2,10 +2,28 @@ package wms
 
 import (
 	"backend/internal/app/entity"
+	"backend/internal/pkg/lotcode"
 	"log"
 
 	"gorm.io/gorm"
 )
+
+// assignVariantCode ออกรหัสล็อตต่อบริษัท (variant code) ให้แถว inventory ที่เพิ่งสร้าง
+// เช่น BP-123-SU3 — ใช้พิมพ์ QR/บาร์โค้ดแยกบริษัทเพื่อให้ตัดสต็อกถูกเจ้า
+func assignVariantCode(tx *gorm.DB, inv *entity.Inventory) error {
+	var supp entity.Supplier
+	shortName := ""
+	if err := tx.First(&supp, inv.SupplierID).Error; err == nil {
+		shortName = supp.ShortSupplierName
+	}
+	var prod entity.Product
+	prodCode := ""
+	if err := tx.Select("product_code").First(&prod, inv.ProductID).Error; err == nil {
+		prodCode = prod.Product_Code
+	}
+	return tx.Model(&entity.Inventory{}).Where("id = ?", inv.ID).
+		Update("variant_code", lotcode.Build(prodCode, shortName, inv.ID)).Error
+}
 
 type ProductRepository interface {
 	CreateProduct(product *entity.Product) error
@@ -161,6 +179,9 @@ func (r *productRepository) ReplaceProductSuppliers(productID uint, inventories 
 			if err := tx.Create(&inv).Error; err != nil {
 				return err
 			}
+			if err := assignVariantCode(tx, &inv); err != nil {
+				return err
+			}
 		}
 
 		// Supplier เดิมที่ไม่อยู่ในรายชื่อใหม่แล้ว -> เอาออกจริง
@@ -205,6 +226,9 @@ func (r *productRepository) ReceiveStock(productID uint, addedQty int, suppliers
 			// Supplier นี้ยังไม่เคยมีมาก่อน -> สร้างแถวใหม่ให้เลย
 			sup.ProductID = productID
 			if err := tx.Create(&sup).Error; err != nil {
+				return err
+			}
+			if err := assignVariantCode(tx, &sup); err != nil {
 				return err
 			}
 		}

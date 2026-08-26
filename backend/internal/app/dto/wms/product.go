@@ -106,6 +106,7 @@ type ProductSupplierResponseDTO struct {
 	SupplierID   uint   `json:"supplier_id"`
 	SupplierName string `json:"supplier_name"`
 	Quantity     int    `json:"quantity"`
+	VariantCode  string `json:"variant_code"`
 }
 
 type ProductImageResponseDTO struct {
@@ -195,6 +196,7 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 			SupplierID:   inv.SupplierID,
 			SupplierName: name,
 			Quantity:     inv.Inventory_Quantity,
+			VariantCode:  inv.Variant_Code,
 		})
 		if name != "" {
 			supplierNames = append(supplierNames, name)
