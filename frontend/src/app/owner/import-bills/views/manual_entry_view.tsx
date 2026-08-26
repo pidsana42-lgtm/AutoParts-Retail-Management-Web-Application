@@ -1,6 +1,9 @@
+import { useMemo } from 'react';
 import { ChevronRight, Save, Trash2, AlertCircle } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
+import TreeSelect from '../../../../components/elements/tree_select';
+import type { CascaderOption } from '../../../../components/elements/cascader';
 import type { ViewState, Supplier, Product, ScannedBillData } from '../../../../interface/import';
 import { validateBillItems, type ItemIssue } from '../../../../utils/excelImport';
 import ProductSearchSelect from '../components/product_search_select';
@@ -20,6 +23,7 @@ interface ManualEntryViewProps {
   products: Product[];
   categories: any[];
   handleItemChange: (idx: number, field: string, val: any) => void;
+  handleItemCategoryChange?: (idx: number, categoryId: number | null, subCategoryId: number | null) => void;
   handleRemoveRow: (idx: number) => void;
   handleAddRow: () => void;
   exportBillItemsToExcel: () => void;
@@ -49,6 +53,7 @@ export default function ManualEntryView({
   products,
   categories,
   handleItemChange,
+  handleItemCategoryChange,
   handleRemoveRow,
   handleAddRow,
   handleSaveBill,
@@ -87,6 +92,25 @@ export default function ManualEntryView({
   const issueCount = Object.keys(itemIssues).length;
   const issueField = (idx: number, field: string): boolean => !!itemIssues[idx]?.fields.includes(field);
   const errInputClass = 'border-red-400 bg-red-50/40 focus:border-red-500 focus:ring-red-400';
+
+  // สร้างต้นไม้หมวดหมู่ (หลัก > ย่อย) สำหรับ TreeSelect แบบ cascading — รูปแบบเดียวกับฟอร์มสินค้าของ WMS
+  // prefix value ด้วย category-/subcategory- กัน id ชนกันข้ามตาราง
+  const categoryTreeOptions: CascaderOption[] = useMemo(() => {
+    return (categories || []).map((c: any, cIdx: number) => {
+      const catId = c.id ?? c.ID ?? cIdx;
+      return {
+        value: `category-${catId}`,
+        label: c.category_name || c.name || `หมวดหมู่ ${catId}`,
+        children: (c.sub_categories || []).map((sc: any, scIdx: number) => {
+          const subCatId = sc.id ?? sc.ID ?? scIdx;
+          return {
+            value: `subcategory-${subCatId}`,
+            label: sc.sub_category_name || sc.name || `หมวดหมู่ย่อย ${subCatId}`,
+          };
+        }),
+      };
+    });
+  }, [categories]);
 
   return (
     <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
@@ -198,8 +222,8 @@ export default function ManualEntryView({
 
           {/* Row Issues Summary */}
           {issueCount > 0 && (
-            <div className="mx-6 mt-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-none flex items-start gap-2">
-              <AlertCircle size={16} className="shrink-0 text-amber-500 mt-0.5" />
+            <div className="mx-6 mt-2 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-none flex items-start gap-2">
+              <AlertCircle size={16} className="shrink-0 text-red-500 mt-0.5" />
               <div>
                 <span className="font-bold">พบข้อมูลที่ควรตรวจสอบ {issueCount} รายการ</span>
                 <ul className="list-disc ml-4 mt-1 space-y-0.5">
@@ -210,7 +234,7 @@ export default function ManualEntryView({
                   ))}
                   {issueCount > 5 && <li>และอีก {issueCount - 5} รายการ (ดูในตารางด้านล่าง)</li>}
                 </ul>
-                <p className="mt-1 text-amber-600">* ยังสามารถบันทึกได้ แตะที่ช่องสีแดงในตารางเพื่อแก้ไข</p>
+                <p className="mt-1 text-red-500">* ยังสามารถบันทึกได้ แตะที่ช่องสีแดงในตารางเพื่อแก้ไข</p>
               </div>
             </div>
           )}
@@ -223,8 +247,7 @@ export default function ManualEntryView({
                   <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[150px]">รหัสสินค้าคู่ค้า</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[260px]">ชื่อสินค้าตามบิล</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[280px]">จับคู่สินค้าในร้าน</TableHead>
-                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่หลัก</TableHead>
-                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่ย่อย</TableHead>
+                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[200px]">หมวดหมู่</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[80px]">จำนวน</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-center text-[#5F5E5E] min-w-[70px]">หน่วย</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[110px]">ราคา/หน่วย</TableHead>
@@ -235,7 +258,7 @@ export default function ManualEntryView({
               <TableBody className="divide-y divide-gray-100">
                 {formData.items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="py-12 text-center text-gray-500 bg-gray-50/50">
+                    <TableCell colSpan={9} className="py-12 text-center text-gray-500 bg-gray-50/50">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <AlertCircle size={36} className="text-gray-400" />
                         <p className="font-bold text-[#1C1B1B] text-sm">ไม่พบรายการสินค้าในบิลนี้</p>
@@ -302,63 +325,36 @@ export default function ManualEntryView({
                         {item.product_id ? (
                           (() => {
                             const prod = products.find(p => p.id === Number(item.product_id));
-                            if (prod) {
+                            if (prod && (prod.category_name || prod.sub_category_name)) {
                               return (
-                                <span className="text-sm text-[#1C1B1B] font-medium">
-                                  {prod.category_name || 'ไม่ระบุหมวดหมู่'}
-                                </span>
-                              );
-                            }
-                            return <span className="text-gray-400 text-sm">-</span>;
-                          })()
-                         ) : (
-                           <select
-                             value={item.category_id || ''}
-                             onChange={(e) => {
-                               handleItemChange(idx, 'category_id', e.target.value ? Number(e.target.value) : null);
-                             }}
-                             className="bg-white border border-gray-300 rounded-none p-1.5 text-sm w-full focus:ring-1 focus:ring-[#e51c23] focus:border-[#e51c23] text-gray-700 font-medium"
-                           >
-                             <option value="">-- หมวดหมู่หลัก --</option>
-                             {categories.map((c: any, cIdx: number) => {
-                               const catId = c.id ?? c.ID ?? cIdx;
-                               return (
-                                 <option key={catId} value={catId}>{c.category_name || c.name}</option>
-                               );
-                             })}
-                           </select>
-                         )}
-                      </TableCell>
-                      <TableCell className="py-2.5 px-3">
-                        {item.product_id ? (
-                          (() => {
-                            const prod = products.find(p => p.id === Number(item.product_id));
-                            if (prod && prod.sub_category_name) {
-                              return (
-                                <span className="text-sm text-[#1C1B1B] font-medium">
-                                  {prod.sub_category_name}
+                                <span className="text-sm text-[#1C1B1B]" title={[prod.category_name, prod.sub_category_name].filter(Boolean).join(' > ')}>
+                                  {[prod.category_name, prod.sub_category_name].filter(Boolean).join(' > ')}
                                 </span>
                               );
                             }
                             return <span className="text-gray-400 text-sm">-</span>;
                           })()
                         ) : (
-                          <select
-                            value={item.sub_category_id || ''}
-                            disabled={!item.category_id}
-                            onChange={(e) => {
-                              handleItemChange(idx, 'sub_category_id', e.target.value ? Number(e.target.value) : null);
+                          <TreeSelect
+                            options={categoryTreeOptions}
+                            placeholder="เลือกหมวดหมู่"
+                            searchPlaceholder="ค้นหาหมวดหมู่..."
+                            value={
+                              item.sub_category_id
+                                ? `subcategory-${item.sub_category_id}`
+                                : item.category_id
+                                  ? `category-${item.category_id}`
+                                  : ''
+                            }
+                            onChange={(_val, path) => {
+                              if (!handleItemCategoryChange) return;
+                              const catVal = path[0]?.value || '';
+                              const subVal = path[1]?.value || '';
+                              const catId = catVal.startsWith('category-') ? Number(catVal.replace('category-', '')) : null;
+                              const subCatId = subVal.startsWith('subcategory-') ? Number(subVal.replace('subcategory-', '')) : null;
+                              handleItemCategoryChange(idx, catId, subCatId);
                             }}
-                            className="bg-white border border-gray-300 rounded-none p-1.5 text-sm w-full focus:ring-1 focus:ring-[#e51c23] focus:border-[#e51c23] text-gray-700 font-medium disabled:opacity-50"
-                          >
-                            <option value="">-- หมวดหมู่ย่อย --</option>
-                            {item.category_id ? ((categories.find((c: any) => (c.id ?? c.ID) === item.category_id))?.sub_categories || []).map((sc: any, scIdx: number) => {
-                              const subCatId = sc.id ?? sc.ID ?? scIdx;
-                              return (
-                                <option key={subCatId} value={subCatId}>{sc.sub_category_name || sc.name}</option>
-                              );
-                            }) : null}
-                          </select>
+                          />
                         )}
                       </TableCell>
                       {Number(item.order_quantity) === 0 ? (

@@ -341,6 +341,7 @@ export default function StockPage() {
               <TableHead>ชื่อสินค้า</TableHead>
               <TableHead>PART NO.</TableHead>
               <TableHead>แบรนด์ - รุ่นรถ</TableHead>
+              <TableHead>ผู้จำหน่าย</TableHead>
               <TableHead>ประเภท</TableHead>
               <TableHead className="text-center">เกรด</TableHead>
               <TableHead>คลังคงเหลือ / ขั้นต่ำ</TableHead>
@@ -363,6 +364,28 @@ export default function StockPage() {
                           ? row.Models.map((m) => `${m.brand_name} ${m.model_name}`).join(", ")
                           : "-"}
                       </span>
+                    </TableCell>
+                    <TableCell className="max-w-[180px]">
+                      {row.Suppliers && row.Suppliers.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {row.Suppliers.map((s) => (
+                            <div
+                              key={s.SupplierID}
+                              className="flex items-center justify-between gap-2 rounded-sm border border-slate-100 bg-slate-50 px-2 py-0.5 text-xs"
+                              title={`${s.SupplierName || `Supplier #${s.SupplierID}`} — รับจากเจ้านี้ ${s.Quantity} ${row.Unit || "ชิ้น"}`}
+                            >
+                              <span className="truncate font-medium text-slate-600">
+                                {s.SupplierName || `Supplier #${s.SupplierID}`}
+                              </span>
+                              <span className="shrink-0 text-slate-400">{s.Quantity}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : row.Supplier ? (
+                        <span className="text-xs font-medium text-slate-600">{row.Supplier}</span>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
@@ -408,7 +431,7 @@ export default function StockPage() {
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-12 text-gray-500">
+                <TableCell colSpan={9} className="text-center py-12 text-gray-500">
                   ไม่พบรายการอะไหล่ในระบบสต็อก
                 </TableCell>
               </TableRow>

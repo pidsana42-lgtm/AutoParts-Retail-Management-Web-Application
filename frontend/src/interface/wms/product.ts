@@ -23,5 +23,5 @@ export interface StockItem {
   // Supplier: รวมชื่อ Supplier ทุกเจ้าที่สินค้านี้รับมาจาก คั่นด้วย ", " (ใช้กับตัวกรอง/แสดงผลแบบสั้นในตาราง)
   Supplier?: string;
   // Suppliers: รายละเอียดแยกเจ้า พร้อมจำนวนที่รับจากแต่ละเจ้า (มาจากตาราง Inventory)
-  Suppliers?: { SupplierID: number; SupplierName: string; Quantity: number }[];
+  Suppliers?: { SupplierID: number; SupplierName: string; Quantity: number; VariantCode?: string }[];
 }

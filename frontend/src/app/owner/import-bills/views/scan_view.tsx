@@ -92,7 +92,6 @@ export default function ScanView({
   setPoReference,
   poList,
   products,
-  categories,
   handleItemChange,
   handleRemoveRow,
   handleAddRow,
@@ -202,8 +201,13 @@ export default function ScanView({
         </div>
       )}
 
+      {/* บิลที่ไม่ได้นำเข้าด้วยภาพ (Excel/กรอกมือ) จะไม่มีรูปและไม่มีไฟล์แบตช์ → ซ่อน panel ภาพ ให้ฟอร์มเต็มจอ */}
+      {(() => {
+        const hideImagePane = !!formData && !previewUrl && batchImages.length === 0;
+        return (
       <div id="split-pane-container" className="flex flex-col lg:flex-row gap-0 w-full min-h-[750px] relative">
         {/* Left: Document Preview & File Selection */}
+        {!hideImagePane && (
         <div 
           style={{ width: typeof window !== 'undefined' && window.innerWidth >= 1024 ? `${leftWidth}%` : '100%' }}
           className="bg-[#e2e2e2] rounded-none p-6 flex flex-col gap-4 min-h-[750px]"
@@ -371,8 +375,10 @@ export default function ScanView({
             </div>
           )}
         </div>
-        
+        )}
+
         {/* Resizer Divider Bar */}
+        {!hideImagePane && (
         <div
           onMouseDown={(e) => {
             e.preventDefault();
@@ -389,12 +395,13 @@ export default function ScanView({
             <span>•</span>
           </div>
         </div>
+        )}
 
         {/* Right: Extracted Data Fields */}
         <div 
           style={{ 
             width: typeof window !== 'undefined' && window.innerWidth >= 1024 
-              ? `${100 - leftWidth}%` 
+              ? (hideImagePane ? '100%' : `${100 - leftWidth}%`)
               : '100%' 
           }}
           className="bg-white rounded-none shadow-sm border border-gray-100 flex flex-col min-h-[700px]"
@@ -517,7 +524,6 @@ export default function ScanView({
                       <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[150px]">รหัสสินค้าคู่ค้า</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[260px]">ชื่อสินค้าตามบิล</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[280px]">จับคู่สินค้าในร้าน</TableHead>
-                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[160px]">บาร์โค้ด</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่หลัก</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่ย่อย</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">จำนวน</TableHead>
@@ -529,7 +535,7 @@ export default function ScanView({
                   <TableBody className="divide-y divide-gray-100">
                     {formData.items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="py-12 text-center text-gray-500 bg-gray-50/50">
+                        <TableCell colSpan={9} className="py-12 text-center text-gray-500 bg-gray-50/50">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <AlertCircle size={36} className="text-gray-400" />
                             <p className="font-bold text-[#1C1B1B] text-sm">ไม่พบรายการสินค้าในบิลนี้</p>
@@ -581,63 +587,17 @@ export default function ScanView({
                             {item.product_id ? (
                               (() => {
                                 const prod = products.find(p => p.id === Number(item.product_id));
-                                if (!prod) return <span className="text-gray-400">-</span>;
-
-                                const paddedId = String(prod.id).padStart(6, '0');
-                                const code = prod.barcode || prod.product_code || '';
-                                const sanitized = code.replace(/[^a-zA-Z0-9_\-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-                                const baseName = sanitized ? `prod_${paddedId}_${sanitized}` : `prod_${paddedId}_PROD-${paddedId}`;
-                                const barcodeImgUrl = `/barcode/${baseName}.png`;
-
-                                return (
-                                  <div className="flex flex-col items-center gap-1">
-                                    <img 
-                                      src={barcodeImgUrl} 
-                                      alt={prod.barcode} 
-                                      className="max-h-8 object-contain bg-white p-0.5 border border-gray-200"
-                                      onError={(e) => {
-                                        (e.target as HTMLElement).style.display = 'none';
-                                      }}
-                                    />
-                                    <span className="font-mono text-xs font-semibold text-[#1C1B1B]">
-                                      {prod.barcode || '-'}
-                                    </span>
-                                  </div>
-                                );
-                              })()
-                            ) : (
-                              <span className="text-xs text-black">
-                                [สร้างให้อัตโนมัติ]
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="py-2.5 px-3">
-                            {item.product_id ? (
-                              (() => {
-                                const prod = products.find(p => p.id === Number(item.product_id));
-                                if (prod) {
+                                if (prod && prod.category_name) {
                                   return (
-                                    <span className="text-xs text-[#5F5E5E] bg-gray-100 px-2 py-1 rounded-none font-medium inline-block truncate max-w-[140px]" title={prod.category_name}>
-                                      {prod.category_name || 'ไม่ระบุหมวดหมู่'}
+                                    <span className="text-sm text-[#1C1B1B]" title={prod.category_name}>
+                                      {prod.category_name}
                                     </span>
                                   );
                                 }
-                                return <span className="text-gray-400 text-xs">-</span>;
+                                return <span className="text-gray-400 text-sm">-</span>;
                               })()
                             ) : (
-                              <select
-                                value={item.category_id || ''}
-                                onChange={(e) => {
-                                  handleItemChange(idx, 'category_id', e.target.value ? Number(e.target.value) : null);
-                                }}
-                                className="bg-white border border-gray-300 rounded-none p-1.5 text-sm w-full focus:ring-1 focus:ring-[#e51c23] focus:border-[#e51c23] text-gray-700 font-medium"
-                              >
-                                <option value="">-- หมวดหมู่หลัก --</option>
-                                {categories.map((c: any, cIdx: number) => {
-                                  const val = c.ID || c.id || cIdx;
-                                  return <option key={`cat-${val}`} value={val}>{c.category_name}</option>;
-                                })}
-                              </select>
+                              <span className="text-gray-400 text-sm">-</span>
                             )}
                           </TableCell>
                           
@@ -647,28 +607,15 @@ export default function ScanView({
                                 const prod = products.find(p => p.id === Number(item.product_id));
                                 if (prod && prod.sub_category_name) {
                                   return (
-                                    <span className="text-xs text-gray-500 pl-1 truncate max-w-[140px]" title={prod.sub_category_name}>
-                                      └─ {prod.sub_category_name}
+                                    <span className="text-sm text-[#1C1B1B]" title={prod.sub_category_name}>
+                                      {prod.sub_category_name}
                                     </span>
                                   );
                                 }
-                                return <span className="text-gray-400 text-xs">-</span>;
+                                return <span className="text-gray-400 text-sm">-</span>;
                               })()
                             ) : (
-                              <select
-                                value={item.sub_category_id || ''}
-                                disabled={!item.category_id}
-                                onChange={(e) => {
-                                  handleItemChange(idx, 'sub_category_id', e.target.value ? Number(e.target.value) : null);
-                                }}
-                                className="bg-white border border-gray-300 rounded-none p-1.5 text-sm w-full focus:ring-1 focus:ring-[#e51c23] focus:border-[#e51c23] text-gray-700 font-medium disabled:opacity-50"
-                              >
-                                <option value="">-- หมวดหมู่ย่อย --</option>
-                                {item.category_id ? ((categories.find((c: any) => (c.ID || c.id) === item.category_id))?.sub_categories || []).map((sc: any, scIdx: number) => {
-                                  const scVal = sc.ID || sc.id || scIdx;
-                                  return <option key={`subcat-${scVal}`} value={scVal}>{sc.sub_category_name}</option>;
-                                }) : null}
-                              </select>
+                              <span className="text-gray-400 text-sm">-</span>
                             )}
                           </TableCell>
 
@@ -861,6 +808,8 @@ export default function ScanView({
           )}
         </div>
       </div>
+        );
+      })()}
     </div>
   );
 }
