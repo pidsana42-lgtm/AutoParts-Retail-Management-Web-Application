@@ -5,8 +5,6 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Filter,
-  Download,
   Eye,
   X,
 } from "lucide-react";
@@ -40,7 +38,9 @@ export default function CustomerRegistration() {
     submitting,
     formData,
     idCardFile,
+    errors,
     handleInputChange,
+    handleBlur,
     handleFileChange,
     handleReset,
     handleSubmit,
@@ -97,7 +97,7 @@ export default function CustomerRegistration() {
           </div>
 
           {/* Form Bar */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* 1: ข้อมูลทั่วไป */}
               <Card className="bg-white rounded-none shadow-none border-y border-r border-gray-200 overflow-hidden">
@@ -111,20 +111,27 @@ export default function CustomerRegistration() {
                     </Heading>
                   </div>
 
+                  {/* กรอกข้อมูลชื่อลูกค้า */}
                   <div className="space-y-1.5">
-                    <label className="text-xs text-[#5F5E5E]">ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท *</label>
+                    <Text className="text-xs text-[#5F5E5E] mb-1">
+                      ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท <span className="text-[#E51C23] font-normal">*</span>
+                    </Text>
                     <Input
                       name="customer_name"
                       placeholder="ระบุชื่อ-นามสกุล หรือชื่อนิติบุคคล"
                       value={formData.customer_name}
                       onChange={handleInputChange}
-                      required
-                      className="w-full h-10 bg-white border border-gray-200 rounded-none text-sm text-[#1C1B1B] focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
+                      onBlur={() => handleBlur("customer_name")}
+                      error={errors.customer_name}
+                      className="w-full h-10 bg-[#F6F3F2] border border-gray-200 rounded-none text-sm text-[#1C1B1B] placeholder:text-[#6B7280] placeholder:font-light focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
                     />
                   </div>
 
+                  {/* กรอกข้อมูลประเภทลูกค้า */}
                   <div className="space-y-1.5">
-                    <label className="text-xs text-[#5F5E5E]">ประเภทลูกค้า *</label>
+                    <label className="text-xs text-[#5F5E5E]">
+                      ประเภทลูกค้า <span className="text-[#E51C23] font-normal">*</span>
+                    </label>
                     <Select
                       value={String(formData.customer_type_id)}
                       onChange={(e: any) =>
@@ -132,80 +139,106 @@ export default function CustomerRegistration() {
                           target: { name: "customer_type_id", value: e.target.value },
                         } as any)
                       }
-                      className="w-full h-10 bg-white border border-gray-200 rounded-none text-sm text-[#1C1B1B] cursor-pointer"
-                      options={types.map((t) => ({
+                      error={errors.customer_type_id}
+                        className="w-full h-10 bg-[#F6F3F2] border-none rounded-none text-sm text-[#1C1B1B] cursor-pointer focus:outline-none focus:ring-0"                      options={types.map((t) => ({
                         label: t.type_label || t.type_name,
                         value: String(t.id),
                       }))}
                     />
                   </div>
-
+                  
+                  {/* กรอกข้อมูลหมายเลขโทรศัพท์หลัก */}
                   <div className="space-y-1.5">
-                    <label className="text-xs text-[#5F5E5E]">หมายเลขโทรศัพท์หลัก *</label>
+                    <label className="text-xs text-[#5F5E5E]">
+                      หมายเลขโทรศัพท์หลัก <span className="text-[#E51C23] font-normal">*</span>
+                    </label>
                     <Input
                       type="tel"
                       name="phone_number"
-                      placeholder="0XX-XXX-XXXX"
+                      placeholder="0XX-XXXXXXX"
+                      maxLength={11}
                       value={formData.phone_number}
                       onChange={handleInputChange}
-                      required
-                      className="w-full h-10 bg-white border border-gray-200 rounded-none text-sm text-[#1C1B1B] focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
+                      onBlur={() => handleBlur("phone_number")}
+                      error={errors.phone_number}
+                      className="w-full h-10 bg-[#F6F3F2] border-none rounded-none text-sm text-[#1C1B1B] placeholder:text-[#6B7280] placeholder:font-light focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
                     />
                   </div>
                 </CardContent>
               </Card>
 
               {/* 02: ข้อมูลส่วนบุคคล */}
-              <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
+              <Card className="bg-white rounded-none shadow-none border-y border-r border-gray-200 overflow-hidden">
                 <CardContent className="p-6 space-y-4">
-                  <div className="flex items-center gap-2 border-b border-gray-200/80 pb-3">
-                    <span className="bg-[#1C1B1B] text-white text-xs px-2 py-0.5 rounded-none font-bold">
+                  <div className="flex items-center gap-2  pb-3">
+                    <span className="bg-[#1C1B1B] text-white text-sm px-2 py-1 rounded-none font-normal">
                       02
                     </span>
-                    <Heading level="h3" weight="normal" className="text-sm font-bold text-[#1C1B1B] mb-0">
+                    <Heading level="h3" weight="normal" className=" text-[#1C1B1B] mb-0">
                       ข้อมูลส่วนบุคคล / ทะเบียน
                     </Heading>
                   </div>
 
+                  {/* กรอกข้อมูลบัตรประจำตัวประชาชน */}
                   <div className="space-y-1.5">
                     <label className="text-xs text-[#5F5E5E]">
-                      บัตรประจำตัวประชาชน / เลขประจำตัวผู้เสียภาษี (13 หลัก) *
+                      บัตรประจำตัวประชาชน (13 หลัก) <span className="text-[#E51C23] font-normal">*</span>
                     </label>
                     <Input
                       name="id_card_number_customer"
                       placeholder="X-XXXX-XXXXX-XX-X"
+                      maxLength={17}
                       value={formData.id_card_number_customer}
                       onChange={handleInputChange}
-                      required
-                      className="w-full h-10 bg-white border border-gray-200 rounded-none text-sm text-[#1C1B1B] focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
+                      onBlur={() => handleBlur("id_card_number_customer")}
+                      error={errors.id_card_number_customer}
+                      className="w-full h-10 bg-[#F6F3F2] border border-gray-200 rounded-none text-sm text-[#1C1B1B] placeholder:text-[#6B7280] placeholder:font-light focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
                     />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs text-[#5F5E5E]">ที่อยู่ตามทะเบียนบ้าน *</label>
+                      <label className="text-xs text-[#5F5E5E]">
+                        ที่อยู่ตามทะเบียนบ้าน <span className="text-[#E51C23] font-normal">*</span>
+                      </label>
                       <textarea
                         name="registered_address"
                         rows={3}
                         placeholder="ป้อนที่อยู่เต็มตามบัตรประชาชน..."
                         value={formData.registered_address}
                         onChange={handleInputChange}
-                        required
-                        className="w-full p-2.5 bg-white border border-gray-200 rounded-none text-sm text-[#1C1B1B] focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23] resize-none outline-none"
+                        onBlur={() => handleBlur("registered_address")}
+                        className={`w-full p-2.5 bg-[#F6F3F2] border-none rounded-none text-sm text-[#1C1B1B] placeholder:text-[#6B7280] placeholder:font-light resize-none outline-none transition-colors ${
+                          errors.registered_address
+                            ? "!border-red-500 !border-solid ring-1 ring-red-500"
+                            : "border-gray-200 focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
+                        }`}
                       />
+                      {errors.registered_address && (
+                        <p className="text-xs text-red-500 mt-0.5">{errors.registered_address}</p>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs text-[#5F5E5E]">ที่อยู่จัดส่ง / ที่ตั้งอู่ *</label>
+                      <label className="text-xs text-[#5F5E5E]">
+                        ที่อยู่จัดส่ง / ที่ตั้งอู่ <span className="text-[#E51C23] font-normal">*</span>
+                      </label>
                       <textarea
                         name="shipping_address"
                         rows={3}
                         placeholder="ที่อยู่ปลายทางการจัดส่งหรือที่ตั้งหน้าร้าน..."
                         value={formData.shipping_address}
                         onChange={handleInputChange}
-                        required
-                        className="w-full p-2.5 bg-white border border-gray-200 rounded-none text-sm text-[#1C1B1B] focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23] resize-none outline-none"
+                        onBlur={() => handleBlur("shipping_address")}
+                        className={`w-full p-2.5 bg-[#F6F3F2] border-none rounded-none text-sm text-[#1C1B1B] placeholder:text-[#6B7280] placeholder:font-light resize-none outline-none transition-colors ${
+                          errors.shipping_address
+                            ? "!border-red-500 !border-solid ring-1 ring-red-500"
+                            : "border-gray-200 focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
+                        }`}
                       />
+                      {errors.shipping_address && (
+                        <p className="text-xs text-red-500 mt-0.5">{errors.shipping_address}</p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -213,20 +246,20 @@ export default function CustomerRegistration() {
             </div>
 
             {/* 03: การอัปโหลดเอกสาร */}
-            <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
+            <Card className="bg-white rounded-none shadow-none border-y border-r border-gray-200 overflow-hidden">
               <CardContent className="p-6 space-y-4">
-                <div className="flex items-center gap-2 border-b border-gray-200/80 pb-3">
-                  <span className="bg-[#1C1B1B] text-white text-xs px-2 py-0.5 rounded-none font-bold">
+                <div className="flex items-center gap-2 pb-3">
+                   <span className="bg-[#1C1B1B] text-white text-sm px-2 py-1 rounded-none font-normal">
                     03
                   </span>
-                  <Heading level="h3" weight="normal" className="text-sm font-bold text-[#1C1B1B] mb-0">
+                  <Heading level="h3" weight="normal" className=" text-[#1C1B1B] mb-0">
                     การอัปโหลดเอกสาร
                   </Heading>
                 </div>
 
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="border border-dashed border-gray-300 bg-white hover:bg-red-50/20 transition-colors p-8 flex flex-col items-center justify-center cursor-pointer"
+                  className="border border-dashed border-[#E7BDB8] bg-white hover:bg-red-50/20 transition-colors p-8 flex flex-col items-center justify-center cursor-pointer"
                 >
                   <input
                     type="file"
@@ -235,11 +268,11 @@ export default function CustomerRegistration() {
                     accept="image/*,.pdf"
                     className="hidden"
                   />
-                  <UploadCloud className="w-10 h-10 text-[#E51C23] mb-2 stroke-[1.5]" />
+                  <UploadCloud className="w-10 h-10 text-[#5B5B5B] mb-2 stroke-[1.5]" />
                   <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
                     {idCardFile ? idCardFile.name : "คลิกเพื่ออัปโหลดสำเนาบัตรประชาชน / ภ.พ.20"}
                   </Text>
-                  <Text variant="xs" className="text-[#6B7280] mb-0">
+                  <Text variant="xs" className="font-light text-[#5B5B5B] mb-0">
                     PDF, JPG, PNG (ขนาดไม่เกิน 10MB)
                   </Text>
                 </div>
@@ -269,23 +302,7 @@ export default function CustomerRegistration() {
 
           {/* Customer Table List */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
-            {/* Table Control Header */}
-            <div className="p-4 bg-[#F6F3F2] border-b border-gray-200 flex justify-between items-center">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-none text-slate-700 hover:bg-gray-50 transition"
-                >
-                  <Filter className="w-3.5 h-3.5 text-[#5F5E5E]" /> กรองข้อมูล
-                </button>
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-none text-slate-700 hover:bg-gray-50 transition"
-                >
-                  <Download className="w-3.5 h-3.5 text-[#5F5E5E]" /> ส่งออก CSV
-                </button>
-              </div>
-            </div>
+          
 
             {/* Table Content */}
             <Table className="!w-full !min-w-0 table-fixed text-left border-collapse">
