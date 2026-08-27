@@ -3,6 +3,7 @@ import type {
   CustomerTypeItem,
   CustomerListItem,
   CustomerDetailResponse,
+  RegisterCustomerRequest,
 } from "../../../interface/customer/customer_interface";
 
 export const customerApiService = {
@@ -14,23 +15,19 @@ export const customerApiService = {
 
   /** ดึงรายการลูกค้าทั้งหมด */
   getCustomers: async (): Promise<CustomerListItem[]> => {
-    const res = await apiClient.get<CustomerListItem[]>("/api/customers");
+    const res = await apiClient.get<CustomerListItem[]>("/customers");
     return res.data || [];
   },
 
   /** ดึงรายละเอียดลูกค้าตาม ID */
   getCustomerById: async (id: number): Promise<CustomerDetailResponse> => {
-    const res = await apiClient.get<CustomerDetailResponse>(`/api/customers/${id}`);
+    const res = await apiClient.get<CustomerDetailResponse>(`/customers/${id}`);
     return res.data;
   },
 
   /** ลงทะเบียนลูกค้าใหม่ */
-  registerCustomer: async (formData: FormData): Promise<any> => {
-    const res = await apiClient.post("/api/customers/register", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
+  registerCustomer: async (payload: RegisterCustomerRequest): Promise<any> => {
+    const res = await apiClient.post("/customers/register", payload);
     return res.data;
   },
 };
