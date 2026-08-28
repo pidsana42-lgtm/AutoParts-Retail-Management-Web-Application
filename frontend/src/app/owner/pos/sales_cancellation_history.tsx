@@ -97,11 +97,11 @@ const OwnerSalesCancellationHistory: React.FC = () => {
     <main className="space-y-6 p-6">
       {/* Header ส่วนหัวของหน้า */}
       <header>
-        <Text variant="xs" className="text-[#E51C23] uppercase tracking-wider mb-0">
-          ยกเลิกบิลขาย
-        </Text>
-        <Heading level="h1" weight="normal" className="mb-0 text-[#1C1B1B]">
+        <Heading level='h1' weight='semibold' className='m-0 text-black'>
           รายการยกเลิกจากพนักงาน
+        </Heading>
+        <Heading level='h6' className='m-0 mt-1'>
+          ยกเลิกบิลขาย
         </Heading>
       </header>
 
@@ -111,6 +111,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
             
             {/* ค้นหาเลขคำสั่งซื้อ/ชื่อลูกค้า (col-span-3) */}
+            {/* ว่างก็เปลี่ยนมาเขียน handleSearchChange */}
             <div className="md:col-span-3 flex flex-col gap-1.5">
               <Text variant="xs" className="text-[#5F5E5E]">ค้นหาเลขคำสั่งซื้อ/ชื่อลูกค้า</Text>
               <div className="relative flex-1">

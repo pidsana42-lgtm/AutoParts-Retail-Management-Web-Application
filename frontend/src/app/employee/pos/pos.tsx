@@ -81,11 +81,11 @@ export default function PosPage(): React.JSX.Element {
           {/* 1. ส่วนหัวบิล (Header - ชื่อหน้าย่อ POS & ปุ่มล้างตะกร้าทั้งหมด) */}
           <div className="flex justify-between items-start mb-6">
             <div>
-              <Text variant="xs" className="text-[#E51C23] uppercase tracking-wider mb-0 ">
-                รายการที่กำลังขาย
-              </Text>
-              <Heading level="h1" weight="normal" className="mb-0 text-[#1C1B1B]">
+              <Heading level='h1' weight='semibold' className='m-0 text-black'>
                 POS
+              </Heading>
+              <Heading level='h6' className='m-0 mt-1'>
+                รายการที่กำลังขาย
               </Heading>
             </div>
             <div className="text-right flex flex-col items-end gap-1.5">

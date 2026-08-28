@@ -93,11 +93,11 @@ export default function PaymentHistoryPage() {
           {/* Section Title */}
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
-              <Text variant="xs" className="text-[#E51C23] uppercase tracking-wider mb-0">
-                บันทึกรายการรับชำระเงินและตัดหนี้ที่คุณทำรายการ
-              </Text>
-              <Heading level="h1" weight="normal" className="mb-0 text-[#1C1B1B]">
+              <Heading level='h1' weight='semibold' className='m-0 text-black'>
                 ประวัติการชำระเงิน
+              </Heading>
+              <Heading level='h6' className='m-0 mt-1'>
+                บันทึกรายการรับชำระเงินและตัดหนี้ที่คุณทำรายการ
               </Heading>
             </div>
           </div>

@@ -115,11 +115,11 @@ export default function SettleBillsPage(): React.JSX.Element {
           {/* Header */}
           <div className="flex justify-between items-start mb-6">
             <div>
-              <Text variant="xs" className="text-[#E51C23] uppercase tracking-wider mb-0">
-                จัดการบิลค้างชำระและตัดยอดหนี้ลูกค้า
-              </Text>
-              <Heading level="h1" weight="normal" className="mb-0 text-[#1C1B1B]">
+              <Heading level='h1' weight='semibold' className='m-0 text-black'>
                 ชำระหนี้คงค้าง
+              </Heading>
+              <Heading level='h6' className='m-0 mt-1'>
+                จัดการบิลค้างชำระและตัดยอดหนี้ลูกค้า
               </Heading>
             </div>
 

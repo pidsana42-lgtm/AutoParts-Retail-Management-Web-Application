@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import {
   UploadCloud,
   ChevronLeft,
@@ -6,6 +6,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Eye,
+  ScanBarcode,
   X,
 } from "lucide-react";
 
@@ -28,14 +29,17 @@ import { Card, CardContent } from "../../../components/elements/card";
 
 // Hook & Types
 import { useCustomerRegistration } from "./hook/useCustomerRegustration";
-import type { CustomerListItem } from "../../../interface/customer/customer_interface";
 
 export default function CustomerRegistration() {
   const {
+    // Types & Data
     types,
     customers,
+    paginatedCustomers,
     loading,
     submitting,
+
+    // Form
     formData,
     idCardFile,
     errors,
@@ -44,19 +48,30 @@ export default function CustomerRegistration() {
     handleFileChange,
     handleReset,
     handleSubmit,
+
+    // Filters
+    searchQuery,
+    customerTypeFilter,
+    debtFilter,
+    handleSearchChange,
+    handleCustomerTypeChange,
+    handleDebtFilterChange,
+    handleSearch,
+
+    // Pagination
+    page,
+    setPage,
+    limit,
+    setLimit,
+    totalRows,
+    totalPages,
+
+    // Details Modal
+    selectedCustomer,
+    setSelectedCustomer,
   } = useCustomerRegistration();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Table pagination & details modal state
-  const [page, setPage] = useState<number>(1);
-  const [limit, setLimit] = useState<number>(10);
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerListItem | null>(null);
-
-  // Pagination calculations
-  const totalRows = customers.length;
-  const totalPages = Math.ceil(totalRows / limit) || 1;
-  const paginatedCustomers = customers.slice((page - 1) * limit, page * limit);
 
   // Helper สำหรับ Badge ประเภทลูกค้า
   const getCustomerTypeBadge = (typeName?: string, typeLabel?: string) => {
@@ -88,11 +103,11 @@ export default function CustomerRegistration() {
         <main className="p-6 space-y-6 flex-1">
           {/* Section Header */}
           <div>
-            <Text variant="xs" className="text-[#E51C23] uppercase tracking-wider mb-0">
-              การลงทะเบียนนิติบุคคลเชิงพาณิชย์ใหม่หรือลูกค้าปลีกรายใหม่
-            </Text>
-            <Heading level="h1" weight="normal" className="mb-0 text-[#1C1B1B]">
+            <Heading level='h1' weight='semibold' className='m-0 text-black'>
               การลงทะเบียนสมาชิกใหม่
+            </Heading>
+            <Heading level='h6' className='m-0 mt-1'>
+              การลงทะเบียนนิติบุคคลเชิงพาณิชย์ใหม่หรือลูกค้าปลีกรายใหม่
             </Heading>
           </div>
 
@@ -300,10 +315,79 @@ export default function CustomerRegistration() {
             </div>
           </form>
 
+          {/* Filter Bar */}
+          <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
+            <CardContent className="p-6 md:p-8">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                {/* ค้นหาชื่อลูกค้า / เบอร์โทร / เลขบัตรประชาชน (col-span-5) */}
+                <div className="md:col-span-5 flex flex-col gap-1.5">
+                  <Text variant="xs" className="text-[#5F5E5E]">
+                    ค้นหาชื่อลูกค้า / หมายเลขโทรศัพท์ / เลขประจำตัวประชาชน
+                  </Text>
+                  <div className="relative flex-1">
+                    <ScanBarcode className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={18} />
+                    <Input
+                      value={searchQuery}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      placeholder="สแกนบาร์โค้ด / ชื่อลูกค้า / เบอร์โทร หรือ เลขประจำตัวประชาชน"
+                      className="w-full h-11 bg-white border border-gray-200 rounded-none pl-12 pr-4 text-sm text-[#1C1B1B] font-light focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 shadow-sm transition-all placeholder:text-[#6B7280]"
+                    />
+                  </div>
+                </div>
+
+                {/* ประเภทลูกค้า (col-span-3) */}
+                <div className="md:col-span-3 flex flex-col gap-1.5">
+                  <Text variant="xs" className="text-[#5F5E5E]">
+                    ประเภทลูกค้า
+                  </Text>
+                  <Select
+                    value={customerTypeFilter}
+                    onChange={(e: any) => handleCustomerTypeChange(e.target.value)}
+                    placeholder="ประเภทลูกค้าทั้งหมด"
+                    className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none cursor-pointer"
+                    options={[
+                      { label: "ประเภทลูกค้าทั้งหมด", value: "" },
+                      ...types.map((t) => ({
+                        label: t.type_label || t.type_name,
+                        value: String(t.id),
+                      })),
+                    ]}
+                  />
+                </div>
+
+                {/* สถานะหนี้ค้างชำระ (col-span-2) */}
+                <div className="md:col-span-2 flex flex-col gap-1.5">
+                  <Text variant="xs" className="text-[#5F5E5E]">
+                    สถานะหนี้ค้างชำระ
+                  </Text>
+                  <Select
+                    value={debtFilter}
+                    onChange={(e: any) => handleDebtFilterChange(e.target.value)}
+                    placeholder="สถานะทั้งหมด"
+                    className="bg-white border-none rounded-none h-11 text-sm font-normal text-[#1C1B1B] px-3 shadow-none cursor-pointer"
+                    options={[
+                      { label: "ทั้งหมด", value: "" },
+                      { label: "มียอดหนี้ค้างชำระ", value: "HAS_DEBT" },
+                      { label: "ไม่มีหนี้ค้างชำระ", value: "NO_DEBT" },
+                    ]}
+                  />
+                </div>
+
+                {/* ปุ่มค้นหา (col-span-2) */}
+                <div className="md:col-span-2">
+                  <Button
+                    onClick={handleSearch}
+                    className="w-full h-11 rounded-none bg-[#E51C23] hover:bg-[#c9151b] text-white text-sm font-normal transition-colors border-none shadow-sm cursor-pointer"
+                  >
+                    ค้นหา
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Customer Table List */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
-          
-
             {/* Table Content */}
             <Table className="!w-full !min-w-0 table-fixed text-left border-collapse">
               <TableHeader className="bg-[#F6F3F2] border-b border-gray-200 text-[11px] text-[#6B7280] uppercase tracking-wider">
@@ -330,7 +414,9 @@ export default function CustomerRegistration() {
                   <TableRow>
                     <TableCell colSpan={6} className="py-12 text-center">
                       <Text variant="small" className="text-gray-400 mb-0">
-                        ยังไม่มีข้อมูลสมาชิกในระบบ
+                        {customers.length === 0
+                          ? "ยังไม่มีข้อมูลสมาชิกในระบบ"
+                          : "ไม่พบข้อมูลสมาชิกที่ตรงกับเงื่อนไขการค้นหา"}
                       </Text>
                     </TableCell>
                   </TableRow>
@@ -341,9 +427,9 @@ export default function CustomerRegistration() {
                         <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate">
                           {c.customer_name}
                         </Text>
-                        <Text variant="xs" className="font-light text-[#A8A29E] mb-0">
+                        {/* <Text variant="xs" className="font-light text-[#A8A29E] mb-0">
                           UID: C-{String(c.id).padStart(3, "0")}
-                        </Text>
+                        </Text> */} 
                       </TableCell>
                       <TableCell className="py-3.5 px-4 text-sm text-[#1C1B1B]">
                         {c.phone_number || "-"}
@@ -459,9 +545,9 @@ export default function CustomerRegistration() {
                   <Heading level="h3" weight="normal" className="text-xl text-[#1C1B1B] mb-0.5">
                     โปรไฟล์ลูกค้า
                   </Heading>
-                  <Text variant="xs" className="text-[#6B7280]">
+                  {/* <Text variant="xs" className="text-[#6B7280]">
                     UID: C-{String(selectedCustomer.id).padStart(3, "0")}
-                  </Text>
+                  </Text> */}
                 </div>
                 <button
                   type="button"
