@@ -92,7 +92,7 @@ export function CustomerCard({ customer, address }: CustomerCardProps): React.JS
             วงเงินเครดิต: ฿{maxCreditLimitStr}
           </Text>
         </div>
-        <div>
+        {/* <div>
           {ontopDiscountRate > 0 ? (
             <span className="text-[#259B24] bg-[#259B24]/20 border border-[#86F976]/50 px-2 py-0.5 text-[10px] font-medium tracking-wide">
               ส่วนลด On-Top {ontopDiscountRate}%
@@ -102,7 +102,7 @@ export function CustomerCard({ customer, address }: CustomerCardProps): React.JS
               ไม่มีส่วนลด On-Top
             </span>
           )}
-        </div>
+        </div> */}
       </div>
 
     </div>

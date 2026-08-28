@@ -43,6 +43,20 @@ export const useSalesHistory = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // --- States สำหรับ Overall Stats สรุปภาพรวมทั้งหมด (ไม่ขึ้นกับตัวกรอง) ---
+  const [stats, setStats] = useState({
+    totalSales: 0,
+    totalOrders: 0,
+    completedCount: 0,
+    cancelledCount: 0,
+    cashAndQrSales: 0,
+    creditSales: 0,
+    paidAmount: 0,
+    balanceDue: 0,
+    unpaidCount: 0,
+  });
+  const [isStatsLoading, setIsStatsLoading] = useState(false);
+
   // States สำหรับจัดการ Drawer Detail
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
   const [orderDetail, setOrderDetail] = useState<GetSaleHistoryByIDResponse | null>(null);
@@ -50,6 +64,72 @@ export const useSalesHistory = () => {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelRemark, setCancelRemark] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
+
+  // คำนวณสรุปสถิติภาพรวมทั้งหมดของระบบ (Total Summary All Time)
+  const fetchOverallStats = useCallback(async () => {
+    setIsStatsLoading(true);
+    try {
+      const res = await posApiService.getSalesHistory({ limit: 0 });
+      const allItems = res.items || [];
+      const totalOrders = res.total_rows || allItems.length;
+
+      const validItems = allItems.filter(
+        (item) => item.status?.toUpperCase() !== "CANCELLED" && item.status !== "ยกเลิก"
+      );
+
+      const totalSales = validItems.reduce((sum, item) => sum + (Number(item.total_amount) || 0), 0);
+      const completedCount = validItems.filter(
+        (item) => item.status?.toUpperCase() === "COMPLETED" || item.status === "เสร็จสมบูรณ์"
+      ).length;
+      const cancelledCount = allItems.filter(
+        (item) => item.status?.toUpperCase() === "CANCELLED" || item.status === "ยกเลิก"
+      ).length;
+
+      const cashAndQrSales = validItems
+        .filter((item) => {
+          const m = (item.payment_method_name || "").toUpperCase();
+          return (
+            m.includes("CASH") ||
+            m.includes("QR") ||
+            m.includes("เงินสด") ||
+            m.includes("เงินโอน") ||
+            m.includes("TRANSFER")
+          );
+        })
+        .reduce((sum, item) => sum + (Number(item.total_amount) || 0), 0);
+
+      const creditSales = validItems
+        .filter((item) => {
+          const m = (item.payment_method_name || "").toUpperCase();
+          return m.includes("CREDIT") || m.includes("เงินเชื่อ");
+        })
+        .reduce((sum, item) => sum + (Number(item.total_amount) || 0), 0);
+
+      const paidAmount = validItems.reduce((sum, item) => sum + (Number(item.paid_amount) || 0), 0);
+      const balanceDue = validItems.reduce((sum, item) => sum + (Number(item.balance_due) || 0), 0);
+      const unpaidCount = validItems.filter((item) => (Number(item.balance_due) || 0) > 0).length;
+
+      setStats({
+        totalSales,
+        totalOrders,
+        completedCount,
+        cancelledCount,
+        cashAndQrSales,
+        creditSales,
+        paidAmount,
+        balanceDue,
+        unpaidCount,
+      });
+    } catch (err) {
+      console.error("Failed to fetch overall stats:", err);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchOverallStats();
+  }, [fetchOverallStats]);
 
   // ดึงรายชื่อพนักงานเมื่อหน้าเว็บโหลด
   useEffect(() => {
@@ -238,6 +318,7 @@ export const useSalesHistory = () => {
       setCancelReason("");
       setCancelRemark("");
       fetchSalesHistory();
+      fetchOverallStats();
     } catch (err: any) {
       console.error("Failed to cancel order directly:", err);
       alert(err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถยกเลิกรายการได้");
@@ -268,30 +349,36 @@ export const useSalesHistory = () => {
       setCancelReason("");
       setCancelRemark("");
       fetchSalesHistory(); // รีโหลดตารางใหม่
+      fetchOverallStats();
     } catch (err: any) {
       console.error("Failed to reject cancel order:", err);
-      alert(err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถปฏิเสธคำขอยกเลิกรายการได้");
+      alert(err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถปฏิเสธคำขอยกเลิกได้");
     } finally {
       setIsCancelling(false);
     }
   };
 
-  // 4. Handler สำหรับ พนักงาน (Employee): ดึงคำขอยกเลิกกลับ (กู้คืนคำขอ)
+  // 4. Handler สำหรับ พนักงาน (Employee): ดึงคำขอยกเลิกกลับ (Revert Request)
   const handleRevertCancel = async () => {
     if (!selectedOrderId) return;
-    if (!confirm("คุณต้องการดึงคำขอยกเลิกรายการนี้กลับใช่หรือไม่?")) return;
+
+    if (!confirm("คุณต้องการยกเลิกคำขอ และคืนสถานะบิลนี้เป็นบิลปกติใช่หรือไม่?")) {
+      return;
+    }
 
     setIsCancelling(true);
     try {
       await posApiService.revertCancellationRequest(selectedOrderId);
-      alert("ดึงคำขอยกเลิกบิลกลับสำเร็จ");
+      alert("ดึงคำขอยกเลิกกลับ และคืนสถานะบิลเรียบร้อยแล้ว");
+      
       setSelectedOrderId(null);
       setCancelReason("");
       setCancelRemark("");
       fetchSalesHistory();
+      fetchOverallStats();
     } catch (err: any) {
       console.error("Failed to revert cancel request:", err);
-      alert(err?.response?.data?.message || err?.response?.data?.error || "เกิดข้อผิดพลาดในการดึงคำขอกลับ");
+      alert(err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถดึงคำขอยกเลิกกลับได้");
     } finally {
       setIsCancelling(false);
     }
@@ -328,6 +415,10 @@ export const useSalesHistory = () => {
     totalPages,
     isLoading,
     error,
+    // Overall Stats
+    stats,
+    isStatsLoading,
+    fetchOverallStats,
     // Filter States
     search,
     startDate,
