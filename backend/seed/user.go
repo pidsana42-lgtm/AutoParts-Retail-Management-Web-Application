@@ -15,14 +15,15 @@ func User(db *gorm.DB) error {
         return fmt.Errorf("failed to seed bank: %w", err)
     }
 
-    // 2. ดึง StoreConfig ID 1 ที่โบว์ทำ Seed ไว้แล้วขึ้นมาใช้ (ไม่สร้างซ้ำ)
+    // 2. ดึงหรือสร้าง StoreConfig ID 1 เพื่อให้ User อ้างอิง Foreign Key ได้
     var storeConfig entity.StoreConfig
-    if err := db.Where("id = ?", 1).First(&storeConfig).Error; err != nil {
-        // เผื่อกรณียังไม่ได้รัน seed ของ StoreConfig ให้ไปเรียกมาก่อนเลย
-        if errSeed := StoreConfig(db); errSeed != nil {
-            return fmt.Errorf("failed to seed store config from user seed: %w", errSeed)
-        }
-        _ = db.Where("id = ?", 1).First(&storeConfig)
+    if err := db.Where("id = ?", 1).FirstOrCreate(&storeConfig, entity.StoreConfig{
+        MaxCredit:            0,
+        MaxOverdueDays:       0,
+        MaxExtraDiscountRate: 0,
+        SupervisedPin:        "1234",
+    }).Error; err != nil {
+        return fmt.Errorf("failed to init store config: %w", err)
     }
 
     // 3. ดึงข้อมูลบทบาท (Role) มารอไว้สำหรับสร้าง User (เอาอันที่สั่งรัน Seed ซ้ำออก)

@@ -47,6 +47,7 @@ import SettleBills from './employee/transactions/settle_bills';
 import PaymentHistory from './employee/transactions/payment_history';
 import PaymentCancellationHistory from './employee/transactions/payment_cancellation_history';
 import CustomerRegistration from './employee/customer/customer_registration';
+import FinancialPolicy from './owner/storeconfig/financial_policy';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -90,7 +91,12 @@ export default function AppRouter(): React.JSX.Element {
           isAdminOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
+        {/* -------------------- การตั้งค่า ------------------------ */}
         <Route path="/owner/storeconfig" element={<StoreConfig />} />
+        <Route path="/owner/storeconfig/financial-policy" element={<FinancialPolicy />} />
+        {/* ------------------------------------------------------ */}
+
+        
 
         <Route path="/owner/stock" element={
           isAdminOrOwner ? <Stock /> : <Navigate to={firstMenuPath} replace />
@@ -194,6 +200,18 @@ export default function AppRouter(): React.JSX.Element {
         {/* เจ้าของร้าน */}
         <Route path="/owner/customers/customer-registration" element={
           isAdminOrOwner ? <CustomerRegistration /> : <Navigate to={firstMenuPath} replace />
+        } />
+        {/* --------------------------------------------------- */}
+
+        {/* ------------------ การตั้งค่าร้านค้า ----------------- */}
+        <Route path="/owner/storeconfig" element={
+          isAdminOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/storeconfig/financial-policy" element={
+          isAdminOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/storeconfig/financial_policy" element={
+          isAdminOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
         } />
         {/* --------------------------------------------------- */}
 
