@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { customerApiService } from "../../../../service/http/customer/customer_service";
 import type {
@@ -13,6 +13,7 @@ export const useCustomerRegistration = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
+  // --- Registration Form State ---
   const [formData, setFormData] = useState<RegisterCustomerRequest>({
     customer_name: "",
     customer_type_id: 1,
@@ -24,6 +25,16 @@ export const useCustomerRegistration = () => {
 
   const [idCardFile, setIdCardFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // --- Filter & Search States ---
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [customerTypeFilter, setCustomerTypeFilter] = useState<string>("");
+  const [debtFilter, setDebtFilter] = useState<string>("");
+
+  // --- Pagination & Drawer States ---
+  const [page, setPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(10);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerListItem | null>(null);
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -208,11 +219,87 @@ export const useCustomerRegistration = () => {
     }
   };
 
+  // --- Filter Handlers ---
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setPage(1);
+  };
+
+  const handleCustomerTypeChange = (value: string) => {
+    setCustomerTypeFilter(value);
+    setPage(1);
+  };
+
+  const handleDebtFilterChange = (value: string) => {
+    setDebtFilter(value);
+    setPage(1);
+  };
+
+  const handleSearch = () => {
+    setPage(1);
+  };
+
+  // --- Filtered & Paginated Customer List ---
+  const filteredCustomers = useMemo(() => {
+    return customers.filter((customer) => {
+      // 1. ค้นหาชื่อลูกค้า / เบอร์โทรศัพท์ / เลขบัตรประชาชน / ที่อยู่
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const rawQ = q.replace(/[-\s]/g, "");
+        const name = (customer.customer_name || "").toLowerCase();
+        const phone = (customer.phone_number || "").toLowerCase();
+        const rawPhone = phone.replace(/[-\s]/g, "");
+        const idCard = (customer.id_card_number_customer || "").toLowerCase();
+        const rawIdCard = idCard.replace(/[-\s]/g, "");
+        const address = (customer.display_address || "").toLowerCase();
+
+        const matchName = name.includes(q);
+        const matchPhone = phone.includes(q) || (rawQ.length > 0 && rawPhone.includes(rawQ));
+        const matchIdCard = idCard.includes(q) || (rawQ.length > 0 && rawIdCard.includes(rawQ));
+        const matchAddress = address.includes(q);
+
+        if (!matchName && !matchPhone && !matchIdCard && !matchAddress) {
+          return false;
+        }
+      }
+
+      // 2. ประเภทลูกค้า
+      if (customerTypeFilter) {
+        const typeId = customer.customer_type?.id || (customer as any).customer_type_id;
+        if (String(typeId) !== String(customerTypeFilter)) {
+          return false;
+        }
+      }
+
+      // 3. สถานะหนี้ค้างชำระ
+      if (debtFilter === "HAS_DEBT") {
+        if (!customer.current_debt_amount || customer.current_debt_amount <= 0) {
+          return false;
+        }
+      } else if (debtFilter === "NO_DEBT") {
+        if (customer.current_debt_amount && customer.current_debt_amount > 0) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [customers, searchQuery, customerTypeFilter, debtFilter]);
+
+  const totalRows = filteredCustomers.length;
+  const totalPages = Math.ceil(totalRows / limit) || 1;
+  const paginatedCustomers = filteredCustomers.slice((page - 1) * limit, page * limit);
+
   return {
+    // Types & Data
     types,
     customers,
+    filteredCustomers,
+    paginatedCustomers,
     loading,
     submitting,
+
+    // Form
     formData,
     idCardFile,
     errors,
@@ -223,5 +310,32 @@ export const useCustomerRegistration = () => {
     handleFileChange,
     handleReset,
     handleSubmit,
+
+    // Filters
+    searchQuery,
+    setSearchQuery,
+    customerTypeFilter,
+    setCustomerTypeFilter,
+    debtFilter,
+    setDebtFilter,
+    handleSearchChange,
+    handleCustomerTypeChange,
+    handleDebtFilterChange,
+    handleSearch,
+
+    // Pagination
+    page,
+    setPage,
+    limit,
+    setLimit,
+    totalRows,
+    totalPages,
+
+    // Details Modal
+    selectedCustomer,
+    setSelectedCustomer,
+
+    // Refetch
+    refetch: fetchInitialData,
   };
 };
