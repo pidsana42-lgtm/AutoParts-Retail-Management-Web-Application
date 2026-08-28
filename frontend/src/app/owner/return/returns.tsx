@@ -1,631 +1,510 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Search, Plus, Minus, Upload, 
-  CheckCircle, ChevronLeft, 
-  FileText, Clock, XCircle
-} from 'lucide-react';
+import { FileText, ClockAlert, CirclePlus, Search, ReceiptText, Loader2, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Eye, CircleCheck, Banknote } from 'lucide-react';
+// Components
 import Heading from '../../../components/elements/heading';
-import Card from '../../../components/elements/card';
+import { Card } from '../../../components/elements/card';
 import Input from '../../../components/elements/input';
-import Select from '../../../components/elements/select';
+import Select, { type SelectOption } from '../../../components/elements/select';
 import Button from '../../../components/elements/button';
-import Table from '../../../components/elements/table';
-import { posApiService } from '../../../service/http/pos/pos_service';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/elements/table';
+// Interface
+import type { ReturnListItem, ReturnStatusCount } from '../../../interface/return/return_interface';
+// Service & Utils
+import { returnService } from '../../../service/http/return/return_service';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
+import { cn } from '../../../utils/component';
+import { formatDateThai } from '../../../utils/formatdate';
+import Badge from '../../../components/elements/badge';
+import { useToast } from '../../../components/elements/toast';
+import Modal from '../../../components/elements/modal';
 
-interface ReturnItem {
-  id: number;
-  return_no: string;
-  return_date: string;
-  customer_name: string;
-  customer_phone: string;
-  quantity: number;
-  amount: number;
-  status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
-  reason?: string;
-  remarks?: string;
-}
+/** สถานะของรายการคืนสินค้า ใช้ทั้งเป็นค่ากรองในตารางและ badge สถานะ */
+type ReturnStatus = 'PENDING' | 'APPROVED' | 'REFUNDED' | 'REJECTED';
 
-const DEFAULT_RETURNS: ReturnItem[] = [
-  {
-    id: 1,
-    return_no: 'RTN-2026-0001',
-    return_date: '2026-07-01T09:00:00Z',
-    customer_name: 'บริษัท สมหวังไอที จำกัด',
-    customer_phone: '02-345-6789',
-    quantity: 1,
-    amount: 12500,
-    status: 'PENDING',
-    reason: 'ORDER_ERROR',
-    remarks: 'ลูกค้าแจ้งสั่งซื้อเครื่องพิมพ์รุ่นผิด ต้องการเปลี่ยนเป็นรุ่น PRO-X2'
-  },
-  {
-    id: 2,
-    return_no: 'RTN-2026-0002',
-    return_date: '2026-07-05T16:45:00Z',
-    customer_name: 'คุณกิตติศักดิ์ พรหมดี',
-    customer_phone: '081-234-5678',
-    quantity: 2,
-    amount: 25090,
-    status: 'COMPLETED',
-    reason: 'QUALITY_ISSUE',
-    remarks: 'สินค้ามีตำหนิและรอยบุบจากการขนส่ง'
-  },
-  {
-    id: 3,
-    return_no: 'RTN-2026-0003',
-    return_date: '2026-07-06T11:20:00Z',
-    customer_name: 'อู่สงวนอะไหล่ยนต์',
-    customer_phone: '089-876-5432',
-    quantity: 50,
-    amount: 2250,
-    status: 'CANCELLED',
-    reason: 'CUSTOMER_CHANGE_MIND',
-    remarks: 'เปลี่ยนใจยกเลิกความต้องการคืน'
-  },
+const STATUS_FILTER: SelectOption[] = [
+  { label: 'ทั้งหมด', value: 'ALL' },
+  { label: 'รอดำเนินการ', value: 'PENDING' },
+  { label: 'อนุมัติแล้ว', value: 'APPROVED' },
+  { label: 'คืนเงินจริงแล้ว', value: 'REFUNDED' },
+  { label: 'ปฏิเสธ', value: 'REJECTED' },
 ];
 
-export default function ReturnsPage(): React.JSX.Element {
+function StatusBadge({ status }: { status: string }) {
+  if (status === "PENDING")
+    return <Badge variant="outline" className="bg-yellow-100 border-none text-yellow-700">รอดำเนินการ</Badge>;
+  if (status === "APPROVED")
+    return <Badge variant="success">อนุมัติแล้ว</Badge>;
+  if (status === "REFUNDED")
+    return <Badge variant="success" className="bg-blue-100 text-blue-700">คืนเงินจริงแล้ว</Badge>;
+  if (status === "REJECTED")
+    return <Badge variant="destructive">ปฏิเสธ</Badge>;
+  return <Badge variant="outline">{status}</Badge>;
+}
+
+const PAGE_SIZE = 10;
+
+function getPageNumbers(current: number, total: number): (number | '...')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  if (current <= 4) return [1, 2, 3, 4, 5, '...', total];
+  if (current >= total - 3) return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+  return [1, '...', current - 1, current, current + 1, '...', total];
+}
+
+const ReturnsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [view, setView] = useState<'list' | 'return-form'>('list');
+  const basePath = usePathBasePrefix();
+  const { toast } = useToast();
+  const userRole = (localStorage.getItem('role') || '').toUpperCase();
+  const canApprove = userRole === 'OWNER';
+
+  // Search bar
+  const searchRef = useRef<HTMLDivElement>(null);
   const [returnSearch, setReturnSearch] = useState('');
-  const [returnFilter, setReturnFilter] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const [returns, setReturns] = useState<ReturnItem[]>(() => {
-    const saved = localStorage.getItem('mock_returns');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    localStorage.setItem('mock_returns', JSON.stringify(DEFAULT_RETURNS));
-    return DEFAULT_RETURNS;
-  });
+  // Filter dropdown & Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<ReturnStatus | 'ALL' | ''>('');
 
-  // Return Form States
-  const [returnReceiptSearch, setReturnReceiptSearch] = useState('');
-  const [isReceiptSearched, setIsReceiptSearched] = useState(false);
-  const [receiptCustomerName, setReceiptCustomerName] = useState('บริษัท สมหวังไอที จำกัด');
-  const [receiptCustomerPhone, setReceiptCustomerPhone] = useState('02-345-6789');
-  const [receiptSalesperson, setReceiptSalesperson] = useState('น.ส. สมหญิง รักษ์บริการ');
-  const [receiptDateStr, setReceiptDateStr] = useState('15 ตุลาคม 2025 14:30');
-  const [receiptItems, setReceiptItems] = useState<Array<{
-    product_name: string;
-    price: number;
-    sold_qty: number;
-    return_qty: number;
-    checked: boolean;
-  }>>([
-    { product_name: 'เครื่องพิมพ์บาร์โค้ด PRO-X', price: 12500, sold_qty: 2, return_qty: 1, checked: true },
-    { product_name: 'ม้วนกระดาษความร้อน 80x80mm', price: 45, sold_qty: 50, return_qty: 0, checked: false }
-  ]);
-  const [returnReason, setReturnReason] = useState('ORDER_ERROR');
-  const [returnRemarks, setReturnRemarks] = useState('');
+  // Tab & Tracking state
+  const [activeTab, setActiveTab] = useState<'return' | 'tracking' | 'refunding'>('return');
 
-  // Filtered Returns
-  const filteredReturns = returns.filter(item => {
-    const matchesSearch = 
-      item.return_no.toLowerCase().includes(returnSearch.toLowerCase()) ||
-      item.customer_name.toLowerCase().includes(returnSearch.toLowerCase());
-    
-    const matchesStatus = returnFilter === '' || item.status === returnFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+  // Backend data state
+  const [returnsList, setReturnsList] = useState<ReturnListItem[]>([]);
+  const [statusCounts, setStatusCounts] = useState<ReturnStatusCount[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [processingRefundId, setProcessingRefundId] = useState<number | null>(null);
+  const [refundTarget, setRefundTarget] = useState<ReturnListItem | null>(null);
 
-  // Handle return search invoice mapping
-  const handleSearchReturnInvoice = async () => {
-    const query = returnReceiptSearch.trim().toUpperCase();
-    if (!query) {
-      alert('กรุณากรอกหมายเลขใบสั่งซื้อ');
-      return;
-    }
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(returnSearch.trim());
+      setCurrentPage(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [returnSearch]);
 
+  // Fetch real data from backend
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const order = await posApiService.getSaleOrderByNumber(query);
-      if (order) {
-        const cName = order.customer?.customer_name || order.customer_name_temp || 'ลูกค้าทั่วไป';
-        const cPhone = order.customer?.phone_number || order.customer_phone_temp || '-';
-        
-        setReceiptCustomerName(cName);
-        setReceiptCustomerPhone(cPhone);
-        setReceiptSalesperson('พนักงาน POS');
-        setReceiptDateStr(new Date(order.OrderDate).toLocaleDateString('th-TH', {
-          year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
-        }));
-        
-        if (order.items && order.items.length > 0) {
-          const items = order.items.map((item: any) => ({
-            product_name: item.product_name || (item.product ? item.product.Name : 'อะไหล่ยนต์'),
-            price: item.final_unit_price || item.unit_price,
-            sold_qty: item.qty || 1,
-            return_qty: 0,
-            checked: false
-          }));
-          setReceiptItems(items);
-        } else {
-          setReceiptItems([]);
-        }
-        setIsReceiptSearched(true);
-        return;
-      }
+      const effectiveStatus =
+        activeTab === 'tracking' ? 'PENDING' : statusFilter === 'ALL' ? '' : statusFilter;
+
+      const res = await returnService.getReturns({
+        status: effectiveStatus || undefined,
+        search: debouncedSearch || undefined,
+        page: currentPage,
+        page_size: 10,
+      });
+
+      setReturnsList(res.data ?? []);
+      setStatusCounts(res.status_counts ?? []);
+      setTotalCount(res.total_count ?? 0);
     } catch (err) {
-      console.warn('API call failed, falling back to mock receipt.', err);
+      console.error('Failed to fetch returns data:', err);
+      setReturnsList([]);
+    } finally {
+      setIsLoading(false);
     }
+  }, [activeTab, statusFilter, debouncedSearch, currentPage]);
 
-    // Mock fallback
-    if (query === 'INV-2023-089') {
-      setReceiptCustomerName('บริษัท สมหวังไอที จำกัด');
-      setReceiptCustomerPhone('02-345-6789');
-      setReceiptSalesperson('น.ส. สมหญิง รักษ์บริการ');
-      setReceiptDateStr('15 ตุลาคม 2025 14:30');
-      setReceiptItems([
-        { product_name: 'เครื่องพิมพ์บาร์โค้ด PRO-X', price: 12500, sold_qty: 2, return_qty: 1, checked: true },
-        { product_name: 'ม้วนกระดาษความร้อน 80x80mm', price: 45, sold_qty: 50, return_qty: 0, checked: false }
-      ]);
-      setIsReceiptSearched(true);
-    } else if (query === 'INV-2023-090') {
-      setReceiptCustomerName('คุณกิตติศักดิ์ พรหมดี');
-      setReceiptCustomerPhone('081-234-5678');
-      setReceiptSalesperson('น.ส. สมหญิง รักษ์บริการ');
-      setReceiptDateStr('18 ตุลาคม 2025 10:15');
-      setReceiptItems([
-        { product_name: 'โช้คอัพหลัง ยี่ห้อ TOKI', price: 2500, sold_qty: 4, return_qty: 1, checked: true },
-        { product_name: 'กรองอากาศ เบอร์ 24', price: 500, sold_qty: 10, return_qty: 2, checked: true }
-      ]);
-      setIsReceiptSearched(true);
-    } else {
-      // Fallback general mock
-      setReceiptCustomerName('ลูกค้าทั่วไป');
-      setReceiptCustomerPhone('-');
-      setReceiptSalesperson('พนักงาน POS');
-      setReceiptDateStr('วันนี้');
-      setReceiptItems([
-        { product_name: 'กรองอากาศ เบอร์ 24', price: 500, sold_qty: 10, return_qty: 1, checked: true }
-      ]);
-      setIsReceiptSearched(true);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleApprove = async (id: number) => {
+    if (!canApprove || approvingId !== null) return;
+
+    setApprovingId(id);
+    try {
+      await returnService.updateSalesReturn(id, { status: 'APPROVED' });
+      toast({
+        title: 'อนุมัติสำเร็จ',
+        message: 'อนุมัติรายการคืนสินค้าเรียบร้อยแล้ว',
+        variant: 'success',
+      });
+      await fetchData();
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err?.response?.data?.message || 'ไม่สามารถอนุมัติรายการคืนสินค้าได้';
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        message,
+        variant: 'error',
+      });
+    } finally {
+      setApprovingId(null);
     }
   };
 
-  // Handle saving new return
-  const handleSaveReturn = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    let totalQty = 0;
-    let totalAmount = 0;
+  const handleProcessRefund = async (id: number) => {
+    if (processingRefundId !== null) return;
 
-    const selectedItems = receiptItems.filter(item => item.checked && item.return_qty > 0);
-    if (selectedItems.length === 0) {
-      alert('กรุณาเลือกสินค้าและระบุจำนวนที่จะรับคืนอย่างน้อย 1 ชิ้น');
-      return;
+    setProcessingRefundId(id);
+    try {
+      await returnService.processRefund(id);
+      toast({
+        title: 'คืนเงินสำเร็จ',
+        message: 'สร้างรายการคืนเงินและอัปเดตยอดสุทธิเรียบร้อยแล้ว',
+        variant: 'success',
+      });
+      await fetchData();
+    } catch (err: any) {
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        message: err?.response?.data?.error || err?.response?.data?.message || 'ไม่สามารถดำเนินการคืนเงินจริงได้',
+        variant: 'error',
+      });
+    } finally {
+      setProcessingRefundId(null);
     }
-
-    selectedItems.forEach(item => {
-      totalQty += item.return_qty;
-      totalAmount += item.return_qty * item.price;
-    });
-
-    const newReturn: ReturnItem = {
-      id: returns.length + 1,
-      return_no: `RTN-2026-${String(returns.length + 1).padStart(4, '0')}`,
-      return_date: new Date().toISOString(),
-      customer_name: receiptCustomerName,
-      customer_phone: receiptCustomerPhone,
-      quantity: totalQty,
-      amount: totalAmount,
-      status: 'PENDING',
-      reason: returnReason,
-      remarks: returnRemarks || `${selectedItems.map(si => `${si.product_name} (${si.return_qty} ชิ้น)`).join(', ')}`
-    };
-
-    const updated = [newReturn, ...returns];
-    setReturns(updated);
-    localStorage.setItem('mock_returns', JSON.stringify(updated));
-    
-    // Reset Form
-    setIsReceiptSearched(false);
-    setReturnReceiptSearch('');
-    setReturnRemarks('');
-    setView('list');
-    alert('บันทึกคำขอการคืนเงินเรียบร้อยแล้ว (สถานะ: รอตรวจสอบ)');
   };
 
-  // Table Columns config for returns
-  const returnColumns = [
-    {
-      key: 'return_no',
-      header: 'เลขที่ใบรับคืน',
-      render: (row: ReturnItem) => (
-        <span className="font-mono font-bold text-[#e51c23]">
-          {row.return_no}
-        </span>
-      )
-    },
-    {
-      key: 'return_date',
-      header: 'วันที่รับคืน',
-      render: (row: ReturnItem) => (
-        <span className="text-xs text-slate-500 font-semibold">
-          {new Date(row.return_date).toLocaleDateString('th-TH', {
-            year: 'numeric', month: 'short', day: 'numeric'
-          })}
-        </span>
-      )
-    },
-    {
-      key: 'customer_name',
-      header: 'ชื่อลูกค้า',
-      render: (row: ReturnItem) => (
-        <div>
-          <p className="font-bold text-slate-800 text-sm">{row.customer_name}</p>
-          <p className="text-xs text-slate-400 font-bold">{row.customer_phone}</p>
-        </div>
-      )
-    },
-    {
-      key: 'quantity',
-      header: 'จำนวนรับคืน',
-      align: 'center' as const,
-      render: (row: ReturnItem) => (
-        <span className="font-bold text-slate-700">{row.quantity} ชิ้น</span>
-      )
-    },
-    {
-      key: 'amount',
-      header: 'ยอดเงินคืนสุทธิ',
-      align: 'right' as const,
-      render: (row: ReturnItem) => (
-        <span className="font-extrabold text-slate-900">
-          ฿{row.amount.toLocaleString()}
-        </span>
-      )
-    },
-    {
-      key: 'status',
-      header: 'สถานะ',
-      align: 'center' as const,
-      render: (row: ReturnItem) => (
-        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${
-          row.status === 'COMPLETED' 
-            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
-            : row.status === 'CANCELLED' 
-              ? 'bg-red-50 text-red-600 border border-red-100' 
-              : 'bg-amber-50 text-amber-600 border border-amber-100'
-        }`}>
-          {row.status === 'COMPLETED' ? (
-            <CheckCircle size={12} />
-          ) : row.status === 'CANCELLED' ? (
-            <XCircle size={12} />
-          ) : (
-            <Clock size={12} />
-          )}
-          {row.status === 'COMPLETED' ? 'คืนสำเร็จ' : row.status === 'CANCELLED' ? 'ยกเลิก' : 'รอตรวจสอบ'}
-        </span>
-      )
-    },
-    {
-      key: 'actions',
-      header: 'จัดการ',
-      align: 'right' as const,
-      render: (row: ReturnItem) => (
-        <Button 
-          onClick={() => navigate(`/owner/returns/detail/${row.id}`)}
-          variant="outline" 
-          size="sm"
-          className="font-bold text-xs border-[#e51c23] text-[#e51c23] hover:bg-[#e51c23] hover:text-white"
-        >
-          ตรวจบิลคืนเงิน
-        </Button>
-      )
-    }
-  ];
+  // Status Counts
+  const pendingCount =
+    statusCounts.find((s) => s.status === 'PENDING')?.count ?? 0;
+  const approvedCount =
+    statusCounts.find((s) => s.status === 'APPROVED')?.count ?? 0;
+  const refundingCount = approvedCount;
+  const refundedCount =
+    statusCounts.find((s) => s.status === 'REFUNDED')?.count ?? 0;
+  const rejectedCount =
+    statusCounts.find((s) => s.status === 'REJECTED')?.count ?? 0;
+  const allCount =
+    statusCounts.reduce((acc, curr) => acc + curr.count, 0) || totalCount;
 
   return (
-    <div className="space-y-6 p-6 font-sans">
-      
-      {view === 'list' ? (
-        <div className="space-y-6 animate-in fade-in duration-200">
-          {/* Top Bar Header */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <Heading level="h1" className="mb-1 text-slate-800">จัดการใบคืนสินค้าและคืนเงิน</Heading>
-              <p className="text-sm text-slate-500 font-semibold">อนุมัติและจัดการใบคืนสินค้าของลูกค้าจากระบบหน้าร้าน POS</p>
-            </div>
-            <div>
-              <Button 
-                onClick={() => setView('return-form')}
-                className="bg-[#e51c23] hover:bg-[#c9181f] text-white flex items-center gap-2 shadow-sm font-bold h-10 px-5 rounded-lg text-sm"
-              >
-                <Plus size={18} /> สร้างเอกสารการรับคืน
-              </Button>
-            </div>
-          </div>
+    <div className="p-8 space-y-6 bg-white min-h-screen font-sans">
+      {/* 1. Header */}
+      <div className="flex items-center justify-between">
+        <Heading level="h1" weight="semibold" className="m-0 text-black">
+          จัดการคืนสินค้า
+        </Heading>
+        <Button
+          leftIcon={<CirclePlus size={20} />}
+          size="md"
+          onClick={() => navigate(`${basePath}/returns/new-return`)}
+        >
+          สร้างรายการใหม่
+        </Button>
+      </div>
 
-          {/* Search & Filters */}
-          <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-slate-100 shadow-sm items-stretch md:items-center justify-between">
-            <div className="flex-1 max-w-md">
-              <Input 
-                type="text" 
-                placeholder="ค้นหาด้วยเลขที่ใบรับคืน หรือชื่อลูกค้า..." 
-                value={returnSearch}
-                onChange={(e) => setReturnSearch(e.target.value)}
-                leftIcon={<Search size={20} />}
-                className="bg-slate-50 border border-slate-200"
-              />
-            </div>
-            
-            <div className="w-full md:w-48">
-              <Select
-                value={returnFilter}
-                onChange={(e) => setReturnFilter(e.target.value)}
-                options={[
-                  { value: '', label: 'ทุกสถานะ' },
-                  { value: 'PENDING', label: 'รอตรวจสอบ' },
-                  { value: 'COMPLETED', label: 'คืนเงินสำเร็จ' },
-                  { value: 'CANCELLED', label: 'ยกเลิก' },
-                ]}
-                className="bg-slate-50 border border-slate-200"
-              />
-            </div>
-          </div>
-
-          {/* Returns List Table */}
-          <Card noPadding>
-            <Table 
-              columns={returnColumns}
-              data={filteredReturns}
-              rowKey={(row) => row.id}
-            />
+      {activeTab === 'return' ? (
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
+          <Card className="bg-[#1C1B1B] border-none text-white p-5 col-span-1 relative overflow-hidden flex flex-col justify-between">
+            <Heading
+              level="h6"
+              className="text-xs text-gray-400 font-normal uppercase tracking-wider"
+            >
+              รายการทั้งหมด
+            </Heading>
+            <Heading level="h2" className="font-bold text-white">
+              {allCount}
+            </Heading>
+            <Heading level="p" className="text-slate-400">
+              รายการ
+            </Heading>
+          </Card>
+          <Card className="border-l-[5px] border-l-black flex flex-col justify-between p-5">
+            <Heading level="h6">รออนุมัติ</Heading>
+            <Heading level="h2" className="font-bold text-black">
+              {pendingCount}
+            </Heading>
+            <Heading level="p">รายการ</Heading>
+          </Card>
+          <Card className="border-l-[5px] border-l-emerald-500 flex flex-col justify-between p-5">
+            <Heading level="h6">อนุมัติแล้ว</Heading>
+            <Heading level="h2" className="font-bold text-black">
+              {approvedCount}
+            </Heading>
+            <Heading level="p">รายการ</Heading>
+          </Card>
+          <Card className="border-l-[5px] border-l-sky-700 flex flex-col justify-between p-5">
+            <Heading level="h6">คืนเงินจริงแล้ว</Heading>
+            <Heading level="h2" className="font-bold text-black">
+              {refundedCount}
+            </Heading>
+            <Heading level="p">รายการ</Heading>
+          </Card>
+          <Card className="border-l-[5px] border-l-red-600 flex flex-col justify-between p-5">
+            <Heading level="h6">ปฏิเสธ</Heading>
+            <Heading level="h2" className="font-bold text-black">
+              {rejectedCount}
+            </Heading>
+            <Heading level="p">รายการ</Heading>
           </Card>
         </div>
       ) : (
-        
-        // VIEW: RETURN DETAILS FORM (1 Column Layout)
-        <form onSubmit={handleSaveReturn} className="w-full space-y-6 animate-in fade-in duration-300">
-          
-          {/* Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-            <div className="flex items-center gap-4">
-              <button 
-                type="button" 
-                onClick={() => setView('list')} 
-                className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-              >
-                <ChevronLeft size={24} className="text-slate-600" />
-              </button>
-              <div>
-                <Heading level="h2" className="mb-0 font-extrabold text-slate-900">
-                  รายละเอียดการคืนสินค้า
-                </Heading>
-              </div>
-            </div>
-            
-            <Button 
-              type="submit"
-              variant="primary" 
-              className="bg-[#e51c23] hover:bg-[#c9181f] gap-2 shadow-sm font-bold"
-            >
-              <Upload size={18} /> ส่งใบคืนสินค้า
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-            
-            {/* Left section: Search receipt & Select items */}
-            <div className="lg:col-span-2 space-y-6">
-              
-              {/* Search bar */}
-              <div className="w-full bg-white p-4 rounded-xl border border-slate-100 shadow-sm space-y-2">
-                <p className="text-sm text-slate-600 font-bold">ค้นหาใบเสร็จสั่งซื้อด้วยหมายเลขใบสั่งซื้อหรือชื่อลูกค้า</p>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <Input 
-                      type="text" 
-                      placeholder="เช่น INV-2023-089" 
-                      value={returnReceiptSearch}
-                      onChange={(e) => setReturnReceiptSearch(e.target.value)}
-                      leftIcon={<Search size={20} />}
-                      className="bg-slate-50 border border-slate-200"
-                    />
-                  </div>
-                  <Button 
-                    type="button"
-                    variant="outline" 
-                    onClick={handleSearchReturnInvoice}
-                    className="bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 px-6 h-10 font-bold text-xs"
-                  >
-                    ค้นหา
-                  </Button>
-                </div>
-              </div>
-
-              {/* If receipt searched, show cards */}
-              {isReceiptSearched ? (
-                <div className="space-y-6">
-                  
-                  {/* Receipt Info Card */}
-                  <Card 
-                    title="ข้อมูลใบเสร็จ" 
-                    subtitle="รายละเอียดสำหรับการรับคืนสินค้าที่สั่งซื้อไปแล้ว"
-                    headerAction={
-                      <div className="bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1.5 rounded-md flex items-center gap-1.5 border border-emerald-100">
-                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div> ดำเนินการคืนสินค้าได้
-                      </div>
-                    }
-                  >
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-2">
-                      <div>
-                        <p className="text-xs text-slate-400 mb-1">เลขที่ใบเสร็จ</p>
-                        <p className="font-bold text-slate-800">{returnReceiptSearch}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400 mb-1">วันที่ซื้อ</p>
-                        <p className="font-bold text-slate-800 text-xs">{receiptDateStr}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400 mb-1">ลูกค้า</p>
-                        <p className="font-bold text-slate-800">{receiptCustomerName}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400 mb-1">พนักงานขาย</p>
-                        <p className="font-bold text-slate-800">{receiptSalesperson}</p>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Items Card */}
-                  <Card noPadding>
-                    <div className="bg-slate-50 p-4 flex justify-between items-center border-b border-slate-100">
-                      <h3 className="font-bold text-slate-800 text-sm">เลือกสินค้าที่ต้องการคืน</h3>
-                      <span className="text-sm text-slate-500 font-semibold">พบ {receiptItems.length} รายการในใบเสร็จนี้</span>
-                    </div>
-
-                    <div className="overflow-x-auto p-4">
-                      <table className="w-full text-sm text-left border-collapse">
-                        <thead className="bg-white text-slate-500 text-xs border-b border-slate-100">
-                          <tr>
-                            <th className="py-4 px-6 w-12 text-center"></th>
-                            <th className="py-4 px-4 font-semibold">ชื่อสินค้า</th>
-                            <th className="py-4 px-4 font-semibold text-center">จำนวนที่ซื้อ</th>
-                            <th className="py-4 px-4 font-semibold text-right">ราคาต่อหน่วย</th>
-                            <th className="py-4 px-6 font-semibold text-center">จำนวนที่คืน</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 text-slate-700">
-                          {receiptItems.map((item, idx) => (
-                            <tr key={idx} className={`hover:bg-slate-50/50 transition-colors ${!item.checked ? 'opacity-50' : ''}`}>
-                              <td className="py-5 px-6 text-center">
-                                <input 
-                                  type="checkbox" 
-                                  checked={item.checked}
-                                  onChange={(e) => {
-                                    const updated = [...receiptItems];
-                                    updated[idx] = { 
-                                      ...item, 
-                                      checked: e.target.checked,
-                                      return_qty: e.target.checked ? (item.return_qty || 1) : 0
-                                    };
-                                    setReceiptItems(updated);
-                                  }}
-                                  className="w-4 h-4 text-[#e51c23] bg-gray-100 border-gray-300 rounded focus:ring-[#e51c23] accent-[#e51c23] cursor-pointer" 
-                                />
-                              </td>
-                              <td className="py-5 px-4">
-                                <div className="font-semibold text-slate-800">{item.product_name}</div>
-                              </td>
-                              <td className="py-5 px-4 text-center font-bold text-slate-600">{item.sold_qty} ชิ้น</td>
-                              <td className="py-5 px-4 text-right font-extrabold text-slate-900">฿{item.price.toLocaleString()}</td>
-                              <td className="py-5 px-6">
-                                <div className="flex items-center justify-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const updated = [...receiptItems];
-                                      const newQty = Math.max(0, item.return_qty - 1);
-                                      updated[idx] = { 
-                                        ...item, 
-                                        return_qty: newQty,
-                                        checked: newQty > 0 ? item.checked : false
-                                      };
-                                      setReceiptItems(updated);
-                                    }}
-                                    className="p-1 hover:bg-slate-100 rounded text-slate-500 cursor-pointer animate-none"
-                                  >
-                                    <Minus size={14} />
-                                  </button>
-                                  <span className="w-8 text-center font-bold">{item.return_qty}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const updated = [...receiptItems];
-                                      const newQty = Math.min(item.sold_qty, item.return_qty + 1);
-                                      updated[idx] = { 
-                                        ...item, 
-                                        return_qty: newQty,
-                                        checked: true 
-                                      };
-                                      setReceiptItems(updated);
-                                    }}
-                                    className="p-1 hover:bg-slate-100 rounded text-slate-500 cursor-pointer animate-none"
-                                  >
-                                    <Plus size={14} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Summary Footer */}
-                    <div className="bg-slate-50 p-6 border-t border-slate-100 flex justify-between items-center rounded-b-lg">
-                      <div>
-                        <p className="text-xs text-slate-500 font-bold">จำนวนคืนรวม</p>
-                        <p className="font-extrabold text-slate-800">
-                          {receiptItems.filter(item => item.checked && item.return_qty > 0).length} รายการ ({receiptItems.reduce((acc, curr) => acc + (curr.checked ? curr.return_qty : 0), 0)} ชิ้น)
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-slate-500 font-bold">รวมยอดเงินรับคืนสุทธิ</p>
-                        <p className="font-extrabold text-lg text-[#e51c23]">
-                          ฿{receiptItems.reduce((acc, curr) => acc + (curr.checked ? curr.return_qty * curr.price : 0), 0).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-slate-100 shadow-sm min-h-[250px] text-slate-400">
-                  <FileText size={48} className="mb-3 text-slate-300" />
-                  <span className="font-semibold text-lg text-slate-600">กรุณาพิมพ์ค้นหารหัสใบเสร็จ</span>
-                  <p className="text-xs text-slate-400 mt-1">ตัวอย่างเช่นพิมพ์ค้นหา "INV-2023-089" เพื่อจำลองข้อมูลใบเสร็จ</p>
-                </div>
-              )}
-
-            </div>
-
-            {/* Right section: Return details & reason */}
-            <div className="space-y-6">
-              
-              <Card title="รายละเอียดเพิ่มเติม">
-                <div className="space-y-4 py-2">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">สาเหตุการรับคืน</label>
-                    <Select
-                      value={returnReason}
-                      onChange={(e) => setReturnReason(e.target.value)}
-                      options={[
-                        { value: 'ORDER_ERROR', label: 'สั่งสินค้าผิดรุ่น/ผิดขนาด' },
-                        { value: 'QUALITY_ISSUE', label: 'สินค้าไม่ได้มาตรฐาน/ชำรุด' },
-                        { value: 'CUSTOMER_CHANGE_MIND', label: 'ลูกค้าเปลี่ยนใจ' },
-                        { value: 'OTHER', label: 'อื่น ๆ (ระบุในหมายเหตุ)' },
-                      ]}
-                      className="bg-slate-50 border border-slate-200 font-semibold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">หมายเหตุเพิ่มเติม</label>
-                    <textarea 
-                      value={returnRemarks}
-                      onChange={(e) => setReturnRemarks(e.target.value)}
-                      rows={4}
-                      placeholder="ใส่รายละเอียดเกี่ยวกับสินค้าหรือสาเหตุที่ต้องการคืนเพิ่มเติม..."
-                      className="w-full text-sm border border-slate-200 bg-slate-50 rounded-lg p-3 focus:outline-none focus:border-[#e51c23] font-semibold text-slate-700 placeholder-slate-400"
-                    />
-                  </div>
-                </div>
-              </Card>
-
-            </div>
-
-          </div>
-        </form>
+        <></>
       )}
 
+      {/* 2. Search & Filter Bar */}
+      <div className="p-3.5 flex flex-col md:flex-row gap-3 items-center justify-between shadow-sm">
+        <div className="flex flex-1 items-center gap-3 w-full">
+          {/* ช่องค้นหา */}
+          <div ref={searchRef} className="relative flex-1 min-w-60">
+            <Input
+              type="text"
+              placeholder="ค้นหาด้วยเลขที่รายการ, ชื่อลูกค้า, สินค้า..."
+              value={returnSearch}
+              onChange={(e) => setReturnSearch(e.target.value)}
+              leftIcon={<Search size={16} className="text-gray-400" />}
+              className="text-sm h-10 w-full"
+            />
+          </div>
+          <div className="w-full md:w-64">
+            <Select
+              placeholder="สถานะรายการคืน"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value as ReturnStatus | 'ALL' | '');
+                setCurrentPage(1);
+              }}
+              options={STATUS_FILTER}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="gap-0">
+        {/* 3. Tab Navigation */}
+        <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-3 pt-2 shadow-xs">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('return');
+              setStatusFilter('');
+              setCurrentPage(1);
+            }}
+            className={`flex items-center gap-2 px-5 py-3 text-sm font-normal border-b-2 transition-all cursor-pointer ${
+              activeTab === 'return'
+                ? 'border-[#e51c23] text-[#e51c23]'
+                : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
+            }`}
+          >
+            <FileText size={16} /> รายการคืนสินค้าทั้งหมด
+            <span
+              className={`px-2 py-0.5 text-sm rounded-full ${
+                activeTab === 'return'
+                  ? 'bg-red-600 text-white font-normal'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {allCount}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('tracking');
+              setStatusFilter('PENDING');
+              setCurrentPage(1);
+            }}
+            className={`flex items-center gap-2 px-5 py-3 text-sm font-normal border-b-2 transition-all cursor-pointer ${
+              activeTab === 'tracking'
+                ? 'border-[#e51c23] text-[#e51c23]'
+                : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
+            }`}
+          >
+            <ClockAlert size={16} /> รายการคืนสินค้าค้างในระบบ
+            <span
+              className={`px-2 py-0.5 text-sm rounded-full ${
+                activeTab === 'tracking'
+                  ? 'bg-red-600 text-white font-normal'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {pendingCount}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('refunding');
+              setStatusFilter('APPROVED');
+              setCurrentPage(1);
+            }}
+            className={`flex items-center gap-2 px-5 py-3 text-sm font-normal border-b-2 transition-all cursor-pointer ${
+              activeTab === 'refunding'
+                ? 'border-[#e51c23] text-[#e51c23]'
+                : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
+            }`}
+          >
+            <ClockAlert size={16} /> รายการคืนเงินค้างในระบบ
+            <span
+              className={`px-2 py-0.5 text-sm rounded-full ${
+                activeTab === 'refunding'
+                  ? 'bg-red-600 text-white font-normal'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {refundingCount}
+            </span>
+          </button>
+        </div>
+
+        {/* 4. Table */}
+        <Table>
+          <TableHeader className='bg-[#F6F3F2] text-[#797878]'>
+            <TableRow>
+              <TableHead className='pl-6'>เลขที่รายการ</TableHead>
+              <TableHead className='text-center'>วันคืนสินค้า</TableHead>
+              <TableHead className='text-left'>สาเหตุการคืนสินค้า</TableHead>
+              <TableHead className='text-center'>ช่องทางการคืนเงิน</TableHead>
+              <TableHead className='text-right'>ยอดเงินคืนสุทธิ</TableHead>
+              <TableHead className='text-center'>สถานะ</TableHead>
+              <TableHead className='text-center'>จัดการ</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className='text-black'>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={7} className='text-center py-12 text-gray-400'>
+                  <Loader2 size={32} className='animate-spin mx-auto' />
+                </TableCell>
+              </TableRow>
+            ) : returnsList.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className='text-center py-12 text-gray-400'>
+                  <ReceiptText size={40} strokeWidth={0.7} className='mx-auto' /> <br />
+                  ยังไม่มีรายการคืนสินค้า
+                </TableCell>
+              </TableRow>
+            ) : (
+              returnsList.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell className='pl-6 text-left'>{item.return_number}</TableCell>
+                  <TableCell className='text-center'>{formatDateThai(item.requested_at)}</TableCell>
+                  <TableCell className="text-left max-w-75">
+                    <span className="block truncate" title={item.reason}>
+                      {item.reason}
+                    </span>
+                  </TableCell>
+                  <TableCell className='text-center'>{item.refund_method}</TableCell>
+                  <TableCell className='text-right'>฿ {item.refund_amount.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2,})}</TableCell>
+                  <TableCell className='text-center'><StatusBadge status={item.status} /></TableCell>
+                  <TableCell className='text-center'>
+                    <div className='flex items-center justify-center gap-2'>
+                      {canApprove && item.status === 'PENDING' && (
+                        <button
+                          type="button"
+                          title="อนุมัติรายการคืนสินค้า"
+                          aria-label="อนุมัติรายการคืนสินค้า"
+                          disabled={approvingId !== null}
+                          onClick={() => handleApprove(item.id)}
+                          className='text-emerald-600 cursor-pointer hover:text-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed'
+                        >
+                          {approvingId === item.id ? <Loader2 size={16} className='animate-spin' /> : <CircleCheck size={16} />}
+                        </button>
+                      )}
+                      {(userRole === 'OWNER' || userRole === 'EMPLOYEE' || userRole === 'ADMIN') && item.status === 'APPROVED' && (
+                        <button
+                          type="button"
+                          title="ดำเนินการคืนเงินจริง"
+                          aria-label="ดำเนินการคืนเงินจริง"
+                          disabled={processingRefundId !== null}
+                          onClick={() => setRefundTarget(item)}
+                          className='text-sky-600 cursor-pointer hover:text-sky-700 disabled:opacity-40 disabled:cursor-not-allowed'
+                        >
+                          {processingRefundId === item.id ? <Loader2 size={16} className='animate-spin' /> : <Banknote size={16} />}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        title="ดูรายละเอียด"
+                        aria-label="ดูรายละเอียด"
+                        onClick={() => navigate(`${basePath}/returns/${item.id}`)}
+                        className='text-gray-600 cursor-pointer hover:text-gray-900'
+                      >
+                        <Eye size={16} />
+                      </button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+        {(() => {
+          const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+          return (
+            <div className='bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500'>
+              <span>
+                แสดง {totalCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1} ถึง{' '}
+                {Math.min(currentPage * PAGE_SIZE, totalCount)} จาก {totalCount} รายการ
+              </span>
+              <div className='flex items-center gap-1'>
+                <button disabled={currentPage === 1} onClick={() => setCurrentPage(1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsLeft size={16} /></button>
+                <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronLeft size={16} /></button>
+                {getPageNumbers(currentPage, totalPages).map((p, idx) =>
+                  p === '...' ? <span key={`e-${idx}`} className='px-2 text-gray-400'>...</span>
+                  : <button key={p} onClick={() => setCurrentPage(p as number)} className={cn('px-3 py-1.5 rounded-none font-medium transition-colors cursor-pointer', currentPage === p ? 'bg-[#d61c24] text-white' : 'text-gray-600 hover:bg-gray-100')}>{p}</button>
+                )}
+                <button disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronRight size={16} /></button>
+                <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsRight size={16} /></button>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+      <Modal
+        isOpen={refundTarget !== null}
+        onClose={() => processingRefundId === null && setRefundTarget(null)}
+        title="ยืนยันการคืนเงินจริง"
+        description="การดำเนินการนี้จะสร้างรายการ Payment และเพิ่มสินค้าเข้าคลัง"
+        size="sm"
+        footer={(
+          <>
+            <Button
+              type="button"
+              variant="tertiary"
+              disabled={processingRefundId !== null}
+              onClick={() => setRefundTarget(null)}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              type="button"
+              variant="approved"
+              disabled={processingRefundId !== null || refundTarget === null}
+              onClick={async () => {
+                if (!refundTarget) return;
+                const id = refundTarget.id;
+                setRefundTarget(null);
+                await handleProcessRefund(id);
+              }}
+            >
+              {processingRefundId !== null ? <Loader2 size={16} className="animate-spin" /> : <></>}
+              ยืนยันคืนเงินจริง
+            </Button>
+          </>
+        )}
+      >
+        {refundTarget && (
+          <div className="space-y-3 text-sm text-slate-700">
+            <div className="flex justify-between gap-4">
+              <span className="text-slate-500">เลขที่ใบคืน</span>
+              <span className="font-semibold text-slate-900">{refundTarget.return_number}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-slate-500">ยอดเงินคืน</span>
+              <span className="font-semibold text-red-600">
+                ฿ {refundTarget.refund_amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-slate-500">ช่องทางคืนเงิน</span>
+              <span className="font-medium text-slate-900">{refundTarget.refund_method || '-'}</span>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
+
+export default ReturnsPage;

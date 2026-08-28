@@ -2,8 +2,12 @@ package claim
 
 import (
 	"backend/internal/app/entity"
+	"errors"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
+
+var ErrOrderInProgress = errors.New("sale order already has an active claim or return")
 
 type CustomerClaimRepository interface {
 	CreateCustomerClaim(claim *entity.CustomerClaim) error
@@ -25,7 +29,30 @@ func NewCustomerClaimRepository(db *gorm.DB) CustomerClaimRepository {
 }
 
 func (r *customerClaimRepository) CreateCustomerClaim(claim *entity.CustomerClaim) error {
-	return r.db.Create(claim).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var order entity.SaleOrder
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, claim.OriginalOrderID).Error; err != nil {
+			return err
+		}
+
+		var activeReturns int64
+		if err := tx.Model(&entity.SalesReturn{}).
+			Where("original_order_id = ? AND deleted_at IS NULL AND LOWER(TRIM(COALESCE(status, ''))) <> 'rejected'", claim.OriginalOrderID).
+			Count(&activeReturns).Error; err != nil {
+			return err
+		}
+		var activeClaims int64
+		if err := tx.Model(&entity.CustomerClaim{}).
+			Where("original_order_id = ? AND deleted_at IS NULL AND LOWER(TRIM(COALESCE(status, ''))) <> 'rejected'", claim.OriginalOrderID).
+			Count(&activeClaims).Error; err != nil {
+			return err
+		}
+		if activeReturns > 0 || activeClaims > 0 {
+			return ErrOrderInProgress
+		}
+
+		return tx.Create(claim).Error
+	})
 }
 
 func (r *customerClaimRepository) CreateCustomerClaimItem(item *entity.CustomerClaimItem) error {

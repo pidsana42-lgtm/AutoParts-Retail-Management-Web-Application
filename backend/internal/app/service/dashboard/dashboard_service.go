@@ -1,14 +1,14 @@
 package dashboard
 
 import (
-	"time"
-	"sort"
 	"context"
+	"sort"
+	"time"
 
 	"backend/config"
+	dashDto "backend/internal/app/dto/dashboard"
 	"backend/internal/app/entity"
 	"backend/internal/app/enum"
-	dashDto  "backend/internal/app/dto/dashboard"
 	dashRepo "backend/internal/app/repository/dashboard"
 )
 
@@ -111,6 +111,7 @@ func (s *dashboardService) GetSummaryData(ctx context.Context, query dashDto.Sum
 			TotalItemsSold:          d.TotalItemsSold,
 			OverdueDebtCount:        d.OverdueDebtCount,
 			TotalRevenue:            d.TotalRevenue,
+			NetRevenue:              d.NetRevenue,
 			TotalCost:               d.TotalCost,
 			GrossProfit:             d.GrossProfit,
 			MarginPercent:           d.MarginPercent,
@@ -269,28 +270,27 @@ func (s *dashboardService) GetIncomeSummary(ctx context.Context, query dashDto.S
 	var general, garage, corporate float64
 	var cash, transfer, credit float64
 	for _, d := range result.SummaryData {
-		general    += d.WalkinCustomerAmount
-		garage    += d.GarageCustomerAmount
+		general += d.WalkinCustomerAmount
+		garage += d.GarageCustomerAmount
 		corporate += d.CorporateCustomerAmount
-		cash      += d.CashAmount
-		transfer  += d.TransferAmount
-		credit    += d.CreditAmount
+		cash += d.CashAmount
+		transfer += d.TransferAmount
+		credit += d.CreditAmount
 	}
 
 	return &dashDto.RevenueBreakdownResponse{
 		CustomerData: []dashDto.ChartDatumDTO{
-			{Name: "ลูกค้าทั่วไป", Value: general,    Fill: "#B70011"},
-			{Name: "ลูกค้าอู่ซ่อมรถ", Value: garage,    Fill: "#FF9999"},
+			{Name: "ลูกค้าทั่วไป", Value: general, Fill: "#B70011"},
+			{Name: "ลูกค้าอู่ซ่อมรถ", Value: garage, Fill: "#FF9999"},
 			{Name: "ลูกค้าบริษัท", Value: corporate, Fill: "#FFC9C9"},
 		},
 		PaymentData: []dashDto.ChartDatumDTO{
-			{Name: enum.PaymentMethodCash,   Value: cash,     Fill: "#005E8D"},
-			{Name: enum.PaymentMethodQR,     Value: transfer, Fill: "#CBE6FF"},
-			{Name: enum.PaymentMethodCredit, Value: credit,   Fill: "#E0ECF8"},
+			{Name: enum.PaymentMethodCash, Value: cash, Fill: "#005E8D"},
+			{Name: enum.PaymentMethodQR, Value: transfer, Fill: "#CBE6FF"},
+			{Name: enum.PaymentMethodCredit, Value: credit, Fill: "#E0ECF8"},
 		},
 	}, nil
 }
-
 
 func (s *dashboardService) GetTopSellers(ctx context.Context, query dashDto.SummaryQuery, limit int) ([]dashDto.TopSellerDTO, error) {
 	if limit <= 0 {
