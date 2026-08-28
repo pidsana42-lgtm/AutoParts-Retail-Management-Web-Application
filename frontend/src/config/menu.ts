@@ -123,7 +123,6 @@ export const SIDEBAR_MENUS: MenuItem[] = [
     roles: ["OWNER", "ADMIN"],
     subs: [
       { path: "/owner/storeconfig", label: "จัดการสิทธิ์ส่วนลดลูกค้าอู่" },
-      { icon: MonitorCog, path: "/owner/companysetting", label: "ตั้งค่าร้านค้า" },
     ],
   },
 ];

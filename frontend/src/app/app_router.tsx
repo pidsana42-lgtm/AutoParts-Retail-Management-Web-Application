@@ -47,7 +47,7 @@ import RepaymentHistory from './employee/transactions/repayment_history';
 import OwnerRepaymentHistory from './owner/transactions/repayment_history';
 import SettleBills from './employee/transactions/settle_bills';
 import DeletedPoHistory from './owner/purchase_orders/restore_po';
-import CompanySetting from './owner/companysetting/companysetting';
+import NewReturnPage from './owner/return/new_return';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -79,10 +79,6 @@ export default function AppRouter(): React.JSX.Element {
         
         {/* หน้าแรกสุด (/) ดีดส่งไปที่เมนูแรกสุดใน Sidebar ของ Role นั้นๆ */}
         <Route path="/" element={<Navigate to={firstMenuPath} replace />} />
-
-        <Route path="/owner/companysetting" element={
-          isAdminOrOwner ? <CompanySetting /> : <Navigate to={firstMenuPath} replace />} 
-        />
 
         {/* เฉพาะ OWNER หรือ ADMIN เท่านั้นที่เข้าได้ */}
         <Route path="/owner/dashboard/maindashboard" element={
@@ -157,6 +153,8 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/owner/claims/approve/:id" element={<ClaimApprovePage />} />
         <Route path="/owner/claims/status/:id" element={<Navigate to="/owner/claims/detail/:id" replace />} />
         <Route path="/owner/returns" element={<ReturnsPage />} />
+        <Route path="/owner/returns/new-return" element={<NewReturnPage />} />
+        <Route path="/owner/returns/:id" element={<ReturnDetailPage />} />
         <Route path="/owner/returns/detail/:id" element={<ReturnDetailPage />} />
         {/* ----------------------------------------------------------- */}
 
@@ -223,6 +221,11 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/employee/claims/detail/:id" element={<ClaimDetailPage />} />
         <Route path="/employee/claims/edit/:id" element={<ClaimEditPage canApprove={false} />} />
         <Route path="/employee/claims/status/:id" element={<Navigate to="/employee/claims/detail/:id" replace />} />
+
+        <Route path="/employee/returns" element={<ReturnsPage />} />
+        <Route path="/employee/returns/new-return" element={<NewReturnPage />} />
+        <Route path="/employee/returns/:id" element={<ReturnDetailPage />} />
+        <Route path="/employee/returns/detail/:id" element={<ReturnDetailPage />} />
 
         {/* หน้าตรวจนับสต็อกสำหรับพนักงาน */}
         <Route path="/employee/wms/check-stock" element={<EmployeeCheckStockListPage />} />

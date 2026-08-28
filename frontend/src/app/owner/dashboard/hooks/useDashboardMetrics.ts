@@ -8,7 +8,7 @@ export function useDashboardMetrics(
   const aggr = useMemo<AggrResult>(() =>
     summaryData.reduce(
       (acc, d) => ({
-        totalRevenue: acc.totalRevenue + d.total_revenue,
+        totalRevenue: acc.totalRevenue + d.net_revenue,
         totalCost:    acc.totalCost    + d.total_cost,
         grossProfit:  acc.grossProfit  + d.gross_profit,
         totalOrders:  acc.totalOrders  + d.total_orders,

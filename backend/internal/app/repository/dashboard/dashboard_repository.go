@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
+	dashDto "backend/internal/app/dto/dashboard"
+	dashEntity "backend/internal/app/entity"
+	"backend/internal/app/enum"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"backend/internal/app/enum"
-	dashEntity "backend/internal/app/entity"
-	dashDto "backend/internal/app/dto/dashboard"
 )
 
 type DashboardRepository interface {
@@ -53,7 +53,7 @@ func (r *dashboardRepository) GetSummaryDataByQuery(ctx context.Context, query d
 	daysSinceSunday := int(now.Weekday()) // วันอาทิตย์ ถ้าอยากได้วัยแรกคือวันจันทร์ให้ daysSinceMonday := int(now.Weekday()) - 1 และใช้การคำนวณอีกวิธีนึง
 	startOfWeek := time.Date(now.Year(), now.Month(), now.Day()-daysSinceSunday, 0, 0, 0, 0, now.Location())
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	startMonthOfQuarter := time.Month(((int(now.Month()) - 1) / 3) * 3 + 1)
+	startMonthOfQuarter := time.Month(((int(now.Month())-1)/3)*3 + 1)
 	startOfQuarter := time.Date(now.Year(), startMonthOfQuarter, 1, 0, 0, 0, 0, now.Location())
 	startOfYear := time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, now.Location())
 
@@ -63,7 +63,7 @@ func (r *dashboardRepository) GetSummaryDataByQuery(ctx context.Context, query d
 		dbQuery = dbQuery.Where("summary_date = ?", query.SummaryDate)
 	}
 	if query.Weekly != "" {
-		endOfWeek := startOfWeek.AddDate(0, 0, 7) 
+		endOfWeek := startOfWeek.AddDate(0, 0, 7)
 		dbQuery = dbQuery.Where("summary_date >= ? AND summary_date < ?", startOfWeek, endOfWeek)
 	}
 	if query.Monthly != "" {
@@ -248,15 +248,23 @@ func (r *dashboardRepository) calculateSummaryForDate(ctx context.Context, date 
 		}
 	}
 
-	// 5) ยอดคืนสินค้า (นับตาม ApprovedAt เท่านั้น)
+	// 5) ยอดคืนสินค้า (หักกลับไปยังวันที่ขายของใบขายต้นทาง)
 	var returnAmount float64
-	if err := db.Model(&dashEntity.SalesReturn{}).
+	if err := db.Table("sales_returns").
 		Select("COALESCE(SUM(refund_amount),0)").
-		Where("approved_at >= ? AND approved_at < ? AND deleted_at IS NULL", start, end).
+		Joins("JOIN sale_orders ON sale_orders.id = sales_returns.original_order_id AND sale_orders.deleted_at IS NULL").
+		Where("sales_returns.refunded_at IS NOT NULL AND sales_returns.deleted_at IS NULL AND sale_orders.order_date >= ? AND sale_orders.order_date < ?", start, end).
 		Scan(&returnAmount).Error; err != nil {
 		return nil, err
 	}
 	summary.ReturnAmount = returnAmount
+	summary.NetRevenue = summary.TotalRevenue - summary.ReturnAmount
+	summary.GrossProfit = summary.NetRevenue - summary.TotalCost
+	if summary.NetRevenue > 0 {
+		summary.MarginPercent = summary.GrossProfit / summary.NetRevenue * 100
+	} else {
+		summary.MarginPercent = 0
+	}
 
 	// 6) ยอดเก็บหนี้ได้ในวันนี้ (Payment + PaymentRepayment)
 	var paymentCollected float64
@@ -423,21 +431,21 @@ func (r *dashboardRepository) GetDebtAging(ctx context.Context, query dashDto.De
 
 	// Build HAVING clause for status and age-day filters (aggregates — cannot go in WHERE)
 	statusExpr := `CASE WHEN BOOL_OR(so.due_date IS NOT NULL AND so.due_date < NOW()) THEN 'เกินกำหนด' ELSE 'ทยอยชำระ' END`
-	ageExpr    := `(CURRENT_DATE - MIN(so.order_date::DATE))`
+	ageExpr := `(CURRENT_DATE - MIN(so.order_date::DATE))`
 
 	var havingParts []string
-	var havingArgs  []interface{}
+	var havingArgs []interface{}
 	if query.Status != "" {
 		havingParts = append(havingParts, statusExpr+" = ?")
-		havingArgs  = append(havingArgs, query.Status)
+		havingArgs = append(havingArgs, query.Status)
 	}
 	if query.MinAgeDays > 0 {
 		havingParts = append(havingParts, ageExpr+" >= ?")
-		havingArgs  = append(havingArgs, query.MinAgeDays)
+		havingArgs = append(havingArgs, query.MinAgeDays)
 	}
 	if query.MaxAgeDays > 0 {
 		havingParts = append(havingParts, ageExpr+" <= ?")
-		havingArgs  = append(havingArgs, query.MaxAgeDays)
+		havingArgs = append(havingArgs, query.MaxAgeDays)
 	}
 	havingSQL := ""
 	if len(havingParts) > 0 {
@@ -520,7 +528,8 @@ func (r *dashboardRepository) GetTotalDebtors(ctx context.Context) (int64, error
 	return count, err
 }
 
-// GetHistoricalSummaries อ่านจาก daily_summary ตรงๆ (ข้อมูลนิ่งแล้ว ไม่ query สด) เติมวันที่ขาดด้วย 0
+// GetHistoricalSummaries อ่านจาก daily_summary และคำนวณใหม่เฉพาะวันที่มีการคืนเงินจริง
+// เพื่อให้รายการคืนที่เกิดภายหลังยังหักออกจากวันที่ขายได้ทันที
 func (r *dashboardRepository) GetHistoricalSummaries(ctx context.Context, start, end time.Time) ([]dashEntity.DailySummary, error) {
 	// 1. ดึงเฉพาะแถวที่มีข้อมูลจริงในช่วง [start, end)
 	var existing []dashEntity.DailySummary
@@ -536,10 +545,32 @@ func (r *dashboardRepository) GetHistoricalSummaries(ctx context.Context, start,
 		byDate[s.SummaryDate.Format("2006-01-02")] = s
 	}
 
+	var refundedSaleDates []time.Time
+	if err := r.db.WithContext(ctx).
+		Table("sales_returns").
+		Joins("JOIN sale_orders ON sale_orders.id = sales_returns.original_order_id AND sale_orders.deleted_at IS NULL").
+		Where("sales_returns.refunded_at IS NOT NULL AND sales_returns.deleted_at IS NULL AND sale_orders.order_date >= ? AND sale_orders.order_date < ?", start, end).
+		Distinct("sale_orders.order_date").
+		Pluck("sale_orders.order_date", &refundedSaleDates).Error; err != nil {
+		return nil, err
+	}
+	affectedDates := make(map[string]struct{}, len(refundedSaleDates))
+	for _, saleDate := range refundedSaleDates {
+		affectedDates[saleDate.Format("2006-01-02")] = struct{}{}
+	}
+
 	// 3. วนทุกวันใน [start, end) จาก end-1 ลงมา เติม zero สำหรับวันที่ไม่มีข้อมูล
 	var result []dashEntity.DailySummary
 	for d := end.AddDate(0, 0, -1); !d.Before(start); d = d.AddDate(0, 0, -1) {
 		key := d.Format("2006-01-02")
+		if _, affected := affectedDates[key]; affected {
+			fresh, err := r.calculateSummaryForDate(ctx, d)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, *fresh)
+			continue
+		}
 		if s, ok := byDate[key]; ok {
 			result = append(result, s)
 		} else {
