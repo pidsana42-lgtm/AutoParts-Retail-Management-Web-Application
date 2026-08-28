@@ -40,6 +40,8 @@ const OwnerSalesCancellationHistory: React.FC = () => {
     selectableCount,
     isLoading,
     error,
+    stats,
+    isStatsLoading,
     page,
     limit,
     totalRows,
@@ -64,6 +66,9 @@ const OwnerSalesCancellationHistory: React.FC = () => {
     handleRejectSelected, // ใช้ปุ่มปฏิเสธสำหรับเจ้าของร้าน
     refetch,
   } = useOwnerSalesCancellationHistory();
+
+  const kpiValue = (value: React.ReactNode) =>
+    isStatsLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
 
   // ดึง Drawer State และ Action Handlers
   const {
@@ -193,6 +198,81 @@ const OwnerSalesCancellationHistory: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Small Stat Cards เหนือตาราง */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+        {/* 1. รออนุมัติ */}
+        <Card className="!border-l-[5px] !border-l-amber-300 flex flex-col justify-between p-4 md:p-5">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <Heading level="h6" className="uppercase tracking-wider">
+                รออนุมัติยกเลิก
+              </Heading>
+            </div>
+            <Heading level="h3">
+              ฿{kpiValue(stats.pendingAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+            </Heading>
+          </div>
+          <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+            <span>รอการตัดสินใจ</span>
+            <span className="text-amber-400 font-normal">{stats.pendingCount} รายการ</span>
+          </div>
+        </Card>
+
+        {/* 2. อนุมัติแล้ว*/}
+        <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <Heading level="h6" className="uppercase tracking-wider">
+                อนุมัติยกเลิกแล้ว
+              </Heading>
+            </div>
+            <Heading level="h3">
+              ฿{kpiValue(stats.approvedAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+            </Heading>
+          </div>
+          <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+            <span>ยอดขายที่ลดลง</span>
+            <span className="text-emerald-500 font-normal">{stats.approvedCount} รายการ</span>
+          </div>
+        </Card>
+
+        {/* 3. ปฏิเสธแล้ว (Rejected) */}
+        <Card className="!border-l-[5px]  !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <Heading level="h6" className="uppercase tracking-wider">
+                ปฏิเสธคำขอ
+              </Heading>
+            </div>
+            <Heading level="h3">
+              ฿{kpiValue(stats.rejectedAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+            </Heading>
+          </div>
+          <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+            <span>ไม่ผ่านการอนุมัติ</span>
+            <span className="text-[#E51C23] font-normal">{stats.rejectedCount} รายการ</span>
+          </div>
+        </Card>
+
+        {/* 4. คำขอทั้งหมด (Total Requests) */}
+        <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <Heading level="h6" className="uppercase tracking-wider">
+                คำขอทั้งหมด
+              </Heading>
+            </div>
+            <Heading level="h3">
+              ฿{kpiValue(stats.totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+            </Heading>
+          </div>
+          <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+            <span>ประวัติคำขอทั้งหมด</span>
+            <span className="text-sky-700 font-normal">{stats.totalCount} รายการ</span>
+          </div>
+        </Card>
+      </div>
 
       {/* Table Section */}
       <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">

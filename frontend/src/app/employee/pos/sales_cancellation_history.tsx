@@ -40,6 +40,8 @@ const SalesCancellationHistory: React.FC = () => {
         isSelectAll,
         isLoading,
         error,
+        stats,
+        isStatsLoading,
         page,
         limit,
         totalRows,
@@ -64,6 +66,9 @@ const SalesCancellationHistory: React.FC = () => {
         handleRestoreSelected,
         refetch,
     } = useSalesCancellationHistory();
+
+    const kpiValue = (value: React.ReactNode) =>
+        isStatsLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
 
   // 2. ดึงเฉพาะ Drawer State และ Action Handlers จาก useSalesHistory
     const {
@@ -192,6 +197,81 @@ const SalesCancellationHistory: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Small Stat Cards เหนือตาราง (คำขอของฉัน) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+            {/* 1. คำขอของฉันทั้งหมด (Total Requests) */}
+            <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Heading level="h6" className="uppercase tracking-wider">
+                    คำขอของฉันทั้งหมด
+                  </Heading>
+                </div>
+                <Heading level="h3">
+                  {kpiValue(stats.totalCount.toLocaleString("th-TH"))} <span className="text-sm font-normal text-[#1C1B1B]">รายการ</span>
+                </Heading>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                <span>มูลค่ารวมคำขอ</span>
+                <span className="text-sky-700 font-normal">฿{stats.totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+              </div>
+            </Card>
+
+            {/* 2. รอเจ้าของร้านอนุมัติ (Pending) */}
+            <Card className="!border-l-[5px] !border-l-amber-300 flex flex-col justify-between p-4 md:p-5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Heading level="h6" className="uppercase tracking-wider">
+                    รอเจ้าของร้านอนุมัติ 
+                  </Heading>
+                </div>
+                <Heading level="h3">
+                  {kpiValue(stats.pendingCount.toLocaleString("th-TH"))} <span className="text-sm font-normal text-[#1C1B1B]">รายการ</span>
+                </Heading>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                <span>ยอดเงินรอดำเนินการ</span>
+                <span className="text-amber-400 font-normal">฿{stats.pendingAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+              </div>
+            </Card>
+
+            {/* 3. อนุมัติแล้ว (Approved) */}
+            <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Heading level="h6" className="uppercase tracking-wider">
+                    อนุมัติแล้ว
+                  </Heading>
+                </div>
+                <Heading level="h3">
+                  {kpiValue(stats.approvedCount.toLocaleString("th-TH"))} <span className="text-sm font-normal text-[#1C1B1B]">รายการ</span>
+                </Heading>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                <span>ยกเลิกสำเร็จแล้ว</span>
+                <span className="text-emerald-500 font-normal">฿{stats.approvedAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+              </div>
+            </Card>
+
+            {/* 4. ไม่อนุมัติ (Rejected) */}
+            <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Heading level="h6" className="uppercase tracking-wider">
+                    ไม่อนุมัติ (ปฏิเสธ)
+                  </Heading>
+                </div>
+                <Heading level="h3">
+                  {kpiValue(stats.rejectedCount.toLocaleString("th-TH"))} <span className="text-sm font-normal text-[#1C1B1B]">รายการ</span>
+                </Heading>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                <span>ไม่ผ่านการอนุมัติ</span>
+                <span className="text-[#E51C23] font-normal">฿{stats.rejectedAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+              </div>
+            </Card>
+          </div>
 
           {/* Table */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">

@@ -12,6 +12,19 @@ export const useSalesCancellationHistory = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // --- Overall Stats State (เฉพาะคำขอของพนักงานคนนี้) ---
+  const [stats, setStats] = useState({
+    totalCount: 0,
+    totalAmount: 0,
+    pendingCount: 0,
+    pendingAmount: 0,
+    approvedCount: 0,
+    approvedAmount: 0,
+    rejectedCount: 0,
+    rejectedAmount: 0,
+  });
+  const [isStatsLoading, setIsStatsLoading] = useState<boolean>(false);
+
   // --- Pagination States ---
   const [page, setPage] = useState<number>(1);
   const [limit, setLimit] = useState<number>(10);
@@ -75,10 +88,63 @@ export const useSalesCancellationHistory = () => {
     }
   }, [searchQuery, startDate, endDate, customerType, status, paymentMethod, page, limit]);
 
+  // --- Fetch Overall Stats (สถิติภาพรวมเฉพาะคำขอของพนักงานคนนี้ ไม่ขึ้นกับตัวกรอง) ---
+  const fetchOverallStats = useCallback(async () => {
+    try {
+      setIsStatsLoading(true);
+      const response = await posApiService.getMyCancellationRequests({ limit: 0 });
+      const allItems = response.items || [];
+
+      let pendingCount = 0, pendingAmount = 0;
+      let approvedCount = 0, approvedAmount = 0;
+      let rejectedCount = 0, rejectedAmount = 0;
+      let totalCount = 0, totalAmount = 0;
+
+      for (const item of allItems) {
+        const amount = Number(item.total_amount) || 0;
+        const s = (item.status || "").trim().toUpperCase();
+        const hasCancelRemark = Boolean(item.cancel_remark && item.cancel_remark.trim() !== "");
+
+        totalCount++;
+        totalAmount += amount;
+
+        if (s === "PENDING_CANCEL") {
+          pendingCount++;
+          pendingAmount += amount;
+        } else if (s === "CANCELLED" || s === "ยกเลิก") {
+          approvedCount++;
+          approvedAmount += amount;
+        } else if (hasCancelRemark || s === "REJECTED") {
+          rejectedCount++;
+          rejectedAmount += amount;
+        }
+      }
+
+      setStats({
+        totalCount,
+        totalAmount,
+        pendingCount,
+        pendingAmount,
+        approvedCount,
+        approvedAmount,
+        rejectedCount,
+        rejectedAmount,
+      });
+    } catch (err) {
+      console.error("Failed to fetch employee cancellation stats:", err);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  }, []);
+
   // Effect สำหรับเรียกข้อมูลใหม่เมื่อ Filter/Pagination เปลี่ยน
   useEffect(() => {
     fetchCancellationHistory();
   }, [fetchCancellationHistory]);
+
+  useEffect(() => {
+    fetchOverallStats();
+  }, [fetchOverallStats]);
 
   // --- Selection Handlers ---
 
@@ -142,6 +208,7 @@ export const useSalesCancellationHistory = () => {
         alert("ดึงคำขอยกเลิกบิลกลับสำเร็จ");
         setSelectedIds([]);
         fetchCancellationHistory();
+        fetchOverallStats();
       } catch (err: any) {
         alert(err?.response?.data?.message || "เกิดข้อผิดพลาดในการดึงคำขอกลับ");
       } finally {
@@ -149,6 +216,11 @@ export const useSalesCancellationHistory = () => {
       }
     }
   };
+
+  const refetch = useCallback(() => {
+    fetchCancellationHistory();
+    fetchOverallStats();
+  }, [fetchCancellationHistory, fetchOverallStats]);
 
   return {
     // Data & Selection
@@ -159,6 +231,11 @@ export const useSalesCancellationHistory = () => {
     selectableItems,
     isLoading,
     error,
+
+    // Overall Stats
+    stats,
+    isStatsLoading,
+    fetchOverallStats,
 
     // Pagination
     page,
@@ -187,6 +264,6 @@ export const useSalesCancellationHistory = () => {
     handleSelectRow,
     handleSearch,
     handleRestoreSelected,
-    refetch: fetchCancellationHistory,
+    refetch,
   };
 };

@@ -181,7 +181,7 @@ export const renderCancellationStatusBadge = (
 
   if (billStatus === "PENDING_CANCEL") {
     return (
-      <Badge variant="warning" className="rounded-none whitespace-nowrap bg-[#FEF08A] text-[#854D0E] border-none">
+      <Badge variant="warning" className="rounded-none whitespace-nowrap">
         รอดำเนินการ
       </Badge>
     );
@@ -189,7 +189,7 @@ export const renderCancellationStatusBadge = (
 
   if (billStatus === "CANCELLED" || billStatus === "ยกเลิก") {
     return (
-      <Badge variant="error" className="rounded-none whitespace-nowrap bg-[#FEE2E2] text-[#E51C23] border-none">
+      <Badge variant="success" className="rounded-none whitespace-nowrap">
         อนุมัติแล้ว
       </Badge>
     );
@@ -197,7 +197,7 @@ export const renderCancellationStatusBadge = (
 
   // หากเป็น COMPLETED หรือสถานะอื่นๆ ในหน้าคำขอยกเลิก แสดง "ไม่อนุมัติ"
   return (
-    <Badge variant="neutral" className="rounded-none whitespace-nowrap bg-gray-200 text-gray-700 border-none">
+    <Badge variant="error" className="rounded-none whitespace-nowrap">
       ไม่อนุมัติ
     </Badge>
   );

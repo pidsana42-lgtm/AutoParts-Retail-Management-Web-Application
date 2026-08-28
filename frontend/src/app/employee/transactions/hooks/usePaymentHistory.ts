@@ -104,6 +104,129 @@ export function usePaymentHistory() {
     return filteredItems.slice(start, start + limit);
   }, [filteredItems, page, limit]);
 
+  // Helper ฟังก์ชันเช็คประเภทช่องทางชำระเงิน
+  const isCashMethod = (method: string) => {
+    const m = (method || "").toUpperCase();
+    return m.includes("CASH") || m.includes("เงินสด");
+  };
+
+  const isTransferOrQrMethod = (method: string) => {
+    const m = (method || "").toUpperCase();
+    return m.includes("QR") || m.includes("TRANSFER") || m.includes("โอน") || m.includes("พร้อมเพย์") || m.includes("PROMPTPAY");
+  };
+
+  // 1. สถิติภาพรวมสำหรับฝั่งเจ้าของร้าน (Owner System)
+  const ownerStats = useMemo(() => {
+    const completedItems = items.filter(
+      (item) => item.status?.toLowerCase() === "completed" || item.status === "สำเร็จ"
+    );
+    const cancelledItems = items.filter(
+      (item) => item.status?.toLowerCase() === "cancelled" || item.status === "ยกเลิก"
+    );
+
+    // Card 1: ยอดรับชำระสุทธิ (Net Total Collected)
+    const netTotalCollected = completedItems.reduce(
+      (sum, item) => sum + (Number(item.total_received) || 0),
+      0
+    );
+    const completedCount = completedItems.length;
+
+    // Card 2: ช่องทางการเงิน (Payment Methods)
+    const cashItems = completedItems.filter((item) => isCashMethod(item.payment_method));
+    const cashTotal = cashItems.reduce((sum, item) => sum + (Number(item.total_received) || 0), 0);
+    const cashCount = cashItems.length;
+
+    const transferQrItems = completedItems.filter((item) => isTransferOrQrMethod(item.payment_method));
+    const transferQrTotal = transferQrItems.reduce((sum, item) => sum + (Number(item.total_received) || 0), 0);
+    const transferQrCount = transferQrItems.length;
+
+    // Card 3: ประเภทการรับชำระ (Payment Types)
+    const posItems = completedItems.filter((item) => item.payment_type === "payment");
+    const posPaymentTotal = posItems.reduce((sum, item) => sum + (Number(item.total_received) || 0), 0);
+    const posPaymentCount = posItems.length;
+
+    const repaymentItems = completedItems.filter((item) => item.payment_type === "repayment");
+    const repaymentTotal = repaymentItems.reduce((sum, item) => sum + (Number(item.total_received) || 0), 0);
+    const repaymentCount = repaymentItems.length;
+
+    // Card 4: รายการที่ยกเลิก (Cancelled Payments)
+    const cancelledTotal = cancelledItems.reduce(
+      (sum, item) => sum + (Number(item.total_received) || 0),
+      0
+    );
+    const cancelledCount = cancelledItems.length;
+
+    return {
+      netTotalCollected,
+      completedCount,
+      cashTotal,
+      cashCount,
+      transferQrTotal,
+      transferQrCount,
+      posPaymentTotal,
+      posPaymentCount,
+      repaymentTotal,
+      repaymentCount,
+      cancelledTotal,
+      cancelledCount,
+      totalCount: items.length,
+    };
+  }, [items]);
+
+  // 2. สถิติสำหรับฝั่งพนักงาน (Employee) — กรองเฉพาะรายการของตนเองเพื่อสรุปส่งมอบเงิน
+  const employeeStats = useMemo(() => {
+    const currentUserId = getCurrentUserId();
+    const myItems = items.filter((item) => {
+      if (item.received_by_id !== undefined && item.received_by_id !== null && item.received_by_id !== 0) {
+        return Number(item.received_by_id) === Number(currentUserId);
+      }
+      return true;
+    });
+
+    const completedItems = myItems.filter(
+      (item) => item.status?.toLowerCase() === "completed" || item.status === "สำเร็จ"
+    );
+    const cancelledItems = myItems.filter(
+      (item) => item.status?.toLowerCase() === "cancelled" || item.status === "ยกเลิก"
+    );
+
+    // Card 1: ยอดรับชำระของฉัน (My Collected Total)
+    const netTotalCollected = completedItems.reduce(
+      (sum, item) => sum + (Number(item.total_received) || 0),
+      0
+    );
+    const completedCount = completedItems.length;
+
+    // Card 2: เงินสดที่ต้องส่งมอบ (Cash in Hand) — สำคัญที่สุด
+    const cashItems = completedItems.filter((item) => isCashMethod(item.payment_method));
+    const cashTotal = cashItems.reduce((sum, item) => sum + (Number(item.total_received) || 0), 0);
+    const cashCount = cashItems.length;
+
+    // Card 3: เงินโอน/สแกน QR (Transfer / QR Code)
+    const transferQrItems = completedItems.filter((item) => isTransferOrQrMethod(item.payment_method));
+    const transferQrTotal = transferQrItems.reduce((sum, item) => sum + (Number(item.total_received) || 0), 0);
+    const transferQrCount = transferQrItems.length;
+
+    // Card 4: บิลที่ถูกยกเลิก (My Cancelled Transactions)
+    const cancelledTotal = cancelledItems.reduce(
+      (sum, item) => sum + (Number(item.total_received) || 0),
+      0
+    );
+    const cancelledCount = cancelledItems.length;
+
+    return {
+      netTotalCollected,
+      completedCount,
+      cashTotal,
+      cashCount,
+      transferQrTotal,
+      transferQrCount,
+      cancelledTotal,
+      cancelledCount,
+      totalCount: myItems.length,
+    };
+  }, [items]);
+
   const handleApplyFilter = () => {
     setPage(1);
   };
@@ -239,6 +362,8 @@ export function usePaymentHistory() {
     totalPages,
     isLoading,
     error,
+    ownerStats,
+    employeeStats,
     search,
     typeFilter,
     statusFilter,

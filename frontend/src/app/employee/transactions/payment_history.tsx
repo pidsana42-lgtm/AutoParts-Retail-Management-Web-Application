@@ -46,6 +46,8 @@ export default function PaymentHistoryPage() {
     totalPages,
     isLoading,
     error,
+    ownerStats,
+    employeeStats,
     search, 
     typeFilter,
     statusFilter,
@@ -85,6 +87,9 @@ export default function PaymentHistoryPage() {
       minimumFractionDigits: 2,
     });
   };
+
+  const kpiValue = (value: React.ReactNode) =>
+    isLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
 
   return (
     <div className="relative flex min-h-screen bg-white text-slate-800 font-sans overflow-x-hidden">
@@ -235,6 +240,171 @@ export default function PaymentHistoryPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Small Stat Cards เหนือตาราง */}
+          {isOwnerOrAdmin ? (
+            /* 1. ฝั่งเจ้าของร้าน (Owner System) */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+              {/* Card 1: ยอดรับชำระสุทธิ (Net Total Collected) */}
+              <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      ยอดรับชำระสุทธิ
+                    </Heading>
+                  </div>
+                  <Heading level="h3">
+                    ฿{kpiValue(formatCurrency(ownerStats.netTotalCollected))}
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>จำนวนรายการทั้งหมด</span>
+                  <span className="text-[#259B24] font-normal">{ownerStats.completedCount} รายการ</span>
+                </div>
+              </Card>
+
+              {/* Card 2: ช่องทางการเงิน (Payment Methods) */}
+              <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      ช่องทางการเงิน
+                    </Heading>
+                  </div>
+                  <Heading level="h3" className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-[#259B24]" title="เงินสด">
+                      ฿{kpiValue(ownerStats.cashTotal.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
+                    </span>
+                    <span className="text-xs text-gray-400 font-light">/</span>
+                    <span className="text-blue-500" title="เงินโอน/สแกน QR">
+                      ฿{kpiValue(ownerStats.transferQrTotal.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
+                    </span>
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>สด: <span className="text-[#259B24] font-normal">฿{formatCurrency(ownerStats.cashTotal)}</span></span>
+                  <span>โอน/QR: <span className="text-blue-500 font-normal">฿{formatCurrency(ownerStats.transferQrTotal)}</span></span>
+                </div>
+              </Card>
+
+              {/* Card 3: ประเภทการรับชำระ (Payment Types) */}
+              <Card className="!border-l-[5px] !border-l-teal-500 flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      ประเภทการรับชำระ
+                    </Heading>
+                  </div>
+                  <Heading level="h3" className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-[#1C1B1B]" title="ชำระสดหน้าร้าน (บิล POS)">
+                      ฿{kpiValue(ownerStats.posPaymentTotal.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
+                    </span>
+                    <span className="text-xs text-gray-400 font-light">/</span>
+                    <span className="text-teal-500" title="เคลียร์หนี้เงินเชื่อ">
+                      ฿{kpiValue(ownerStats.repaymentTotal.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
+                    </span>
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>หน้าร้าน: ฿{formatCurrency(ownerStats.posPaymentTotal)} ({ownerStats.posPaymentCount})</span>
+                  <span>เคลียร์หนี้: ฿{formatCurrency(ownerStats.repaymentTotal)} ({ownerStats.repaymentCount})</span>
+                </div>
+              </Card>
+
+              {/* Card 4: รายการที่ยกเลิก (Cancelled Payments) */}
+              <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      รายการที่ยกเลิก
+                    </Heading>
+                  </div>
+                  <Heading level="h3" className="text-[#E51C23]">
+                    ฿{kpiValue(formatCurrency(ownerStats.cancelledTotal))}
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>จำนวนรายการที่ยกเลิก</span>
+                  <span className="text-[#E51C23] font-normal">{ownerStats.cancelledCount} รายการ</span>
+                </div>
+              </Card>
+            </div>
+          ) : (
+            /* 2. ฝั่งพนักงาน (Employee / Somchai หน้าร้าน) */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+              {/* Card 1: ยอดรับชำระของฉัน (My Collected Total) */}
+              <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      ยอดรับชำระของฉัน
+                    </Heading>
+                  </div>
+                  <Heading level="h3">
+                    ฿{kpiValue(formatCurrency(employeeStats.netTotalCollected))}
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>รับชำระสำเร็จ</span>
+                  <span className="text-emerald-500 font-normal">{employeeStats.completedCount} รายการ</span>
+                </div>
+              </Card>
+
+              {/* Card 2: เงินสดที่ต้องส่งมอบ (Cash in Hand) — สำคัญที่สุด */}
+              <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      เงินสดที่ต้องส่งมอบ
+                    </Heading>
+                  </div>
+                  <Heading level="h3">
+                    ฿{kpiValue(formatCurrency(employeeStats.cashTotal))}
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>นับจากบิลเงินสด</span>
+                  <span className="text-emerald-500 font-normal">{employeeStats.cashCount} รายการ</span>
+                </div>
+              </Card>
+
+              {/* Card 3: เงินโอน/สแกน QR (Transfer / QR Code) */}
+              <Card className="!border-l-[5px] !border-l-gray-300 flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      เงินโอน / สแกน QR
+                    </Heading>
+                  </div>
+                  <Heading level="h3">
+                    ฿{kpiValue(formatCurrency(employeeStats.transferQrTotal))}
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>โอนเข้าบัญชีร้าน</span>
+                  <span className="text-gray-600 font-normal">มีสลิป {employeeStats.transferQrCount} รายการ</span>
+                </div>
+              </Card>
+
+              {/* Card 4: บิลที่ถูกยกเลิก (My Cancelled Transactions) */}
+              <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      บิลที่ถูกยกเลิก
+                    </Heading>
+                  </div>
+                  <Heading level="h3">
+                    ฿{kpiValue(formatCurrency(employeeStats.cancelledTotal))}
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>หักออกจากยอดส่งเงินแล้ว</span>
+                  <span className="text-[#E51C23] font-normal">{employeeStats.cancelledCount} รายการ</span>
+                </div>
+              </Card>
+            </div>
+          )}
 
           {/* Data Table */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">

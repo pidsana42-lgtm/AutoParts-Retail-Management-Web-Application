@@ -242,12 +242,12 @@ export default function TransactionHistoryPage() {
               </div>
               <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
                 <span>ภาพรวมยอดขายทั้งหมด</span>
-                <span className="text-[#259B24] font-normal">สำเร็จ {stats.completedCount} บิล</span>
+                <span className="text-emerald-500 font-normal">สำเร็จ {stats.completedCount} บิล</span>
               </div>
             </Card>
 
             {/* 2. จำนวนบิลทั้งหมด (Total Orders) */}
-            <Card className="!border-l-[5px] !border-l-slate-400 flex flex-col justify-between p-4 md:p-5">
+            <Card className="!border-l-[5px] !border-l-slate-300 flex flex-col justify-between p-4 md:p-5">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -269,7 +269,7 @@ export default function TransactionHistoryPage() {
             </Card>
 
             {/* 3. ยอดเงินสด vs เงินเชื่อ (Cash vs Credit) */}
-            <Card className="!border-l-[5px] !border-l-blue-500 flex flex-col justify-between p-4 md:p-5">
+            <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -277,23 +277,23 @@ export default function TransactionHistoryPage() {
                   </Heading>
                 </div>
                 <Heading level="h3" className="flex items-baseline gap-1.5 flex-wrap">
-                  <span className="text-[#259B24]" title="เงินสด/เงินโอน">
+                  <span title="เงินสด/เงินโอน">
                     ฿{kpiValue(stats.cashAndQrSales.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
                   </span>
                   <span className="text-xs text-gray-400 font-light">/</span>
-                  <span className="text-blue-500" title="เงินเชื่อ">
+                  <span title="เงินเชื่อ">
                     ฿{kpiValue(stats.creditSales.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
                   </span>
                 </Heading>
               </div>
               <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
-                <span>สด/โอน: <span className="text-[#259B24] font-normal">฿{stats.cashAndQrSales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></span>
-                <span>เชื่อ: <span className="text-blue-500 font-normal">฿{stats.creditSales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></span>
+                <span>สด/โอน: <span className="text-emerald-500 font-normal">฿{stats.cashAndQrSales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></span>
+                <span>เชื่อ: <span className="text-sky-700 font-normal">฿{stats.creditSales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></span>
               </div>
             </Card>
 
             {/* 4. ยอดที่ชำระแล้ว vs ค้างชำระ (Paid vs Balance Due) */}
-            <Card className="!border-l-[5px] !border-l-[#259B24] flex flex-col justify-between p-4 md:p-5">
+            <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -301,7 +301,7 @@ export default function TransactionHistoryPage() {
                   </Heading>
                 </div>
                 <Heading level="h3" className="flex items-baseline gap-1.5 flex-wrap">
-                  <span className="text-[#259B24]" title="ชำระแล้ว">
+                  <span title="ชำระแล้ว">
                     ฿{kpiValue(stats.paidAmount.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
                   </span>
                   <span className="text-xs text-gray-400 font-light">/</span>
@@ -312,7 +312,7 @@ export default function TransactionHistoryPage() {
               </div>
               <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
                 <span>
-                  ชำระ: <span className="text-[#259B24] font-normal">฿{stats.paidAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                  ชำระ: <span className="text-emerald-500 font-normal">฿{stats.paidAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
                 </span>
                 <span>
                   {stats.balanceDue > 0 ? (

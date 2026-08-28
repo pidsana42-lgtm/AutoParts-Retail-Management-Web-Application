@@ -7,12 +7,38 @@ export interface PaymentCancellationFilterRequest {
   payment_type?: string;
 }
 
+export interface OwnerPaymentCancellationStats {
+  pendingCount: number;
+  pendingAmount: number;
+  approvedCount: number;
+  approvedAmount: number;
+  rejectedCount: number;
+  rejectedAmount: number;
+  totalCount: number;
+  totalAmount: number;
+}
+
+export interface EmployeePaymentCancellationStats {
+  totalCount: number;
+  totalAmount: number;
+  pendingCount: number;
+  pendingAmount: number;
+  approvedCount: number;
+  approvedAmount: number;
+  rejectedCount: number;
+  rejectedAmount: number;
+}
+
 export interface UsePaymentCancellationHistoryReturn {
   dataList: PaymentHistoryItem[];
   selectedIds: number[];
   isSelectAll: boolean;
   isLoading: boolean;
   error: string | null;
+  ownerStats: OwnerPaymentCancellationStats;
+  employeeStats: EmployeePaymentCancellationStats;
+  isStatsLoading: boolean;
+  fetchOverallStats: () => Promise<void>;
   page: number;
   limit: number;
   totalRows: number;

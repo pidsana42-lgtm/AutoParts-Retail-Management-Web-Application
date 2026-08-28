@@ -14,6 +14,31 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // --- Overall Stats State ---
+  const [ownerStats, setOwnerStats] = useState({
+    pendingCount: 0,
+    pendingAmount: 0,
+    approvedCount: 0,
+    approvedAmount: 0,
+    rejectedCount: 0,
+    rejectedAmount: 0,
+    totalCount: 0,
+    totalAmount: 0,
+  });
+
+  const [employeeStats, setEmployeeStats] = useState({
+    totalCount: 0,
+    totalAmount: 0,
+    pendingCount: 0,
+    pendingAmount: 0,
+    approvedCount: 0,
+    approvedAmount: 0,
+    rejectedCount: 0,
+    rejectedAmount: 0,
+  });
+
+  const [isStatsLoading, setIsStatsLoading] = useState<boolean>(false);
+
   // Pagination & Filter States
   const [page, setPage] = useState<number>(1);
   const [limit, setLimit] = useState<number>(10);
@@ -30,6 +55,106 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
   const [cancelRemark, setCancelRemark] = useState<string>("");
   const [cancelReason, setCancelReason] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  // --- ดึงสถิติภาพรวมทั้งหมด (Overall Summary ไม่ขึ้นกับตัวกรอง) ---
+  const fetchOverallStats = useCallback(async () => {
+    try {
+      setIsStatsLoading(true);
+      const res = await posApiService.getPaymentHistory({});
+      const currentUserId = getCurrentUserId();
+
+      // กรองเฉพาะรายการที่เกี่ยวข้องกับการขอยกเลิก (pending_cancel, cancelled หรือมี cancel_remark)
+      const allCancellationItems = res.filter((item) => {
+        const itemStatus = (item.status || "").toLowerCase();
+        const hasRemark = Boolean(item.cancel_remark && item.cancel_remark.trim() !== "");
+        return itemStatus === "pending_cancel" || itemStatus === "cancelled" || hasRemark;
+      });
+
+      // 1. Owner Stats (ทุกรายการของร้าน)
+      let oPendingCount = 0, oPendingAmount = 0;
+      let oApprovedCount = 0, oApprovedAmount = 0;
+      let oRejectedCount = 0, oRejectedAmount = 0;
+      let oTotalCount = 0, oTotalAmount = 0;
+
+      // 2. Employee Stats (เฉพาะรายการของพนักงานตนเอง)
+      let ePendingCount = 0, ePendingAmount = 0;
+      let eApprovedCount = 0, eApprovedAmount = 0;
+      let eRejectedCount = 0, eRejectedAmount = 0;
+      let eTotalCount = 0, eTotalAmount = 0;
+
+      for (const item of allCancellationItems) {
+        const amount = Number(item.total_received) || 0;
+        const itemStatus = (item.status || "").toLowerCase();
+        const hasRemark = Boolean(item.cancel_remark && item.cancel_remark.trim() !== "");
+
+        oTotalCount++;
+        oTotalAmount += amount;
+
+        const isPending = itemStatus === "pending_cancel";
+        const isApproved = itemStatus === "cancelled";
+        const isRejected = itemStatus === "completed" && hasRemark;
+
+        if (isPending) {
+          oPendingCount++;
+          oPendingAmount += amount;
+        } else if (isApproved) {
+          oApprovedCount++;
+          oApprovedAmount += amount;
+        } else if (isRejected) {
+          oRejectedCount++;
+          oRejectedAmount += amount;
+        }
+
+        // เช็คว่าเป็นรายการของพนักงานคนนี้หรือไม่
+        const activeRequesterId = item.cancel_requested_by_id ?? item.cancelled_by_id ?? item.received_by_id;
+        const isMy = activeRequesterId !== undefined && activeRequesterId !== null && activeRequesterId !== 0
+          ? Number(activeRequesterId) === Number(currentUserId)
+          : true;
+
+        if (isMy) {
+          eTotalCount++;
+          eTotalAmount += amount;
+
+          if (isPending) {
+            ePendingCount++;
+            ePendingAmount += amount;
+          } else if (isApproved) {
+            eApprovedCount++;
+            eApprovedAmount += amount;
+          } else if (isRejected) {
+            eRejectedCount++;
+            eRejectedAmount += amount;
+          }
+        }
+      }
+
+      setOwnerStats({
+        pendingCount: oPendingCount,
+        pendingAmount: oPendingAmount,
+        approvedCount: oApprovedCount,
+        approvedAmount: oApprovedAmount,
+        rejectedCount: oRejectedCount,
+        rejectedAmount: oRejectedAmount,
+        totalCount: oTotalCount,
+        totalAmount: oTotalAmount,
+      });
+
+      setEmployeeStats({
+        totalCount: eTotalCount,
+        totalAmount: eTotalAmount,
+        pendingCount: ePendingCount,
+        pendingAmount: ePendingAmount,
+        approvedCount: eApprovedCount,
+        approvedAmount: eApprovedAmount,
+        rejectedCount: eRejectedCount,
+        rejectedAmount: eRejectedAmount,
+      });
+    } catch (err) {
+      console.error("Failed to fetch overall payment cancellation stats:", err);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  }, []);
 
   const fetchCancellationHistory = useCallback(async () => {
     setIsLoading(true);
@@ -101,6 +226,10 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
     fetchCancellationHistory();
   }, [fetchCancellationHistory]);
 
+  useEffect(() => {
+    fetchOverallStats();
+  }, [fetchOverallStats]);
+
   const totalPages = Math.ceil(totalRows / limit) || 1;
   const pendingCancelItems = dataList.filter((item) => (item.status || "").toLowerCase() === "pending_cancel");
   const isSelectAll = pendingCancelItems.length > 0 && selectedIds.length === pendingCancelItems.length;
@@ -136,6 +265,7 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
       setSelectedReceipt(null);
       setCancelRemark("");
       fetchCancellationHistory();
+      fetchOverallStats();
     } catch (err: any) {
       alert(err?.response?.data?.error || "เกิดข้อผิดพลาดในการอนุมัติ");
     } finally {
@@ -154,6 +284,7 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
       setSelectedReceipt(null);
       setCancelRemark("");
       fetchCancellationHistory();
+      fetchOverallStats();
     } catch (err: any) {
       alert(err?.response?.data?.error || "เกิดข้อผิดพลาดในการปฏิเสธ");
     } finally {
@@ -169,6 +300,7 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
       alert("ดึงคำขอยกเลิกกลับเรียบร้อยแล้ว");
       setSelectedReceipt(null);
       fetchCancellationHistory();
+      fetchOverallStats();
     } catch (err: any) {
       alert(err?.response?.data?.error || "เกิดข้อผิดพลาดในการดึงคำขอกลับ");
     } finally {
@@ -188,6 +320,7 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
       alert(`อนุมัติการยกเลิกเรียบร้อยแล้ว ${selectedIds.length} รายการ`);
       setSelectedIds([]);
       fetchCancellationHistory();
+      fetchOverallStats();
     } catch (err: any) {
       alert(err?.response?.data?.error || "เกิดข้อผิดพลาดในการอนุมัติแบบกลุ่ม");
     } finally {
@@ -206,6 +339,7 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
       alert(`ปฏิเสธคำขอยกเลิกเรียบร้อยแล้ว ${selectedIds.length} รายการ`);
       setSelectedIds([]);
       fetchCancellationHistory();
+      fetchOverallStats();
     } catch (err: any) {
       alert(err?.response?.data?.error || "เกิดข้อผิดพลาดในการปฏิเสธแบบกลุ่ม");
     } finally {
@@ -224,6 +358,7 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
       alert(`ดึงคำขอยกเลิกกลับเรียบร้อยแล้ว ${selectedIds.length} รายการ`);
       setSelectedIds([]);
       fetchCancellationHistory();
+      fetchOverallStats();
     } catch (err: any) {
       alert(err?.response?.data?.error || "เกิดข้อผิดพลาดในการดึงคำขอกลับ");
     } finally {
@@ -258,6 +393,7 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
       setSelectedReceipt(null);
       setCancelReason("");
       fetchCancellationHistory();
+      fetchOverallStats();
     } catch (err: any) {
       alert(err?.response?.data?.error || err?.response?.data?.message || "เกิดข้อผิดพลาดในการดำเนินการ");
     } finally {
@@ -265,12 +401,20 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
     }
   };
 
+  const refetch = useCallback(async () => {
+    await Promise.all([fetchCancellationHistory(), fetchOverallStats()]);
+  }, [fetchCancellationHistory, fetchOverallStats]);
+
   return {
     dataList,
     selectedIds,
     isSelectAll,
     isLoading,
     error,
+    ownerStats,
+    employeeStats,
+    isStatsLoading,
+    fetchOverallStats,
     page,
     limit,
     totalRows,
@@ -292,7 +436,7 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
     handleSelectAll,
     handleSelectRow,
     handleSearch,
-    refetch: fetchCancellationHistory,
+    refetch,
     selectedReceipt,
     setSelectedReceipt,
     cancelRemark,
