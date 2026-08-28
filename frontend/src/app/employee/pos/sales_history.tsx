@@ -45,6 +45,8 @@ export default function TransactionHistoryPage() {
     totalPages,
     isLoading,
     error,
+    stats,
+    isStatsLoading,
     search,
     customerType,
     paymentMethod,
@@ -79,6 +81,9 @@ export default function TransactionHistoryPage() {
     handleRevertCancel,
     getStatusText,
   } = useSalesHistory();
+
+  const kpiValue = (value: React.ReactNode) =>
+    isStatsLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
 
   return (
     <div className="relative flex min-h-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-x-hidden">
@@ -220,6 +225,110 @@ export default function TransactionHistoryPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Small Stat Cards เหนือตาราง */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+            {/* 1. ยอดขายรวม (Total Sales) */}
+            <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Heading level="h6" className="uppercase tracking-wider">
+                    ยอดขายรวม
+                  </Heading>
+                </div>
+                <Heading level="h3">
+                  ฿{kpiValue(stats.totalSales.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+                </Heading>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                <span>ภาพรวมยอดขายทั้งหมด</span>
+                <span className="text-[#259B24] font-normal">สำเร็จ {stats.completedCount} บิล</span>
+              </div>
+            </Card>
+
+            {/* 2. จำนวนบิลทั้งหมด (Total Orders) */}
+            <Card className="!border-l-[5px] !border-l-slate-400 flex flex-col justify-between p-4 md:p-5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Heading level="h6" className="uppercase tracking-wider">
+                    จำนวนบิลทั้งหมด
+                  </Heading>
+                </div>
+                <Heading level="h3">
+                  {kpiValue(stats.totalOrders.toLocaleString("th-TH"))} <span className="text-sm font-normal text-[#1C1B1B]">บิล</span>
+                </Heading>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                <span>บิลทั้งหมดในระบบ</span>
+                {stats.cancelledCount > 0 ? (
+                  <span className="text-[#E51C23] font-normal">ยกเลิก {stats.cancelledCount} บิล</span>
+                ) : (
+                  <span className="text-gray-400">ไม่มีบิลยกเลิก</span>
+                )}
+              </div>
+            </Card>
+
+            {/* 3. ยอดเงินสด vs เงินเชื่อ (Cash vs Credit) */}
+            <Card className="!border-l-[5px] !border-l-blue-500 flex flex-col justify-between p-4 md:p-5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Heading level="h6" className="uppercase tracking-wider">
+                    ยอดเงินสด vs เงินเชื่อ
+                  </Heading>
+                </div>
+                <Heading level="h3" className="flex items-baseline gap-1.5 flex-wrap">
+                  <span className="text-[#259B24]" title="เงินสด/เงินโอน">
+                    ฿{kpiValue(stats.cashAndQrSales.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
+                  </span>
+                  <span className="text-xs text-gray-400 font-light">/</span>
+                  <span className="text-blue-500" title="เงินเชื่อ">
+                    ฿{kpiValue(stats.creditSales.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
+                  </span>
+                </Heading>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                <span>สด/โอน: <span className="text-[#259B24] font-normal">฿{stats.cashAndQrSales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></span>
+                <span>เชื่อ: <span className="text-blue-500 font-normal">฿{stats.creditSales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></span>
+              </div>
+            </Card>
+
+            {/* 4. ยอดที่ชำระแล้ว vs ค้างชำระ (Paid vs Balance Due) */}
+            <Card className="!border-l-[5px] !border-l-[#259B24] flex flex-col justify-between p-4 md:p-5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Heading level="h6" className="uppercase tracking-wider">
+                    ยอดชำระแล้ว vs ค้างชำระ
+                  </Heading>
+                </div>
+                <Heading level="h3" className="flex items-baseline gap-1.5 flex-wrap">
+                  <span className="text-[#259B24]" title="ชำระแล้ว">
+                    ฿{kpiValue(stats.paidAmount.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
+                  </span>
+                  <span className="text-xs text-gray-400 font-light">/</span>
+                  <span className={stats.balanceDue > 0 ? "text-[#E51C23]" : "text-gray-600"} title="ค้างชำระ">
+                    ฿{kpiValue(stats.balanceDue.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
+                  </span>
+                </Heading>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                <span>
+                  ชำระ: <span className="text-[#259B24] font-normal">฿{stats.paidAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                </span>
+                <span>
+                  {stats.balanceDue > 0 ? (
+                    <>
+                      <span className="text-[#6B7280]">ค้าง: </span>
+                      <span className="text-[#E51C23] font-normal">
+                        ฿{stats.balanceDue.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ({stats.unpaidCount} บิล)
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-gray-400">ไม่มีค้างชำระ</span>
+                  )}
+                </span>
+              </div>
+            </Card>
+          </div>
 
           {/* Data Table */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
