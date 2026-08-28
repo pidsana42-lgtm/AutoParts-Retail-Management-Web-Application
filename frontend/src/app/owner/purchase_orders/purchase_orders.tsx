@@ -9,6 +9,8 @@ import Input   from "../../../components/elements/input";
 import Select , { type SelectOption }  from "../../../components/elements/select";
 import Button  from "../../../components/elements/button";
 import { Badge } from "../../../components/elements/badge";
+import Modal from "../../../components/elements/modal";
+import { useToast } from "../../../components/elements/toast";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../components/elements/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../components/elements/table";
 import { useRejectedBreakdownModal } from "./hooks/useRejectedBreakdownModal";
@@ -37,9 +39,12 @@ function StatusBadge({ status }: { status: string }) {
 
 function ActionButtons({ id, status }: { id: number; status: string }) {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const userRole = localStorage.getItem('role');
   const basePath = usePathBasePrefix();
   const [isPrinting, setIsPrinting] = useState(false);
+  const [confirmationAction, setConfirmationAction] = useState<"approve" | "delete" | null>(null);
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   const printOptions: SelectOption[] = [
     { label: "พิมพ์พร้อมรหัสสินค้า", value: "with_code" },
@@ -68,56 +73,103 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
   };
 
   const handleApprove = async () => {
-    if (!id) return;
-    const confirmed = window.confirm('คุณต้องการอนุมัติใบสั่งซื้อนี้ใช่หรือไม่? หรือถ้ายังไม่แน่ใจสามารถดูรายละเอียดก่อนได้นะ')
-    if (!confirmed) return;
+    if (!id || isActionLoading) return;
+    setIsActionLoading(true);
     try {
       await poService.updatePOStatus(id, 'APPROVED');
-      alert('อนุมัติใบสั่งซื้อแล้ว')
-      window.location.reload()
+      toast({
+        title: 'ดำเนินการสำเร็จ',
+        message: 'อนุมัติใบสั่งซื้อแล้ว',
+        variant: 'success',
+        duration: 4000,
+      });
+      setConfirmationAction(null);
+      setTimeout(() => window.location.reload(), 4000)
     } catch {
-      alert('ไม่สามารถอนุมัติใบสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง');
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        message: 'ไม่สามารถอนุมัติใบสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง',
+        variant: 'error',
+      });
+    } finally {
+      setIsActionLoading(false);
     }
   }
 
   const handleDelete = async () => {
-    if (!id) return;
-    const confirmed = window.confirm('คุณต้องการลบใบสั่งซื้อนี้ใช่หรือไม่? (สามารถกู้คืนได้จากถังขยะ)')
-    if (!confirmed) return;
+    if (!id || isActionLoading) return;
+    setIsActionLoading(true);
     try {
       await poService.deletePurchaseOrder(id);
-      alert('ลบใบสั่งซื้อสำเร็จ')
-      window.location.reload()
+      toast({
+        title: 'ดำเนินการสำเร็จ',
+        message: 'ลบใบสั่งซื้อสำเร็จ',
+        variant: 'success',
+        duration: 4000,
+      });
+      setConfirmationAction(null);
+      setTimeout(() => window.location.reload(), 4000)
     } catch {
-      alert('ไม่สามารถลบใบสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง');
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        message: 'ไม่สามารถลบใบสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง',
+        variant: 'error',
+      });
+    } finally {
+      setIsActionLoading(false);
     }
   }
+
+  const confirmationModal = (
+    <Modal
+      isOpen={confirmationAction !== null}
+      onClose={() => !isActionLoading && setConfirmationAction(null)}
+      title={confirmationAction === "delete" ? "ยืนยันการลบใบสั่งซื้อ" : "ยืนยันการอนุมัติใบสั่งซื้อ"}
+      description={confirmationAction === "delete"
+        ? "คุณต้องการลบใบสั่งซื้อนี้ใช่หรือไม่? สามารถกู้คืนได้จากถังขยะ"
+        : "คุณต้องการอนุมัติใบสั่งซื้อนี้ใช่หรือไม่?"}
+      onConfirm={() => {
+        if (confirmationAction === "approve") void handleApprove();
+        if (confirmationAction === "delete") void handleDelete();
+      }}
+      confirmText={confirmationAction === "delete" ? "ยืนยันการลบ" : "ยืนยันการอนุมัติ"}
+      cancelText="ยกเลิก"
+      variant={confirmationAction === "delete" ? "danger" : "success"}
+      isSubmitting={isActionLoading}
+    />
+  );
 
   // สถานะ: ฉบับร่าง หรือไม่ผ่านอนุมัติ รอส่งพิจารณาใหม่
   if (status === "DRAFT" || status === "RESUBMITTED") {
     return (
-      <div className="flex items-start justify-center gap-3">
-        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <PenLine size={16}/>
-        </button>
-        <button onClick={handleDelete} className="text-red-600 hover:text-red-700 transition cursor-pointer">
-          <Trash2 size={16} />
-        </button>
-      </div>
+      <>
+        <div className="flex items-start justify-center gap-3">
+          <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
+            <PenLine size={16}/>
+          </button>
+          <button onClick={() => setConfirmationAction("delete")} className="text-red-600 hover:text-red-700 transition cursor-pointer">
+            <Trash2 size={16} />
+          </button>
+        </div>
+        {confirmationModal}
+      </>
     );
   }
 
   // สถานะ: รออนุมัติ
   if (status === "PENDING" && userRole === 'Owner') {
     return (
-      <div className="flex items-center justify-center gap-3">
-        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <Eye size={16} />
-        </button>
-        <button onClick={handleApprove} className="text-emerald-600 hover:text-emerald-700 rounded transition cursor-pointer">
-          <CircleCheck size={16} />
-        </button>
-      </div>
+      <>
+        <div className="flex items-center justify-center gap-3">
+          <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
+            <Eye size={16} />
+          </button>
+          <button onClick={() => setConfirmationAction("approve")} className="text-emerald-600 hover:text-emerald-700 rounded transition cursor-pointer">
+            <CircleCheck size={16} />
+          </button>
+        </div>
+        {confirmationModal}
+      </>
     );
   }
 
@@ -303,6 +355,12 @@ const PurchaseOrders: React.FC = () => {
   const displayOrders = statusFilter === "all"
     ? orders.filter(po => po.status !== "CANCELLED" && po.status !== "DELETED")
     : orders;
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
     <div className="p-8 space-y-6 bg-white min-h-screen font-sans">

@@ -451,54 +451,40 @@ const ReturnsPage: React.FC = () => {
         isOpen={refundTarget !== null}
         onClose={() => processingRefundId === null && setRefundTarget(null)}
         title="ยืนยันการคืนเงินจริง"
-        description="การดำเนินการนี้จะสร้างรายการ Payment และเพิ่มสินค้าเข้าคลัง"
-        size="sm"
-        footer={(
-          <>
-            <Button
-              type="button"
-              variant="tertiary"
-              disabled={processingRefundId !== null}
-              onClick={() => setRefundTarget(null)}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              type="button"
-              variant="approved"
-              disabled={processingRefundId !== null || refundTarget === null}
-              onClick={async () => {
-                if (!refundTarget) return;
-                const id = refundTarget.id;
-                setRefundTarget(null);
-                await handleProcessRefund(id);
-              }}
-            >
-              {processingRefundId !== null ? <Loader2 size={16} className="animate-spin" /> : <></>}
-              ยืนยันคืนเงินจริง
-            </Button>
-          </>
-        )}
-      >
-        {refundTarget && (
+        description={(
           <div className="space-y-3 text-sm text-slate-700">
-            <div className="flex justify-between gap-4">
-              <span className="text-slate-500">เลขที่ใบคืน</span>
-              <span className="font-semibold text-slate-900">{refundTarget.return_number}</span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-slate-500">ยอดเงินคืน</span>
-              <span className="font-semibold text-red-600">
-                ฿ {refundTarget.refund_amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-slate-500">ช่องทางคืนเงิน</span>
-              <span className="font-medium text-slate-900">{refundTarget.refund_method || '-'}</span>
-            </div>
+            <p>การดำเนินการนี้จะสร้างรายการ Payment และเพิ่มสินค้าเข้าคลัง</p>
+            {refundTarget && (
+              <>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">เลขที่ใบคืน</span>
+                  <span className="font-semibold text-slate-900">{refundTarget.return_number}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">ยอดเงินคืน</span>
+                  <span className="font-semibold text-red-600">
+                    ฿ {refundTarget.refund_amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">ช่องทางคืนเงิน</span>
+                  <span className="font-medium text-slate-900">{refundTarget.refund_method || '-'}</span>
+                </div>
+              </>
+            )}
           </div>
         )}
-      </Modal>
+        onConfirm={async () => {
+          if (!refundTarget) return;
+          const id = refundTarget.id;
+          setRefundTarget(null);
+          await handleProcessRefund(id);
+        }}
+        confirmText="ยืนยันคืนเงินจริง"
+        cancelText="ยกเลิก"
+        variant="success"
+        isSubmitting={processingRefundId !== null}
+      />
     </div>
   );
 }
