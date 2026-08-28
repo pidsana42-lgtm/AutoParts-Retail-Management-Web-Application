@@ -27,6 +27,7 @@ import {
 } from "../../../components/elements/table";
 import { Card, CardContent } from "../../../components/elements/card";
 import { getCustomerTypeBadge } from "../../../utils/customerhelpers";
+import { CustomerCard } from "../pos/components/customercard";
 
 // Hook & Types
 import { useCustomerRegistration } from "./hook/useCustomerRegustration";
@@ -567,41 +568,12 @@ export default function CustomerRegistration() {
                   <Text variant="xs" className="font-normal text-[#E51C23] mb-2">
                     สิทธิประโยชน์และวงเงิน
                   </Text>
-                  <Card className="bg-[#1C1B1B] text-white rounded-none shadow-none">
-                    <CardContent className="p-4 space-y-2">
-                      <div className="flex justify-between">
-                        <Text variant="xs" className="text-[#9CA3AF] mb-0">วงเงินเครดิตสูงสุด</Text>
-                        <Text variant="xs" className="text-white mb-0">
-                          {(selectedCustomer.max_credit_limit || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
-                        </Text>
-                      </div>
-                      <div className="flex justify-between">
-                        <Text variant="xs" className="text-[#9CA3AF] mb-0">ยอดหนี้ค้างชำระปัจจุบัน</Text>
-                        <Text variant="xs" className="text-red-400 font-semibold mb-0">
-                          {(selectedCustomer.current_debt_amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
-                        </Text>
-                      </div>
-                      <div className="border-t border-gray-700 pt-2 flex justify-between">
-                        <Text variant="xs" className="text-[#9CA3AF] mb-0">ส่วนลด On-Top</Text>
-                        <Text variant="xs" className="text-green-400 mb-0">
-                          {selectedCustomer.ontop_discount_rate || 0}%
-                        </Text>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <CustomerCard
+                    customer={selectedCustomer as any}
+                    address={selectedCustomer.display_address}
+                  />
                 </div>
               </div>
-            </div>
-
-            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end">
-              <Button
-                type="button"
-                variant="outline-cancel"
-                onClick={() => setSelectedCustomer(null)}
-                className="px-6 h-10 border border-gray-200 text-[#5F5E5E] hover:bg-gray-100 font-normal rounded-none"
-              >
-                ปิดหน้าต่าง
-              </Button>
             </div>
           </aside>
         </div>

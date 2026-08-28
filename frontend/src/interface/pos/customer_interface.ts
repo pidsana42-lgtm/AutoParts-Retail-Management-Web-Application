@@ -32,6 +32,7 @@ export interface ComputedCustomerData {
   phoneNumber: string;
   isGuest: boolean;
   isSpecialPrice: boolean;
+  ontopDiscountRate: number;
   creditUsagePercentage: number;
   currentDebtStr: string;
   remainingCreditStr: string;

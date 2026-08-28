@@ -3,11 +3,12 @@ import type { CustomerDiscountResponse, ComputedCustomerData } from "../../../..
 
 export function useCustomerFinancials(customer: CustomerDiscountResponse | null): ComputedCustomerData {
   return useMemo(() => {
-    // 1. เช็คว่าเป็นลูกค้าทั่วไป (Guest) หรือไม่
+    // 1. เช็คว่าเป็นลูกค้าทั่วไป (Guest / ขาจร) หรือไม่
     const isGuest = !customer || customer.id === 0;
     
-    // 2. เช็คเรื่องสิทธิ์ราคาพิเศษ
-    const isSpecialPrice = !isGuest && customer.is_discount_enabled;
+    // 2. เช็คเรื่องสิทธิ์ราคาพิเศษ: ต้องไม่ใช่ลูกค้าขาจร, เปิดสิทธิ์ส่วนลด และมีส่วนลด On-Top มากกว่า 0
+    const ontopRate = Number(customer?.ontop_discount_rate) || 0;
+    const isSpecialPrice = !isGuest && Boolean(customer?.is_discount_enabled) && ontopRate > 0;
     
     // 3. ดึงค่าตัวเลขมาเตรียมคำนวณ (กันเหนียวใส่ fallback เป็น 0 ไว้เผื่อข้อมูลมาไม่ครบ)
     const maxLimit = customer?.max_credit_limit || 0;
@@ -28,6 +29,7 @@ export function useCustomerFinancials(customer: CustomerDiscountResponse | null)
       phoneNumber: customer?.phone_number || "ลูกค้าทั่วไป (ไม่ระบุ)",
       isGuest,
       isSpecialPrice,
+      ontopDiscountRate: ontopRate,
       creditUsagePercentage,
       currentDebtStr: currentDebt.toFixed(2),
       remainingCreditStr: remainingCredit.toFixed(2),
