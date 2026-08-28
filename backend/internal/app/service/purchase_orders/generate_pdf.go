@@ -68,24 +68,24 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 		})
 		// ฝั่งขวา: หั่นย่อยเป็น 2 คอลัมน์ (Label กับ Value) เพื่อให้จัดชิดขวาได้เป๊ะๆ
 		m.Col(1, func() {
-			m.Text("เลขที่", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Color: hexToColor("#E51C23"),})
-			m.Text("วันที่", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 5, Color: hexToColor("#E51C23"),})
-			m.Text("ผู้สั่งซื้อ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 10, Color: hexToColor("#E51C23"),})
+			m.Text("เลขที่", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Color: hexToColor("#E51C23")})
+			m.Text("วันที่", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 5, Color: hexToColor("#E51C23")})
+			m.Text("ผู้สั่งซื้อ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 10, Color: hexToColor("#E51C23")})
 		})
 		m.Col(3, func() {
 			m.Text(poData.PO_number, props.Text{Size: 11, Align: consts.Left})
 			m.Text(poDate, props.Text{Size: 11, Align: consts.Left, Top: 5})
-			m.Text(poData.Creator.FirstName + " " + poData.Creator.LastName, props.Text{Size: 11, Align: consts.Left, Top: 10}) 
+			m.Text(poData.Creator.FirstName+" "+poData.Creator.LastName, props.Text{Size: 11, Align: consts.Left, Top: 10})
 		})
 
 	})
 
-	m.Row(5, func() {}) 
+	m.Row(5, func() {})
 
 	// 5. ข้อมูลผู้จำหน่าย (กระชับพื้นที่)
 	m.Row(15, func() {
 		m.Col(12, func() {
-			m.Text("ผู้จำหน่าย", props.Text{Size: 11, Style: consts.Bold, Color: hexToColor("#E51C23"),})
+			m.Text("ผู้จำหน่าย", props.Text{Size: 11, Style: consts.Bold, Color: hexToColor("#E51C23")})
 			m.Text(poData.Supplier.SupplierName, props.Text{Size: 11, Top: 5})
 			m.Text(poData.Supplier.SupplierAddress, props.Text{Size: 11, Top: 10})
 		})
@@ -95,8 +95,8 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 
 	// 6. สร้างตารางแบบ Manual
 	// วาดเส้นขอบบนของ Header
-	m.Line(1) 
-	
+	m.Line(1)
+
 	// หัวตาราง
 	// หัวตาราง
 	m.Row(8, func() {
@@ -104,20 +104,30 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 		m.Col(1, func() { m.Text("ประเภท", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left}) })
 		var colName uint = 5
 		if includeCode {
-			m.Col(2, func() { m.Text("รหัสสินค้า", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left}) })
+			m.Col(2, func() {
+				m.Text("รหัสสินค้า", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left})
+			})
 			colName = 3
 		}
-		m.Col(colName, func() { m.Text("ชื่อสินค้า", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left}) })
-		m.Col(1, func() {}) 
-		m.Col(2, func() { m.Text("จำนวนต่อหน่วย  ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Right}) }) 
+		m.Col(colName, func() {
+			m.Text("ชื่อสินค้า", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left})
+		})
+		m.Col(1, func() {})
+		m.Col(2, func() {
+			m.Text("จำนวนต่อหน่วย  ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Right})
+		})
 		m.Col(2, func() { m.Text("หน่วย  ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Right}) })
 	})
-	
+
 	// วาดเส้นขอบล่างของ Header
-	m.Line(1) 
+	m.Line(1)
 
 	// วนลูปข้อมูลสินค้า (Content)
 	for i, item := range poData.PO_Items {
+		productCode := item.Supply_product_code_snapshot
+		if item.Product != nil && item.Product.CompanyProductCode != "" {
+			productCode = item.Product.CompanyProductCode
+		}
 		poType := "สั่งซื้อ"
 		if item.PreOrderItemID != nil {
 			poType = "พรีออเดอร์"
@@ -130,17 +140,17 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 
 		m.Row(7, func() {
 			m.Col(1, func() { m.Text(fmt.Sprintf("%d", i+1), props.Text{Size: 11, Align: consts.Center}) })
-			m.Col(1, func() { m.Text(poType, props.Text{Size: 11, Align: consts.Left})})
+			m.Col(1, func() { m.Text(poType, props.Text{Size: 11, Align: consts.Left}) })
 			if includeCode {
-				m.Col(2, func() { m.Text(item.Supply_product_code_snapshot, props.Text{Size: 11, Align: consts.Left}) })
+				m.Col(2, func() { m.Text(productCode, props.Text{Size: 11, Align: consts.Left}) })
 			}
 			m.Col(colName, func() { m.Text(item.Product_name_snapshot, props.Text{Size: 11}) })
-			m.Col(1, func() {}) 
-			m.Col(2, func() { m.Text(fmt.Sprintf("%d  ", int(item.Quantity)), props.Text{Size: 11, Align: consts.Right}) }) 
+			m.Col(1, func() {})
+			m.Col(2, func() { m.Text(fmt.Sprintf("%d  ", int(item.Quantity)), props.Text{Size: 11, Align: consts.Right}) })
 			m.Col(2, func() { m.Text(fmt.Sprintf("%s  ", item.Unit), props.Text{Size: 11, Align: consts.Right}) })
 		})
 	}
-	
+
 	// ปิดท้ายตารางด้วยเส้นล่างสุด
 	m.Line(1)
 
@@ -150,7 +160,7 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 	m.Row(5, func() {
 		// หมายเหตุ (ซ้าย)
 		m.Col(6, func() {
-			m.Text("หมายเหตุ", props.Text{Size: 11, Style: consts.Bold, Color: hexToColor("#E51C23"),})
+			m.Text("หมายเหตุ", props.Text{Size: 11, Style: consts.Bold, Color: hexToColor("#E51C23")})
 			m.Text("ขอความกรุณาส่งสินค้าภายในเวลาทำการของร้านเท่านั้น", props.Text{Size: 11, Top: 5})
 		})
 	})

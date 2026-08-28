@@ -1,17 +1,17 @@
 package purchaseorders
 
 import (
-	"fmt"
-	"time"
-	"errors"
-	"strings"
-	"context"
-	"strconv"
-	"hash/fnv"
-	"gorm.io/gorm"
+	poDto "backend/internal/app/dto/purchase_orders"
 	poEntity "backend/internal/app/entity"
 	poEnum "backend/internal/app/enum"
-	poDto "backend/internal/app/dto/purchase_orders"
+	"context"
+	"errors"
+	"fmt"
+	"gorm.io/gorm"
+	"hash/fnv"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // PurchaseOrderRepository คุมตาราง purchase_orders และ po_items
@@ -46,8 +46,8 @@ func NewPORepository(db *gorm.DB) PurchaseOrderRepository {
 
 // POHistory Record โครงสร้างข้อมูลสำหรับฝั่ง Database
 type POHistory struct {
-	CreatedAt  	time.Time
-	ReceivedAt 	time.Time 	`gorm:"-" json:"received_at"`
+	CreatedAt  time.Time
+	ReceivedAt time.Time `gorm:"-" json:"received_at"`
 }
 
 // Save บันทึกใบสั่งซื้อพร้อมไอเทมลูกทั้งหมดลง Database (มีระบบ Transaction ป้องกันข้อมูลพัง)
@@ -104,6 +104,9 @@ func (r *purchaseOrderRepository) FindAll(ctx context.Context, query poDto.ListP
 
 	if query.Status != "" {
 		dbQuery = dbQuery.Where("status = ?", query.Status)
+	} else {
+		// หน้าจัดการใบสั่งซื้อไม่แสดงรายการที่ลบหรือยกเลิกแล้ว
+		dbQuery = dbQuery.Where("status NOT IN ?", []string{"DELETED", "CANCELLED"})
 	}
 	if query.Search != "" {
 		dbQuery = dbQuery.Where("po_number LIKE ?", "%"+query.Search+"%")
@@ -169,62 +172,62 @@ func (r *purchaseOrderRepository) FindAvailableYears(ctx context.Context) ([]int
 }
 
 func (r *purchaseOrderRepository) GetPOSummary(ctx context.Context) (*poDto.POSummaryResponse, error) {
-    var summary poDto.POSummaryResponse
+	var summary poDto.POSummaryResponse
 
-    now := time.Now()
-    startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	now := time.Now()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	startOfLastMonth := startOfMonth.AddDate(0, -1, 0)
 
 	// นับยอดใบสั่งซื้อเดือนนี้
 	if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).Where("UPPER(status)=? AND created_at >= ?",
-			"APPROVED", startOfMonth,).Count(&summary.MonthlyApprovedCount).Error; err != nil {
+		"APPROVED", startOfMonth).Count(&summary.MonthlyApprovedCount).Error; err != nil {
 		return nil, fmt.Errorf("count monthly approved: %w", err)
 	}
 
 	// นับยอดใบสั่งซื้อเดือนที่แล้ว
 	if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).Where(`UPPER(status)=? AND created_at >= ? AND created_at < ?`,
-		"APPROVED", startOfLastMonth, startOfMonth,).Count(&summary.MonthlyApprovedLastCount).Error; err != nil {
+		"APPROVED", startOfLastMonth, startOfMonth).Count(&summary.MonthlyApprovedLastCount).Error; err != nil {
 		return nil, fmt.Errorf("count last month approved: %w", err)
 	}
 
-    // 1. ยอดรออนุมัติ
-    if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).Where("UPPER(status) = ?", "PENDING").
-        Select("COALESCE(SUM(total_amount), 0)").Row().Scan(&summary.PendingAmount); err != nil {
-        return nil, fmt.Errorf("query pending amount: %w", err)
-    }
+	// 1. ยอดรออนุมัติ
+	if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).Where("UPPER(status) = ?", "PENDING").
+		Select("COALESCE(SUM(total_amount), 0)").Row().Scan(&summary.PendingAmount); err != nil {
+		return nil, fmt.Errorf("query pending amount: %w", err)
+	}
 
-    // 2. ยอดอนุมัติแล้ว (MTD)
-    if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).
-        Where("UPPER(status) = ? AND created_at >= ?", "APPROVED", startOfMonth).
-        Select("COALESCE(SUM(total_amount), 0)").Row().Scan(&summary.ApprovedMTDAmount); err != nil {
-        return nil, fmt.Errorf("query approved amount: %w", err)
-    }
+	// 2. ยอดอนุมัติแล้ว (MTD)
+	if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).
+		Where("UPPER(status) = ? AND created_at >= ?", "APPROVED", startOfMonth).
+		Select("COALESCE(SUM(total_amount), 0)").Row().Scan(&summary.ApprovedMTDAmount); err != nil {
+		return nil, fmt.Errorf("query approved amount: %w", err)
+	}
 
-    // 3. ยอดที่ถูกตีกลับให้แก้ไข (RESUBMITTED ที่ยังค้างอยู่)
-    if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).Where("UPPER(status) = ?", "RESUBMITTED").
+	// 3. ยอดที่ถูกตีกลับให้แก้ไข (RESUBMITTED ที่ยังค้างอยู่)
+	if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).Where("UPPER(status) = ?", "RESUBMITTED").
 		Select("COALESCE(SUM(total_amount), 0)").Row().Scan(&summary.RejectedMTDAmount); err != nil {
-        return nil, fmt.Errorf("query resubmitted amount: %w", err)
-    }
+		return nil, fmt.Errorf("query resubmitted amount: %w", err)
+	}
 
-    // 4. ยอดที่ถูกตีกลับแยกตามบริษัท
-    if err := r.db.WithContext(ctx).Table("purchase_orders").
-        Select("suppliers.supplier_name, COALESCE(SUM(purchase_orders.total_amount), 0) as amount").
-        Joins("JOIN suppliers ON suppliers.id = purchase_orders.supplier_id").
-        Where("UPPER(purchase_orders.status) = ?", "RESUBMITTED").Group("suppliers.supplier_name").
-        Scan(&summary.RejectedBySupplier).Error; err != nil {
-        return nil, fmt.Errorf("query resubmitted by supplier: %w", err)
-    }
+	// 4. ยอดที่ถูกตีกลับแยกตามบริษัท
+	if err := r.db.WithContext(ctx).Table("purchase_orders").
+		Select("suppliers.supplier_name, COALESCE(SUM(purchase_orders.total_amount), 0) as amount").
+		Joins("JOIN suppliers ON suppliers.id = purchase_orders.supplier_id").
+		Where("UPPER(purchase_orders.status) = ?", "RESUBMITTED").Group("suppliers.supplier_name").
+		Scan(&summary.RejectedBySupplier).Error; err != nil {
+		return nil, fmt.Errorf("query resubmitted by supplier: %w", err)
+	}
 
-    if summary.RejectedBySupplier == nil {
-        summary.RejectedBySupplier = []poDto.SupplierRejectedSummary{}
-    }
+	if summary.RejectedBySupplier == nil {
+		summary.RejectedBySupplier = []poDto.SupplierRejectedSummary{}
+	}
 
 	if summary.MonthlyApprovedLastCount > 0 {
 		summary.ApprovedChangePercent = (float64(summary.MonthlyApprovedCount-summary.MonthlyApprovedLastCount) /
 			float64(summary.MonthlyApprovedLastCount)) * 100
 	}
 
-    return &summary, nil
+	return &summary, nil
 }
 
 // Get เพื่อเช็คว่ามี PO นี้อยู่จริงไหมก่อนลบ
@@ -237,7 +240,7 @@ func (r *purchaseOrderRepository) GetPOByID(ctx context.Context, id uint) (*poEn
 
 	// ถ้ามี Error เกิดขึ้น (รวมถึงหาไม่เจอ gorm.ErrRecordNotFound) ส่งกลับไปให้ Service จัดการเลย
 	if err != nil {
-		return nil, err 
+		return nil, err
 	}
 
 	return &po, nil
@@ -262,15 +265,15 @@ func (r *purchaseOrderRepository) DeletePOByID(ctx context.Context, id uint) err
 	})
 }
 
-
 // Get เพื่อไปทำ PDF
 func (r *purchaseOrderRepository) GetPOForPDF(ctx context.Context, id uint) (*poEntity.PO, error) {
 	var po poEntity.PO
-	
+
 	err := r.db.WithContext(ctx).Where("id = ?", id).
 		Preload("Creator").
 		Preload("Supplier").
 		Preload("PO_Type").
+		Preload("PO_Items.Product").
 		Preload("PO_Items").
 		First(&po, id).Error
 
@@ -305,16 +308,16 @@ func (r *purchaseOrderRepository) SyncItems(ctx context.Context, poID uint, inco
 				if err := tx.Model(&poEntity.POItems{}).
 					Where("id = ? AND po_id = ?", item.ID, poID).
 					Updates(map[string]interface{}{
-						"product_id":                      item.ProductID,
-						"product_name_snapshot":           item.Product_name_snapshot,
-						"supply_product_code_snapshot":    item.Supply_product_code_snapshot,
-						"quantity":                        item.Quantity,
-						"unit":                            item.Unit,
-						"unit_price":                      item.UnitPrice,
-						"sub_total":                       item.SubTotal,
-						"notes":                           item.Notes,
-						"alert_id":                        item.AlertID,
-						"pre_order_item_id":               item.PreOrderItemID,
+						"product_id":                   item.ProductID,
+						"product_name_snapshot":        item.Product_name_snapshot,
+						"supply_product_code_snapshot": item.Supply_product_code_snapshot,
+						"quantity":                     item.Quantity,
+						"unit":                         item.Unit,
+						"unit_price":                   item.UnitPrice,
+						"sub_total":                    item.SubTotal,
+						"notes":                        item.Notes,
+						"alert_id":                     item.AlertID,
+						"pre_order_item_id":            item.PreOrderItemID,
 					}).Error; err != nil {
 					return err
 				}
@@ -339,6 +342,7 @@ func (r *purchaseOrderRepository) SyncItems(ctx context.Context, poID uint, inco
 		return nil
 	})
 }
+
 // Get เพื่อคืน PO พร้อม relations ครบ สำหรับตอบกลับหลัง update
 func (r *purchaseOrderRepository) GetPOWithRelations(ctx context.Context, id uint) (*poEntity.PO, error) {
 	var po poEntity.PO
@@ -365,25 +369,24 @@ func (r *purchaseOrderRepository) UpdatePO(ctx context.Context, po *poEntity.PO)
 	return r.db.WithContext(ctx).Save(po).Error
 }
 
-
 func (r *purchaseOrderRepository) GetSupplierDeliveryHistory(ctx context.Context, supplierID int) ([]POHistory, error) {
-    var history []POHistory
+	var history []POHistory
 
-    err := r.db.WithContext(ctx).
-        Table("purchase_orders").
-        Select("purchase_orders.created_at, bills.receive_date").
-        Joins("INNER JOIN bills ON bills.po_id = purchase_orders.id").
-        Where("purchase_orders.supplier_id = ?", supplierID).
-        Where("purchase_orders.status = ?", "APPROVED").
-        Where("bills.receive_date IS NOT NULL").
-        Order("purchase_orders.created_at DESC").
-        Scan(&history).Error
+	err := r.db.WithContext(ctx).
+		Table("purchase_orders").
+		Select("purchase_orders.created_at, bills.receive_date").
+		Joins("INNER JOIN bills ON bills.po_id = purchase_orders.id").
+		Where("purchase_orders.supplier_id = ?", supplierID).
+		Where("purchase_orders.status = ?", "APPROVED").
+		Where("bills.receive_date IS NOT NULL").
+		Order("purchase_orders.created_at DESC").
+		Scan(&history).Error
 
-    if err != nil {
-        return nil, err
-    }
+	if err != nil {
+		return nil, err
+	}
 
-    return history, nil
+	return history, nil
 }
 
 // GetMonthlyPOCount นับจำนวนใบสั่งซื้อที่อนุมัติแล้วของเดือนนี้ — เปิดให้ทุก role เรียกได้
