@@ -193,8 +193,7 @@ const ReturnsPage: React.FC = () => {
         </Button>
       </div>
 
-      {activeTab === 'return' ? (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
           <Card className="bg-[#1C1B1B] border-none text-white p-5 col-span-1 relative overflow-hidden flex flex-col justify-between">
             <Heading
               level="h6"
@@ -237,10 +236,7 @@ const ReturnsPage: React.FC = () => {
             </Heading>
             <Heading level="p">รายการ</Heading>
           </Card>
-        </div>
-      ) : (
-        <></>
-      )}
+      </div>
 
       {/* 2. Search & Filter Bar */}
       <div className="p-3.5 flex flex-col md:flex-row gap-3 items-center justify-between shadow-sm">
