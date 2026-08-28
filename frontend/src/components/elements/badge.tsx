@@ -10,23 +10,28 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        primary:     "bg-red-100 text-red-700",
-        success:     "bg-green-100 text-green-700",
-        error:       "bg-red-100 text-red-600",
-        destructive: "bg-red-600 text-white",        // ✅ เพิ่มใหม่
-        warning:     "bg-yellow-100 text-yellow-700",
-        info:        "bg-blue-100 text-blue-700",
-        neutral:     "bg-slate-100 text-slate-600",
-        outline:     "border border-current bg-transparent text-slate-600",
-        
+        primary: "bg-red-100 text-red-700",
+        success: "bg-green-100 text-green-700",
+        error: "bg-red-100 text-red-600",
+        destructive: "bg-red-600 text-white", // ✅ เพิ่มใหม่
+        warning: "bg-yellow-100 text-yellow-700",
+        info: "bg-blue-100 text-blue-700",
+        neutral: "bg-slate-100 text-slate-600",
+        outline: "border border-current bg-transparent text-slate-600",
+
         //เพิ่มประเภทการชำระเงิน
-        credit:      "bg-[#2563EB] text-white font-light",         // เงินเชื่อ
-        transfer:    "bg-gray-400 text-white font-light",         // เงินโอน/สแกน QR
-        cash:        "bg-[#259B24] text-white font-light",        // เงินสด
+        credit: "bg-[#2563EB] text-white font-light", // เงินเชื่อ
+        transfer: "bg-gray-400 text-white font-light", // เงินโอน/สแกน QR
+        cash: "bg-[#259B24] text-white font-light", // เงินสด
 
         // ธุรกรรมการรับชำระ
-        payment:     "bg-blue-100 text-blue-700 ",      // ชำระสดหน้าร้าน
-        repayment:   "bg-green-100 text-green-700 ", // เคลียร์หนี้เงินเชื่อ
+        payment: "bg-blue-100 text-blue-700 ", // ชำระสดหน้าร้าน
+        repayment: "bg-teal-600 text-white font-light", // เคลียร์หนี้เงินเชื่อ
+
+        // เพิ่มประเภทลูกค้า
+        customer: "bg-sky-100 text-sky-700", // ลูกค้าทั่วไป
+        garage: "bg-orange-100 text-orange-700", // ลูกค้าอู่
+        wholesale: "bg-indigo-100 text-indigo-700", // ลูกค้าบริษัท
       },
       size: {
         sm: "w-20 px-1.5 py-0.5 text-xs",
@@ -37,27 +42,31 @@ const badgeVariants = cva(
     },
     defaultVariants: {
       variant: "neutral",
-      size:    "md",
+      size: "md",
     },
-  }
+  },
 );
 
 const dotVariants = cva("rounded-full shrink-0", {
   variants: {
     variant: {
-      primary:     "bg-red-500",
-      success:     "bg-green-500",
-      error:       "bg-red-500",
+      primary: "bg-red-500",
+      success: "bg-green-500",
+      error: "bg-red-500",
       destructive: "bg-white",
-      warning:     "bg-yellow-500",
-      info:        "bg-blue-500",
-      neutral:     "bg-slate-400",
-      outline:     "bg-slate-400",
-      credit:      "bg-white",
-      transfer:    "bg-white",
-      cash:        "bg-white",
-      payment:     "bg-blue-500",
-      repayment:   "bg-emerald-500",
+      warning: "bg-yellow-500",
+      info: "bg-blue-500",
+      neutral: "bg-slate-400",
+      outline: "bg-slate-400",
+      credit: "bg-white",
+      transfer: "bg-white",
+      cash: "bg-white",
+      payment: "bg-blue-500",
+      repayment: "bg-teal-600",
+
+      customer: "bg-sky-400",
+      garage: "bg-orange-500",
+      wholesale: "bg-indigo-700",
     },
     size: {
       sm: "h-1 w-1",
@@ -68,32 +77,39 @@ const dotVariants = cva("rounded-full shrink-0", {
   },
   defaultVariants: {
     variant: "neutral",
-    size:    "md",
+    size: "md",
   },
 });
 
-type BadgeVariantType = NonNullable<VariantProps<typeof badgeVariants>["variant"]>;
-type BadgeSizeType    = NonNullable<VariantProps<typeof badgeVariants>["size"]>;
+type BadgeVariantType = NonNullable<
+  VariantProps<typeof badgeVariants>["variant"]
+>;
+type BadgeSizeType = NonNullable<VariantProps<typeof badgeVariants>["size"]>;
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
-  variant?:  BadgeVariantType;
-  size?:     BadgeSizeType;
-  dot?:      boolean;
+  variant?: BadgeVariantType;
+  size?: BadgeSizeType;
+  dot?: boolean;
   onRemove?: () => void;
 }
 
 export function Badge({
-  variant  = "neutral",
-  size     = "md",
-  dot      = false,
+  variant = "neutral",
+  size = "md",
+  dot = false,
   onRemove,
   className,
   children,
   ...props
 }: BadgeProps) {
   return (
-    <span className={cn(badgeVariants({ variant, size }), className)} {...props}>
-      {dot && <span aria-hidden="true" className={dotVariants({ variant, size })} />}
+    <span
+      className={cn(badgeVariants({ variant, size }), className)}
+      {...props}
+    >
+      {dot && (
+        <span aria-hidden="true" className={dotVariants({ variant, size })} />
+      )}
       {children}
       {onRemove && (
         <button
@@ -102,8 +118,18 @@ export function Badge({
           aria-label="ลบ"
           className="ml-0.5 rounded-sm transition-opacity hover:opacity-70 focus:outline-none focus-visible:ring-1 focus-visible:ring-current"
         >
-          <svg className="h-3 w-3" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <svg
+            className="h-3 w-3"
+            viewBox="0 0 20 20"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M5 5l10 10M15 5L5 15"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
           </svg>
         </button>
       )}

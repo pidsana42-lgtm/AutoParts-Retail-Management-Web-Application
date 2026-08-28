@@ -51,6 +51,9 @@ const PaymentCancellationHistory: React.FC = () => {
     handleBatchRevert,
     isLoading,
     error,
+    ownerStats,
+    employeeStats,
+    isStatsLoading,
     page,
     limit,
     totalRows,
@@ -83,6 +86,9 @@ const PaymentCancellationHistory: React.FC = () => {
     handleResubmitCancel,
   } = usePaymentCancellationHistory();
 
+  const kpiValue = (value: React.ReactNode) =>
+    isStatsLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
+
   return (
     <div className="relative flex min-h-screen bg-white text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
@@ -90,11 +96,15 @@ const PaymentCancellationHistory: React.FC = () => {
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
-              <Heading level='h1' weight='semibold' className='m-0 text-black'>
-                ประวัติการยกเลิกการชำระเงิน 
+              <Heading level="h1" weight="semibold" className="m-0 text-black">
+                {isOwnerOrAdmin
+                  ? 'คำขอยกเลิกการชำระเงินจากพนักงาน'
+                  : 'ประวัติการยกเลิกการชำระเงิน'}
               </Heading>
-              <Heading level='h6' className='m-0 mt-1'>
-                ประวัติและการจัดการคำขอ
+              <Heading level="h6" className="m-0 mt-1 text-gray-500">
+                {isOwnerOrAdmin
+                  ? 'ตรวจสอบและจัดการคำขอยกเลิกรายการชำระเงิน'
+                  : 'ติดตามสถานะคำขอยกเลิกรายการชำระเงิน'}
               </Heading>
             </div>
           </div>
@@ -188,6 +198,159 @@ const PaymentCancellationHistory: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Small Stat Cards เหนือตาราง */}
+          {isOwnerOrAdmin ? (
+            /* 1. ฝั่งเจ้าของร้าน (Owner System) */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+              {/* Card 1: รออนุมัติ */}
+              <Card className="!border-l-[5px] !border-l-amber-300   flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      รออนุมัติยกเลิก
+                    </Heading>
+                  </div>
+                  <Heading level="h3">
+                    {kpiValue(ownerStats.pendingCount.toLocaleString("th-TH"))} <span className="text-sm font-normal text-[#1C1B1B]">รายการ</span>
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>มูลค่ารวมที่ขอยกเลิก</span>
+                  <span className="text-amber-400 font-normal">฿{formatCurrency(ownerStats.pendingAmount)}</span>
+                </div>
+              </Card>
+
+              {/* Card 2: อนุมัติแล้ว (Approved) */}
+              <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      อนุมัติแล้ว
+                    </Heading>
+                  </div>
+                  <Heading level="h3">
+                    ฿{kpiValue(formatCurrency(ownerStats.approvedAmount))}
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>ยกเลิกสำเร็จ</span>
+                  <span className="text-emerald-500 font-medium">{ownerStats.approvedCount} รายการ</span>
+                </div>
+              </Card>
+
+              {/* Card 3: ปฏิเสธ / ไม่อนุมัติ (Rejected) */}
+              <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      ปฏิเสธ / ไม่อนุมัติ
+                    </Heading>
+                  </div>
+                  <Heading level="h3">
+                    {kpiValue(ownerStats.rejectedCount.toLocaleString("th-TH"))} <span className="text-sm font-normal text-[#1C1B1B]">รายการ</span>
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>มูลค่าที่ไม่ผ่าน</span>
+                  <span className="text-[#E51C23] font-normal">฿{formatCurrency(ownerStats.rejectedAmount)}</span>
+                </div>
+              </Card>
+
+              {/* Card 4: คำขอทั้งหมด (Total Requests) */}
+              <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      คำขอทั้งหมด
+                    </Heading>
+                  </div>
+                  <Heading level="h3">
+                    {kpiValue(ownerStats.totalCount.toLocaleString("th-TH"))} <span className="text-sm font-normal text-[#1C1B1B]">รายการ</span>
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>มูลค่าคำขอรวม</span>
+                  <span className="text-sky-700 font-normal">฿{formatCurrency(ownerStats.totalAmount)}</span>
+                </div>
+              </Card>
+            </div>
+          ) : (
+            /* 2. ฝั่งพนักงาน (Employee) */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+              {/* Card 1: คำขอทั้งหมดของฉัน (My Total Requests) */}
+              <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      คำขอทั้งหมดของฉัน
+                    </Heading>
+                  </div>
+                  <Heading level="h3">
+                    {kpiValue(employeeStats.totalCount.toLocaleString("th-TH"))} <span className="text-sm font-normal text-[#1C1B1B]">รายการ</span>
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>มูลค่ารวมทั้งหมด</span>
+                  <span className="text-sky-700 font-normal">฿{formatCurrency(employeeStats.totalAmount)}</span>
+                </div>
+              </Card>
+
+              {/* Card 2: รอเจ้าของร้านอนุมัติ (Pending) */}
+              <Card className="!border-l-[5px] !border-l-amber-300 flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      รอเจ้าของร้านอนุมัติ
+                    </Heading>
+                  </div>
+                  <Heading level="h3">
+                    {kpiValue(employeeStats.pendingCount.toLocaleString("th-TH"))} <span className="text-sm font-normal text-[#1C1B1B]">รายการ</span>
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>รอการตรวจสอบ</span>
+                  <span className="text-amber-400 font-normal">฿{formatCurrency(employeeStats.pendingAmount)}</span>
+                </div>
+              </Card>
+
+              {/* Card 3: อนุมัติแล้ว (Approved) */}
+              <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      อนุมัติแล้ว
+                    </Heading>
+                  </div>
+                  <Heading level="h3">
+                    {kpiValue(employeeStats.approvedCount.toLocaleString("th-TH"))} <span className="text-sm font-normal text-[#1C1B1B]">รายการ</span>
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>ปรับลดยอดส่งกะแล้ว</span>
+                  <span className="text-emerald-500 font-normal">฿{formatCurrency(employeeStats.approvedAmount)}</span>
+                </div>
+              </Card>
+
+              {/* Card 4: ไม่อนุมัติ (Rejected) */}
+              <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Heading level="h6" className="uppercase tracking-wider">
+                      ไม่อนุมัติ (ปฏิเสธ)
+                    </Heading>
+                  </div>
+                  <Heading level="h3">
+                    {kpiValue(employeeStats.rejectedCount.toLocaleString("th-TH"))} <span className="text-sm font-normal text-[#1C1B1B]">รายการ</span>
+                  </Heading>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                  <span>ต้องนำส่งเงินตามปกติ</span>
+                  <span className="text-[#E51C23] font-normal">฿{formatCurrency(employeeStats.rejectedAmount)}</span>
+                </div>
+              </Card>
+            </div>
+          )}
 
           {/* Table */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
