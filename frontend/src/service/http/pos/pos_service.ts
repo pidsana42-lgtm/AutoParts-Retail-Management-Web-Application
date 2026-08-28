@@ -13,6 +13,14 @@ export const posApiService = {
   getStoreConfig: (): Promise<StoreConfigInterface> => 
     apiClient.get<StoreConfigInterface>("/pos/store-config").then((res) => res.data),
 
+  /** สร้างค่าตั้งค่าคอนฟิกร้านค้าครั้งแรก (POST) */
+  createStoreConfig: (payload: Partial<StoreConfigInterface>): Promise<any> =>
+    apiClient.post("/pos/store-config", payload).then((res) => res.data),
+
+  /** อัปเดตค่าตั้งค่าคอนฟิกร้านค้า (PUT) */
+  updateStoreConfig: (payload: Partial<StoreConfigInterface>): Promise<any> =>
+    apiClient.put("/pos/store-config", payload).then((res) => res.data),
+
   /** ค้นหาข้อมูลสิทธิ์ส่วนลดและโปรไฟล์ลูกค้า */
   searchCustomerDiscount: (query: string): Promise<CustomerDiscountResponse[]> => 
     apiClient
