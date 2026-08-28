@@ -16,7 +16,7 @@ import Text from "../../../components/elements/text";
 import Input from "../../../components/elements/input";
 import Select from "../../../components/elements/select";
 import Button from "../../../components/elements/button";
-import Badge from "../../../components/elements/badge";
+// import Badge from "../../../components/elements/badge";
 import {
   Table,
   TableHeader,
@@ -26,6 +26,7 @@ import {
   TableCell,
 } from "../../../components/elements/table";
 import { Card, CardContent } from "../../../components/elements/card";
+import { getCustomerTypeBadge } from "../../../utils/customerhelpers";
 
 // Hook & Types
 import { useCustomerRegistration } from "./hook/useCustomerRegustration";
@@ -73,29 +74,7 @@ export default function CustomerRegistration() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Helper สำหรับ Badge ประเภทลูกค้า
-  const getCustomerTypeBadge = (typeName?: string, typeLabel?: string) => {
-    const name = typeName?.toUpperCase() || "";
-    if (name === "GARAGE" || typeLabel?.includes("อู่")) {
-      return (
-        <Badge variant="warning" className="rounded-none font-normal text-[11px]">
-          {typeLabel || "ลูกค้าอู่"}
-        </Badge>
-      );
-    }
-    if (name === "WHOLESALE" || typeLabel?.includes("บริษัท")) {
-      return (
-        <Badge variant="neutral" className="rounded-none font-normal text-[11px] bg-slate-700 text-white">
-          {typeLabel || "ลูกค้าบริษัท"}
-        </Badge>
-      );
-    }
-    return (
-      <Badge variant="outline" className="rounded-none font-normal text-[11px]">
-        {typeLabel || "ลูกค้าทั่วไป"}
-      </Badge>
-    );
-  };
+  
 
   return (
     <div className="relative flex min-h-screen bg-white text-slate-800 font-sans overflow-x-hidden">
