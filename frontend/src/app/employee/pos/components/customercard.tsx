@@ -14,7 +14,9 @@ export function CustomerCard({ customer, address }: CustomerCardProps): React.JS
   const {
     customerName,
     phoneNumber,
+    isGuest,
     isSpecialPrice,
+    isDiscountEnabled,
     ontopDiscountRate,
     creditUsagePercentage,
     currentDebtStr,
@@ -49,7 +51,12 @@ export function CustomerCard({ customer, address }: CustomerCardProps): React.JS
           }`}>
             {isSpecialPrice ? "ระดับราคาพิเศษ" : "ระดับราคามาตรฐาน"}
           </div>
-          {ontopDiscountRate > 0 ? (
+          {!isGuest && !isDiscountEnabled ? (
+            <span className="text-[11px] text-[#6B7280] font-normal tracking-wide flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#6B7280] inline-block shrink-0" />
+              <span>On-Top: {ontopDiscountRate > 0 ? `+${ontopDiscountRate}%` : "0%"} (ปิดใช้งาน)</span>
+            </span>
+          ) : ontopDiscountRate > 0 ? (
             <span className="text-[11px] text-[#259B24] font-normal tracking-wide">
               On-Top: +{ontopDiscountRate}%
             </span>
