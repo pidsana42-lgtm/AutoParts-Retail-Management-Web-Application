@@ -7,10 +7,12 @@ import (
 	poEntity 	"backend/internal/app/entity"
 	preOrderRepo "backend/internal/app/repository/pre_oder"
 	wmsRepo 	"backend/internal/app/repository/wms"
+	svcNotification "backend/internal/app/service/notification"
 	"gorm.io/gorm"
 	"strings"
 	"context"
 	"errors"
+	"log"
 	"time"
 	"fmt"
 	"math"
@@ -31,6 +33,7 @@ type PurchaseOrderService interface {
 	GetSupplierDeliveryEstimate(ctx context.Context, supplierID int) (*poDto.POAnalyticsResponse, error)
 	GetMonthlyPOCount(ctx context.Context) (int64, error)
 	RestorePO(ctx context.Context, poID uint, userID uint) error
+	SendStaleDraftReminders(ctx context.Context) error
 }
 
 // purchaseOrderService ตัว Struct หลักที่จะทำงานจริง (Implement Interface ด้านบน)
@@ -42,6 +45,7 @@ type purchaseOrderService struct {
 	userRepo        poRepo.UserRepository
 	preOrderRepo    preOrderRepo.PreOrderRepository
 	stockAlertRepo  wmsRepo.StockAlertRepository
+	notification    svcNotification.NotificationService
 }
 
 // NewPurchaseOrderService ฟังก์ชัน Constructor สำหรับทำ DI
@@ -53,6 +57,7 @@ func NewPOService(
 	preOrderRepo    preOrderRepo.PreOrderRepository,
 	userRepo        poRepo.UserRepository,
 	stockAlertRepo  wmsRepo.StockAlertRepository,
+	notificationService svcNotification.NotificationService,
 ) PurchaseOrderService {
 	return &purchaseOrderService{
 		poRepository:   poRepo,
@@ -62,6 +67,7 @@ func NewPOService(
 		preOrderRepo:   preOrderRepo,
 		userRepo:       userRepo,
 		stockAlertRepo: stockAlertRepo,
+		notification:   notificationService,
 	}
 }
 
@@ -140,6 +146,10 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 
 	if err := s.poRepository.SavePO(ctx, poData); err != nil {
 		return nil, fmt.Errorf("failed to save purchase order: %w", err)
+	}
+
+	if poData.Status == poEnum.StatusPending {
+		s.notifyOwnersOfPendingApproval(ctx, poData, creatorID)
 	}
 
 	// จองไอเทม PreOrder
@@ -321,7 +331,41 @@ func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, stat
 			_ = s.stockAlertRepo.ResolveByIDs(alertIDs)
 		}
 	}
-	return s.poRepository.UpdatePO(ctx, po)
+
+	if err := s.poRepository.UpdatePO(ctx, po); err != nil {
+		return err
+	}
+
+	if status == poEnum.StatusPending {
+		s.notifyOwnersOfPendingApproval(ctx, po, updatedBy)
+	}
+
+	return nil
+}
+
+// notifyOwnersOfPendingApproval แจ้งเจ้าของร้านเมื่อมีใบสั่งซื้อถูกส่งเข้ามาขออนุมัติ
+// (ข้ามการแจ้งเตือนถ้าคนส่งเองเป็นเจ้าของร้าน เพราะฝั่ง frontend จะอนุมัติอัตโนมัติต่อทันทีอยู่แล้ว)
+func (s *purchaseOrderService) notifyOwnersOfPendingApproval(ctx context.Context, po *poEntity.PO, actorID uint) {
+	if s.notification == nil {
+		return
+	}
+
+	actor, err := s.userRepo.FindByID(ctx, actorID)
+	if err != nil {
+		log.Printf("[po-notify] failed to load actor %d for PO %s: %v", actorID, po.PO_number, err)
+		return
+	}
+	if actor.Role.RoleName == poEnum.RoleOwner {
+		return
+	}
+
+	title := "มีใบสั่งซื้อรออนุมัติใหม่"
+	message := fmt.Sprintf("พนักงานส่งใบสั่งซื้อ %s เข้ามาขออนุมัติ กรุณาตรวจสอบ", po.PO_number)
+	link := fmt.Sprintf("/owner/orders/%d", po.ID)
+
+	if err := s.notification.NotifyOwners("PO_PENDING_APPROVAL", title, message, link, nil); err != nil {
+		log.Printf("[po-notify] failed to notify owners for PO %s: %v", po.PO_number, err)
+	}
 }
 
 func (s *purchaseOrderService) ListPOs(ctx context.Context, query poDto.ListPOQuery) (*poDto.ListPOResponse, error) {
@@ -653,4 +697,47 @@ func (s *purchaseOrderService) GetSupplierDeliveryEstimate(ctx context.Context, 
 
 func (s *purchaseOrderService) RestorePO(ctx context.Context, poID uint, userID uint) error {
 	return s.poRepository.RestorePOByID(ctx, poID, userID)
+}
+
+// SendStaleDraftReminders แจ้งเตือนผู้สร้าง PO ที่ค้างอยู่ในสถานะ DRAFT/RESUBMITTED โดยไม่มีความเคลื่อนไหวมาแล้วอย่างน้อย 7 วัน
+func (s *purchaseOrderService) SendStaleDraftReminders(ctx context.Context) error {
+	cutoff := time.Now().AddDate(0, 0, -7)
+	pos, err := s.poRepository.FindDuePOReminders(ctx, cutoff)
+	if err != nil {
+		return fmt.Errorf("failed to find due PO reminders: %w", err)
+	}
+
+	for _, po := range pos {
+		var title, message, notifType string
+		switch po.Status {
+		case poEnum.StatusDraft:
+			title = "ใบสั่งซื้อฉบับร่างค้างนาน"
+			message = fmt.Sprintf("ใบสั่งซื้อ %s เป็นฉบับร่างค้างไว้นานกว่า 7 วัน กรุณาตรวจสอบและดำเนินการต่อ", po.PO_number)
+			notifType = "PO_DRAFT_REMINDER"
+		case poEnum.StatusResubmitted:
+			title = "ใบสั่งซื้อถูกตีกลับค้างนาน"
+			message = fmt.Sprintf("ใบสั่งซื้อ %s ถูกตีกลับให้แก้ไขค้างไว้นานกว่า 7 วัน กรุณาแก้ไขและส่งอนุมัติใหม่", po.PO_number)
+			notifType = "PO_RESUBMITTED_REMINDER"
+		default:
+			continue
+		}
+
+		prefix := "/employee"
+		if po.Creator.Role.RoleName == poEnum.RoleOwner {
+			prefix = "/owner"
+		}
+		link := fmt.Sprintf("%s/orders/%d", prefix, po.ID)
+
+		if s.notification != nil {
+			if err := s.notification.NotifyUser(po.Created_by, notifType, title, message, link, nil); err != nil {
+				log.Printf("[po-reminder] failed to notify user %d (PO %s): %v\n", po.Created_by, po.PO_number, err)
+			}
+		}
+
+		if err := s.poRepository.UpdateLastReminderAt(ctx, po.ID, time.Now()); err != nil {
+			log.Printf("[po-reminder] failed to update last_reminder_at for PO %s: %v\n", po.PO_number, err)
+		}
+	}
+
+	return nil
 }

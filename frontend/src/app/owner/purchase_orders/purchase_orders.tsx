@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ShoppingBasket, CircleCheck, PenLine, Eye, Printer, Trash2, Info, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
-  TrendingUp, TrendingDown,
-  ReceiptText, } from "lucide-react";
+  TrendingUp, TrendingDown, ReceiptText, } from "lucide-react";
 // Components
 import Heading from "../../../components/elements/heading";
 import Input   from "../../../components/elements/input";

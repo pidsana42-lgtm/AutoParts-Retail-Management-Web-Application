@@ -8,6 +8,8 @@ import Card from '../../../components/elements/card';
 import Input from '../../../components/elements/input';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '../../../components/elements/table';
 import Button from '../../../components/elements/button';
+import Modal from '../../../components/elements/modal';
+import { useToast } from '../../../components/elements/toast';
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
 // Interface
 import type { POResponse, LocalPOItem, POAnalyticsResponse } from '../../../interface/purchase_orders/po_interface';
@@ -65,6 +67,7 @@ const getPageSubtitle = (status: string, role: string | null): string => {
 function OrderDetail() {
     const navigate = useNavigate();
     const basePath = usePathBasePrefix();
+    const { toast } = useToast();
     // ดึง id จาก URL มาใช้งาน (เช่น เอาไป Fetch API ต่อ)
     const { id } = useParams();
     const userRole = localStorage.getItem('role');
@@ -77,6 +80,10 @@ function OrderDetail() {
     const [activeAction, setActiveAction] = useState<'draft' | 'submit' | 'approve' | 'resubmitted' | 'restore' | null>(null);
     const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
     const [rejectMode, setRejectMode] = useState<'cancel' | 'return' | null>(null);
+    // เปิด/ปิด modal ยืนยันการกู้คืนใบสั่งซื้อ
+    const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
+    // เก็บ key ของรายการที่รอยืนยันลบ พร้อมเหตุผล (ลบเอง หรือ จำนวนเหลือ 0)
+    const [removeConfirm, setRemoveConfirm] = useState<{ key: number | string; reason: 'manual' | 'zero-qty' } | null>(null);
     // เก็บค่าที่ผู้ใช้กำลังพิมพ์อยู่ (ระหว่างลบเลขเดิมทิ้งแล้วยังพิมพ์ไม่เสร็จ) แยกจาก items จริง
     const [qtyDrafts, setQtyDrafts] = useState<Record<string | number, string>>({});
     // เก็บ id ของรายการที่ "มีอยู่แล้วจริงใน DB" ตอนโหลดหน้ามาครั้งแรก
@@ -93,8 +100,9 @@ function OrderDetail() {
     // เรียกใช้งาน Hook
     const searchInputRef = useRef<HTMLInputElement>(null);
     const supplierId = po?.supplier_id ? String(po.supplier_id) : '';
-    const { searchInput, addQuantity, setAddQuantity, searchResults, isSearching,
-        handleSearchInput, handleSelectProduct, handleAddItem, handleScannerEnter } =
+    const { searchInput, addQuantity, setAddQuantity, searchResults, isSearching, selectedProduct,
+        handleSearchInput, handleSelectProduct, handleAddItem, handleScannerEnter,
+        duplicatePrompt, confirmDuplicateAdd, cancelDuplicateAdd } =
         usePoScanner(supplierId, items, setItems);
     const { preorders, handleAddPreorderToPO } = usePreorders(items, setItems, setIsPreorderModalOpen);
     
@@ -144,10 +152,10 @@ function OrderDetail() {
         setActiveAction('approve');
         try {
             await poService.updatePOStatus(id, 'APPROVED');
-            alert('อนุมัติใบสั่งซื้อสำเร็จ');
+            toast({ title: 'ดำเนินการสำเร็จ', message: 'อนุมัติใบสั่งซื้อสำเร็จ', variant: 'success' });
             navigate(`${basePath}/orders`);
         } catch {
-            setError('อนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+            toast({ title: 'เกิดข้อผิดพลาด', message: 'อนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', variant: 'error' });
         } finally {
             setActiveAction(null);
         }
@@ -165,14 +173,14 @@ function OrderDetail() {
         try {
             if (rejectMode === 'cancel') {
                 await poService.updatePOStatus(id, 'CANCELLED');
-                alert('ยกเลิกใบสั่งซื้อสำเร็จ');
+                toast({ title: 'ดำเนินการสำเร็จ', message: 'ยกเลิกใบสั่งซื้อสำเร็จ', variant: 'success' });
             } else {
                 await poService.updatePOStatus(id, 'RESUBMITTED');
-                alert('ตีกลับใบสั่งซื้อสำเร็จ');
+                toast({ title: 'ดำเนินการสำเร็จ', message: 'ตีกลับใบสั่งซื้อสำเร็จ', variant: 'success' });
             }
             navigate(`${basePath}/orders`);
         } catch {
-            setError('ไม่สามารถดำเนินการได้ กรุณาลองใหม่อีกครั้ง');
+            toast({ title: 'เกิดข้อผิดพลาด', message: 'ไม่สามารถดำเนินการได้ กรุณาลองใหม่อีกครั้ง', variant: 'error' });
         } finally {
             setActiveAction(null);
         }
@@ -180,15 +188,14 @@ function OrderDetail() {
 
     const handleRestore = async () => {
         if (!id) return;
-        const confirmed = window.confirm('คุณต้องการกู้คืนใบสั่งซื้อนี้ใช่หรือไม่? (ระบบจะเปลี่ยนสถานะกลับเป็นฉบับร่าง)');
-        if (!confirmed) return;
         setActiveAction('restore');
         try {
             await poService.restorePurchaseOrder(id);
-            alert('กู้คืนใบสั่งซื้อสำเร็จ');
+            toast({ title: 'ดำเนินการสำเร็จ', message: 'กู้คืนใบสั่งซื้อสำเร็จ', variant: 'success' });
+            setIsRestoreConfirmOpen(false);
             navigate(`${basePath}/orders/restore`);
         } catch {
-            setError('ไม่สามารถกู้คืนใบสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง');
+            toast({ title: 'เกิดข้อผิดพลาด', message: 'ไม่สามารถกู้คืนใบสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง', variant: 'error' });
         } finally {
             setActiveAction(null);
         }
@@ -231,10 +238,7 @@ function OrderDetail() {
         }
         const value = Number(trimmed);
         if (value <= 0) {
-            const confirmed = window.confirm('จำนวนสินค้าจะเหลือ 0 ต้องการลบรายการนี้ออกจากรายการหรือไม่?');
-            if (confirmed) {
-                handleRemoveItem(key);
-            }
+            setRemoveConfirm({ key, reason: 'zero-qty' });
             // ไม่ว่าจะยืนยันหรือยกเลิก ก็เคลียร์ draft ทิ้ง (ถ้าไม่ลบ ตัวเลขจะกลับไปเป็นค่าเดิมของ item)
             setQtyDrafts(prev => {
                 const next = { ...prev };
@@ -251,10 +255,17 @@ function OrderDetail() {
         });
     };
 
-    const handleRemoveItem = (key: number | string) => {
-        const confirmed = window.confirm('ต้องการลบสินค้ารายการนี้ออกจากรายการหรือไม่?');
-        if (!confirmed) return;
+    const removeItemImmediate = (key: number | string) => {
         setItems(prev => prev.filter(item => item.id !== key));
+    };
+
+    const handleRemoveItem = (key: number | string) => {
+        setRemoveConfirm({ key, reason: 'manual' });
+    };
+
+    const confirmRemoveItem = () => {
+        if (removeConfirm) removeItemImmediate(removeConfirm.key);
+        setRemoveConfirm(null);
     };
 
     // ฟังก์ชันกลาง: บันทึกรายการแก้ไขปัจจุบันลง PO (ใช้ร่วมกันทั้งบันทึกร่างและส่งอนุมัติ)
@@ -289,10 +300,10 @@ function OrderDetail() {
         setActiveAction('draft');
         try {
             await savePOChanges();
-            alert('บันทึกการแก้ไขข้อมูลสำเร็จ');
+            toast({ title: 'ดำเนินการสำเร็จ', message: 'บันทึกการแก้ไขข้อมูลสำเร็จ', variant: 'success' });
         } catch (err: any) {
             console.error("Update Error:", err.response?.data || err);
-            setError('บันทึกการแก้ไขไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+            toast({ title: 'เกิดข้อผิดพลาด', message: 'บันทึกการแก้ไขไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', variant: 'error' });
         } finally {
             setActiveAction(null);
         }
@@ -305,11 +316,11 @@ function OrderDetail() {
         try {
             await savePOChanges();
             await poService.updatePOStatus(id, 'PENDING');
-            alert('ส่งใบสั่งซื้อเพื่อขออนุมัติเรียบร้อยแล้ว');
+            toast({ title: 'ดำเนินการสำเร็จ', message: 'ส่งใบสั่งซื้อเพื่อขออนุมัติเรียบร้อยแล้ว', variant: 'success' });
             navigate(`${basePath}/orders`);
         } catch (err: any) {
             console.error("Submit Error:", err.response?.data || err);
-            setError('ส่งอนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+            toast({ title: 'เกิดข้อผิดพลาด', message: 'ส่งอนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', variant: 'error' });
         } finally {
             setActiveAction(null);
         }
@@ -521,27 +532,28 @@ function OrderDetail() {
                                     onKeyDown={(e) => { if (e.key === 'Enter') handleScannerEnter(); }}
                                     className='w-full border border-gray-200 rounded pl-9 pr-3 py-2 text-sm outline-none focus:border-gray-400 bg-white'
                                 />
-                                {searchResults.length > 0 && (
+                                {searchInput.trim().length > 0 && !(selectedProduct && searchInput === selectedProduct.name) && (
                                     <div className='absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-64 overflow-y-auto'>
-                                        {searchResults.map((product) => (
-                                            <button
-                                                key={product.id}
-                                                type='button'
-                                                onClick={() => handleSelectProduct(product)}
-                                                className='w-full text-left px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-b-0 flex items-center justify-between gap-3'
-                                            >
-                                                <div>
-                                                    <div className='text-sm font-medium text-black'>{product.name}</div>
-                                                    <div className='text-xs text-gray-400'>{product.code} · คงเหลือ {product.stock_qty} {product.unit}</div>
-                                                </div>
-                                                <div className='text-sm font-medium text-black whitespace-nowrap'>{product.price.toLocaleString()} ฿</div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                                {isSearching && (
-                                    <div className='absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded shadow-lg px-4 py-2.5 text-sm text-gray-400'>
-                                        กำลังค้นหา...
+                                        {isSearching ? (
+                                            <div className='px-4 py-2.5 text-sm text-gray-400'>กำลังค้นหา...</div>
+                                        ) : searchResults.length > 0 ? (
+                                            searchResults.map((product) => (
+                                                <button
+                                                    key={product.id}
+                                                    type='button'
+                                                    onClick={() => handleSelectProduct(product)}
+                                                    className='w-full text-left px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-b-0 flex items-center justify-between gap-3'
+                                                >
+                                                    <div>
+                                                        <div className='text-sm font-medium text-black'>{product.name}</div>
+                                                        <div className='text-xs text-gray-400'>{product.code} · คงเหลือ {product.stock_qty} {product.unit}</div>
+                                                    </div>
+                                                    <div className='text-sm font-medium text-black whitespace-nowrap'>{product.price.toLocaleString()} ฿</div>
+                                                </button>
+                                            ))
+                                        ) : (
+                                            <div className='px-4 py-2.5 text-sm text-gray-400'>ไม่พบสินค้าที่ตรงกับคำค้นหา</div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -608,8 +620,7 @@ function OrderDetail() {
                                                         return next;
                                                     });
                                                     if (item.quantity <= 1) {
-                                                        const confirmed = window.confirm('จำนวนสินค้าจะเหลือ 0 ต้องการลบรายการนี้ออกจากรายการหรือไม่?');
-                                                        if (confirmed) handleRemoveItem(itemKey);
+                                                        setRemoveConfirm({ key: itemKey, reason: 'zero-qty' });
                                                         return;
                                                     }
                                                     handleItemChange(itemKey, 'quantity', item.quantity - 1);
@@ -733,7 +744,7 @@ function OrderDetail() {
                         ย้อนกลับ
                     </Button>
                     <div className='flex gap-4'>
-                        <Button variant='primary' className='w-40' onClick={handleRestore} disabled={!!activeAction}>
+                        <Button variant='primary' className='w-40' onClick={() => setIsRestoreConfirmOpen(true)} disabled={!!activeAction}>
                             {activeAction === 'restore' ? 'กำลังกู้คืน...' : 'กู้คืนใบสั่งซื้อ'}
                         </Button>
                     </div>
@@ -793,6 +804,45 @@ function OrderDetail() {
                     </div>
                 </div>
             )}
+
+            <Modal
+                isOpen={isRestoreConfirmOpen}
+                onClose={() => setIsRestoreConfirmOpen(false)}
+                onConfirm={handleRestore}
+                title='ยืนยันการกู้คืนใบสั่งซื้อ'
+                description='คุณต้องการกู้คืนใบสั่งซื้อนี้ใช่หรือไม่? ระบบจะเปลี่ยนสถานะกลับเป็นฉบับร่าง'
+                confirmText='กู้คืน'
+                variant='info'
+                isSubmitting={activeAction === 'restore'}
+            />
+
+            <Modal
+                isOpen={!!removeConfirm}
+                onClose={() => setRemoveConfirm(null)}
+                onConfirm={confirmRemoveItem}
+                title='ยืนยันการลบรายการ'
+                description={
+                    removeConfirm?.reason === 'zero-qty'
+                        ? 'จำนวนสินค้าจะเหลือ 0 ต้องการลบรายการนี้ออกจากรายการหรือไม่?'
+                        : 'ต้องการลบสินค้ารายการนี้ออกจากรายการหรือไม่?'
+                }
+                confirmText='ลบ'
+                variant='danger'
+            />
+
+            <Modal
+                isOpen={!!duplicatePrompt}
+                onClose={cancelDuplicateAdd}
+                onConfirm={confirmDuplicateAdd}
+                title='สินค้านี้มีอยู่ในใบสั่งซื้อแล้ว'
+                description={
+                    duplicatePrompt
+                        ? `สินค้า "${duplicatePrompt.product.name}" มีอยู่ในใบสั่งซื้อแล้ว ${duplicatePrompt.existingQty} ${duplicatePrompt.unit} ต้องการเพิ่มอีก ${duplicatePrompt.addQty} ${duplicatePrompt.unit} รวมเป็น ${duplicatePrompt.existingQty + duplicatePrompt.addQty} ${duplicatePrompt.unit} ใช่หรือไม่?`
+                        : ''
+                }
+                confirmText='ยืนยัน'
+                variant='warning'
+            />
         </div>
     );
 }

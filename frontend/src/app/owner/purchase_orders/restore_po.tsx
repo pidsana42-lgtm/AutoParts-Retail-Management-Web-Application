@@ -7,6 +7,8 @@ import Heading from '../../../components/elements/heading';
 import Input from '../../../components/elements/input';
 import Select from '../../../components/elements/select';
 import Button from '../../../components/elements/button';
+import Modal from '../../../components/elements/modal';
+import { useToast } from '../../../components/elements/toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/elements/table';
 // Interface
 import type { POResponse } from '../../../interface/purchase_orders/po_interface';
@@ -38,11 +40,14 @@ const PO_STATUS_OPTIONS = [
 const DeletedPoHistory: React.FC = () => {
   const navigate = useNavigate();
   const basePath = usePathBasePrefix();
+  const { toast } = useToast();
   const [orders, setOrders] = useState<POResponse[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
+  // เปิด/ปิด modal ยืนยันการกู้คืนใบสั่งซื้อที่เลือก
+  const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState("DELETED");
   const [searchId, setSearchId] = useState("");
@@ -115,16 +120,16 @@ const DeletedPoHistory: React.FC = () => {
 
   const handleBulkRestore = async () => {
     if (selectedIds.length === 0) return;
-    const confirmed = window.confirm(`คุณต้องการกู้คืนใบสั่งซื้อที่เลือก ${selectedIds.length} รายการใช่หรือไม่?`);
-    if (!confirmed) return;
+    const restoredCount = selectedIds.length;
     setIsRestoring(true);
     try {
       await Promise.all(selectedIds.map(id => poService.restorePurchaseOrder(id)));
-      alert(`กู้คืนสำเร็จ ${selectedIds.length} รายการ`);
+      toast({ title: 'ดำเนินการสำเร็จ', message: `กู้คืนสำเร็จ ${restoredCount} รายการ`, variant: 'success' });
       setSelectedIds([]);
+      setIsRestoreConfirmOpen(false);
       fetchOrders();
     } catch {
-      alert('เกิดข้อผิดพลาดในการกู้คืน กรุณาลองใหม่อีกครั้ง');
+      toast({ title: 'เกิดข้อผิดพลาด', message: 'เกิดข้อผิดพลาดในการกู้คืน กรุณาลองใหม่อีกครั้ง', variant: 'error' });
     } finally {
       setIsRestoring(false);
     }
@@ -335,13 +340,24 @@ const DeletedPoHistory: React.FC = () => {
       <div className="flex justify-end">
         <Button
           variant="primary"
-          onClick={handleBulkRestore}
+          onClick={() => setIsRestoreConfirmOpen(true)}
           disabled={selectedIds.length === 0 || isRestoring}
         >
           <RotateCcw size={16} />
           กู้คืนใบสั่งซื้อที่เลือก {selectedIds.length > 0 && `(${selectedIds.length})`}
         </Button>
       </div>
+
+      <Modal
+        isOpen={isRestoreConfirmOpen}
+        onClose={() => setIsRestoreConfirmOpen(false)}
+        onConfirm={handleBulkRestore}
+        title="ยืนยันการกู้คืนใบสั่งซื้อ"
+        description={`คุณต้องการกู้คืนใบสั่งซื้อที่เลือก ${selectedIds.length} รายการใช่หรือไม่?`}
+        confirmText="กู้คืน"
+        variant="info"
+        isSubmitting={isRestoring}
+      />
     </div>
   );
 };

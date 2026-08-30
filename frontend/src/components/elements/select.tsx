@@ -170,7 +170,7 @@ export default function Select({
               onClick={() => setIsOpen((prev) => !prev)}
               className={cn(
                 "h-10 w-full rounded-none border-none bg-[#f6f3f2] px-3 pr-9 text-sm text-left",
-                "transition-colors duration-150 ease-out",
+                "transition-colors duration-150 ease-out cursor-pointer",
                 "focus:outline-none focus:ring-1 focus:ring-offset-0",
                 "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
                 isPlaceholder ? "text-slate-400" : "text-slate-800",

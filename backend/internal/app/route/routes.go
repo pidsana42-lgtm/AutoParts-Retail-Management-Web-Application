@@ -55,7 +55,7 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	catalog.SetupCatalogRoutes(r, db)
 
 	// purchase orders routes
-	purchaseorders.SetupPORoutes(r, db)
+	purchaseorders.SetupPORoutes(r, db, notificationService)
 
 	// return routes
 	returns.SetupReturnRoutes(r, db)
