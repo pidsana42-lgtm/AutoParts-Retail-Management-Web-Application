@@ -48,6 +48,7 @@ import PaymentCancellationHistory from './employee/transactions/payment_cancella
 import CustomerRegistration from './employee/customer/customer_registration';
 import FinancialPolicy from './owner/storeconfig/financial_policy';
 import CustomerCreditControl from './owner/storeconfig/customer_credit_control';
+import StoreConfig from './owner/storeconfig/storeconfig';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -93,7 +94,7 @@ export default function AppRouter(): React.JSX.Element {
 
         {/* -------------------- การตั้งค่า ------------------------ */}
         <Route path="/owner/storeconfig" element={
-          isAdminOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
+          isAdminOrOwner ? <StoreConfig /> : <Navigate to={firstMenuPath} replace />
         } />
         <Route path="/owner/storeconfig/financial-policy" element={
           isAdminOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
