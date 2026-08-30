@@ -31,6 +31,8 @@ type PurchaseOrderRepository interface {
 	GetCompanySetting(ctx context.Context) (*poEntity.CompanySetting, error)
 	UpdateStatus(ctx context.Context, id uint, status poEnum.POStatus, updatedByUserID uint) error
 	RestorePOByID(ctx context.Context, id uint, updatedByUserID uint) error
+	FindDuePOReminders(ctx context.Context, cutoff time.Time) ([]poEntity.PO, error)
+	UpdateLastReminderAt(ctx context.Context, poID uint, at time.Time) error
 }
 
 type purchaseOrderRepository struct {
@@ -178,14 +180,14 @@ func (r *purchaseOrderRepository) GetPOSummary(ctx context.Context) (*poDto.POSu
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	startOfLastMonth := startOfMonth.AddDate(0, -1, 0)
 
-	// นับยอดใบสั่งซื้อเดือนนี้
-	if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).Where("UPPER(status)=? AND created_at >= ?",
+	// นับยอดใบสั่งซื้อที่อนุมัติในเดือนนี้ (อิงวันที่อนุมัติจริง ไม่ใช่วันที่สร้าง เพราะ PO อาจสร้างเดือนก่อนแต่มาอนุมัติเดือนนี้)
+	if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).Where("UPPER(status)=? AND approved_at >= ?",
 		"APPROVED", startOfMonth).Count(&summary.MonthlyApprovedCount).Error; err != nil {
 		return nil, fmt.Errorf("count monthly approved: %w", err)
 	}
 
-	// นับยอดใบสั่งซื้อเดือนที่แล้ว
-	if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).Where(`UPPER(status)=? AND created_at >= ? AND created_at < ?`,
+	// นับยอดใบสั่งซื้อที่อนุมัติในเดือนที่แล้ว
+	if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).Where(`UPPER(status)=? AND approved_at >= ? AND approved_at < ?`,
 		"APPROVED", startOfLastMonth, startOfMonth).Count(&summary.MonthlyApprovedLastCount).Error; err != nil {
 		return nil, fmt.Errorf("count last month approved: %w", err)
 	}
@@ -196,9 +198,9 @@ func (r *purchaseOrderRepository) GetPOSummary(ctx context.Context) (*poDto.POSu
 		return nil, fmt.Errorf("query pending amount: %w", err)
 	}
 
-	// 2. ยอดอนุมัติแล้ว (MTD)
+	// 2. ยอดอนุมัติแล้ว (MTD) — อิงวันที่อนุมัติจริง
 	if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).
-		Where("UPPER(status) = ? AND created_at >= ?", "APPROVED", startOfMonth).
+		Where("UPPER(status) = ? AND approved_at >= ?", "APPROVED", startOfMonth).
 		Select("COALESCE(SUM(total_amount), 0)").Row().Scan(&summary.ApprovedMTDAmount); err != nil {
 		return nil, fmt.Errorf("query approved amount: %w", err)
 	}
@@ -225,6 +227,9 @@ func (r *purchaseOrderRepository) GetPOSummary(ctx context.Context) (*poDto.POSu
 	if summary.MonthlyApprovedLastCount > 0 {
 		summary.ApprovedChangePercent = (float64(summary.MonthlyApprovedCount-summary.MonthlyApprovedLastCount) /
 			float64(summary.MonthlyApprovedLastCount)) * 100
+	} else if summary.MonthlyApprovedCount > 0 {
+		// เดือนที่แล้วไม่มีเลย แต่เดือนนี้มี -> ถือว่าเพิ่มขึ้น 100% (กันหารด้วยศูนย์แล้วค้างที่ 0%)
+		summary.ApprovedChangePercent = 100
 	}
 
 	return &summary, nil
@@ -396,7 +401,7 @@ func (r *purchaseOrderRepository) GetMonthlyPOCount(ctx context.Context) (int64,
 
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).
-		Where("UPPER(status) = ? AND created_at >= ?", "APPROVED", startOfMonth).
+		Where("UPPER(status) = ? AND approved_at >= ?", "APPROVED", startOfMonth).
 		Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("count monthly po: %w", err)
 	}
@@ -439,4 +444,23 @@ func (r *purchaseOrderRepository) RestorePOByID(ctx context.Context, id uint, up
 		return errors.New("ไม่พบใบสั่งซื้อในถังขยะ หรือถูกกู้คืนไปแล้ว")
 	}
 	return nil
+}
+
+// FindDuePOReminders หา PO สถานะ DRAFT/RESUBMITTED ที่ไม่มีความเคลื่อนไหว (แก้ไข หรือแจ้งเตือนล่าสุด) มาแล้วอย่างน้อย 7 วัน
+func (r *purchaseOrderRepository) FindDuePOReminders(ctx context.Context, cutoff time.Time) ([]poEntity.PO, error) {
+	var pos []poEntity.PO
+	err := r.db.WithContext(ctx).
+		Preload("Creator.Role").
+		Where("status IN ? AND GREATEST(updated_at, COALESCE(last_reminder_at, updated_at)) <= ?",
+			[]string{"DRAFT", "RESUBMITTED"}, cutoff).
+		Find(&pos).Error
+	if err != nil {
+		return nil, err
+	}
+	return pos, nil
+}
+
+// UpdateLastReminderAt ใช้ UpdateColumn เพื่อไม่ให้กระทบ updated_at (ต้องคงไว้เป็นเวลาแก้ไขจริงของผู้ใช้)
+func (r *purchaseOrderRepository) UpdateLastReminderAt(ctx context.Context, poID uint, at time.Time) error {
+	return r.db.WithContext(ctx).Model(&poEntity.PO{}).Where("id = ?", poID).UpdateColumn("last_reminder_at", at).Error
 }

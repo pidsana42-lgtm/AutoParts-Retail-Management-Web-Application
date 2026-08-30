@@ -2,11 +2,13 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { poService } from '../../../../service/http/purchase_orders/po_service';
 import type { LocalPOItem, ProductSearchResponse } from '../../../../interface/purchase_orders/po_interface';
 import { generateLocalId } from '../../../../utils/generateId';
+import { useToast } from '../../../../components/elements/toast';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
 export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoItems: React.Dispatch<React.SetStateAction<LocalPOItem[]>>
 ) => {
+    const { toast } = useToast();
     const [searchInput, setSearchInput] = useState("");
     const [addQuantity, setAddQuantity] = useState<number | "">("");
     const [searchResults, setSearchResults] = useState<ProductSearchResponse[]>([]);
@@ -17,6 +19,13 @@ export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoIt
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     // ควบคุมการ Hightlight สินค้าด้วยลูกศรแล้ว enter ได้
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    // เก็บข้อมูลรอยืนยัน เมื่อสินค้าที่จะเพิ่มมีอยู่ในใบสั่งซื้อแล้ว (แถวประเภท "สั่งซื้อ")
+    const [duplicatePrompt, setDuplicatePrompt] = useState<{
+        product: ProductSearchResponse;
+        addQty: number;
+        existingQty: number;
+        unit: string;
+    } | null>(null);
     // รีเซ็ตไฮไลต์กลับไปที่รายการแรกทุกครั้งที่ผลการค้นหาเปลี่ยน
     useEffect(() => {
         setHighlightedIndex(searchResults.length > 0 ? 0 : -1);
@@ -79,37 +88,18 @@ export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoIt
         setSearchResults([]); 
     };
 
-    // 3. ฟังก์ชันเพิ่มสินค้าลงใบสั่งซื้อ
-    const handleAddItem = () => {
-        if (!selectedProduct || !selectedProduct.id) {
-            alert('กรุณาเลือกสินค้าจากรายการค้นหาก่อนเพิ่มลงบิล');
-            return;
-        }
-        if (!addQuantity || addQuantity <= 0) {
-            alert('กรุณาระบุจำนวนสินค้าให้ถูกต้อง');
-            return;
-        }
-        // เช็คว่ามีสินค้านี้ในตะกร้าแล้วหรือยัง (เฉพาะแถวประเภท "สั่งซื้อ" ไม่ปนกับพรีออเดอร์)
-        const existing = poItems.find(
-            row => row.product_id === selectedProduct.id && row.order_type === 'สั่งซื้อ'
-        );
-        if (existing) {
-            const confirmed = window.confirm(
-                `สินค้า "${existing.product_name_snapshot}" มีอยู่ในใบสั่งซื้อแล้ว ${existing.quantity} ${existing.unit}\n` +
-                `ต้องการเพิ่มอีก ${addQuantity} ${existing.unit} รวมเป็น ${existing.quantity + Number(addQuantity)} ${existing.unit} ใช่หรือไม่?`
-            );
-            if (!confirmed) return false; // ไม่ยืนยัน -> หยุดตรงนี้ ไม่แก้อะไรเลย
-        }
-        const subTotal = addQuantity * selectedProduct.price;
+    // ฟังก์ชันกลาง: เพิ่ม/บวกจำนวนสินค้าลงตะกร้าจริง ๆ (เรียกทั้งจากเพิ่มปกติ และจากยืนยัน duplicate)
+    const commitAddItem = (product: ProductSearchResponse, qty: number) => {
+        const subTotal = qty * product.price;
         setPoItems(prev => {
             const idx = prev.findIndex(
-                row => row.product_id === selectedProduct.id && row.order_type === 'สั่งซื้อ'
+                row => row.product_id === product.id && row.order_type === 'สั่งซื้อ'
             );
             if (idx !== -1) {
                 // มีอยู่แล้ว -> บวกจำนวนเข้าแถวเดิม
                 const updated = [...prev];
                 const target = updated[idx];
-                const newQuantity = target.quantity + Number(addQuantity);
+                const newQuantity = target.quantity + qty;
                 updated[idx] = {
                     ...target,
                     quantity: newQuantity,
@@ -120,12 +110,12 @@ export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoIt
             // ยังไม่มี -> สร้างแถวใหม่ตามปกติ
             const newItem: LocalPOItem = {
                 id: generateLocalId(),
-                product_id: selectedProduct.id,
-                product_name_code_snapshot: selectedProduct.code,
-                product_name_snapshot: selectedProduct.name,
-                quantity: addQuantity,
-                unit: selectedProduct.unit,
-                unit_price: selectedProduct.price,
+                product_id: product.id,
+                product_name_code_snapshot: product.code,
+                product_name_snapshot: product.name,
+                quantity: qty,
+                unit: product.unit,
+                unit_price: product.price,
                 sub_total: subTotal,
                 order_type: 'สั่งซื้อ' as const,
                 notes: "",
@@ -138,8 +128,41 @@ export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoIt
         setSearchInput('');
         setAddQuantity(1);
         setSelectedProduct(null);
+    };
+
+    // 3. ฟังก์ชันเพิ่มสินค้าลงใบสั่งซื้อ
+    const handleAddItem = () => {
+        if (!selectedProduct || !selectedProduct.id) {
+            toast({ title: 'เกิดข้อผิดพลาด', message: 'กรุณาเลือกสินค้าจากรายการค้นหาก่อนเพิ่มลงบิล', variant: 'error' });
+            return;
+        }
+        if (!addQuantity || addQuantity <= 0) {
+            toast({ title: 'เกิดข้อผิดพลาด', message: 'กรุณาระบุจำนวนสินค้าให้ถูกต้อง', variant: 'error' });
+            return;
+        }
+        const qty = Number(addQuantity);
+        // เช็คว่ามีสินค้านี้ในตะกร้าแล้วหรือยัง (เฉพาะแถวประเภท "สั่งซื้อ" ไม่ปนกับพรีออเดอร์)
+        const existing = poItems.find(
+            row => row.product_id === selectedProduct.id && row.order_type === 'สั่งซื้อ'
+        );
+        if (existing) {
+            // มีอยู่แล้ว -> รอให้ผู้ใช้ยืนยันผ่าน Modal ก่อน (ดู duplicatePrompt / confirmDuplicateAdd)
+            setDuplicatePrompt({ product: selectedProduct, addQty: qty, existingQty: existing.quantity, unit: existing.unit });
+            return false;
+        }
+        commitAddItem(selectedProduct, qty);
         return true;
     };
+
+    // ยืนยันเพิ่มจำนวนทับรายการเดิม (จาก Modal)
+    const confirmDuplicateAdd = () => {
+        if (!duplicatePrompt) return;
+        commitAddItem(duplicatePrompt.product, duplicatePrompt.addQty);
+        setDuplicatePrompt(null);
+    };
+
+    // ยกเลิกการเพิ่มจำนวนทับรายการเดิม
+    const cancelDuplicateAdd = () => setDuplicatePrompt(null);
 
     // 4. ฟังก์ชันกลางสำหรับ "รหัสบาร์โค้ด" ไม่ว่าจะมาจากเครื่องสแกน (HID) หรือกล้อง
     //    ใช้ exact match กับ code ก่อน ถ้าไม่เจอค่อย fallback ไปที่ผลลัพธ์แรก
@@ -147,7 +170,7 @@ export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoIt
         const code = rawCode.trim();
         if (!code) return;
         if (!supplierId) {
-            alert("กรุณาเลือกชื่อบริษัท/ผู้จัดจำหน่ายก่อนสแกนสินค้า");
+            toast({ title: 'เกิดข้อผิดพลาด', message: 'กรุณาเลือกชื่อบริษัท/ผู้จัดจำหน่ายก่อนสแกนสินค้า', variant: 'error' });
             return;
         }
         // ยกเลิก debounce/การค้นหาจากการพิมพ์ที่อาจค้างอยู่ ไม่ให้ทับผลลัพธ์การสแกน
@@ -163,7 +186,7 @@ export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoIt
                 const product = results.find((p) => p.barcode === code || p.code === code) || results[0];
                 handleSelectProduct(product);
             } else {
-                alert(`ไม่พบสินค้ารหัส: ${code}`);
+                toast({ title: 'เกิดข้อผิดพลาด', message: `ไม่พบสินค้ารหัส: ${code}`, variant: 'error' });
                 setSearchInput("");
             }
         } catch (error) {
@@ -231,6 +254,9 @@ export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoIt
         highlightedIndex,
         setHighlightedIndex,
         handleSearchKeyDown,
-        selectedProduct
+        selectedProduct,
+        duplicatePrompt,
+        confirmDuplicateAdd,
+        cancelDuplicateAdd
     };
 };

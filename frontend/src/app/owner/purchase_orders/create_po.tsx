@@ -9,6 +9,8 @@ import Input from '../../../components/elements/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/elements/card';
 import Select from '../../../components/elements/select';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableFooter } from "../../../components/elements/table";
+import Modal from '../../../components/elements/modal';
+import { useToast } from '../../../components/elements/toast';
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
 // Interface
 import type { CreatePORequest, LocalPOItem, PreorderItem, POAnalyticsResponse } from '../../../interface/purchase_orders/po_interface';
@@ -27,6 +29,7 @@ const CreatePurchaseOrders: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const basePath = usePathBasePrefix();
+    const { toast } = useToast();
     // States ของ API
     const [item, setItem] = useState<LocalPOItem[]>([]);
     const [totalItems, setTotalItems] = useState(0);
@@ -41,14 +44,21 @@ const CreatePurchaseOrders: React.FC = () => {
     const searchInputRef = useRef<HTMLInputElement>(null);
     const quantityInputRef = useRef<HTMLInputElement>(null);
     const { searchInput, addQuantity, setAddQuantity, searchResults, handleSearchInput, handleSelectProduct,
-        handleAddItem, handleSearchKeyDown, highlightedIndex, setHighlightedIndex, selectedProduct } = usePoScanner(listsSupplier, item, setItem);
+        handleAddItem, handleSearchKeyDown, highlightedIndex, setHighlightedIndex, selectedProduct, isSearching,
+        duplicatePrompt, confirmDuplicateAdd, cancelDuplicateAdd } = usePoScanner(listsSupplier, item, setItem);
     // ดึงข้อมูลจาก Hook เรียกรายการพรีออเดอร์
     const { preorders, totalPreorders, isLoading: isPreordersLoading } = usePreorders(item, setItem, setIsPreorderModalOpen);
+    // สิทธิ์เจ้าของร้าน: กดส่งอนุมัติแล้วอนุมัติทันทีโดยไม่ต้องรอ
+    const userRole = localStorage.getItem('role');
     // สำหรับดึงข้อมูลคาดการณ์ระยะเวลาจัดส่ง
     const [deliveryEstimate, setDeliveryEstimate] = useState<POAnalyticsResponse | null>(null);
     const [isEstimateLoading, setIsEstimateLoading] = useState(false);
     // เก็บค่าที่ผู้ใช้กำลังพิมพ์อยู่ (ระหว่างลบเลขเดิมทิ้งแล้วยังพิมพ์ไม่เสร็จ) แยกจาก items จริง
     const [qtyDrafts, setQtyDrafts] = useState<Record<string | number, string>>({});
+    // เก็บ supplier ที่รอยืนยันเปลี่ยน (ถ้ามีของในตะกร้าอยู่แล้ว)
+    const [pendingSupplierId, setPendingSupplierId] = useState<string | null>(null);
+    // เก็บ key ของรายการที่รอยืนยันลบเนื่องจากจำนวนเหลือ 0
+    const [removeConfirm, setRemoveConfirm] = useState<{ key: number | string } | null>(null);
 
     // อัปเดต totalItems อัตโนมัติเมื่อตะกร้า (item) มีการเปลี่ยนแปลง
     useEffect(() => {
@@ -134,12 +144,15 @@ const CreatePurchaseOrders: React.FC = () => {
     // Function เตือนก่อนว่ามีของในใบสั่งซื้ออยู่ ถ้าเปลี่ยนบริษัทจะดึง Stock Alert ชุดใหม่มาทับตะกร้าเดิม
     const handleSupplierChange = (newSupplierId: string) => {
         if (item.length > 0) {
-            const confirmed = window.confirm(
-                "การเปลี่ยนบริษัท/ผู้จัดจำหน่ายจะล้างรายการสินค้าที่เพิ่มไว้ในตะกร้าปัจจุบันทั้งหมด ต้องการดำเนินการต่อหรือไม่?"
-            );
-            if (!confirmed) return;
+            setPendingSupplierId(newSupplierId);
+            return;
         }
         setlistsSupplier(newSupplierId);
+    };
+
+    const confirmSupplierChange = () => {
+        if (pendingSupplierId !== null) setlistsSupplier(pendingSupplierId);
+        setPendingSupplierId(null);
     };
 
     // 3. ฟังก์ชันสำหรับรับรายการพรีออเดอร์ที่ถูกกด "เพิ่ม" มาแปลงใส่ลงตารางใบสั่งซื้อ (item)
@@ -166,7 +179,7 @@ const CreatePurchaseOrders: React.FC = () => {
         );
 
         if (isDuplicate) {
-            alert(`มีรายการ "${selectedPreorder.product_name}" ประเภท ${newItem.order_type} อยู่ในใบสั่งซื้อแล้ว`);
+            toast({ title: 'เกิดข้อผิดพลาด', message: `มีรายการ "${selectedPreorder.product_name}" ประเภท ${newItem.order_type} อยู่ในใบสั่งซื้อแล้ว`, variant: 'warning' });
             return;
         }
 
@@ -198,15 +211,20 @@ const CreatePurchaseOrders: React.FC = () => {
         setItem(updatedItems);
     };
 
+    const confirmRemoveItem = () => {
+        if (removeConfirm) handleRemoveItem(removeConfirm.key.toString());
+        setRemoveConfirm(null);
+    };
+
     // ฟังก์ชัน: บันทึกร่าง / ส่งอนุมัติ
     const handleSavePO = async (submitStatus: 'DRAFT' | 'PENDING') => {
         if (item.length === 0) {
-            alert("กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ");
+            toast({ title: 'เกิดข้อผิดพลาด', message: 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ', variant: 'warning' });
             return;
         }
 
         if (!listsSupplier || listsSupplier === 'all' || listsSupplier === 'others') {
-            alert("กรุณาเลือกผู้จัดจำหน่าย (Supplier)");
+            toast({ title: 'เกิดข้อผิดพลาด', message: 'กรุณาเลือกผู้จัดจำหน่าย (Supplier)', variant: 'warning' });
             return;
         }
 
@@ -230,17 +248,31 @@ const CreatePurchaseOrders: React.FC = () => {
 
             // เรียกใช้ API ตัวเดียวกันได้เลย
             const response = await poService.createPurchaseOrder(payload);
-            
             const createdPoNumber = response?.po_number || "";
-            const message = submitStatus === 'DRAFT' 
-                ? `บันทึกฉบับร่าง ${createdPoNumber} เรียบร้อยแล้ว` 
+
+            // ถ้าเจ้าของร้านเป็นคนกดส่งอนุมัติเอง ให้อนุมัติต่อทันที ไม่ต้องรอขั้นตอนแยก
+            let message = submitStatus === 'DRAFT'
+                ? `บันทึกฉบับร่าง ${createdPoNumber} เรียบร้อยแล้ว`
                 : `ส่งใบสั่งซื้อ ${createdPoNumber} เพื่อขออนุมัติเรียบร้อยแล้ว`;
-            
-            alert(message);
+
+            if (submitStatus === 'PENDING' && userRole === 'Owner' && response?.id) {
+                try {
+                    await poService.updatePOStatus(response.id, 'APPROVED');
+                    message = `อนุมัติใบสั่งซื้อ ${createdPoNumber} เรียบร้อยแล้ว`;
+                } catch (approveError: any) {
+                    // สร้าง PO สำเร็จแล้ว แต่อนุมัติอัตโนมัติไม่สำเร็จ -> แจ้งเตือนแยก ไม่บล็อกการสร้าง
+                    const approveMessage = approveError?.response?.data?.message || approveError?.message;
+                    toast({ title: 'สร้างใบสั่งซื้อสำเร็จ แต่อนุมัติอัตโนมัติไม่สำเร็จ', message: approveMessage || 'กรุณาเข้าไปอนุมัติที่รายละเอียดใบสั่งซื้อ', variant: 'warning' });
+                    navigate(`${basePath}/orders`);
+                    return;
+                }
+            }
+
+            toast({ title: 'ดำเนินการสำเร็จ', message, variant: 'success' });
             navigate(`${basePath}/orders`); // กลับไปหน้ารวม
         } catch (error: any) {
             const backendMessage = error?.response?.data?.message || error?.message;
-            alert(backendMessage || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง');
+            toast({ title: 'เกิดข้อผิดพลาด', message: backendMessage || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง', variant: 'error' });
         } finally {
             setIsSaving(false);
         }
@@ -422,9 +454,9 @@ const CreatePurchaseOrders: React.FC = () => {
                                                 : 'text-gray-500 cursor-pointer hover:text-gray-700'
                                             }`} 
                                             onClick={(e) => {
-                                                e.stopPropagation(); 
+                                                e.stopPropagation();
                                                 if (!listsSupplier) {
-                                                    alert("กรุณาเลือกผู้จัดจำหน่ายก่อน");
+                                                    toast({ title: 'เกิดข้อผิดพลาด', message: 'กรุณาเลือกผู้จัดจำหน่ายก่อน', variant: 'error' });
                                                     return;
                                                 }
                                                 // แทนที่จะเปิด Prompt ให้ทำการ Focus ไปที่ช่อง Input เพื่อให้พร้อมยิงบาร์โค้ด
@@ -436,28 +468,34 @@ const CreatePurchaseOrders: React.FC = () => {
                                 placeholder="สแกนหรือพิมพ์ รหัส / ชื่อสินค้า..."
                             />
                             
-                            {/* เพิ่ม Dropdown แสดงผลลัพธ์การค้นหา */}
-                            {searchResults.length > 0 && (
+                            {/* เพิ่ม Dropdown แสดงผลลัพธ์การค้นหา (รวมสถานะกำลังค้นหา/ไม่พบผลลัพธ์ เพื่อไม่ให้ดูเหมือนพิมพ์แล้วไม่มีอะไรเกิดขึ้น) */}
+                            {searchInput.trim().length > 0 && !(selectedProduct && searchInput === selectedProduct.name) && (
                                 <div className='absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-none shadow-lg'>
-                                    {searchResults.map((product, index) => (
-                                        <div 
-                                            key={product.id}
-                                            className={`px-4 py-2 cursor-pointer text-sm ${
-                                                index === highlightedIndex ? 'bg-gray-100' : 'hover:bg-gray-100'
-                                            }`}
-                                            onMouseEnter={() => setHighlightedIndex(index)}
-                                            onClick={() => handleSelectProduct(product)}
-                                        >
-                                            <div className='flex flex-row font-normal text-black items-baseline justify-between'>
-                                                <div>{product.name}</div>
-                                                <span className='text-red-600'>฿{product.price.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    {isSearching ? (
+                                        <div className='px-4 py-3 text-sm text-gray-400'>กำลังค้นหา...</div>
+                                    ) : searchResults.length > 0 ? (
+                                        searchResults.map((product, index) => (
+                                            <div
+                                                key={product.id}
+                                                className={`px-4 py-2 cursor-pointer text-sm ${
+                                                    index === highlightedIndex ? 'bg-gray-100' : 'hover:bg-gray-100'
+                                                }`}
+                                                onMouseEnter={() => setHighlightedIndex(index)}
+                                                onClick={() => handleSelectProduct(product)}
+                                            >
+                                                <div className='flex flex-row font-normal text-black items-baseline justify-between'>
+                                                    <div>{product.name}</div>
+                                                    <span className='text-red-600'>฿{product.price.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                </div>
+                                                <div className='flex flex-row items-baseline justify-between text-gray-500 text-xs font-light'>
+                                                    <span>SKU: {product.code}</span>
+                                                    <span>คงเหลือ: {product.stock_qty}</span>
+                                                </div>
                                             </div>
-                                            <div className='flex flex-row items-baseline justify-between text-gray-500 text-xs font-light'>
-                                                <span>SKU: {product.code}</span>
-                                                <span>คงเหลือ: {product.stock_qty}</span>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        ))
+                                    ) : (
+                                        <div className='px-4 py-3 text-sm text-gray-400'>ไม่พบสินค้าที่ตรงกับคำค้นหา</div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -535,8 +573,7 @@ const CreatePurchaseOrders: React.FC = () => {
                                                                 return next;
                                                             });
                                                             if (row.quantity <= 1) {
-                                                                const confirmed = window.confirm('จำนวนสินค้าจะเหลือ 0 ต้องการลบรายการนี้ออกจากตะกร้าหรือไม่?');
-                                                                if (confirmed) handleRemoveItem(row.id.toString());
+                                                                setRemoveConfirm({ key: row.id });
                                                                 return;
                                                             }
                                                             handleUpdateItem(row.id, 'quantity', String(row.quantity - 1));
@@ -630,11 +667,45 @@ const CreatePurchaseOrders: React.FC = () => {
                     </Card>
                 </div>
             </div>
-            <PreorderSelectionModal 
+            <PreorderSelectionModal
                 isOpen={isPreorderModalOpen}
                 onClose={() => setIsPreorderModalOpen(false)}
                 preorders={preorders}
                 onSelectPreorder={handleAddPreorderToPO}
+            />
+
+            <Modal
+                isOpen={pendingSupplierId !== null}
+                onClose={() => setPendingSupplierId(null)}
+                onConfirm={confirmSupplierChange}
+                title='ยืนยันการเปลี่ยนบริษัท/ผู้จัดจำหน่าย'
+                description='การเปลี่ยนบริษัท/ผู้จัดจำหน่ายจะล้างรายการสินค้าที่เพิ่มไว้ในตะกร้าปัจจุบันทั้งหมด ต้องการดำเนินการต่อหรือไม่?'
+                confirmText='ยืนยัน'
+                variant='warning'
+            />
+
+            <Modal
+                isOpen={!!removeConfirm}
+                onClose={() => setRemoveConfirm(null)}
+                onConfirm={confirmRemoveItem}
+                title='ยืนยันการลบรายการ'
+                description='จำนวนสินค้าจะเหลือ 0 ต้องการลบรายการนี้ออกจากตะกร้าหรือไม่?'
+                confirmText='ลบ'
+                variant='danger'
+            />
+
+            <Modal
+                isOpen={!!duplicatePrompt}
+                onClose={cancelDuplicateAdd}
+                onConfirm={confirmDuplicateAdd}
+                title='สินค้านี้มีอยู่ในใบสั่งซื้อแล้ว'
+                description={
+                    duplicatePrompt
+                        ? `สินค้า "${duplicatePrompt.product.name}" มีอยู่ในใบสั่งซื้อแล้ว ${duplicatePrompt.existingQty} ${duplicatePrompt.unit} ต้องการเพิ่มอีก ${duplicatePrompt.addQty} ${duplicatePrompt.unit} รวมเป็น ${duplicatePrompt.existingQty + duplicatePrompt.addQty} ${duplicatePrompt.unit} ใช่หรือไม่?`
+                        : ''
+                }
+                confirmText='ยืนยัน'
+                variant='warning'
             />
         </div>
     )
