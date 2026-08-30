@@ -31,7 +31,6 @@ import Text from "../../../components/elements/text";
 import Input from "../../../components/elements/input";
 import Select from "../../../components/elements/select";
 import Button from "../../../components/elements/button";
-import Badge from "../../../components/elements/badge";
 import Modal from "../../../components/elements/modal";
 import { Card, CardContent } from "../../../components/elements/card";
 import {
@@ -44,7 +43,7 @@ import {
 } from "../../../components/elements/table";
 
 // Helpers & Components
-import { getCustomerTypeBadge } from "../../../utils/customerhelpers";
+import { CustomerTypeBadge } from "../../../components/elements/status_badge";
 import { CustomerCard } from "../../employee/pos/components/customercard";
 
 // Hook & Interfaces
@@ -430,10 +429,10 @@ export default function CustomerCreditControl() {
 
                         {/* Customer Type Badge */}
                         <TableCell className="py-3.5 px-4 text-center">
-                          {getCustomerTypeBadge(
-                            c.customer_type?.type_name,
-                            c.customer_type_label || c.customer_type?.type_label
-                          )}
+                          <CustomerTypeBadge
+                            typeName={c.customer_type?.type_name}
+                            typeLabel={c.customer_type_label || c.customer_type?.type_label}
+                          />
                         </TableCell>
 
                         {/* Debt vs Credit Limit */}
@@ -621,10 +620,10 @@ export default function CustomerCreditControl() {
                   <Text variant="small" className="font-semibold text-[#1C1B1B] m-0">
                     {selectedCustomer.customer_name}
                   </Text>
-                  {getCustomerTypeBadge(
-                    selectedCustomer.customer_type?.type_name,
-                    selectedCustomer.customer_type_label || selectedCustomer.customer_type?.type_label
-                  )}
+                  <CustomerTypeBadge
+                    typeName={selectedCustomer.customer_type?.type_name}
+                    typeLabel={selectedCustomer.customer_type_label || selectedCustomer.customer_type?.type_label}
+                  />
                 </div>
                 <Text variant="xs" className="text-[#5F5E5E] font-light m-0 mt-1">
                   เบอร์โทร: {selectedCustomer.phone_number || "-"} | บัตรประชาชน: {selectedCustomer.id_card_number_customer || "-"}

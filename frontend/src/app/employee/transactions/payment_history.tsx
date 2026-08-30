@@ -31,7 +31,8 @@ import { cn } from "../../../utils/component";
 // Hooks & Helpers
 import { usePaymentHistory } from "./hooks/usePaymentHistory";
 import type { PaymentHistoryItem } from "../../../interface/pos/payment_interface";
-import { getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderPaymentStatusBadge, renderPaymentTypeBadge } from "../../../utils/poshelpers";
+import { getDisplayCustomerName, getPageNumbers, getPaymentVariant } from "../../../utils/poshelpers";
+import { PaymentTypeBadge, PaymentStatusBadge } from "../../../components/elements/status_badge";
 import { formatDate } from "../../../utils/date";
 import { useUserRole } from "../../../hooks/useUserRole";
 
@@ -480,12 +481,12 @@ export default function PaymentHistoryPage() {
 
                       {/* 4. ประเภทการชำระ */}
                       <TableCell className="py-3.5 px-3">
-                        {renderPaymentTypeBadge(item.payment_type)}
+                        <PaymentTypeBadge type={item.payment_type} />
                       </TableCell>
 
                       {/* 5. สถานะ */}
                       <TableCell className="py-3.5 px-3">
-                        {renderPaymentStatusBadge(item.status)}
+                        <PaymentStatusBadge status={item.status} />
                       </TableCell>
 
                       {/* 6. ผู้บันทึกยอด */}

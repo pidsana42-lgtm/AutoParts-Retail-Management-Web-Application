@@ -28,7 +28,8 @@ import { cn } from "../../../utils/component";
 
 // นำเข้า Hook & Helpers
 import { useSalesHistory } from "./hooks/useSalesHistory";
-import { getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge } from "../../../utils/poshelpers";
+import { getDisplayCustomerName, getPageNumbers, getPaymentVariant } from "../../../utils/poshelpers";
+import { SalesStatusBadge } from "../../../components/elements/status_badge";
 import { formatDate } from "../../../utils/date";
 import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
 import { useUserRole } from "../../../hooks/useUserRole";
@@ -453,7 +454,7 @@ export default function TransactionHistoryPage() {
 
                       {/* 6. สถานะ */}
                       <TableCell className="py-3.5 px-4 text-center">
-                        {renderStatusBadge(item.status, item.payment_status)}
+                        <SalesStatusBadge status={item.status} paymentStatus={item.payment_status} />
                       </TableCell>
 
                       {/* 7. ปุ่มจัดการ */}

@@ -26,7 +26,7 @@ import {
   TableCell,
 } from "../../../components/elements/table";
 import { Card, CardContent } from "../../../components/elements/card";
-import { getCustomerTypeBadge } from "../../../utils/customerhelpers";
+import { CustomerTypeBadge } from "../../../components/elements/status_badge";
 import { CustomerCard } from "../pos/components/customercard";
 
 // Hook & Types
@@ -423,7 +423,10 @@ export default function CustomerRegistration() {
                         </Text>
                       </TableCell>
                       <TableCell className="py-3.5 px-4 text-center">
-                        {getCustomerTypeBadge(c.customer_type?.type_name, c.customer_type_label || c.customer_type?.type_label)}
+                        <CustomerTypeBadge
+                          typeName={c.customer_type?.type_name}
+                          typeLabel={c.customer_type_label || c.customer_type?.type_label}
+                        />
                       </TableCell>
                       <TableCell className="py-3.5 px-4 text-center">
                         <button
