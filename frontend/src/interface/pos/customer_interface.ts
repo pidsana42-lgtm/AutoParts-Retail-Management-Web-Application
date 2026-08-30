@@ -34,6 +34,7 @@ export interface ComputedCustomerData {
   phoneNumber: string;
   isGuest: boolean;
   isSpecialPrice: boolean;
+  isDiscountEnabled: boolean;
   ontopDiscountRate: number;
   creditUsagePercentage: number;
   currentDebtStr: string;
