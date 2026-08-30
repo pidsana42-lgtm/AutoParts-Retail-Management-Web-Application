@@ -2,6 +2,7 @@ package pos
 
 import (
 	"backend/internal/app/entity"
+	"strings"
 	"gorm.io/gorm"
 )
 
@@ -42,8 +43,13 @@ func (r *customerDiscountRepository) SearchCustomers(searchQuery string) ([]enti
     query := r.db.Preload("CustomerType").Model(&entity.Customer{})
     
     if searchQuery != "" {
+        cleaned := strings.ReplaceAll(strings.ReplaceAll(searchQuery, "-", ""), " ", "")
         likeQuery := "%" + searchQuery + "%"
-        query = query.Where("customer_name LIKE ? OR phone_number LIKE ? OR id_card_number_customer LIKE ?", likeQuery, likeQuery, likeQuery)
+        likeCleaned := "%" + cleaned + "%"
+        query = query.Where(
+            "customer_name LIKE ? OR phone_number LIKE ? OR id_card_number_customer LIKE ? OR REPLACE(REPLACE(phone_number, '-', ''), ' ', '') LIKE ? OR REPLACE(REPLACE(id_card_number_customer, '-', ''), ' ', '') LIKE ?",
+            likeQuery, likeQuery, likeQuery, likeCleaned, likeCleaned,
+        )
     }
     
     err := query.Find(&customers).Error

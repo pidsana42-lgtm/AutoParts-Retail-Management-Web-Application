@@ -251,10 +251,24 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     }
 
     try {
-      const response = await apiClient.get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${cleanedQuery}`);
+      const response = await apiClient.get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${encodeURIComponent(cleanedQuery)}`);
       const dataList = response.data;
+      const rawQuery = cleanedQuery.replace(/[-\s]/g, "").toLowerCase();
       const exactMatchedCustomer = dataList && dataList.length > 0 
-        ? dataList.find((c) => c.customer_name?.toLowerCase() === cleanedQuery.toLowerCase() || c.phone_number === cleanedQuery)
+        ? dataList.find((c) => {
+            const name = (c.customer_name || "").toLowerCase();
+            const phone = (c.phone_number || "").toLowerCase();
+            const rawPhone = phone.replace(/[-\s]/g, "");
+            const idCard = (c.id_card_number_customer || "").toLowerCase();
+            const rawIdCard = idCard.replace(/[-\s]/g, "");
+            return (
+              name === cleanedQuery.toLowerCase() ||
+              phone === cleanedQuery.toLowerCase() ||
+              (rawQuery.length > 0 && rawPhone === rawQuery) ||
+              idCard === cleanedQuery.toLowerCase() ||
+              (rawQuery.length > 0 && rawIdCard === rawQuery)
+            );
+          })
         : null;
 
       if (exactMatchedCustomer) {

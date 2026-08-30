@@ -204,10 +204,19 @@ export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
       // 1. Search Query
       if (filter.search.trim()) {
         const query = filter.search.toLowerCase().trim();
+        const rawQ = query.replace(/[-\s]/g, "");
         const nameMatch = c.customer_name.toLowerCase().includes(query);
-        const phoneMatch = c.phone_number.includes(query);
-        const idCardMatch = (c.id_card_number_customer || "").includes(query);
-        const uidMatch = `c-${String(c.id).padStart(3, "0")}`.includes(query);
+        
+        const phone = (c.phone_number || "").toLowerCase();
+        const rawPhone = phone.replace(/[-\s]/g, "");
+        const phoneMatch = phone.includes(query) || (rawQ.length > 0 && rawPhone.includes(rawQ));
+        
+        const idCard = (c.id_card_number_customer || "").toLowerCase();
+        const rawIdCard = idCard.replace(/[-\s]/g, "");
+        const idCardMatch = idCard.includes(query) || (rawQ.length > 0 && rawIdCard.includes(rawQ));
+        
+        const uidMatch = `c-${String(c.id).padStart(3, "0")}`.toLowerCase().includes(query) || String(c.id).includes(rawQ);
+        
         if (!nameMatch && !phoneMatch && !idCardMatch && !uidMatch) {
           return false;
         }
