@@ -49,6 +49,7 @@ import { CustomerCard } from "../../employee/pos/components/customercard";
 // Hook & Interfaces
 import { useCustomerCreditControl } from "./hook/UseCustomerCreditControl";
 import type { CustomerCreditItem } from "../../../interface/storeconfig/customer_credit_interface";
+import { formatDate } from "../../../utils/date";
 
 export default function CustomerCreditControl() {
   const {
@@ -348,7 +349,7 @@ export default function CustomerCreditControl() {
                     type="button"
                     variant="outline-cancel"
                     onClick={handleResetFilter}
-                    className="w-full h-11 border border-gray-200 rounded-none text-xs text-[#5F5E5E] hover:bg-white transition-colors cursor-pointer"
+                    className="w-full h-11 border border-gray-200 rounded-none text-xs text-[#5F5E5E] hover:bg-gray-100 transition-colors cursor-pointer"
                     title="ล้างตัวกรอง"
                   >
                     รีเซ็ต
@@ -442,7 +443,7 @@ export default function CustomerCreditControl() {
                               <span className={`font-normal ${c.current_debt_amount > 0 ? "text-[#E51C23]" : "text-gray-600"}`}>
                                 ฿{c.current_debt_amount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
-                              <span className="text-gray-400 font-normal text-[11px]">
+                              <span className="text-gray-400 font-light text-[11px]">
                                 / ฿{c.max_credit_limit.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             </div>
@@ -464,7 +465,7 @@ export default function CustomerCreditControl() {
                             <div className="flex items-center justify-between text-[10px] text-gray-400 font-light">
                               <span>ใช้ไป {usagePercent.toFixed(0)}%</span>
                               {isOverLimit && (
-                                <span className="text-[#E51C23] font-normal">เกินวงเงิน!</span>
+                                <span className="text-[#E51C23] font-normal">เกินวงเงิน</span>
                               )}
                             </div>
                           </div>
@@ -487,19 +488,16 @@ export default function CustomerCreditControl() {
                             type="button"
                             onClick={() => handleQuickToggleDiscount(c)}
                             disabled={isUpdating}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-normal transition-all cursor-pointer select-none rounded-none border ${
-                              c.is_discount_enabled
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                                : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
+                              c.is_discount_enabled ? "bg-[#E51C23]" : "bg-gray-300"
                             }`}
-                            title="คลิกเพื่อสลับสถานะเปิด/ปิดสิทธิ์ส่วนลด"
+                            title={c.is_discount_enabled ? "คลิกเพื่อปิดสิทธิ์ส่วนลด" : "คลิกเพื่อเปิดสิทธิ์ส่วนลด"}
                           >
                             <span
-                              className={`w-2 h-2 rounded-full ${
-                                c.is_discount_enabled ? "bg-emerald-500 animate-pulse" : "bg-gray-400"
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                c.is_discount_enabled ? "translate-x-5" : "translate-x-0"
                               }`}
                             />
-                            <span>{c.is_discount_enabled ? "เปิดใช้งาน" : "ปิดใช้งาน"}</span>
                           </button>
                         </TableCell>
 
@@ -510,7 +508,7 @@ export default function CustomerCreditControl() {
                             <button
                               type="button"
                               onClick={() => onOpenEdit(c)}
-                              className="p-1.5 text-gray-600 hover:text-[#E51C23] hover:bg-red-50 transition-colors rounded-none cursor-pointer"
+                              className="p-1.5 text-gray-600 cursor-pointer"
                               title="แก้ไขสิทธิ์และส่วนลด"
                             >
                               <Edit size={16} />
@@ -520,7 +518,7 @@ export default function CustomerCreditControl() {
                             <button
                               type="button"
                               onClick={() => setDrawerCustomer(c)}
-                              className="p-1.5 text-gray-600 hover:text-[#1C1B1B] hover:bg-gray-100 transition-colors rounded-none cursor-pointer"
+                              className="p-1.5 text-gray-600 rounded-none cursor-pointer"
                               title="ดูข้อมูลโปรไฟล์"
                             >
                               <Eye size={16} />
@@ -578,7 +576,7 @@ export default function CustomerCreditControl() {
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                   <span className="px-3 py-1 font-medium bg-[#E51C23] text-white text-xs">
-                    {page} / {totalPages}
+                    {page}
                   </span>
                   <button
                     type="button"
@@ -614,10 +612,10 @@ export default function CustomerCreditControl() {
         {selectedCustomer && (
           <form onSubmit={handleSubmitEdit} className="space-y-5">
             {/* Customer Summary Box */}
-            <div className="bg-[#F6F3F2] p-4 border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="bg-white p-4 border-l-3 border-l-[#1C1B1B] border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <Text variant="small" className="font-semibold text-[#1C1B1B] m-0">
+                  <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate">
                     {selectedCustomer.customer_name}
                   </Text>
                   <CustomerTypeBadge
@@ -631,10 +629,10 @@ export default function CustomerCreditControl() {
               </div>
 
               <div className="text-left sm:text-right">
-                <Text variant="xs" className="text-gray-500 font-light m-0">
+                <Text variant="xs" className="text-[#5F5E5E] font-light m-0">
                   ยอดหนี้ค้างชำระ / วงเงิน
                 </Text>
-                <Text variant="small" className="font-medium text-[#E51C23] m-0">
+                <Text variant="small" className=" text-[#E51C23] m-0">
                   ฿{selectedCustomer.current_debt_amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} / ฿{selectedCustomer.max_credit_limit.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                 </Text>
               </div>
@@ -643,7 +641,7 @@ export default function CustomerCreditControl() {
             {/* Field 1: สิทธิ์ราคาพิเศษ (เปิด/ปิด) */}
             <div className="flex items-center justify-between p-4 border border-gray-200 bg-white">
               <div>
-                <Text variant="small" className="font-medium text-[#1C1B1B] m-0">
+                <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate">
                   เปิดใช้งานสิทธิ์ส่วนลดพิเศษ
                 </Text>
                 <Text variant="xs" className="text-[#5F5E5E] font-light m-0 mt-0.5">
@@ -673,7 +671,7 @@ export default function CustomerCreditControl() {
 
             {/* Field 2: อัตราส่วนลด On-Top (%) */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">
+              <label className="text-sm font-normal text-[#1C1B1B]">
                 อัตราส่วนลด On-Top สำหรับลูกค้าอู่/พันธมิตร (%)
               </label>
               <Input
@@ -686,7 +684,7 @@ export default function CustomerCreditControl() {
                   setEditFormData((prev) => ({
                     ...prev,
                     ontop_discount_rate: Number(e.target.value) || 0,
-                  }))
+                  })) 
                 }
                 rightIcon={<Percent size={16} className="text-gray-400" />}
                 className="font-medium text-base text-[#1C1B1B] bg-[#F6F3F2] border border-gray-200"
@@ -698,7 +696,7 @@ export default function CustomerCreditControl() {
             <div className="bg-[#FFDAD6]/30 border border-[#BA1A1A]/20 p-3.5 flex items-start gap-2.5">
               <ShieldCheck className="text-[#E51C23] shrink-0 mt-0.5" size={18} />
               <Text variant="xs" className="text-[#E51C23] font-normal m-0 leading-relaxed">
-                <strong>กฎเกณฑ์ของระบบ:</strong> ลูกค้ากลุ่มบริษัท (WHOLESALE) จะไม่ได้รับส่วนลดตามนโยบายร้านค้า สำหรับลูกค้าอู่ (GARAGE) ระบบจะคำนวณส่วนลดรวม = (ส่วนลดสินค้า + On-Top {editFormData.ontop_discount_rate}%) อัตโนมัติ
+                <span className="font-medium">กฎเกณฑ์ของระบบ:</span> ลูกค้ากลุ่มบริษัท (WHOLESALE) จะไม่ได้รับส่วนลดตามนโยบายร้านค้า สำหรับลูกค้าอู่ (GARAGE) ระบบจะคำนวณส่วนลดรวม = (ส่วนลดสินค้า + On-Top {editFormData.ontop_discount_rate}%) อัตโนมัติ
               </Text>
             </div>
 
@@ -708,7 +706,7 @@ export default function CustomerCreditControl() {
                 type="button"
                 variant="outline-cancel"
                 onClick={() => setIsEditModalOpen(false)}
-                className="rounded-none px-5 h-10 text-xs font-normal"
+                className="rounded-none h-11 px-4 text-xs font-normal text-[#5F5E5E] bg-white  border border-gray-200 hover:bg-[#F6F3F2] shadow-none cursor-pointer transition-colors"
               >
                 ยกเลิก
               </Button>
@@ -750,13 +748,7 @@ export default function CustomerCreditControl() {
                     <span className="text-xs text-gray-400 font-light">โดย {log.changed_by}</span>
                   </div>
                   <span className="text-[#5F5E5E] text-xs font-light">
-                    {new Date(log.changed_at).toLocaleString("th-TH", {
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatDate(log.changed_at)}
                   </span>
                 </div>
 

@@ -109,7 +109,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {error}
           </p>
         ) : helperText ? (
-          <p className="text-xs text-slate-400">{helperText}</p>
+          <p className="text-xs font-light text-[#6B7280]">{helperText}</p>
         ) : null}
       </div>
     );

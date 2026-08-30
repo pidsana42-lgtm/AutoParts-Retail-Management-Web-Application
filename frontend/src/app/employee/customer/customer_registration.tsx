@@ -407,9 +407,9 @@ export default function CustomerRegistration() {
                         <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate">
                           {c.customer_name}
                         </Text>
-                        {/* <Text variant="xs" className="font-light text-[#A8A29E] mb-0">
+                        <Text variant="xs" className="font-light text-[#A8A29E] mb-0">
                           UID: C-{String(c.id).padStart(3, "0")}
-                        </Text> */} 
+                        </Text> 
                       </TableCell>
                       <TableCell className="py-3.5 px-4 text-sm text-[#1C1B1B]">
                         {c.phone_number || "-"}
@@ -526,11 +526,11 @@ export default function CustomerRegistration() {
               <div className="p-5 border-b border-[#E7BDB8] flex items-start justify-between bg-white">
                 <div>
                   <Heading level="h3" weight="normal" className="text-xl text-[#1C1B1B] mb-0.5">
-                    โปรไฟล์ลูกค้า
+                    โปรไฟล์และการเงินลูกค้า
                   </Heading>
-                  {/* <Text variant="xs" className="text-[#6B7280]">
+                  <Text variant="xs" className="text-[#6B7280]">
                     UID: C-{String(selectedCustomer.id).padStart(3, "0")}
-                  </Text> */}
+                  </Text>
                 </div>
                 <button
                   type="button"

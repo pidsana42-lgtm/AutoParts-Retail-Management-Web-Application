@@ -43,7 +43,7 @@ func (r *customerDiscountRepository) SearchCustomers(searchQuery string) ([]enti
     
     if searchQuery != "" {
         likeQuery := "%" + searchQuery + "%"
-        query = query.Where("customer_name LIKE ? OR phone_number LIKE ?", likeQuery, likeQuery)
+        query = query.Where("customer_name LIKE ? OR phone_number LIKE ? OR id_card_number_customer LIKE ?", likeQuery, likeQuery, likeQuery)
     }
     
     err := query.Find(&customers).Error
