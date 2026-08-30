@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Save,
   TriangleAlert,
@@ -90,7 +90,7 @@ export default function FinancialPolicyPage() {
             </div>
           </div>
 
-          {/* Success / Error Alerts
+          {/* Success / Error Alerts */}
           {successMessage && (
             <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between rounded-none animate-fade-in shadow-xs">
               <div className="flex items-center gap-2.5">
@@ -106,7 +106,7 @@ export default function FinancialPolicyPage() {
               <AlertCircle size={18} className="text-red-600 shrink-0" />
               <span className="font-medium">{error}</span>
             </div>
-          )} */}
+          )}
 
           {/* Form Content (Cards) */}
           <div className="space-y-6">

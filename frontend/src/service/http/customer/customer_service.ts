@@ -4,7 +4,10 @@ import type {
   CustomerListItem,
   CustomerDetailResponse,
   RegisterCustomerRequest,
+  UpdateCustomerDiscountRequest,
 } from "../../../interface/customer/customer_interface";
+import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
+import type { BulkUpdateCustomerDiscountItem } from "../../../interface/storeconfig/customer_credit_interface";
 
 export const customerApiService = {
   /** ดึงรายชื่อประเภทลูกค้าสำหรับ Dropdown */
@@ -28,6 +31,33 @@ export const customerApiService = {
   /** ลงทะเบียนลูกค้าใหม่ */
   registerCustomer: async (payload: RegisterCustomerRequest): Promise<any> => {
     const res = await apiClient.post("/customers/register", payload);
+    return res.data;
+  },
+
+  /** ค้นหา/ดึงข้อมูลสิทธิ์ส่วนลดและวงเงินเครดิตลูกค้า */
+  getCustomerDiscounts: async (query: string = ""): Promise<CustomerDiscountResponse[]> => {
+    const res = await apiClient.get<CustomerDiscountResponse[]>(
+      `/pos/customer-discount?search=${encodeURIComponent(query)}`
+    );
+    return res.data || [];
+  },
+
+  /** อัปเดตสิทธิ์ส่วนลดพิเศษ On-top ของลูกค้า (PUT /api/customers/:id/discount) */
+  updateCustomerDiscount: async (
+    id: number,
+    payload: UpdateCustomerDiscountRequest
+  ): Promise<any> => {
+    const res = await apiClient.put(`/customers/${id}/discount`, payload);
+    return res.data;
+  },
+
+  /** บันทึกแก้ไขส่วนลดลูกค้าจำนวนมาก (Bulk Update) */
+  bulkUpdateCustomerDiscounts: async (
+    items: BulkUpdateCustomerDiscountItem[]
+  ): Promise<any> => {
+    const res = await apiClient.put("/pos/customer-discount", {
+      discount_items: items,
+    });
     return res.data;
   },
 };

@@ -9,7 +9,6 @@ import Pos from './employee/pos/pos';
 import SalesHistory from './employee/pos/sales_history';
 import { getMenuByRole } from '../config/menu'; 
 import { useAuth } from '../contexts/AuthContexts'; 
-import StoreConfig from './owner/storeconfig/storeconfig'; 
 import Stock from './owner/stock/stock';
 import StockMovement from './owner/stock/stock_movement/stock_movement';
 import Stockdata from './owner/stock/Stock_data/stock_data';
@@ -48,6 +47,7 @@ import PaymentHistory from './employee/transactions/payment_history';
 import PaymentCancellationHistory from './employee/transactions/payment_cancellation_history';
 import CustomerRegistration from './employee/customer/customer_registration';
 import FinancialPolicy from './owner/storeconfig/financial_policy';
+import CustomerCreditControl from './owner/storeconfig/customer_credit_control';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -92,8 +92,15 @@ export default function AppRouter(): React.JSX.Element {
         } />
 
         {/* -------------------- การตั้งค่า ------------------------ */}
-        <Route path="/owner/storeconfig" element={<StoreConfig />} />
-        <Route path="/owner/storeconfig/financial-policy" element={<FinancialPolicy />} />
+        <Route path="/owner/storeconfig" element={
+          isAdminOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/storeconfig/financial-policy" element={
+          isAdminOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/storeconfig/customer-credit-control" element={
+          isAdminOrOwner ? <CustomerCreditControl /> : <Navigate to={firstMenuPath} replace />
+        } />
         {/* ------------------------------------------------------ */}
 
         
@@ -200,18 +207,6 @@ export default function AppRouter(): React.JSX.Element {
         {/* เจ้าของร้าน */}
         <Route path="/owner/customers/customer-registration" element={
           isAdminOrOwner ? <CustomerRegistration /> : <Navigate to={firstMenuPath} replace />
-        } />
-        {/* --------------------------------------------------- */}
-
-        {/* ------------------ การตั้งค่าร้านค้า ----------------- */}
-        <Route path="/owner/storeconfig" element={
-          isAdminOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
-        } />
-        <Route path="/owner/storeconfig/financial-policy" element={
-          isAdminOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
-        } />
-        <Route path="/owner/storeconfig/financial_policy" element={
-          isAdminOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
         } />
         {/* --------------------------------------------------- */}
 

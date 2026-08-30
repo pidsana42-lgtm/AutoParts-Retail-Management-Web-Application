@@ -207,7 +207,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
             <div className="flex items-center justify-between mb-1">
               <Heading level="h6" className="uppercase tracking-wider">
                 รออนุมัติยกเลิก
-              </Heading>
+              </Heading> 
             </div>
             <Heading level="h3">
               ฿{kpiValue(stats.pendingAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}

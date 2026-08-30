@@ -247,7 +247,7 @@ export default function TransactionHistoryPage() {
             </Card>
 
             {/* 2. จำนวนบิลทั้งหมด (Total Orders) */}
-            <Card className="!border-l-[5px] !border-l-slate-300 flex flex-col justify-between p-4 md:p-5">
+            <Card className="border-l-5 !border-l-slate-300 flex flex-col justify-between p-4 md:p-5">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -269,7 +269,7 @@ export default function TransactionHistoryPage() {
             </Card>
 
             {/* 3. ยอดเงินสด vs เงินเชื่อ (Cash vs Credit) */}
-            <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+            <Card className="bg-white rounded-none border border-gray-200 p-5 shadow-xs border-l-4 border-l-[#E51C23]">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Heading level="h6" className="uppercase tracking-wider">
