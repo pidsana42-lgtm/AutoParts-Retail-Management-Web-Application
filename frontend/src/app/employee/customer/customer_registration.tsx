@@ -415,7 +415,7 @@ export default function CustomerRegistration() {
                         {c.phone_number || "-"}
                       </TableCell>
                       <TableCell className="py-3.5 px-4 text-sm text-[#5F5E5E]">
-                        {c.id_card_number_customer || "-"}
+                        {c.id_card_number_customer || "-"} 
                       </TableCell>
                       <TableCell className="py-3.5 px-4 truncate">
                         <Text variant="xs" className="text-[#5F5E5E] truncate mb-0">
