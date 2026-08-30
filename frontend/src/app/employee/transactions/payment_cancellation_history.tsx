@@ -30,8 +30,8 @@ import {
   formatCurrency,
   getPageNumbers,
   getPaymentVariant,
-  renderCancellationStatusBadge,
 } from "../../../utils/poshelpers";
+import { SalesCancellationStatusBadge } from "../../../components/elements/status_badge";
 import { usePaymentCancellationHistory } from "./hooks/usePaymentCancellationHistory";
 import { useUserRole } from "../../../hooks/useUserRole";
 import { useEmployeeOptions } from "../../../hooks/useEmployeeOptions";
@@ -455,7 +455,11 @@ const PaymentCancellationHistory: React.FC = () => {
 
                         {/* 6. สถานะ */}
                         <TableCell className="py-3.5 px-3 text-center">
-                          {renderCancellationStatusBadge(item.status, "", item.cancel_remark, item.cancelled_at)}
+                          <SalesCancellationStatusBadge
+                            status={item.status}
+                            cancelRemark={item.cancel_remark}
+                            cancelProcessedAt={item.cancelled_at}
+                          />
                         </TableCell>
 
                         {/* 7. จัดการ */}

@@ -24,7 +24,8 @@ import {
   TableCell,
 } from "../../../components/elements/table";
 import { cn } from "../../../utils/component";
-import { formatDate, getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge, renderCancellationStatusBadge } from "../../../utils/poshelpers";
+import { formatDate, getDisplayCustomerName, getPageNumbers, getPaymentVariant } from "../../../utils/poshelpers";
+import { SalesCancellationStatusBadge } from "../../../components/elements/status_badge";
 
 // นำเข้า Custom Hook ของเจ้าของร้าน
 import { useOwnerSalesCancellationHistory } from "./hooks/useOwnerSalesCancellationHistory";
@@ -386,7 +387,12 @@ const OwnerSalesCancellationHistory: React.FC = () => {
 
                     {/* สถานะ */}
                     <TableCell className="py-3.5 px-3 text-center">
-                      {renderCancellationStatusBadge(item.status, item.payment_status, item.cancel_remark, item.cancel_processed_at)}
+                      <SalesCancellationStatusBadge
+                        status={item.status}
+                        paymentStatus={item.payment_status}
+                        cancelRemark={item.cancel_remark}
+                        cancelProcessedAt={item.cancel_processed_at}
+                      />
                     </TableCell>
 
                     {/* จัดการ */}
