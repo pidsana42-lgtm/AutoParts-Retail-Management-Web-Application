@@ -35,12 +35,9 @@ const PageFilter = [
 ];
 
 const PAGE_SIZE = 10;
-const PO_BADGE_LS_KEY = 'dashboard_po_created_alerts';
-const PO_BADGE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 const fmt = (n: number) =>
   n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 
 function getPageNumbers(current: number, total: number): (number | '...')[] {
   const delta = 1;
@@ -89,26 +86,16 @@ const MainDashboard: React.FC = () => {
     }
     return d.toLocaleString('th-TH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
-  // Stste รายการค้างสต๊อกเกิน 180 วัน
+  // State รายการค้างสต๊อกเกิน 180 วัน
   const [agingStock, setAgingStock] = useState<AgingStockItem[]>([]);
   const [agingStockLoading, setAgingStockLoading] = useState(false);
 
-  // State ติดตาม alert ที่สร้าง PO ไปแล้ว (เก็บใน localStorage 7 วัน)
-  const [poCreatedAlertIds, setPoCreatedAlertIds] = useState<Set<number>>(() => {
+  // ล้าง localStorage เก่าที่เคยบันทึก alert PO ไว้ผิดพลาด
+  useEffect(() => {
     try {
-      const raw = localStorage.getItem(PO_BADGE_LS_KEY);
-      if (!raw) return new Set<number>();
-      const map: Record<string, number> = JSON.parse(raw);
-      const now = Date.now();
-      return new Set(
-        Object.entries(map)
-          .filter(([, ts]) => now - ts < PO_BADGE_EXPIRY_MS)
-          .map(([id]) => Number(id))
-      );
-    } catch {
-      return new Set<number>();
-    }
-  });
+      localStorage.removeItem('dashboard_po_created_alerts');
+    } catch { /* ignore */ }
+  }, []);
 
   // Pagination
   const [recentSalePage, setRecentSalePage] = useState(1);
@@ -272,21 +259,6 @@ const MainDashboard: React.FC = () => {
     };
     fetchTrend();
   }, [summaryData, selectedFilter, selectedDate]);
-
-  const handlePOCreated = (alertIds: number[]) => {
-    setPoCreatedAlertIds((prev) => {
-      const next = new Set(prev);
-      alertIds.forEach((id) => next.add(id));
-      return next;
-    });
-    try {
-      const raw = localStorage.getItem(PO_BADGE_LS_KEY);
-      const map: Record<string, number> = raw ? JSON.parse(raw) : {};
-      const now = Date.now();
-      alertIds.forEach((id) => { map[String(id)] = now; });
-      localStorage.setItem(PO_BADGE_LS_KEY, JSON.stringify(map));
-    } catch { /* ignore */ }
-  };
 
   const handleFilterClick = (value: string) => {
     setSelectedFilter(value);
@@ -661,7 +633,7 @@ const MainDashboard: React.FC = () => {
                 </div>
             ) : (
               stockAlerts.map((item) => {
-                const hasPO = poCreatedAlertIds.has(item.id);
+                const hasPO = Boolean(item.has_po);
                 return (
                   <div
                     key={item.id}
@@ -682,7 +654,7 @@ const MainDashboard: React.FC = () => {
                       {hasPO && (
                         <span className='inline-flex items-center gap-1 mt-1 text-xs text-amber-700 font-medium'>
                           <ShoppingCart size={11} />
-                          สร้าง PO แล้ว
+                          สร้าง PO แล้ว {item.po_number ? `(${item.po_number}${(item.po_count ?? 1) > 1 ? ` +${(item.po_count ?? 1) - 1}` : ''})` : ''}
                         </span>
                       )}
                     </div>
@@ -712,7 +684,6 @@ const MainDashboard: React.FC = () => {
       onClose={() => setAlertModalOpen(false)}
       stockAlerts={stockAlerts}
       basePath={basePath}
-      onPOCreated={handlePOCreated}
     />
     </>
   );
