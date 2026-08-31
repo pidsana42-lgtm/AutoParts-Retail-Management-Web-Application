@@ -33,15 +33,17 @@ func (ctrl *PreOrderController) CreatePreOrder(c *gin.Context) {
 		return
 	}
 
-	// แจ้งเตือนเฉพาะเจ้าของร้าน/แอดมิน (ไม่ไปโผล่หน้าพนักงานคนอื่น) — ของเดิม broadcast ทุกคน
-	// หมายเหตุ: pre-order ไม่มีการเก็บว่าใครเป็นคนสร้าง จึงแจ้งกลับได้แค่ทางเดียว (สร้าง -> เจ้าของร้าน)
-	msg := fmt.Sprintf("มีพรีออเดอร์ใหม่จากลูกค้า %s จำนวน %d รายการ รอเจ้าของร้านอนุมัติ", res.CustomerName, len(res.PreOrderItems))
+	// แจ้งเตือนไปยังระบบจัดซื้อ (Purchase / Orders) และเจ้าของร้าน
+	msg := fmt.Sprintf("มีรายการพรีออเดอร์ใหม่จากลูกค้า %s จำนวน %d รายการ เข้าสู่ระบบจัดซื้อ", res.CustomerName, len(res.PreOrderItems))
 	if res.CustomerName == "" {
-		msg = fmt.Sprintf("มีพรีออเดอร์ใหม่ จำนวน %d รายการ รอเจ้าของร้านอนุมัติ", len(res.PreOrderItems))
+		msg = fmt.Sprintf("มีรายการพรีออเดอร์ใหม่ จำนวน %d รายการ เข้าสู่ระบบจัดซื้อ", len(res.PreOrderItems))
 	}
 	if ctrl.notification != nil {
-		if err := ctrl.notification.NotifyOwners("PRE_ORDER_CREATED", "พรีออเดอร์ใหม่รออนุมัติ", msg, "/owner/pre-orders", nil); err != nil {
+		if err := ctrl.notification.NotifyOwners("PRE_ORDER_CREATED", "มีรายการพรีออเดอร์ใหม่ (จัดซื้อ)", msg, "/owner/orders", nil); err != nil {
 			fmt.Printf("[Notification] failed to notify owners (pre-order %d): %v\n", res.ID, err)
+		}
+		if err := ctrl.notification.NotifyEmployees("PRE_ORDER_CREATED", "มีรายการพรีออเดอร์ใหม่ (จัดซื้อ)", msg, "/employee/orders", nil); err != nil {
+			fmt.Printf("[Notification] failed to notify employees (pre-order %d): %v\n", res.ID, err)
 		}
 	}
 
