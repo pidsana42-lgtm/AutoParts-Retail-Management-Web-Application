@@ -49,6 +49,8 @@ import CustomerRegistration from './employee/customer/customer_registration';
 import FinancialPolicy from './owner/storeconfig/financial_policy';
 import CustomerCreditControl from './owner/storeconfig/customer_credit_control';
 import StoreConfig from './owner/storeconfig/storeconfig';
+import DeletedPoHistory from './owner/purchase_orders/restore_po';
+import NewReturnPage from './owner/return/new_return';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -145,8 +147,10 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/owner/import-bills" element={<ImportBill />} />
         <Route path="/owner/import-bills/scan" element={<ImportBill />} />
         <Route path="/owner/import-bills/excel" element={<ImportBill />} />
+        <Route path="/owner/import-bills/mapping" element={<ImportBill />} />
         <Route path="/owner/import-bills/manual" element={<ImportBill />} />
         <Route path="/owner/import-bills/po" element={<ImportBill />} />
+        <Route path="/owner/import-bills/approve/:id" element={<ImportBill />} />
         <Route path="/owner/import-bills/edit-stock-bill" element={
           isAdminOrOwner ? <EditStockBillPage /> : <Navigate to={firstMenuPath} replace />
         } />
@@ -166,6 +170,8 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/owner/claims/approve/:id" element={<ClaimApprovePage />} />
         <Route path="/owner/claims/status/:id" element={<Navigate to="/owner/claims/detail/:id" replace />} />
         <Route path="/owner/returns" element={<ReturnsPage />} />
+        <Route path="/owner/returns/new-return" element={<NewReturnPage />} />
+        <Route path="/owner/returns/:id" element={<ReturnDetailPage />} />
         <Route path="/owner/returns/detail/:id" element={<ReturnDetailPage />} />
         {/* ----------------------------------------------------------- */}
 
@@ -214,6 +220,8 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/owner/orders" element={<PurchaseOrders />} />
         <Route path="/owner/new-orders" element={<CreatePurchaseOrders />} />
         <Route path="/owner/orders/:id" element={<OrderDetail />} />
+        <Route path="/owner/orders/restore" element={<DeletedPoHistory />} />
+
         {/* แดชบอร์ดของฝั่งพนักงาน */}
         <Route path="/employee/dashboard/maindashboard" element={
           !isAdminOrOwner ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
@@ -233,6 +241,7 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/employee/import" element={<EmployeeImport />} />
         <Route path="/employee/import/scan" element={<EmployeeImport />} />
         <Route path="/employee/import/excel" element={<EmployeeImport />} />
+        <Route path="/employee/import/mapping" element={<EmployeeImport />} />
         <Route path="/employee/import/manual" element={<EmployeeImport />} />
         <Route path="/employee/import/po" element={<EmployeeImport />} />
 
@@ -244,6 +253,11 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/employee/claims/detail/:id" element={<ClaimDetailPage />} />
         <Route path="/employee/claims/edit/:id" element={<ClaimEditPage canApprove={false} />} />
         <Route path="/employee/claims/status/:id" element={<Navigate to="/employee/claims/detail/:id" replace />} />
+
+        <Route path="/employee/returns" element={<ReturnsPage />} />
+        <Route path="/employee/returns/new-return" element={<NewReturnPage />} />
+        <Route path="/employee/returns/:id" element={<ReturnDetailPage />} />
+        <Route path="/employee/returns/detail/:id" element={<ReturnDetailPage />} />
 
         {/* หน้าตรวจนับสต็อกสำหรับพนักงาน */}
         <Route path="/employee/wms/check-stock" element={<EmployeeCheckStockListPage />} />

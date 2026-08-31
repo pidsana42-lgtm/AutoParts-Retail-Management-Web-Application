@@ -36,6 +36,11 @@ const mapProductItem = (item: any): StockItem => ({
   ShelfLevel: item.shelf_level_name || "",
   Zone: item.zone_name || "",
   Supplier: item.supplier_name || "",
+  Suppliers: (item.suppliers || []).map((s: any) => ({
+    SupplierID: s.supplier_id,
+    SupplierName: s.supplier_name || "",
+    Quantity: s.quantity || 0,
+  })),
 });
 
 export const getProductsList = async (): Promise<StockItem[]> => {
@@ -132,5 +137,14 @@ export const uploadProductImage = async (productId: number, file: File): Promise
 
 export const updateProduct = async (id: number, data: any): Promise<any> => {
   const response = await apiClient.put(`/wms/products/${id}`, data);
+  return response.data;
+};
+
+// รับสินค้าเข้าเพิ่มให้สินค้าที่มีอยู่แล้วในระบบ (ไม่ใช่สร้างสินค้าใหม่) — บวกจำนวน + Supplier เข้ากับของเดิม
+export const receiveStock = async (
+  id: number,
+  data: { quantity: number; suppliers: { supplier_id: number; quantity: number }[] }
+): Promise<any> => {
+  const response = await apiClient.post(`/wms/products/${id}/receive-stock`, data);
   return response.data;
 };

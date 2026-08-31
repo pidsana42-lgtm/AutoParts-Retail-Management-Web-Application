@@ -26,7 +26,7 @@ func PurchaseOrdersItems(db *gorm.DB) error {
             POID:                         po.ID,
             ProductID:                    product.ID,
             Product_name_snapshot:        product.Product_Name,
-            Supply_product_code_snapshot: product.Product_Code,
+            Supply_product_code_snapshot: product.CompanyProductCode,
             Quantity:                     quantity,
             Unit:                         product.Unit.Unit_Name,
             UnitPrice:                    product.Cost_price,

@@ -19,6 +19,8 @@ type PO struct {
 	Creator     	 User       `gorm:"foreignKey:Created_by" json:"creator"`
 	Approved_by 	 *uint      `json:"approved_by"`
 	Approved_at 	 *time.Time `json:"approved_at"`
+	// เวลาที่แจ้งเตือน PO ค้างครั้งล่าสุด (ใช้คู่กับ UpdatedAt เพื่อนับ 7 วันจากความเคลื่อนไหวล่าสุด ไม่ใช่แค่วันที่สร้าง)
+	LastReminderAt   *time.Time `json:"last_reminder_at"`
 
 	SupplierID 		 uint 		`json:"supplier_id"`
 	Supplier   		 Supplier 	`gorm:"foreignKey:SupplierID" json:"supplier,omitempty"`

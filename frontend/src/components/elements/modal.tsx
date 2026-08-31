@@ -1,119 +1,133 @@
-import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "../../utils/component";
 import { type ReactNode, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { AlertTriangle, type LucideIcon } from "lucide-react";
+import { cn } from "../../utils/component";
+import Button, { type ButtonProps } from "../elements/button";
 
-const modalPanelVariants = cva(
-  [
-    "relative z-10 w-full rounded-none bg-white shadow-xl",
-    "animate-in fade-in zoom-in-95 duration-150",
-  ],
-  {
-    variants: {
-      size: {
-        sm: "max-w-sm",
-        md: "max-w-md",
-        lg: "max-w-2xl",
-        xl: "max-w-4xl",
-      },
-    },
-    defaultVariants: {
-      size: "md",
-    },
-  }
-);
+type ConfirmDialogVariant = "danger" | "warning" | "success" | "info";
+const variantStyles: Record<
+  ConfirmDialogVariant,
+  { iconBg: string; iconColor: string; confirmButtonVariant: ButtonProps["variant"] }
+> = {
+  danger: {
+    iconBg: "bg-red-50",
+    iconColor: "text-red-500",
+    confirmButtonVariant: "danger",
+  },
+  warning: {
+    iconBg: "bg-amber-50",
+    iconColor: "text-amber-500",
+    confirmButtonVariant: "tertiary",
+  },
+  success: {
+    iconBg: "bg-emerald-50",
+    iconColor: "text-emerald-500",
+    confirmButtonVariant: "approved",
+  },
+  info: {
+    iconBg: "bg-orange-50",
+    iconColor: "text-[#F26522]",
+    confirmButtonVariant: "secondary",
+  },
+};
 
-interface ModalProps extends VariantProps<typeof modalPanelVariants> {
+export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  title?: ReactNode;
-  description?: ReactNode;
-  footer?: ReactNode;
-  children?: ReactNode;
-  className?: string;
+  onConfirm: () => void;
+  title: string;
+  description: ReactNode;
+  confirmText?: string;
+  cancelText?: string;
+  variant?: ConfirmDialogVariant;
+  icon?: LucideIcon;
+  isSubmitting?: boolean;
 }
 
 export default function Modal({
   isOpen,
   onClose,
+  onConfirm,
   title,
   description,
-  size,
-  footer,
-  children,
-  className,
+  confirmText = "ยืนยัน",
+  cancelText = "ยกเลิก",
+  variant = "danger",
+  icon: Icon = AlertTriangle,
+  isSubmitting = false,
 }: ModalProps) {
   useEffect(() => {
     if (!isOpen) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !isSubmitting) onClose();
     };
-
     document.addEventListener("keydown", handleKeyDown);
     document.body.style.overflow = "hidden";
-
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = "";
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, isSubmitting, onClose]);
 
   if (!isOpen) return null;
 
+  const styles = variantStyles[variant];
+
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      role="dialog"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+      role="alertdialog"
       aria-modal="true"
-      aria-labelledby={typeof title === "string" ? "modal-title" : undefined}
+      aria-labelledby="confirm-dialog-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isSubmitting) onClose();
+      }}
     >
-      {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-none"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Panel */}
-      <div className={cn(modalPanelVariants({ size }), className)}>
-        {(title || description) && (
-          <div className="bg-[#1C1B1B] flex items-start justify-between gap-3 border-b border-gray-100 px-6 py-4">
-            <div>
-              {typeof title === "string" ? (
-                <h2 id="modal-title" className="text-2xl font-semibold text-white m-0 leading-tight">
-                  {title}
-                </h2>
-              ) : (
-                title
-              )}
-              {description && (
-                <p className="mt-1 text-xs text-white font-light m-0">{description}</p>
-              )}
-            </div>
-            <button
-              onClick={onClose}
-              aria-label="ปิด"
-              className={cn(
-                "rounded-none p-1 text-slate-400 transition-colors cursor-pointer",
-                "hover:text-slate-100",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-              )}
-            >
-              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
+        className={cn(
+          "w-full max-w-sm rounded-none bg-white p-8 text-center shadow-2xl",
+          "animate-in fade-in zoom-in-95 duration-150"
         )}
+      >
+        {/* Icon */}
+        <div
+          className={cn(
+            "mx-auto flex h-16 w-16 items-center justify-center rounded-md",
+            styles.iconBg
+          )}
+        >
+          <Icon className={cn("h-8 w-8", styles.iconColor)} strokeWidth={2} />
+        </div>
 
-        <div className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>
+        {/* Title */}
+        <h2 id="confirm-dialog-title" className="mt-5 text-xl font-bold text-slate-800">
+          {title}
+        </h2>
 
-        {footer && (
-          <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3">
-            {footer}
-          </div>
-        )}
+        {/* Description */}
+        <div className="mt-2 text-sm leading-relaxed text-slate-500">{description}</div>
+
+        {/* Actions */}
+        <div className="mt-7 flex gap-3">
+          <Button
+            type="button"
+            variant="outline-cancel"
+            className="flex-1"
+            onClick={onClose}
+            disabled={isSubmitting}
+          >
+            {cancelText}
+          </Button>
+          <Button
+            type="button"
+            variant={styles.confirmButtonVariant}
+            className="flex-1"
+            onClick={onConfirm}
+            isLoading={isSubmitting}
+          >
+            {confirmText}
+          </Button>
+        </div>
       </div>
     </div>,
     document.body

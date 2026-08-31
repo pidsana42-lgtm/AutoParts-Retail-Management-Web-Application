@@ -36,7 +36,6 @@ export default function SettleBillsPage(): React.JSX.Element {
     searchQuery,
     setSearchQuery,
     customerId,
-    setCustomerId,
     customerName,
     bills,
     filteredBills,

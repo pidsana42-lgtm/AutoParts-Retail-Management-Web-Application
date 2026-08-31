@@ -3,6 +3,8 @@ package catalog
 import (
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	controller "backend/internal/app/controller/catalog"
@@ -16,6 +18,11 @@ func SetupCatalogRoutes(r *gin.Engine, db *gorm.DB) {
 	repository := repo.NewCatalogRepository(db)
 	svc := service.NewCatalogService(repository)
 	ctrl := controller.NewCatalogController(svc)
+	aiServiceURL := strings.TrimRight(os.Getenv("OCR_SERVICE_URL"), "/")
+	if aiServiceURL == "" {
+		aiServiceURL = "http://127.0.0.1:8000"
+	}
+	catalogExtractURL := aiServiceURL + "/api/extract-catalog"
 
 	catalogGroup := r.Group("/api/catalogs")
 	{
@@ -28,7 +35,7 @@ func SetupCatalogRoutes(r *gin.Engine, db *gorm.DB) {
 
 		// Proxy route for AI catalog image extraction
 		catalogGroup.POST("/extract-image", func(c *gin.Context) {
-			proxyReq, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:8000/api/extract-catalog", c.Request.Body)
+			proxyReq, err := http.NewRequest(http.MethodPost, catalogExtractURL, c.Request.Body)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create AI proxy request: " + err.Error()})
 				return
@@ -38,7 +45,7 @@ func SetupCatalogRoutes(r *gin.Engine, db *gorm.DB) {
 			client := &http.Client{Timeout: 300 * time.Second}
 			resp, err := client.Do(proxyReq)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect to Python AI service (port 8000): " + err.Error()})
+				c.JSON(http.StatusBadGateway, gin.H{"error": "failed to connect to catalog AI service: " + err.Error()})
 				return
 			}
 			defer resp.Body.Close()

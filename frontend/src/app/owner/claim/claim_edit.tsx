@@ -8,6 +8,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { getCustomerClaimById, updateCustomerClaim } from '../../../service/http/claim/claim';
 import apiClient from '../../../service/http/apiClient';
 import type { CustomerClaim, CustomerClaimItem } from '../../../interface/claim/claim';
+import { useToast } from '../../../components/elements/toast';
 
 interface ClaimEditPageProps {
   canApprove?: boolean;
@@ -21,6 +22,7 @@ interface EditableItem extends CustomerClaimItem {
 export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const [claim, setClaim] = useState<CustomerClaim | null>(null);
   const [notes, setNotes] = useState('');
@@ -43,6 +45,7 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
         setItems(data.items ? data.items.map(i => ({ ...i })) : []);
       } catch (err) {
         console.error('Failed to load claim:', err);
+        toast({ variant: 'error', message: 'ไม่สามารถโหลดข้อมูลใบเคลมได้' });
       } finally {
         setLoading(false);
       }
@@ -63,7 +66,7 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
     const file = e.target.files?.[0];
     if (!file || activeItemIdx === null) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert('ไฟล์ภาพขนาดใหญ่เกินไป (สูงสุด 5MB)');
+      toast({ variant: 'warning', message: 'ไฟล์ภาพขนาดใหญ่เกินไป (สูงสุด 5MB)' });
       return;
     }
     const preview = URL.createObjectURL(file);
@@ -108,6 +111,7 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
                 evidenceUrl = res.data?.url ?? evidenceUrl;
               } catch (err) {
                 console.error('Failed to upload evidence:', err);
+                toast({ variant: 'warning', message: 'อัปโหลดรูปหลักฐานไม่สำเร็จ' });
               }
             }
             return apiClient.put(`/claims/customer-claims/items/${item.id}`, {
@@ -147,10 +151,11 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
         } as any);
       }
 
+      toast({ variant: 'success', message: 'แก้ไขใบเคลมเรียบร้อยแล้ว' });
       navigate(`${backPath}/detail/${claim.id}`);
     } catch (err) {
       console.error('Failed to save claim:', err);
-      alert('เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่');
+      toast({ variant: 'error', message: 'เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่' });
     } finally {
       setSaving(false);
     }

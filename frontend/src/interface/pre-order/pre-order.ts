@@ -3,6 +3,8 @@ export interface PreOrderItem {
   product_id: number;
   product_name?: string;
   product_code?: string;
+  supplier_part_code?: string;
+  supplier_name?: string;
   quantity: number;
   unit_price: number;
   net_amount?: number;
