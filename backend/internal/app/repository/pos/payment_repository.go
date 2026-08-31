@@ -1,6 +1,7 @@
 package pos
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"time"
@@ -24,11 +25,14 @@ type PaymentRepository interface {
 	GeneratePromptPayQR(promptPayNo string, amount float64) (string, error)
 	BeginTransaction() *gorm.DB
 	GetStoreConfig() (*entity.StoreConfig, error)
+	GetCompanySetting(ctx context.Context) (*entity.CompanySetting, error)
 
 	GetUnpaidOrdersByCustomerID(customerID uint) ([]entity.SaleOrder, error)
 	GetUnpaidOrderByOrderNumber(orderNumber string) (*entity.SaleOrder, error)
     CreateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error
     GetRepaymentByID(repaymentID uint) (*entity.PaymentRepayment, error)
+    GetRepaymentsByReceiptNumber(receiptNo string) ([]entity.PaymentRepayment, error)
+    GetPreviousRepaymentsSum(orderID uint, beforeRepaymentID uint) (float64, error)
     UpdateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error
     GetRepaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.PaymentRepayment, error)
     GetDirectPaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.Payment, error)
@@ -324,4 +328,34 @@ func (r *paymentRepository) RejectCancelRepayment(repaymentID uint, remark strin
             "cancel_remark": remark,
             "cancelled_at":  &now,
         }).Error
+}
+
+func (r *paymentRepository) GetCompanySetting(ctx context.Context) (*entity.CompanySetting, error) {
+    var setting entity.CompanySetting
+    err := r.db.WithContext(ctx).First(&setting).Error
+    if err != nil {
+        return nil, err
+    }
+    return &setting, nil
+}
+
+func (r *paymentRepository) GetRepaymentsByReceiptNumber(receiptNo string) ([]entity.PaymentRepayment, error) {
+    var repayments []entity.PaymentRepayment
+    err := r.db.Preload("Order").
+        Preload("Order.Customer").
+        Preload("Order.Customer.CustomerType").
+        Preload("PaymentMethod").
+        Preload("RecordedBy").
+        Where("receipt_number = ?", receiptNo).
+        Find(&repayments).Error
+    return repayments, err
+}
+
+func (r *paymentRepository) GetPreviousRepaymentsSum(orderID uint, beforeRepaymentID uint) (float64, error) {
+    var total float64
+    err := r.db.Model(&entity.PaymentRepayment{}).
+        Where("order_id = ? AND id < ? AND status = 'completed'", orderID, beforeRepaymentID).
+        Select("COALESCE(SUM(amount_paid), 0)").
+        Scan(&total).Error
+    return total, err
 }

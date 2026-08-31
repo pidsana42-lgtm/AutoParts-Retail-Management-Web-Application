@@ -38,6 +38,8 @@ func SetupPaymentRoutes(r *gin.Engine, db *gorm.DB) {
 		// หน้าประวัติการรับชำระเงิน (Payment History)
 		paymentGroup.GET("/history", paymentCtrl.GetPaymentHistory)
 		paymentGroup.GET("/history/:id", paymentCtrl.GetPaymentHistoryByID)
+		paymentGroup.GET("/history/:id/pdf", paymentCtrl.GenerateDebtReceiptPDF)
+		paymentGroup.GET("/repayments/:id/pdf", paymentCtrl.GenerateDebtReceiptPDF)
 
 		// พนักงานส่งคำขอยกเลิกใบเสร็จ (Repayment)
 		paymentGroup.POST("/history/:id/request-cancel", paymentCtrl.RequestCancelPaymentReceipt)

@@ -1,6 +1,7 @@
 package pos
 
 import (
+	"fmt"
 	"net/http"
 	"strconv" //(String Conversion) ใช้แปลง string → uint
 	"strings"
@@ -21,6 +22,7 @@ type PaymentController interface {
 	SettleCustomerBills(c *gin.Context)
 	GetPaymentHistory(c *gin.Context)
 	GetPaymentHistoryByID(c *gin.Context)
+	GenerateDebtReceiptPDF(c *gin.Context)
 	GetCancelledPaymentHistory(c *gin.Context)
 	RequestCancelPaymentReceipt(c *gin.Context)
 	RevertCancelPaymentReceiptRequest(c *gin.Context)
@@ -463,4 +465,23 @@ func (ctrl *paymentController) CancelPaymentReceipt(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "ยกเลิกการรับชำระเงินและคืนยอดหนี้สำเร็จ"})
+}
+
+// GenerateDebtReceiptPDF GET /api/pos/payments/history/:id/pdf หรือ /api/pos/payments/repayments/:id/pdf
+func (ctrl *paymentController) GenerateDebtReceiptPDF(c *gin.Context) {
+	identifier := c.Param("id")
+	if identifier == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุรหัสใบเสร็จรับเงินหรือเลขที่ใบเสร็จ"})
+		return
+	}
+
+	pdfBytes, err := ctrl.paymentService.GenerateDebtRepaymentReceiptPDF(c.Request.Context(), identifier)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate debt receipt PDF: " + err.Error()})
+		return
+	}
+
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=receipt-%s.pdf", identifier))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }

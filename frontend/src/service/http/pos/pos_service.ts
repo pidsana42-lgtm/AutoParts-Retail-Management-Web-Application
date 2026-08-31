@@ -220,6 +220,19 @@ export const posApiService = {
       throw error;
     }
   },
+
+  /** สั่งพิมพ์หรือดึงไฟล์ PDF ใบเสร็จรับเงิน (ชำระหนี้) */
+  printPaymentReceiptPDF: async (receiptIdOrNo: number | string): Promise<Blob> => {
+    try {
+      const response = await apiClient.get(`/pos/payments/history/${receiptIdOrNo}/pdf`, {
+        responseType: "blob",
+      });
+      return response.data;
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการโหลด PDF ใบเสร็จชำระหนี้:", error);
+      throw error;
+    }
+  },
 };
 
 // ==================== Business Logic Helpers ====================
