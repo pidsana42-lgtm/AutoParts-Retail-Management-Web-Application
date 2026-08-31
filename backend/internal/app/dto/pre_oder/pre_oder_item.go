@@ -96,11 +96,11 @@ func ToPreOrderItemResponseDTO(m *entity.PreOrderItem) PreOrderItemResponseDTO {
 		if prodCode == "" {
 			prodCode = m.Product.Product_Code
 		}
-		if supplierPartCode == "" {
-			supplierPartCode = strings.TrimSpace(m.Product.CompanyProductCode)
-		}
-
+		// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
 		for _, inventory := range m.Product.Inventories {
+			if supplierPartCode == "" && strings.TrimSpace(inventory.CompanyProductCode) != "" {
+				supplierPartCode = strings.TrimSpace(inventory.CompanyProductCode)
+			}
 			if supplierPartCode == "" && strings.TrimSpace(inventory.Variant_Code) != "" {
 				supplierPartCode = strings.TrimSpace(inventory.Variant_Code)
 			}
@@ -163,10 +163,11 @@ func ToPreOrderItemForPODTO(m *entity.PreOrderItem) PreOrderItemForPODTO {
 		if pName == "" {
 			pName = m.Product.Product_Name
 		}
-		if pSupplierCode == "" {
-			pSupplierCode = m.Product.CompanyProductCode
-		}
+		// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
 		for _, inventory := range m.Product.Inventories {
+			if pSupplierCode == "" && inventory.CompanyProductCode != "" {
+				pSupplierCode = inventory.CompanyProductCode
+			}
 			if pSupplierCode == "" && inventory.Variant_Code != "" {
 				pSupplierCode = inventory.Variant_Code
 			}

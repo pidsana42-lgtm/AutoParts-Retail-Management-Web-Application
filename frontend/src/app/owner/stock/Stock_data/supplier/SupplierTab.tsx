@@ -1,13 +1,15 @@
 import { useState, useMemo, useEffect } from "react";
-import { Trash2, SquarePen } from "lucide-react";
+import { Trash2, SquarePen, Eye } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Supplier } from "../../../../../interface/wms/stock_data";
+import { buildFuzzyIndex, fuzzyMatchIds } from "../../../../../utils/fuzzySearch";
 
 // Extracted Modals
 import AddSupplierModal from "./AddSupplierModal";
 import EditSupplierModal from "./EditSupplierModal";
+import SupplierDetailModal from "./SupplierDetailModal";
 import TablePagination from "../components/TablePagination";
 
 interface SupplierTabProps {
@@ -24,6 +26,8 @@ export default function SupplierTab({ search, suppliers, loadData, addSignal }: 
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailSupplier, setDetailSupplier] = useState<Supplier | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -55,15 +59,21 @@ export default function SupplierTab({ search, suppliers, loadData, addSignal }: 
     setEditOpen(true);
   };
 
+  const openDetail = (sup: Supplier) => {
+    setDetailSupplier(sup);
+    setDetailOpen(true);
+  };
+
+  // สร้าง index ไว้แค่ตอน suppliers เปลี่ยน แล้วค่อยค้นหาแบบ fuzzy ทุกครั้งที่ search เปลี่ยน
+  const searchIndex = useMemo(
+    () => buildFuzzyIndex(suppliers, ["supplier_name", "short_supplier_name", "phone_number_sale"]),
+    [suppliers]
+  );
+  const matchedIds = useMemo(() => fuzzyMatchIds(searchIndex, search), [searchIndex, search]);
+
   const filteredSuppliers = useMemo(() => {
-    return suppliers.filter(
-      (sup) =>
-        !search ||
-        sup.supplier_name.toLowerCase().includes(search.toLowerCase()) ||
-        sup.short_supplier_name.toLowerCase().includes(search.toLowerCase()) ||
-        sup.phone_number_sale.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [suppliers, search]);
+    return suppliers.filter((sup) => !matchedIds || matchedIds.has(sup.id));
+  }, [suppliers, matchedIds]);
 
   const paginatedSuppliers = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -103,6 +113,13 @@ export default function SupplierTab({ search, suppliers, loadData, addSignal }: 
                   <td className="px-6 py-3 text-slate-600">{sup.bank_account_number}</td>
                   <td className="px-6 py-3 text-right">
                     <div className="flex items-center justify-end gap-3 text-slate-400">
+                      <button
+                        onClick={() => openDetail(sup)}
+                        className="hover:text-slate-700 transition-colors"
+                        title="ดูรายละเอียด"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
                       <button
                         onClick={() => openEditSupplier(sup)}
                         className="hover:text-slate-700 transition-colors"
@@ -151,6 +168,12 @@ export default function SupplierTab({ search, suppliers, loadData, addSignal }: 
         }}
         supplier={selectedSupplier}
         onSuccess={loadData}
+      />
+
+      <SupplierDetailModal
+        isOpen={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        supplier={detailSupplier}
       />
     </>
   );

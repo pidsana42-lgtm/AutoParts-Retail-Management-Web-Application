@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, PackagePlus, PackageSearch } from "lucide-react";
+import { PackagePlus, PackageSearch } from "lucide-react";
 
 import Heading from "../../../../components/elements/heading";
+import Breadcrumb from "../../../../components/elements/breadcrumb";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
 import Input from "../../../../components/elements/input";
 import Select from "../../../../components/elements/select";
@@ -205,25 +206,23 @@ export default function AddProductPage() {
 
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
+      <Breadcrumb
+        items={[
+          { label: "คลังสินค้า", path: "/owner/stock" },
+          { label: mode === "new" ? "เพิ่มสินค้าใหม่" : "รับสินค้าเข้าเพิ่ม" },
+        ]}
+      />
+
       {/* Header */}
-      <div className="flex items-center gap-4 border-b border-slate-200 pb-4">
-        <button
-          type="button"
-          onClick={() => navigate("/owner/stock")}
-          className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
-        >
-          <ChevronLeft size={24} className="text-slate-600" />
-        </button>
-        <div>
-          <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
-            เพิ่มข้อมูลสินค้า
-          </Heading>
-          <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
-            {mode === "new"
-              ? "กรอกรายละเอียดสินค้าด้านล่างเพื่อเพิ่มข้อมูลสินค้าใหม่เข้าสู่ระบบคลัง"
-              : "เลือกสินค้าที่มีอยู่แล้ว แล้วรับเข้าเพิ่มยอดคงเหลือ (บวกเข้ากับของเดิม ไม่สร้างสินค้าซ้ำ)"}
-          </Heading>
-        </div>
+      <div className="border-b border-slate-200 pb-4">
+        <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
+          เพิ่มข้อมูลสินค้า
+        </Heading>
+        <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
+          {mode === "new"
+            ? "กรอกรายละเอียดสินค้าด้านล่างเพื่อเพิ่มข้อมูลสินค้าใหม่เข้าสู่ระบบคลัง"
+            : "เลือกสินค้าที่มีอยู่แล้ว แล้วรับเข้าเพิ่มยอดคงเหลือ (บวกเข้ากับของเดิม ไม่สร้างสินค้าซ้ำ)"}
+        </Heading>
       </div>
 
       {/* Mode toggle: สินค้าใหม่ / สินค้าที่มีอยู่แล้ว */}
