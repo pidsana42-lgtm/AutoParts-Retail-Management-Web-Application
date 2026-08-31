@@ -258,6 +258,56 @@ func (r *dashboardRepository) calculateSummaryForDate(ctx context.Context, date 
 		return nil, err
 	}
 	summary.ReturnAmount = returnAmount
+
+	// 5b) หักยอดคืนออกจาก breakdown ตามช่องทางชำระเงิน ให้ตรงกับ bucket ของออเดอร์ต้นทาง (ไม่ใช่ refund_method)
+	var returnMethodAggs []methodAgg
+	if err := db.Table("sales_returns").
+		Select("payment_methods.method_name AS method_name, COALESCE(SUM(sales_returns.refund_amount),0) AS amount").
+		Joins("JOIN sale_orders ON sale_orders.id = sales_returns.original_order_id AND sale_orders.deleted_at IS NULL").
+		Joins("JOIN payment_methods ON payment_methods.id = sale_orders.payment_method_id").
+		Where("sales_returns.refunded_at IS NOT NULL AND sales_returns.deleted_at IS NULL AND sale_orders.order_date >= ? AND sale_orders.order_date < ?", start, end).
+		Group("payment_methods.method_name").
+		Scan(&returnMethodAggs).Error; err != nil {
+		return nil, err
+	}
+	for _, m := range returnMethodAggs {
+		switch m.MethodName {
+		case enum.PaymentMethodCash:
+			summary.CashAmount -= m.Amount
+		case enum.PaymentMethodQR:
+			summary.TransferAmount -= m.Amount
+		case enum.PaymentMethodCredit:
+			summary.CreditAmount -= m.Amount
+		}
+	}
+
+	// 5c) หักยอดคืนออกจาก breakdown ตามประเภทลูกค้า ให้ตรงกับ bucket ของออเดอร์ต้นทาง
+	var returnCustAggs []customerAgg
+	if err := db.Table("sales_returns").
+		Select("customer_types.type_name AS type_name, COALESCE(SUM(sales_returns.refund_amount),0) AS amount").
+		Joins("JOIN sale_orders ON sale_orders.id = sales_returns.original_order_id AND sale_orders.deleted_at IS NULL").
+		Joins("LEFT JOIN customers ON customers.id = sale_orders.customer_id").
+		Joins("LEFT JOIN customer_types ON customer_types.id = customers.customer_type_id").
+		Where("sales_returns.refunded_at IS NOT NULL AND sales_returns.deleted_at IS NULL AND sale_orders.order_date >= ? AND sale_orders.order_date < ?", start, end).
+		Group("customer_types.type_name").
+		Scan(&returnCustAggs).Error; err != nil {
+		return nil, err
+	}
+	for _, c := range returnCustAggs {
+		typeName := ""
+		if c.TypeName.Valid {
+			typeName = c.TypeName.String
+		}
+		switch typeName {
+		case "GARAGE":
+			summary.GarageCustomerAmount -= c.Amount
+		case "WHOLESALE":
+			summary.CorporateCustomerAmount -= c.Amount
+		default:
+			summary.WalkinCustomerAmount -= c.Amount
+		}
+	}
+
 	summary.NetRevenue = summary.TotalRevenue - summary.ReturnAmount
 	summary.GrossProfit = summary.NetRevenue - summary.TotalCost
 	if summary.NetRevenue > 0 {

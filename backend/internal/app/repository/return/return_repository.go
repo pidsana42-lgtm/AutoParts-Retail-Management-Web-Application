@@ -322,7 +322,11 @@ func (r *returnRepository) applyApprovedReturn(tx *gorm.DB, returnItem *reEntity
 	return nil
 }
 
-func (r *returnRepository) updateDailySummaryForRefund(tx *gorm.DB, saleDate time.Time, amount float64) error {
+func (r *returnRepository) updateDailySummaryForRefund(tx *gorm.DB, order *reEntity.SaleOrder, amount float64) error {
+	saleDate := order.OrderDate
+	if saleDate.IsZero() {
+		saleDate = order.CreatedAt
+	}
 	summaryDate := time.Date(saleDate.Year(), saleDate.Month(), saleDate.Day(), 0, 0, 0, 0, saleDate.Location())
 	var totalRevenue float64
 	if err := tx.Model(&reEntity.SaleOrder{}).
@@ -336,15 +340,62 @@ func (r *returnRepository) updateDailySummaryForRefund(tx *gorm.DB, saleDate tim
 		Scan(&totalRevenue).Error; err != nil {
 		return err
 	}
+
+	// หา bucket ช่องทางชำระเงิน/ประเภทลูกค้าของออเดอร์ต้นทาง เพื่อหักยอดคืนออกจาก breakdown ให้ตรงกับ bucket ที่เคยนับไว้ตอนขาย
+	methodColumn := ""
+	if order.PaymentMethodID != nil {
+		var pm reEntity.PaymentMethod
+		if err := tx.First(&pm, *order.PaymentMethodID).Error; err == nil {
+			switch pm.MethodName {
+			case enum.PaymentMethodCash:
+				methodColumn = "cash_amount"
+			case enum.PaymentMethodQR:
+				methodColumn = "transfer_amount"
+			case enum.PaymentMethodCredit:
+				methodColumn = "credit_amount"
+			}
+		}
+	}
+
+	customerColumn := "walkin_customer_amount"
+	if order.CustomerID != nil {
+		var cust reEntity.Customer
+		if err := tx.Preload("CustomerType").First(&cust, *order.CustomerID).Error; err == nil {
+			switch cust.CustomerType.TypeName {
+			case "GARAGE":
+				customerColumn = "garage_customer_amount"
+			case "WHOLESALE":
+				customerColumn = "corporate_customer_amount"
+			}
+		}
+	}
+
 	var summary reEntity.DailySummary
 	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("summary_date = ?", summaryDate).First(&summary).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return tx.Create(&reEntity.DailySummary{
+		newSummary := &reEntity.DailySummary{
 			SummaryDate:  summaryDate,
 			TotalRevenue: totalRevenue,
 			ReturnAmount: amount,
 			NetRevenue:   totalRevenue - amount,
-		}).Error
+		}
+		switch methodColumn {
+		case "cash_amount":
+			newSummary.CashAmount = -amount
+		case "transfer_amount":
+			newSummary.TransferAmount = -amount
+		case "credit_amount":
+			newSummary.CreditAmount = -amount
+		}
+		switch customerColumn {
+		case "garage_customer_amount":
+			newSummary.GarageCustomerAmount = -amount
+		case "corporate_customer_amount":
+			newSummary.CorporateCustomerAmount = -amount
+		default:
+			newSummary.WalkinCustomerAmount = -amount
+		}
+		return tx.Create(newSummary).Error
 	}
 	if err != nil {
 		return err
@@ -353,12 +404,17 @@ func (r *returnRepository) updateDailySummaryForRefund(tx *gorm.DB, saleDate tim
 	if summary.TotalRevenue == 0 {
 		summary.TotalRevenue = totalRevenue
 	}
+	updates := map[string]interface{}{
+		"return_amount": newReturnAmount,
+		"net_revenue":   summary.TotalRevenue - newReturnAmount,
+	}
+	if methodColumn != "" {
+		updates[methodColumn] = gorm.Expr(methodColumn + " - ?", amount)
+	}
+	updates[customerColumn] = gorm.Expr(customerColumn + " - ?", amount)
 	return tx.Model(&reEntity.DailySummary{}).
 		Where("id = ?", summary.ID).
-		Updates(map[string]interface{}{
-			"return_amount": newReturnAmount,
-			"net_revenue":   summary.TotalRevenue - newReturnAmount,
-		}).Error
+		Updates(updates).Error
 }
 
 func (r *returnRepository) ProcessRefund(id uint, processedBy uint) error {
@@ -471,11 +527,7 @@ func (r *returnRepository) ProcessRefund(id uint, processedBy uint) error {
 		}).Error; err != nil {
 			return err
 		}
-		refundDate := order.OrderDate
-		if refundDate.IsZero() {
-			refundDate = order.CreatedAt
-		}
-		return r.updateDailySummaryForRefund(tx, refundDate, returnItem.RefundAmount)
+		return r.updateDailySummaryForRefund(tx, &order, returnItem.RefundAmount)
 	})
 }
 

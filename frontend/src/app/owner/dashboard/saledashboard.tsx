@@ -45,12 +45,12 @@ const SaleDashboard: React.FC = () => {
   const isOwner = userRole === 'Owner';
 
   // Basic State
-  const [isLoading] = useState(false);
-  const [error] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   // Filter State
   const [selectedFilter, setSelectedFilter] = useState('daily');
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [summaryData] = useState<DashboardSummaryItem[]>([]);
+  const [summaryData, setSummaryData] = useState<DashboardSummaryItem[]>([]);
   // State ส่วน KPI Card
   const [revenueTrend, setRevenueTrend] = useState<number | null>(null);
   const [orderTrend, setOrderTrend] = useState<number | null>(null);
