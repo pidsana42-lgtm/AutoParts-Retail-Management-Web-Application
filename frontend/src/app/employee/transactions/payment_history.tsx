@@ -514,7 +514,7 @@ export default function PaymentHistoryPage() {
                       <TableCell className="py-3.5 px-3 text-center">
                         <button
                           type="button"
-                          className="inline-flex items-center justify-center p-1.5 text-[#E51C23] hover:text-[#c9151b] hover:bg-red-50 transition-colors cursor-pointer rounded-full"
+                          className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full"
                           title="ดูรายละเอียดใบเสร็จ"
                           onClick={() => setSelectedReceipt(item)}
                         >

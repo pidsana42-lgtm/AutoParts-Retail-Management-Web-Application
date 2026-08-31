@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import {
   Eye,
   ChevronLeft,
@@ -6,6 +7,8 @@ import {
   ChevronsRight,
   ScanBarcode,
   X,
+  Printer,
+  Download,
 } from "lucide-react";
 
 // นำเข้า Components
@@ -33,9 +36,28 @@ import { SalesStatusBadge } from "../../../components/elements/status_badge";
 import { formatDate } from "../../../utils/date";
 import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
 import { useUserRole } from "../../../hooks/useUserRole";
+import { posApiService } from "../../../service/http/pos/pos_service";
+import { openPdfBlobInNewTab, downloadPdfBlob } from "../../../utils/print";
 
 
 export default function TransactionHistoryPage() {
+  const [printingOrderId, setPrintingOrderId] = useState<number | string | null>(null);
+
+  const handlePrintReceipt = async (orderId: number | string, orderNumber?: string) => {
+    setPrintingOrderId(orderId);
+    try {
+      const blob = await posApiService.printOrderReceipt(orderId);
+      const rawNum = orderNumber || orderId;
+      const fileName = String(rawNum).startsWith("INV") ? `${rawNum}.pdf` : `INV-${rawNum}.pdf`;
+      downloadPdfBlob(blob, fileName);
+    } catch (err) {
+      console.error("Failed to print receipt:", err);
+      alert("ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setPrintingOrderId(null);
+    }
+  };
+
   // --- ดึงข้อมูลและ Handlers จริงจาก Custom Hook ---
   const { isOwnerOrAdmin } = useUserRole();
 
@@ -459,14 +481,28 @@ export default function TransactionHistoryPage() {
 
                       {/* 7. ปุ่มจัดการ */}
                       <TableCell className="py-3.5 px-4 text-center">
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center p-1.5 text-[#E51C23] hover:text-[#c9151b] hover:bg-red-50 transition-colors cursor-pointer rounded-full"
-                          title="ดูรายละเอียด"
-                          onClick={() => setSelectedOrderId(item.id)}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center p-1.5 cursor-pointer rounded-full"
+                            title="ดูรายละเอียด"
+                            onClick={() => setSelectedOrderId(item.id)}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={printingOrderId === item.id}
+                            className="inline-flex items-center justify-center p-1.5 cursor-pointer rounded-full disabled:opacity-40"
+                            title="พิมพ์/ดาวน์โหลดใบเสร็จ"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePrintReceipt(item.id, item.order_number);
+                            }}
+                          >
+                            <Printer className={cn("w-4 h-4", printingOrderId === item.id && "animate-pulse")} />
+                          </button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -618,13 +654,25 @@ export default function TransactionHistoryPage() {
                       </span>
                     </Text>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedOrderId(null)}
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* <Button
+                      type="button"
+                      variant="solid-red"
+                      onClick={() => handlePrintReceipt(orderDetail.id || orderDetail.order_number, orderDetail.order_number)}
+                      disabled={printingOrderId !== null}
+                      className="text-xs h-8 px-3 font-normal rounded-none flex items-center gap-1.5"
+                    >
+                      <Printer size={14} />
+                      {printingOrderId !== null ? "กำลังดาวน์โหลด..." : "พิมพ์ใบเสร็จ/ใบส่งของ"}
+                    </Button> */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrderId(null)}
+                      className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Scrollable Body Content */}

@@ -23,6 +23,7 @@ type SalesHistoryService interface {
 	GetCancellationRequests(ctx context.Context, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
 	GetMyCancellationRequests(ctx context.Context, userID uint, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error)
 	GetEmployees(ctx context.Context) ([]entity.User, error)
+	GenerateSaleOrderPDF(ctx context.Context, identifier string, customTitle string) ([]byte, error)
 }
 
 type salesHistoryService struct {

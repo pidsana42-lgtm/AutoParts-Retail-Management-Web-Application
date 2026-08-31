@@ -1,6 +1,7 @@
 package pos
 
 import (
+	"context"
 	"backend/internal/app/dto/pos"
 	"backend/internal/app/entity"
 
@@ -22,6 +23,7 @@ type SalesHistoryRepository interface {
 	GetMyCancellationRequests(userID uint, req pos.SalesHistoryFilterRequest) ([]entity.SaleOrder, int64, error)
 	GetEmployees() ([]entity.User, error)
 	GetUserByID(userID uint) (*entity.User, error)
+	GetCompanySetting(ctx context.Context) (*entity.CompanySetting, error)
 }
 
 type salesHistoryRepository struct {
@@ -435,4 +437,12 @@ func (r *salesHistoryRepository) GetUserByID(userID uint) (*entity.User, error) 
 	var user entity.User
 	err := r.db.Where("id = ?", userID).First(&user).Error
 	return &user, err
+}
+
+func (r *salesHistoryRepository) GetCompanySetting(ctx context.Context) (*entity.CompanySetting, error) {
+	var setting entity.CompanySetting
+	if err := r.db.WithContext(ctx).First(&setting).Error; err != nil {
+		return nil, err
+	}
+	return &setting, nil
 }
