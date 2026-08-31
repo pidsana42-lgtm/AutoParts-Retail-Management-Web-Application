@@ -29,7 +29,7 @@ func (s *stockMovementService) Create(req *wmsDto.StockMovementRequestDTO) error
 		Movement_DateTime: req.Movement_DateTime,
 		Note:              req.Note,
 		ProductID:         req.ProductID,
-		UserID:            req.UserID,
+		UserID:            &req.UserID,
 	}
 	if req.SupplierID != nil {
 		sm.SupplierID = req.SupplierID

@@ -38,6 +38,10 @@ type ProductService interface {
 
 	// ReceiveStock: รับสินค้าเข้าเพิ่มให้สินค้าที่มีอยู่แล้วในระบบ (หน้า "เพิ่มข้อมูลสินค้า" โหมด "สินค้าที่มีอยู่แล้ว")
 	ReceiveStock(id uint, req *wmsDto.ReceiveStockRequestDTO) (*wmsDto.ProductListResponseDTO, error)
+
+	// ListDeletedProducts / RestoreProduct: สำหรับหน้า "ถังขยะ" กู้คืนสินค้าที่ลบไปแล้ว
+	ListDeletedProducts() ([]wmsDto.ProductListResponseDTO, error)
+	RestoreProduct(id uint) error
 }
 
 type productService struct {
@@ -133,6 +137,7 @@ func buildInventories(suppliers []wmsDto.ProductSupplierInput) []entity.Inventor
 			SupplierID:            sup.SupplierID,
 			Inventory_Quantity:    sup.Quantity,
 			Last_Updated_DateTime: time.Now(),
+			CompanyProductCode:    sup.CompanyProductCode,
 		})
 	}
 	return inventories
@@ -140,6 +145,22 @@ func buildInventories(suppliers []wmsDto.ProductSupplierInput) []entity.Inventor
 
 func (s *productService) DeleteProduct(id uint) error {
 	return s.repo.DeleteProduct(id)
+}
+
+func (s *productService) ListDeletedProducts() ([]wmsDto.ProductListResponseDTO, error) {
+	products, err := s.repo.ListDeletedProducts()
+	if err != nil {
+		return nil, err
+	}
+	result := make([]wmsDto.ProductListResponseDTO, len(products))
+	for i, p := range products {
+		result[i].FromEntity(p)
+	}
+	return result, nil
+}
+
+func (s *productService) RestoreProduct(id uint) error {
+	return s.repo.RestoreProduct(id)
 }
 
 // ReceiveStock: รับสินค้าเข้าเพิ่มให้สินค้าที่มีอยู่แล้ว — บวกจำนวนรวม + จำนวนต่อ Supplier เข้ากับยอดเดิม (ไม่แทนที่)

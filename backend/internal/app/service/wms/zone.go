@@ -1,8 +1,8 @@
 package wms
 
 import (
-	"backend/internal/app/entity"
 	wmsDto "backend/internal/app/dto/wms"
+	"backend/internal/app/entity"
 	wmsRepo "backend/internal/app/repository/wms"
 )
 
@@ -58,12 +58,13 @@ func (s *zoneService) Update(id uint, req *wmsDto.ZoneUpdateDTO) error {
 		zone.Zone_Name = req.Zone_Name
 	}
 	return s.repo.Update(zone)
-}	
+}
 
 func toZoneResponse(zone *entity.Zone) *wmsDto.ZoneResponseDTO {
 	return &wmsDto.ZoneResponseDTO{
-		ID:         zone.ID,
+		ID:        zone.ID,
 		Zone_Name: zone.Zone_Name,
+		CreatedAt: zone.CreatedAt,
 	}
 }
 

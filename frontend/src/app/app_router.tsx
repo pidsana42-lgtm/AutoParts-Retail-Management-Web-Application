@@ -23,6 +23,7 @@ import EmployeeStockData from './employee/wms/stock_data/stock';
 import EmployeeProductDetail from './employee/wms/stock_data/product_detail/product_detail';
 import AddProductPage from './owner/stock/add_data_stock/add_data_stock';
 import EditProductPage from './owner/stock/edit_data_stock/edit_data_stock';
+import TrashStockPage from './owner/stock/trash_stock/trash_stock';
 import ImportBill from './owner/import-bills/import_bill';
 import EditStockBillPage from './owner/import-bills/edit-stock-bill';
 import PreOrder from './owner/pre-order/pre-order';
@@ -97,6 +98,10 @@ export default function AppRouter(): React.JSX.Element {
 
         <Route path="/owner/stock/new" element={
           isAdminOrOwner ? <AddProductPage /> : <Navigate to={firstMenuPath} replace />
+        } />
+
+        <Route path="/owner/stock/trash" element={
+          isAdminOrOwner ? <TrashStockPage /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/owner/stock/:id" element={

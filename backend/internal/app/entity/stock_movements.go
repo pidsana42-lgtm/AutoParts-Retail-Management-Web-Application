@@ -17,8 +17,10 @@ type StockMovement struct {
 	Product *Product `gorm:"foreignKey:ProductID" json:"product"`
 	SupplierID *uint `json:"supplier_id"`
 	Supplier *Supplier `gorm:"foreignKey:SupplierID" json:"supplier"`
-	UserID uint `json:"user_id"`
-	User *User `gorm:"foreignKey:UserID" json:"user"`
+	// UserID: ผู้ทำรายการ — เป็น pointer เพราะบางเส้นทางที่บันทึกอัตโนมัติ (เช่น รับสินค้าเข้าเพิ่มจากหน้า WMS)
+	// ยังไม่มี context ผู้ใช้ที่ authenticated ให้ผูก ต้องปล่อยเป็น NULL ได้ ไม่งั้นจะชน FK constraint (user_id=0 ไม่มีอยู่จริง)
+	UserID *uint `json:"user_id"`
+	User   *User `gorm:"foreignKey:UserID" json:"user"`
 	SaleOrderID *uint `json:"sale_order_id"`
 	SaleOrder *SaleOrder `gorm:"foreignKey:SaleOrderID" json:"sale_order"`
 	BillID *uint `json:"bill_id"`

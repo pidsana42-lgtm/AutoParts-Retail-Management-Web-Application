@@ -23,5 +23,9 @@ export interface StockItem {
   // Supplier: รวมชื่อ Supplier ทุกเจ้าที่สินค้านี้รับมาจาก คั่นด้วย ", " (ใช้กับตัวกรอง/แสดงผลแบบสั้นในตาราง)
   Supplier?: string;
   // Suppliers: รายละเอียดแยกเจ้า พร้อมจำนวนที่รับจากแต่ละเจ้า (มาจากตาราง Inventory)
-  Suppliers?: { SupplierID: number; SupplierName: string; Quantity: number }[];
+  // CompanyProductCode: รหัสสินค้าตามที่ Supplier เจ้านั้นใช้เรียกสินค้าชิ้นนี้ (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่กับสินค้าโดยตรง
+  // เพราะสินค้า 1 ชื่อในร้านมาได้จากหลายบริษัท แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน)
+  Suppliers?: { SupplierID: number; SupplierName: string; Quantity: number; CompanyProductCode?: string }[];
+  // DeletedAt: มีค่าเฉพาะตอนดึงรายการ "สินค้าที่ถูกลบ" (ถังขยะ) เท่านั้น
+  DeletedAt?: string;
 }

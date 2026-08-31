@@ -2,6 +2,7 @@ package wms
 
 import (
 	"strings"
+	"time"
 
 	"backend/internal/app/entity"
 )
@@ -37,6 +38,8 @@ type ProductRequestDTO struct {
 type ProductSupplierInput struct {
 	SupplierID uint `json:"supplier_id" binding:"required"`
 	Quantity   int  `json:"quantity" binding:"min=0"`
+	// CompanyProductCode: รหัสสินค้าตามที่ Supplier เจ้านี้ใช้เรียกสินค้าชิ้นนี้ (ไม่บังคับ)
+	CompanyProductCode string `json:"company_product_code"`
 }
 
 // ReceiveStockRequestDTO: รับสินค้าเข้าเพิ่มให้สินค้าที่มีอยู่แล้วในระบบ (ไม่ใช่สร้างสินค้าใหม่)
@@ -99,13 +102,16 @@ type ProductListResponseDTO struct {
 	SupplierName string                     `json:"supplier_name"`
 	Suppliers    []ProductSupplierResponseDTO `json:"suppliers"`
 	Note         string                     `json:"note"`
+	// DeletedAt: มีค่าเฉพาะตอนดึงรายการ "สินค้าที่ถูกลบ" (ถังขยะ) เท่านั้น ไว้โชว์วันที่ลบให้เจ้าของร้านดู
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 // ProductSupplierResponseDTO: รายละเอียด Supplier แต่ละเจ้าที่สินค้านี้รับมาจาก (จากตาราง Inventory)
 type ProductSupplierResponseDTO struct {
-	SupplierID   uint   `json:"supplier_id"`
-	SupplierName string `json:"supplier_name"`
-	Quantity     int    `json:"quantity"`
+	SupplierID         uint   `json:"supplier_id"`
+	SupplierName       string `json:"supplier_name"`
+	Quantity           int    `json:"quantity"`
+	CompanyProductCode string `json:"company_product_code"`
 }
 
 type ProductImageResponseDTO struct {
@@ -180,6 +186,11 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	}
 	d.Note = p.Note
 
+	if p.DeletedAt.Valid {
+		deletedAt := p.DeletedAt.Time
+		d.DeletedAt = &deletedAt
+	}
+
 	if len(p.ProductImages) > 0 {
 		d.ThumbnailUrl = p.ProductImages[0].Image_URL
 	}
@@ -192,9 +203,10 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 			name = inv.Supplier.SupplierName
 		}
 		d.Suppliers = append(d.Suppliers, ProductSupplierResponseDTO{
-			SupplierID:   inv.SupplierID,
-			SupplierName: name,
-			Quantity:     inv.Inventory_Quantity,
+			SupplierID:         inv.SupplierID,
+			SupplierName:       name,
+			Quantity:           inv.Inventory_Quantity,
+			CompanyProductCode: inv.CompanyProductCode,
 		})
 		if name != "" {
 			supplierNames = append(supplierNames, name)

@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft } from "lucide-react";
 
 import Heading from "../../../../components/elements/heading";
+import Breadcrumb from "../../../../components/elements/breadcrumb";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
 import Input from "../../../../components/elements/input";
 import Select from "../../../../components/elements/select";
@@ -101,23 +101,21 @@ function AddCheckStockScheduleContent() {
 
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
+      <Breadcrumb
+        items={[
+          { label: "ตรวจสอบสินค้า", path: "/owner/stock/stock-check" },
+          { label: "สร้างตารางใหม่" },
+        ]}
+      />
+
       {/* Header */}
-      <div className="flex items-center gap-4 border-b border-slate-200 pb-4">
-        <button
-          type="button"
-          onClick={() => navigate("/owner/stock/stock-check")}
-          className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
-        >
-          <ChevronLeft size={24} className="text-slate-600" />
-        </button>
-        <div>
-          <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
-            สร้างตารางเช็คสต็อกใหม่
-          </Heading>
-          <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
-            กำหนดวันเวลา พื้นที่เป้าหมาย และพนักงานที่รับผิดชอบ
-          </Heading>
-        </div>
+      <div className="border-b border-slate-200 pb-4">
+        <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
+          สร้างตารางเช็คสต็อกใหม่
+        </Heading>
+        <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
+          กำหนดวันเวลา พื้นที่เป้าหมาย และพนักงานที่รับผิดชอบ
+        </Heading>
       </div>
 
       <Card className="border-l-[5px] border-l-red-800">
