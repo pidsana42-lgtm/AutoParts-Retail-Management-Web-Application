@@ -4,6 +4,7 @@ export interface DashboardSummaryItem {
   total_items_sold: number;
   overdue_debt_count: number;
   total_revenue: number;
+  net_revenue: number;
   total_cost: number;
   gross_profit: number;
   margin_profit: number;

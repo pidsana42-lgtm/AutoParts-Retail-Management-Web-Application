@@ -9,5 +9,6 @@ type SalesReturnItem struct {
 	ProductID     uint         `gorm:"not null;index" json:"product_id"`
 	Product       *Product     `gorm:"foreignKey:ProductID" json:"product,omitempty"`
 	Quantity      int          `gorm:"not null" json:"quantity"`
-	UnitPrice     float64      `gorm:"not null" json:"unit_price"`
+	UnitPrice     float64      `gorm:"type:decimal(15,2);not null" json:"unit_price"`
+	Subtotal      float64      `gorm:"type:decimal(15,2);not null;default:0.00" json:"subtotal"`
 }

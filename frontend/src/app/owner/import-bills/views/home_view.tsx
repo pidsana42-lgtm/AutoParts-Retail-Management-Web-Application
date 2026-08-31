@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Camera, FileUp, ArrowRight, Eye, History, Trash2,
+  Camera, FileUp, ArrowRight, SquarePen, History, Trash2,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, LayoutPanelLeft, Loader2, CheckCircle2
 } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
@@ -99,8 +99,8 @@ export default function HomeView({
               <Camera size={32} className="text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold mb-1">สแกนบิลด้วยรูปภาพ / PDF</h2>
-              <p className="text-xs text-white/70">Scan Invoice using Image or PDF</p>
+              <h2 className="text-xl font-bold mb-1">สแกนบิลด้วยรูปภาพหรือเอกสาร</h2>
+              <p className="text-xs text-white/70">นำเข้าบิลจากไฟล์รูปภาพหรือเอกสาร</p>
             </div>
           </div>
           <ArrowRight size={32} className="text-white/50 group-hover:text-white transition-colors" />
@@ -116,8 +116,8 @@ export default function HomeView({
               <FileUp size={32} className="text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold mb-1">อัปโหลดไฟล์ Excel</h2>
-              <p className="text-xs text-gray-400">Upload Excel File (.xlsx, .csv)</p>
+              <h2 className="text-xl font-bold mb-1">อัปโหลดไฟล์ตารางสินค้า</h2>
+              <p className="text-xs text-gray-400">นำเข้ารายการสินค้าจากไฟล์ตาราง</p>
             </div>
           </div>
           <LayoutPanelLeft size={36} className="text-white/20" />
@@ -134,7 +134,7 @@ export default function HomeView({
           <div className="flex items-center gap-6">
             <div>
               <h2 className="text-xl font-bold mb-1">นำเข้าจากใบสั่งซื้อ</h2>
-              <p className="text-xs text-white/70">Import from Purchase Order</p>
+              <p className="text-xs text-white/70">นำเข้าข้อมูลจากใบสั่งซื้อในระบบ</p>
             </div>
           </div>
           <ArrowRight size={32} className="text-white/50 group-hover:text-white transition-colors" />
@@ -188,7 +188,7 @@ export default function HomeView({
           <div className="flex items-center gap-6">
             <div>
               <h2 className="text-xl font-bold mb-1">กรอกข้อมูลด้วยตนเอง</h2>
-              <p className="text-xs text-white/70">Manual Entry</p>
+              <p className="text-xs text-white/70">สร้างบิลและกรอกรายการสินค้าเอง</p>
             </div>
           </div>
           <ArrowRight size={32} className="text-white/50 group-hover:text-white transition-colors" />
@@ -200,14 +200,14 @@ export default function HomeView({
         <div className="flex flex-col md:flex-row md:items-center justify-between p-6 border-b border-gray-100 gap-4">
           <div className="flex items-center gap-2 text-[#e51c23] font-bold">
             <History size={20} />
-            <span className="text-sm font-bold">รายการนำเข้าสินค้าล่าสุด (Recent Product Imports)</span>
+            <span className="text-sm font-bold">รายการนำเข้าสินค้าล่าสุด</span>
           </div>
 
           {/* Status Filter Tabs */}
           <div className="flex items-center gap-1.5 flex-wrap">
             {(
               [
-                { key: 'ALL',            label: `ทั้งหมด (${bills.length})`,  activeClass: 'bg-[#1C1B1B] text-white' },
+                { key: 'ALL',            label: `ทั้งหมด ${bills.length}`,  activeClass: 'bg-[#1C1B1B] text-white' },
                 ...(!isEmployee ? [{ key: 'PENDING_REVIEW', label: 'รอเจ้าของอนุมัติ', activeClass: 'bg-[#e51c23] text-white', count: pendingCount }] : []),
                 { key: 'APPROVED',       label: 'อนุมัติแล้ว',               activeClass: 'bg-[#1C1B1B] text-white' },
                 { key: 'DRAFT',          label: 'แบบร่าง',                   activeClass: 'bg-[#1C1B1B] text-white' },
@@ -258,7 +258,11 @@ export default function HomeView({
             </TableHeader>
             <TableBody className="text-gray-700">
               {paginatedBills.map((row) => (
-                <TableRow key={row.id} className="hover:bg-gray-50/70 transition-colors">
+                <TableRow
+                  key={row.id}
+                  onClick={() => handleOpenApprove(row)}
+                  className="hover:bg-gray-50/70 transition-colors cursor-pointer"
+                >
                   <TableCell className="pl-6 font-bold text-[#1C1B1B] text-center">{row.bill_no}</TableCell>
                   <TableCell className="text-[#5F5E5E]">{formatDate(row.created_at)}</TableCell>
                   <TableCell className="text-[#1C1B1B] font-medium">{getSupplierName(row.supplier_id)}</TableCell>
@@ -279,7 +283,10 @@ export default function HomeView({
                       <div className="w-5 flex items-center justify-center">
                         {needsApproval(row) && !isEmployee && (
                           <button
-                            onClick={() => handleOpenApprove(row)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenApprove(row);
+                            }}
                             className="text-emerald-600 hover:text-emerald-800 transition-colors cursor-pointer"
                             title="อนุมัติบิล"
                           >
@@ -288,17 +295,23 @@ export default function HomeView({
                         )}
                       </div>
                       <button
-                        onClick={() => needsApproval(row) && !isEmployee ? handleOpenApprove(row) : handleViewSavedBill(row)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewSavedBill(row);
+                        }}
                         className="text-gray-400 hover:text-[#e51c23] transition-colors cursor-pointer"
-                        title={needsApproval(row) && !isEmployee ? "ดูรายละเอียดและอนุมัติบิล" : "ดูและแก้ไขบิล"}
+                        title="แก้ไขบิล"
                       >
-                        <Eye size={20} />
+                        <SquarePen size={20} />
                       </button>
                       {(!isEmployee || needsApproval(row)) && (
                         <button
-                          onClick={() => handleDeleteBill(row.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteBill(row.id);
+                          }}
                           className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
-                          title={isEmployee ? "ลบบิล (เฉพาะบิลที่ยังไม่อนุมัติ)" : "ลบบิล"}
+                          title={isEmployee ? "ลบบิลเฉพาะรายการที่ยังไม่อนุมัติ" : "ลบบิล"}
                         >
                           <Trash2 size={20} />
                         </button>

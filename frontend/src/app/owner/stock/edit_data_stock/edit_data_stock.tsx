@@ -13,11 +13,13 @@ import ImageUploader from "../../../../components/elements/image_uploader";
 import { getProductById, updateProduct, uploadProductImage } from "../../../../service/http/wms/product";
 import type { StockItem } from "../../../../interface/wms/product";
 import { useProductFormOptions } from "../hooks/useProductFormOptions";
+import SupplierRowsField, { rowsToPayload, suppliersToRows, type SupplierRow } from "../SupplierRowsField";
 
 export default function EditProductPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { models, categories, grades, units, zones, loading: loadingOptions } = useProductFormOptions();
+  const { models, categories, grades, units, zones, suppliers, loading: loadingOptions } = useProductFormOptions();
+  const [supplierRows, setSupplierRows] = useState<SupplierRow[]>([]);
 
   const [product, setProduct] = useState<StockItem | null>(null);
   const [loadingProduct, setLoadingProduct] = useState(true);
@@ -154,6 +156,7 @@ export default function EditProductPage() {
     });
     setImageFile(null);
     setImagePreview(product.ThumbnailUrl || "");
+    setSupplierRows(suppliersToRows(product.Suppliers));
   }, [product, loadingOptions, models, categories, grades, units, zones]);
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -180,6 +183,15 @@ export default function EditProductPage() {
         return;
       }
 
+      const supplierPayload = rowsToPayload(supplierRows);
+      const supplierQtySum = supplierPayload.reduce((sum, s) => sum + s.quantity, 0);
+      if (supplierQtySum > Number(formData.quantity)) {
+        alert(
+          `จำนวนสินค้าที่รับมาจาก Supplier รวมกัน (${supplierQtySum}) เกินจำนวนสินค้าทั้งหมด (${Number(formData.quantity)}) กรุณาแก้ไขจำนวนให้ถูกต้อง`
+        );
+        return;
+      }
+
       // หา shelf/level จาก path ด้วย prefix แทนตำแหน่ง index เพราะ zone_path มาจาก TreeSelect
       // ที่ prefix ค่าตามประเภทไว้แล้ว (zone-/shelf-/level-) กัน id ชนกันข้ามตาราง
       const shelfEntry = formData.zone_path.find((p) => p.startsWith("shelf-"));
@@ -200,6 +212,7 @@ export default function EditProductPage() {
         unit_id: Number(formData.unit_id),
         shelf_id: shelfEntry ? Number(shelfEntry.split("-").pop()) : 0,
         shelf_level_id: levelEntry ? Number(levelEntry.split("-").pop()) : null,
+        suppliers: supplierPayload,
       };
 
       await updateProduct(product.ID, payload);
@@ -392,6 +405,8 @@ export default function EditProductPage() {
               onChange={(e) => setFormData({ ...formData, note: e.target.value })}
               placeholder="เช่น รุ่นรถที่รองรับ หรือรายละเอียดเพิ่มเติม"
             />
+
+            <SupplierRowsField rows={supplierRows} onChange={setSupplierRows} options={suppliers} disabled={submitting} />
 
             <ImageUploader preview={imagePreview} onChange={handleImageChange} onClear={handleImageClear} />
 

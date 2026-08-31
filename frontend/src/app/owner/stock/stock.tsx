@@ -243,7 +243,11 @@ export default function StockPage() {
         }
       }
 
-      const matchesSupplier = !supplier || (item.Supplier && item.Supplier.toUpperCase() === supplier.toUpperCase());
+      // สินค้า 1 ชิ้นมีได้หลาย Supplier แล้ว (ตาราง Inventory) — item.Supplier เป็นสตริงรวมชื่อคั่นด้วย ", "
+      // เทียบแบบ === ตรงๆ เลยไม่ตรงเลยถ้าสินค้ามี Supplier มากกว่า 1 เจ้า ต้องเช็คว่าเจ้าที่เลือกอยู่ใน "รายชื่อ" แทน
+      const matchesSupplier =
+        !supplier ||
+        (item.Suppliers && item.Suppliers.some((s) => s.SupplierName.toUpperCase() === supplier.toUpperCase()));
 
       return matchesSearch && matchesCategory && matchesSupplier;
     });

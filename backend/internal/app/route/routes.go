@@ -4,6 +4,7 @@ import (
 	"backend/internal/app/route/auth"
 	"backend/internal/app/route/catalog"
 	"backend/internal/app/route/claim"
+	"backend/internal/app/route/company_setting"
 	"backend/internal/app/route/customer"
 	"backend/internal/app/route/dashboard"
 	"backend/internal/app/route/import_bill"
@@ -12,6 +13,7 @@ import (
 	"backend/internal/app/route/pos"
 	"backend/internal/app/route/pre_order"
 	"backend/internal/app/route/purchase_orders"
+	returns "backend/internal/app/route/return"
 	"backend/internal/app/route/wms"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -29,6 +31,9 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 
 	// notification routes (กระดิ่งแจ้งเตือน) — ต้อง setup ก่อน wms เพราะ check-stock ต้องใช้ service ตัวนี้ยิงแจ้งเตือน
 	notificationService := notification.SetupNotificationRoutes(r, db)
+
+	// company setting routes
+	company_setting.SetupCompanySettingRoutes(r, db)
 
 	//pos and customer payment routes
 	customer.SetupCustomerRoutes(r, db)
@@ -50,7 +55,10 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	catalog.SetupCatalogRoutes(r, db)
 
 	// purchase orders routes
-	purchaseorders.SetupPORoutes(r, db)
+	purchaseorders.SetupPORoutes(r, db, notificationService)
+
+	// return routes
+	returns.SetupReturnRoutes(r, db)
 
 	// wms routes
 	wms.SetupProductRoutes(r, db)
@@ -67,4 +75,7 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	wms.SetupShelfRoutes(r, db)
 	wms.SetupShelfLevelRoutes(r, db)
 	wms.SetupSubSubCategoryRoutes(r, db)
+
+	// inventory lots (variant code ต่อบริษัท — ใช้พิมพ์ QR/บาร์โค้ดแยกบริษัท)
+	wms.SetupInventoryLotRoutes(r, db)
 }
