@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Eye,
   ChevronLeft,
@@ -8,7 +8,6 @@ import {
   ScanBarcode,
   X,
   Printer,
-  Download,
 } from "lucide-react";
 
 // นำเข้า Components
@@ -37,7 +36,7 @@ import { formatDate } from "../../../utils/date";
 import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
 import { useUserRole } from "../../../hooks/useUserRole";
 import { posApiService } from "../../../service/http/pos/pos_service";
-import { openPdfBlobInNewTab, downloadPdfBlob } from "../../../utils/print";
+import { downloadPdfBlob } from "../../../utils/print";
 
 
 export default function TransactionHistoryPage() {

@@ -1,28 +1,18 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Users,
-  CreditCard,
   Percent,
-  ShieldAlert,
   History,
   RefreshCw,
   ScanBarcode,
-  Search,
   Edit,
   Eye,
   X,
-  CheckCircle2,
-  AlertCircle,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  SlidersHorizontal,
-  BadgePercent,
   ShieldCheck,
-  Building2,
-  Wrench,
-  User,
 } from "lucide-react";
  
 // Design System Components
@@ -55,7 +45,6 @@ export default function CustomerCreditControl() {
   const {
     // Data & Stats
     customers,
-    filteredCustomers,
     paginatedCustomers,
     customerTypes,
     stats,
@@ -63,8 +52,6 @@ export default function CustomerCreditControl() {
     // Loading & Status
     isLoading,
     isUpdating,
-    error,
-    successMessage,
 
     // Filter
     filter,
@@ -96,7 +83,6 @@ export default function CustomerCreditControl() {
     handleOpenEditModal,
     handleUpdateDiscount,
     handleQuickToggleDiscount,
-    refetch,
   } = useCustomerCreditControl();
 
   // Edit Modal Form Local State

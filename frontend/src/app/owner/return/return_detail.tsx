@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { AlertCircle, Banknote, Calendar, ChevronRight, CircleCheck, ClipboardClock, Loader2, Lock, Phone, User, XCircle } from 'lucide-react';
+import { AlertCircle, Calendar, ChevronRight, CircleCheck, ClipboardClock, Loader2, Lock, Phone, User, XCircle } from 'lucide-react';
 // Components
 import Heading from '../../../components/elements/heading';
 import Badge from '../../../components/elements/badge';
