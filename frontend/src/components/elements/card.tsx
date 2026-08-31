@@ -3,7 +3,7 @@ import { cn } from "../../utils/component";
 import { type HTMLAttributes, type ReactNode } from "react";
 
 const cardVariants = cva(
-  "rounded-none border border-slate-200 bg-white shadow-sm"
+  "rounded-none bg-white shadow-sm"
 );
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
@@ -32,7 +32,7 @@ export function Card({
     return (
       <div className={cn(cardVariants(), className)} {...rest}>
         {hasHeader && (
-          <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div className="flex items-start justify-between gap-3 px-5 py-4">
             <div>
               {title    && <h3 className="text-sm font-semibold text-slate-800">{title}</h3>}
               {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
@@ -42,7 +42,7 @@ export function Card({
         )}
         <div className={cn(!noPadding && "px-5 py-4")}>{children}</div>
         {footer && (
-          <div className="border-t border-slate-100 px-5 py-3">{footer}</div>
+          <div className="px-5 py-3">{footer}</div>
         )}
       </div>
     );
@@ -59,7 +59,7 @@ export function Card({
 export function CardHeader({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4", className)}
+      className={cn("flex items-start justify-between gap-3 px-5 py-4", className)}
       {...props}
     >
       {children}
@@ -86,7 +86,7 @@ export function CardContent({ className, children, ...props }: HTMLAttributes<HT
 export function CardFooter({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3", className)}
+      className={cn("flex items-center justify-end gap-2 px-5 py-3", className)}
       {...props}
     >
       {children}

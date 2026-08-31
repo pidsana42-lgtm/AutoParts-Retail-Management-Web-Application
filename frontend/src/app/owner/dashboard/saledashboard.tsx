@@ -130,7 +130,7 @@ const SaleDashboard: React.FC = () => {
       try {
         const res = await dashboardService.getSummaryData(prevQuery);
         const prevData = res.data.summary_data ?? [];
-        const prevRevenue = prevData.reduce((s, d) => s + d.total_revenue, 0);
+        const prevRevenue = prevData.reduce((s, d) => s + d.net_revenue, 0);
         const prevOrders  = prevData.reduce((s, d) => s + d.total_orders,  0);
         const pct = (curr: number, prev: number) =>
           prev === 0 ? (curr === 0 ? 0 : 100) : ((curr - prev) / prev) * 100;
@@ -257,9 +257,9 @@ const SaleDashboard: React.FC = () => {
       { /* KPI Cards */ }
       {isOwner ? (
         <div className='grid grid-cols-4 gap-6 items-stretch'>
-          {/* รายได้รวม */}
+          {/* รายได้สุทธิ */}
           <Card className='border-l-[5px] border-l-red-500 flex flex-col justify-center p-5'>
-            <Heading level='h6'>รายได้รวม</Heading>
+            <Heading level='h6'>รายได้สุทธิ</Heading>
             <Heading level='h3'>฿ {kpiValue(fmt(aggr.totalRevenue))}</Heading>
             {revenueTrend !== null ? (
               <Heading level='p' className='mt-1 flex items-center gap-1 text-emerald-600'>
@@ -323,9 +323,9 @@ const SaleDashboard: React.FC = () => {
             )}
           </Card>
  
-          {/* รายได้รวม */}
+          {/* รายได้สุทธิ */}
           <Card className='border-l-[5px] border-l-red-500 flex flex-col justify-center p-5'>
-            <Heading level='h6'>รายได้รวม</Heading>
+            <Heading level='h6'>รายได้สุทธิ</Heading>
             <Heading level='h3'>฿ {kpiValue(fmt(aggr.totalRevenue))}</Heading>
             {revenueTrend !== null ? (
               <Heading level='p' className='mt-1 flex items-center gap-1 text-emerald-600'>
