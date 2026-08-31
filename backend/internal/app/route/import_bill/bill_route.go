@@ -3,6 +3,8 @@ package import_bill
 import (
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	billCtrl "backend/internal/app/controller/import_data"
@@ -27,7 +29,6 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotifica
 	// 3. Controller
 	ctrl := billCtrl.NewBillController(svc)
 
-	
 	importDataGroup := r.Group("/api/import-data")
 	importDataGroup.Use(
 		middleware.AuthMiddleware(),
@@ -107,9 +108,16 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotifica
 		apiGroup.GET("/purchase-orders/:id", ctrl.GetPurchaseOrderById)
 	}
 
-	// OCR Proxy route: forwards frontend requests through port 8080 backend to internal 127.0.0.1:8000
+	// OCR Proxy route: forwards frontend requests through the Go backend.
+	// OCR_SERVICE_URL can be overridden locally when port 8000 is used by another service.
+	ocrServiceURL := strings.TrimRight(os.Getenv("OCR_SERVICE_URL"), "/")
+	if ocrServiceURL == "" {
+		ocrServiceURL = "http://127.0.0.1:8000"
+	}
+	ocrUploadURL := ocrServiceURL + "/api/extract-invoice/upload"
+
 	ocrProxyHandler := func(c *gin.Context) {
-		proxyReq, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:8000/api/extract-invoice/upload", c.Request.Body)
+		proxyReq, err := http.NewRequest(http.MethodPost, ocrUploadURL, c.Request.Body)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create proxy request: " + err.Error()})
 			return
@@ -119,7 +127,7 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotifica
 		client := &http.Client{Timeout: 300 * time.Second}
 		resp, err := client.Do(proxyReq)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect to OCR service: " + err.Error()})
+			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to connect to OCR service: " + err.Error()})
 			return
 		}
 		defer resp.Body.Close()

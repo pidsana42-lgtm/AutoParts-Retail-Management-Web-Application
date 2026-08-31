@@ -38,6 +38,7 @@ const (
 	scopeAll scope = iota
 	scopeOwners
 	scopeUser
+	scopeEmployees
 )
 
 type outgoing struct {
@@ -91,6 +92,8 @@ func (h *Hub) run() {
 					send = info.Role == "OWNER" || info.Role == "ADMIN"
 				case scopeUser:
 					send = info.UserID != 0 && info.UserID == out.UserID
+				case scopeEmployees:
+					send = info.Role == "EMPLOYEE" || info.Role == "STAFF"
 				}
 				if !send {
 					continue
@@ -159,6 +162,16 @@ func NotifyUser(userID uint, id uint, title, msg, notifType, link string) {
 			Msg:    Message{ID: id, Title: title, Message: msg, Type: notifType, Link: link},
 			Scope:  scopeUser,
 			UserID: userID,
+		}
+	}
+}
+
+// NotifyEmployees: แจ้งเตือนพนักงานทุกคนที่ล็อกอินอยู่ ณ ตอนนี้ (ไม่ไปโผล่ฝั่งเจ้าของร้าน)
+func NotifyEmployees(id uint, title, msg, notifType, link string) {
+	if GlobalHub != nil {
+		GlobalHub.broadcast <- outgoing{
+			Msg:   Message{ID: id, Title: title, Message: msg, Type: notifType, Link: link},
+			Scope: scopeEmployees,
 		}
 	}
 }

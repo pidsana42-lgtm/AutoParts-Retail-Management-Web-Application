@@ -29,7 +29,7 @@ type StockMovementResponseDTO struct {
 	Note              string    `json:"note"`
 	ProductID         uint      `json:"product_id"`
 	ProductName       string    `json:"product_name"`
-	UserID            uint      `json:"user_id"`
+	UserID            *uint     `json:"user_id"`
 	SupplierID        *uint     `json:"supplier_id"`
 	SupplierName      string    `json:"supplier_name,omitempty"`
 	SaleOrderID       *uint     `json:"sale_order_id"`

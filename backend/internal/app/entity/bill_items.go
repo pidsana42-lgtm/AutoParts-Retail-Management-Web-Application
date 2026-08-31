@@ -23,4 +23,5 @@ type BillItem struct {
 	Product            *Product `gorm:"foreignKey:ProductID" json:"product,omitempty"`
 	CategoryID         *uint    `json:"category_id" gorm:"default:null"`
 	SubCategoryID      *uint    `json:"sub_category_id" gorm:"default:null"`
+	SubSubCategoryID   *uint    `json:"sub_sub_category_id" gorm:"default:null"`
 }

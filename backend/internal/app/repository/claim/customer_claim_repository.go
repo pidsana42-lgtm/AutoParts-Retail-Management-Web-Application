@@ -18,6 +18,7 @@ type CustomerClaimRepository interface {
 	UpdateCustomerClaim(claim *entity.CustomerClaim) error
 	UpdateCustomerClaimItem(item *entity.CustomerClaimItem) error
 	DeleteCustomerClaim(id uint) error
+	GetCompanySetting() (*entity.CompanySetting, error)
 }
 
 type customerClaimRepository struct {
@@ -108,3 +109,19 @@ func (r *customerClaimRepository) UpdateCustomerClaimItem(item *entity.CustomerC
 func (r *customerClaimRepository) DeleteCustomerClaim(id uint) error {
 	return r.db.Delete(&entity.CustomerClaim{}, id).Error
 }
+
+func (r *customerClaimRepository) GetCompanySetting() (*entity.CompanySetting, error) {
+	var setting entity.CompanySetting
+	if err := r.db.First(&setting).Error; err != nil {
+		// Fallback default setting if table is empty
+		return &entity.CompanySetting{
+			CompanyName: "AutoParts Retail Management",
+			Address:     "123 ถนนมิตรภาพ ต.ในเมือง อ.เมือง จ.ขอนแก่น 40000",
+			PhoneNumber: "043-123456",
+			Email:       "contact@autoparts.com",
+			TaxIDNumber: "0105559999999",
+		}, nil
+	}
+	return &setting, nil
+}
+

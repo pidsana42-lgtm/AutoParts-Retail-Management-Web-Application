@@ -8,6 +8,7 @@ import Badge from '../../../components/elements/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import { getCustomerClaimById, updateCustomerClaim, updateClaimItemStatus } from '../../../service/http/claim/claim';
 import type { CustomerClaim } from '../../../interface/claim/claim';
+import { useToast } from '../../../components/elements/toast';
 
 interface ApprovedItemState {
   [itemId: number]: boolean;
@@ -16,6 +17,7 @@ interface ApprovedItemState {
 export default function ClaimApprovePage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const [claim, setClaim] = useState<CustomerClaim | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,6 +41,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
         }
       } catch (err) {
         console.error('Failed to load claim:', err);
+        toast({ variant: 'error', message: 'ไม่สามารถโหลดข้อมูลใบเคลมได้' });
       } finally {
         setLoading(false);
       }
@@ -74,10 +77,11 @@ export default function ClaimApprovePage(): React.JSX.Element {
       window.print();
 
       // Navigate back to detail
+      toast({ variant: 'success', message: 'อนุมัติใบเคลมเรียบร้อยแล้ว' });
       navigate(`/owner/claims/detail/${claim.id}`);
     } catch (err) {
       console.error('Failed to approve claim:', err);
-      alert('เกิดข้อผิดพลาดในการอนุมัติใบเคลม กรุณาลองใหม่');
+      toast({ variant: 'error', message: 'เกิดข้อผิดพลาดในการอนุมัติใบเคลม กรุณาลองใหม่' });
     } finally {
       setSaving(false);
     }

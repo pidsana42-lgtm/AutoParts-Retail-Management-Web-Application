@@ -8,11 +8,12 @@ import { usePosCart } from "./hooks/useposcart";
 import { useDiscountCalculation } from "./hooks/useDiscountCalculation";
 import { CustomerCard } from "./components/customercard";
 import Text from "../../../components/elements/text";
+import Badge from "../../../components/elements/badge";
 import { TableHead, TableHeader, TableRow } from "../../../components/elements/table";
 import Input from "../../../components/elements/input";
 import { usePosSessionMeta } from "./hooks/usePosSessionMeta";
 import {useCustomerFinancials} from "./hooks/useCustomerFinancials";
-import Heading from "../../../components/elements/heading"
+import Heading from "../../../components/elements/heading";
 
 export default function PosPage(): React.JSX.Element {
   // ─── STATE & HOOK SETUP ───
@@ -80,11 +81,11 @@ export default function PosPage(): React.JSX.Element {
           {/* 1. ส่วนหัวบิล (Header - ชื่อหน้าย่อ POS & ปุ่มล้างตะกร้าทั้งหมด) */}
           <div className="flex justify-between items-start mb-6">
             <div>
-              <Text variant="xs" className="text-[#E51C23] uppercase tracking-wider mb-0 ">
-                รายการที่กำลังขาย
-              </Text>
-              <Heading level="h1" weight="normal" className="mb-0 text-[#1C1B1B]">
+              <Heading level='h1' weight='semibold' className='m-0 text-black'>
                 POS
+              </Heading>
+              <Heading level='h6' className='m-0 mt-1'>
+                รายการที่กำลังขาย
               </Heading>
             </div>
             <div className="text-right flex flex-col items-end gap-1.5">
@@ -144,37 +145,60 @@ export default function PosPage(): React.JSX.Element {
                 {/* Dropdown ค้นหาด่วน (Autocomplete Suggestions) */}
                 {cartHook.showSuggestions && cartHook.suggestions.length > 0 && (
                   <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-gray-100">
-                    {cartHook.suggestions.map((product) => (
-                      <div
-                        key={product.id}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          cartHook.handleSelectProduct(product);
-                        }}
-                        onClick={() => cartHook.handleSelectProduct(product)}
-                        className="p-3 hover:bg-gray-50 flex justify-between items-center cursor-pointer transition-colors text-left"
-                      >
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <Text variant="small" className="text-[#1C1B1B] mb-0 leading-tight">{product.product_name}</Text>
-                            {product.barcode && (
-                              <Text variant="xs" className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded-none">บาร์โค้ด: {product.barcode}</Text>
-                            )}
+                    {cartHook.suggestions.map((product) => {
+                      const isOutOfStock = (product.quantity ?? 0) <= 0;
+                      return (
+                        <div
+                          key={product.id}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            if (!isOutOfStock) {
+                              cartHook.handleSelectProduct(product);
+                            }
+                          }}
+                          onClick={() => {
+                            if (!isOutOfStock) {
+                              cartHook.handleSelectProduct(product);
+                            }
+                          }}
+                          className={`p-3 flex justify-between items-center transition-colors text-left ${
+                            isOutOfStock
+                              ? "opacity-50 bg-[#F9FAFB] cursor-not-allowed select-none"
+                              : "hover:bg-gray-50 cursor-pointer"
+                          }`}
+                        >
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                              <Text variant="small" className={`mb-0 leading-tight ${isOutOfStock ? "text-[#9CA3AF] font-light" : "text-[#1C1B1B]"}`}>
+                                {product.product_name}
+                              </Text>
+                              {isOutOfStock ? (
+                                <Badge variant="neutral" size="auto" className="bg-[#FEE2E2] text-[#E51C23] border-none text-[10px] py-0.5 px-1.5 rounded-none font-normal">
+                                  สินค้าหมด
+                                </Badge>
+                              ) : (
+                                product.barcode && (
+                                  <Text variant="xs" className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded-none">
+                                    บาร์โค้ด: {product.barcode}
+                                  </Text>
+                                )
+                              )}
+                            </div>
+                            <Text variant="xs" className="text-[10px] text-[#6B7280] mb-0.5 mt-1 leading-tight">
+                              SKU: {product.product_code} | PN: {product.part_number || "-"}
+                            </Text>
                           </div>
-                          <Text variant="xs" className="text-[10px] text-[#6B7280] mb-0.5 mt-1 leading-tight">
-                            SKU: {product.product_code} | PN: {product.part_number || "-"}
-                          </Text>
+                          <div className="text-right flex flex-col shrink-0 pl-4">
+                            <Text variant="xs" className={isOutOfStock ? "text-gray-400 font-light" : "text-[#E51C23]"}>
+                              ฿{(product.sale_price || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                            </Text>
+                            <Text variant="xs" className={`text-[10px] ${isOutOfStock ? "text-[#E51C23] font-medium" : "text-gray-400"}`}>
+                              {isOutOfStock ? "คงเหลือ 0 (หมด)" : `คงเหลือ: ${product.quantity}`}
+                            </Text>
+                          </div>
                         </div>
-                        <div className="text-right flex flex-col shrink-0 pl-4">
-                          <Text variant="xs" className="text-[#E51C23]">
-                            ฿{(product.sale_price || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                          </Text>
-                          <Text variant="xs" className="text-[10px] text-gray-400">
-                            คงเหลือ: {product.quantity}
-                          </Text>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -31,8 +31,19 @@ export interface Product {
   id: number;
   product_name: string;
   product_code: string;
+  part_number?: string;
+  company_product_code?: string;
+  quantity?: number;
+  supplier_name?: string;
+  suppliers?: Array<{
+    supplier_id: number;
+    supplier_name: string;
+    quantity?: number;
+    variant_code?: string;
+  }>;
   category_name?: string;
   sub_category_name?: string;
+  sub_sub_category_name?: string;
   cost_price?: number;
   sale_price?: number;
   retail_price?: number;
@@ -60,6 +71,7 @@ export interface BillItemDTO {
   pre_order_item_id?: number | null;
   category_id?: number | null;
   sub_category_id?: number | null;
+  sub_sub_category_id?: number | null;
 }
 
 export interface ScannedBillData {
@@ -98,6 +110,7 @@ export interface SavedBill {
   payment_status: string;
   is_verified: boolean;
   created_at: string;
+  evidence_file_url?: string;
   bill_image?: {
     id: number;
     image_url: string;
@@ -117,5 +130,8 @@ export interface SavedBill {
     is_freebie: boolean;
     remark: string;
     product_id: number;
+    category_id?: number | null;
+    sub_category_id?: number | null;
+    sub_sub_category_id?: number | null;
   }[];
 }

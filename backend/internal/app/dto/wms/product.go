@@ -1,6 +1,9 @@
 package wms
 
 import (
+	"strings"
+	"time"
+
 	"backend/internal/app/entity"
 )
 
@@ -26,6 +29,24 @@ type ProductRequestDTO struct {
 	GradeID          uint   `json:"grade_id" binding:"required"`
 	ShelfID          uint   `json:"shelf_id" binding:"required"`
 	ShelfLevelID     *uint  `json:"shelf_level_id"`
+
+	// สินค้าชิ้นนี้รับมาจาก Supplier ไหนบ้าง (1 สินค้ามีได้หลายเจ้า แยกจำนวนต่อเจ้า) — ไม่บังคับ เผื่อยังไม่ทราบตอนเพิ่มสินค้า
+	Suppliers []ProductSupplierInput `json:"suppliers"`
+}
+
+// ProductSupplierInput: ผู้จำหน่าย 1 รายที่สินค้านี้รับมาจาก พร้อมจำนวนที่รับจากเจ้านั้น
+type ProductSupplierInput struct {
+	SupplierID uint `json:"supplier_id" binding:"required"`
+	Quantity   int  `json:"quantity" binding:"min=0"`
+	// CompanyProductCode: รหัสสินค้าตามที่ Supplier เจ้านี้ใช้เรียกสินค้าชิ้นนี้ (ไม่บังคับ)
+	CompanyProductCode string `json:"company_product_code"`
+}
+
+// ReceiveStockRequestDTO: รับสินค้าเข้าเพิ่มให้สินค้าที่มีอยู่แล้วในระบบ (ไม่ใช่สร้างสินค้าใหม่)
+// บวกจำนวนที่รับเพิ่มเข้ากับยอดคงเหลือเดิม + บวกจำนวนต่อ Supplier เข้ากับของเดิม (ไม่ใช่แทนที่)
+type ReceiveStockRequestDTO struct {
+	Quantity  int                    `json:"quantity" binding:"required,gt=0"`
+	Suppliers []ProductSupplierInput `json:"suppliers"`
 }
 
 func (r *ProductRequestDTO) ToEntity() entity.Product {
@@ -52,18 +73,20 @@ func (r *ProductRequestDTO) ToEntity() entity.Product {
 }
 
 type ProductListResponseDTO struct {
-	ID              uint    `json:"id"`
-	Product_Code    string  `json:"product_code"`
-	Part_Number     string  `json:"part_number"`
-	Product_Name    string  `json:"product_name"`
-	Barcode         string  `json:"barcode"`
-	Quantity        int     `json:"quantity"`
-	Limit_Quantity  int     `json:"limit_quantity"`
-	Sale_price      float64 `json:"sale_price"`
-	Cost_price      float64 `json:"cost_price"`
-	Is_Active       bool    `json:"is_active"`
-	MaxDiscountRate float64 `json:"max_discount_rate"`
-	Models          []struct {
+	ID           uint   `json:"id"`
+	Product_Code string `json:"product_code"`
+	Part_Number  string `json:"part_number"`
+	// CompanyProductCode ของสินค้าทั้งชิ้นเป็นค่าเดียวไม่ได้อีกแล้ว เพราะ 1 สินค้ามาได้จากหลาย Supplier
+	// แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน — ดูได้ที่ Suppliers[].CompanyProductCode แทน (แยกตามเจ้า)
+	Product_Name string  `json:"product_name"`
+	Barcode            string  `json:"barcode"`
+	Quantity           int     `json:"quantity"`
+	Limit_Quantity     int     `json:"limit_quantity"`
+	Sale_price         float64 `json:"sale_price"`
+	Cost_price         float64 `json:"cost_price"`
+	Is_Active          bool    `json:"is_active"`
+	MaxDiscountRate    float64 `json:"max_discount_rate"`
+	Models             []struct {
 		ID        uint   `json:"id"`
 		ModelName string `json:"model_name"`
 		BrandName string `json:"brand_name"`
@@ -77,8 +100,22 @@ type ProductListResponseDTO struct {
 	ShelfLevelName     string `json:"shelf_level_name"`
 	ZoneName           string `json:"zone_name"`
 	ThumbnailUrl       string `json:"thumbnail_url"`
+	// SupplierName: รวมชื่อ Supplier ทุกเจ้าที่สินค้านี้รับมาจาก คั่นด้วย ", " (เผื่อหน้าตาราง/ตัวกรองเดิมที่คาดหวังค่าเดียว)
+	SupplierName string                       `json:"supplier_name"`
+	Suppliers    []ProductSupplierResponseDTO `json:"suppliers"`
+	Note         string                     `json:"note"`
+	// DeletedAt: มีค่าเฉพาะตอนดึงรายการ "สินค้าที่ถูกลบ" (ถังขยะ) เท่านั้น ไว้โชว์วันที่ลบให้เจ้าของร้านดู
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+}
+
+// ProductSupplierResponseDTO: รายละเอียด Supplier แต่ละเจ้าที่สินค้านี้รับมาจาก (จากตาราง Inventory)
+type ProductSupplierResponseDTO struct {
+	SupplierID         uint   `json:"supplier_id"`
 	SupplierName       string `json:"supplier_name"`
-	Note               string `json:"note"`
+	Quantity           int    `json:"quantity"`
+	CompanyProductCode string `json:"company_product_code"`
+	// VariantCode: รหัสล็อตต่อบริษัทที่ระบบออกให้อัตโนมัติ (เช่น BP-123-SU3) ใช้พิมพ์ QR/บาร์โค้ดแยกบริษัท
+	VariantCode string `json:"variant_code"`
 }
 
 type ProductImageResponseDTO struct {
@@ -153,11 +190,32 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	}
 	d.Note = p.Note
 
+	if p.DeletedAt.Valid {
+		deletedAt := p.DeletedAt.Time
+		d.DeletedAt = &deletedAt
+	}
+
 	if len(p.ProductImages) > 0 {
 		d.ThumbnailUrl = p.ProductImages[0].Image_URL
 	}
 
-	if len(p.Inventories) > 0 && p.Inventories[0].Supplier != nil {
-		d.SupplierName = p.Inventories[0].Supplier.SupplierName
+	d.Suppliers = make([]ProductSupplierResponseDTO, 0, len(p.Inventories))
+	supplierNames := make([]string, 0, len(p.Inventories))
+	for _, inv := range p.Inventories {
+		name := ""
+		if inv.Supplier != nil {
+			name = inv.Supplier.SupplierName
+		}
+		d.Suppliers = append(d.Suppliers, ProductSupplierResponseDTO{
+			SupplierID:         inv.SupplierID,
+			SupplierName:       name,
+			Quantity:           inv.Inventory_Quantity,
+			CompanyProductCode: inv.CompanyProductCode,
+			VariantCode:        inv.Variant_Code,
+		})
+		if name != "" {
+			supplierNames = append(supplierNames, name)
+		}
 	}
+	d.SupplierName = strings.Join(supplierNames, ", ")
 }

@@ -9,7 +9,7 @@ import Input from '../../../components/elements/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/elements/card';
 import Select from '../../../components/elements/select';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableFooter } from "../../../components/elements/table";
-import Modal from '../../../components/elements/modal';
+import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { useToast } from '../../../components/elements/toast';
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
 // Interface
@@ -674,7 +674,7 @@ const CreatePurchaseOrders: React.FC = () => {
                 onSelectPreorder={handleAddPreorderToPO}
             />
 
-            <Modal
+            <ConfirmDialog
                 isOpen={pendingSupplierId !== null}
                 onClose={() => setPendingSupplierId(null)}
                 onConfirm={confirmSupplierChange}
@@ -684,7 +684,7 @@ const CreatePurchaseOrders: React.FC = () => {
                 variant='warning'
             />
 
-            <Modal
+            <ConfirmDialog
                 isOpen={!!removeConfirm}
                 onClose={() => setRemoveConfirm(null)}
                 onConfirm={confirmRemoveItem}
@@ -694,7 +694,7 @@ const CreatePurchaseOrders: React.FC = () => {
                 variant='danger'
             />
 
-            <Modal
+            <ConfirmDialog
                 isOpen={!!duplicatePrompt}
                 onClose={cancelDuplicateAdd}
                 onConfirm={confirmDuplicateAdd}
