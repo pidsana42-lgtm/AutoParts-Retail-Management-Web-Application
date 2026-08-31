@@ -1,0 +1,121 @@
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "../../utils/component";
+import { type ReactNode, useEffect } from "react";
+import { createPortal } from "react-dom";
+
+const modalPanelVariants = cva(
+  [
+    "relative z-10 w-full rounded-none bg-white shadow-xl",
+    "animate-in fade-in zoom-in-95 duration-150",
+  ],
+  {
+    variants: {
+      size: {
+        sm: "max-w-sm",
+        md: "max-w-md",
+        lg: "max-w-2xl",
+        xl: "max-w-4xl",
+      },
+    },
+    defaultVariants: {
+      size: "md",
+    },
+  }
+);
+
+interface ConfirmModalProps extends VariantProps<typeof modalPanelVariants> {
+  isOpen: boolean;
+  onClose: () => void;
+  title?: ReactNode;
+  description?: ReactNode;
+  footer?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+}
+
+export default function ConfirmModal({
+  isOpen,
+  onClose,
+  title,
+  description,
+  size,
+  footer,
+  children,
+  className,
+}: ConfirmModalProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={typeof title === "string" ? "modal-title" : undefined}
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-none"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Panel */}
+      <div className={cn(modalPanelVariants({ size }), className)}>
+        {(title || description) && (
+          <div className="bg-[#1C1B1B] flex items-start justify-between gap-3 border-b border-gray-100 px-6 py-4">
+            <div>
+              {typeof title === "string" ? (
+                <h2 id="modal-title" className="text-2xl font-semibold text-white m-0 leading-tight">
+                  {title}
+                </h2>
+              ) : (
+                title
+              )}
+              {description && (
+                <p className="mt-1 text-xs text-white font-light m-0">{description}</p>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="ปิด"
+              className={cn(
+                "rounded-none p-1 text-slate-400 transition-colors cursor-pointer",
+                "hover:text-slate-100",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              )}
+            >
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        <div className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>
+
+        {footer && (
+          <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3">
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}

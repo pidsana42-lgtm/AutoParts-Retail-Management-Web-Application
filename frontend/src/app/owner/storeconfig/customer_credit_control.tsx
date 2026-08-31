@@ -50,6 +50,7 @@ import { CustomerCard } from "../../employee/pos/components/customercard";
 import { useCustomerCreditControl } from "./hook/UseCustomerCreditControl";
 import type { CustomerCreditItem } from "../../../interface/storeconfig/customer_credit_interface";
 import { formatDate } from "../../../utils/date";
+import ConfirmModal from "../../../components/elements/confirm_modal";
 
 export default function CustomerCreditControl() {
   const {
@@ -602,7 +603,7 @@ export default function CustomerCreditControl() {
       </div>
 
       {/* ==================== Edit Discount & Policy Modal ==================== */}
-      <Modal
+      <ConfirmModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         title="แก้ไขสิทธิ์และส่วนลดลูกค้า"
@@ -723,10 +724,10 @@ export default function CustomerCreditControl() {
             </div>
           </form>
         )}
-      </Modal>
+      </ConfirmModal>
 
       {/* ==================== Audit History Modal ==================== */}
-      <Modal
+      <ConfirmModal
         isOpen={isAuditModalOpen}
         onClose={() => setIsAuditModalOpen(false)}
         title="ประวัติการแก้ไขสิทธิ์และเครดิตลูกค้า"
@@ -763,7 +764,7 @@ export default function CustomerCreditControl() {
             ))}
           </div>
         )}
-      </Modal>
+      </ConfirmModal>
 
       {/* ==================== Slide-over Customer Detail Drawer ==================== */}
       {drawerCustomer && (
