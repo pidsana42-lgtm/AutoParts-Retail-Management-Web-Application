@@ -6,7 +6,6 @@ import Button from '../../../components/elements/button';
 import Badge from '../../../components/elements/badge';
 import { Card, CardHeader } from '../../../components/elements/card';
 import Heading from '../../../components/elements/heading';
-import Input from '../../../components/elements/input';
 import DateRangePicker from '../../../components/elements/date_range_picker';
 import { Table, TableHeader, TableHead, TableBody, TableCell, TableRow } from '../../../components/elements/table';
 // Hooks
@@ -90,7 +89,8 @@ const DebtDashboard: React.FC = () => {
 
   // Period filter (กระทบ KPI summary)
   const [selectedFilter, setSelectedFilter] = useState('daily');
-  const [customDate, setCustomDate] = useState('');
+  const [summaryStartDate, setSummaryStartDate] = useState('');
+  const [summaryEndDate, setSummaryEndDate] = useState('');
 
   // Aging table filter
   const [startDate, setStartDate] = useState('');
@@ -119,15 +119,22 @@ const DebtDashboard: React.FC = () => {
   const [exportingExcel, setExportingExcel] = useState(false);
 
   const summaryQuery = useMemo<SummaryQuery>(() => {
-    if (customDate) return { summary_date: customDate };
+    if (summaryStartDate && summaryEndDate) {
+      if (summaryStartDate === summaryEndDate) {
+        return { summary_date: summaryStartDate };
+      }
+      return { start_date: summaryStartDate, end_date: summaryEndDate };
+    }
+    if (summaryStartDate) return { summary_date: summaryStartDate };
     switch (selectedFilter) {
+      case 'daily':  return { summary_date: getTodayDateString() };
       case 'weekly': return { weekly_summary: '1' };
       case 'monthly': return { monthly_summary: '1' };
       case 'quarterly': return { quarterly_summary: '1' };
       case 'yearly': return { yearly_summary: '1' };
       default: return { summary_date: getTodayDateString() };
     }
-  }, [selectedFilter, customDate]);
+  }, [selectedFilter, summaryStartDate, summaryEndDate]);
 
   const agingBucketParams = useMemo(() => {
     switch (agingBucket) {
@@ -158,12 +165,18 @@ const DebtDashboard: React.FC = () => {
 
   const handlePeriodClick = (value: string) => {
     setSelectedFilter(value);
-    setCustomDate('');
+    setSummaryStartDate('');
+    setSummaryEndDate('');
   };
 
-  const handleCustomDate = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCustomDate(e.target.value);
-    setSelectedFilter(e.target.value ? '' : 'daily');
+  const handleSummaryStartDateChange = (d: string) => {
+    setSummaryStartDate(d);
+    setSelectedFilter('');
+  };
+
+  const handleSummaryEndDateChange = (d: string) => {
+    setSummaryEndDate(d);
+    setSelectedFilter('');
   };
 
   const exportQuery: DebtAgingQuery = {
@@ -230,21 +243,20 @@ const DebtDashboard: React.FC = () => {
         <div className='bg-[#F6F3F2] flex items-center p-1'>
           {PERIOD_FILTER.map((f) => (
             <button key={f.value} onClick={() => handlePeriodClick(f.value)}
-              className={`w-20 py-2.5 text-sm transition ${
+              className={`w-20 py-2.5 text-sm transition cursor-pointer ${
                 selectedFilter === f.value
-                  ? 'bg-white text-red-500 shadow-sm'
+                  ? 'bg-white text-red-500 shadow-sm font-medium'
                   : 'text-gray-500 hover:text-red-500'
               }`}>
               {f.label}
             </button>
           ))}
-          <div className='min-w-32'>
-            <Input type='date' value={customDate} onChange={handleCustomDate}
-              className={`transition-all ${customDate
-                ? 'bg-white text-red-500 border border-red-500 shadow-sm'
-                : 'bg-transparent text-gray-600 border-transparent'}`}
-            />
-          </div>
+          <DateRangePicker
+            startDate={summaryStartDate}
+            endDate={summaryEndDate}
+            onStartDateChange={handleSummaryStartDateChange}
+            onEndDateChange={handleSummaryEndDateChange}
+          />
         </div>
       </div>
 

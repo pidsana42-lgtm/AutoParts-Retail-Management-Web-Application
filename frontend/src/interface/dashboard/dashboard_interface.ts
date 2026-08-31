@@ -21,6 +21,8 @@ export interface DashboardSummaryItem {
 
 export interface SummaryQuery {
   summary_date?: string;
+  start_date?: string;
+  end_date?: string;
   weekly_summary?: string;
   monthly_summary?: string;
   quarterly_summary?: string;
