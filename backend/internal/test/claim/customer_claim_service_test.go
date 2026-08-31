@@ -104,6 +104,13 @@ func (m *mockClaimRepo) DeleteCustomerClaim(id uint) error {
 	return nil
 }
 
+func (m *mockClaimRepo) GetCompanySetting() (*entity.CompanySetting, error) {
+	m.track("GetCompanySetting")
+	return &entity.CompanySetting{
+		CompanyName: "Test Company",
+	}, nil
+}
+
 var _ claimRepo.CustomerClaimRepository = (*mockClaimRepo)(nil)
 
 type mockSORepo struct {
@@ -155,6 +162,14 @@ func (f *fakeNotifier) NotifyUser(userID uint, notifType, title, _, _ string, _ 
 }
 
 // เมธอดอื่น ๆ ของ NotificationService ที่ claim service ไม่ได้ใช้ — stub ว่างไว้
+func (f *fakeNotifier) NotifyEmployees(notifType, title, _, _ string, _ *uint) error {
+	if f.failErr != nil {
+		return f.failErr
+	}
+	f.records = append(f.records, notifRecord{typ: notifType, title: title})
+	return nil
+}
+
 func (f *fakeNotifier) ListForOwners() (*dtoNotification.NotificationListResponseDTO, error) {
 	return nil, nil
 }

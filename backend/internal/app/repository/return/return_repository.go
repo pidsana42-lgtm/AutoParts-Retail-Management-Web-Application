@@ -482,7 +482,7 @@ func (r *returnRepository) ProcessRefund(id uint, processedBy uint) error {
 				Movement_DateTime: now,
 				Note:              fmt.Sprintf("Return %s", returnItem.ReturnNumber),
 				ProductID:         item.ProductID,
-				UserID:            processedBy,
+				UserID:            &processedBy,
 				SaleOrderID:       &saleOrderID,
 			}
 			if err := tx.Create(movement).Error; err != nil {

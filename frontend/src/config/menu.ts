@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, Boxes, MonitorSmartphone,
   ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight, CircleCheck, History,
-  FileX, ReceiptText, BookOpen, RotateCcw, MonitorCog
+  FileX, ReceiptText, BookOpen, ShieldCheck, UserCheck, RotateCcw, MonitorCog
 
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -57,14 +57,14 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   { icon: Boxes, label: "คลังสินค้า", path: "/owner/stock", roles: ["OWNER", "ADMIN"],
     subs: [
       { icon: ArrowLeftRight, path: "/owner/stock/stock-movement", label: "การเคลื่อนไหวของคลังสินค้า" },
-      { icon: FolderPlus, path: "/owner/stock/stock-data", label: "สร้างข้อมูลสินค้า" },
+      { icon: FolderPlus, path: "/owner/stock/stock-data", label: "การตั้งค่าข้อมูลสินค้า" },
       { icon: CircleCheck, path: "/owner/stock/stock-check", label: "ตรวจสอบสินค้า"},
     ],
   },
-  // งานเช็คสต็อกที่มอบหมายให้พนักงาน (เห็นเฉพาะ EMPLOYEE, STAFF)
+  // งานตรวจสอบสินค้าที่มอบหมายให้พนักงาน (เห็นเฉพาะ EMPLOYEE, STAFF)
   { icon: Boxes, label: "คลังสินค้า", path: "/employee/wms/stock-data", roles: ["EMPLOYEE", "STAFF"],
     subs: [
-      { icon: CircleCheck, path: "/employee/wms/check-stock", label: "เช็คสต็อกสินค้า" },
+      { icon: CircleCheck, path: "/employee/wms/check-stock", label: "ตรวจสอบสินค้า" },
     ],
    },
   // POS
@@ -74,7 +74,17 @@ export const SIDEBAR_MENUS: MenuItem[] = [
       { icon: FileX, path: "/employee/pos/sales_cancellation_history", label: "ประวัติยกเลิกการขาย" },
     ],
   },
-  { icon: ReceiptText, label: "รายการธุรกรรม / การเงิน", path: "/employee/transactions/settle-bills", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],},
+  // รายการธุรกรรม / การเงิน
+  { icon: ReceiptText, label: "รายการธุรกรรม / การเงิน", path: "/employee/transactions/settle-bills", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],
+    subs: [
+      { icon: History, path: "/employee/transactions/payment-history", label: "ประวัติการชำระเงิน" },
+      { icon: FileX, path: "/employee/transactions/payment-cancellation-history", label: "ประวัติยกเลิกการชำระเงิน" },
+    ],
+  },
+
+  // ข้อมูลลูกค้า
+  { icon: FolderPlus, label: "ข้อมูลลูกค้า", path: "/employee/customers/customer-registration", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],},
+
 
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/owner/orders", roles: ["OWNER", "ADMIN"],
     subs: [
@@ -116,13 +126,11 @@ export const SIDEBAR_MENUS: MenuItem[] = [
       { label: "รายการคืนสินค้า", path: "/owner/returns", icon: RefreshCw }
     ]
   },
-  { 
-    icon: Settings, 
-    label: "การตั้งค่า", 
-    path: "/owner/storeconfig", 
-    roles: ["OWNER", "ADMIN"],
-    subs: [
-      { path: "/owner/storeconfig", label: "จัดการสิทธิ์ส่วนลดลูกค้าอู่" },
+
+  { icon: Settings, label: "การตั้งค่า", path: "/owner/storeconfig", roles: ["OWNER", "ADMIN"],
+   subs: [
+      { icon: ShieldCheck, path: "/owner/storeconfig/financial-policy", label: "นโยบายการเงิน" },
+      { icon: UserCheck, path: "/owner/storeconfig/customer-credit-control", label: "การควบคุมเครดิตลูกค้า" },
     ],
   },
 ];
@@ -159,6 +167,12 @@ export const getMenuByRole = (role: string): MenuItem[] => {
         updatedMenu.path = isOwnerOrAdmin ? "/owner/claims" : "/employee/claims";
       }
 
+      if (menu.path.includes("/customer-registration")) {
+        updatedMenu.path = isOwnerOrAdmin
+          ? "/owner/customers/customer-registration"
+          : "/employee/customers/customer-registration";
+      }
+
       if (!updatedMenu.subs) return updatedMenu;
 
       // 4. สลับ Sub-menu Path & Label ตาม Role
@@ -181,6 +195,25 @@ export const getMenuByRole = (role: string): MenuItem[] => {
               path: isOwnerOrAdmin
                 ? "/owner/pos/sales_history"
                 : "/employee/pos/sales_history",
+            };
+          }
+
+          if (sub.path.includes("payment-history")) {
+            return {
+              ...sub,
+              path: isOwnerOrAdmin
+                ? "/owner/transactions/payment-history"
+                : "/employee/transactions/payment-history",
+            };
+          }
+
+          if (sub.path.includes("payment-cancellation-history")) {
+            return {
+              ...sub,
+              label: isOwnerOrAdmin ? "คำขอยกเลิกการชำระเงิน" : "ประวัติยกเลิกการชำระเงิน",
+              path: isOwnerOrAdmin
+                ? "/owner/transactions/payment-cancellation-history"
+                : "/employee/transactions/payment-cancellation-history",
             };
           }
 

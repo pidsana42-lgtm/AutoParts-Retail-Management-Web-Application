@@ -4,6 +4,7 @@ import { useToast } from "../../../../../components/elements/toast";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Grade } from "../../../../../interface/wms/stock_data";
+import { buildFuzzyIndex, fuzzyMatchIds } from "../../../../../utils/fuzzySearch";
 
 // Extracted Modals
 import AddGradeModal from "./AddGradeModal";
@@ -55,11 +56,13 @@ export default function GradeTab({ search, grades, loadData, addSignal }: GradeT
     setEditOpen(true);
   };
 
+  // สร้าง index ไว้แค่ตอน grades เปลี่ยน แล้วค่อยค้นหาแบบ fuzzy ทุกครั้งที่ search เปลี่ยน
+  const searchIndex = useMemo(() => buildFuzzyIndex(grades, ["grade_name"]), [grades]);
+  const matchedIds = useMemo(() => fuzzyMatchIds(searchIndex, search), [searchIndex, search]);
+
   const filteredGrades = useMemo(() => {
-    return grades.filter((grade) =>
-      !search || grade.grade_name.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [grades, search]);
+    return grades.filter((grade) => !matchedIds || matchedIds.has(grade.id));
+  }, [grades, matchedIds]);
 
   const paginatedGrades = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;

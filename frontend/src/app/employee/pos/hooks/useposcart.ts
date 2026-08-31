@@ -20,9 +20,12 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
   const { calculateLineDiscountAmount, validateLineDiscountPolicy } = useDiscountCalculation();
 
-  // เก็บ ID ลูกค้าล่าสุดไว้เช็คความเปลี่ยนแปลง ป้องกัน Loop
+  // เก็บ ID ลูกค้า และค่าสิทธิ์ส่วนลดล่าสุดไว้เช็คความเปลี่ยนแปลง ป้องกัน Loop
   const prevCustomerIdRef = useRef<number | undefined>(customer?.id);
   const prevActiveTypeIdRef = useRef<number | undefined>(activeTypeId);
+  const prevIsDiscountEnabledRef = useRef<boolean | undefined>(customer?.is_discount_enabled);
+  const prevOntopDiscountRateRef = useRef<number | undefined>(customer?.ontop_discount_rate);
+  const prevStandardDiscountRateRef = useRef<number | undefined>(customer?.standard_discount_rate);
 
   // บันทึกลง localStorage เฉพาะเมื่อ cart เปลี่ยนแปลงจริง
   useEffect(() => {
@@ -67,19 +70,25 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
     syncCartWithLatestData();
   }, []);
 
-  // ตัวดักจับเมื่อพนักงานสั่งสลับกลุ่มสิทธิ์ลูกค้า 
+  // ตัวดักจับเมื่อพนักงานสั่งสลับกลุ่มสิทธิ์ลูกค้า หรือข้อมูลสิทธิ์ส่วนลดลูกค้าเปลี่ยนแปลง
   useEffect(() => {
-    // ทำงานเฉพาะเมื่อ ID ลูกค้า หรือ ประเภทลูกค้าเปลี่ยนจริงๆ เท่านั้น
-    if (
+    const isCustomerUnchanged =
       prevCustomerIdRef.current === customer?.id &&
-      prevActiveTypeIdRef.current === activeTypeId
-    ) {
+      prevActiveTypeIdRef.current === activeTypeId &&
+      prevIsDiscountEnabledRef.current === customer?.is_discount_enabled &&
+      prevOntopDiscountRateRef.current === customer?.ontop_discount_rate &&
+      prevStandardDiscountRateRef.current === customer?.standard_discount_rate;
+
+    if (isCustomerUnchanged) {
       return;
     }
 
     if (cart.length === 0) {
       prevCustomerIdRef.current = customer?.id;
       prevActiveTypeIdRef.current = activeTypeId;
+      prevIsDiscountEnabledRef.current = customer?.is_discount_enabled;
+      prevOntopDiscountRateRef.current = customer?.ontop_discount_rate;
+      prevStandardDiscountRateRef.current = customer?.standard_discount_rate;
       return;
     }
 
@@ -128,6 +137,9 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
     // อัปเดต ref ล่าสุด
     prevCustomerIdRef.current = customer?.id;
     prevActiveTypeIdRef.current = activeTypeId;
+    prevIsDiscountEnabledRef.current = customer?.is_discount_enabled;
+    prevOntopDiscountRateRef.current = customer?.ontop_discount_rate;
+    prevStandardDiscountRateRef.current = customer?.standard_discount_rate;
   }, [activeTypeId, customer, cart.length]); // ไม่ผูกกับวัตถุ cart ตรงๆ
 
   // ─── COMPUTED VALUES ───
@@ -170,7 +182,13 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
           p.part_number?.toLowerCase() === cleanedQuery.toLowerCase() ||
           p.product_name?.toLowerCase() === cleanedQuery.toLowerCase()
       ) || products[0];
-      // โซนที่ 3 & 4: คำนวณและเช็คความปลอดภัย (มีของซ้ำไหม/สิทธิ์ส่วนลดได้เท่าไหร่)
+      // โซนที่ 3 & 4: คำนวณและเช็คความปลอดภัย (มีของซ้ำไหม/สิทธิ์ส่วนลดได้เท่าไหร่/สต็อกเหลือไหม)
+      const maxStock = product.quantity ?? 0;
+      if (maxStock <= 0) {
+        alert(`สินค้า ${product.product_name || product.product_code} หมดสต็อก (คงเหลือ 0 ชิ้น) ไม่สามารถเพิ่มลงในบิลได้`);
+        return;
+      }
+
       const discountConfig = getDefaultProductDiscount(product, customer, activeTypeId);
       const existingIndex = cart.findIndex((item) => item.product_id === product.id);
       
@@ -179,6 +197,11 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
         // เคส 1: สินค้าเดิมมีอยู่แล้ว ทำการบวกจำนวนชิ้นเพิ่มขึ้น 1
         const newCart = [...cart];
         const item = newCart[existingIndex];
+
+        if (item.qty + 1 > maxStock) {
+          alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+          return;
+        }
 
         newCart[existingIndex] = {
           ...item,
@@ -411,12 +434,23 @@ const timer = setTimeout(async () => {
 }, [searchQuery]);
 
 const handleSelectProduct = (product: any) => {
+    const maxStock = product.quantity ?? 0;
+    if (maxStock <= 0) {
+      alert(`สินค้า ${product.product_name || product.product_code} หมดสต็อก (คงเหลือ 0 ชิ้น) ไม่สามารถเพิ่มลงในบิลได้`);
+      return;
+    }
+
     const discountConfig = getDefaultProductDiscount(product, customer, activeTypeId);
     const existingIndex = cart.findIndex((item) => item.product_id === product.id);
 
     if (existingIndex > -1) {
       const newCart = [...cart];
       const item = newCart[existingIndex];
+
+      if (item.qty + 1 > maxStock) {
+        alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+        return;
+      }
 
       newCart[existingIndex] = {
         ...item,

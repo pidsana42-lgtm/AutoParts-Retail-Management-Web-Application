@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import Heading from '../../../../components/elements/heading';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
 import type { SavedBill, Supplier, Product } from '../../../../interface/import';
+import { resolveImageUrl } from '../../../../service/http/import/import_service';
 import BillSummaryFooterBar from '../components/BillSummaryFooterBar';
 
 interface ApproveViewProps {
@@ -15,6 +16,7 @@ interface ApproveViewProps {
   onBack: () => void;
   formatDate: (dateStr: string) => string;
   getSupplierName: (id: number) => string;
+  isEmployee?: boolean;
 }
 
 export default function ApproveView({
@@ -24,6 +26,7 @@ export default function ApproveView({
   onBack,
   formatDate,
   getSupplierName,
+  isEmployee = false,
 }: ApproveViewProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState<boolean>(false);
@@ -34,9 +37,7 @@ export default function ApproveView({
     try { await onApprove(bill.id); } finally { setLoading(false); }
   };
 
-  const imageUrl = bill.bill_image?.image_url
-    ? `http://localhost:8080/${bill.bill_image.image_url}`
-    : null;
+  const imageUrl = resolveImageUrl(bill.bill_image?.image_url || bill.evidence_file_url);
 
   const totalNetAmount = (bill.bill_items || []).reduce((s, i) => s + (i.net_amount || 0), 0);
 
@@ -65,15 +66,17 @@ export default function ApproveView({
           นำเข้าสินค้าจากบิล
         </button>
         <ChevronRight size={14} className="text-gray-400" />
-        <span className="text-[#1C1B1B] font-bold">อนุมัติบิลนำเข้าสินค้า (เลขที่: {bill.bill_no || '-'})</span>
+        <span className="text-[#1C1B1B] font-bold">{bill.is_verified ? 'รายละเอียดบิลนำเข้าสินค้า' : 'อนุมัติบิลนำเข้าสินค้า'} (เลขที่: {bill.bill_no || '-'})</span>
       </nav>
 
       {/* Header */}
       <div className="mb-8">
         <Heading level="h1" className="font-extrabold text-[#1C1B1B]">
-          อนุมัติบิลนำเข้าสินค้า
+          {bill.is_verified ? 'รายละเอียดบิลนำเข้าสินค้า' : 'อนุมัติบิลนำเข้าสินค้า'}
         </Heading>
-        <p className="text-sm text-gray-500 mt-0.5">ตรวจสอบรายละเอียดบิลก่อนอนุมัติ</p>
+        <p className="text-sm text-gray-500 mt-0.5">
+          {bill.is_verified ? 'รายละเอียดข้อมูลบิลและรายการสินค้า' : 'ตรวจสอบรายละเอียดบิลก่อนอนุมัติ'}
+        </p>
       </div>
 
       <div className={`grid grid-cols-1 gap-6 ${imageUrl && !imgError ? 'xl:grid-cols-3' : ''}`}>
@@ -155,7 +158,7 @@ export default function ApproveView({
               <Table>
                 <TableHeader className="bg-gray-50 text-[#5F5E5E]">
                   <TableRow>
-                    <TableHead className="pl-6 w-10">#</TableHead>
+                    <TableHead className="pl-6 w-20 text-center">ลำดับที่</TableHead>
                     <TableHead>ชื่อสินค้า</TableHead>
                     <TableHead className="text-center">จำนวน</TableHead>
                     <TableHead className="text-right">ราคาทุนเดิม</TableHead>
@@ -223,15 +226,25 @@ export default function ApproveView({
             onCancel={onBack}
             disabled={!!loading}
           >
-            <button
-              type="button"
-              onClick={handleApprove}
-              disabled={!!loading}
-              className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
-            >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-              <span>อนุมัติบิล</span>
-            </button>
+            {bill.is_verified ? (
+              <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                <CheckCircle2 size={16} /> บิลนี้ได้รับการอนุมัติแล้ว
+              </span>
+            ) : !isEmployee ? (
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={!!loading}
+                className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+              >
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                <span>อนุมัติบิล</span>
+              </button>
+            ) : (
+              <span className="text-xs font-bold text-amber-600 flex items-center gap-1">
+                รอเจ้าของร้านอนุมัติ
+              </span>
+            )}
           </BillSummaryFooterBar>
         </div>
       </div>

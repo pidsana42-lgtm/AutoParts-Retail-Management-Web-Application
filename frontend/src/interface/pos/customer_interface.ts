@@ -11,8 +11,10 @@ export interface CustomerTypeInterface {
 // แมตช์ตาม GetCustomerDiscountResponse (API ข้อมูลดิบจาก Backend)
 export interface CustomerDiscountResponse {
   id: number;
+  customer_id?: number;
   phone_number: string;
   customer_name: string;
+  id_card_number_customer?: string;
   standard_discount_rate: number;
   is_discount_enabled: boolean;
   current_debt_amount: number;
@@ -32,6 +34,8 @@ export interface ComputedCustomerData {
   phoneNumber: string;
   isGuest: boolean;
   isSpecialPrice: boolean;
+  isDiscountEnabled: boolean;
+  ontopDiscountRate: number;
   creditUsagePercentage: number;
   currentDebtStr: string;
   remainingCreditStr: string;

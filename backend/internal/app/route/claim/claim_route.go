@@ -55,7 +55,9 @@ func SetupClaimRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotific
 		// Customer Claim Routes
 		claimsGroup.POST("/customer-claims", customerClaimCtrl.CreateCustomerClaim)
 		claimsGroup.POST("/customer-claims/items", customerClaimCtrl.CreateCustomerClaimItem)
+		claimsGroup.GET("/customer-claims/export/checklist-pdf", customerClaimCtrl.GenerateChecklistPDF)
 		claimsGroup.GET("/customer-claims/:id", customerClaimCtrl.GetCustomerClaimByID)
+		claimsGroup.GET("/customer-claims/:id/pdf", customerClaimCtrl.GeneratePDF)
 		claimsGroup.GET("/customer-claims", customerClaimCtrl.ListCustomerClaims)
 		claimsGroup.PUT("/customer-claims/:id", customerClaimCtrl.UpdateCustomerClaim)
 		claimsGroup.PUT("/customer-claims/items/:itemId", customerClaimCtrl.UpdateCustomerClaimItem)

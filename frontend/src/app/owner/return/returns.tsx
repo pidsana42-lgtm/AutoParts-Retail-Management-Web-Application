@@ -17,7 +17,7 @@ import { cn } from '../../../utils/component';
 import { formatDateThai } from '../../../utils/formatdate';
 import Badge from '../../../components/elements/badge';
 import { useToast } from '../../../components/elements/toast';
-import Modal from '../../../components/elements/modal';
+import ConfirmDialog from '../../../components/elements/confirm_dialog';
 
 /** สถานะของรายการคืนสินค้า ใช้ทั้งเป็นค่ากรองในตารางและ badge สถานะ */
 type ReturnStatus = 'PENDING' | 'APPROVED' | 'REFUNDED' | 'REJECTED';
@@ -447,7 +447,7 @@ const ReturnsPage: React.FC = () => {
           );
         })()}
       </div>
-      <Modal
+      <ConfirmDialog
         isOpen={refundTarget !== null}
         onClose={() => processingRefundId === null && setRefundTarget(null)}
         title="ยืนยันการคืนเงินจริง"

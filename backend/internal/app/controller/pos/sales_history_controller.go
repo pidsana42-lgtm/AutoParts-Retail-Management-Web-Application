@@ -3,6 +3,7 @@ package pos
 import (
     "backend/internal/app/dto/pos"
     salesHistorySvc "backend/internal/app/service/pos"
+    "fmt"
     "net/http"
 	"log"
     "github.com/gin-gonic/gin"
@@ -341,4 +342,25 @@ func (c *SalesHistoryController) GetEmployees(ctx *gin.Context) {
 		})
 	}
 	ctx.JSON(http.StatusOK, out)
+}
+
+func (c *SalesHistoryController) PrintSaleOrder(ctx *gin.Context) {
+	identifier := ctx.Param("id")
+	if identifier == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Missing order ID"})
+		return
+	}
+
+	docTitle := ctx.DefaultQuery("title", "")
+
+	pdfBytes, err := c.salesHistoryService.GenerateSaleOrderPDF(ctx.Request.Context(), identifier, docTitle)
+	if err != nil {
+		log.Printf("PDF Generation Error: %v", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate receipt PDF: " + err.Error()})
+		return
+	}
+
+	ctx.Header("Content-Type", "application/pdf")
+	ctx.Header("Content-Disposition", fmt.Sprintf("inline; filename=Receipt-%s.pdf", identifier))
+	ctx.Data(http.StatusOK, "application/pdf", pdfBytes)
 }

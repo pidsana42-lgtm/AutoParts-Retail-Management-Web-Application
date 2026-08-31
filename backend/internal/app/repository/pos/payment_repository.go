@@ -3,6 +3,8 @@ package pos
 import (
 	"encoding/base64"
 	"fmt"
+	"time"
+
 	"backend/internal/app/entity"
 
 	"github.com/skip2/go-qrcode"
@@ -28,9 +30,12 @@ type PaymentRepository interface {
     CreateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error
     GetRepaymentByID(repaymentID uint) (*entity.PaymentRepayment, error)
     UpdateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error
-    GetRepaymentHistory(search, startDate, endDate string) ([]entity.PaymentRepayment, error)
-    GetDirectPaymentHistory(search, startDate, endDate string) ([]entity.Payment, error)
+    GetRepaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.PaymentRepayment, error)
+    GetDirectPaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.Payment, error)
     GetCancelledRepaymentHistory(search, startDate, endDate string) ([]entity.PaymentRepayment, error)
+    RequestCancelRepayment(repaymentID uint, userID uint, reason string) error
+    RevertCancelRepayment(repaymentID uint) error
+    RejectCancelRepayment(repaymentID uint, remark string) error
 }
 
 type paymentRepository struct {
@@ -61,7 +66,12 @@ func (r *paymentRepository) GetPaymentByID(paymentID uint) (*entity.Payment, err
 
 func (r *paymentRepository) GetPaymentWithDetailsByID(paymentID uint) (*entity.Payment, error) {
 	var payment entity.Payment
-	err := r.db.Preload("Order").Preload("Order.Customer").Preload("PaymentMethod").Preload("ReceivedBy").First(&payment, paymentID).Error
+	err := r.db.Preload("Order").
+		Preload("Order.Customer").
+		Preload("Order.CancelRequestedBy").
+		Preload("PaymentMethod").
+		Preload("ReceivedBy").
+		First(&payment, paymentID).Error
 	return &payment, err
 }
 
@@ -173,7 +183,13 @@ func (r *paymentRepository) CreateRepaymentWithTx(tx *gorm.DB, repayment *entity
 
 func (r *paymentRepository) GetRepaymentByID(repaymentID uint) (*entity.PaymentRepayment, error) {
     var repayment entity.PaymentRepayment
-    err := r.db.Preload("Order").Preload("Order.Customer").Preload("PaymentMethod").Preload("RecordedBy").First(&repayment, repaymentID).Error
+    err := r.db.Preload("Order").
+        Preload("Order.Customer").
+        Preload("PaymentMethod").
+        Preload("RecordedBy").
+        Preload("CancelRequestedBy").
+        Preload("CancelledBy").
+        First(&repayment, repaymentID).Error
     return &repayment, err
 }
 
@@ -181,9 +197,18 @@ func (r *paymentRepository) UpdateRepaymentWithTx(tx *gorm.DB, repayment *entity
     return tx.Save(repayment).Error
 }
 
-func (r *paymentRepository) GetRepaymentHistory(search, startDate, endDate string) ([]entity.PaymentRepayment, error) {
+func (r *paymentRepository) GetRepaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.PaymentRepayment, error) {
     var repayments []entity.PaymentRepayment
-    query := r.db.Preload("Order").Preload("Order.Customer").Preload("PaymentMethod").Preload("RecordedBy").Where("payment_repayments.status = ?", "completed")
+    query := r.db.Preload("Order").
+        Preload("Order.Customer").
+        Preload("PaymentMethod").
+        Preload("RecordedBy").
+        Preload("CancelRequestedBy").
+        Preload("CancelledBy")
+
+    if employeeID > 0 {
+        query = query.Where("payment_repayments.recorded_by_id = ?", employeeID)
+    }
 
     if search != "" {
         likeSearch := "%" + search + "%"
@@ -203,14 +228,19 @@ func (r *paymentRepository) GetRepaymentHistory(search, startDate, endDate strin
     return repayments, err
 }
 
-func (r *paymentRepository) GetDirectPaymentHistory(search, startDate, endDate string) ([]entity.Payment, error) {
+func (r *paymentRepository) GetDirectPaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.Payment, error) {
     var payments []entity.Payment
     query := r.db.Preload("Order").
         Preload("Order.Customer").
+        Preload("Order.CancelRequestedBy").
         Preload("PaymentMethod").
         Preload("ReceivedBy").
         Joins("JOIN sale_orders ON sale_orders.id = payments.order_id").
-        Where("payments.paid_at IS NOT NULL AND sale_orders.status != ?", "cancelled")
+        Where("payments.paid_at IS NOT NULL")
+
+    if employeeID > 0 {
+        query = query.Where("payments.received_by_id = ?", employeeID)
+    }
 
     if search != "" {
         likeSearch := "%" + search + "%"
@@ -232,7 +262,13 @@ func (r *paymentRepository) GetDirectPaymentHistory(search, startDate, endDate s
 
 func (r *paymentRepository) GetCancelledRepaymentHistory(search, startDate, endDate string) ([]entity.PaymentRepayment, error) {
     var repayments []entity.PaymentRepayment
-    query := r.db.Preload("Order").Preload("Order.Customer").Preload("PaymentMethod").Preload("CancelledBy").Where("payment_repayments.status = ?", "cancelled")
+    query := r.db.Preload("Order").
+        Preload("Order.Customer").
+        Preload("PaymentMethod").
+        Preload("RecordedBy").
+        Preload("CancelRequestedBy").
+        Preload("CancelledBy").
+        Where("payment_repayments.status = ?", "cancelled")
 
     if search != "" {
         likeSearch := "%" + search + "%"
@@ -250,4 +286,42 @@ func (r *paymentRepository) GetCancelledRepaymentHistory(search, startDate, endD
     }
     err := query.Order("payment_repayments.cancelled_at desc").Find(&repayments).Error
     return repayments, err
+}
+
+// พนักงานส่งคำขอยกเลิกใบเสร็จ (Repayment)
+func (r *paymentRepository) RequestCancelRepayment(repaymentID uint, userID uint, reason string) error {
+    now := time.Now()
+    return r.db.Model(&entity.PaymentRepayment{}).
+        Where("id = ?", repaymentID).
+        Updates(map[string]interface{}{
+            "status":                 "pending_cancel",
+            "cancel_reason":          reason,
+            "cancel_requested_at":    now,
+            "cancel_requested_by_id": userID,
+            "cancel_remark":          nil,
+        }).Error
+}
+
+// พนักงานดึงคำขอยกเลิกกลับ (เมื่อยังอยู่ในสถานะ pending_cancel)
+func (r *paymentRepository) RevertCancelRepayment(repaymentID uint) error {
+    return r.db.Model(&entity.PaymentRepayment{}).
+        Where("id = ? AND status = ?", repaymentID, "pending_cancel").
+        Updates(map[string]interface{}{
+            "status":                 "completed",
+            "cancel_reason":          "",
+            "cancel_requested_at":    nil,
+            "cancel_requested_by_id": nil,
+        }).Error
+}
+
+// เจ้าของร้านปฏิเสธคำขอยกเลิก (เปลี่ยนสถานะกลับเป็น completed)
+func (r *paymentRepository) RejectCancelRepayment(repaymentID uint, remark string) error {
+    now := time.Now()
+    return r.db.Model(&entity.PaymentRepayment{}).
+        Where("id = ?", repaymentID).
+        Updates(map[string]interface{}{
+            "status":        "completed",
+            "cancel_remark": remark,
+            "cancelled_at":  &now,
+        }).Error
 }

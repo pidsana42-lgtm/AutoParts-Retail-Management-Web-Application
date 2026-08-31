@@ -10,10 +10,12 @@ import (
 const defaultListLimit = 50
 
 type NotificationService interface {
-	// NotifyOwners/NotifyUser บันทึกลง DB ก่อน แล้วค่อยส่ง push แบบเรียลไทม์ผ่าน websocket ตามหลัง
+	// NotifyOwners/NotifyUser/NotifyEmployees บันทึกลง DB ก่อน แล้วค่อยส่ง push แบบเรียลไทม์ผ่าน websocket ตามหลัง
 	// ให้ทั้งฝั่งที่ออนไลน์อยู่ (เห็นทันที) และฝั่งที่ไม่ได้เปิดหน้าเว็บอยู่ (เห็นตอนเข้ามาทีหลังจากประวัติใน DB)
 	NotifyOwners(notifType, title, message, link string, scheduleID *uint) error
 	NotifyUser(userID uint, notifType, title, message, link string, scheduleID *uint) error
+	// NotifyEmployees: แจ้งเตือนพนักงานทุกคน (ไม่เจาะจงคนเดียว) เช่น มีการเช็คสต็อกโซน/หมวดหมู่นี้อยู่ ให้คนอื่นรู้ไว้เผื่อไปยุ่งกับสต็อกจุดเดียวกัน
+	NotifyEmployees(notifType, title, message, link string, scheduleID *uint) error
 
 	ListForOwners() (*dtoNotification.NotificationListResponseDTO, error)
 	ListForUser(userID uint) (*dtoNotification.NotificationListResponseDTO, error)
@@ -43,6 +45,22 @@ func (s *notificationService) NotifyOwners(notifType, title, message, link strin
 		return err
 	}
 	websocket.NotifyOwners(n.ID, title, message, notifType, link)
+	return nil
+}
+
+func (s *notificationService) NotifyEmployees(notifType, title, message, link string, scheduleID *uint) error {
+	n := entity.Notification{
+		Type:                 notifType,
+		Title:                title,
+		Message:              message,
+		Link:                 link,
+		ForEmployees:         true,
+		CheckStockScheduleID: scheduleID,
+	}
+	if err := s.repo.Create(&n); err != nil {
+		return err
+	}
+	websocket.NotifyEmployees(n.ID, title, message, notifType, link)
 	return nil
 }
 

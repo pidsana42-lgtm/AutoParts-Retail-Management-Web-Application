@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronLeft, Loader2, MapPin, Send, QrCode, Download, Printer } from "lucide-react";
+import { Loader2, MapPin, Send, QrCode, Download, Printer, FileDown } from "lucide-react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 
 import Heading from "../../../../components/elements/heading";
+import Breadcrumb from "../../../../components/elements/breadcrumb";
 import Badge from "../../../../components/elements/badge";
 import Button from "../../../../components/elements/button";
 import Input from "../../../../components/elements/input";
@@ -102,6 +103,178 @@ function EmployeeCheckStockExecuteContent() {
       a.download = `check-stock-qr-${id}.png`;
       a.click();
     }
+  };
+
+  // สร้างเอกสารรายการสินค้าที่ต้องนับ เปิดหน้าต่างใหม่แล้วเรียก print ของเบราว์เซอร์ให้เลือกเองว่าจะ
+  // "บันทึกเป็น PDF" (ดาวน์โหลด) หรือเลือกเครื่องพิมพ์จริง (พิมพ์กระดาษ) — ไม่ต้องพึ่งไลบรารีสร้าง PDF เพิ่ม
+  // เหมือนที่ QR Code ด้านบนทำอยู่แล้ว ปุ่มดาวน์โหลด/พิมพ์ทั้งคู่จึงเรียกฟังก์ชันนี้ร่วมกัน ต่างกันแค่คำอธิบายปุ่ม
+  const openChecklistPrintWindow = () => {
+    if (!schedule) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const rows = scheduleProducts
+      .map((p, idx) => {
+        const submitted = submittedByProduct.get(p.ID);
+        const location = p.Shelf ? `${p.Shelf}${p.ShelfLevel ? ` (ชั้น ${p.ShelfLevel})` : ""}` : "-";
+        const systemQty = submitted?.old_quantity ?? p.Stock;
+        // มีค่าที่นับ/ส่งไปแล้วก็โชว์เลย ไม่งั้นเว้นช่องว่างไว้ให้เขียนด้วยมือระหว่างเดินนับของจริง
+        const countedVal = submitted?.new_quantity ?? counts[p.ID] ?? "";
+        const noteVal = submitted?.reason ?? notes[p.ID] ?? "";
+        return `
+          <tr>
+            <td class="center muted">${idx + 1}</td>
+            <td class="mono">${p.ProductCode}</td>
+            <td class="strong">${p.Name}</td>
+            <td class="center"><span class="tag">${location}</span></td>
+            <td class="center muted">${systemQty}</td>
+            <td class="center blank">${countedVal}</td>
+            <td class="blank">${noteVal}</td>
+          </tr>`;
+      })
+      .join("");
+
+    const dateStr = new Date(schedule.scheduled_datetime).toLocaleDateString("th-TH", { day: "2-digit", month: "long", year: "numeric" });
+    const printedAt = new Date().toLocaleString("th-TH", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>รายการตรวจนับสต็อก - ${schedule.target_name || "งานเช็คสต็อก"}</title>
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Kanit:wght@500;600;700&display=swap" rel="stylesheet">
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              font-family: "Sarabun", "Kanit", "Inter", sans-serif;
+              margin: 0;
+              padding: 28px 32px;
+              color: #111827;
+            }
+
+            /* หัวเอกสาร — เรียบ ทางการ ขาวดำ */
+            .doc-header {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 16px;
+              border-bottom: 2px solid #111827;
+              padding-bottom: 12px;
+              margin-bottom: 18px;
+            }
+            .doc-title { font-family: "Kanit", sans-serif; font-size: 19px; font-weight: 600; margin: 0; }
+            .doc-subtitle { font-size: 12px; color: #4b5563; margin: 4px 0 0; }
+            .doc-badge {
+              flex-shrink: 0;
+              border: 1px solid #111827;
+              font-size: 11px;
+              font-weight: 600;
+              padding: 4px 12px;
+              white-space: nowrap;
+            }
+
+            /* กล่องข้อมูลงาน */
+            .meta-grid {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 10px;
+              border: 1px solid #d1d5db;
+              padding: 12px 16px;
+              margin-bottom: 20px;
+            }
+            .meta-grid .full { grid-column: 1 / -1; }
+            .meta-label { font-size: 10px; color: #6b7280; margin: 0 0 2px; text-transform: uppercase; letter-spacing: 0.03em; }
+            .meta-value { font-size: 13px; color: #111827; font-weight: 500; margin: 0; }
+
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            thead th {
+              background: #f3f4f6;
+              color: #111827;
+              font-weight: 600;
+              text-align: left;
+              padding: 9px 10px;
+              font-size: 11px;
+              letter-spacing: 0.02em;
+              border: 1px solid #9ca3af;
+            }
+            tbody td { padding: 9px 10px; border: 1px solid #d1d5db; vertical-align: middle; }
+
+            .center { text-align: center; }
+            .strong { font-weight: 600; }
+            .muted { color: #6b7280; }
+            .mono { font-family: "Sarabun", monospace; color: #374151; }
+            .tag { font-size: 11px; color: #374151; }
+            .blank { min-width: 70px; border-bottom: 1px dashed #9ca3af !important; }
+
+            /* ลายเซ็นท้ายเอกสาร */
+            .signatures { display: flex; justify-content: flex-end; gap: 48px; margin-top: 48px; }
+            .signature { text-align: center; font-size: 11px; color: #374151; }
+            .signature .line { width: 160px; border-bottom: 1px solid #6b7280; margin-bottom: 6px; height: 28px; }
+
+            .footer { margin-top: 20px; font-size: 10px; color: #9ca3af; text-align: right; }
+
+            @page { size: A4; margin: 14mm 16mm; }
+            @media print {
+              body { padding: 0; }
+              thead { display: table-header-group; } /* ให้หัวตารางซ้ำทุกหน้าเมื่อรายการยาวเกิน 1 หน้า */
+            }
+          </style>
+        </head>
+        <body>
+          <div class="doc-header">
+            <div>
+              <p class="doc-title">รายการตรวจนับสต็อกสินค้า</p>
+              <p class="doc-subtitle">${schedule.target_name || "-"}</p>
+            </div>
+            <span class="doc-badge">${schedule.status}</span>
+          </div>
+
+          <div class="meta-grid">
+            <div>
+              <p class="meta-label">วันที่นัดตรวจ</p>
+              <p class="meta-value">${dateStr}</p>
+            </div>
+            <div>
+              <p class="meta-label">ผู้รับผิดชอบ</p>
+              <p class="meta-value">${schedule.user_full_name || "-"}</p>
+            </div>
+            <div>
+              <p class="meta-label">จำนวนรายการ</p>
+              <p class="meta-value">${scheduleProducts.length} รายการ</p>
+            </div>
+            ${schedule.note ? `<div class="full"><p class="meta-label">หมายเหตุ</p><p class="meta-value">${schedule.note}</p></div>` : ""}
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th class="center">#</th>
+                <th>รหัสสินค้า</th>
+                <th>ชื่อสินค้า</th>
+                <th class="center">ตำแหน่งจัดเก็บ</th>
+                <th class="center">จำนวนในระบบ</th>
+                <th class="center">นับได้จริง</th>
+                <th>หมายเหตุ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows || `<tr><td colspan="7" class="center muted">ไม่พบรายการสินค้า</td></tr>`}
+            </tbody>
+          </table>
+
+          <div class="signatures">
+            <div class="signature"><div class="line"></div>ผู้ตรวจนับ</div>
+            <div class="signature"><div class="line"></div>ผู้ตรวจสอบ</div>
+          </div>
+
+          <div class="footer">พิมพ์เมื่อ ${printedAt}</div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    // รอให้ฟอนต์ Google Fonts โหลดเสร็จก่อนเรียก print กันข้อความกระโดดขนาดหลังสั่งพิมพ์ไปแล้ว
+    setTimeout(() => printWindow.print(), 400);
   };
 
   const handlePrintQR = () => {
@@ -253,27 +426,27 @@ function EmployeeCheckStockExecuteContent() {
 
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-6 pb-28 font-sans">
+      {/* Breadcrumb: ซ่อนไว้ตอนเข้าผ่านการสแกน QR (หน้าเปล่าไม่มี Sidebar/Navbar) เพราะไม่มีที่ให้ย้อนกลับไปจริงๆ */}
+      {!isValidQrToken && (
+        <Breadcrumb
+          items={[
+            { label: "คลังสินค้า", path: "/employee/wms/stock-data" },
+            { label: "เช็คสต็อกสินค้า", path: "/employee/wms/check-stock" },
+            { label: schedule.target_name || "รายละเอียดงาน" },
+          ]}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
-        <div className="flex items-center gap-3">
-          {!isValidQrToken && (
-            <button
-              type="button"
-              onClick={() => navigate("/employee/wms/check-stock")}
-              className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
-            >
-              <ChevronLeft size={24} className="text-slate-600" />
-            </button>
-          )}
-          <div>
-            <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
-              {schedule.target_name || "ตรวจนับสต็อก"}
-            </Heading>
-            <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
-              {dateStr} · {startTimeStr}
-              {endTimeStr ? ` - ${endTimeStr}` : ""}
-            </Heading>
-          </div>
+        <div>
+          <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
+            {schedule.target_name || "ตรวจนับสต็อก"}
+          </Heading>
+          <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
+            {dateStr} · {startTimeStr}
+            {endTimeStr ? ` - ${endTimeStr}` : ""}
+          </Heading>
         </div>
         {getStatusBadge(schedule.status)}
       </div>
@@ -340,8 +513,14 @@ function EmployeeCheckStockExecuteContent() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle className="text-lg">รายการสินค้าที่ต้องนับ</CardTitle>
+          {scheduleProducts.length > 0 && (
+            <Button onClick={openChecklistPrintWindow} variant="outline" className="flex shrink-0 items-center gap-1.5">
+              <FileDown className="h-3.5 w-3.5" />
+              ดาวน์โหลด/พิมพ์ PDF
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {scheduleProducts.length === 0 ? (

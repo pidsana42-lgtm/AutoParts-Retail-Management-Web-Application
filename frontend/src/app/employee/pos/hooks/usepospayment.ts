@@ -7,6 +7,9 @@ import type { StoreConfigInterface } from "../../../../interface/pos/store_confi
 import type { CreateSaleOrderRequest } from "../../../../interface/pos/pos_interface";
 import type { CartItem } from "../../../../interface/pos/usePosCart.interface";
 import type { PosSession } from "../../../../interface/pos/pos_session_interface"; 
+import { getCurrentUserId } from "../../../../utils/auth"; 
+import { downloadPdfBlob } from "../../../../utils/print"; 
+import { useToast } from "../../../../components/elements/toast";    
 
 interface UsePosPaymentProps {
   cart: CartItem[];
@@ -16,6 +19,7 @@ interface UsePosPaymentProps {
 }
 
 export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount }: UsePosPaymentProps) {
+  const { toast } = useToast();
   const { calculateProRataWeight } = useDiscountCalculation();
 
   // 1. โครงสร้างการดึง Session เริ่มต้นจาก LocalStorage
@@ -127,6 +131,37 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     return Boolean(customer && customer.id > 0);
   }, [customer]);
 
+  // Auto-sync customer data & discount policy on mount, window focus, visibility change & interval
+  useEffect(() => {
+    const activeCust = customer || posSession.customer;
+    if (activeCust && activeCust.id && activeCust.id > 0) {
+      refreshCustomerFinancials(activeCust);
+    }
+
+    const handleSync = () => {
+      const currentCust = customer || posSession.customer;
+      if (currentCust && currentCust.id && currentCust.id > 0) {
+        refreshCustomerFinancials(currentCust);
+      }
+    };
+
+    window.addEventListener("focus", handleSync);
+    document.addEventListener("visibilitychange", handleSync);
+
+    const interval = setInterval(() => {
+      const currentCust = customer || posSession.customer;
+      if (currentCust && currentCust.id && currentCust.id > 0) {
+        refreshCustomerFinancials(currentCust);
+      }
+    }, 4000);
+
+    return () => {
+      window.removeEventListener("focus", handleSync);
+      document.removeEventListener("visibilitychange", handleSync);
+      clearInterval(interval);
+    };
+  }, [customer?.id, posSession.customer?.id]);
+
   useEffect(() => {
     if (!isPaymentModalOpen) {
       setQrCodeData(null);
@@ -186,7 +221,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const selectPaymentMethod = async (methodId: number) => {
     const isCustomerSelected = Boolean(customer && customer.customer_name);
     if (methodId === 3 && isCustomerSelected && !isRegisteredCustomer) {
-      alert("สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น กรุณาเลือกลูกค้า หรือลงทะเบียนสมัครสมาชิกก่อนทำรายการ");
+      toast({
+        variant: "warning",
+        message: "สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น กรุณาเลือกลูกค้า หรือลงทะเบียนสมัครสมาชิกก่อนทำรายการ",
+      });
       return false;
     }
     
@@ -219,10 +257,24 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     }
 
     try {
-      const response = await apiClient.get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${cleanedQuery}`);
+      const response = await apiClient.get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${encodeURIComponent(cleanedQuery)}`);
       const dataList = response.data;
+      const rawQuery = cleanedQuery.replace(/[-\s]/g, "").toLowerCase();
       const exactMatchedCustomer = dataList && dataList.length > 0 
-        ? dataList.find((c) => c.customer_name?.toLowerCase() === cleanedQuery.toLowerCase() || c.phone_number === cleanedQuery)
+        ? dataList.find((c) => {
+            const name = (c.customer_name || "").toLowerCase();
+            const phone = (c.phone_number || "").toLowerCase();
+            const rawPhone = phone.replace(/[-\s]/g, "");
+            const idCard = (c.id_card_number_customer || "").toLowerCase();
+            const rawIdCard = idCard.replace(/[-\s]/g, "");
+            return (
+              name === cleanedQuery.toLowerCase() ||
+              phone === cleanedQuery.toLowerCase() ||
+              (rawQuery.length > 0 && rawPhone === rawQuery) ||
+              idCard === cleanedQuery.toLowerCase() ||
+              (rawQuery.length > 0 && rawIdCard === rawQuery)
+            );
+          })
         : null;
 
       if (exactMatchedCustomer) {
@@ -262,30 +314,58 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     }
   };
 
-  const refreshCustomerFinancials = async (customerPhone: string) => {
-    if (!customerPhone || customerPhone.includes("ลูกค้าทั่วไป")) return;
+  const refreshCustomerFinancials = async (targetPhoneOrCustomer?: string | CustomerDiscountResponse | null) => {
+    let targetId: number | undefined;
+    let query = "";
+
+    if (typeof targetPhoneOrCustomer === "string") {
+      query = targetPhoneOrCustomer.trim();
+    } else if (targetPhoneOrCustomer && typeof targetPhoneOrCustomer === "object") {
+      targetId = targetPhoneOrCustomer.id || (targetPhoneOrCustomer as any).customer_id;
+      query = targetPhoneOrCustomer.phone_number || targetPhoneOrCustomer.customer_name || (targetId ? String(targetId) : "");
+    } else {
+      const active = customer || posSession.customer;
+      targetId = active?.id || (active as any)?.customer_id;
+      query = active?.phone_number || active?.customer_name || (targetId ? String(targetId) : "");
+    }
+
+    if (!query || query.includes("ลูกค้าทั่วไป") || targetId === 0) return;
+
     try {
-      const response = await apiClient.get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${customerPhone}`);
+      const response = await apiClient.get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${encodeURIComponent(query)}`);
       const dataList = response.data;
       if (dataList && dataList.length > 0) {
-        const matched = dataList.find((c) => c.phone_number === customerPhone || c.customer_name === customerPhone);
+        const matched = dataList.find((c) =>
+          (targetId && (c.id === targetId || (c as any).customer_id === targetId)) ||
+          c.phone_number === query ||
+          c.customer_name === query
+        ) || dataList[0];
+
         if (matched) {
           // ป้องกันสภาวะแข่งขันแบบอะซิงโครนัส (Race Condition): 
-          // หากพนักงานขายบิลสำเร็จและเคลียร์ลูกค้าออกไปแล้ว (customer เป็น null) ห้ามเขียนข้อมูลใหม่ทับกลับมา
+          // หากพนักงานขายบิลสำเร็จและเคลียร์ลูกค้าออกไปแล้ว (customer เป็น null หรือ guest) ห้ามเขียนข้อมูลใหม่ทับกลับมา
           setPosSession((prev) => {
-            if (!prev.customer || (prev.customer.phone_number !== customerPhone && prev.customer.customer_name !== customerPhone)) {
-              return prev; // ยกเลิกการอัปเดตเซสชัน
+            if (!prev.customer || prev.customer.id === 0) {
+              return prev;
             }
-            return {
+            if (targetId && prev.customer.id !== targetId && (prev.customer as any).customer_id !== targetId) {
+              return prev;
+            }
+            const updated = {
               ...prev,
               customer: matched,
-              activeTypeId: matched.customer_type?.id || 1
+              activeTypeId: matched.customer_type?.id || prev.activeTypeId || 1,
             };
+            localStorage.setItem("pos_session", JSON.stringify(updated));
+            return updated;
           });
 
           setCustomer((prev) => {
-            if (!prev || (prev.phone_number !== customerPhone && prev.customer_name !== customerPhone)) {
-              return prev; // ยกเลิกการอัปเดตสเตท
+            if (!prev || prev.id === 0) {
+              return prev;
+            }
+            if (targetId && prev.id !== targetId && (prev as any).customer_id !== targetId) {
+              return prev;
             }
             return matched;
           });
@@ -316,7 +396,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     const currentCustomerTypeName = customer?.customer_type?.type_name || "";
 
     if (currentCustomerTypeId === 3 || currentCustomerTypeName === "WHOLESALE") {
-      alert("ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น");
+      toast({
+        variant: "warning",
+        message: "ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น",
+      });
       updateSession("billDiscountValue", 0);
       return;
     }
@@ -330,7 +413,11 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     if (billDiscountType === "amount" && remainingAfterLineDiscount > 0 && inputValue > maxDiscountBaht) isExceed = true;
 
     if (isExceed) {
-      alert(`ส่วนลดท้ายบิลเกินนโยบายร้านค้า\n\nระบบอนุญาตให้ลดสูงสุดไม่เกิน:\n• ${maxExtraConfigRate}% ของยอดรวม\n• หรือไม่เกิน ฿${maxDiscountBaht.toFixed(2)}`);
+      toast({
+        variant: "warning",
+        title: "ส่วนลดท้ายบิลเกินนโยบายร้านค้า",
+        message: `ระบบอนุญาตให้ลดสูงสุดไม่เกิน: ${maxExtraConfigRate}% ของยอดรวม หรือไม่เกิน ฿${maxDiscountBaht.toFixed(2)}`,
+      });
       updateSession("billDiscountValue", 0);
       return;
     }
@@ -339,7 +426,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   };
 
   const handleOpenPaymentModal = () => {
-    if (cart.length === 0) return alert("กรุณาเลือกสินค้าลงตะกร้า");
+    if (cart.length === 0) {
+      toast({ variant: "warning", message: "กรุณาเลือกสินค้าลงตะกร้า" });
+      return;
+    }
 
     let targetMethodId = paymentMethodId;
     if (selectedPaymentType === "CASH" && targetMethodId === 3) {
@@ -365,7 +455,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       });
     } catch (error: any) {
       console.error("Error generating QR:", error);
-      alert("ไม่สามารถสร้าง QR Code ได้");
+      toast({ variant: "error", message: "ไม่สามารถสร้าง QR Code ได้" });
     } finally {
       setIsLoadingQR(false);
     }
@@ -375,7 +465,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const submitOrderToDatabase = async (currentCart?: CartItem[]): Promise<number | null> => {
     const targetCart = currentCart || cart;
     if (targetCart.length === 0) {
-      alert("กรุณาเลือกสินค้าลงตะกร้า");
+      toast({ variant: "warning", message: "กรุณาเลือกสินค้าลงตะกร้า" });
       return null;
     }
 
@@ -425,7 +515,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       payment_method_id: finalPaymentMethodId,
       bill_discount_type: posSession.billDiscountType,
       bill_discount_value: posSession.billDiscountValue,
-      note: "บันทึกบิลขายส่งผ่านระบบ POS หน้าร้าน",
+      note: "",
       items: computedItems as any,
     };
 
@@ -548,7 +638,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       }
     } catch (error: any) {
       console.error("Submit order failed:", error);
-      alert(error.response?.data?.error || error.response?.data?.message || "เกิดปัญหาที่ระบบหลังบ้าน");
+      toast({
+        variant: "error",
+        message: error.response?.data?.error || error.response?.data?.message || "เกิดปัญหาที่ระบบหลังบ้าน",
+      });
       return null;
     } finally {
       setIsSubmitting(false);
@@ -557,7 +650,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
 
   // ─── 1. กดปุ่ม "ยืนยันการขาย" หน้าร้าน ───
   const handleConfirmSale = async () => {
-    if (cart.length === 0) return alert("กรุณาเลือกสินค้าลงตะกร้า");
+    if (cart.length === 0) {
+      toast({ variant: "warning", message: "กรุณาเลือกสินค้าลงตะกร้า" });
+      return;
+    }
 
     // 1. จัดการ Overwrite paymentMethodId กรณี CASH + CREDIT ให้เสร็จก่อน
     let activePaymentMethod = paymentMethodId || posSession.paymentMethodId;
@@ -567,12 +663,18 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     }
 
     if (activePaymentMethod === 3 && !isRegisteredCustomer) {
-      alert("สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น");
+      toast({
+        variant: "warning",
+        message: "สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น",
+      });
       return;
     }
 
     if (activePaymentMethod === 3 && isExceedCreditLimit) {
-      alert("วงเงินเครดิตของลูกค้าไม่เพียงพอ ไม่สามารถทำรายการเงินเชื่อได้");
+      toast({
+        variant: "warning",
+        message: "วงเงินเครดิตของลูกค้าไม่เพียงพอ ไม่สามารถทำรายการเงินเชื่อได้",
+      });
       return;
     }
 
@@ -586,28 +688,54 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     const activePaymentMethodId = paymentMethodId || posSession.paymentMethodId;
 
     if (activePaymentMethodId === 1) {
-      if (!receivedAmount || receivedAmount <= 0) {
-        alert("กรุณากรอกจำนวนเงินที่รับมา");
+      if (finalTotal > 0 && (!receivedAmount || receivedAmount <= 0)) {
+        toast({ variant: "warning", message: "กรุณากรอกจำนวนเงินที่รับมา" });
         return false;
       }
       if (receivedAmount < finalTotal) {
-        alert(`จำนวนเงินที่รับมาไม่ครบ (รับมา ฿${receivedAmount.toLocaleString()} / ยอดชำระ ฿${finalTotal.toLocaleString()})`);
+        toast({
+          variant: "warning",
+          message: `จำนวนเงินที่รับมาไม่ครบ (รับมา ฿${receivedAmount.toLocaleString()} / ยอดชำระ ฿${finalTotal.toLocaleString()})`,
+        });
         return false;
       }
     }
 
     if (activePaymentMethodId === 3) {
       if (!isRegisteredCustomer) {
-        alert("สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น");
+        toast({
+          variant: "warning",
+          message: "สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น",
+        });
         return false;
       }
       if (isExceedCreditLimit) {
-        alert("วงเงินเครดิตของลูกค้าไม่เพียงพอ ไม่สามารถทำรายการเงินเชื่อได้");
+        toast({
+          variant: "warning",
+          message: "วงเงินเครดิตของลูกค้าไม่เพียงพอ ไม่สามารถทำรายการเงินเชื่อได้",
+        });
         return false;
       }
     }
 
     setIsConfirming(true);
+
+    const printReceiptPdf = async (orderIdToPrint: number | string) => {
+      try {
+        const orderNum = currentOrderNumberRef.current || posSession.currentOrderNumber || orderIdToPrint;
+        const blob = await posApiService.printOrderReceipt(orderIdToPrint);
+        const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+        const win = window.open(blobUrl, "_blank");
+        if (!win) {
+          const fileName = String(orderNum).startsWith("INV") ? `${orderNum}.pdf` : `INV-${orderNum}.pdf`;
+          downloadPdfBlob(blob, fileName);
+        }
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 120000);
+      } catch (err) {
+        console.error("Error opening receipt PDF:", err);
+      }
+    };
+
     try {
       if (activePaymentMethodId === 1 || activePaymentMethodId === 3) {
         //  CASH & CREDIT: ยิง DB ทีเดียวจบ (ไม่ผ่าน pending)
@@ -616,7 +744,8 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
           setIsConfirming(false);
           return false;
         }
-        alert("ยืนยันการชำระเงินและจบการขายสำเร็จ!");
+        await printReceiptPdf(orderId);
+        toast({ variant: "success", message: "ยืนยันการชำระเงินและจบการขายสำเร็จ!" });
         resetPaymentState();
         setCart([]);
         localStorage.removeItem("pos_cart");
@@ -639,10 +768,11 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         order_id: orderId,
         payment_method_id: activePaymentMethodId,
         received_amount: finalTotal,
-        received_by_id: 1, 
+        received_by_id: getCurrentUserId() || 1, 
       });
 
-      alert("ยืนยันการชำระเงินและจบการขายสำเร็จ!");
+      await printReceiptPdf(orderId);
+      toast({ variant: "success", message: "ยืนยันการชำระเงินและจบการขายสำเร็จ!" });
 
       // จบการขายสำเร็จ ค่อยสั่ง reset เพื่อล้าง orderNumber ให้บิลถัดไป
       resetPaymentState();
@@ -652,7 +782,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       return true;
     } catch (error: any) {
       console.error("Confirm payment failed:", error);
-      alert(error.response?.data?.error || "เกิดข้อผิดพลาดในการยืนยันชำระเงิน");
+      toast({
+        variant: "error",
+        message: error.response?.data?.error || "เกิดข้อผิดพลาดในการยืนยันชำระเงิน",
+      });
       return false;
     } finally {
       setIsConfirming(false);
@@ -741,5 +874,6 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     closePaymentModal,
     customerAddressTemp,
     handleAddressChange,
+    refreshCustomerFinancials,
   };
 }

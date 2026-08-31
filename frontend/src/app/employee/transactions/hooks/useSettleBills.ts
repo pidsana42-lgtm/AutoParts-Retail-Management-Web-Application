@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import apiClient from "../../../../service/http/apiClient";
 import { posApiService } from "../../../../service/http/pos/pos_service";
 import type { CustomerDiscountResponse } from "../../../../interface/pos/customer_interface";
+import { getCurrentUserId } from "../../../../utils/auth";
 import type {
   UnpaidBillItem,
   SettleCustomerSuggestion,
@@ -536,7 +536,7 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
       const res = await posApiService.generateSettleQR({
         amount: amount,
         customer_id: customerId ?? undefined,
-        received_by_id: 1,
+        received_by_id: getCurrentUserId(),
       });
       setQrCodeData({
         qrCode: res.qr_code,
@@ -587,47 +587,49 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
   };
 
   // ยืนยันการชำระเงินและตัดยอดหนี้
-  const handleFinalConfirm = async (receivedById: number = 1) => {
-    if (!customerId || selectedBillIds.length === 0) return;
-    if (totalPayAmount <= 0) {
-      alert("ยอดชำระรวมต้องมากกว่า 0 บาท");
+  const handleFinalConfirm = async (receivedById?: number) => {
+  if (!customerId || selectedBillIds.length === 0) return;
+  if (totalPayAmount <= 0) {
+    alert("ยอดชำระรวมต้องมากกว่า 0 บาท");
+    return;
+  }
+
+  if (paymentMethodId === 1 && receivedAmount < totalPayAmount) {
+    alert(`จำนวนเงินที่รับมาไม่ครบ (รับมา ฿${receivedAmount.toLocaleString()} / ยอดชำระ ฿${totalPayAmount.toLocaleString()})`);
+    return;
+  }
+
+  const selectedBills = bills.filter((b) => selectedBillIds.includes(b.order_id));
+  
+  const allocations = [];
+  for (const b of selectedBills) {
+    const payAmt = getBillPayAmount(b);
+    if (payAmt <= 0) {
+      alert(`ยอดชำระของบิล ${b.order_number} ต้องมากกว่า 0 บาท`);
       return;
     }
-
-    if (paymentMethodId === 1 && receivedAmount < totalPayAmount) {
-      alert(`จำนวนเงินที่รับมาไม่ครบ (รับมา ฿${receivedAmount.toLocaleString()} / ยอดชำระ ฿${totalPayAmount.toLocaleString()})`);
+    if (payAmt > b.balance_due) {
+      alert(`ยอดชำระของบิล ${b.order_number} (฿${payAmt.toFixed(2)}) เกินยอดหนี้คงค้าง (฿${b.balance_due.toFixed(2)})`);
       return;
     }
+    allocations.push({
+      order_id: b.order_id,
+      pay_amount: payAmt,
+    });
+  }
 
-    const selectedBills = bills.filter((b) => selectedBillIds.includes(b.order_id));
-    
-    // ตรวจสอบยอดชำระของแต่ละบิล
-    const allocations = [];
-    for (const b of selectedBills) {
-      const payAmt = getBillPayAmount(b);
-      if (payAmt <= 0) {
-        alert(`ยอดชำระของบิล ${b.order_number} ต้องมากกว่า 0 บาท`);
-        return;
-      }
-      if (payAmt > b.balance_due) {
-        alert(`ยอดชำระของบิล ${b.order_number} (฿${payAmt.toFixed(2)}) เกินยอดหนี้คงค้าง (฿${b.balance_due.toFixed(2)})`);
-        return;
-      }
-      allocations.push({
-        order_id: b.order_id,
-        pay_amount: payAmt,
-      });
-    }
+  // ใช้ ID ที่ส่งเข้ามา หรือ fallback ไปดึง ID ของ User ที่ล็อกอินจริง
+  const activeStaffId = receivedById || getCurrentUserId();
 
-    setIsSubmitting(true);
-    const payload = {
-      customer_id: customerId,
-      received_by_id: receivedById,
-      payment_method_id: paymentMethodId,
-      total_received: paymentMethodId === 1 ? (receivedAmount || totalPayAmount) : totalPayAmount,
-      transaction_ref: paymentMethodId === 2 ? qrCodeData?.refNo : undefined,
-      allocations: allocations,
-    };
+  setIsSubmitting(true);
+  const payload = {
+    customer_id: customerId,
+    received_by_id: activeStaffId, 
+    payment_method_id: paymentMethodId,
+    total_received: paymentMethodId === 1 ? (receivedAmount || totalPayAmount) : totalPayAmount,
+    transaction_ref: paymentMethodId === 2 ? qrCodeData?.refNo : undefined,
+    allocations: allocations,
+  };
 
     try {
       const res = await posApiService.settleCustomerBills(payload);

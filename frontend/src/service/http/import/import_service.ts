@@ -272,3 +272,19 @@ export async function updateImportProduct(productId: number, payload: any): Prom
     throw new Error(errMsg);
   }
 }
+
+// 12. Helper สำหรับแปลง path รูปภาพให้โหลดผ่าน static file server / proxy ได้ถูกต้อง
+export function resolveImageUrl(url?: string | null): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("blob:") || trimmed.startsWith("data:")) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  // นำหน้าด้วย '/' เสมอเพื่อให้ browser ร้องขอจาก root (/uploads/...) ซึ่งจะผ่าน proxy ของ Vite
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+

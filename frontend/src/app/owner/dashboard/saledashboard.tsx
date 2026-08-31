@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Banknote, Users, Loader2, Eye, Trophy, FileText } from 'lucide-react';
+import { TrendingUp, TrendingDown, Banknote, Users, Loader2, Eye, Trophy } from 'lucide-react';
 // Components
 import Button from '../../../components/elements/button';
 import { Card, CardHeader } from '../../../components/elements/card';
