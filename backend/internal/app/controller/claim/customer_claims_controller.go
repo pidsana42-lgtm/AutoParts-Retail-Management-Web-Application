@@ -1,8 +1,10 @@
 package claim
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	claimDTO "backend/internal/app/dto/claim"
 	claimSvc "backend/internal/app/service/claim"
@@ -175,3 +177,39 @@ func (ctrl *CustomerClaimController) DeleteCustomerClaim(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
 }
+
+func (ctrl *CustomerClaimController) GeneratePDF(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	pdfBytes, err := ctrl.svc.GenerateCustomerClaimPDF(c.Request.Context(), uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate claim PDF: " + err.Error()})
+		return
+	}
+
+	fileName := fmt.Sprintf("Claim_%d.pdf", id)
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+func (ctrl *CustomerClaimController) GenerateChecklistPDF(c *gin.Context) {
+	status := c.Query("status")
+	search := c.Query("search")
+
+	pdfBytes, err := ctrl.svc.GenerateCustomerClaimChecklistPDF(c.Request.Context(), status, search)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate claim checklist PDF: " + err.Error()})
+		return
+	}
+
+	fileName := fmt.Sprintf("Claim_Checklist_%s.pdf", time.Now().Format("20060102_150405"))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+

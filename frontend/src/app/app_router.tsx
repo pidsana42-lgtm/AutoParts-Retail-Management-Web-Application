@@ -130,8 +130,10 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/owner/import-bills" element={<ImportBill />} />
         <Route path="/owner/import-bills/scan" element={<ImportBill />} />
         <Route path="/owner/import-bills/excel" element={<ImportBill />} />
+        <Route path="/owner/import-bills/mapping" element={<ImportBill />} />
         <Route path="/owner/import-bills/manual" element={<ImportBill />} />
         <Route path="/owner/import-bills/po" element={<ImportBill />} />
+        <Route path="/owner/import-bills/approve/:id" element={<ImportBill />} />
         <Route path="/owner/import-bills/edit-stock-bill" element={
           isAdminOrOwner ? <EditStockBillPage /> : <Navigate to={firstMenuPath} replace />
         } />
@@ -204,6 +206,7 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/employee/import" element={<EmployeeImport />} />
         <Route path="/employee/import/scan" element={<EmployeeImport />} />
         <Route path="/employee/import/excel" element={<EmployeeImport />} />
+        <Route path="/employee/import/mapping" element={<EmployeeImport />} />
         <Route path="/employee/import/manual" element={<EmployeeImport />} />
         <Route path="/employee/import/po" element={<EmployeeImport />} />
 

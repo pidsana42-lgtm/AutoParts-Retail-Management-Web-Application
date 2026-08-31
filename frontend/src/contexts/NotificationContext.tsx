@@ -118,8 +118,10 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let ws: WebSocket;
     let reconnectTimeout: ReturnType<typeof setTimeout>;
+    let disposed = false;
 
     const connect = () => {
+      if (disposed) return;
       let wsUrl = import.meta.env.VITE_WS_URL;
       if (!wsUrl) {
         if (typeof window !== 'undefined') {
@@ -136,9 +138,10 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       const query = params.toString();
       if (query) wsUrl += (wsUrl.includes('?') ? '&' : '?') + query;
 
-      ws = new WebSocket(wsUrl);
+      const socket = new WebSocket(wsUrl);
+      ws = socket;
 
-      ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           if (data && data.title) {
@@ -164,12 +167,13 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         }
       };
 
-      ws.onerror = () => {
+      socket.onerror = () => {
+        if (disposed) return;
         console.warn('WebSocket error, attempting to reconnect...');
-        ws.close();
       };
 
-      ws.onclose = () => {
+      socket.onclose = () => {
+        if (disposed) return;
         reconnectTimeout = setTimeout(connect, 3000);
       };
     };
@@ -177,9 +181,20 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     connect();
 
     return () => {
+      disposed = true;
       clearTimeout(reconnectTimeout);
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      if (!ws) return;
+
+      ws.onmessage = null;
+      ws.onerror = null;
+      ws.onclose = null;
+      if (ws.readyState === WebSocket.OPEN) {
         ws.close();
+      } else if (ws.readyState === WebSocket.CONNECTING) {
+        // React StrictMode may unmount while the handshake is still in progress.
+        // Wait until it opens before closing to avoid the browser's
+        // "closed before the connection is established" warning.
+        ws.onopen = () => ws.close();
       }
     };
   }, [role, user?.id, addNotification, addServerNotification]);

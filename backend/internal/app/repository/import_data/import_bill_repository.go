@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
 	"backend/internal/app/entity"
 	"backend/internal/app/enum"
 	"backend/internal/pkg/lotcode"
+	"gorm.io/gorm"
 )
 
 type ImportBillRepository interface {
@@ -241,6 +241,10 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				if items[i].SubCategoryID != nil && *items[i].SubCategoryID > 0 {
 					subCatID = items[i].SubCategoryID
 				}
+				var subSubCatID *uint
+				if items[i].SubSubCategoryID != nil && *items[i].SubSubCategoryID > 0 {
+					subSubCatID = items[i].SubSubCategoryID
+				}
 
 				prodName := strings.TrimSpace(items[i].CompanyProductName)
 				if prodName == "" {
@@ -248,21 +252,22 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				}
 
 				newProd := entity.Product{
-					Product_Name:   prodName,
-					Product_Code:   "",
-					Part_Number:    items[i].CompanyProductCode,
-					Barcode:        "",
-					Cost_price:     items[i].PricePerUnit,
-					Sale_price:     items[i].PricePerUnit * 1.25,
-					Is_Active:      true,
-					Quantity:       items[i].OrderQuantity,
-					Limit_Quantity: 5,
-					Models:         []entity.Models{{Model: gorm.Model{ID: 1}}},
-					UnitID:         1,
-					CategoryID:     catID,
-					SubCategoryID:  subCatID,
-					GradeID:        1,
-					ShelfID:        1,
+					Product_Name:     prodName,
+					Product_Code:     "",
+					Part_Number:      items[i].CompanyProductCode,
+					Barcode:          "",
+					Cost_price:       items[i].PricePerUnit,
+					Sale_price:       items[i].PricePerUnit * 1.25,
+					Is_Active:        true,
+					Quantity:         items[i].OrderQuantity,
+					Limit_Quantity:   5,
+					Models:           []entity.Models{{Model: gorm.Model{ID: 1}}},
+					UnitID:           1,
+					CategoryID:       catID,
+					SubCategoryID:    subCatID,
+					SubSubCategoryID: subSubCatID,
+					GradeID:          1,
+					ShelfID:          1,
 				}
 				if err := tx.Create(&newProd).Error; err != nil {
 					return err
@@ -348,7 +353,7 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 
 func (r *billRepository) GetBillByID(id uint) (*entity.Bill, error) {
 	var bill entity.Bill
-	err := r.db.Preload("BillItems").Preload("Supplier").First(&bill, id).Error
+	err := r.db.Preload("BillItems").Preload("Supplier").Preload("BillImage").First(&bill, id).Error
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ChevronLeft, ChevronRight, AlertCircle, ZoomIn, ZoomOut, RotateCw,
   Camera, FileUp, Loader2, Trash2, Save, Smartphone, X
@@ -6,7 +6,10 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import Heading from '../../../../components/elements/heading';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
+import TreeSelect from '../../../../components/elements/tree_select';
+import type { CascaderOption } from '../../../../components/elements/cascader';
 import type { ViewState, Supplier, Product, ScannedBillData } from '../../../../interface/import';
+import { resolveImageUrl } from '../../../../service/http/import/import_service';
 import ProductSearchSelect from '../components/product_search_select';
 import InlineValidationAlertBanner from '../components/inline_validation_alert_banner';
 import BillSummaryFooterBar from '../components/BillSummaryFooterBar';
@@ -44,6 +47,12 @@ interface ScanViewProps {
   products: Product[];
   categories: any[];
   handleItemChange: (idx: number, field: string, val: any) => void;
+  handleItemCategoryChange: (
+    idx: number,
+    categoryId: number | null,
+    subCategoryId: number | null,
+    subSubCategoryId: number | null
+  ) => void;
   handleRemoveRow: (idx: number) => void;
   handleAddRow: () => void;
   exportBillItemsToExcel: () => void;
@@ -92,7 +101,9 @@ export default function ScanView({
   setPoReference,
   poList,
   products,
+  categories,
   handleItemChange,
+  handleItemCategoryChange,
   handleRemoveRow,
   handleAddRow,
   handleSaveBill,
@@ -127,6 +138,30 @@ export default function ScanView({
   const showBanner = (validationWarnings.length > 0 || priceMismatchedItems.length > 0 || pendingNewProducts.length > 0) && !!handleConfirmValidationSave && !!handleDismissValidation;
 
   const [showQR, setShowQR] = useState(false);
+  const categoryTreeOptions: CascaderOption[] = useMemo(() => {
+    return (categories || []).map((category: any, categoryIndex: number) => {
+      const categoryId = category.id ?? category.ID ?? categoryIndex;
+      return {
+        value: `category-${categoryId}`,
+        label: category.category_name || category.name || `หมวดหมู่ ${categoryId}`,
+        children: (category.sub_categories || []).map((subCategory: any, subCategoryIndex: number) => {
+          const subCategoryId = subCategory.id ?? subCategory.ID ?? subCategoryIndex;
+          return {
+            value: `subcategory-${subCategoryId}`,
+            label: subCategory.sub_category_name || subCategory.name || `หมวดหมู่ย่อย ${subCategoryId}`,
+            children: (subCategory.sub_sub_categories || []).map((subSubCategory: any, subSubCategoryIndex: number) => {
+              const subSubCategoryId = subSubCategory.id ?? subSubCategory.ID ?? subSubCategoryIndex;
+              return {
+                value: `subsubcategory-${subSubCategoryId}`,
+                label: subSubCategory.sub_sub_category_name || subSubCategory.name || `หมวดหมู่ย่อยย่อย ${subSubCategoryId}`,
+              };
+            }),
+          };
+        }),
+      };
+    });
+  }, [categories]);
+
   const mobileUrl = mobileSessionId
     ? `${window.location.origin}/mobile-scan?session=${mobileSessionId}`
     : window.location.href;
@@ -304,7 +339,7 @@ export default function ScanView({
                     </div>
                   ) : (
                     <img
-                      src={previewUrl ?? ''}
+                      src={resolveImageUrl(previewUrl) ?? ''}
                       alt="Invoice Preview"
                       className="w-full h-full object-contain"
                       style={{ scale: `${zoom}`, transition: 'scale 0.2s' }}
@@ -362,7 +397,7 @@ export default function ScanView({
               <Camera size={64} className="text-gray-400 mb-4 animate-pulse" />
               <p className="text-[#5F5E5E] font-bold text-sm mb-2">ลากไฟล์บิลของคุณวางที่นี่ หรือ</p>
               <label className="cursor-pointer text-white bg-[#e51c23] hover:bg-[#c9181f] px-6 py-2.5 rounded-none font-bold transition-all shadow-sm">
-                อัปโหลดบิล (ภาพ/HEIC/PDF)
+                อัปโหลดบิล
                 <input type="file" className="hidden" accept="image/*,.heic,.heif,application/pdf" multiple onChange={handleFileChange} />
               </label>
               <p className="text-sm text-gray-400 mt-3">รองรับการเลือกทีละหลายไฟล์สำหรับสแกนแบบกลุ่ม</p>
@@ -413,7 +448,7 @@ export default function ScanView({
               <p className="text-sm max-w-md">กรุณาเลือกไฟล์บิลด้านซ้าย และกดปุ่มสแกนบิลเพื่อตรวจสอบวิเคราะห์ข้อมูล</p>
             </div>
           ) : (
-            <div key={`form-view-active-${activeBatchIndex}-${formData.bill_no || ''}`} className="flex flex-col flex-1 animate-in fade-in duration-300">
+            <div key={`form-view-active-${activeBatchIndex}`} className="flex flex-col flex-1 animate-in fade-in duration-300">
               {/* Multi-Page Bill Merge Control Banner */}
               {batchImages.length > 1 && (
                 <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex items-center justify-between gap-4 flex-wrap text-xs">
@@ -524,8 +559,7 @@ export default function ScanView({
                       <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[150px]">รหัสสินค้าคู่ค้า</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[260px]">ชื่อสินค้าตามบิล</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[280px]">จับคู่สินค้าในร้าน</TableHead>
-                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่หลัก</TableHead>
-                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่ย่อย</TableHead>
+                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[220px]">หมวดหมู่สินค้า</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">จำนวน</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[110px]">ราคา/หน่วย</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">ยอดรวม</TableHead>
@@ -535,7 +569,7 @@ export default function ScanView({
                   <TableBody className="divide-y divide-gray-100">
                     {formData.items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="py-12 text-center text-gray-500 bg-gray-50/50">
+                        <TableCell colSpan={8} className="py-12 text-center text-gray-500 bg-gray-50/50">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <AlertCircle size={36} className="text-gray-400" />
                             <p className="font-bold text-[#1C1B1B] text-sm">ไม่พบรายการสินค้าในบิลนี้</p>
@@ -554,8 +588,11 @@ export default function ScanView({
                       </TableRow>
                     ) : (
                       formData.items.map((item, idx) => {
+                        const matchedProduct = item.product_id
+                          ? products.find(p => p.id === Number(item.product_id))
+                          : undefined;
                         return (
-                          <TableRow key={`item-${activeBatchIndex}-${idx}-${item.company_product_code || ''}-${item.company_product_name || ''}`} className="hover:bg-gray-50/80 align-top transition-colors">
+                          <TableRow key={`item-${activeBatchIndex}-${idx}`} className="hover:bg-gray-50/80 align-top transition-colors">
                           <TableCell className="py-2.5 px-3">
                             <input 
                               type="text"
@@ -585,37 +622,59 @@ export default function ScanView({
                           </TableCell>
                           <TableCell className="py-2.5 px-3">
                             {item.product_id ? (
-                              (() => {
-                                const prod = products.find(p => p.id === Number(item.product_id));
-                                if (prod && prod.category_name) {
-                                  return (
-                                    <span className="text-sm text-[#1C1B1B]" title={prod.category_name}>
-                                      {prod.category_name}
-                                    </span>
-                                  );
-                                }
-                                return <span className="text-gray-400 text-sm">-</span>;
-                              })()
+                              matchedProduct && (
+                                matchedProduct.category_name ||
+                                matchedProduct.sub_category_name ||
+                                matchedProduct.sub_sub_category_name
+                              ) ? (
+                                <span
+                                  className="text-sm text-[#1C1B1B]"
+                                  title={[
+                                    matchedProduct.category_name,
+                                    matchedProduct.sub_category_name,
+                                    matchedProduct.sub_sub_category_name,
+                                  ].filter(Boolean).join(' / ')}
+                                >
+                                  {[
+                                    matchedProduct.category_name,
+                                    matchedProduct.sub_category_name,
+                                    matchedProduct.sub_sub_category_name,
+                                  ].filter(Boolean).join(' / ')}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 text-sm">-</span>
+                              )
                             ) : (
-                              <span className="text-gray-400 text-sm">-</span>
-                            )}
-                          </TableCell>
-                          
-                          <TableCell className="py-2.5 px-3">
-                            {item.product_id ? (
-                              (() => {
-                                const prod = products.find(p => p.id === Number(item.product_id));
-                                if (prod && prod.sub_category_name) {
-                                  return (
-                                    <span className="text-sm text-[#1C1B1B]" title={prod.sub_category_name}>
-                                      {prod.sub_category_name}
-                                    </span>
-                                  );
+                              <TreeSelect
+                                containerClassName="min-w-[220px]"
+                                options={categoryTreeOptions}
+                                placeholder="เลือกหมวดหมู่สินค้า"
+                                searchPlaceholder="ค้นหาหมวดหมู่..."
+                                value={
+                                  item.sub_sub_category_id
+                                    ? `subsubcategory-${item.sub_sub_category_id}`
+                                    : item.sub_category_id
+                                    ? `subcategory-${item.sub_category_id}`
+                                    : item.category_id
+                                      ? `category-${item.category_id}`
+                                      : ''
                                 }
-                                return <span className="text-gray-400 text-sm">-</span>;
-                              })()
-                            ) : (
-                              <span className="text-gray-400 text-sm">-</span>
+                                onChange={(_value, path) => {
+                                  const categoryValue = path[0]?.value || '';
+                                  const subCategoryValue = path[1]?.value || '';
+                                  const subSubCategoryValue = path[2]?.value || '';
+                                  const categoryId = categoryValue.startsWith('category-')
+                                    ? Number(categoryValue.replace('category-', ''))
+                                    : null;
+                                  const subCategoryId = subCategoryValue.startsWith('subcategory-')
+                                    ? Number(subCategoryValue.replace('subcategory-', ''))
+                                    : null;
+                                  const subSubCategoryId = subSubCategoryValue.startsWith('subsubcategory-')
+                                    ? Number(subSubCategoryValue.replace('subsubcategory-', ''))
+                                    : null;
+                                  handleItemCategoryChange(idx, categoryId, subCategoryId, subSubCategoryId);
+                                }}
+                              />
                             )}
                           </TableCell>
 
