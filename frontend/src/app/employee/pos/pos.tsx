@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, ScanBarcode,} from "lucide-react";
+import { useLocation, useSearchParams, useNavigate } from "react-router-dom";
+import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, ScanBarcode, RotateCcw, AlertCircle, RefreshCw} from "lucide-react";
 import Button from "../../../components/elements/button";
 import { usePosPayment } from "./hooks/usepospayment";
 import { usePosCart } from "./hooks/useposcart";
@@ -14,17 +15,29 @@ import Input from "../../../components/elements/input";
 import { usePosSessionMeta } from "./hooks/usePosSessionMeta";
 import {useCustomerFinancials} from "./hooks/useCustomerFinancials";
 import Heading from "../../../components/elements/heading";
+import { posApiService } from "../../../service/http/pos/pos_service";
+import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
 
 export default function PosPage(): React.JSX.Element {
   // ─── STATE & HOOK SETUP ───
   const [customerForCart, setCustomerForCart] = React.useState<any>(null);
   const [activeTypeForCart, setActiveTypeForCart] = React.useState<number>(1);
+  const [isRecoverMode, setIsRecoverMode] = React.useState<boolean>(() => {
+    return typeof window !== "undefined" && Boolean(localStorage.getItem("pos_recovered_order"));
+  });
   const { formatDate, formatTime, currentStaff } = usePosSessionMeta();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  const recoverHandlerRef = React.useRef<(id: number) => Promise<boolean>>(async () => false);
 
   // ระบบจัดการสินค้าในตะกร้า 
   const cartHook = usePosCart({
     customer: customerForCart,
     activeTypeId: activeTypeForCart,
+    isRecoverMode,
+    onRecoverCancelledOrder: (id) => recoverHandlerRef.current(id),
   });
 
   // ระบบจัดการข้อมูลลูกค้าและการชำระเงิน 
@@ -34,6 +47,10 @@ export default function PosPage(): React.JSX.Element {
     totalItemPrice: cartHook.totalItemPrice,
     totalLineDiscount: cartHook.totalLineDiscount,
   });
+
+  React.useEffect(() => {
+    recoverHandlerRef.current = paymentData.handleRecoverCancelledOrder;
+  }, [paymentData.handleRecoverCancelledOrder]);
 
   // เรียกใช้ฟังก์ชันคำนวณเพื่อเอามาช่วย Render หน้าตาราง
   const { calculateLineDiscountAmount, calculateProRataWeight } = useDiscountCalculation();
@@ -59,6 +76,37 @@ export default function PosPage(): React.JSX.Element {
     setActiveTypeForCart(paymentData.activeTypeId);
   }, [paymentData.customer, paymentData.activeTypeId]);
 
+  // ซิงค์สถานะโหมดกู้คืนเมื่อมี recoveredOrderInfo
+  React.useEffect(() => {
+    if (paymentData.recoveredOrderInfo) {
+      setIsRecoverMode(true);
+    }
+  }, [paymentData.recoveredOrderInfo]);
+
+  const handleToggleRecoverMode = (checked: boolean) => {
+    setIsRecoverMode(checked);
+    if (!checked) {
+      if (paymentData.recoveredOrderInfo) {
+        paymentData.handleCancelRecovery();
+      }
+    }
+  };
+
+  // ตรวจจับ Order ID ที่ส่งต่อมาทาง URL Param หรือ Navigation State เพื่อกู้คืนบิลยกเลิกอัตโนมัติ
+  React.useEffect(() => {
+    const stateOrderId = (location.state as any)?.recoverOrderId;
+    const queryOrderId = searchParams.get("recover_order_id");
+    const targetOrderId = stateOrderId || (queryOrderId ? Number(queryOrderId) : null);
+
+    if (targetOrderId) {
+      setIsRecoverMode(true);
+      paymentData.handleRecoverCancelledOrder(Number(targetOrderId));
+      searchParams.delete("recover_order_id");
+      setSearchParams(searchParams, { replace: true });
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, searchParams]);
+
   const isCompanyCustomer =
     paymentData.activeTypeId === 3 ||
     paymentData.customer?.customer_type?.id === 3 ||
@@ -78,49 +126,81 @@ export default function PosPage(): React.JSX.Element {
       <div className="w-full lg:w-[73%] bg-white p-6 flex flex-col justify-between">
         <div>
           
-          {/* 1. ส่วนหัวบิล (Header - ชื่อหน้าย่อ POS & ปุ่มล้างตะกร้าทั้งหมด) */}
+          {/* 1. ส่วนหัวบิล (Header - ชื่อหน้าย่อ POS, สวิตช์โหมด & ปุ่มล้างตะกร้าทั้งหมด) */}
           <div className="flex justify-between items-start mb-6">
             <div>
               <Heading level='h1' weight='semibold' className='m-0 text-black'>
                 POS
               </Heading>
               <Heading level='h6' className='m-0 mt-1'>
-                รายการที่กำลังขาย
+                {isRecoverMode ? "ทำรายการจากบิลเก่าที่ยกเลิก" : "รายการที่กำลังขาย"}
               </Heading>
             </div>
-            <div className="text-right flex flex-col items-end gap-1.5">
-              <Text variant="xs" className="text-[#6B7280] mb-0">
-                สถานะรายการขาย
-              </Text>
-              <h2 className="text-2xl text-zinc-800 ">บิลร่าง (DRAFT)</h2>
-              <Button
-                type="button"
-                onClick={() =>
-                  cartHook.handleClearAllCart(() => {
-                    paymentData.resetBillDiscount();
-                    paymentData.resetPaymentState();
-                  })
-                }
-                // ถ้าในตะกร้ามีสินค้า หรือ มีการเลือกลูกค้าไว้ ให้ปุ่มนี้ยังคลิกได้
-                disabled={cartHook.cart.length === 0 && !paymentData.customer}
-                
-                // ให้เช็กเงื่อนไขเดียวกันเพื่อให้สีปุ่มแสดงผลถูกต้อง
-                className={`text-xs font-normal px-3 py-1.5 border cursor-pointer transition-all duration-200 ${
-                  cartHook.cart.length === 0 && !paymentData.customer
-                    ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed select-none"
-                    : "bg-[#E51C23] text-white border-[#E51C23] hover:bg-[#C62828] active:bg-[#B71C1C] shadow-sm"
-                }`}
-              >
-                ล้างทั้งหมด
-              </Button>
+            
+            <div className="flex items-center gap-3">
+              {/* Switch Toggle โหมดทำรายการจากบิลเก่าที่ยกเลิก */}
+              
+
+              {/* สถานะรายการขาย (ด้านบน) & ปุ่มล้างทั้งหมด (ด้านล่าง) */}
+              <div className="flex flex-col items-end gap-1.5 text-right">
+                <div className="hidden sm:block">
+                   <Text variant="xs" className="text-[#6B7280] mb-0">
+                    สถานะรายการขาย
+                  </Text>
+                  <h2 className="text-2xl text-zinc-800 ">
+                    {paymentData.recoveredOrderInfo ? "บิลกู้คืน" : "บิลร่าง (DRAFT)"}
+                  </h2>
+                </div>
+                <Button
+                  type="button"
+                  onClick={() =>
+                    cartHook.handleClearAllCart(() => {
+                      paymentData.resetBillDiscount();
+                      paymentData.resetPaymentState();
+                    })
+                  }
+                  disabled={cartHook.cart.length === 0 && !paymentData.customer && !paymentData.recoveredOrderInfo}
+                  className={`text-xs font-normal px-3 py-1.5 border cursor-pointer transition-all duration-200 ${
+                    cartHook.cart.length === 0 && !paymentData.customer && !paymentData.recoveredOrderInfo
+                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed select-none"
+                      : "bg-[#E51C23] text-white border-[#E51C23] hover:bg-[#C62828] active:bg-[#B71C1C] shadow-sm"
+                  }`}
+                >
+                  ล้างทั้งหมด
+                </Button>
+              </div>
             </div>
           </div>
 
+          
+
           {/* --- ส่วนบนสุดของฝั่ง Cart --- */}
           <div className="space-y-4">
-  
-            {/* ช่องแสกนบาร์โค้ด (ย้ายมาไว้ตรงนี้) */}
-            <form onSubmit={cartHook.handleAddProduct} className="mt-6 flex gap-2">
+
+            {/* แถบแจ้งเตือนเมื่อกำลังอ้างอิงบิลยกเลิก */}
+            {paymentData.recoveredOrderInfo && (
+              <div className="flex items-center justify-between gap-2 text-xs text-[#6B7280] bg-[#F6F3F2] px-3.5 py-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <span>
+                    กำลังแก้ไขรายการจากบิลยกเลิก: <strong className="font-medium text-[#1C1B1A]">{paymentData.recoveredOrderInfo.orderNumber}</strong>
+                    {customerName && ` (ลูกค้า: ${customerName})`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    paymentData.handleCancelRecovery();
+                    cartHook.handleClearAllCart();
+                  }}
+                  className="text-[#E51C23] hover:underline font-normal cursor-pointer"
+                >
+                  ยกเลิกการอ้างอิง
+                </button>
+              </div>
+            )}
+
+            {/* ช่องแสกนบาร์โค้ด / ค้นหา (ช่องเดิมช่องเดียว สลับ Placeholder และผลลัพธ์ตาม Switch) */}
+            <form onSubmit={cartHook.handleAddProduct} className="mt-2 flex gap-2 items-center">
               <div className="relative flex-1">
                 <ScanBarcode className="absolute left-4 top-3.5 text-gray-400" size={18} />
                 <input
@@ -137,77 +217,179 @@ export default function PosPage(): React.JSX.Element {
                       cartHook.setShowSuggestions(true);
                     }
                   }}
-                  placeholder="สแกนบาร์โค้ดสินค้า, พิมพ์เลขบาร์โค้ด, พิมพ์รหัสสินค้า, Part Number หรือชื่อสินค้าเพื่อเพิ่มรายการ..."
+                  placeholder={
+                    isRecoverMode
+                      ? "สแกนบาร์โค้ด / INV-202X-XXX หรือ ชื่อลูกค้า..."
+                      : "สแกนบาร์โค้ดสินค้า, พิมพ์เลขบาร์โค้ด, พิมพ์รหัสสินค้า, Part Number หรือชื่อสินค้าเพื่อเพิ่มรายการ..."
+                  }
                   className="w-full bg-white border border-gray-200 rounded-none pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-red-500 shadow-sm"
                   autoFocus
                 />
 
                 {/* Dropdown ค้นหาด่วน (Autocomplete Suggestions) */}
-                {cartHook.showSuggestions && cartHook.suggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-gray-100">
-                    {cartHook.suggestions.map((product) => {
-                      const isOutOfStock = (product.quantity ?? 0) <= 0;
-                      return (
-                        <div
-                          key={product.id}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            if (!isOutOfStock) {
-                              cartHook.handleSelectProduct(product);
-                            }
-                          }}
-                          onClick={() => {
-                            if (!isOutOfStock) {
-                              cartHook.handleSelectProduct(product);
-                            }
-                          }}
-                          className={`p-3 flex justify-between items-center transition-colors text-left ${
-                            isOutOfStock
-                              ? "opacity-50 bg-[#F9FAFB] cursor-not-allowed select-none"
-                              : "hover:bg-gray-50 cursor-pointer"
-                          }`}
-                        >
-                          <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                              <Text variant="small" className={`mb-0 leading-tight ${isOutOfStock ? "text-[#9CA3AF] font-light" : "text-[#1C1B1B]"}`}>
-                                {product.product_name}
-                              </Text>
-                              {isOutOfStock ? (
-                                <Badge variant="neutral" size="auto" className="bg-[#FEE2E2] text-[#E51C23] border-none text-[10px] py-0.5 px-1.5 rounded-none font-normal">
-                                  สินค้าหมด
-                                </Badge>
-                              ) : (
-                                product.barcode && (
-                                  <Text variant="xs" className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded-none">
-                                    บาร์โค้ด: {product.barcode}
-                                  </Text>
-                                )
-                              )}
-                            </div>
-                            <Text variant="xs" className="text-[10px] text-[#6B7280] mb-0.5 mt-1 leading-tight">
-                              SKU: {product.product_code} | PN: {product.part_number || "-"}
-                            </Text>
+                {cartHook.showSuggestions && (cartHook.suggestions.length > 0 || (isRecoverMode && cartHook.cancelledOrderSuggestions && cartHook.cancelledOrderSuggestions.length > 0)) && (
+                  <div className="absolute left-0 right-0 top-full mt-0 bg-white border border-gray-200 shadow-xl z-50 max-h-80 overflow-y-auto divide-y divide-gray-100">
+                    
+                    {/* 1. ส่วนบิลยกเลิก (แสดงเฉพาะเมื่อเปิดโหมดกู้คืนบิล) */}
+                    {isRecoverMode && cartHook.cancelledOrderSuggestions && cartHook.cancelledOrderSuggestions.length > 0 && (
+                      <div>
+                        <div className="bg-[#F6F3F2] px-3.5 py-1.5 flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Text variant="xs" className="text-[#1C1B1B] font-light">พบบิลยกเลิก (คลิกเพื่อโหลดรายการเข้า POS)</Text>
                           </div>
-                          <div className="text-right flex flex-col shrink-0 pl-4">
-                            <Text variant="xs" className={isOutOfStock ? "text-gray-400 font-light" : "text-[#E51C23]"}>
-                              ฿{(product.sale_price || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                            </Text>
-                            <Text variant="xs" className={`text-[10px] ${isOutOfStock ? "text-[#E51C23] font-medium" : "text-gray-400"}`}>
-                              {isOutOfStock ? "คงเหลือ 0 (หมด)" : `คงเหลือ: ${product.quantity}`}
-                            </Text>
-                          </div>
+                          <Text variant="xs" className="font-light text-[#1C1B1B]">
+                            {cartHook.cancelledOrderSuggestions.length} รายการ
+                          </Text>
                         </div>
-                      );
-                    })}
+                        {cartHook.cancelledOrderSuggestions.map((order) => (
+                          <div
+                            key={`cancelled-${order.id}`}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              cartHook.handleSelectCancelledOrder(order);
+                            }}
+                            onClick={() => cartHook.handleSelectCancelledOrder(order)}
+                            className="p-3 flex justify-between items-center bg-white hover:bg-gray-50 cursor-pointer transition-colors text-left "
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-2">
+                                <Text variant="small" className="text-[#1C1B1B] mb-0 leading-tight">
+                                  {order.order_number}
+                                </Text>
+                                <Badge variant="error" size="auto">
+                                  บิลยกเลิก
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-3 font-light">
+                                <Text variant="xs" className=" font-light text-[#6B7280] mb-0.5 mt-1 leading-tight">
+                                  ลูกค้า: {order.customer_name || order.customer_name_temp || "ลูกค้าทั่วไป"} | ({order.cancel_reason})
+                                </Text>
+                                {/* {order.cancel_reason && (
+                                  <Text variant="xs" className="text-[#854D0E] truncate max-w-xs">
+                                    ({order.cancel_reason})
+                                  </Text>
+                                )} */}
+                              </div>
+                            </div>
+                            <div className="text-right flex flex-col shrink-0 pl-4">
+                              <Text variant="xs" className="text-[#E51C23] mb-0">
+                                ฿{(order.total_amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                              </Text>
+                              <Text variant="xs" className="text-[10px] text-gray-600 font-light">
+                                คลิกเพื่อดึงรายการ
+                              </Text>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 2. ส่วนสินค้า */}
+                    {cartHook.suggestions.length > 0 && (
+                      <div>
+                        {isRecoverMode && cartHook.cancelledOrderSuggestions && cartHook.cancelledOrderSuggestions.length > 0 && (
+                          <div className="bg-[#F6F3F2] px-3.5 py-1.5 flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <Text variant="xs" className="text-[#1C1B1B] font-light">รายการสินค้า</Text>
+                            </div>
+                            <Text variant="xs" className="font-light text-[#1C1B1B]">
+                              {cartHook.suggestions.length} รายการ
+                            </Text>
+                          </div>
+                        )}
+                        {cartHook.suggestions.map((product) => {
+                          const isOutOfStock = (product.quantity ?? 0) <= 0;
+                          return (
+                            <div
+                              key={`prod-${product.id}`}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                if (!isOutOfStock) {
+                                  cartHook.handleSelectProduct(product);
+                                }
+                              }}
+                              onClick={() => {
+                                if (!isOutOfStock) {
+                                  cartHook.handleSelectProduct(product);
+                                }
+                              }}
+                              className={`p-3 flex justify-between items-center transition-colors text-left ${
+                                isOutOfStock
+                                  ? "opacity-50 bg-[#F9FAFB] cursor-not-allowed select-none"
+                                  : "hover:bg-gray-50 cursor-pointer"
+                              }`}
+                            >
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-2">
+                                  <Text variant="small" className={`mb-0 leading-tight ${isOutOfStock ? "text-[#9CA3AF] font-light" : "text-[#1C1B1B]"}`}>
+                                    {product.product_name}
+                                  </Text>
+                                  {isOutOfStock ? (
+                                    <Badge variant="neutral" size="auto" className="bg-[#FEE2E2] text-[#E51C23] border-none text-[10px] py-0.5 px-1.5 rounded-none font-normal">
+                                      สินค้าหมด
+                                    </Badge>
+                                  ) : (
+                                    product.barcode && (
+                                      <Text variant="xs" className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded-none">
+                                        บาร์โค้ด: {product.barcode}
+                                      </Text>
+                                    )
+                                  )}
+                                </div>
+                                <Text variant="xs" className=" font-light text-[#6B7280] mb-0.5 mt-1 leading-tight">
+                                  SKU: {product.product_code} | PN: {product.part_number || "-"}
+                                </Text>
+                              </div>
+                              <div className="text-right flex flex-col shrink-0 pl-4">
+                                <Text variant="xs" className={isOutOfStock ? "text-gray-400 font-light" : "text-[#E51C23]"}>
+                                  ฿{(product.sale_price || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                </Text>
+                                <Text variant="xs" className={`text-[10px] ${isOutOfStock ? "text-[#E51C23] font-light" : "text-gray-600 font-light"}`}>
+                                  {isOutOfStock ? "คงเหลือ 0 (หมด)" : `คงเหลือ: ${product.quantity}`}
+                                </Text>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
               <button
                 type="submit"
-                className="bg-[#1C1B1B] text-white px-8 py-3 rounded-none text-sm hover:bg-zinc-800 transition-colors cursor-pointer"
+                className="bg-[#1C1B1B] text-white px-8 py-3 rounded-none text-sm hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
               >
                 เพิ่มรายการ
               </button>
+
+              {/* สวิตช์โหมดทำรายการจากบิลเก่าที่ยกเลิก ข้างปุ่มเพิ่มรายการ */}
+              <div 
+                onClick={() => handleToggleRecoverMode(!isRecoverMode)}
+                className="flex items-center gap-2 px-3 py-2.5 bg-[#F6F3F2] border border-gray-200 rounded-none shrink-0 cursor-pointer select-none hover:bg-gray-100 transition-colors"
+              >
+                <Text variant="xs" className="text-[#1C1B1A] font-light whitespace-nowrap mb-0">
+                  ทำรายการจากบิลเก่าที่ยกเลิก
+                </Text>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isRecoverMode}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleRecoverMode(!isRecoverMode);
+                  }}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isRecoverMode ? "bg-[#E51C23]" : "bg-gray-300"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                      isRecoverMode ? "translate-x-4" : "translate-x-0.5"
+                    }`}
+                  />
+                </button>
+              </div>
             </form>
 
           </div>

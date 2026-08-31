@@ -6,6 +6,8 @@ import type { CustomerDiscountResponse } from "./customer_interface";
 export interface UsePosCartProps {
   customer: CustomerDiscountResponse | null;
   activeTypeId: number;
+  isRecoverMode?: boolean;
+  onRecoverCancelledOrder?: (orderId: number) => Promise<boolean>;
 }
 
 // สำหรับโครงสร้างสินค้าที่อยู่ในตะกร้า 
@@ -31,7 +33,10 @@ export interface UsePosCartReturn {
   handleDiscountValueChange: (index: number, valueStr: string) => void;
   suggestions: any[];
   setSuggestions: React.Dispatch<React.SetStateAction<any[]>>;
+  cancelledOrderSuggestions: any[];
+  setCancelledOrderSuggestions: React.Dispatch<React.SetStateAction<any[]>>;
   showSuggestions: boolean;
   setShowSuggestions: React.Dispatch<React.SetStateAction<boolean>>;
   handleSelectProduct: (product: any) => void;
+  handleSelectCancelledOrder: (order: any) => Promise<void>;
 }

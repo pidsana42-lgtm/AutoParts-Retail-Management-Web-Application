@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Eye,
   ChevronLeft,
@@ -6,6 +7,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ScanBarcode,
+  RotateCcw,
   X,
   Printer,
   Download,
@@ -42,6 +44,7 @@ import { openPdfBlobInNewTab, downloadPdfBlob } from "../../../utils/print";
 
 export default function TransactionHistoryPage() {
   const [printingOrderId, setPrintingOrderId] = useState<number | string | null>(null);
+  const navigate = useNavigate();
 
   const handlePrintReceipt = async (orderId: number | string, orderNumber?: string) => {
     setPrintingOrderId(orderId);
@@ -1023,40 +1026,58 @@ export default function TransactionHistoryPage() {
                     // 2. ถ้ารายการถูกยกเลิกเรียบร้อยแล้ว (CANCELLED)
                     if (status === "CANCELLED" || status === "ยกเลิก") {
                       return (
-                        <Card className="p-4 bg-[#FCF7F7] border border-[#F5DFDF] rounded-none shadow-none space-y-2">
-                          <div className="flex items-center justify-between">
-                            <Text variant="small" className="font-normal text-[#E51C23] mb-0">
-                              สถานะคำขอ: รายการนี้ถูกยกเลิกแล้ว
-                            </Text>
-                            <Badge
-                              variant="neutral"
-                              size="auto"
-                              className="bg-[#E51C23] text-white border-none text-[10px] font-normal rounded-none py-0.5 px-2"
-                            >
-                              {getStatusText(orderDetail.status)}
-                            </Badge>
-                          </div>
-                          
-                          <div className="text-xs text-[#1C1B1B] ">
-                            <div>
-                              <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
-                              <span className="text-[#1C1B1B]">{orderDetail.canceller || "-"}</span>
-                            </div>
-                            <div>
-                              <span className="font-normal text-[#1C1B1B]">เหตุผลที่ระบุ:</span>{" "}
-                              <span className="text-[#1C1B1B]">{orderDetail.cancel_reason || "-"}</span>
-                            </div>
-                            {(orderDetail.cancel_processed_at || orderDetail.cancelled_at || orderDetail.cancel_requested_at) && (
-                              <Text variant="xs" className="text-[#1C1B1B] pt-0.5">
-                                อนุมัติเมื่อ: {formatDate(orderDetail.cancel_processed_at || orderDetail.cancelled_at || orderDetail.cancel_requested_at || "")}
+                        <div className="space-y-3">
+                          <Card className="p-4 bg-[#FCF7F7] border border-[#F5DFDF] rounded-none shadow-none space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Text variant="small" className="font-normal text-[#E51C23] mb-0">
+                                สถานะคำขอ: รายการนี้ถูกยกเลิกแล้ว
                               </Text>
-                            )}
-                            <div>
-                              <span className="font-normal text-[#1C1B1B]">หมายเหตุ:</span>{" "}
-                              <span className="text-[#1C1B1B]">{orderDetail.cancel_remark || "-"}</span>
+                              <Badge
+                                variant="neutral"
+                                size="auto"
+                                className="bg-[#E51C23] text-white border-none text-[10px] font-normal rounded-none py-0.5 px-2"
+                              >
+                                {getStatusText(orderDetail.status)}
+                              </Badge>
                             </div>
-                          </div>
-                        </Card>
+                            
+                            <div className="text-xs text-[#1C1B1B] ">
+                              <div>
+                                <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
+                                <span className="text-[#1C1B1B]">{orderDetail.canceller || "-"}</span>
+                              </div>
+                              <div>
+                                <span className="font-normal text-[#1C1B1B]">เหตุผลที่ระบุ:</span>{" "}
+                                <span className="text-[#1C1B1B]">{orderDetail.cancel_reason || "-"}</span>
+                              </div>
+                              {(orderDetail.cancel_processed_at || orderDetail.cancelled_at || orderDetail.cancel_requested_at) && (
+                                <Text variant="xs" className="text-[#1C1B1B] pt-0.5">
+                                  อนุมัติเมื่อ: {formatDate(orderDetail.cancel_processed_at || orderDetail.cancelled_at || orderDetail.cancel_requested_at || "")}
+                                </Text>
+                              )}
+                              <div>
+                                <span className="font-normal text-[#1C1B1B]">หมายเหตุ:</span>{" "}
+                                <span className="text-[#1C1B1B]">{orderDetail.cancel_remark || "-"}</span>
+                              </div>
+                            </div>
+                          </Card>
+
+                          <Button
+                            type="button"
+                            variant="solid-red"
+                            onClick={() => {
+                              navigate(
+                                (isOwnerOrAdmin ? "/owner/pos/pos" : "/employee/pos/pos") +
+                                  `?recover_order_id=${orderDetail.id}`,
+                                { state: { recoverOrderId: orderDetail.id } }
+                              );
+                            }}
+                            className="w-full text-xs h-10 font-normal rounded-none flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            <span>กู้คืน/แก้ไขรายการที่หน้า POS</span>
+                          </Button>
+                        </div>
                       );
                     }
 

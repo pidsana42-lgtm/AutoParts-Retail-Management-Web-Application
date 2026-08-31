@@ -128,6 +128,12 @@ func (r *salesHistoryRepository) GetSalesHistory(req pos.SalesHistoryFilterReque
         query = query.Where("sale_orders.created_by_id = ?", req.EmployeeID)
     }
 
+    // 4.6 กรองตามสถานะคำสั่งซื้อ (Status)
+    if req.Status != "" {
+        cleanStatus := strings.ToLower(strings.TrimSpace(req.Status))
+        query = query.Where("sale_orders.status = ?", cleanStatus)
+    }
+
     // นับจำนวนรายการทั้งหมดก่อนทำ Pagination
     if err := query.Count(&totalRows).Error; err != nil {
         return nil, 0, err
