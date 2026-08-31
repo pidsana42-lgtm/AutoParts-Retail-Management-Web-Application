@@ -6,13 +6,16 @@ import './index.css';
 import { AuthProvider } from './contexts/AuthContexts';
 
 import { NotificationProvider } from './contexts/NotificationContext';
+import { ToastProvider } from './components/elements/toast';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
         <NotificationProvider>
-          <App />
+          <ToastProvider position="top-right" maxToasts={5}>
+            <App />
+          </ToastProvider>
         </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
