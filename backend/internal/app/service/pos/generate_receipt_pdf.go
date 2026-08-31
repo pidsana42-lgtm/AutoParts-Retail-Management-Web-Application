@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"strings"
 
 	"github.com/johnfercher/maroto/pkg/color"
@@ -13,60 +12,67 @@ import (
 	"github.com/johnfercher/maroto/pkg/props"
 )
 
-// GenerateSaleOrderPDF สร้างไฟล์ PDF บิลขาย / ใบส่งของ / ใบเสร็จรับเงิน ตามดีไซน์ต้นฉบับ
+// GenerateSaleOrderPDF สร้างไฟล์ PDF บิลขาย / ใบเสร็จรับเงิน / ใบส่งของ ตามรูปแบบเดียวกับ Purchase Order
 func (s *salesHistoryService) GenerateSaleOrderPDF(ctx context.Context, identifier string, customTitle string) ([]byte, error) {
-	// 1. ดึงข้อมูล SaleOrder จาก DB
+	// 1. ดึงข้อมูลจริงจาก Database
 	order, err := s.salesHistoryRepo.GetSaleHistoryByID(identifier)
 	if err != nil {
 		return nil, fmt.Errorf("could not get sale order: %w", err)
 	}
 
-	// 2. ดึงข้อมูลการตั้งค่าร้านค้า (CompanySetting)
-	companySetting, _ := s.salesHistoryRepo.GetCompanySetting(ctx)
+	companyData, err := s.salesHistoryRepo.GetCompanySetting(ctx)
+	if err != nil || companyData == nil {
+		companyData = nil
+	}
 
 	companyName := "เจ.เจ อะไหล่ (หนองสาหร่าย)"
 	companyAddress := "51 ม.20 ต.หนองสาหร่าย อ.ปากช่อง จ.นครราชสีมา 30130"
 	companyPhone := "096-7985115"
+	companyEmail := "-"
+	companyTaxID := "-"
 	logoURL := ""
 
-	if companySetting != nil {
-		if companySetting.CompanyName != "" {
-			companyName = companySetting.CompanyName
+	if companyData != nil {
+		if companyData.CompanyName != "" {
+			companyName = companyData.CompanyName
 		}
-		if companySetting.Address != "" {
-			companyAddress = companySetting.Address
+		if companyData.Address != "" {
+			companyAddress = companyData.Address
 		}
-		if companySetting.PhoneNumber != "" {
-			companyPhone = companySetting.PhoneNumber
+		if companyData.PhoneNumber != "" {
+			companyPhone = companyData.PhoneNumber
 		}
-		if companySetting.LogoURL != "" {
-			logoURL = companySetting.LogoURL
+		if companyData.Email != "" {
+			companyEmail = companyData.Email
+		}
+		if companyData.TaxIDNumber != "" {
+			companyTaxID = companyData.TaxIDNumber
+		}
+		if companyData.LogoURL != "" {
+			logoURL = companyData.LogoURL
 		}
 	}
 
-	// 3. กำหนดหัวข้อเอกสาร (Document Title)
+	// 2. กำหนดหัวข้อเอกสาร (Document Title)
 	docTitle := customTitle
 	if docTitle == "" {
 		if order.PaymentMethodID != nil && *order.PaymentMethodID == 3 {
-			docTitle = "ใบส่งของชั่วคราว/\nใบเสนอราคา"
+			docTitle = "ใบส่งของชั่วคราว"
 		} else {
-			docTitle = "ใบเสร็จรับเงิน/\nบิลเงินสด"
+			docTitle = "ใบเสร็จรับเงิน"
 		}
 	}
 
-	// 4. เริ่มสร้าง PDF ด้วย Maroto A4 Portrait
+	// 3. ตั้งค่าหน้ากระดาษและฟอนต์
 	m := pdf.NewMaroto(consts.Portrait, consts.A4)
-	m.SetPageMargins(12, 14, 12)
+	m.SetPageMargins(10, 15, 10)
 	m.AddUTF8Font("THSarabun", consts.Normal, "assets/fonts/THSarabunNew.ttf")
 	m.AddUTF8Font("THSarabun", consts.Bold, "assets/fonts/THSarabunNew Bold.ttf")
 	m.SetDefaultFontFamily("THSarabun")
 
-	// วันที่และเวลา
-	createdTime := order.CreatedAt
-	dateStr := createdTime.Format("02/01/2006")
-	timeStr := createdTime.Format("15:04:05")
+	orderDate := order.CreatedAt.Format("02/01/2006 15:04")
 
-	// รูปแบบการชำระเงิน และ เครดิต
+	// รูปแบบการชำระเงิน
 	paymentMethodStr := "เงินสด"
 	if order.PaymentMethod != nil && order.PaymentMethod.MethodName != "" {
 		paymentMethodStr = order.PaymentMethod.MethodName
@@ -81,16 +87,10 @@ func (s *salesHistoryService) GenerateSaleOrderPDF(ctx context.Context, identifi
 		}
 	}
 
-	creditTermStr := "เงินสด"
-	if order.DueDate != nil {
-		days := int(order.DueDate.Sub(order.CreatedAt).Hours() / 24)
-		if days > 0 {
-			creditTermStr = fmt.Sprintf("เครดิต %d วัน", days)
-		} else {
-			creditTermStr = fmt.Sprintf("ครบกำหนด %s", order.DueDate.Format("02/01/2006"))
-		}
-	} else if order.PaymentMethodID != nil && *order.PaymentMethodID == 3 {
-		creditTermStr = "เครดิต 90 วัน"
+	// พนักงานขาย
+	salesStaff := "พนักงานขาย"
+	if order.CreatedBy != nil && order.CreatedBy.FirstName != "" {
+		salesStaff = fmt.Sprintf("%s %s", order.CreatedBy.FirstName, order.CreatedBy.LastName)
 	}
 
 	// ข้อมูลลูกค้า
@@ -120,159 +120,98 @@ func (s *salesHistoryService) GenerateSaleOrderPDF(ctx context.Context, identifi
 		custPhone = order.Customer.PhoneNumber
 	}
 
-	// พนักงานขาย
-	salesStaff := "พนักงานขาย"
-	if order.CreatedBy != nil && order.CreatedBy.FirstName != "" {
-		salesStaff = fmt.Sprintf("%s %s", order.CreatedBy.FirstName, order.CreatedBy.LastName)
-	}
-
-	primaryRed := hexToColor("#E51C23")
-	darkColor := hexToColor("#1C1B1B")
-	grayColor := hexToColor("#5F5E5E")
-
-	// ==========================================
-	// 5. ส่วนหัวเอกสาร (Header)
-	// ==========================================
-	m.Row(24, func() {
-		// ฝั่งซ้าย (Col 4.5): โลโก้ + ข้อมูลร้าน
-		m.Col(4, func() {
-			if logoURL != "" {
-				if _, err := os.Stat(logoURL); err == nil {
+	// 4. ส่วนหัวเอกสาร (Header) รูปแบบเดียวกับ Purchase Order
+	m.RegisterHeader(func() {
+		m.Row(25, func() {
+			m.Col(3, func() {
+				if logoURL != "" {
 					_ = m.FileImage(logoURL, props.Rect{
-						Percent: 70,
-						Center:  false,
+						Percent: 400,
+						Center:  false, // ให้โลโก้ชิดซ้าย
 					})
 				}
-			}
-			m.Text(companyName, props.Text{
-				Size:  12,
-				Style: consts.Bold,
-				Color: darkColor,
 			})
-			m.Text(companyAddress, props.Text{
-				Size:  9,
-				Top:   4.5,
-				Color: grayColor,
-			})
-			m.Text(fmt.Sprintf("โทร: %s", companyPhone), props.Text{
-				Size:  9,
-				Top:   8.5,
-				Color: grayColor,
-			})
-		})
-
-		// ตรงกลาง (Col 4): กล่องชื่อเอกสาร (Title Box)
-		m.Col(4, func() {
-			titleLines := strings.Split(docTitle, "\n")
-			topOffset := 2.5
-			if len(titleLines) == 1 {
-				topOffset = 5.0
-			}
-			for _, line := range titleLines {
-				m.Text(line, props.Text{
-					Size:  13,
-					Style: consts.Bold,
-					Align: consts.Center,
-					Top:   topOffset,
-					Color: darkColor,
-				})
-				topOffset += 5.5
-			}
-		})
-
-		// ฝั่งขวา (Col 4): เลขที่เอกสาร, วันที่, ระยะเครดิต, ประเภทชำระเงิน
-		m.Col(4, func() {
-			m.Text(fmt.Sprintf("เลขที่ : %s", order.OrderNumber), props.Text{
-				Size:  9,
-				Style: consts.Bold,
-				Align: consts.Right,
-				Top:   0,
-			})
-			m.Text(fmt.Sprintf("วันที่ : %s  เวลา : %s", dateStr, timeStr), props.Text{
-				Size:  9,
-				Align: consts.Right,
-				Top:   4.5,
-			})
-			m.Text(fmt.Sprintf("ระยะเครดิต : %s", creditTermStr), props.Text{
-				Size:  9,
-				Align: consts.Right,
-				Top:   8.5,
-			})
-			m.Text(fmt.Sprintf("ประเภทชำระเงิน : %s", paymentMethodStr), props.Text{
-				Size:  9,
-				Align: consts.Right,
-				Top:   12.5,
+			m.Col(5, func() {}) // ช่องว่างตรงกลาง
+			m.Col(4, func() {
+				// รองรับการขึ้นบรรทัดใหม่ของ Title ถ้ามี
+				titleLines := strings.Split(docTitle, "\n")
+				fontSize := 24.0
+				if len(titleLines) > 1 {
+					fontSize = 18.0
+				}
+				topOffset := 0.0
+				for _, line := range titleLines {
+					m.Text(line, props.Text{
+						Size:  fontSize,
+						Style: consts.Bold,
+						Align: consts.Center,
+						Color: hexToColor("#E51C23"),
+						Top:   topOffset,
+					})
+					topOffset += 6.5
+				}
 			})
 		})
 	})
 
-	m.Row(2, func() {})
-	m.Line(0.8)
-	m.Row(1, func() {})
+	m.Row(5, func() {}) // เว้นบรรทัด
 
-	// ==========================================
-	// 6. ข้อมูลลูกค้า (Customer Section)
-	// ==========================================
-	m.Row(14, func() {
+	// 5. ข้อมูลบริษัท (ซ้าย) และ ข้อมูลเอกสาร (ขวา)
+	m.Row(25, func() {
+		// ฝั่งซ้าย: ข้อมูลบริษัท
+		m.Col(8, func() {
+			m.Text(companyName, props.Text{Size: 12, Style: consts.Bold})
+			m.Text(companyAddress, props.Text{Size: 11, Top: 5})
+			m.Text(fmt.Sprintf("โทร. %s", companyPhone), props.Text{Size: 11, Top: 10})
+			m.Text(fmt.Sprintf("อีเมล %s", companyEmail), props.Text{Size: 11, Top: 15})
+			m.Text(fmt.Sprintf("เลขประจำตัวผู้เสียภาษี %s", companyTaxID), props.Text{Size: 11, Top: 20})
+		})
+		// ฝั่งขวา: หั่นย่อยเป็น 2 คอลัมน์ (Label สีแดง กับ Value)
+		m.Col(1, func() {
+			m.Text("เลขที่", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Color: hexToColor("#E51C23")})
+			m.Text("วันที่", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 5, Color: hexToColor("#E51C23")})
+			m.Text("พนักงาน", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 10, Color: hexToColor("#E51C23")})
+			m.Text("ชำระโดย", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 15, Color: hexToColor("#E51C23")})
+		})
+		m.Col(3, func() {
+			m.Text(order.OrderNumber, props.Text{Size: 11, Align: consts.Left})
+			m.Text(orderDate, props.Text{Size: 11, Align: consts.Left, Top: 5})
+			m.Text(salesStaff, props.Text{Size: 11, Align: consts.Left, Top: 10})
+			m.Text(paymentMethodStr, props.Text{Size: 11, Align: consts.Left, Top: 15})
+		})
+	})
+
+	m.Row(5, func() {})
+
+	// 6. ข้อมูลลูกค้า
+	m.Row(15, func() {
 		m.Col(12, func() {
-			m.Text(fmt.Sprintf("ลูกค้า:  %s", custName), props.Text{
-				Size:  9,
-				Style: consts.Bold,
-				Top:   0,
-			})
-			m.Text(fmt.Sprintf("ที่อยู่:  %s", custAddress), props.Text{
-				Size: 9,
-				Top:  4.2,
-			})
-			m.Text(fmt.Sprintf("โทรศัพท์:  %s", custPhone), props.Text{
-				Size: 9,
-				Top:  8.4,
-			})
+			m.Text("ลูกค้า", props.Text{Size: 11, Style: consts.Bold, Color: hexToColor("#E51C23")})
+			m.Text(custName, props.Text{Size: 11, Top: 5})
+			m.Text(fmt.Sprintf("%s  (โทร. %s)", custAddress, custPhone), props.Text{Size: 11, Top: 10})
 		})
 	})
 
-	m.Row(1, func() {})
-	m.Line(0.5)
-	m.Row(1, func() {})
+	m.Row(5, func() {})
 
-	// ==========================================
-	// 7. ข้อมูลร้าน & พนักงานขาย
-	// ==========================================
-	m.Row(5, func() {
-		m.Col(6, func() {
-			m.Text(fmt.Sprintf("โทรศัพท์: %s", companyPhone), props.Text{
-				Size: 9,
-			})
-		})
-		m.Col(6, func() {
-			m.Text(fmt.Sprintf("พนักงานขาย: %s", salesStaff), props.Text{
-				Size: 9,
-			})
-		})
+	// 7. สร้างตารางแบบ Manual (เส้นขอบบน ล่าง และรายการสินค้า)
+	m.Line(1)
+
+	// หัวตาราง
+	m.Row(8, func() {
+		m.Col(1, func() { m.Text("ลำดับ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Center}) })
+		m.Col(2, func() { m.Text("รหัสสินค้า", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left}) })
+		m.Col(4, func() { m.Text("ชื่อสินค้า", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left}) })
+		m.Col(1, func() { m.Text("จำนวน", props.Text{Size: 11, Style: consts.Bold, Align: consts.Right}) })
+		m.Col(1, func() { m.Text("หน่วย", props.Text{Size: 11, Style: consts.Bold, Align: consts.Center}) })
+		m.Col(1, func() { m.Text("ราคา/หน่วย", props.Text{Size: 11, Style: consts.Bold, Align: consts.Right}) })
+		m.Col(1, func() { m.Text("ส่วนลด", props.Text{Size: 11, Style: consts.Bold, Align: consts.Right}) })
+		m.Col(1, func() { m.Text("จำนวนเงิน", props.Text{Size: 11, Style: consts.Bold, Align: consts.Right}) })
 	})
 
-	m.Row(1, func() {})
-	m.Line(0.8)
+	m.Line(1)
 
-	// ==========================================
-	// 8. หัวตารางสินค้า (Table Header)
-	// ==========================================
-	m.Row(7, func() {
-		m.Col(1, func() { m.Text("ลำดับ", props.Text{Size: 9, Style: consts.Bold, Align: consts.Center, Top: 1}) })
-		m.Col(2, func() { m.Text("รหัสสินค้า", props.Text{Size: 9, Style: consts.Bold, Align: consts.Left, Top: 1}) })
-		m.Col(3, func() { m.Text("รายการ", props.Text{Size: 9, Style: consts.Bold, Align: consts.Left, Top: 1}) })
-		m.Col(1, func() { m.Text("จำนวน", props.Text{Size: 9, Style: consts.Bold, Align: consts.Right, Top: 1}) })
-		m.Col(1, func() { m.Text("แถม", props.Text{Size: 9, Style: consts.Bold, Align: consts.Center, Top: 1}) })
-		m.Col(1, func() { m.Text("หน่วยนับ", props.Text{Size: 9, Style: consts.Bold, Align: consts.Center, Top: 1}) })
-		m.Col(1, func() { m.Text("ราคา", props.Text{Size: 9, Style: consts.Bold, Align: consts.Right, Top: 1}) })
-		m.Col(1, func() { m.Text("ส่วนลด", props.Text{Size: 9, Style: consts.Bold, Align: consts.Right, Top: 1}) })
-		m.Col(1, func() { m.Text("มูลค่ารวม", props.Text{Size: 9, Style: consts.Bold, Align: consts.Right, Top: 1}) })
-	})
-	m.Line(0.8)
-
-	// ==========================================
-	// 9. รายการสินค้า (Table Items)
-	// ==========================================
+	// วนลูปข้อมูลสินค้า (Content)
 	for i, item := range order.Items {
 		itemPartNumber := item.PartNumber
 		if itemPartNumber == "" {
@@ -289,155 +228,63 @@ func (s *salesHistoryService) GenerateSaleOrderPDF(ctx context.Context, identifi
 		}
 
 		m.Row(7, func() {
-			m.Col(1, func() {
-				m.Text(fmt.Sprintf("%d", i+1), props.Text{Size: 9, Align: consts.Center, Top: 1})
-			})
-			m.Col(2, func() {
-				m.Text(itemPartNumber, props.Text{Size: 9, Align: consts.Left, Top: 1})
-			})
-			m.Col(3, func() {
-				m.Text(item.ProductName, props.Text{Size: 9, Align: consts.Left, Top: 1})
-			})
-			m.Col(1, func() {
-				m.Text(fmt.Sprintf("%.2f", float64(item.Qty)), props.Text{Size: 9, Align: consts.Right, Top: 1})
-			})
-			m.Col(1, func() {
-				m.Text("0", props.Text{Size: 9, Align: consts.Center, Top: 1})
-			})
-			m.Col(1, func() {
-				m.Text(itemUnit, props.Text{Size: 9, Align: consts.Center, Top: 1})
-			})
-			m.Col(1, func() {
-				m.Text(fmt.Sprintf("%.2f", item.UnitPrice), props.Text{Size: 9, Align: consts.Right, Top: 1})
-			})
-			m.Col(1, func() {
-				m.Text(fmt.Sprintf("%.2f", itemDiscount), props.Text{Size: 9, Align: consts.Right, Top: 1})
-			})
-			m.Col(1, func() {
-				m.Text(fmt.Sprintf("%.2f", itemTotal), props.Text{Size: 9, Style: consts.Bold, Align: consts.Right, Top: 1})
-			})
+			m.Col(1, func() { m.Text(fmt.Sprintf("%d", i+1), props.Text{Size: 11, Align: consts.Center}) })
+			m.Col(2, func() { m.Text(itemPartNumber, props.Text{Size: 11, Align: consts.Left}) })
+			m.Col(4, func() { m.Text(item.ProductName, props.Text{Size: 11, Align: consts.Left}) })
+			m.Col(1, func() { m.Text(fmt.Sprintf("%d", item.Qty), props.Text{Size: 11, Align: consts.Right}) })
+			m.Col(1, func() { m.Text(itemUnit, props.Text{Size: 11, Align: consts.Center}) })
+			m.Col(1, func() { m.Text(fmt.Sprintf("%.2f", item.UnitPrice), props.Text{Size: 11, Align: consts.Right}) })
+			m.Col(1, func() { m.Text(fmt.Sprintf("%.2f", itemDiscount), props.Text{Size: 11, Align: consts.Right}) })
+			m.Col(1, func() { m.Text(fmt.Sprintf("%.2f", itemTotal), props.Text{Size: 11, Align: consts.Right}) })
 		})
 	}
 
-	// วาดเส้นปิดตาราง
-	m.Line(0.8)
-	m.Row(4, func() {})
+	m.Line(1)
 
-	// ==========================================
-	// 10. สรุปท้ายบิล & หมายเหตุ (Summary Box)
-	// ==========================================
-	m.Line(0.6)
-	m.Row(34, func() {
-		// ฝั่งซ้าย (7 คอลัมน์): เงื่อนไข + กล่องโอนเงิน
-		m.Col(7, func() {
-			m.Text("1. สินค้าตามใบส่งของนี้ หากมีการขาดตกบกพร่องประการใด โปรดแจ้งให้ทางร้านทราบ", props.Text{
-				Size: 8,
-				Top:  2,
-			})
-			m.Text("   ภายใน 7 วัน มิฉะนั้นทางร้านฯ จะไม่รับผิดชอบความเสียหายใดๆ ทั้งสิ้น", props.Text{
-				Size: 8,
-				Top:  5.5,
-			})
+	m.Row(5, func() {}) // เว้นบรรทัดหลังตาราง
 
-			// กล่องข้อมูลสำหรับโอนเงิน
-			m.Text("ข้อมูลสำหรับโอนเงินผ่านธนาคาร", props.Text{
-				Size:  8.5,
-				Style: consts.Bold,
-				Color: primaryRed,
-				Top:   12,
-			})
-			m.Text("โอนเงินเข้าบัญชี : เจ.เจ อะไหล่ ธนาคารกรุงไทย เลขที่บัญชี XXX-X-XXXXX-X", props.Text{
-				Size: 8,
-				Top:  16,
-			})
+	// 8. ส่วนสรุปยอด (ขวา) และ หมายเหตุ + คำอ่านภาษาไทย (ซ้าย)
+	thaiText := ThaiBahtText(order.TotalAmount)
+
+	var grossTotal float64
+	var lineDiscounts float64
+	for _, item := range order.Items {
+		grossTotal += item.UnitPrice * float64(item.Qty)
+		lineDiscounts += item.DiscountAmount
+	}
+	if grossTotal == 0 {
+		grossTotal = order.Subtotal
+	}
+	billDiscount := order.DiscountAmount
+	totalDiscount := lineDiscounts + billDiscount
+
+	m.Row(28, func() {
+		// หมายเหตุ (ซ้าย)
+		m.Col(6, func() {
+			m.Text("หมายเหตุ", props.Text{Size: 11, Style: consts.Bold, Color: hexToColor("#E51C23")})
+			m.Text("1. สินค้าตามใบเสร็จ/ใบส่งของนี้ หากมีข้อผิดพลาดโปรดแจ้งทางร้านภายใน 7 วัน", props.Text{Size: 10, Top: 5})
+			m.Text(fmt.Sprintf("จำนวนเงินทั้งสิ้น (ตัวอักษร): %s", thaiText), props.Text{Size: 10, Style: consts.Bold, Top: 11})
 		})
 
-		// ฝั่งขวา (5 คอลัมน์): ตัวเลขสรุปยอด
-		m.Col(5, func() {
-			// ลดท้ายบิล
-			m.Text("ลดท้ายบิล", props.Text{
-				Size:  8.5,
-				Align: consts.Left,
-				Top:   2,
-			})
-			m.Text(fmt.Sprintf("%.2f", order.DiscountAmount), props.Text{
-				Size:  8.5,
-				Align: consts.Right,
-				Top:   2,
-			})
-
-			// มูลค่าสินค้า
-			m.Text("มูลค่าสินค้า", props.Text{
-				Size:  8.5,
-				Align: consts.Left,
-				Top:   6.5,
-			})
-			m.Text(fmt.Sprintf("%.2f", order.Subtotal), props.Text{
-				Size:  8.5,
-				Align: consts.Right,
-				Top:   6.5,
-			})
-
-			// รวม
-			m.Text("รวม", props.Text{
-				Size:  8.5,
-				Align: consts.Left,
-				Top:   11.0,
-			})
-			m.Text(fmt.Sprintf("%.2f", order.Subtotal-order.DiscountAmount), props.Text{
-				Size:  8.5,
-				Align: consts.Right,
-				Top:   11.0,
-			})
-
-			// มูลค่าสุทธิ
-			m.Text("มูลค่าสุทธิ", props.Text{
-				Size:  11,
-				Style: consts.Bold,
-				Color: darkColor,
-				Align: consts.Left,
-				Top:   18.0,
-			})
-			m.Text(fmt.Sprintf("฿%.2f", order.TotalAmount), props.Text{
-				Size:  15,
-				Style: consts.Bold,
-				Color: darkColor,
-				Align: consts.Right,
-				Top:   17.0,
-			})
-
-			// ตัวอักษรไทยบาทถ้วน
-			thaiText := ThaiBahtText(order.TotalAmount)
-			m.Text(fmt.Sprintf("| — %s — |", thaiText), props.Text{
-				Size:  7.5,
-				Align: consts.Right,
-				Top:   25.0,
-				Color: grayColor,
-			})
+		// สรุปยอดเงิน (ขวา)
+		m.Col(3, func() {
+			m.Text("ราคารวมสินค้า", props.Text{Size: 11, Align: consts.Left})
+			m.Text("ส่วนลดท้ายบิล", props.Text{Size: 11, Align: consts.Left, Top: 5})
+			m.Text("ส่วนลดรวมทั้งสิ้น", props.Text{Size: 11, Align: consts.Left, Top: 10})
+			m.Text("จำนวนเงินสุทธิ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 16, Color: hexToColor("#E51C23")})
 		})
-	})
-	m.Line(0.6)
-
-	m.Row(4, func() {})
-
-	// ==========================================
-	// 11. Footer สิ้นสุดเอกสาร
-	// ==========================================
-	m.Row(6, func() {
-		m.Col(12, func() {
-			m.Text(fmt.Sprintf("สิ้นสุดเอกสาร - ประมวลผลโดยระบบบริหารจัดการ %s", companyName), props.Text{
-				Size:  7.5,
-				Align: consts.Center,
-				Color: grayColor,
-				Top:   2,
-			})
+		m.Col(3, func() {
+			m.Text(fmt.Sprintf("฿%.2f", grossTotal), props.Text{Size: 11, Align: consts.Right})
+			m.Text(fmt.Sprintf("฿%.2f", billDiscount), props.Text{Size: 11, Align: consts.Right, Top: 5})
+			m.Text(fmt.Sprintf("฿%.2f", totalDiscount), props.Text{Size: 11, Align: consts.Right, Top: 10})
+			m.Text(fmt.Sprintf("฿%.2f", order.TotalAmount), props.Text{Size: 12, Style: consts.Bold, Align: consts.Right, Top: 16, Color: hexToColor("#E51C23")})
 		})
 	})
 
-	// 12. ส่งออกไฟล์เป็น Byte Array
+	// 9. นำออกเป็น Byte Array
 	buf, err := m.Output()
 	if err != nil {
-		return nil, fmt.Errorf("could not generate receipt PDF: %w", err)
+		return nil, fmt.Errorf("could not generate PDF: %w", err)
 	}
 
 	return buf.Bytes(), nil
