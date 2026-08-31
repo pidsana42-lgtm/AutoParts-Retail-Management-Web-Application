@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Camera, FileUp, ArrowRight, Eye, History, Trash2,
+  Camera, FileUp, ArrowRight, SquarePen, History, Trash2,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, LayoutPanelLeft, Loader2, CheckCircle2
 } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
@@ -258,7 +258,11 @@ export default function HomeView({
             </TableHeader>
             <TableBody className="text-gray-700">
               {paginatedBills.map((row) => (
-                <TableRow key={row.id} className="hover:bg-gray-50/70 transition-colors">
+                <TableRow
+                  key={row.id}
+                  onClick={() => handleOpenApprove(row)}
+                  className="hover:bg-gray-50/70 transition-colors cursor-pointer"
+                >
                   <TableCell className="pl-6 font-bold text-[#1C1B1B] text-center">{row.bill_no}</TableCell>
                   <TableCell className="text-[#5F5E5E]">{formatDate(row.created_at)}</TableCell>
                   <TableCell className="text-[#1C1B1B] font-medium">{getSupplierName(row.supplier_id)}</TableCell>
@@ -279,7 +283,10 @@ export default function HomeView({
                       <div className="w-5 flex items-center justify-center">
                         {needsApproval(row) && !isEmployee && (
                           <button
-                            onClick={() => handleOpenApprove(row)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenApprove(row);
+                            }}
                             className="text-emerald-600 hover:text-emerald-800 transition-colors cursor-pointer"
                             title="อนุมัติบิล"
                           >
@@ -288,15 +295,21 @@ export default function HomeView({
                         )}
                       </div>
                       <button
-                        onClick={() => needsApproval(row) && !isEmployee ? handleOpenApprove(row) : handleViewSavedBill(row)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewSavedBill(row);
+                        }}
                         className="text-gray-400 hover:text-[#e51c23] transition-colors cursor-pointer"
-                        title={needsApproval(row) && !isEmployee ? "ดูรายละเอียดและอนุมัติบิล" : "ดูและแก้ไขบิล"}
+                        title="แก้ไขบิล"
                       >
-                        <Eye size={20} />
+                        <SquarePen size={20} />
                       </button>
                       {(!isEmployee || needsApproval(row)) && (
                         <button
-                          onClick={() => handleDeleteBill(row.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteBill(row.id);
+                          }}
                           className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
                           title={isEmployee ? "ลบบิลเฉพาะรายการที่ยังไม่อนุมัติ" : "ลบบิล"}
                         >

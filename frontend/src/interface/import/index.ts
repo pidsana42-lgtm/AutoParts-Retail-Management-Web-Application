@@ -33,6 +33,7 @@ export interface Product {
   product_code: string;
   part_number?: string;
   company_product_code?: string;
+  quantity?: number;
   supplier_name?: string;
   suppliers?: Array<{
     supplier_id: number;
