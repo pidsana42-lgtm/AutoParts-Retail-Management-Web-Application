@@ -18,6 +18,7 @@ interface DateRangePickerProps {
   endDate: string;
   onStartDateChange: (date: string) => void;
   onEndDateChange: (date: string) => void;
+  align?: 'left' | 'right';
   className?: string;
 }
 
@@ -26,13 +27,16 @@ export default function DateRangePicker({
   endDate,
   onStartDateChange,
   onEndDateChange,
+  align,
   className,
 }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
+  const [openLeftward, setOpenLeftward] = useState(false);
   const [draft, setDraft] = useState({ start: startDate, end: endDate });
   const containerRef = useRef<HTMLDivElement>(null);
   const POPOVER_HEIGHT = 220; // approximate popover height in px
+  const POPOVER_WIDTH = 290;  // approximate popover width in px
 
   // sync draft when props change from outside
   useEffect(() => {
@@ -56,7 +60,9 @@ export default function DateRangePicker({
     if (!open && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceRight = window.innerWidth - rect.left;
       setOpenUpward(spaceBelow < POPOVER_HEIGHT);
+      setOpenLeftward(align === 'right' || spaceRight < POPOVER_WIDTH || rect.right > window.innerWidth / 2);
     }
     setOpen((o) => !o);
   };
@@ -78,23 +84,31 @@ export default function DateRangePicker({
       ? `${formatDateTH(startDate)} — ...`
       : 'เลือกช่วงวันที่';
 
+  const isSelected = Boolean(startDate && endDate) || Boolean(startDate);
+
   return (
     <div ref={containerRef} className={cn('relative inline-block', className)}>
       {/* Trigger */}
       <button
         type='button'
         onClick={handleOpen}
-        className='flex items-center gap-2 bg-[#F6F3F2] px-3 py-2 border-b-2 border-red-500 rounded-none text-sm text-gray-600 hover:bg-gray-200 transition'
+        className={cn(
+          'flex items-center gap-2 px-3 py-2 text-sm transition cursor-pointer',
+          isSelected || open
+            ? 'bg-white text-red-500 shadow-sm font-medium'
+            : 'bg-transparent text-gray-600 hover:text-red-500'
+        )}
       >
-        <Calendar size={15} className='text-gray-400 shrink-0' />
+        <Calendar size={15} className={cn('shrink-0', isSelected || open ? 'text-red-500' : 'text-gray-400')} />
         <span className='whitespace-nowrap'>{label}</span>
-        <ChevronDown size={14} className={cn('text-gray-400 transition-transform', open && 'rotate-180')} />
+        <ChevronDown size={14} className={cn('transition-transform', open && 'rotate-180', isSelected || open ? 'text-red-500' : 'text-gray-400')} />
       </button>
 
       {/* Popover */}
       {open && (
         <div className={cn(
-          'absolute left-0 z-50 bg-white border border-gray-200 rounded-none shadow-lg p-4 min-w-70',
+          'absolute z-50 bg-white border border-gray-200 rounded-none shadow-lg p-4 w-72 max-w-[90vw]',
+          openLeftward ? 'right-0' : 'left-0',
           openUpward ? 'bottom-full mb-2' : 'top-full mt-2'
         )}>
           <p className='text-xs font-medium text-gray-500 mb-3'>เลือกช่วงวันที่</p>

@@ -7,6 +7,7 @@ import { Card, CardHeader } from '../../../components/elements/card';
 import Heading from '../../../components/elements/heading';
 import { Table, TableHeader, TableHead, TableBody, TableCell, TableRow } from '../../../components/elements/table';
 import DonutChartCard from './hooks/DonutchartCard';
+import DateRangePicker from '../../../components/elements/date_range_picker';
 // Hooks
 import { useDashboardMetrics } from '../../owner/dashboard/hooks/useDashboardMetrics';
 import { useRevenueBreakdown } from './hooks/useRevenueBreakdown';
@@ -15,7 +16,6 @@ import { dashboardService } from '../../../service/http/dashboard/dashboard_serv
 import type { DashboardSummaryItem, SummaryQuery, StockHealthStats, TopSellerItem } from '../../../interface/dashboard/dashboard_interface';
 // Utils
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
-import Input from '../../../components/elements/input';
 import { formatDateThai, getTodayDateString } from '../../../utils/formatdate';
 import { exportTopSellerPdf } from '../../../utils/print';
 
@@ -49,7 +49,8 @@ const SaleDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   // Filter State
   const [selectedFilter, setSelectedFilter] = useState('daily');
-  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [summaryData, setSummaryData] = useState<DashboardSummaryItem[]>([]);
   // State ส่วน KPI Card
   const [revenueTrend, setRevenueTrend] = useState<number | null>(null);
@@ -61,15 +62,22 @@ const SaleDashboard: React.FC = () => {
   const [exportingPdf, setExportingPdf] = useState(false);
 
   const query = useMemo<SummaryQuery>(() => {
-    if (selectedDate) return { summary_date: selectedDate };
+    if (startDate && endDate) {
+      if (startDate === endDate) {
+        return { summary_date: startDate };
+      }
+      return { start_date: startDate, end_date: endDate };
+    }
+    if (startDate) return { summary_date: startDate };
     switch (selectedFilter) {
+      case 'daily':     return { summary_date: getTodayDateString() };
       case 'weekly':    return { weekly_summary: '1' };
       case 'monthly':   return { monthly_summary: '1' };
       case 'quarterly': return { quarterly_summary: '1' };
       case 'yearly':    return { yearly_summary: '1' };
       default:          return { summary_date: getTodayDateString() };
     }
-  }, [selectedFilter, selectedDate]);
+  }, [selectedFilter, startDate, endDate]);
 
   const { aggr, marginPct } = useDashboardMetrics(summaryData, stockHealth);
   const { customerData, paymentData, totalCustomerRevenue, totalPaymentRevenue, isLoading: isChartLoading } = useRevenueBreakdown(query);
@@ -78,8 +86,24 @@ const SaleDashboard: React.FC = () => {
   const dateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
   const buildPrevQuery = (): SummaryQuery | null => {
-    if (selectedDate) {
-      const d = new Date(selectedDate);
+    if (startDate && endDate) {
+      const s = new Date(startDate);
+      const e = new Date(endDate);
+      const diffMs = e.getTime() - s.getTime();
+      const diffDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
+
+      const prevEnd = new Date(s);
+      prevEnd.setDate(prevEnd.getDate() - 1);
+      const prevStart = new Date(prevEnd);
+      prevStart.setDate(prevStart.getDate() - diffDays + 1);
+
+      if (diffDays === 1) {
+        return { summary_date: dateStr(prevStart) };
+      }
+      return { start_date: dateStr(prevStart), end_date: dateStr(prevEnd) };
+    }
+    if (startDate) {
+      const d = new Date(startDate);
       d.setDate(d.getDate() - 1);
       return { summary_date: dateStr(d) };
     }
@@ -109,8 +133,13 @@ const SaleDashboard: React.FC = () => {
   };
 
   const getTrendLabel = () => {
-    if (selectedDate) return 'เทียบกับเมื่อวาน';
+    if (startDate && endDate) {
+      if (startDate === endDate) return 'เทียบกับเมื่อวาน';
+      return 'เทียบกับช่วงก่อนหน้า';
+    }
+    if (startDate) return 'เทียบกับเมื่อวาน';
     switch (selectedFilter) {
+      case 'daily':     return 'เทียบกับเมื่อวาน';
       case 'weekly':    return 'เทียบกับสัปดาห์ที่แล้ว';
       case 'monthly':   return 'เทียบกับเดือนที่แล้ว';
       case 'quarterly': return 'เทียบกับไตรมาสที่แล้ว';
@@ -152,7 +181,7 @@ const SaleDashboard: React.FC = () => {
         const res = await dashboardService.getSummaryData(query);
         setSummaryData(res.data.summary_data ?? []);
       } catch {
-        setError('ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
+        setError('ไม่สามารถโหลดข้อมูลสรุปได้');
       } finally {
         setIsLoading(false);
       }
@@ -161,9 +190,15 @@ const SaleDashboard: React.FC = () => {
   }, [query]);
 
   useEffect(() => {
-    dashboardService.getStockHealth()
-      .then((res) => setStockHealth(res.data))
-      .catch(() => setStockHealth(null));
+    const fetchStockHealth = async () => {
+      try {
+        const res = await dashboardService.getStockHealth();
+        setStockHealth(res.data);
+      } catch {
+        setStockHealth(null);
+      }
+    };
+    fetchStockHealth();
   }, []);
 
   useEffect(() => {
@@ -171,7 +206,8 @@ const SaleDashboard: React.FC = () => {
       setTopSellerProductLoading(true);
       try {
         const res = await dashboardService.getTopSellers(query, 10);
-        setTopSellerProduct(res.data.data ?? []);
+        const list = Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
+        setTopSellerProduct(Array.isArray(list) ? list : []);
       } catch {
         setTopSellerProduct([]);
       } finally {
@@ -183,18 +219,25 @@ const SaleDashboard: React.FC = () => {
   
   const handleFilterClick = (value: string) => {
     setSelectedFilter(value);
-    setSelectedDate('');
+    setStartDate('');
+    setEndDate('');
   };
 
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newDate = e.target.value;
-    setSelectedDate(newDate);
-    setSelectedFilter(newDate ? '' : 'daily');
+  const handleStartDateChange = (d: string) => {
+    setStartDate(d);
+    setSelectedFilter('');
+  };
+
+  const handleEndDateChange = (d: string) => {
+    setEndDate(d);
+    setSelectedFilter('');
   };
 
   const handleExportPdf = () => {
-    const periodLabel = selectedDate
-      ? formatDateThai(selectedDate)
+    const periodLabel = startDate && endDate
+      ? `${formatDateThai(startDate)} – ${formatDateThai(endDate)}`
+      : startDate
+      ? formatDateThai(startDate)
       : Filter.find((f) => f.value === selectedFilter)?.label ?? 'ทั้งหมด';
     setExportingPdf(true);
     exportTopSellerPdf(topSellerProduct, periodLabel);
@@ -232,19 +275,18 @@ const SaleDashboard: React.FC = () => {
         <div className='bg-[#F6F3F2] flex items-center p-1'>
           {Filter.map((filter) => (
             <button key={filter.value} onClick={() => handleFilterClick(filter.value)}
-              className={`w-20 py-2.5 text-sm transition ${selectedFilter === filter.value
-                ? 'bg-white text-red-500 shadow-sm' : 'text-gray-500 hover:text-red-500'}`}
+              className={`w-20 py-2.5 text-sm transition cursor-pointer ${selectedFilter === filter.value
+                ? 'bg-white text-red-500 shadow-sm font-medium' : 'text-gray-500 hover:text-red-500'}`}
             >
               {filter.label}
             </button>
           ))}
-          <div className='min-w-32'>
-            <Input type='date' value={selectedDate} onChange={handleDateChange}
-              className={`transition-all ${selectedDate
-                ? 'bg-white text-red-500 border border-red-500 shadow-sm'
-                : 'bg-transparent text-gray-600 border-transparent'}`}
-            />
-          </div>
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={handleStartDateChange}
+            onEndDateChange={handleEndDateChange}
+          />
         </div>
       </div>
 
@@ -382,7 +424,7 @@ const SaleDashboard: React.FC = () => {
                   <TableRow>
                     <TableCell colSpan={6} className='text-center py-12 text-gray-400'><Loader2 size={32} className='animate-spin mx-auto' /></TableCell>
                   </TableRow>
-                ) : topSellerProduct.length === 0 ? (
+                ) : !Array.isArray(topSellerProduct) || topSellerProduct.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className='text-center py-12 text-gray-400'>
                       <Trophy size={40} strokeWidth={0.7} className='mx-auto' /> <br />ยังไม่มีข้อมูลสินค้าขายดี 10 อับดับ

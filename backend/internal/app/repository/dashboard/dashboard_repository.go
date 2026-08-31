@@ -62,6 +62,13 @@ func (r *dashboardRepository) GetSummaryDataByQuery(ctx context.Context, query d
 	if query.SummaryDate != "" {
 		dbQuery = dbQuery.Where("summary_date = ?", query.SummaryDate)
 	}
+	if query.StartDate != "" && query.EndDate != "" {
+		dbQuery = dbQuery.Where("summary_date >= ? AND summary_date <= ?", query.StartDate, query.EndDate)
+	} else if query.StartDate != "" {
+		dbQuery = dbQuery.Where("summary_date >= ?", query.StartDate)
+	} else if query.EndDate != "" {
+		dbQuery = dbQuery.Where("summary_date <= ?", query.EndDate)
+	}
 	if query.Weekly != "" {
 		endOfWeek := startOfWeek.AddDate(0, 0, 7)
 		dbQuery = dbQuery.Where("summary_date >= ? AND summary_date < ?", startOfWeek, endOfWeek)

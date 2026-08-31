@@ -54,6 +54,8 @@ type DisplayDashboardDTO struct {
 
 type SummaryQuery struct {
 	SummaryDate string `form:"summary_date"`
+	StartDate   string `form:"start_date"`
+	EndDate     string `form:"end_date"`
 	Weekly      string `form:"weekly_summary"`
 	Monthly     string `form:"monthly_summary"`
 	Quarterly   string `form:"quarterly_summary"`

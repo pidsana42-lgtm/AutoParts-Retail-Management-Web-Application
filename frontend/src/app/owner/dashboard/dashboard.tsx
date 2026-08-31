@@ -5,11 +5,11 @@ import { TriangleAlert, TrendingUp, TrendingDown, CheckCircle2, Loader2, FileInp
 import { useDashboardMetrics } from '../../owner/dashboard/hooks/useDashboardMetrics';
 // Components
 import Button from '../../../components/elements/button';
-import Input   from '../../../components/elements/input';
 import Heading from '../../../components/elements/heading';
 import { Badge } from '../../../components/elements/badge';
 import Card, { CardContent, CardHeader } from '../../../components/elements/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/elements/table';
+import DateRangePicker from '../../../components/elements/date_range_picker';
 // Service & Interface
 import { dashboardService } from '../../../service/http/dashboard/dashboard_service';
 import type { DashboardSummaryItem, SummaryQuery, StockAlertItem, RecentSaleItem, AgingStockItem, StockHealthStats } from '../../../interface/dashboard/dashboard_interface';
@@ -64,7 +64,8 @@ const MainDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   // Filter State
   const [selectedFilter, setSelectedFilter] = useState('daily');
-  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [summaryData, setSummaryData] = useState<DashboardSummaryItem[]>([]);
   // State ส่วน KPI Card สภาพสินค้าคงคลัง
   const [stockHealth, setStockHealth] = useState<StockHealthStats | null>(null);
@@ -78,7 +79,7 @@ const MainDashboard: React.FC = () => {
   // State รายการขายล่าสุด
   const [recentSale, setRecentSale] = useState<RecentSaleItem[]>([]);
   const [recentSaleLoading, setRecentSaleLoading] = useState(false);
-  const isFilterToday = selectedFilter === 'daily' && !selectedDate;
+  const isFilterToday = selectedFilter === 'daily' || (!selectedFilter && !startDate && !endDate) || (startDate === getTodayDateString() && (endDate === getTodayDateString() || !endDate));
   const fmtTime = (iso: string) => {
     const d = new Date(iso);
     if (isFilterToday) {
@@ -103,8 +104,15 @@ const MainDashboard: React.FC = () => {
   const { aggr, marginPct, stockHealthLabel } = useDashboardMetrics(summaryData, stockHealth);
 
   const buildQuery = (): SummaryQuery => {
-    if (selectedDate) return { summary_date: selectedDate };
+    if (startDate && endDate) {
+      if (startDate === endDate) {
+        return { summary_date: startDate };
+      }
+      return { start_date: startDate, end_date: endDate };
+    }
+    if (startDate) return { summary_date: startDate };
     switch (selectedFilter) {
+      case 'daily':     return { summary_date: getTodayDateString() };
       case 'weekly':    return { weekly_summary: '1' };
       case 'monthly':   return { monthly_summary: '1' };
       case 'quarterly': return { quarterly_summary: '1' };
@@ -117,8 +125,24 @@ const MainDashboard: React.FC = () => {
   const dateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
   const buildPrevQuery = (): SummaryQuery | null => {
-    if (selectedDate) {
-      const d = new Date(selectedDate);
+    if (startDate && endDate) {
+      const s = new Date(startDate);
+      const e = new Date(endDate);
+      const diffMs = e.getTime() - s.getTime();
+      const diffDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
+
+      const prevEnd = new Date(s);
+      prevEnd.setDate(prevEnd.getDate() - 1);
+      const prevStart = new Date(prevEnd);
+      prevStart.setDate(prevStart.getDate() - diffDays + 1);
+
+      if (diffDays === 1) {
+        return { summary_date: dateStr(prevStart) };
+      }
+      return { start_date: dateStr(prevStart), end_date: dateStr(prevEnd) };
+    }
+    if (startDate) {
+      const d = new Date(startDate);
       d.setDate(d.getDate() - 1);
       return { summary_date: dateStr(d) };
     }
@@ -148,8 +172,13 @@ const MainDashboard: React.FC = () => {
   };
 
   const getTrendLabel = () => {
-    if (selectedDate) return 'เทียบกับเมื่อวาน';
+    if (startDate && endDate) {
+      if (startDate === endDate) return 'เทียบกับเมื่อวาน';
+      return 'เทียบกับช่วงก่อนหน้า';
+    }
+    if (startDate) return 'เทียบกับเมื่อวาน';
     switch (selectedFilter) {
+      case 'daily':     return 'เทียบกับเมื่อวาน';
       case 'weekly':    return 'เทียบกับสัปดาห์ที่แล้ว';
       case 'monthly':   return 'เทียบกับเดือนที่แล้ว';
       case 'quarterly': return 'เทียบกับไตรมาสที่แล้ว';
@@ -172,7 +201,7 @@ const MainDashboard: React.FC = () => {
       }
     };
     fetch();
-  }, [selectedFilter, selectedDate]);
+  }, [selectedFilter, startDate, endDate]);
 
   useEffect(() => {
     const fetchStockHealth = async () => {
@@ -218,7 +247,7 @@ const MainDashboard: React.FC = () => {
       }
     };
     fetchRecentSalesOrder();
-  }, [selectedFilter, selectedDate]);
+  }, [selectedFilter, startDate, endDate]);
 
   useEffect(() => {
     const fetchAgingStock = async () => {
@@ -258,18 +287,24 @@ const MainDashboard: React.FC = () => {
       }
     };
     fetchTrend();
-  }, [summaryData, selectedFilter, selectedDate]);
+  }, [summaryData, selectedFilter, startDate, endDate]);
 
   const handleFilterClick = (value: string) => {
     setSelectedFilter(value);
-    setSelectedDate('');
+    setStartDate('');
+    setEndDate('');
     setRecentSalePage(1);
   };
 
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newDate = e.target.value;
-    setSelectedDate(newDate);
-    setSelectedFilter(newDate ? '' : 'daily');
+  const handleStartDateChange = (d: string) => {
+    setStartDate(d);
+    setSelectedFilter('');
+    setRecentSalePage(1);
+  };
+
+  const handleEndDateChange = (d: string) => {
+    setEndDate(d);
+    setSelectedFilter('');
     setRecentSalePage(1);
   };
 
@@ -306,19 +341,18 @@ const MainDashboard: React.FC = () => {
         <div className='bg-[#F6F3F2] flex items-center p-1'>
           {Filter.map((filter) => (
             <button key={filter.value} onClick={() => handleFilterClick(filter.value)}
-              className={`w-20 py-2.5 text-sm transition ${selectedFilter === filter.value
-                ? 'bg-white text-red-500 shadow-sm' : 'text-gray-500 hover:text-red-500'}`}
+              className={`w-20 py-2.5 text-sm transition cursor-pointer ${selectedFilter === filter.value
+                ? 'bg-white text-red-500 shadow-sm font-medium' : 'text-gray-500 hover:text-red-500'}`}
             >
               {filter.label}
             </button>
           ))}
-          <div className='min-w-32'>
-            <Input type='date' value={selectedDate} onChange={handleDateChange}
-              className={`transition-all ${selectedDate
-                ? 'bg-white text-red-500 border border-red-500 shadow-sm'
-                : 'bg-transparent text-gray-600 border-transparent'}`}
-            />
-          </div>
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={handleStartDateChange}
+            onEndDateChange={handleEndDateChange}
+          />
         </div>
       </div>
 

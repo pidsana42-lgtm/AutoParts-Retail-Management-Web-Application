@@ -343,6 +343,17 @@ func resolveDateRange(query dashDto.SummaryQuery, now time.Time) (start, end tim
 	startOfYear := time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, now.Location())
 
 	switch {
+	case query.StartDate != "" && query.EndDate != "":
+		s, errS := time.ParseInLocation("2006-01-02", query.StartDate, now.Location())
+		e, errE := time.ParseInLocation("2006-01-02", query.EndDate, now.Location())
+		if errS == nil && errE == nil {
+			return s, e.AddDate(0, 0, 1), true
+		}
+	case query.StartDate != "":
+		s, errS := time.ParseInLocation("2006-01-02", query.StartDate, now.Location())
+		if errS == nil {
+			return s, s.AddDate(0, 0, 1), true
+		}
 	case query.Weekly != "":
 		return startOfWeek, startOfWeek.AddDate(0, 0, 7), true
 	case query.Monthly != "":
@@ -354,4 +365,5 @@ func resolveDateRange(query dashDto.SummaryQuery, now time.Time) (start, end tim
 	default:
 		return time.Time{}, time.Time{}, false
 	}
+	return time.Time{}, time.Time{}, false
 }
