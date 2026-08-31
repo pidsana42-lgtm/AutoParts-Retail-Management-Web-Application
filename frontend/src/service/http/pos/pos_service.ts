@@ -102,6 +102,15 @@ export const posApiService = {
       .post<RevertCancellationRequestResponse>(`/pos/sales-history/${id}/cancel-request/revert`)
       .then((res) => res.data),
 
+  /** ค้นหารายการบิลที่ถูกยกเลิก (สำหรับนำมากู้คืนที่หน้า POS) */
+  getCancelledOrders: (search?: string): Promise<SalesHistoryItemResponse[]> =>
+    apiClient
+      .get<{ data: SalesHistoryPaginationResponse; message: string }>("/pos/sales/history", {
+        params: { search: search || undefined, status: "cancelled", limit: 50 },
+      })
+      .then((res) => res.data?.data?.items || [])
+      .catch(() => []),
+
   /** ดึงรายชื่อพนักงาน */
   getEmployees: (): Promise<any[]> =>
     apiClient

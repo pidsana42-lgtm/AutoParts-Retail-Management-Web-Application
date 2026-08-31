@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import Text from "../../../components/elements/text";
 import Heading from "../../../components/elements/heading";
 import { Card, CardContent } from "../../../components/elements/card";
@@ -33,6 +34,7 @@ import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_hist
 import { useUserRole } from "../../../hooks/useUserRole";
 
 const SalesCancellationHistory: React.FC = () => {
+    const navigate = useNavigate();
     const { isOwnerOrAdmin } = useUserRole();
   // 1. ดึงข้อมูลตารางคำขอยกเลิกจาก useSalesCancellationHistory
     const {
@@ -396,13 +398,30 @@ const SalesCancellationHistory: React.FC = () => {
 
                         {/* จัดการ */}
                         <TableCell className="py-3.5 px-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedOrderId(item.id)}
-                            className="p-1.5 cursor-pointer"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              title="ดูรายละเอียด"
+                              onClick={() => setSelectedOrderId(item.id)}
+                              className="p-1.5 text-gray-500 hover:text-gray-700 cursor-pointer"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            {(item.status || "").toUpperCase() === "CANCELLED" && (
+                              <button
+                                type="button"
+                                title="กู้คืนและแก้ไขที่หน้า POS"
+                                onClick={() =>
+                                  navigate(`/employee/pos/pos?recover_order_id=${item.id}`, {
+                                    state: { recoverOrderId: item.id },
+                                  })
+                                }
+                                className="p-1.5 text-red-600 hover:text-red-800 cursor-pointer"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -870,42 +889,58 @@ const SalesCancellationHistory: React.FC = () => {
 
                     if (status === "CANCELLED" || status === "ยกเลิก") {
                       return (
-                        <Card className="p-4 bg-[#FCF7F7] border border-[#F5DFDF] rounded-none shadow-none space-y-2">
-                          <div className="flex items-center justify-between">
-                            <Text variant="small" className="font-normal text-[#E51C23] mb-0">
-                              สถานะคำขอ: รายการนี้ถูกยกเลิกแล้ว
-                            </Text>
-                            <Badge
-                              variant="neutral"
-                              size="auto"
-                              className="bg-[#E51C23] text-white border-none text-[10px] font-normal rounded-none py-0.5 px-2"
-                            >
-                              {getStatusText ? getStatusText(orderDetail.status) : orderDetail.status}
-                            </Badge>
-                          </div>
-
-                          <div className="text-xs text-[#1C1B1B]">
-                            <div>
-                              <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
-                              <span className="text-[#1C1B1B]">{orderDetail.canceller || "-"}</span>
-                            </div>
-                            <div>
-                              <span className="font-normal text-[#1C1B1B]">เหตุผลการยกเลิก:</span>{" "}
-                              <span className="text-[#1C1B1B]">{orderDetail.cancel_reason || "-"}</span>
-                            </div>
-                            {(orderDetail.cancel_processed_at || orderDetail.cancel_requested_at) && (
-                              <Text variant="xs" className="text-[#1C1B1B] pt-0.5 mb-0">
-                                อนุมัติเมื่อ: {formatDate(orderDetail.cancel_processed_at || orderDetail.cancel_requested_at || "")}
+                        <div className="space-y-3">
+                          <Card className="p-4 bg-[#FCF7F7] border border-[#F5DFDF] rounded-none shadow-none space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Text variant="small" className="font-normal text-[#E51C23] mb-0">
+                                สถานะคำขอ: รายการนี้ถูกยกเลิกแล้ว
                               </Text>
-                            )}
-                            {orderDetail.cancel_remark && (
+                              <Badge
+                                variant="neutral"
+                                size="auto"
+                                className="bg-[#E51C23] text-white border-none text-[10px] font-normal rounded-none py-0.5 px-2"
+                              >
+                                {getStatusText ? getStatusText(orderDetail.status) : orderDetail.status}
+                              </Badge>
+                            </div>
+
+                            <div className="text-xs text-[#1C1B1B]">
                               <div>
-                                <span className="font-normal text-[#1C1B1B]">หมายเหตุ:</span>{" "}
-                                <span className="text-[#1C1B1B]">{orderDetail.cancel_remark}</span>
+                                <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
+                                <span className="text-[#1C1B1B]">{orderDetail.canceller || "-"}</span>
                               </div>
-                            )}
-                          </div>
-                        </Card>
+                              <div>
+                                <span className="font-normal text-[#1C1B1B]">เหตุผลการยกเลิก:</span>{" "}
+                                <span className="text-[#1C1B1B]">{orderDetail.cancel_reason || "-"}</span>
+                              </div>
+                              {(orderDetail.cancel_processed_at || orderDetail.cancel_requested_at) && (
+                                <Text variant="xs" className="text-[#1C1B1B] pt-0.5 mb-0">
+                                  อนุมัติเมื่อ: {formatDate(orderDetail.cancel_processed_at || orderDetail.cancel_requested_at || "")}
+                                </Text>
+                              )}
+                              {orderDetail.cancel_remark && (
+                                <div>
+                                  <span className="font-normal text-[#1C1B1B]">หมายเหตุ:</span>{" "}
+                                  <span className="text-[#1C1B1B]">{orderDetail.cancel_remark}</span>
+                                </div>
+                              )}
+                            </div>
+                          </Card>
+
+                          <Button
+                            type="button"
+                            variant="solid-red"
+                            onClick={() => {
+                              navigate(`/employee/pos/pos?recover_order_id=${orderDetail.id}`, {
+                                state: { recoverOrderId: orderDetail.id }
+                              });
+                            }}
+                            className="w-full text-xs h-10 font-normal rounded-none flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            <span>กู้คืน/แก้ไขรายการที่หน้า POS</span>
+                          </Button>
+                        </div>
                       );
                     }
 
