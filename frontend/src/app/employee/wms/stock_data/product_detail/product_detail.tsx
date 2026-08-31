@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
-import { ChevronLeft, Download, Printer, X, Loader2 } from "lucide-react";
+import { Download, Printer, X, Loader2 } from "lucide-react";
 
 import Heading from "../../../../../components/elements/heading";
+import Breadcrumb from "../../../../../components/elements/breadcrumb";
 import Button from "../../../../../components/elements/button";
 import VariantCodeBadge from "../../../../../components/elements/variant_code_badge";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../../components/elements/card";
@@ -311,24 +312,22 @@ export default function ProductDetailPage() {
 
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
+      <Breadcrumb
+        items={[
+          { label: "คลังสินค้า", path: "/employee/wms/stock-data" },
+          { label: product.Name || "รายละเอียดสินค้า" },
+        ]}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => navigate("/employee/wms/stock-data")}
-            className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
-          >
-            <ChevronLeft size={24} className="text-slate-600" />
-          </button>
-          <div>
-            <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
-              รายละเอียดสินค้า
-            </Heading>
-            <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
-              รหัสสินค้า: {product.ProductCode}
-            </Heading>
-          </div>
+        <div>
+          <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
+            รายละเอียดสินค้า
+          </Heading>
+          <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
+            รหัสสินค้า: {product.ProductCode}
+          </Heading>
         </div>
 
         <span

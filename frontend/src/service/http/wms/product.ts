@@ -40,7 +40,10 @@ const mapProductItem = (item: any): StockItem => ({
     SupplierID: s.supplier_id,
     SupplierName: s.supplier_name || "",
     Quantity: s.quantity || 0,
+    CompanyProductCode: s.company_product_code || "",
+    VariantCode: s.variant_code || "",
   })),
+  DeletedAt: item.deleted_at || undefined,
 });
 
 export const getProductsList = async (): Promise<StockItem[]> => {
@@ -112,6 +115,24 @@ export const createProduct = async (data: any): Promise<any> => {
   return response.data;
 };
 
+// ลบสินค้า (soft delete ฝั่ง backend — ไม่กระทบประวัติการขาย/ใบสั่งซื้อ/สต็อกที่เคยอ้างอิงสินค้านี้)
+export const deleteProduct = async (id: number): Promise<any> => {
+  const response = await apiClient.delete(`/wms/products/${id}`);
+  return response.data;
+};
+
+// รายการสินค้าที่ถูกลบไว้ (หน้าถังขยะ)
+export const getDeletedProductsList = async (): Promise<StockItem[]> => {
+  const response = await apiClient.get<any[]>("/wms/deleted-products");
+  return (response.data || []).map(mapProductItem);
+};
+
+// กู้คืนสินค้าที่เคยลบไว้ กลับมาใช้งานได้ปกติ
+export const restoreProduct = async (id: number): Promise<any> => {
+  const response = await apiClient.post(`/wms/products/${id}/restore`);
+  return response.data;
+};
+
 export const uploadProductImage = async (productId: number, file: File): Promise<any> => {
   const formData = new FormData();
   formData.append("image", file);
@@ -143,7 +164,7 @@ export const updateProduct = async (id: number, data: any): Promise<any> => {
 // รับสินค้าเข้าเพิ่มให้สินค้าที่มีอยู่แล้วในระบบ (ไม่ใช่สร้างสินค้าใหม่) — บวกจำนวน + Supplier เข้ากับของเดิม
 export const receiveStock = async (
   id: number,
-  data: { quantity: number; suppliers: { supplier_id: number; quantity: number }[] }
+  data: { quantity: number; suppliers: { supplier_id: number; quantity: number; company_product_code: string }[] }
 ): Promise<any> => {
   const response = await apiClient.post(`/wms/products/${id}/receive-stock`, data);
   return response.data;

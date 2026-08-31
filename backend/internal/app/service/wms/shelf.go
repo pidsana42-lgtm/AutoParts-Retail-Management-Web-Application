@@ -71,6 +71,7 @@ func toShelfResponse(shelf *entity.Shelf) *wmsDto.ShelfResponseDTO {
 			ID:         l.ID,
 			Level_Name: l.Level_Name,
 			ShelfID:    l.ShelfID,
+			CreatedAt:  l.CreatedAt,
 		})
 	}
 	if levels == nil {
@@ -80,6 +81,7 @@ func toShelfResponse(shelf *entity.Shelf) *wmsDto.ShelfResponseDTO {
 		ID:          shelf.ID,
 		Shelf_Name:  shelf.Shelf_Name,
 		ZoneID:      shelf.ZoneID,
+		CreatedAt:   shelf.CreatedAt,
 		ShelfLevels: levels,
 	}
 }

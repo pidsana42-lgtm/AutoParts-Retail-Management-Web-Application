@@ -97,30 +97,20 @@ func ToPreOrderItemResponseDTO(m *entity.PreOrderItem) PreOrderItemResponseDTO {
 	prodCode := strings.TrimSpace(m.ProductCodeSnapshot)
 	supplierPartCode := strings.TrimSpace(m.SupplierPartCode)
 	supplierName := strings.TrimSpace(m.SupplierName)
-	var productID uint
-	if m.ProductID != nil && *m.ProductID > 0 {
-		productID = *m.ProductID
-		if m.Product != nil {
-			if prodName == "" {
-				prodName = m.Product.Product_Name
+	if m.Product != nil {
+		if prodName == "" {
+			prodName = m.Product.Product_Name
+		}
+		if prodCode == "" {
+			prodCode = m.Product.Product_Code
+		}
+		// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
+		for _, inventory := range m.Product.Inventories {
+			if supplierPartCode == "" && strings.TrimSpace(inventory.CompanyProductCode) != "" {
+				supplierPartCode = strings.TrimSpace(inventory.CompanyProductCode)
 			}
-			if prodCode == "" {
-				prodCode = m.Product.Product_Code
-			}
-			if supplierPartCode == "" {
-				supplierPartCode = strings.TrimSpace(m.Product.CompanyProductCode)
-			}
-
-			for _, inventory := range m.Product.Inventories {
-				if supplierPartCode == "" && strings.TrimSpace(inventory.Variant_Code) != "" {
-					supplierPartCode = strings.TrimSpace(inventory.Variant_Code)
-				}
-				if supplierName == "" && inventory.Supplier != nil {
-					supplierName = strings.TrimSpace(inventory.Supplier.SupplierName)
-				}
-				if supplierPartCode != "" && supplierName != "" {
-					break
-				}
+			if supplierPartCode == "" && strings.TrimSpace(inventory.Variant_Code) != "" {
+				supplierPartCode = strings.TrimSpace(inventory.Variant_Code)
 			}
 
 			if supplierPartCode == "" {
@@ -168,12 +158,20 @@ func ToPreOrderItemForPODTO(m *entity.PreOrderItem) PreOrderItemForPODTO {
 	pSupplierCode := strings.TrimSpace(m.SupplierPartCode)
 	pSupplierName := strings.TrimSpace(m.SupplierName)
 	var pUnit string
-	var productID uint
-	if m.ProductID != nil && *m.ProductID > 0 {
-		productID = *m.ProductID
-		if m.Product != nil {
-			if pCode == "" {
-				pCode = m.Product.Product_Code
+	if m.Product != nil {
+		if pCode == "" {
+			pCode = m.Product.Product_Code
+		}
+		if pName == "" {
+			pName = m.Product.Product_Name
+		}
+		// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
+		for _, inventory := range m.Product.Inventories {
+			if pSupplierCode == "" && inventory.CompanyProductCode != "" {
+				pSupplierCode = inventory.CompanyProductCode
+			}
+			if pSupplierCode == "" && inventory.Variant_Code != "" {
+				pSupplierCode = inventory.Variant_Code
 			}
 			if pName == "" {
 				pName = m.Product.Product_Name

@@ -1,14 +1,16 @@
 import { useState, useMemo, useEffect } from "react";
-import { Trash2, SquarePen } from "lucide-react";
+import { Trash2, SquarePen, Eye } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
 import type { Brand, Model } from "../../../../../interface/wms/stock_data";
 
 // Extracted Modals
 import EditBrandRowModal from "./EditBrandRowModal";
 import AddBrandModelModal from "./AddBrandModelModal";
+import BrandDetailModal from "./BrandDetailModal";
 import TablePagination from "../components/TablePagination";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
+import { buildFuzzyIndex, fuzzyMatchIds } from "../../../../../utils/fuzzySearch";
 
 interface BrandTabProps {
   search: string;
@@ -31,6 +33,8 @@ export default function BrandTab({
   const [addOpen, setAddOpen] = useState(false);
   const [addMode, setAddMode] = useState<"new_brand" | "existing_brand">("new_brand");
   const [editRowOpen, setEditRowOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailBrand, setDetailBrand] = useState<Brand | null>(null);
 
   // Selected records
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
@@ -86,6 +90,18 @@ export default function BrandTab({
     setAddOpen(true);
   };
 
+  const openDetail = (brand: Brand) => {
+    setDetailBrand(brand);
+    setDetailOpen(true);
+  };
+
+  // สร้าง index ไว้แค่ตอน brands เปลี่ยน แล้วค่อยค้นหาแบบ fuzzy ทุกครั้งที่ search เปลี่ยน
+  const allModels = useMemo(() => brands.flatMap((b) => b.models || []), [brands]);
+  const brandSearchIndex = useMemo(() => buildFuzzyIndex(brands, ["brand_name"]), [brands]);
+  const modelSearchIndex = useMemo(() => buildFuzzyIndex(allModels, ["model_name"]), [allModels]);
+  const matchedBrandIds = useMemo(() => fuzzyMatchIds(brandSearchIndex, search), [brandSearchIndex, search]);
+  const matchedModelIds = useMemo(() => fuzzyMatchIds(modelSearchIndex, search), [modelSearchIndex, search]);
+
   const filteredRows = useMemo(() => {
     const list: {
       brand: Brand;
@@ -101,14 +117,11 @@ export default function BrandTab({
         return;
       }
 
-      const matchesSearch = (text: string) =>
-        text.toLowerCase().includes(search.toLowerCase());
-
       const filteredMdls = mdls.filter(
         (md) =>
           !search ||
-          matchesSearch(md.model_name) ||
-          matchesSearch(brand.brand_name)
+          matchedModelIds?.has(md.id) ||
+          matchedBrandIds?.has(brand.id)
       );
 
       if (filteredMdls.length > 0) {
@@ -122,7 +135,7 @@ export default function BrandTab({
         });
       } else if (
         !brandFilter &&
-        (!search || matchesSearch(brand.brand_name))
+        (!matchedBrandIds || matchedBrandIds.has(brand.id))
       ) {
         list.push({
           brand: brand,
@@ -133,7 +146,7 @@ export default function BrandTab({
     });
 
     return list;
-  }, [brands, search, brandFilter]);
+  }, [brands, matchedBrandIds, matchedModelIds, brandFilter]);
 
   // จัดกลุ่มแถวตามแบรนด์หลัก เพื่อแบ่งหน้าโดยไม่ตัดกลุ่มขาดจากกัน
   const groupedByBrand = useMemo(() => {
@@ -189,6 +202,13 @@ export default function BrandTab({
                       {row.model ? (
                         <>
                           <button
+                            onClick={() => openDetail(row.brand)}
+                            className="hover:text-slate-700 transition-colors"
+                            title="ดูรายละเอียดแบรนด์"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button
                             onClick={() => openEditRow(row.brand, row.model!)}
                             className="hover:text-slate-700 transition-colors"
                             title="แก้ไขข้อมูลแถวนี้"
@@ -206,6 +226,13 @@ export default function BrandTab({
                       ) : (
                         row.isFirst && (
                           <>
+                            <button
+                              onClick={() => openDetail(row.brand)}
+                              className="hover:text-slate-700 transition-colors"
+                              title="ดูรายละเอียดแบรนด์"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
                             <button
                               onClick={() => openEditRow(row.brand)}
                               className="hover:text-slate-700 transition-colors"
@@ -261,6 +288,12 @@ export default function BrandTab({
         model={selectedModel}
         brands={brands}
         onSuccess={reloadBrands}
+      />
+
+      <BrandDetailModal
+        isOpen={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        brand={detailBrand}
       />
     </>
   );

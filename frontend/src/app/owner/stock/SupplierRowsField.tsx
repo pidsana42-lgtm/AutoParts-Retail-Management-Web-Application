@@ -5,6 +5,9 @@ import Input from "../../../components/elements/input";
 export interface SupplierRow {
   supplier_id: string;
   quantity: string;
+  // company_code: รหัสสินค้าตามที่ Supplier เจ้านี้ใช้เรียกสินค้าชิ้นนี้ (ไม่บังคับ) — ผูกกับ Supplier แต่ละแถว
+  // เพราะสินค้า 1 ชื่อในร้านมาได้จากหลายบริษัท แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน
+  company_code: string;
 }
 
 interface SupplierOption {
@@ -19,11 +22,11 @@ interface SupplierRowsFieldProps {
   disabled?: boolean;
 }
 
-// สินค้า 1 ชิ้น รับมาจาก Supplier ได้หลายเจ้า แยกจำนวนที่รับจากแต่ละเจ้า (บันทึกลงตาราง Inventory)
-// ใช้ร่วมกันทั้งหน้าเพิ่ม/แก้ไขสินค้า
+// สินค้า 1 ชิ้น รับมาจาก Supplier ได้หลายเจ้า แยกจำนวน + รหัสสินค้าของแต่ละเจ้า (บันทึกลงตาราง Inventory)
+// ใช้ร่วมกันทั้งหน้าเพิ่ม/แก้ไขสินค้า และหน้ารับสินค้าเข้าเพิ่ม
 export default function SupplierRowsField({ rows, onChange, options, disabled }: SupplierRowsFieldProps) {
   const handleAddRow = () => {
-    onChange([...rows, { supplier_id: "", quantity: "" }]);
+    onChange([...rows, { supplier_id: "", quantity: "", company_code: "" }]);
   };
 
   const handleRemoveRow = (index: number) => {
@@ -64,7 +67,7 @@ export default function SupplierRowsField({ rows, onChange, options, disabled }:
       ) : (
         <div className="flex flex-col gap-2">
           {rows.map((row, index) => (
-            <div key={index} className="flex items-center gap-2">
+            <div key={index} className="flex flex-col gap-2 rounded-sm border border-slate-100 bg-slate-50 p-2 sm:flex-row sm:items-start">
               <div className="flex-1">
                 <Select
                   options={[{ label: "เลือก Supplier...", value: "" }, ...optionsForRow(index)]}
@@ -73,7 +76,7 @@ export default function SupplierRowsField({ rows, onChange, options, disabled }:
                   disabled={disabled}
                 />
               </div>
-              <div className="w-32">
+              <div className="w-full sm:w-28">
                 <Input
                   type="number"
                   min={0}
@@ -83,11 +86,19 @@ export default function SupplierRowsField({ rows, onChange, options, disabled }:
                   disabled={disabled}
                 />
               </div>
+              <div className="w-full sm:w-44">
+                <Input
+                  placeholder="รหัสสินค้าของบริษัท (ถ้ามี)"
+                  value={row.company_code}
+                  onChange={(e) => handleRowChange(index, { company_code: e.target.value })}
+                  disabled={disabled}
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => handleRemoveRow(index)}
                 disabled={disabled}
-                className="shrink-0 cursor-pointer rounded-md p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="shrink-0 cursor-pointer self-center rounded-md p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                 title="ลบแถวนี้"
               >
                 <X className="h-4 w-4" />
@@ -101,14 +112,26 @@ export default function SupplierRowsField({ rows, onChange, options, disabled }:
 }
 
 // สร้าง state เริ่มต้นจาก suppliers ที่โหลดมาจากสินค้าเดิม (ใช้ตอนเปิดหน้าแก้ไข)
-export function suppliersToRows(suppliers?: { SupplierID: number; Quantity: number }[]): SupplierRow[] {
+export function suppliersToRows(
+  suppliers?: { SupplierID: number; Quantity: number; CompanyProductCode?: string }[]
+): SupplierRow[] {
   if (!suppliers || suppliers.length === 0) return [];
-  return suppliers.map((s) => ({ supplier_id: String(s.SupplierID), quantity: String(s.Quantity) }));
+  return suppliers.map((s) => ({
+    supplier_id: String(s.SupplierID),
+    quantity: String(s.Quantity),
+    company_code: s.CompanyProductCode || "",
+  }));
 }
 
 // แปลง state ของฟอร์มกลับเป็น payload ที่ backend ต้องการ ก่อนส่ง (ตัดแถวที่ยังไม่ได้เลือก Supplier ทิ้ง)
-export function rowsToPayload(rows: SupplierRow[]): { supplier_id: number; quantity: number }[] {
+export function rowsToPayload(
+  rows: SupplierRow[]
+): { supplier_id: number; quantity: number; company_product_code: string }[] {
   return rows
     .filter((r) => r.supplier_id)
-    .map((r) => ({ supplier_id: Number(r.supplier_id), quantity: Number(r.quantity) || 0 }));
+    .map((r) => ({
+      supplier_id: Number(r.supplier_id),
+      quantity: Number(r.quantity) || 0,
+      company_product_code: r.company_code.trim(),
+    }));
 }
