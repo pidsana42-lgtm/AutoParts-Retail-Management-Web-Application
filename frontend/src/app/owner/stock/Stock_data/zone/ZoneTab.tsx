@@ -1,13 +1,15 @@
 import { useState, useMemo, useEffect } from "react";
-import { Trash2, SquarePen } from "lucide-react";
+import { Trash2, SquarePen, Eye } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Zone, Shelf, ShelfLevel } from "../../../../../interface/wms/stock_data";
+import { buildFuzzyIndex, fuzzyMatchIds } from "../../../../../utils/fuzzySearch";
 
 // Extracted Modals
 import AddZoneShelfModal from "./AddZoneShelfModal";
 import EditRowModal from "./EditRowModal";
+import ZoneDetailModal from "./ZoneDetailModal";
 import TablePagination from "../components/TablePagination";
 
 interface ZoneTabProps {
@@ -33,6 +35,8 @@ export default function ZoneTab({
   const [addOpen, setAddOpen] = useState(false);
   const [addMode, setAddMode] = useState<"new_zone" | "existing_zone">("new_zone");
   const [editRowOpen, setEditRowOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailZone, setDetailZone] = useState<Zone | null>(null);
 
   // Selected records
   const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
@@ -99,6 +103,17 @@ export default function ZoneTab({
     setAddOpen(true);
   };
 
+  const openDetail = (zone: Zone) => {
+    setDetailZone(zone);
+    setDetailOpen(true);
+  };
+
+  // สร้าง index ไว้แค่ตอน zones/shelves เปลี่ยน แล้วค่อยค้นหาแบบ fuzzy ทุกครั้งที่ search เปลี่ยน
+  const zoneSearchIndex = useMemo(() => buildFuzzyIndex(zones, ["zone_name"]), [zones]);
+  const shelfSearchIndex = useMemo(() => buildFuzzyIndex(shelves, ["shelf_name"]), [shelves]);
+  const matchedZoneIds = useMemo(() => fuzzyMatchIds(zoneSearchIndex, search), [zoneSearchIndex, search]);
+  const matchedShelfIds = useMemo(() => fuzzyMatchIds(shelfSearchIndex, search), [shelfSearchIndex, search]);
+
   const filteredRows = useMemo(() => {
     const list: {
       zone: Zone;
@@ -118,15 +133,10 @@ export default function ZoneTab({
         return;
       }
 
-      const matchesSearch = (text: string) =>
-        text.toLowerCase().includes(search.toLowerCase());
-
       const filteredShlvs = shlvs
         .filter(
           (sh) =>
-            !search ||
-            matchesSearch(sh.shelf_name) ||
-            matchesSearch(zone.zone_name)
+            !search || matchedShelfIds?.has(sh.id) || matchedZoneIds?.has(zone.id)
         )
         .map((sh) => {
           if (sh.shelf_levels) {
@@ -149,7 +159,7 @@ export default function ZoneTab({
         });
       } else if (
         !zoneFilter &&
-        (!search || matchesSearch(zone.zone_name))
+        (!matchedZoneIds || matchedZoneIds.has(zone.id))
       ) {
         list.push({
           zone: zone,
@@ -160,7 +170,7 @@ export default function ZoneTab({
     });
 
     return list;
-  }, [zones, shelves, search, zoneFilter]);
+  }, [zones, shelves, matchedZoneIds, matchedShelfIds, zoneFilter]);
 
   // จัดกลุ่มแถวตามโซนหลัก เพื่อแบ่งหน้าโดยไม่ตัดกลุ่มขาดจากกัน
   const groupedByZone = useMemo(() => {
@@ -235,6 +245,13 @@ export default function ZoneTab({
                         {row.shelf.shelf_levels.map((lvl, idx, arr) => (
                           <div key={lvl.id} className={`px-6 py-3 flex items-center justify-end gap-3 text-slate-400 ${idx !== arr.length - 1 ? 'border-b border-slate-100' : ''}`}>
                             <button
+                              onClick={() => openDetail(row.zone)}
+                              className="hover:text-slate-700 transition-colors"
+                              title="ดูรายละเอียดโซน"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
                               onClick={() => openEditRow(row.zone, row.shelf, lvl)}
                               className="hover:text-slate-700 transition-colors"
                               title="แก้ไขข้อมูลแถวนี้"
@@ -256,6 +273,13 @@ export default function ZoneTab({
                         {row.shelf ? (
                           <div className="flex items-center gap-3 text-slate-400">
                             <button
+                              onClick={() => openDetail(row.zone)}
+                              className="hover:text-slate-700 transition-colors"
+                              title="ดูรายละเอียดโซน"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
                               onClick={() => openEditRow(row.zone, row.shelf)}
                               className="hover:text-slate-700 transition-colors"
                               title="แก้ไขข้อมูลแถวนี้"
@@ -273,6 +297,13 @@ export default function ZoneTab({
                         ) : (
                           row.isFirst && (
                             <div className="flex items-center gap-4 text-slate-400">
+                              <button
+                                onClick={() => openDetail(row.zone)}
+                                className="hover:text-slate-700 transition-colors"
+                                title="ดูรายละเอียดโซน"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </button>
                               <button
                                 onClick={() => openEditRow(row.zone)}
                                 className="hover:text-slate-700 transition-colors"
@@ -330,6 +361,13 @@ export default function ZoneTab({
         zones={zones}
         shelves={shelves}
         onSuccess={loadData}
+      />
+
+      <ZoneDetailModal
+        isOpen={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        zone={detailZone}
+        shelves={shelves}
       />
     </>
   );
