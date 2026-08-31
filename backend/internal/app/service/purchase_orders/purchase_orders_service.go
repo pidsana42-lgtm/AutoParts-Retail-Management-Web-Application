@@ -96,7 +96,7 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 		}
 
 		productName := product.Product_Name
-		productCode := product.CompanyProductCode
+		productCode := companyProductCodeForSupplier(product, req.SupplierID)
 		var unitName string
 		if product.Unit != nil {
 			unitName = product.Unit.Unit_Name
@@ -593,7 +593,7 @@ func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto
 			item := poEntity.POItems{
 				ProductID:                    it.ProductID,
 				Product_name_snapshot:        product.Product_Name,
-				Supply_product_code_snapshot: product.CompanyProductCode,
+				Supply_product_code_snapshot: companyProductCodeForSupplier(product, po.SupplierID),
 				Quantity:                     float64(it.Quantity),
 				Unit:                         unitName,
 				UnitPrice:                    it.UnitPrice,
@@ -740,4 +740,19 @@ func (s *purchaseOrderService) SendStaleDraftReminders(ctx context.Context) erro
 	}
 
 	return nil
+}
+
+// companyProductCodeForSupplier: หารหัสสินค้าที่ Supplier เจ้านี้ใช้เรียกสินค้าชิ้นนี้ (จาก Inventory ที่ preload มาแล้ว)
+// CompanyProductCode ย้ายมาอยู่ที่ Inventory แทน Product โดยตรง เพราะสินค้า 1 ชิ้นมาจากหลาย Supplier ได้
+// แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน — คืนค่าว่างถ้าสินค้านี้ยังไม่เคยรับมาจาก Supplier เจ้านี้
+func companyProductCodeForSupplier(product *poEntity.Product, supplierID uint) string {
+	if product == nil {
+		return ""
+	}
+	for _, inv := range product.Inventories {
+		if inv.SupplierID == supplierID {
+			return inv.CompanyProductCode
+		}
+	}
+	return ""
 }

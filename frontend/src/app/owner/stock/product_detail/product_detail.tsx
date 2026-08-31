@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
-import { ChevronLeft, Download, Printer, X, Loader2 } from "lucide-react";
+import { Download, Printer, X, Loader2 } from "lucide-react";
 
 import Heading from "../../../../components/elements/heading";
+import Breadcrumb from "../../../../components/elements/breadcrumb";
 import Button from "../../../../components/elements/button";
 import VariantCodeBadge from "../../../../components/elements/variant_code_badge";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
@@ -59,6 +60,9 @@ function traceRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // ที่มาของการเข้าหน้านี้ (ถ้ามี) — ใช้ปรับเกล็ดขนมปังให้ตรงกับหน้าที่กดเข้ามาจริงๆ เช่นจากหน้า "การเคลื่อนไหวของคลังสินค้า"
+  const location = useLocation();
+  const cameFromMovement = (location.state as { from?: string } | null)?.from === "movement";
 
   const [product, setProduct] = useState<StockItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -311,24 +315,36 @@ export default function ProductDetailPage() {
 
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
+      <Breadcrumb
+        items={
+          // สินค้าที่ถูกลบไว้ (ดูได้ทางเดียวคือกด "ดูรายละเอียด" จากหน้าถังขยะ) ให้ breadcrumb ไล่ผ่านถังขยะด้วย
+          product.DeletedAt
+            ? [
+                { label: "คลังสินค้า", path: "/owner/stock" },
+                { label: "ถังขยะสินค้า", path: "/owner/stock/trash" },
+                { label: product.Name || "รายละเอียดสินค้า" },
+              ]
+            : cameFromMovement
+              ? [
+                  { label: "การเคลื่อนไหวของคลังสินค้า", path: "/owner/stock/stock-movement" },
+                  { label: product.Name || "รายละเอียดสินค้า" },
+                ]
+              : [
+                  { label: "คลังสินค้า", path: "/owner/stock" },
+                  { label: product.Name || "รายละเอียดสินค้า" },
+                ]
+        }
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => navigate("/owner/stock")}
-            className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
-          >
-            <ChevronLeft size={24} className="text-slate-600" />
-          </button>
-          <div>
-            <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
-              รายละเอียดสินค้า
-            </Heading>
-            <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
-              รหัสสินค้า: {product.ProductCode}
-            </Heading>
-          </div>
+        <div>
+          <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
+            รายละเอียดสินค้า
+          </Heading>
+          <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
+            รหัสสินค้า: {product.ProductCode}
+          </Heading>
         </div>
 
         <span
@@ -422,14 +438,15 @@ export default function ProductDetailPage() {
                               key={s.SupplierID}
                               className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-slate-100 bg-slate-50 px-2 py-1"
                             >
-                              <div className="flex flex-col leading-tight">
-                                <span className="font-medium text-slate-700">
-                                  {s.SupplierName || `Supplier #${s.SupplierID}`}
-                                </span>
-                                <span className="text-xs text-slate-500">
-                                  คงเหลือ {s.Quantity} {product.Unit || "ชิ้น"}
-                                </span>
+                              <div className="min-w-0">
+                                <span className="font-medium text-slate-700">{s.SupplierName || `Supplier #${s.SupplierID}`}</span>
+                                {s.CompanyProductCode && (
+                                  <span className="ml-2 text-xs text-slate-400">รหัส: {s.CompanyProductCode}</span>
+                                )}
                               </div>
+                              <span className="shrink-0 text-slate-500">
+                                {s.Quantity} {product.Unit || "ชิ้น"}
+                              </span>
                               {s.VariantCode && (
                                 <VariantCodeBadge code={s.VariantCode} label="รหัสล็อตบริษัทนี้" />
                               )}

@@ -7,7 +7,7 @@ import Heading from '../../../components/elements/heading';
 import Input from '../../../components/elements/input';
 import Select from '../../../components/elements/select';
 import Button from '../../../components/elements/button';
-import Modal from '../../../components/elements/modal';
+import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { useToast } from '../../../components/elements/toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/elements/table';
 // Interface
@@ -348,7 +348,7 @@ const DeletedPoHistory: React.FC = () => {
         </Button>
       </div>
 
-      <Modal
+      <ConfirmDialog
         isOpen={isRestoreConfirmOpen}
         onClose={() => setIsRestoreConfirmOpen(false)}
         onConfirm={handleBulkRestore}
