@@ -33,6 +33,19 @@ func (r *saleOrderLookupRepository) GetSaleOrderByNumber(orderNumber string) (*e
 	err := r.db.Preload("Customer").
 		Preload("Items").
 		Where("order_number = ?", orderNumber).
+		Where("sale_orders.deleted_at IS NULL").
+		Where(`NOT EXISTS (
+			SELECT 1 FROM sales_returns sr
+			WHERE sr.original_order_id = sale_orders.id
+			  AND sr.deleted_at IS NULL
+			  AND LOWER(TRIM(COALESCE(sr.status, ''))) <> 'rejected'
+		)`).
+		Where(`NOT EXISTS (
+			SELECT 1 FROM customer_claims cc
+			WHERE cc.original_order_id = sale_orders.id
+			  AND cc.deleted_at IS NULL
+			  AND LOWER(TRIM(COALESCE(cc.status, ''))) <> 'rejected'
+		)`).
 		First(&order).Error
 	if err != nil {
 		return nil, err
@@ -51,6 +64,18 @@ func (r *saleOrderLookupRepository) SearchSaleOrders(query string) ([]entity.Sal
 			like, like, like,
 		).
 		Where("sale_orders.deleted_at IS NULL").
+		Where(`NOT EXISTS (
+			SELECT 1 FROM sales_returns sr
+			WHERE sr.original_order_id = sale_orders.id
+			  AND sr.deleted_at IS NULL
+			  AND LOWER(TRIM(COALESCE(sr.status, ''))) <> 'rejected'
+		)`).
+		Where(`NOT EXISTS (
+			SELECT 1 FROM customer_claims cc
+			WHERE cc.original_order_id = sale_orders.id
+			  AND cc.deleted_at IS NULL
+			  AND LOWER(TRIM(COALESCE(cc.status, ''))) <> 'rejected'
+		)`).
 		Limit(10).
 		Find(&orders).Error
 	return orders, err

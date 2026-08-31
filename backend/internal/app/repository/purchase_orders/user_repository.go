@@ -23,7 +23,7 @@ func NewUserRepository(db *gorm.DB) UserRepository {
 func (r *userRepository) FindByID(ctx context.Context, id uint) (*poEntity.User, error) {
 	var user poEntity.User
 
-	err := r.db.WithContext(ctx).First(&user, id).Error
+	err := r.db.WithContext(ctx).Preload("Role").First(&user, id).Error
 
 	if err != nil {
 		return nil, err

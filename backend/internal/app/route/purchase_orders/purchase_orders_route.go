@@ -6,6 +6,8 @@ import (
 	poSvc "backend/internal/app/service/purchase_orders"
 	preOrderRepo "backend/internal/app/repository/pre_oder"
 	wmsRepo "backend/internal/app/repository/wms"
+	svcNotification "backend/internal/app/service/notification"
+	"backend/internal/app/cron"
 
 	"backend/internal/app/enum"
 	"backend/internal/middleware"
@@ -13,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupPORoutes(r *gin.Engine, db *gorm.DB) {
+func SetupPORoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotification.NotificationService) {
 	poRepository := poRepo.NewPORepository(db)
 	productRepository := poRepo.NewProductRepository(db)
 	supplierRepository := poRepo.NewSupplierRepository(db)
@@ -29,7 +31,10 @@ func SetupPORoutes(r *gin.Engine, db *gorm.DB) {
 		preOrderRepository,
 		userRepository,
 		stockAlertRepository,
+		notificationService,
 	)
+
+	cron.StartPOReminderCron(poService)
 
 	poController := poCtrl.NewPOController(poService)
 

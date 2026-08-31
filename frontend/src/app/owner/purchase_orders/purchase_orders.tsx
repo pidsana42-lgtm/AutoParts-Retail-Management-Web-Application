@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShoppingBasket, CircleCheck, PenLine, Eye, Printer, Trash2, Info,
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RotateCcw,
-  TrendingUp,
-  TrendingDown, } from "lucide-react";
+import { ShoppingBasket, CircleCheck, PenLine, Eye, Printer, Trash2, Info, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+  TrendingUp, TrendingDown, ReceiptText, } from "lucide-react";
 // Components
 import Heading from "../../../components/elements/heading";
 import Input   from "../../../components/elements/input";
 import Select , { type SelectOption }  from "../../../components/elements/select";
 import Button  from "../../../components/elements/button";
 import { Badge } from "../../../components/elements/badge";
+import Modal from "../../../components/elements/modal";
+import { useToast } from "../../../components/elements/toast";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../components/elements/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../components/elements/table";
 import { useRejectedBreakdownModal } from "./hooks/useRejectedBreakdownModal";
@@ -33,18 +33,17 @@ function StatusBadge({ status }: { status: string }) {
     return <Badge variant="success">อนุมัติแล้ว</Badge>;
   if (status === "RESUBMITTED")
     return <Badge variant="destructive">รอส่งอนุมัติใหม่</Badge>;
-  if (status === "CANCELLED")
-    return <Badge variant="outline" className="bg-red-100 border-none text-red-700">ยกเลิกแล้ว</Badge>;
-  if (status === "DELETED")
-    return <Badge variant="outline" className="bg-orange-100 border-none text-orange-700">อยู่ในถังขยะ</Badge>;
   return <Badge variant="outline">{status}</Badge>;
 }
 
 function ActionButtons({ id, status }: { id: number; status: string }) {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const userRole = localStorage.getItem('role');
   const basePath = usePathBasePrefix();
   const [isPrinting, setIsPrinting] = useState(false);
+  const [confirmationAction, setConfirmationAction] = useState<"approve" | "delete" | null>(null);
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   const printOptions: SelectOption[] = [
     { label: "พิมพ์พร้อมรหัสสินค้า", value: "with_code" },
@@ -73,69 +72,103 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
   };
 
   const handleApprove = async () => {
-    if (!id) return;
-    const confirmed = window.confirm('คุณต้องการอนุมัติใบสั่งซื้อนี้ใช่หรือไม่? หรือถ้ายังไม่แน่ใจสามารถดูรายละเอียดก่อนได้นะ')
-    if (!confirmed) return;
+    if (!id || isActionLoading) return;
+    setIsActionLoading(true);
     try {
       await poService.updatePOStatus(id, 'APPROVED');
-      alert('อนุมัติใบสั่งซื้อแล้ว')
-      window.location.reload()
+      toast({
+        title: 'ดำเนินการสำเร็จ',
+        message: 'อนุมัติใบสั่งซื้อแล้ว',
+        variant: 'success',
+        duration: 4000,
+      });
+      setConfirmationAction(null);
+      setTimeout(() => window.location.reload(), 4000)
     } catch {
-      alert('ไม่สามารถอนุมัติใบสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง');
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        message: 'ไม่สามารถอนุมัติใบสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง',
+        variant: 'error',
+      });
+    } finally {
+      setIsActionLoading(false);
     }
   }
 
   const handleDelete = async () => {
-    if (!id) return;
-    const confirmed = window.confirm('คุณต้องการลบใบสั่งซื้อนี้ใช่หรือไม่? (สามารถกู้คืนได้จากถังขยะ)')
-    if (!confirmed) return;
+    if (!id || isActionLoading) return;
+    setIsActionLoading(true);
     try {
       await poService.deletePurchaseOrder(id);
-      alert('ลบใบสั่งซื้อสำเร็จ')
-      window.location.reload()
+      toast({
+        title: 'ดำเนินการสำเร็จ',
+        message: 'ลบใบสั่งซื้อสำเร็จ',
+        variant: 'success',
+        duration: 4000,
+      });
+      setConfirmationAction(null);
+      setTimeout(() => window.location.reload(), 4000)
     } catch {
-      alert('ไม่สามารถลบใบสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง');
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        message: 'ไม่สามารถลบใบสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง',
+        variant: 'error',
+      });
+    } finally {
+      setIsActionLoading(false);
     }
   }
 
-  const handleRestore = async () => {
-    if (!id) return;
-    const confirmed = window.confirm('คุณต้องการกู้คืนใบสั่งซื้อที่หมดอายุนี้ใช่หรือไม่? (ระบบจะเปลี่ยนสถานะกลับเป็นฉบับร่าง)');
-    if (!confirmed) return;
-    try {
-      await poService.updatePOStatus(id, 'DRAFT');
-      alert('กู้คืนใบสั่งซื้อสำเร็จ');
-      window.location.reload(); 
-    } catch {
-      alert('ไม่สามารถอนุมัติใบสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง');
-    }
-  };
+  const confirmationModal = (
+    <Modal
+      isOpen={confirmationAction !== null}
+      onClose={() => !isActionLoading && setConfirmationAction(null)}
+      title={confirmationAction === "delete" ? "ยืนยันการลบใบสั่งซื้อ" : "ยืนยันการอนุมัติใบสั่งซื้อ"}
+      description={confirmationAction === "delete"
+        ? "คุณต้องการลบใบสั่งซื้อนี้ใช่หรือไม่? สามารถกู้คืนได้จากถังขยะ"
+        : "คุณต้องการอนุมัติใบสั่งซื้อนี้ใช่หรือไม่?"}
+      onConfirm={() => {
+        if (confirmationAction === "approve") void handleApprove();
+        if (confirmationAction === "delete") void handleDelete();
+      }}
+      confirmText={confirmationAction === "delete" ? "ยืนยันการลบ" : "ยืนยันการอนุมัติ"}
+      cancelText="ยกเลิก"
+      variant={confirmationAction === "delete" ? "danger" : "success"}
+      isSubmitting={isActionLoading}
+    />
+  );
 
   // สถานะ: ฉบับร่าง หรือไม่ผ่านอนุมัติ รอส่งพิจารณาใหม่
   if (status === "DRAFT" || status === "RESUBMITTED") {
     return (
-      <div className="flex items-start justify-center gap-3">
-        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <PenLine size={16}/>
-        </button>
-        <button onClick={handleDelete} className="text-red-600 hover:text-red-700 transition cursor-pointer">
-          <Trash2 size={16} />
-        </button>
-      </div>
+      <>
+        <div className="flex items-start justify-center gap-3">
+          <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
+            <PenLine size={16}/>
+          </button>
+          <button onClick={() => setConfirmationAction("delete")} className="text-red-600 hover:text-red-700 transition cursor-pointer">
+            <Trash2 size={16} />
+          </button>
+        </div>
+        {confirmationModal}
+      </>
     );
   }
 
   // สถานะ: รออนุมัติ
   if (status === "PENDING" && userRole === 'Owner') {
     return (
-      <div className="flex items-center justify-center gap-3">
-        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <Eye size={16} />
-        </button>
-        <button onClick={handleApprove} className="text-emerald-600 hover:text-emerald-700 rounded transition cursor-pointer">
-          <CircleCheck size={16} />
-        </button>
-      </div>
+      <>
+        <div className="flex items-center justify-center gap-3">
+          <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
+            <Eye size={16} />
+          </button>
+          <button onClick={() => setConfirmationAction("approve")} className="text-emerald-600 hover:text-emerald-700 rounded transition cursor-pointer">
+            <CircleCheck size={16} />
+          </button>
+        </div>
+        {confirmationModal}
+      </>
     );
   }
 
@@ -144,31 +177,6 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
       <div className="flex items-center justify-center gap-3">
         <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
           <Eye size={16} />
-        </button>
-      </div>
-    );
-  }
-
-  // สถานะ: ยกเลิกแล้ว (ดูได้อย่างเดียว ไม่สามารถกู้คืนได้)
-  if (status === "CANCELLED") {
-    return (
-      <div className="flex items-center justify-center gap-3">
-        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <Eye size={16} />
-        </button>
-      </div>
-    );
-  }
-
-  // สถานะ: อยู่ในถังขยะ (กู้คืนได้)
-  if (status === "DELETED") {
-    return (
-      <div className="flex items-center justify-center gap-3">
-        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <Eye size={16} />
-        </button>
-        <button onClick={handleRestore} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
-          <RotateCcw size={16} />
         </button>
       </div>
     );
@@ -227,7 +235,6 @@ const PO_STATUS_OPTIONS = [
   { label: "รออนุมัติ", value: "PENDING" },
   { label: "อนุมัติแล้ว", value: "APPROVED" },
   { label: "รอส่งอนุมัติใหม่", value: "RESUBMITTED" },
-  { label: "ยกเลิกแล้ว", value: "CANCELLED" },
 ];
 
 // ─── Page ──────────
@@ -344,9 +351,18 @@ const PurchaseOrders: React.FC = () => {
   }, []);
 
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const displayOrders = statusFilter === "all"
+    ? orders.filter(po => po.status !== "CANCELLED" && po.status !== "DELETED")
+    : orders;
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
-    <div className="p-8 space-y-6 bg-gray-50 min-h-screen font-sans">
+    <div className="p-8 space-y-6 bg-white min-h-screen font-sans">
 
       {/* 1. Header */}
       <div className="flex items-center justify-between">
@@ -438,13 +454,13 @@ const PurchaseOrders: React.FC = () => {
           <Card className="border-l-[5px] border-l-black flex flex-col justify-between h-24 p-5">
             <Heading level="p" className="text-[#6B7280] font-medium">รออนุมัติ</Heading>
             <Heading level="h3" className="font-bold mt-1 text-black">
-              ฿{(summary?.pending_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ฿ {(summary?.pending_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Heading>
           </Card>
           <Card className="border-l-[5px] border-l-emerald-500 flex flex-col justify-between h-24 p-5">
             <Heading level="p" className="text-[#6B7280] font-medium">อนุมัติแล้ว (MTD)</Heading>
             <Heading level="h3" className="font-bold mt-1 text-black">
-              ฿{(summary?.approved_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ฿ {(summary?.approved_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Heading>
           </Card>
           <Card
@@ -458,7 +474,7 @@ const PurchaseOrders: React.FC = () => {
               </span>
             </div>
             <Heading level="h3" className="font-bold mt-1 text-black group-hover:text-red-600 transition-colors">
-              ฿{(summary?.rejected_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ฿ {(summary?.rejected_mtd_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Heading>
           </Card>
         </div>
@@ -495,8 +511,8 @@ const PurchaseOrders: React.FC = () => {
                   {error}
                 </TableCell>
               </TableRow>
-            ) : orders.length > 0 ? (
-              orders.map((po) => {
+            ) : displayOrders.length > 0 ? (
+              displayOrders.map((po) => {
                 // คำนวณจำนวนรายการและจำนวนชิ้นจาก array po_items
                 const totalItemTypes = po.po_items?.length || 0;
                 const totalQuantity = po.po_items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
@@ -522,7 +538,9 @@ const PurchaseOrders: React.FC = () => {
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-12 text-gray-500">ไม่พบข้อมูลใบสั่งซื้อ</TableCell>
+                <TableCell colSpan={9} className="text-center py-12 text-gray-400">
+                  <ReceiptText size={40} strokeWidth={0.7} className='mx-auto'/> <br />ไม่พบข้อมูลใบสั่งซื้อ
+                  </TableCell>
               </TableRow>
             )}
           </TableBody>

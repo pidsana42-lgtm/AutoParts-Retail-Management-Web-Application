@@ -2,11 +2,13 @@ package claim
 
 import (
 	"fmt"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	claimDTO "backend/internal/app/dto/claim"
+	claimRepo "backend/internal/app/repository/claim"
 	claimSvc "backend/internal/app/service/claim"
 	"github.com/gin-gonic/gin"
 )
@@ -38,6 +40,10 @@ func (ctrl *CustomerClaimController) CreateCustomerClaim(c *gin.Context) {
 
 	res, err := ctrl.svc.CreateCustomerClaim(input, createdBy)
 	if err != nil {
+		if errors.Is(err, claimRepo.ErrOrderInProgress) {
+			c.JSON(http.StatusConflict, gin.H{"error": "sale order is already being claimed or returned"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create customer claim: " + err.Error()})
 		return
 	}

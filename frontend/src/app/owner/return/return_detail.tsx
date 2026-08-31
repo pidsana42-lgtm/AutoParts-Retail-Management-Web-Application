@@ -1,295 +1,386 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ChevronLeft, CheckCircle, Clock, XCircle, 
-  Calendar, Phone, User, Package, Lock
-} from 'lucide-react';
-import { useAuth } from '../../../contexts/AuthContexts';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { AlertCircle, Banknote, Calendar, ChevronRight, CircleCheck, ClipboardClock, Loader2, Lock, Phone, User, XCircle } from 'lucide-react';
+// Components
 import Heading from '../../../components/elements/heading';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../components/elements/card';
+import Badge from '../../../components/elements/badge';
+import Card, { CardContent, CardHeader, CardTitle } from '../../../components/elements/card';
 import Button from '../../../components/elements/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/elements/table';
+// Service + Interface + Utils
+import type { SalesReturn } from '../../../interface/return/return_interface';
+import { returnService } from '../../../service/http/return/return_service';
+import { formatDateThai } from '../../../utils/formatdate';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
+import { useToast } from '../../../components/elements/toast';
+import Modal from '../../../components/elements/modal';
 
-interface ReturnItem {
-  id: number;
-  return_no: string;
-  return_date: string;
-  customer_name: string;
-  customer_phone: string;
-  quantity: number;
-  amount: number;
-  status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
-  reason?: string;
-  remarks?: string;
-}
+const STATUS_LABEL: Record<string, string> = {
+  REFUNDED: 'คืนเงินจริงแล้ว',
+  PENDING: 'รออนุมัติ',
+  APPROVED: 'อนุมัติแล้ว',
+  REJECTED: 'ปฏิเสธ',
+};
 
-const DEFAULT_RETURNS: ReturnItem[] = [
-  {
-    id: 1,
-    return_no: 'RTN-2026-0001',
-    return_date: '2026-07-01T09:00:00Z',
-    customer_name: 'บริษัท สมหวังไอที จำกัด',
-    customer_phone: '02-345-6789',
-    quantity: 1,
-    amount: 12500,
-    status: 'PENDING',
-    reason: 'ORDER_ERROR',
-    remarks: 'ลูกค้าแจ้งสั่งซื้อเครื่องพิมพ์รุ่นผิด ต้องการเปลี่ยนเป็นรุ่น PRO-X2'
-  },
-  {
-    id: 2,
-    return_no: 'RTN-2026-0002',
-    return_date: '2026-07-05T16:45:00Z',
-    customer_name: 'คุณกิตติศักดิ์ พรหมดี',
-    customer_phone: '081-234-5678',
-    quantity: 2,
-    amount: 25090,
-    status: 'COMPLETED',
-    reason: 'QUALITY_ISSUE',
-    remarks: 'สินค้ามีตำหนิและรอยบุบจากการขนส่ง'
-  },
-  {
-    id: 3,
-    return_no: 'RTN-2026-0003',
-    return_date: '2026-07-06T11:20:00Z',
-    customer_name: 'อู่สงวนอะไหล่ยนต์',
-    customer_phone: '089-876-5432',
-    quantity: 50,
-    amount: 2250,
-    status: 'CANCELLED',
-    reason: 'CUSTOMER_CHANGE_MIND',
-    remarks: 'เปลี่ยนใจยกเลิกความต้องการคืน'
-  },
-];
+const getItemReason = (reason: string | undefined, productName: string, index: number) => {
+  const fullReason = reason?.trim() || '-';
+  const reasonParts = fullReason.split(/\s*\|\s*/).filter(Boolean);
+  if (reasonParts.length <= 1) return fullReason;
 
-export default function ReturnDetailPage(): React.JSX.Element {
+  const productPrefix = `${productName}:`.toLowerCase();
+  const matchedReason = reasonParts.find((part) => part.toLowerCase().startsWith(productPrefix));
+  const reasonForItem = matchedReason || reasonParts[index] || fullReason;
+  const separatorIndex = reasonForItem.indexOf(':');
+
+  return separatorIndex >= 0 ? reasonForItem.slice(separatorIndex + 1).trim() : reasonForItem;
+};
+
+const ReturnDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { role } = useAuth() as any;
-  const isManager = role === 'OWNER' || role === 'ADMIN';
+  const basePath = usePathBasePrefix();
+  const userRole = (localStorage.getItem('role') || '').toUpperCase();
+  const isManager = userRole === 'OWNER' || userRole === 'ADMIN';
+  const canProcessRefund = userRole === 'OWNER' || userRole === 'EMPLOYEE' || userRole === 'ADMIN';
+  const { toast } = useToast();
 
-  const [returns, setReturns] = useState<ReturnItem[]>([]);
-  const [returnItem, setReturnItem] = useState<ReturnItem | null>(null);
+  const [returnItem, setReturnItem] = useState<SalesReturn | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
 
-  // Load returns from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('mock_returns');
-    let loadedReturns = DEFAULT_RETURNS;
-    if (saved) {
-      try {
-        loadedReturns = JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    } else {
-      localStorage.setItem('mock_returns', JSON.stringify(DEFAULT_RETURNS));
-    }
-    setReturns(loadedReturns);
+    if (!id) return;
 
-    const found = loadedReturns.find(r => r.id === Number(id));
-    if (found) {
-      setReturnItem(found);
-    }
+    const fetchDetail = async () => {
+      setIsLoading(true);
+      try {
+        const data = await returnService.getReturnById(Number(id));
+        setReturnItem(data);
+      } catch (err) {
+        console.error('Failed to load return detail:', err);
+        setReturnItem(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDetail();
   }, [id]);
 
-  // Handle status update
-  const handleStatusUpdate = (newStatus: 'COMPLETED' | 'CANCELLED') => {
-    if (!returnItem) return;
-    const updatedReturns = returns.map(r => 
-      r.id === returnItem.id ? { ...r, status: newStatus } : r
-    );
-    setReturns(updatedReturns);
-    localStorage.setItem('mock_returns', JSON.stringify(updatedReturns));
-    setReturnItem({ ...returnItem, status: newStatus });
-    
-    alert(`ดำเนินการ ${newStatus === 'COMPLETED' ? 'อนุมัติคืนเงินสำเร็จ' : 'ยกเลิกคำขอคืนเงิน'} เรียบร้อยแล้ว`);
-    navigate('/owner/returns');
+  const handleStatusUpdate = async (newStatus: 'APPROVED' | 'REJECTED') => {
+    if (!returnItem?.id || isUpdating) return;
+
+    setIsUpdating(true);
+    try {
+      const updated = await returnService.updateSalesReturn(returnItem.id, { status: newStatus });
+      setReturnItem(updated || { ...returnItem, status: newStatus });
+      alert(`ดำเนินการ${newStatus === 'APPROVED' ? 'อนุมัติคืนเงินสำเร็จ' : 'ปฏิเสธคำขอคืนเงิน'}เรียบร้อยแล้ว`);
+      navigate(`${basePath}/returns`);
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'เกิดข้อผิดพลาดในการอัปเดตสถานะ';
+      alert(message);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
-  if (!returnItem) {
+  const handleProcessRefund = async () => {
+    if (!returnItem?.id || isUpdating || !canProcessRefund) return;
+
+    setIsUpdating(true);
+    try {
+      const updated = await returnService.processRefund(returnItem.id);
+      setReturnItem(updated || { ...returnItem, status: 'REFUNDED' });
+      toast({
+        title: 'คืนเงินสำเร็จ',
+        message: 'สร้างรายการคืนเงินและอัปเดตยอดสุทธิเรียบร้อยแล้ว',
+        variant: 'success',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        message: err?.response?.data?.error || err?.response?.data?.message || 'ไม่สามารถดำเนินการคืนเงินจริงได้',
+        variant: 'error',
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  if (isLoading) {
     return (
-      <div className="p-8 text-center space-y-4">
-        <p className="text-slate-500 font-bold">ไม่พบข้อมูลใบคืนสินค้าที่คุณระบุ</p>
-        <Button onClick={() => navigate('/owner/returns')} variant="outline">กลับหน้าหลัก</Button>
+      <div className="p-8 text-center py-24 text-gray-400">
+        <Loader2 size={36} className="animate-spin mx-auto mb-2" />
+        <p className="text-sm">กำลังโหลดข้อมูลใบคืนสินค้า...</p>
       </div>
     );
   }
 
+  if (!returnItem) {
+    return (
+      <div className="p-8 text-center space-y-4 py-24">
+        <AlertCircle size={40} className="mx-auto text-red-500" />
+        <p className="text-slate-600 font-medium">ไม่พบข้อมูลใบคืนสินค้าที่คุณระบุ</p>
+        <Button onClick={() => navigate(`${basePath}/returns`)} variant="outline">กลับหน้าหลัก</Button>
+      </div>
+    );
+  }
+
+  const originalOrder = returnItem.original_order || {};
+  const customer = originalOrder.customer || {};
+  const customerName = customer.customer_name || originalOrder.customer_name_temp || 'ไม่ระบุ';
+  const customerPhone = customer.phone || originalOrder.customer_phone_temp || 'ไม่ระบุ';
+  const orderNumber = originalOrder.order_number || '-';
+  const items = returnItem.sales_return_items || [];
+  const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+  const status = returnItem.status || 'PENDING';
+  const actionStatus = status === 'REFUNDED' ? 'APPROVED' : status;
+
   return (
-    <div className="p-8 space-y-6 bg-gray-50 min-h-screen font-sans">
-      
-      {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+    <div className="p-8 space-y-6 bg-white min-h-screen relative pb-28 font-sans">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button 
-            type="button" 
-            onClick={() => navigate('/owner/returns')} 
-            className="p-2 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
-          >
-            <ChevronLeft size={24} className="text-slate-600" />
-          </button>
-          <div>
-            <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
-              รายละเอียดเอกสารการรับคืน
+          <div className="flex-col space-y-2">
+            <nav className="flex items-center text-sm text-gray-500 gap-2 font-light">
+              <Link to={`${basePath}/returns`} className="hover:text-black transition-colors">
+                จัดการคืนสินค้า
+              </Link>
+              <ChevronRight size={16} className="text-gray-400" />
+              <span className="text-black font-normal">รายละเอียดใบคืนสินค้า</span>
+            </nav>
+            <Heading level="h1" weight="semibold" className="m-0 text-black">
+              รายละเอียดใบคืนสินค้า
             </Heading>
-            <Heading level="h6" weight="light" className="m-0 text-slate-500 mt-1">
-              เลขที่ใบรับคืน: {returnItem.return_no}
+            <Heading level="h6" weight="normal" className="m-0 text-gray-500">
+              เลขที่ใบคืนสินค้า: {returnItem.return_number || '-'} | อ้างอิงใบเสร็จ: {orderNumber}
             </Heading>
           </div>
         </div>
-        
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${
-          returnItem.status === 'COMPLETED' 
-            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
-            : returnItem.status === 'CANCELLED' 
-              ? 'bg-red-50 text-red-600 border border-red-100' 
-              : 'bg-amber-50 text-amber-600 border border-amber-100'
-        }`}>
-          {returnItem.status === 'COMPLETED' ? (
-            <CheckCircle size={14} />
-          ) : returnItem.status === 'CANCELLED' ? (
-            <XCircle size={14} />
-          ) : (
-            <Clock size={14} />
-          )}
-          {returnItem.status === 'COMPLETED' ? 'คืนเงินสำเร็จ' : returnItem.status === 'CANCELLED' ? 'ยกเลิก' : 'รอตรวจสอบ'}
-        </span>
+        <Badge variant="outline" size="lg" className="w-fit gap-2 p-2">
+          <ClipboardClock size={14} />
+          สถานะ: {STATUS_LABEL[status] || status}
+        </Badge>
       </div>
 
-      {/* Grid Layout */}
       <div className="flex flex-col lg:flex-row gap-6 items-stretch">
-        
-        {/* Left Side: Main Info (2/3) */}
         <div className="w-full lg:w-3/4 flex flex-col gap-6">
-          
-          {/* Card: Customer Details */}
-          <Card className="border-l-[5px] border-l-red-800">
+          <Card className="border-l-[5px] border-l-red-600">
             <CardHeader className="items-center justify-start gap-4">
-              <CardTitle className="text-lg">ข้อมูลลูกค้า</CardTitle>
+              <CardTitle className="text-lg">ข้อมูลลูกค้าและใบขาย</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm">
                 <div className="flex items-center gap-3">
-                  <User className="text-slate-400" size={18} />
+                  <User className="text-slate-700" size={18} />
                   <div>
-                    <p className="text-xs text-slate-400 font-bold">ชื่อลูกค้า</p>
-                    <p className="font-bold text-slate-800">{returnItem.customer_name}</p>
+                    <Heading level="p" className="text-slate-700 mb-0">ชื่อลูกค้า</Heading>
+                    <Heading level="h6" weight="medium" className="text-black">{customerName}</Heading>
                   </div>
                 </div>
-                
                 <div className="flex items-center gap-3">
-                  <Phone className="text-slate-400" size={18} />
+                  <Phone className="text-slate-700" size={18} />
                   <div>
-                    <p className="text-xs text-slate-400 font-bold">เบอร์โทรศัพท์</p>
-                    <p className="font-bold text-slate-800">{returnItem.customer_phone}</p>
+                    <Heading level="p" className="text-slate-700 mb-0">เบอร์โทรศัพท์</Heading>
+                    <Heading level="h6" weight="medium" className="text-black">{customerPhone}</Heading>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-3 sm:col-span-2 border-t border-slate-100 pt-3">
-                  <Calendar className="text-slate-400" size={18} />
+                <div className="flex items-center gap-3">
+                  <Calendar className="text-slate-700" size={18} />
                   <div>
-                    <p className="text-xs text-slate-400 font-bold">วันที่ส่งคำขอคืน</p>
-                    <p className="font-semibold text-slate-600 text-xs">
-                      {new Date(returnItem.return_date).toLocaleDateString('th-TH', {
-                        year: 'numeric', month: 'long', day: 'numeric',
-                        hour: '2-digit', minute: '2-digit'
-                      })}
-                    </p>
+                    <Heading level="p" className="text-slate-700 mb-0">วันที่ส่งคำขอคืน</Heading>
+                    <Heading level="h6" weight="medium" className="text-black">{formatDateThai(returnItem.requested_at || returnItem.return_date)}</Heading>
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Card: Summary of return */}
-          <Card className="border-l-[5px] border-l-black">
-            <CardHeader className="items-center justify-start gap-4 bg-slate-50/50">
-              <CardTitle className="text-lg">รายการสินค้าและยอดเงินคืน</CardTitle>
+          <Card className="border-l-[5px] border-l-black overflow-hidden" noPadding>
+            <CardHeader className="items-center justify-between bg-white px-6 py-4">
+              <CardTitle className="text-lg">รายการสินค้าที่คืน</CardTitle>
+              <span className="text-sm text-black font-medium">รวม {totalQuantity} ชิ้น</span>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4 py-1 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500 font-semibold flex items-center gap-2">
-                    <Package className="text-slate-400" size={16} />
-                    จำนวนสินค้าที่รับคืนรวม:
-                  </span>
-                  <span className="font-bold text-slate-800">{returnItem.quantity} ชิ้น</span>
-                </div>
-                <div className="flex justify-between items-center border-t border-slate-100 pt-3">
-                  <span className="text-slate-500 font-bold">ยอดรวมคืนเงินสุทธิ:</span>
-                  <span className="font-extrabold text-lg text-[#e51c23]">฿{returnItem.amount.toLocaleString()}</span>
-                </div>
+            <Table>
+              <TableHeader className="text-[#797878] bg-[#f6f3f2]">
+                <TableRow>
+                  <TableHead className="pl-6">ลำดับ</TableHead>
+                  <TableHead className="text-left">สินค้า</TableHead>
+                  <TableHead className="text-center">จำนวนคืน</TableHead>
+                  <TableHead className="text-right">ราคาต่อหน่วย</TableHead>
+                  <TableHead className="text-right pr-6">รวมเงินคืน</TableHead>
+                  <TableHead className="text-left">สาเหตุการคืน</TableHead>
+                 </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-gray-400">
+                      ไม่พบรายละเอียดรายการสินค้า
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  items.map((item, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="pl-6">
+                        {index + 1}
+                      </TableCell>
+                      <TableCell className="text-left">
+                        <Heading level="p" weight="medium" className="text-black mb-0">{item.product_name || `สินค้า #${item.product_id}`}</Heading>
+                        {item.product_code && <Heading level="p" weight="light" className="text-gray-700">SKU: {item.product_code}</Heading>}
+                      </TableCell>
+                      <TableCell className="text-center text-black">{item.quantity}</TableCell>
+                      <TableCell className="text-right text-black">
+                        ฿ {item.unit_price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-right pr-6 text-black">
+                        ฿ {(item.subtotal || item.quantity * item.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-left text-black max-w-60 whitespace-pre-wrap wrap-break-word">
+                         {getItemReason(returnItem.reason, item.product_name || `สินค้า #${item.product_id}`, index)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+            <div className="bg-white px-6 py-4 border-t border-slate-100 flex justify-between items-center">
+              <span className="text-sm font-medium text-black">ช่องทางการคืนเงิน: {returnItem.refund_method || 'เงินสด'}</span>
+              <div className="text-right">
+                <span className="text-sm text-slate-500 mr-2">ยอดคืนสุทธิ:</span>
+                <span className="text-2xl font-extrabold text-[#e51c23]">
+                  ฿ {returnItem.refund_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="border-l-[5px] border-l-gray-400">
+            <CardHeader className="items-center justify-start gap-2 pb-2">
+              <CardTitle className="text-lg">หมายเหตุเพิ่มเติม</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="text-sm text-black bg-[#f6f3f2] p-2 rounded-none border-none mt-0">
+                <Heading level="p" weight="normal">{returnItem.note || '-'}</Heading>
               </div>
             </CardContent>
           </Card>
-
-          {/* Card: Damaged Details & Notes */}
-          <Card className="border-l-[5px] border-l-slate-400">
-            <CardHeader className="items-center justify-start gap-4">
-              <CardTitle className="text-lg">สาเหตุการคืนและรายละเอียดเพิ่มเติม</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm text-slate-700 bg-slate-100 p-4 rounded border border-slate-200 font-semibold italic">
-                "{returnItem.remarks || 'ไม่มีหมายเหตุเพิ่มเติม'}"
-              </div>
-            </CardContent>
-          </Card>
-
         </div>
 
-        {/* Right Side: Approval Panel (1/3) */}
         <div className="w-full lg:w-1/4 flex flex-col gap-6">
-          <Card className="border-t-[5px] border-t-red-800">
+          <Card className="border-t-[5px] border-t-red-600">
             <CardHeader className="items-center justify-start gap-4">
               <CardTitle className="text-lg">ดำเนินการบิลคืนเงิน</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4 text-xs">
-                <div className="text-slate-500 font-bold">
-                  * กรุณาตรวจสอบความถูกต้องของสินค้าและใบเสร็จก่อนอนุมัติคืนเงิน
+                <div className="flex">
+                  <span className="text-red-500">*</span>
+                  <Heading level="p" weight="normal" className="text-gray-600"> กรุณาตรวจสอบความถูกต้องของสินค้าและใบเสร็จก่อนอนุมัติคืนเงิน</Heading>
                 </div>
-
-                {returnItem.status === 'PENDING' ? (
+                {status === 'PENDING' ? (
                   <div className="space-y-3 pt-2">
                     {isManager ? (
                       <>
                         <Button
                           type="button"
-                          onClick={() => handleStatusUpdate('COMPLETED')}
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 justify-center shadow-sm flex items-center gap-2"
+                          variant="approved"
+                          disabled={isUpdating}
+                          onClick={() => handleStatusUpdate('APPROVED')}
+                          className="w-full"
                         >
-                          <CheckCircle size={18} /> อนุมัติคืนเงินสำเร็จ
+                          {isUpdating ? <Loader2 size={16} className="animate-spin" /> : <CircleCheck size={18} />} อนุมัติคืนเงินสำเร็จ
                         </Button>
                         <Button
                           type="button"
-                          onClick={() => handleStatusUpdate('CANCELLED')}
-                          className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 justify-center shadow-sm flex items-center gap-2"
+                          variant="danger"
+                          disabled={isUpdating}
+                          onClick={() => handleStatusUpdate('REJECTED')}
+                          className="w-full"
                         >
-                          <XCircle size={18} /> ยกเลิกคำขอคืนเงิน
+                          {isUpdating ? <Loader2 size={16} className="animate-spin" /> : <XCircle size={18} />} ปฏิเสธคำขอคืนเงิน
                         </Button>
                       </>
                     ) : (
-                      <div className="bg-slate-100 p-3 rounded text-center text-xs text-slate-400 font-bold flex items-center justify-center gap-1.5">
+                      <div className="bg-[#f6f3f2] p-3 rounded-none text-center text-sm text-gray-400 font-semibold flex items-center justify-center gap-1.5">
                         <Lock size={14} /> สิทธิ์การอนุมัติเฉพาะผู้จัดการหรือเจ้าของร้าน
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="bg-slate-50 p-4 rounded border border-slate-150 text-center space-y-2">
-                    <p className="text-xs text-slate-400 font-bold">ดำเนินการตรวจสอบเสร็จสิ้น</p>
-                    <p className={`font-extrabold text-sm ${
-                      returnItem.status === 'COMPLETED' ? 'text-emerald-600' : 'text-red-600'
-                    }`}>
-                      {returnItem.status === 'COMPLETED' ? 'คืนเงินสำเร็จแล้ว' : 'ยกเลิกคำขอคืนเงินแล้ว'}
-                    </p>
+                  <div className="bg-[#f6f3f2] p-4 rounded-none border border-slate-150 text-center space-y-2">
+                    <Heading level="p" weight="medium">ดำเนินการตรวจสอบเสร็จสิ้น</Heading>
+                    <Heading level="p" weight="medium" className={`${actionStatus === 'APPROVED' ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {actionStatus === 'APPROVED' ? (status === 'REFUNDED' ? 'คืนเงินจริงแล้ว' : 'อนุมัติคืนเงินสำเร็จแล้ว') : 'ปฏิเสธคำขอคืนเงินแล้ว'}
+                    </Heading>
+                    {status === 'APPROVED' && canProcessRefund && (
+                      <Button
+                        type="button"
+                        variant="approved"
+                        disabled={isUpdating}
+                        onClick={() => setIsRefundModalOpen(true)}
+                        className="w-full mt-2 cursor-pointer"
+                      >
+                        {isUpdating ? <Loader2 size={16} className="animate-spin" /> : <></>} ดำเนินการคืนเงินจริง
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
             </CardContent>
           </Card>
         </div>
-
       </div>
-
+      <Modal
+        isOpen={isRefundModalOpen}
+        onClose={() => !isUpdating && setIsRefundModalOpen(false)}
+        title="ยืนยันการคืนเงินจริง"
+        description="การดำเนินการนี้จะสร้างรายการ Payment และเพิ่มสินค้าเข้าคลัง"
+        size="sm"
+        footer={(
+          <>
+            <Button
+              type="button"
+              variant="tertiary"
+              disabled={isUpdating}
+              onClick={() => setIsRefundModalOpen(false)}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              type="button"
+              variant="approved"
+              disabled={isUpdating}
+              onClick={async () => {
+                setIsRefundModalOpen(false);
+                await handleProcessRefund();
+              }}
+            >
+              {isUpdating ? <Loader2 size={16} className="animate-spin" /> : <></>}
+              ยืนยันคืนเงินจริง
+            </Button>
+          </>
+        )}
+      >
+        <div className="space-y-3 text-sm text-slate-700">
+          <div className="flex justify-between gap-4">
+            <span className="text-slate-500">เลขที่ใบคืน</span>
+            <span className="font-semibold text-slate-900">{returnItem.return_number || '-'}</span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span className="text-slate-500">ยอดเงินคืน</span>
+            <span className="font-semibold text-red-600">
+              ฿ {returnItem.refund_amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span className="text-slate-500">ช่องทางคืนเงิน</span>
+            <span className="font-medium text-slate-900">{returnItem.refund_method || '-'}</span>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
-}
+};
+
+export default ReturnDetailPage;
