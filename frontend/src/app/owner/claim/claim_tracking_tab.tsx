@@ -44,10 +44,10 @@ function TypeBadge({ type }: { type: 'INSTANT' | 'SUPPLIER_PENDING' | 'CREDIT_AC
 }
 
 function TrackingStageBadge({ stage }: { stage: TrackingStage }) {
-  if (stage === 'COMPLETED') return <Badge variant="success" size="md" dot>ส่งมอบแล้ว</Badge>;
-  if (stage === 'REPLACEMENT_RECEIVED') return <Badge variant="info" size="md" dot>ได้รับของแล้ว</Badge>;
-  if (stage === 'SENT_TO_SUPPLIER') return <Badge variant="neutral" size="md" dot>ส่งบริษัทแล้ว</Badge>;
-  return <Badge variant="warning" size="md" dot>รอรวบรวมส่ง</Badge>;
+  if (stage === 'COMPLETED') return <Badge variant="success" size="md">ส่งมอบแล้ว</Badge>;
+  if (stage === 'REPLACEMENT_RECEIVED') return <Badge variant="info" size="md">ได้รับของแล้ว</Badge>;
+  if (stage === 'SENT_TO_SUPPLIER') return <Badge variant="neutral" size="md">ส่งบริษัทแล้ว</Badge>;
+  return <Badge variant="warning" size="md">รอรวบรวมส่ง</Badge>;
 }
 
 function getPageNumbers(current: number, total: number): (number | "...")[] {

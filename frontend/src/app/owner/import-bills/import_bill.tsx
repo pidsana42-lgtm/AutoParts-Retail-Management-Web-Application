@@ -2241,6 +2241,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
           onBack={() => { setApprovingBill(null); setCurrentView('home'); }}
           formatDate={formatDate}
           getSupplierName={getSupplierName}
+          isEmployee={isEmployee}
         />
       )}
 
