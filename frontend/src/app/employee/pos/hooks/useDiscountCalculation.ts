@@ -38,15 +38,16 @@ export function useDiscountCalculation() {
     let allowedMaxRate = maxDiscountRate ?? 2.0;
 
     // กฎโหมดอู่ซ่อมรถ (+ ontop)
-    const isDiscountEnabled = customer ? customer.is_discount_enabled : true;
+    const isDiscountEnabled = customer ? customer.is_discount_enabled : false;
+    const ontopRate = customer ? (Number((customer as any).ontop_discount_rate) || 0) : 0;
     const isGarageMode =
       isDiscountEnabled &&
+      ontopRate > 0 &&
       (currentCustomerTypeId === 2 ||
         currentCustomerTypeName === "GARAGE" ||
         customer?.customer_name?.includes("อู่"));
 
     if (isGarageMode) {
-      const ontopRate = customer ? ((customer as any).ontop_discount_rate ?? 3.0) : 3.0;
       allowedMaxRate += ontopRate;
     }
 

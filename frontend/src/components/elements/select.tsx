@@ -175,7 +175,7 @@ export default function Select({
                 "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
                 isPlaceholder ? "text-slate-400" : "text-slate-800",
                 error
-                  ? "border-red-400 focus:border-red-500 focus:ring-red-200"
+                  ? "!border-red-500 focus:border-red-500 ring-1 ring-red-500"
                   // ✅ focus สีแดง
                   : "border-slate-300 focus:border-[#B70011] focus:ring-red-200",
                 isOpen && "border-[#B70011] ring-2 ring-red-200",

@@ -143,7 +143,6 @@ func SetupDatabase() {
 	seed.Role(db)
 	seed.CustomerType(db)
 	seed.PaymentMethod(db)
-	seed.StoreConfig(db)
     
 	// Toto WMS
 	seed.Zone(db)

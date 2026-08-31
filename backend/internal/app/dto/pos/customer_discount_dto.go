@@ -13,6 +13,7 @@ type GetCustomerDiscountResponse struct {
     CustomerID           uint                     `json:"customer_id"`
     CustomerName         string                   `json:"customer_name"`
     PhoneNumber          string                   `json:"phone_number"`
+    IdCardNumberCustomer string                   `json:"id_card_number_customer"`
     MaxCreditLimit       float64                  `json:"max_credit_limit"`
     CurrentDebtAmount    float64                  `json:"current_debt_amount"`
     IsDiscountEnabled    bool                     `json:"is_discount_enabled"`
@@ -40,6 +41,7 @@ func ToCustomerDiscountResponse(customer *entity.Customer) *GetCustomerDiscountR
         CustomerID:           customer.ID,
         CustomerName:         customer.CustomerName, 
         PhoneNumber:          customer.PhoneNumber,
+        IdCardNumberCustomer: customer.IdCardNumberCustomer,
         MaxCreditLimit:       customer.CreditLimit, 
         CurrentDebtAmount:    customer.CurrentDebtAmount,
         IsDiscountEnabled:    customer.IsDiscountEnabled,

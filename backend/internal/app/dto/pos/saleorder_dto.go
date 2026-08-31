@@ -29,7 +29,7 @@ type SaleOrderItemRequest struct {
 	ProductID   uint    `json:"product_id" binding:"required"`   // ID สินค้าในเบส เพื่อเอาไปเช็คสต็อกและราคาทุน
 	ProductName string  `json:"product_name" binding:"required"` // ชื่อสินค้า
 	Qty         int     `json:"qty" binding:"required,min=1"`    // จำนวนที่ซื้อ บังคับขั้นต่ำ 1 ชิ้น
-	UnitPrice   float64 `json:"unit_price" binding:"required"`   // ราคาขายต่อหน่วย ณ ตอนนั้น
+	UnitPrice   float64 `json:"unit_price"`                       // ราคาขายต่อหน่วย ณ ตอนนั้น (รองรับสินค้า 0 บาท)
 
 	// ส่วนลดรายบรรทัด (จากช่องติ๊กถูก DISC? ในตาราง)
 	DiscountType  string  `json:"discount_type" binding:"required"` // 'none', 'percentage', 'amount'

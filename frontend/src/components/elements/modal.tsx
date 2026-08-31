@@ -26,8 +26,8 @@ const modalPanelVariants = cva(
 interface ModalProps extends VariantProps<typeof modalPanelVariants> {
   isOpen: boolean;
   onClose: () => void;
-  title?: string;
-  description?: string;
+  title?: ReactNode;
+  description?: ReactNode;
   footer?: ReactNode;
   children?: ReactNode;
   className?: string;
@@ -66,11 +66,11 @@ export default function Modal({
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-labelledby={title ? "modal-title" : undefined}
+      aria-labelledby={typeof title === "string" ? "modal-title" : undefined}
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-slate-900/50 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-black/60 backdrop-blur-none"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -78,23 +78,25 @@ export default function Modal({
       {/* Panel */}
       <div className={cn(modalPanelVariants({ size }), className)}>
         {(title || description) && (
-          <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div className="bg-[#1C1B1B] flex items-start justify-between gap-3 border-b border-gray-100 px-6 py-4">
             <div>
-              {title && (
-                <h2 id="modal-title" className="text-base font-semibold text-slate-800">
+              {typeof title === "string" ? (
+                <h2 id="modal-title" className="text-2xl font-semibold text-white m-0 leading-tight">
                   {title}
                 </h2>
+              ) : (
+                title
               )}
               {description && (
-                <p className="mt-0.5 text-sm text-slate-400">{description}</p>
+                <p className="mt-1 text-xs text-white font-light m-0">{description}</p>
               )}
             </div>
             <button
               onClick={onClose}
               aria-label="ปิด"
               className={cn(
-                "rounded-none p-1 text-slate-400 transition-colors",
-                "hover:bg-slate-100 hover:text-slate-600",
+                "rounded-none p-1 text-slate-400 transition-colors cursor-pointer",
+                "hover:text-slate-100",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               )}
             >
