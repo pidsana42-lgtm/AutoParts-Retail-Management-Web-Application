@@ -399,7 +399,7 @@ const SalesCancellationHistory: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setSelectedOrderId(item.id)}
-                            className="p-1.5 text-[#E51C23] hover:bg-red-50 rounded-full cursor-pointer"
+                            className="p-1.5 cursor-pointer"
                           >
                             <Eye className="w-4 h-4" />
                           </button>

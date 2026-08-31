@@ -8,6 +8,7 @@ import type { CreateSaleOrderRequest } from "../../../../interface/pos/pos_inter
 import type { CartItem } from "../../../../interface/pos/usePosCart.interface";
 import type { PosSession } from "../../../../interface/pos/pos_session_interface"; 
 import { getCurrentUserId } from "../../../../utils/auth"; 
+import { downloadPdfBlob } from "../../../../utils/print"; 
 
 interface UsePosPaymentProps {
   cart: CartItem[];
@@ -682,6 +683,23 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     }
 
     setIsConfirming(true);
+
+    const printReceiptPdf = async (orderIdToPrint: number | string) => {
+      try {
+        const orderNum = currentOrderNumberRef.current || posSession.currentOrderNumber || orderIdToPrint;
+        const blob = await posApiService.printOrderReceipt(orderIdToPrint);
+        const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+        const win = window.open(blobUrl, "_blank");
+        if (!win) {
+          const fileName = String(orderNum).startsWith("INV") ? `${orderNum}.pdf` : `INV-${orderNum}.pdf`;
+          downloadPdfBlob(blob, fileName);
+        }
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 120000);
+      } catch (err) {
+        console.error("Error opening receipt PDF:", err);
+      }
+    };
+
     try {
       if (activePaymentMethodId === 1 || activePaymentMethodId === 3) {
         //  CASH & CREDIT: ยิง DB ทีเดียวจบ (ไม่ผ่าน pending)
@@ -690,6 +708,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
           setIsConfirming(false);
           return false;
         }
+        await printReceiptPdf(orderId);
         alert("ยืนยันการชำระเงินและจบการขายสำเร็จ!");
         resetPaymentState();
         setCart([]);
@@ -716,6 +735,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         received_by_id: getCurrentUserId() || 1, 
       });
 
+      await printReceiptPdf(orderId);
       alert("ยืนยันการชำระเงินและจบการขายสำเร็จ!");
 
       // จบการขายสำเร็จ ค่อยสั่ง reset เพื่อล้าง orderNumber ให้บิลถัดไป

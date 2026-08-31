@@ -197,6 +197,20 @@ export const posApiService = {
     }
     return null;
   },
+
+  /** สั่งพิมพ์หรือดึงไฟล์ PDF ใบเสร็จรับเงิน / ใบส่งของชั่วคราว */
+  printOrderReceipt: async (orderId: number | string, customTitle?: string): Promise<Blob> => {
+    try {
+      const response = await apiClient.get(`/pos/sales-history/${orderId}/print`, {
+        params: customTitle ? { title: customTitle } : undefined,
+        responseType: "blob",
+      });
+      return response.data;
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการโหลด PDF ใบเสร็จ:", error);
+      throw error;
+    }
+  },
 };
 
 // ==================== Business Logic Helpers ====================

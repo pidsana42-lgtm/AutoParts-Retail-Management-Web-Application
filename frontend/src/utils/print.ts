@@ -100,3 +100,53 @@ export function exportDebtAgingPdf(rows: DebtAgingItem[], dateLabel: string) {
 </table>
 </body></html>`);
 }
+
+/**
+ * ดาวน์โหลดไฟล์ PDF Blob ลงเครื่องทันที (พร้อมชื่อไฟล์ .pdf ที่ถูกต้อง)
+ */
+export function downloadPdfBlob(blob: Blob, fileName: string) {
+  const finalName = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+  const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = finalName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60000);
+}
+
+/**
+ * เปิดพรีวิวไฟล์ PDF Blob ในแท็บใหม่ โดยกำหนด Title และชื่อไฟล์ให้แสดงเป็น .pdf อย่างถูกต้อง
+ */
+export function openPdfBlobInNewTab(blob: Blob, fileName: string) {
+  const finalName = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+  const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+  const win = window.open('', '_blank');
+
+  if (!win) {
+    // กรณีที่เบราว์เซอร์บล็อกป็อปอัป ให้ดาวน์โหลดไฟล์อัตโนมัติ
+    downloadPdfBlob(blob, finalName);
+    return;
+  }
+
+  win.document.title = finalName;
+  win.document.write(`<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>${finalName}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #525659; }
+    iframe { width: 100%; height: 100%; border: none; display: block; }
+  </style>
+</head>
+<body>
+  <iframe src="${blobUrl}" title="${finalName}"></iframe>
+</body>
+</html>`);
+  win.document.close();
+  setTimeout(() => window.URL.revokeObjectURL(blobUrl), 120000);
+}
+

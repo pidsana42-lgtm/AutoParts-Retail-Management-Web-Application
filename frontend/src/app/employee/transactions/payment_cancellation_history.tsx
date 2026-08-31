@@ -467,7 +467,7 @@ const PaymentCancellationHistory: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setSelectedReceipt(item)}
-                            className="p-1.5 text-[#E51C23] hover:bg-red-50 rounded-full cursor-pointer transition-colors"
+                            className="p-1.5 cursor-pointer transition-colors"
                             title="ดูรายละเอียดคำขอ"
                           >
                             <Eye className="w-4 h-4" />
