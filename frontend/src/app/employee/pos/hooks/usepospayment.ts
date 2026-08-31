@@ -7,6 +7,8 @@ import type { StoreConfigInterface } from "../../../../interface/pos/store_confi
 import type { CreateSaleOrderRequest } from "../../../../interface/pos/pos_interface";
 import type { CartItem } from "../../../../interface/pos/usePosCart.interface";
 import type { PosSession } from "../../../../interface/pos/pos_session_interface"; 
+import { getCurrentUserId } from "../../../../utils/auth"; 
+import { downloadPdfBlob } from "../../../../utils/print"; 
 
 interface UsePosPaymentProps {
   cart: CartItem[];
@@ -127,6 +129,37 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     return Boolean(customer && customer.id > 0);
   }, [customer]);
 
+  // Auto-sync customer data & discount policy on mount, window focus, visibility change & interval
+  useEffect(() => {
+    const activeCust = customer || posSession.customer;
+    if (activeCust && activeCust.id && activeCust.id > 0) {
+      refreshCustomerFinancials(activeCust);
+    }
+
+    const handleSync = () => {
+      const currentCust = customer || posSession.customer;
+      if (currentCust && currentCust.id && currentCust.id > 0) {
+        refreshCustomerFinancials(currentCust);
+      }
+    };
+
+    window.addEventListener("focus", handleSync);
+    document.addEventListener("visibilitychange", handleSync);
+
+    const interval = setInterval(() => {
+      const currentCust = customer || posSession.customer;
+      if (currentCust && currentCust.id && currentCust.id > 0) {
+        refreshCustomerFinancials(currentCust);
+      }
+    }, 4000);
+
+    return () => {
+      window.removeEventListener("focus", handleSync);
+      document.removeEventListener("visibilitychange", handleSync);
+      clearInterval(interval);
+    };
+  }, [customer?.id, posSession.customer?.id]);
+
   useEffect(() => {
     if (!isPaymentModalOpen) {
       setQrCodeData(null);
@@ -219,10 +252,24 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     }
 
     try {
-      const response = await apiClient.get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${cleanedQuery}`);
+      const response = await apiClient.get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${encodeURIComponent(cleanedQuery)}`);
       const dataList = response.data;
+      const rawQuery = cleanedQuery.replace(/[-\s]/g, "").toLowerCase();
       const exactMatchedCustomer = dataList && dataList.length > 0 
-        ? dataList.find((c) => c.customer_name?.toLowerCase() === cleanedQuery.toLowerCase() || c.phone_number === cleanedQuery)
+        ? dataList.find((c) => {
+            const name = (c.customer_name || "").toLowerCase();
+            const phone = (c.phone_number || "").toLowerCase();
+            const rawPhone = phone.replace(/[-\s]/g, "");
+            const idCard = (c.id_card_number_customer || "").toLowerCase();
+            const rawIdCard = idCard.replace(/[-\s]/g, "");
+            return (
+              name === cleanedQuery.toLowerCase() ||
+              phone === cleanedQuery.toLowerCase() ||
+              (rawQuery.length > 0 && rawPhone === rawQuery) ||
+              idCard === cleanedQuery.toLowerCase() ||
+              (rawQuery.length > 0 && rawIdCard === rawQuery)
+            );
+          })
         : null;
 
       if (exactMatchedCustomer) {
@@ -262,30 +309,58 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     }
   };
 
-  const refreshCustomerFinancials = async (customerPhone: string) => {
-    if (!customerPhone || customerPhone.includes("ลูกค้าทั่วไป")) return;
+  const refreshCustomerFinancials = async (targetPhoneOrCustomer?: string | CustomerDiscountResponse | null) => {
+    let targetId: number | undefined;
+    let query = "";
+
+    if (typeof targetPhoneOrCustomer === "string") {
+      query = targetPhoneOrCustomer.trim();
+    } else if (targetPhoneOrCustomer && typeof targetPhoneOrCustomer === "object") {
+      targetId = targetPhoneOrCustomer.id || (targetPhoneOrCustomer as any).customer_id;
+      query = targetPhoneOrCustomer.phone_number || targetPhoneOrCustomer.customer_name || (targetId ? String(targetId) : "");
+    } else {
+      const active = customer || posSession.customer;
+      targetId = active?.id || (active as any)?.customer_id;
+      query = active?.phone_number || active?.customer_name || (targetId ? String(targetId) : "");
+    }
+
+    if (!query || query.includes("ลูกค้าทั่วไป") || targetId === 0) return;
+
     try {
-      const response = await apiClient.get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${customerPhone}`);
+      const response = await apiClient.get<CustomerDiscountResponse[]>(`/pos/customer-discount?search=${encodeURIComponent(query)}`);
       const dataList = response.data;
       if (dataList && dataList.length > 0) {
-        const matched = dataList.find((c) => c.phone_number === customerPhone || c.customer_name === customerPhone);
+        const matched = dataList.find((c) =>
+          (targetId && (c.id === targetId || (c as any).customer_id === targetId)) ||
+          c.phone_number === query ||
+          c.customer_name === query
+        ) || dataList[0];
+
         if (matched) {
           // ป้องกันสภาวะแข่งขันแบบอะซิงโครนัส (Race Condition): 
-          // หากพนักงานขายบิลสำเร็จและเคลียร์ลูกค้าออกไปแล้ว (customer เป็น null) ห้ามเขียนข้อมูลใหม่ทับกลับมา
+          // หากพนักงานขายบิลสำเร็จและเคลียร์ลูกค้าออกไปแล้ว (customer เป็น null หรือ guest) ห้ามเขียนข้อมูลใหม่ทับกลับมา
           setPosSession((prev) => {
-            if (!prev.customer || (prev.customer.phone_number !== customerPhone && prev.customer.customer_name !== customerPhone)) {
-              return prev; // ยกเลิกการอัปเดตเซสชัน
+            if (!prev.customer || prev.customer.id === 0) {
+              return prev;
             }
-            return {
+            if (targetId && prev.customer.id !== targetId && (prev.customer as any).customer_id !== targetId) {
+              return prev;
+            }
+            const updated = {
               ...prev,
               customer: matched,
-              activeTypeId: matched.customer_type?.id || 1
+              activeTypeId: matched.customer_type?.id || prev.activeTypeId || 1,
             };
+            localStorage.setItem("pos_session", JSON.stringify(updated));
+            return updated;
           });
 
           setCustomer((prev) => {
-            if (!prev || (prev.phone_number !== customerPhone && prev.customer_name !== customerPhone)) {
-              return prev; // ยกเลิกการอัปเดตสเตท
+            if (!prev || prev.id === 0) {
+              return prev;
+            }
+            if (targetId && prev.id !== targetId && (prev as any).customer_id !== targetId) {
+              return prev;
             }
             return matched;
           });
@@ -425,7 +500,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       payment_method_id: finalPaymentMethodId,
       bill_discount_type: posSession.billDiscountType,
       bill_discount_value: posSession.billDiscountValue,
-      note: "บันทึกบิลขายส่งผ่านระบบ POS หน้าร้าน",
+      note: "",
       items: computedItems as any,
     };
 
@@ -586,7 +661,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     const activePaymentMethodId = paymentMethodId || posSession.paymentMethodId;
 
     if (activePaymentMethodId === 1) {
-      if (!receivedAmount || receivedAmount <= 0) {
+      if (finalTotal > 0 && (!receivedAmount || receivedAmount <= 0)) {
         alert("กรุณากรอกจำนวนเงินที่รับมา");
         return false;
       }
@@ -608,6 +683,23 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     }
 
     setIsConfirming(true);
+
+    const printReceiptPdf = async (orderIdToPrint: number | string) => {
+      try {
+        const orderNum = currentOrderNumberRef.current || posSession.currentOrderNumber || orderIdToPrint;
+        const blob = await posApiService.printOrderReceipt(orderIdToPrint);
+        const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+        const win = window.open(blobUrl, "_blank");
+        if (!win) {
+          const fileName = String(orderNum).startsWith("INV") ? `${orderNum}.pdf` : `INV-${orderNum}.pdf`;
+          downloadPdfBlob(blob, fileName);
+        }
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 120000);
+      } catch (err) {
+        console.error("Error opening receipt PDF:", err);
+      }
+    };
+
     try {
       if (activePaymentMethodId === 1 || activePaymentMethodId === 3) {
         //  CASH & CREDIT: ยิง DB ทีเดียวจบ (ไม่ผ่าน pending)
@@ -616,6 +708,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
           setIsConfirming(false);
           return false;
         }
+        await printReceiptPdf(orderId);
         alert("ยืนยันการชำระเงินและจบการขายสำเร็จ!");
         resetPaymentState();
         setCart([]);
@@ -639,9 +732,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         order_id: orderId,
         payment_method_id: activePaymentMethodId,
         received_amount: finalTotal,
-        received_by_id: 1, 
+        received_by_id: getCurrentUserId() || 1, 
       });
 
+      await printReceiptPdf(orderId);
       alert("ยืนยันการชำระเงินและจบการขายสำเร็จ!");
 
       // จบการขายสำเร็จ ค่อยสั่ง reset เพื่อล้าง orderNumber ให้บิลถัดไป
@@ -741,5 +835,6 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     closePaymentModal,
     customerAddressTemp,
     handleAddressChange,
+    refreshCustomerFinancials,
   };
 }

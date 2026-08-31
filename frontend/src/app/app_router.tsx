@@ -9,7 +9,6 @@ import Pos from './employee/pos/pos';
 import SalesHistory from './employee/pos/sales_history';
 import { getMenuByRole } from '../config/menu'; 
 import { useAuth } from '../contexts/AuthContexts'; 
-import StoreConfig from './owner/storeconfig/storeconfig'; 
 import Stock from './owner/stock/stock';
 import StockMovement from './owner/stock/stock_movement/stock_movement';
 import Stockdata from './owner/stock/Stock_data/stock_data';
@@ -43,9 +42,13 @@ import MobileScanPage from './mobile-scan/mobile_scan_page';
 import PublicProductPage from './public-product/public_product_page';
 import SalesCancellationHistory from './employee/pos/sales_cancellation_history';
 import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_history';
-import RepaymentHistory from './employee/transactions/repayment_history';
-import OwnerRepaymentHistory from './owner/transactions/repayment_history';
 import SettleBills from './employee/transactions/settle_bills';
+import PaymentHistory from './employee/transactions/payment_history';
+import PaymentCancellationHistory from './employee/transactions/payment_cancellation_history';
+import CustomerRegistration from './employee/customer/customer_registration';
+import FinancialPolicy from './owner/storeconfig/financial_policy';
+import CustomerCreditControl from './owner/storeconfig/customer_credit_control';
+import StoreConfig from './owner/storeconfig/storeconfig';
 
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth() as any;
@@ -89,7 +92,19 @@ export default function AppRouter(): React.JSX.Element {
           isAdminOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
-        <Route path="/owner/storeconfig" element={<StoreConfig />} />
+        {/* -------------------- การตั้งค่า ------------------------ */}
+        <Route path="/owner/storeconfig" element={
+          isAdminOrOwner ? <StoreConfig /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/storeconfig/financial-policy" element={
+          isAdminOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/storeconfig/customer-credit-control" element={
+          isAdminOrOwner ? <CustomerCreditControl /> : <Navigate to={firstMenuPath} replace />
+        } />
+        {/* ------------------------------------------------------ */}
+
+        
 
         <Route path="/owner/stock" element={
           isAdminOrOwner ? <Stock /> : <Navigate to={firstMenuPath} replace />
@@ -174,13 +189,27 @@ export default function AppRouter(): React.JSX.Element {
 
         {/* -------- หน้ารายการธุรกรรม / การเงิน -------- */}
         <Route path="/employee/transactions/settle-bills" element={<SettleBills />} />
-        <Route path="/employee/transactions/repayment-history" element={<RepaymentHistory />} />
+        <Route path="/employee/transactions/payment-history" element={<PaymentHistory />} />
+        <Route path="/employee/transactions/payment-cancellation-history" element={<PaymentCancellationHistory />} />
 
         <Route path="/owner/transactions/settle-bills" element={
           isAdminOrOwner ? <SettleBills /> : <Navigate to={firstMenuPath} replace />
         } />
-        <Route path="/owner/transactions/repayment-history" element={
-          isAdminOrOwner ? <OwnerRepaymentHistory /> : <Navigate to={firstMenuPath} replace />
+        <Route path="/owner/transactions/payment-history" element={
+          isAdminOrOwner ? <PaymentHistory /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/transactions/payment-cancellation-history" element={
+          isAdminOrOwner ? <PaymentCancellationHistory /> : <Navigate to={firstMenuPath} replace />
+        } />
+        {/* --------------------------------------------------- */}
+
+        {/* ------------------ ข้อมูลลูกค้า ----------------- */}
+        {/* พนักงาน */}
+        <Route path="/employee/customers/customer-registration" element={<CustomerRegistration />} />
+
+        {/* เจ้าของร้าน */}
+        <Route path="/owner/customers/customer-registration" element={
+          isAdminOrOwner ? <CustomerRegistration /> : <Navigate to={firstMenuPath} replace />
         } />
         {/* --------------------------------------------------- */}
 

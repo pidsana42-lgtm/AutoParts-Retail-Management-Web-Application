@@ -12,6 +12,19 @@ export const useOwnerSalesCancellationHistory = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // --- Overall Stats State ---
+  const [stats, setStats] = useState({
+    pendingCount: 0,
+    pendingAmount: 0,
+    approvedCount: 0,
+    approvedAmount: 0,
+    rejectedCount: 0,
+    rejectedAmount: 0,
+    totalCount: 0,
+    totalAmount: 0,
+  });
+  const [isStatsLoading, setIsStatsLoading] = useState<boolean>(false);
+
   // --- Pagination States ---
   const [page, setPage] = useState<number>(1);
   const [limit, setLimit] = useState<number>(10);
@@ -96,9 +109,62 @@ export const useOwnerSalesCancellationHistory = () => {
     }
   }, [searchQuery, startDate, endDate, customerType, status, employeeId, paymentMethod, page, limit]);
 
+  // --- Fetch Overall Stats (สถิติภาพรวมทั้งหมด ไม่ขึ้นกับตัวกรอง) ---
+  const fetchOverallStats = useCallback(async () => {
+    try {
+      setIsStatsLoading(true);
+      const response = await posApiService.getCancellationRequests({ limit: 0 });
+      const allItems = response.items || [];
+
+      let pendingCount = 0, pendingAmount = 0;
+      let approvedCount = 0, approvedAmount = 0;
+      let rejectedCount = 0, rejectedAmount = 0;
+      let totalCount = 0, totalAmount = 0;
+
+      for (const item of allItems) {
+        const amount = Number(item.total_amount) || 0;
+        const s = (item.status || "").trim().toUpperCase();
+        const hasCancelRemark = Boolean(item.cancel_remark && item.cancel_remark.trim() !== "");
+
+        totalCount++;
+        totalAmount += amount;
+
+        if (s === "PENDING_CANCEL") {
+          pendingCount++;
+          pendingAmount += amount;
+        } else if (s === "CANCELLED" || s === "ยกเลิก") {
+          approvedCount++;
+          approvedAmount += amount;
+        } else if (hasCancelRemark || s === "REJECTED") {
+          rejectedCount++;
+          rejectedAmount += amount;
+        }
+      }
+
+      setStats({
+        pendingCount,
+        pendingAmount,
+        approvedCount,
+        approvedAmount,
+        rejectedCount,
+        rejectedAmount,
+        totalCount,
+        totalAmount,
+      });
+    } catch (err) {
+      console.error("Failed to fetch overall stats for owner cancellation:", err);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchCancellationHistory();
   }, [fetchCancellationHistory]);
+
+  useEffect(() => {
+    fetchOverallStats();
+  }, [fetchOverallStats]);
 
   // --- Selection Handlers ---
   const selectableItems = dataList.filter(
@@ -158,6 +224,7 @@ export const useOwnerSalesCancellationHistory = () => {
         alert("อนุมัติยกเลิกบิลสำเร็จ");
         setSelectedIds([]);
         fetchCancellationHistory();
+        fetchOverallStats();
       } catch (err: any) {
         alert(err?.response?.data?.message || "เกิดข้อผิดพลาดในการอนุมัติยกเลิกบิล");
       } finally {
@@ -188,6 +255,7 @@ export const useOwnerSalesCancellationHistory = () => {
         alert("ปฏิเสธคำขอยกเลิกบิลสำเร็จ");
         setSelectedIds([]);
         fetchCancellationHistory();
+        fetchOverallStats();
       } catch (err: any) {
         alert(err?.response?.data?.message || "เกิดข้อผิดพลาดในการปฏิเสธคำขอยกเลิกบิล");
       } finally {
@@ -195,6 +263,11 @@ export const useOwnerSalesCancellationHistory = () => {
       }
     }
   };
+
+  const refetch = useCallback(() => {
+    fetchCancellationHistory();
+    fetchOverallStats();
+  }, [fetchCancellationHistory, fetchOverallStats]);
 
   return {
     // Data & Selection
@@ -205,6 +278,11 @@ export const useOwnerSalesCancellationHistory = () => {
     selectableItems,
     isLoading,
     error,
+
+    // Overall Stats
+    stats,
+    isStatsLoading,
+    fetchOverallStats,
 
     // Pagination
     page,
@@ -237,6 +315,6 @@ export const useOwnerSalesCancellationHistory = () => {
     handleSearch,
     handleApproveSelected,
     handleRejectSelected, 
-    refetch: fetchCancellationHistory,
+    refetch,
   };
 };

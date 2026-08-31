@@ -12,7 +12,8 @@ const inputVariants = cva(
   {
     variants: {
       hasError: {
-        true:  "border border-red-400 focus:outline-none focus:border-red-500",
+        //เพิ่มการจัดการ focus state สำหรับ input ที่มี error
+        true:  "border border-red-400 focus:outline-none focus:border-red-500 ring-1 ring-red-500", // ไฮไลต์ขอบสีแดง 1px ตอนกรอกข้อมูลไม่ถูกต้อง
         false: "border-none focus:outline-none",
       },
       hasLeftIcon: {
@@ -104,11 +105,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         </div>
 
         {error ? (
-          <p id={`${inputId}-error`} className="text-xs text-red-500 text-center">
+          <p id={`${inputId}-error`} className="text-xs text-red-500 text-left mt-0.5">
             {error}
           </p>
         ) : helperText ? (
-          <p className="text-xs text-slate-400">{helperText}</p>
+          <p className="text-xs font-light text-[#6B7280]">{helperText}</p>
         ) : null}
       </div>
     );

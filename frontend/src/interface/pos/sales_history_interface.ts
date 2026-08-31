@@ -49,6 +49,7 @@ export interface SalesHistoryItemResponse {
   cancel_remark?: string | null;
   cancel_processed_at?: string | null;
   canceller?: string;
+  note?: string;
 }
 
 export interface SalesHistoryPaginationResponse {
@@ -124,6 +125,8 @@ export interface GetSaleHistoryByIDResponse {
   cancel_requested_at?: string | null;
   cancel_remark?: string | null;
   cancel_processed_at?: string | null;
+  rejected_at?: string | null;
+  cancelled_at?: string | null;
   created_by_id?: number | null;
   created_by_name?: string;
   canceller?: string;
