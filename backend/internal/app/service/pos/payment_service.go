@@ -1,6 +1,7 @@
 package pos
 
 import (
+	"context"
 	posDto "backend/internal/app/dto/pos"
 	"backend/internal/app/entity"
 	posRepository "backend/internal/app/repository/pos"
@@ -28,6 +29,7 @@ type PaymentService interface {
 	ApproveCancelPaymentReceipt(repaymentID uint, ownerID uint, remark string) error
 	RejectCancelPaymentReceipt(repaymentID uint, remark string) error
 	CancelPaymentReceipt(repaymentID uint, req posDto.CancelPaymentReceiptRequest) error
+	GenerateDebtRepaymentReceiptPDF(ctx context.Context, identifier string) ([]byte, error)
 }
 
 type paymentService struct {

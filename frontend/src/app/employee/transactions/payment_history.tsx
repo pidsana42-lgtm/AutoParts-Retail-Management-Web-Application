@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import {
   Eye,
   ChevronLeft,
@@ -5,6 +6,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ScanBarcode,
+  Printer,
   X,
 } from "lucide-react";
 
@@ -35,11 +37,35 @@ import { getDisplayCustomerName, getPageNumbers, getPaymentVariant } from "../..
 import { PaymentTypeBadge, PaymentStatusBadge } from "../../../components/elements/status_badge";
 import { formatDate } from "../../../utils/date";
 import { useUserRole } from "../../../hooks/useUserRole";
+import { posApiService } from "../../../service/http/pos/pos_service";
+import { downloadPdfBlob } from "../../../utils/print";
 
 
 export default function PaymentHistoryPage() {
   const navigate = useNavigate();
   const { isOwnerOrAdmin } = useUserRole();
+  const [printingReceiptId, setPrintingReceiptId] = useState<number | string | null>(null);
+
+  const handlePrintReceipt = async (item: PaymentHistoryItem) => {
+    const targetId = item.receipt_id || item.receipt_number;
+    setPrintingReceiptId(targetId);
+    try {
+      let blob: Blob;
+      if (item.payment_type === "repayment") {
+        blob = await posApiService.printPaymentReceiptPDF(targetId);
+      } else {
+        blob = await posApiService.printOrderReceipt(item.order_numbers || targetId);
+      }
+      const rawNum = item.receipt_number || targetId;
+      const fileName = String(rawNum).endsWith(".pdf") ? `${rawNum}` : `${rawNum}.pdf`;
+      downloadPdfBlob(blob, fileName);
+    } catch (err) {
+      console.error("Failed to print receipt:", err);
+      alert("ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setPrintingReceiptId(null);
+    }
+  };
 
   const {
     items,
@@ -510,16 +536,30 @@ export default function PaymentHistoryPage() {
                         </Badge>
                       </TableCell>
 
-                      {/* 9. ปุ่มดูรายละเอียด */}
+                      {/* 9. จัดการ: ปุ่มดูรายละเอียด + ปุ่มพิมพ์ใบเสร็จ */}
                       <TableCell className="py-3.5 px-3 text-center">
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full"
-                          title="ดูรายละเอียดใบเสร็จ"
-                          onClick={() => setSelectedReceipt(item)}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
+                            title="ดูรายละเอียดใบเสร็จ"
+                            onClick={() => setSelectedReceipt(item)}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={printingReceiptId === (item.receipt_id || item.receipt_number)}
+                            className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100 disabled:opacity-40"
+                            title="พิมพ์/ดาวน์โหลดใบเสร็จ"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePrintReceipt(item);
+                            }}
+                          >
+                            <Printer className={cn("w-4 h-4", printingReceiptId === (item.receipt_id || item.receipt_number) && "animate-pulse")} />
+                          </button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -711,6 +751,31 @@ export default function PaymentHistoryPage() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* ปุ่มพิมพ์ใบเสร็จรับเงิน (PDF) */}
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={async () => {
+                    try {
+                      const targetId = selectedReceipt.receipt_id || selectedReceipt.receipt_number;
+                      let blob: Blob;
+                      if (selectedReceipt.payment_type === "repayment") {
+                        blob = await posApiService.printPaymentReceiptPDF(targetId);
+                      } else {
+                        blob = await posApiService.printOrderReceipt(selectedReceipt.order_numbers || targetId);
+                      }
+                      const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+                      window.open(blobUrl, "_blank");
+                    } catch (err) {
+                      alert("ไม่สามารถเปิดพิมพ์ใบเสร็จได้");
+                    }
+                  }}
+                  className="w-full text-xs h-10 font-normal flex items-center justify-center gap-1.5 shadow-sm bg-[#1C1B1B] hover:bg-zinc-800 text-white cursor-pointer rounded-none"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>พิมพ์ใบเสร็จรับเงิน (PDF)</span>
+                </Button>
 
                 {/* 2. กรณีเป็น Direct Payment (ชำระสดหน้าร้าน) -> มีปุ่มเด้งไปหน้าประวัติการขายสินค้าและเลือกบิลให้อัตโนมัติ */}
                 {selectedReceipt.payment_type === "payment" && selectedReceipt.status !== "cancelled" && (

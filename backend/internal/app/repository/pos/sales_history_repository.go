@@ -170,6 +170,10 @@ func (r *salesHistoryRepository) GetSaleHistoryByID(identifier string) (*entity.
 		Preload("Payments.PaymentMethod").
 		Preload("Payments.ReceivedBy").
 		Preload("Items").
+		Preload("Items.Product").
+		Preload("Items.Product.Grade").
+		Preload("Items.Product.Models").
+		Preload("Items.Product.Models.Brand").
 		Preload("CreatedBy").
 		Preload("CancelRequestedBy")
 
