@@ -282,15 +282,13 @@ func (s *customerClaimService) GenerateCustomerClaimPDF(ctx context.Context, cla
 	}
 
 	// 9. หมายเหตุ & เงื่อนไขการรับเคลม
-	m.Row(18, func() {
+
+	m.Row(16, func() {
 		m.Col(7, func() {
 			m.Text("เงื่อนไขการรับประกันและข้อกำหนดการเคลม:", props.Text{Size: 10, Style: consts.Bold, Color: hexToColor("#E51C23")})
 			m.Text("1. กรุณาเก็บใบรับเคลมนี้ไว้เป็นหลักฐานเพื่อใช้แสดงตัวตนในการรับสินค้าหรือติดตามสถานะ", props.Text{Size: 9, Top: 4})
 			m.Text("2. สินค้าที่นำมาเคลมต้องอยู่ในเงื่อนไขการรับประกัน ไม่แตก หัก บิ่น ไหม้ หรือดัดแปลงสภาพ", props.Text{Size: 9, Top: 7.5})
 			m.Text("3. ทางร้านจะติดต่อกลับผ่านเบอร์โทรศัพท์ที่ระบุไว้เมื่อผลการเคลมได้รับการอนุมัติเสร็จสิ้น", props.Text{Size: 9, Top: 11})
-			if claim.Note != "" {
-				m.Text(fmt.Sprintf("หมายเหตุเพิ่มเติม: %s", claim.Note), props.Text{Size: 9, Style: consts.Bold, Top: 14.5})
-			}
 		})
 
 		m.Col(5, func() {
