@@ -124,9 +124,15 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 
 	// วนลูปข้อมูลสินค้า (Content)
 	for i, item := range poData.PO_Items {
-		// Supply_product_code_snapshot ถูกบันทึกไว้ตอนสร้างรายการ PO นี้อยู่แล้ว (รหัสของ Supplier เจ้าที่สั่งซื้อ ณ ตอนนั้น)
-		// CompanyProductCode ย้ายไปอยู่ที่ Inventory (ผูกกับ Supplier แต่ละเจ้า) แล้ว ไม่มีอยู่ที่ Product โดยตรงอีกต่อไป
+		// Supply_product_code_snapshot ถูกบันทึกไว้ตอนสร้างรายการ PO นี้อยู่แล้ว (CompanyProductCode จาก Inventory ของ Supplier เจ้าที่สั่งซื้อ ณ ตอนนั้น)
 		productCode := item.Supply_product_code_snapshot
+		if productCode == "" {
+			if item.Product != nil && item.Product.Product_Code != "" {
+				productCode = item.Product.Product_Code
+			} else {
+				productCode = "-"
+			}
+		}
 		poType := "สั่งซื้อ"
 		if item.PreOrderItemID != nil {
 			poType = "พรีออเดอร์"

@@ -744,15 +744,15 @@ func (s *purchaseOrderService) SendStaleDraftReminders(ctx context.Context) erro
 
 // companyProductCodeForSupplier: หารหัสสินค้าที่ Supplier เจ้านี้ใช้เรียกสินค้าชิ้นนี้ (จาก Inventory ที่ preload มาแล้ว)
 // CompanyProductCode ย้ายมาอยู่ที่ Inventory แทน Product โดยตรง เพราะสินค้า 1 ชิ้นมาจากหลาย Supplier ได้
-// แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน — คืนค่าว่างถ้าสินค้านี้ยังไม่เคยรับมาจาก Supplier เจ้านี้
+// แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน — คืนค่า CompanyProductCode ของ Supplier เจ้านั้น หรือ fallback เป็น Product_Code ถ้ายังไม่เคยระบุ
 func companyProductCodeForSupplier(product *poEntity.Product, supplierID uint) string {
 	if product == nil {
 		return ""
 	}
 	for _, inv := range product.Inventories {
-		if inv.SupplierID == supplierID {
+		if inv.SupplierID == supplierID && inv.CompanyProductCode != "" {
 			return inv.CompanyProductCode
 		}
 	}
-	return ""
+	return product.Product_Code
 }
