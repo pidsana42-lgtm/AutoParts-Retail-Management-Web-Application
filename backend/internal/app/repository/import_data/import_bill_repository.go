@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
 	"backend/internal/app/entity"
 	"backend/internal/app/enum"
+	"backend/internal/pkg/lotcode"
+	"gorm.io/gorm"
 )
 
 type ImportBillRepository interface {
@@ -81,9 +82,52 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 			bill.BillNo = fmt.Sprintf("BILL-%s-%d", time.Now().Format("20060102"), time.Now().UnixNano()%100000)
 		}
 
+		// upsertSupplierInventory บันทึก/ปรับยอดในตาราง inventories ต่อ (product, supplier)
+		// เพื่อให้ระบบรู้ว่าสินค้าชิ้นนี้รับมาจากบริษัทไหน และรับจากเจ้านั้นไปกี่ชิ้น
+		upsertSupplierInventory := func(productID, supplierID uint, qty int) error {
+			if productID == 0 || supplierID == 0 || qty == 0 {
+				return nil
+			}
+			var inv entity.Inventory
+			err := tx.Where("product_id = ? AND supplier_id = ?", productID, supplierID).First(&inv).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				// สร้างล็อตใหม่ แล้วออกรหัสล็อตต่อบริษัท (variant code) ไว้พิมพ์ QR/บาร์โค้ดแยกบริษัท
+				newInv := entity.Inventory{
+					Inventory_Quantity:    qty,
+					Last_Updated_DateTime: time.Now(),
+					ProductID:             productID,
+					SupplierID:            supplierID,
+				}
+				if err := tx.Create(&newInv).Error; err != nil {
+					return err
+				}
+
+				var supp entity.Supplier
+				shortName := ""
+				if errSup := tx.First(&supp, supplierID).Error; errSup == nil {
+					shortName = supp.ShortSupplierName
+				}
+				var prod entity.Product
+				prodCode := ""
+				if errProd := tx.Select("product_code").First(&prod, productID).Error; errProd == nil {
+					prodCode = prod.Product_Code
+				}
+
+				return tx.Model(&entity.Inventory{}).Where("id = ?", newInv.ID).
+					Update("variant_code", lotcode.Build(prodCode, shortName, newInv.ID)).Error
+			}
+			if err != nil {
+				return err
+			}
+			return tx.Model(&entity.Inventory{}).Where("id = ?", inv.ID).Updates(map[string]interface{}{
+				"inventory_quantity":     inv.Inventory_Quantity + qty,
+				"last_updated_date_time": time.Now(),
+			}).Error
+		}
+
 		// reverseBillStock subtracts the stock that was added by a previous confirm of this bill.
 		// Must be called before deleting the old bill_items, so quantities are still readable.
-		reverseBillStock := func(billID uint) error {
+		reverseBillStock := func(billID, supplierID uint) error {
 			var oldItems []entity.BillItem
 			if err := tx.Unscoped().Where("bill_id = ?", billID).Find(&oldItems).Error; err != nil {
 				return err
@@ -95,6 +139,15 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				if err := tx.Model(&entity.Product{}).
 					Where("id = ? AND quantity >= ?", item.ProductID, item.OrderQuantity).
 					UpdateColumn("quantity", gorm.Expr("quantity - ?", item.OrderQuantity)).Error; err != nil {
+					return err
+				}
+				// คืนยอดต่อบริษัทด้วย (ลดได้ไม่ต่ำกว่า 0) เพื่อไม่ให้ที่มาค้างยอดผิดหลัง import ซ้ำ
+				if err := tx.Model(&entity.Inventory{}).
+					Where("product_id = ? AND supplier_id = ?", item.ProductID, supplierID).
+					Updates(map[string]interface{}{
+						"inventory_quantity":     gorm.Expr("GREATEST(inventory_quantity - ?, 0)", item.OrderQuantity),
+						"last_updated_date_time": time.Now(),
+					}).Error; err != nil {
 					return err
 				}
 			}
@@ -114,7 +167,7 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 			if err := tx.Unscoped().Model(&existingBill).Updates(bill).Error; err != nil {
 				return err
 			}
-			if err := reverseBillStock(existingBill.ID); err != nil {
+			if err := reverseBillStock(existingBill.ID, existingBill.SupplierID); err != nil {
 				return err
 			}
 			if err := tx.Unscoped().Where("bill_id = ?", existingBill.ID).Delete(&entity.BillItem{}).Error; err != nil {
@@ -140,7 +193,7 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 					if err := tx.Unscoped().Model(&linkedBill).Updates(bill).Error; err != nil {
 						return err
 					}
-					if err := reverseBillStock(targetID); err != nil {
+					if err := reverseBillStock(targetID, linkedBill.SupplierID); err != nil {
 						return err
 					}
 					if err := tx.Unscoped().Where("bill_id = ?", targetID).Delete(&entity.BillItem{}).Error; err != nil {
@@ -171,7 +224,12 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 			} else {
 				prodName := strings.TrimSpace(items[i].CompanyProductName)
 				prodCode := strings.TrimSpace(items[i].CompanyProductCode)
-				err = tx.Where("LOWER(TRIM(product_name)) = LOWER(TRIM(?)) OR (LOWER(TRIM(product_code)) = LOWER(TRIM(?)) AND product_code != '')", prodName, prodCode).First(&prod).Error
+				// กรณีชื่อ/รหัสซ้ำกันมีหลายสินค้า (ชื่อเดียวกันแต่ต่างบริษัท) → เลือกตัวที่เคยรับจากบริษัทนี้มาก่อน
+				// แล้วค่อย fallback เป็นตัวที่ id เก่าสุด เพื่อให้ผลลัพธ์คาดเดาได้เสมอ
+				err = tx.Where("LOWER(TRIM(product_name)) = LOWER(TRIM(?)) OR (LOWER(TRIM(product_code)) = LOWER(TRIM(?)) AND product_code != '')", prodName, prodCode).
+					Order(fmt.Sprintf("CASE WHEN EXISTS (SELECT 1 FROM inventories i WHERE i.product_id = products.id AND i.supplier_id = %d AND i.deleted_at IS NULL) THEN 0 ELSE 1 END", bill.SupplierID)).
+					Order("id").
+					First(&prod).Error
 			}
 
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -183,6 +241,10 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				if items[i].SubCategoryID != nil && *items[i].SubCategoryID > 0 {
 					subCatID = items[i].SubCategoryID
 				}
+				var subSubCatID *uint
+				if items[i].SubSubCategoryID != nil && *items[i].SubSubCategoryID > 0 {
+					subSubCatID = items[i].SubSubCategoryID
+				}
 
 				prodName := strings.TrimSpace(items[i].CompanyProductName)
 				if prodName == "" {
@@ -190,28 +252,38 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				}
 
 				newProd := entity.Product{
-					Product_Name:   prodName,
-					Product_Code:   "",
-					Part_Number:    items[i].CompanyProductCode,
-					Barcode:        "",
-					Cost_price:     items[i].PricePerUnit,
-					Sale_price:     items[i].PricePerUnit * 1.25,
-					Is_Active:      true,
-					Quantity:       items[i].OrderQuantity,
-					Limit_Quantity: 5,
-					Models:         []entity.Models{{Model: gorm.Model{ID: 1}}},
-					UnitID:         1,
-					CategoryID:     catID,
-					SubCategoryID:  subCatID,
-					GradeID:        1,
-					ShelfID:        1,
+					Product_Name:     prodName,
+					Product_Code:     "",
+					Part_Number:      items[i].CompanyProductCode,
+					Barcode:          "",
+					Cost_price:       items[i].PricePerUnit,
+					Sale_price:       items[i].PricePerUnit * 1.25,
+					Is_Active:        true,
+					Quantity:         items[i].OrderQuantity,
+					Limit_Quantity:   5,
+					Models:           []entity.Models{{Model: gorm.Model{ID: 1}}},
+					UnitID:           1,
+					CategoryID:       catID,
+					SubCategoryID:    subCatID,
+					SubSubCategoryID: subSubCatID,
+					GradeID:          1,
+					ShelfID:          1,
 				}
 				if err := tx.Create(&newProd).Error; err != nil {
 					return err
 				}
 				prod = newProd
+
+				// ผูกสินค้าใหม่เข้ากับบริษัทที่นำเข้าบิลนี้ ตั้งแต่ชิ้นแรก
+				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, items[i].OrderQuantity); err != nil {
+					return err
+				}
 			} else if err == nil {
 				if err := tx.Model(&prod).Update("quantity", prod.Quantity+items[i].OrderQuantity).Error; err != nil {
+					return err
+				}
+				// บวกยอดเข้าบริษัทของบิลนี้ — ทำให้สินค้าชื่อเดียวกันจากต่างบริษัทไล่ยอด/ที่มาแยกกันได้
+				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, items[i].OrderQuantity); err != nil {
 					return err
 				}
 				if items[i].PricePerUnit > 0 && items[i].PricePerUnit != prod.Cost_price {
@@ -281,7 +353,7 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 
 func (r *billRepository) GetBillByID(id uint) (*entity.Bill, error) {
 	var bill entity.Bill
-	err := r.db.Preload("BillItems").Preload("Supplier").First(&bill, id).Error
+	err := r.db.Preload("BillItems").Preload("Supplier").Preload("BillImage").First(&bill, id).Error
 	if err != nil {
 		return nil, err
 	}

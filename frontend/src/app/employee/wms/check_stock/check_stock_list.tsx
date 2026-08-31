@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { CalendarClock, ClipboardList, Loader2, MapPin, PackageSearch } from "lucide-react";
 
 import Heading from "../../../../components/elements/heading";
+// import Breadcrumb from "../../../../components/elements/breadcrumb";
 import Text from "../../../../components/elements/text";
 import { Card } from "../../../../components/elements/card";
 import Badge from "../../../../components/elements/badge";
@@ -84,6 +85,12 @@ function EmployeeCheckStockListContent() {
 
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-6 font-sans">
+      {/* <Breadcrumb
+        items={[
+          { label: "คลังสินค้า", path: "/employee/wms/stock-data" },
+          { label: "เช็คสต็อกสินค้า" },
+        ]}
+      /> */}
       <div>
         <Heading level="h1" className="text-3xl font-bold tracking-tight text-slate-800">
           งานเช็คสต็อกของฉัน
@@ -94,20 +101,22 @@ function EmployeeCheckStockListContent() {
       </div>
 
       {/* Status tabs */}
-      <div className="flex flex-wrap gap-2">
-        {STATUS_TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setStatusTab(t)}
-            className={`cursor-pointer rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-              statusTab === t
-                ? "border-[#B70011] bg-[#B70011] text-white"
-                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-            }`}
-          >
-            {t} {counts[t] ? `(${counts[t]})` : ""}
-          </button>
-        ))}
+      <div className="flex max-w-4xl rounded-sm border border-slate-200 bg-[#F6F3F2] p-1 shadow-sm">
+        {STATUS_TABS.map((t) => {
+          const isActive = statusTab === t;
+          return (
+            <button
+              key={t}
+              onClick={() => setStatusTab(t)}
+              className={[
+                "flex-1 cursor-pointer rounded-sm py-2 text-center text-xs font-semibold transition-all duration-150",
+                isActive ? "border border-slate-200/50 bg-white text-[#B70011] shadow-sm" : "text-slate-600 hover:text-slate-900",
+              ].join(" ")}
+            >
+              {t} {counts[t] ? `(${counts[t]})` : ""}
+            </button>
+          );
+        })}
       </div>
 
       {/* List */}

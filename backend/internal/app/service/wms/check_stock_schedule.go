@@ -54,6 +54,53 @@ type CheckStockScheduleService interface {
 	ActivateDueSchedules() error
 }
 
+// resolveTargetName: สร้างข้อความอธิบาย "เป้าหมายการตรวจ" แบบสั้นๆ ใช้ในข้อความแจ้งเตือน
+// (แยกจาก toResponse ที่คำนวณ TargetName+ProductCount เต็มรูปแบบสำหรับหน้าตาราง เพื่อไม่ให้ไปกระทบของเดิม)
+func (s *checkStockScheduleService) resolveTargetName(sc *entity.CheckStockSchedule) string {
+	switch sc.CheckType {
+	case "LOCATION":
+		if sc.ShelfLevelID != nil {
+			var level entity.ShelfLevel
+			if err := s.db.Preload("Shelf.Zone").First(&level, sc.ShelfLevelID).Error; err == nil && level.Shelf != nil && level.Shelf.Zone != nil {
+				return fmt.Sprintf("Zone %s - %s - %s", level.Shelf.Zone.Zone_Name, level.Shelf.Shelf_Name, level.Level_Name)
+			}
+		} else if sc.ShelfID != nil {
+			var shelf entity.Shelf
+			if err := s.db.Preload("Zone").First(&shelf, sc.ShelfID).Error; err == nil && shelf.Zone != nil {
+				return fmt.Sprintf("Zone %s - %s", shelf.Zone.Zone_Name, shelf.Shelf_Name)
+			}
+		} else if sc.ZoneID != nil {
+			var zone entity.Zone
+			s.db.First(&zone, sc.ZoneID)
+			return fmt.Sprintf("Zone %s", zone.Zone_Name)
+		}
+		return "พื้นที่จัดเก็บสินค้า"
+	case "CATEGORY":
+		if sc.SubSubCategoryID != nil {
+			var ssc entity.SubSubCategory
+			s.db.First(&ssc, sc.SubSubCategoryID)
+			return fmt.Sprintf("หมวดหมู่ย่อยที่สุด: %s", ssc.Sub_Sub_Category_Name)
+		} else if sc.SubCategoryID != nil {
+			var subcat entity.SubCategory
+			s.db.First(&subcat, sc.SubCategoryID)
+			return fmt.Sprintf("หมวดหมู่ย่อย: %s", subcat.Sub_Category_Name)
+		} else if sc.CategoryID != nil {
+			var cat entity.Category
+			s.db.First(&cat, sc.CategoryID)
+			return fmt.Sprintf("หมวดหมู่: %s", cat.Category_Name)
+		}
+		return "หมวดหมู่สินค้า"
+	case "PRODUCT":
+		if sc.ProductID != nil {
+			var prod entity.Product
+			s.db.First(&prod, sc.ProductID)
+			return fmt.Sprintf("สินค้า [%s] %s", prod.Product_Code, prod.Product_Name)
+		}
+		return "สินค้าชิ้นนี้"
+	}
+	return "รายการนี้"
+}
+
 type checkStockScheduleService struct {
 	repo         wmsRepo.CheckStockScheduleRepository
 	db           *gorm.DB // injected to do simple lookups for UI names and counts
@@ -97,6 +144,20 @@ func (s *checkStockScheduleService) CreateSchedule(req *wmsDto.CheckStockSchedul
 			&schedule.ID,
 		); err != nil {
 			log.Printf("[Notification] failed to notify user %d (schedule %d): %v", *schedule.UserID, schedule.ID, err)
+		}
+	}
+
+	// แจ้งเตือนพนักงาน "คนอื่น" ที่ไม่ได้รับมอบหมายด้วย ให้รู้ว่าสินค้า/โซน/หมวดหมู่นี้กำลังจะถูกเช็ค
+	// (เผื่อมีคนกำลังจะไปตัด/ปรับสต็อกจุดเดียวกันพร้อมกัน จะได้เห็นว่ามีคนอื่นกำลังตรวจอยู่)
+	if s.notification != nil {
+		if err := s.notification.NotifyEmployees(
+			"CHECK_STOCK_SCHEDULED",
+			"มีการเช็คสต็อกใหม่",
+			fmt.Sprintf("%s กำลังจะถูกเช็คสต็อก กำหนดตรวจวันที่ %s", s.resolveTargetName(&schedule), bangkokTime(schedule.Scheduled_DateTime).Format("02/01/2006 15:04")),
+			"/employee/wms/check-stock",
+			&schedule.ID,
+		); err != nil {
+			log.Printf("[Notification] failed to notify employees (schedule %d): %v", schedule.ID, err)
 		}
 	}
 
@@ -320,6 +381,19 @@ func (s *checkStockScheduleService) ActivateDueSchedules() error {
 				&sc.ID,
 			); err != nil {
 				log.Printf("[Notification] failed to notify user %d (schedule %d): %v", *sc.UserID, sc.ID, err)
+			}
+		}
+
+		// แจ้งเตือนพนักงานคนอื่นที่ไม่ได้รับมอบหมายด้วย ให้รู้ว่าตอนนี้มีการเช็คสต็อกจุดนี้อยู่จริงๆ แล้ว
+		if s.notification != nil {
+			if err := s.notification.NotifyEmployees(
+				"CHECK_STOCK_IN_PROGRESS",
+				"กำลังมีการเช็คสต็อก",
+				fmt.Sprintf("%s กำลังถูกเช็คสต็อกอยู่ในขณะนี้", s.resolveTargetName(&sc)),
+				"/employee/wms/check-stock",
+				&sc.ID,
+			); err != nil {
+				log.Printf("[Notification] failed to notify employees (schedule %d): %v", sc.ID, err)
 			}
 		}
 	}

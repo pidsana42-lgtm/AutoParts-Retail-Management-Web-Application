@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import {
   Eye,
   ChevronLeft,
@@ -6,6 +7,8 @@ import {
   ChevronsRight,
   ScanBarcode,
   X,
+  Printer,
+  Download,
 } from "lucide-react";
 
 // นำเข้า Components
@@ -28,13 +31,33 @@ import { cn } from "../../../utils/component";
 
 // นำเข้า Hook & Helpers
 import { useSalesHistory } from "./hooks/useSalesHistory";
-import { getDisplayCustomerName, getPageNumbers, getPaymentVariant, renderStatusBadge } from "../../../utils/poshelpers";
+import { getDisplayCustomerName, getPageNumbers, getPaymentVariant } from "../../../utils/poshelpers";
+import { SalesStatusBadge } from "../../../components/elements/status_badge";
 import { formatDate } from "../../../utils/date";
 import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
 import { useUserRole } from "../../../hooks/useUserRole";
+import { posApiService } from "../../../service/http/pos/pos_service";
+import { openPdfBlobInNewTab, downloadPdfBlob } from "../../../utils/print";
 
 
 export default function TransactionHistoryPage() {
+  const [printingOrderId, setPrintingOrderId] = useState<number | string | null>(null);
+
+  const handlePrintReceipt = async (orderId: number | string, orderNumber?: string) => {
+    setPrintingOrderId(orderId);
+    try {
+      const blob = await posApiService.printOrderReceipt(orderId);
+      const rawNum = orderNumber || orderId;
+      const fileName = String(rawNum).startsWith("INV") ? `${rawNum}.pdf` : `INV-${rawNum}.pdf`;
+      downloadPdfBlob(blob, fileName);
+    } catch (err) {
+      console.error("Failed to print receipt:", err);
+      alert("ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setPrintingOrderId(null);
+    }
+  };
+
   // --- ดึงข้อมูลและ Handlers จริงจาก Custom Hook ---
   const { isOwnerOrAdmin } = useUserRole();
 
@@ -45,6 +68,8 @@ export default function TransactionHistoryPage() {
     totalPages,
     isLoading,
     error,
+    stats,
+    isStatsLoading,
     search,
     customerType,
     paymentMethod,
@@ -70,12 +95,18 @@ export default function TransactionHistoryPage() {
     isDetailLoading,
     cancelReason,
     setCancelReason,
+    cancelRemark,
+    setCancelRemark,
     isCancelling,
     handleRequestCancel, //  ดึง handler มาใช้งาน
     handleDirectCancelByOwner, 
     handleRejectCancelByOwner,
+    handleRevertCancel,
     getStatusText,
   } = useSalesHistory();
+
+  const kpiValue = (value: React.ReactNode) =>
+    isStatsLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
 
   return (
     <div className="relative flex min-h-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-x-hidden">
@@ -85,18 +116,11 @@ export default function TransactionHistoryPage() {
           {/* Section Title */}
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
-              <Text
-                variant="xs"
-                className="text-[#E51C23] uppercase tracking-wider mb-0"
-              >
-                บันทึกบิลขายสินค้า
-              </Text>
-              <Heading
-                level="h1"
-                weight="normal"
-                className="mb-0 text-[#1C1B1B]"
-              >
+              <Heading level='h1' weight='semibold' className='m-0 text-black'>
                 ประวัติการขายสินค้า
+              </Heading>
+              <Heading level='h6' className='m-0 mt-1'>
+                บันทึกบิลขายสินค้า
               </Heading>
             </div>
           </div>
@@ -225,36 +249,124 @@ export default function TransactionHistoryPage() {
             </CardContent>
           </Card>
 
+          {/* Small Stat Cards เหนือตาราง */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+            {/* 1. ยอดขายรวม (Total Sales) */}
+            <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Heading level="h6" className="uppercase tracking-wider">
+                    ยอดขายรวม
+                  </Heading>
+                </div>
+                <Heading level="h3">
+                  ฿{kpiValue(stats.totalSales.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+                </Heading>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                <span>ภาพรวมยอดขายทั้งหมด</span>
+                <span className="text-emerald-500 font-normal">สำเร็จ {stats.completedCount} บิล</span>
+              </div>
+            </Card>
+
+            {/* 2. จำนวนบิลทั้งหมด (Total Orders) */}
+            <Card className="border-l-5 !border-l-slate-300 flex flex-col justify-between p-4 md:p-5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Heading level="h6" className="uppercase tracking-wider">
+                    จำนวนบิลทั้งหมด
+                  </Heading>
+                </div>
+                <Heading level="h3">
+                  {kpiValue(stats.totalOrders.toLocaleString("th-TH"))} <span className="text-sm font-normal text-[#1C1B1B]">บิล</span>
+                </Heading>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                <span>บิลทั้งหมดในระบบ</span>
+                {stats.cancelledCount > 0 ? (
+                  <span className="text-[#E51C23] font-normal">ยกเลิก {stats.cancelledCount} บิล</span>
+                ) : (
+                  <span className="text-gray-400">ไม่มีบิลยกเลิก</span>
+                )}
+              </div>
+            </Card>
+
+            {/* 3. ยอดเงินสด vs เงินเชื่อ (Cash vs Credit) */}
+            <Card className="bg-white rounded-none border border-gray-200 p-5 shadow-xs border-l-4 border-l-[#E51C23]">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Heading level="h6" className="uppercase tracking-wider">
+                    ยอดเงินสด vs เงินเชื่อ
+                  </Heading>
+                </div>
+                <Heading level="h3" className="flex items-baseline gap-1.5 flex-wrap">
+                  <span title="เงินสด/เงินโอน">
+                    ฿{kpiValue(stats.cashAndQrSales.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
+                  </span>
+                  <span className="text-xs text-gray-400 font-light">/</span>
+                  <span title="เงินเชื่อ">
+                    ฿{kpiValue(stats.creditSales.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
+                  </span>
+                </Heading>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                <span>สด/โอน: <span className="text-emerald-500 font-normal">฿{stats.cashAndQrSales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></span>
+                <span>เชื่อ: <span className="text-sky-700 font-normal">฿{stats.creditSales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></span>
+              </div>
+            </Card>
+
+            {/* 4. ยอดที่ชำระแล้ว vs ค้างชำระ (Paid vs Balance Due) */}
+            <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Heading level="h6" className="uppercase tracking-wider">
+                    ยอดชำระแล้ว vs ค้างชำระ
+                  </Heading>
+                </div>
+                <Heading level="h3" className="flex items-baseline gap-1.5 flex-wrap">
+                  <span title="ชำระแล้ว">
+                    ฿{kpiValue(stats.paidAmount.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
+                  </span>
+                  <span className="text-xs text-gray-400 font-light">/</span>
+                  <span className={stats.balanceDue > 0 ? "text-[#E51C23]" : "text-gray-600"} title="ค้างชำระ">
+                    ฿{kpiValue(stats.balanceDue.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}
+                  </span>
+                </Heading>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-[#6B7280] font-light">
+                <span>
+                  ชำระ: <span className="text-emerald-500 font-normal">฿{stats.paidAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                </span>
+                <span>
+                  {stats.balanceDue > 0 ? (
+                    <>
+                      <span className="text-[#6B7280]">ค้าง: </span>
+                      <span className="text-[#E51C23] font-normal">
+                        ฿{stats.balanceDue.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ({stats.unpaidCount} บิล)
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-gray-400">ไม่มีค้างชำระ</span>
+                  )}
+                </span>
+              </div>
+            </Card>
+          </div>
+
           {/* Data Table */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
             <Table className="!w-full !min-w-0 table-fixed text-left border-collapse">
               {/* Header Table */}
               <TableHeader className="bg-[#F6F3F2] rounded-none border-b border-gray-200 text-[11px] text-[#6B7280] uppercase tracking-wider">
                 <TableRow>
-                  <TableHead className="py-3 px-3 w-[14%]">
-                    หมายเลขคำสั่งซื้อ
-                  </TableHead>
-                  <TableHead className="py-3 px-3 w-[12%]">
-                    วันที่ทำรายการ
-                  </TableHead>
-                  <TableHead className="py-3 px-3 w-[20%]">
-                    ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท
-                  </TableHead>
-                  <TableHead className="py-3  text-left px-3 w-[12%]">
-                    พนักงานขาย
-                  </TableHead>
-                  <TableHead className="py-3 px-3 text-right w-[10%]">
-                    จำนวนเงิน
-                  </TableHead>
-                  <TableHead className="py-3 px-3 text-center w-[12%]">
-                    การชำระเงิน
-                  </TableHead>
-                  <TableHead className="py-3 px-3 text-center w-[12%]">
-                    สถานะ
-                  </TableHead>
-                  <TableHead className="py-3 px-3 text-center w-[8%]">
-                    จัดการ
-                  </TableHead>
+                  <TableHead className="py-3 px-3 w-[14%]">หมายเลขคำสั่งซื้อ</TableHead>
+                  <TableHead className="py-3 px-3 w-[12%]">วันที่ทำรายการ</TableHead>
+                  <TableHead className="py-3 px-3 w-[20%]">ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท</TableHead>
+                  <TableHead className="py-3  text-left px-3 w-[12%]">พนักงานขาย</TableHead>
+                  <TableHead className="py-3 px-3 text-right w-[10%]">จำนวนเงิน</TableHead>
+                  <TableHead className="py-3 px-3 text-center w-[12%]">การชำระเงิน</TableHead>
+                  <TableHead className="py-3 px-3 text-center w-[12%]">สถานะ</TableHead>
+                  <TableHead className="py-3 px-3 text-center w-[8%]">จัดการ</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -264,7 +376,7 @@ export default function TransactionHistoryPage() {
                   <TableRow>
                     <TableCell colSpan={8} className="py-12 text-center">
                       <Text variant="small" className="text-gray-500 mb-0">
-                        กำลังโหลดข้อมูล...
+                        กำลังโหลดข้อมูลประวัติการขาย...
                       </Text>
                     </TableCell>
                   </TableRow>
@@ -334,7 +446,7 @@ export default function TransactionHistoryPage() {
                       {/* 3.5 พนักงานขาย */}
                       <TableCell className="py-3.5 px-4 truncate">
                         <Text
-                          variant="small"
+                          variant="xs"
                           className="font-normal text-[#1C1B1B] mb-0"
                         >
                           {item.created_by_name || "-"}
@@ -364,19 +476,33 @@ export default function TransactionHistoryPage() {
 
                       {/* 6. สถานะ */}
                       <TableCell className="py-3.5 px-4 text-center">
-                        {renderStatusBadge(item.status, item.payment_status)}
+                        <SalesStatusBadge status={item.status} paymentStatus={item.payment_status} />
                       </TableCell>
 
                       {/* 7. ปุ่มจัดการ */}
                       <TableCell className="py-3.5 px-4 text-center">
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center p-1.5 text-[#E51C23] hover:text-[#c9151b] hover:bg-red-50 transition-colors cursor-pointer rounded-full"
-                          title="ดูรายละเอียด"
-                          onClick={() => setSelectedOrderId(item.id)}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center p-1.5 cursor-pointer rounded-full"
+                            title="ดูรายละเอียด"
+                            onClick={() => setSelectedOrderId(item.id)}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={printingOrderId === item.id}
+                            className="inline-flex items-center justify-center p-1.5 cursor-pointer rounded-full disabled:opacity-40"
+                            title="พิมพ์/ดาวน์โหลดใบเสร็จ"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePrintReceipt(item.id, item.order_number);
+                            }}
+                          >
+                            <Printer className={cn("w-4 h-4", printingOrderId === item.id && "animate-pulse")} />
+                          </button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -528,51 +654,49 @@ export default function TransactionHistoryPage() {
                       </span>
                     </Text>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedOrderId(null)}
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* <Button
+                      type="button"
+                      variant="solid-red"
+                      onClick={() => handlePrintReceipt(orderDetail.id || orderDetail.order_number, orderDetail.order_number)}
+                      disabled={printingOrderId !== null}
+                      className="text-xs h-8 px-3 font-normal rounded-none flex items-center gap-1.5"
+                    >
+                      <Printer size={14} />
+                      {printingOrderId !== null ? "กำลังดาวน์โหลด..." : "พิมพ์ใบเสร็จ/ใบส่งของ"}
+                    </Button> */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrderId(null)}
+                      className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Scrollable Body Content */}
                 <div className="p-6 space-y-6">
                   {/* ข้อมูลลูกค้า */}
                   <div>
-                    <Text
-                      variant="xs"
-                      className="font-normal text-[#E51C23] mb-2"
-                    >
+                    <Text variant="xs" className="font-normal text-[#E51C23] mb-2">
                       ข้อมูลลูกค้า
                     </Text>
-                    <Card className="bg-[#F6F3F2] rounded-none  border-gray-100 border-l-3 border-l-[#E51C23] shadow-none">
+                    <Card className="bg-[#F6F3F2] rounded-none border-gray-100 border-l-3 border-l-[#E51C23] shadow-none">
                       <CardContent className="p-4 space-y-1">
-                        <Text
-                          variant="small"
-                          className="font-medium text-[#1C1B1B] mb-0"
-                        >
-                          {getDisplayCustomerName(
-                            orderDetail as unknown as SalesHistoryItemResponse,
-                          )}
+                        <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
+                          {getDisplayCustomerName(orderDetail)}
                         </Text>
-                        <Text variant="small" className="text-[#6B7280] mb-0">
-                          {orderDetail.phone_number ||
-                            orderDetail.customer_phone_temp ||
-                            "-"}
+                        <Text variant="xs" className="text-[#6B7280] mb-0">
+                          เบอร์โทร: {orderDetail.phone_number || orderDetail.customer_phone_temp || "-"}
                         </Text>
                         {orderDetail.customer_type_name && (
                           <Text variant="xs" className="text-[#6B7280] mb-0">
                             ประเภท: {orderDetail.customer_type_name}
                           </Text>
                         )}
-
                         {orderDetail.address && (
-                          <Text
-                            variant="xs"
-                            className="text-[#6B7280] mb-0 truncate"
-                          >
+                          <Text variant="xs" className="text-[#6B7280] mb-0 truncate">
                             ที่อยู่: {orderDetail.address}
                           </Text>
                         )}
@@ -582,6 +706,33 @@ export default function TransactionHistoryPage() {
                       </CardContent>
                     </Card>
                   </div>
+
+                  {/* ประวัติการกู้คืนคำขอ (แสดงเฉพาะเมื่อมีการกู้คืน) */}
+                  {(() => {
+                    const revertNotes = (orderDetail.note || "")
+                      .split("|")
+                      .map((s) => s.trim())
+                      .filter((s) => s.includes("กู้คืน"));
+
+                    if (revertNotes.length === 0) return null;
+
+                    return (
+                      <div>
+                        <Text variant="xs" className="font-normal text-[#E51C23] mb-2">
+                          ประวัติการกู้คืนคำขอยกเลิก
+                        </Text>
+                        <Card className="bg-[#F6F3F2] rounded-none border-gray-200  shadow-none">
+                          <CardContent className="p-3 space-y-1">
+                            {revertNotes.map((noteText, idx) => (
+                              <Text key={idx} variant="xs" className="text-[#1C1B1B] font-light mb-0">
+                                {noteText}
+                              </Text>
+                            ))}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    );
+                  })()}
 
                   {/* รายการสินค้าจริง */}
                   <div>
@@ -729,42 +880,39 @@ export default function TransactionHistoryPage() {
 
                     // 1. เคสรายการอยู่ระหว่างรออนุมัติการยกเลิก (PENDING_CANCEL)
                     if (status === "PENDING_CANCEL") {
-                      // 👑 1.1 ถ้าผู้ใช้เป็น OWNER / ADMIN: แยกเป็น 2 ส่วน (กล่องสรุปข้อมูล + ฟอร์มการดำเนินการ)
+                      // 1.1 ถ้าผู้ใช้เป็น OWNER / ADMIN: แยกเป็น 2 ส่วน (กล่องสรุปข้อมูล + ฟอร์มการดำเนินการ)
                       if (isOwnerOrAdmin) {
                         return (
                           <div className="space-y-4">
                             {/* ส่วนที่ 1: กล่องสรุปคำขอจากพนักงาน */}
-                            <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-3">
+                            <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-2">
                               <div className="flex items-center justify-between">
-                                <Text
-                                  variant="small"
-                                  className="font-normal text-[#854D0E] mb-0"
-                                >
+                                <Text variant="small" className="font-normal text-[#854D0E] mb-0">
                                   สถานะคำขอ: คำขอยกเลิกจากพนักงาน
                                 </Text>
                                 <Badge
                                   variant="warning"
-                                  className="bg-[#FEF08A] text-[#854D0E] border-none text-[10px] font-light rounded-none py-0.5 px-2"
+                                  size="auto"
+                                  className="bg-[#FEF08A] text-[#854D0E] border-none text-[10px] font-normal rounded-none py-0.5 px-2"
                                 >
                                   {getStatusText(orderDetail.status)}
                                 </Badge>
                               </div>
 
-                              <div className="text-xs text-[#5F5E5E] bg-[#FFFBEB] p-2.5 border-l-2 border-[#EAB308] space-y-1">
+                              <div className="text-xs text-[#1C1B1B] ">
                                 <div>
-                                  <span className="font-normal text-[#1C1B1B]">
-                                    ผู้ส่งคำขอ:
-                                  </span>{" "}
-                                  {orderDetail.canceller || "-"}
+                                  <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
+                                  <span className="text-[#1C1B1B]">{orderDetail.canceller || "-"}</span>
                                 </div>
                                 <div>
-                                  <span className="font-normal text-[#1C1B1B]">
-                                    เหตุผลที่พนักงานขอ:
-                                  </span>{" "}
-                                  {cancelReason ||
-                                    orderDetail.cancel_reason ||
-                                    "-"}
+                                  <span className="font-normal text-[#1C1B1B]">เหตุผลที่พนักงานระบุ:</span>{" "}
+                                  <span className="text-[#1C1B1B]">{orderDetail.cancel_reason || "-"}</span>
                                 </div>
+                                {orderDetail.cancel_requested_at && (
+                                  <Text variant="xs" className="text-[#1C1B1B] pt-0.5">
+                                    ส่งคำขอเมื่อ: {formatDate(orderDetail.cancel_requested_at)}
+                                  </Text>
+                                )}
                               </div>
                             </Card>
 
@@ -779,9 +927,9 @@ export default function TransactionHistoryPage() {
                                 </Text>
                                 <textarea
                                   rows={3}
-                                  value={cancelReason}
-                                  onChange={(e) => setCancelReason(e.target.value)}
-                                  placeholder="ระบุเหตุผลในการอนุมัติหรือปฏิเสธ..."
+                                  value={cancelRemark}
+                                  onChange={(e) => setCancelRemark(e.target.value)}
+                                  placeholder="ระบุหมายเหตุการอนุมัติหรือเหตุผลในการปฏิเสธ..."
                                   className="w-full p-2.5 text-xs font-light bg-[#F6F3F2] border border-[#E51C23] rounded-none focus:outline-none text-[#1C1B1B] placeholder-[#6B7280] resize-none"
                                 />
                               </div>
@@ -812,38 +960,63 @@ export default function TransactionHistoryPage() {
                         );
                       }
 
-                      // 🧑‍💼 1.2 ถ้าเป็น EMPLOYEE / STAFF: ดูได้อย่างเดียวว่า รออนุมัติ
+                      // 1.2 ถ้าเป็น EMPLOYEE / STAFF: ดูได้อย่างเดียวว่า รออนุมัติ
                       return (
-                        <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-2">
-                          <div className="flex items-center justify-between">
-                            <Text
-                              variant="small"
-                              className="font-normal text-[#854D0E] mb-0"
-                            >
-                              สถานะคำขอ: อยู่ระหว่างรออนุมัติ
-                            </Text>
-                            <Badge
-                              variant="warning"
-                              className="bg-[#FEF08A] text-[#854D0E] border-none text-[10px] font-light rounded-none py-0.5 px-2"
-                            >
-                              {getStatusText(orderDetail.status)}
-                            </Badge>
-                          </div>
-                          <div className="text-xs text-[#5F5E5E] bg-[#FFFBEB] p-2.5 border-l-2 border-[#EAB308] space-y-1">
-                            <div>
-                              <span className="font-normal text-[#1C1B1B]">
-                                ผู้ส่งคำขอ:
-                              </span>{" "}
-                              {orderDetail.canceller || "-"}
+                        <div className="space-y-3">
+                          {/* 1. ส่วน Card แสดงรายละเอียดสถานะ */}
+                          <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Text variant="small" className="font-normal text-[#854D0E] mb-0">
+                                สถานะ: รอเจ้าของร้านอนุมัติการยกเลิก
+                              </Text>
+                              <Badge
+                                variant="warning"
+                                size="auto"
+                                className="bg-[#FEF08A] text-[#854D0E] border-none text-[10px] font-normal rounded-none py-0.5 px-2"
+                              >
+                                {getStatusText(orderDetail.status)}
+                              </Badge>
                             </div>
-                            <div>
-                              <span className="font-normal text-[#1C1B1B]">
-                                เหตุผลที่ระบุ:
-                              </span>{" "}
-                              {cancelReason || orderDetail.cancel_reason || "-"}
+
+                            <div className="text-xs text-[#1C1B1B]">
+                              <div>
+                                <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
+                                <span className="text-[#1C1B1B]">{orderDetail.canceller || "-"}</span>
+                              </div>
+                              <div>
+                                <span className="font-normal text-[#1C1B1B]">เหตุผลที่ระบุ:</span>{" "}
+                                <span className="text-[#1C1B1B]">{orderDetail.cancel_reason || "-"}</span>
+                              </div>
+                              {orderDetail.cancel_requested_at && (
+                                <Text variant="xs" className="text-[#1C1B1B] pt-0.5 mb-0">
+                                  ส่งคำขอเมื่อ: {formatDate(orderDetail.cancel_requested_at)}
+                                </Text>
+                              )}
                             </div>
+                          </Card>
+
+                          {/* 2. ปุ่ม Action ด้านล่าง (อยู่นอก Card) */}
+                          <div className="flex gap-2 pt-1">
+                            <Button
+                              type="button"
+                              variant="solid-red"
+                              onClick={handleRevertCancel}
+                              disabled={isCancelling}
+                              className="flex-1 text-xs h-10 font-normal rounded-none"
+                            >
+                              {isCancelling ? "กำลังดำเนินการ..." : "ดึงคำขอยกเลิกกลับ (กู้คืนคำขอ)"}
+                            </Button>
+
+                            <Button
+                              type="button"
+                              variant="outline-cancel"
+                              onClick={() => setSelectedOrderId(null)}
+                              className="text-xs px-4 h-10 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal rounded-none"
+                            >
+                              ปิด
+                            </Button>
                           </div>
-                        </Card>
+                        </div>
                       );
                     }
 
@@ -852,31 +1025,35 @@ export default function TransactionHistoryPage() {
                       return (
                         <Card className="p-4 bg-[#FCF7F7] border border-[#F5DFDF] rounded-none shadow-none space-y-2">
                           <div className="flex items-center justify-between">
-                            <Text
-                              variant="small"
-                              className="font-normal text-[#E51C23] mb-0"
-                            >
+                            <Text variant="small" className="font-normal text-[#E51C23] mb-0">
                               สถานะคำขอ: รายการนี้ถูกยกเลิกแล้ว
                             </Text>
                             <Badge
                               variant="neutral"
-                              className="bg-[#E51C23] text-white border-none text-[10px] font-light rounded-none py-0.5 px-2"
+                              size="auto"
+                              className="bg-[#E51C23] text-white border-none text-[10px] font-normal rounded-none py-0.5 px-2"
                             >
                               {getStatusText(orderDetail.status)}
                             </Badge>
                           </div>
-                          <div className="text-xs text-[#5F5E5E] bg-[#FAF2F2] p-2.5 border-l-2 border-[#E51C23] space-y-1">
+                          
+                          <div className="text-xs text-[#1C1B1B] ">
                             <div>
-                              <span className="font-normal text-[#1C1B1B]">
-                                ผู้ขอยกเลิก:
-                              </span>{" "}
-                              {orderDetail.canceller || "-"}
+                              <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอ:</span>{" "}
+                              <span className="text-[#1C1B1B]">{orderDetail.canceller || "-"}</span>
                             </div>
                             <div>
-                              <span className="font-normal text-[#1C1B1B]">
-                                เหตุผลการยกเลิก:
-                              </span>{" "}
-                              {orderDetail.cancel_reason || "-"}
+                              <span className="font-normal text-[#1C1B1B]">เหตุผลที่ระบุ:</span>{" "}
+                              <span className="text-[#1C1B1B]">{orderDetail.cancel_reason || "-"}</span>
+                            </div>
+                            {(orderDetail.cancel_processed_at || orderDetail.cancelled_at || orderDetail.cancel_requested_at) && (
+                              <Text variant="xs" className="text-[#1C1B1B] pt-0.5">
+                                อนุมัติเมื่อ: {formatDate(orderDetail.cancel_processed_at || orderDetail.cancelled_at || orderDetail.cancel_requested_at || "")}
+                              </Text>
+                            )}
+                            <div>
+                              <span className="font-normal text-[#1C1B1B]">หมายเหตุ:</span>{" "}
+                              <span className="text-[#1C1B1B]">{orderDetail.cancel_remark || "-"}</span>
                             </div>
                           </div>
                         </Card>
@@ -889,27 +1066,34 @@ export default function TransactionHistoryPage() {
                         {hasBeenRejected && (
                           <Card className="p-4 bg-[#FCF7F7] border border-[#F5DFDF] rounded-none shadow-none space-y-2">
                             <div className="flex items-center justify-between">
-                              <Text
-                                variant="small"
-                                className="font-normal text-[#E51C23] mb-0"
-                              >
+                              <Text variant="small" className="font-normal text-[#E51C23] mb-0">
                                 สถานะ: คำขอยกเลิกก่อนหน้านี้ถูกปฏิเสธ
                               </Text>
                               <Badge
                                 variant="neutral"
-                                className="bg-[#E51C23] text-white border-none text-[10px] font-light rounded-none py-0.5 px-2"
+                                size="auto"
+                                className="bg-[#E51C23] text-white border-none text-[10px] font-normal rounded-none py-0.5 px-2"
                               >
-                                {getStatusText(
-                                  orderDetail.status,
-                                  orderDetail.cancel_remark,
-                                )}
+                                {getStatusText(orderDetail.status, orderDetail.cancel_remark)}
                               </Badge>
                             </div>
-                            <div className="text-xs text-[#5F5E5E] bg-[#FAF2F2] p-2.5 border-l-2 border-[#E51C23]">
-                              <span className="font-normal text-[#1C1B1B]">
-                                เหตุผลจากเจ้าของร้าน:
-                              </span>{" "}
-                              {orderDetail.cancel_remark}
+
+                            <div className="text-xs text-[#1C1B1B]">
+                              {orderDetail.canceller && (
+                                <div>
+                                  <span className="font-normal text-[#1C1B1B]">ผู้ส่งคำขอเดิม:</span>{" "}
+                                  <span className="text-[#1C1B1B]">{orderDetail.canceller}</span>
+                                </div>
+                              )}
+                              <div>
+                                <span className="font-normal text-[#1C1B1B]">เหตุผลจากเจ้าของร้าน:</span>{" "}
+                                <span className="text-[#1C1B1B]">{orderDetail.cancel_remark || "-"}</span>
+                              </div>
+                              {orderDetail.cancel_processed_at && (
+                                <Text variant="xs" className="text-[#1C1B1B] pt-0.5 mb-0">
+                                  ปฏิเสธคำขอเมื่อ: {formatDate(orderDetail.cancel_processed_at)}
+                                </Text>
+                              )}
                             </div>
                           </Card>
                         )}

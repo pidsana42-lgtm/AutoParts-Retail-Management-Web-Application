@@ -8,10 +8,11 @@ import { useAuth } from '../../../contexts/AuthContexts';
 import Heading from '../../../components/elements/heading';
 import Badge from '../../../components/elements/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
-import { getCustomerClaimById, updateClaimItemStatus, updateCustomerClaim, searchCustomerCreditByPhone } from '../../../service/http/claim/claim';
+import { getCustomerClaimById, updateClaimItemStatus, updateCustomerClaim, searchCustomerCreditByPhone, generateCustomerClaimPDF } from '../../../service/http/claim/claim';
 import apiClient from '../../../service/http/apiClient';
 import type { CustomerDiscountResponse } from '../../../interface/pos/customer_interface';
 import type { CustomerClaim, CustomerClaimItem } from '../../../interface/claim/claim';
+import { useToast } from '../../../components/elements/toast';
 
 interface EditableItem extends CustomerClaimItem {
   newFile?: File | null;
@@ -26,6 +27,7 @@ const parseNote = (note: string | undefined, key: string): string => {
 
 export default function ClaimDetailPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const { role } = useAuth() as any;
   const isManager = role?.toUpperCase() === 'OWNER' || role?.toUpperCase() === 'ADMIN';
@@ -50,6 +52,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
         setClaim(data);
       } catch (err) {
         console.error('Failed to load claim:', err);
+        toast({ variant: 'error', message: 'ไม่สามารถโหลดข้อมูลใบเคลมได้' });
       } finally {
         setLoading(false);
       }
@@ -112,7 +115,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
     const file = e.target.files?.[0];
     if (!file || activeItemIdx === null) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert('ไฟล์ภาพขนาดใหญ่เกินไป (สูงสุด 5MB)');
+      toast({ variant: 'warning', message: 'ไฟล์ภาพขนาดใหญ่เกินไป (สูงสุด 5MB)' });
       return;
     }
     const preview = URL.createObjectURL(file);
@@ -148,6 +151,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
               evidenceUrl = res.data?.url ?? evidenceUrl;
             } catch (err) {
               console.error('Failed to upload evidence:', err);
+              toast({ variant: 'warning', message: 'อัปโหลดรูปหลักฐานไม่สำเร็จ' });
             }
           }
 
@@ -165,6 +169,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
               await updateClaimItemStatus(item.id, item.status);
             } catch (err) {
               console.error('Failed to update item status:', err);
+              toast({ variant: 'warning', message: 'อัปเดตสถานะสินค้าบางรายการไม่สำเร็จ' });
             }
           }
 
@@ -185,11 +190,44 @@ export default function ClaimDetailPage(): React.JSX.Element {
 
       setClaim(prev => prev ? { ...prev, status: nextClaimStatus, items: savedItems as CustomerClaimItem[] } : prev);
       cancelEditing();
+      toast({ variant: 'success', message: 'บันทึกข้อมูลใบเคลมเรียบร้อยแล้ว' });
     } catch (err) {
       console.error('Failed to save claim:', err);
-      alert('เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่');
+      toast({ variant: 'error', message: 'เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    if (!claim || !claim.id) return;
+    setDownloadingPdf(true);
+    try {
+      const blob = await generateCustomerClaimPDF(claim.id);
+      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      const fileNameId = claim.claim_no || `CLM-${claim.id}`;
+      a.download = `${fileNameId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast({
+        variant: 'success',
+        title: 'ดาวน์โหลดสำเร็จ',
+        message: `ดาวน์โหลดไฟล์ PDF ใบรับเคลม ${fileNameId} เรียบร้อยแล้ว`,
+      });
+    } catch (err: any) {
+      toast({
+        variant: 'error',
+        title: 'ดาวน์โหลดไม่สำเร็จ',
+        message: 'ไม่สามารถสร้างไฟล์ PDF ใบรับเคลมได้: ' + (err.message || err),
+      });
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -248,17 +286,24 @@ export default function ClaimDetailPage(): React.JSX.Element {
           <div className="flex items-center gap-3">
             <button
               type="button"
+              onClick={handleDownloadPDF}
+              disabled={downloadingPdf}
+              className="border border-gray-300 text-gray-700 hover:bg-gray-100 flex items-center gap-2 shadow-xs font-bold h-10 px-4 rounded-none text-sm shrink-0 cursor-pointer bg-white transition-colors disabled:opacity-50"
+              title="ดาวน์โหลดหรือพิมพ์เอกสารใบรับเคลม PDF"
+            >
+              {downloadingPdf ? (
+                <Loader2 size={16} className="text-[#e51c23] animate-spin" />
+              ) : (
+                <Printer size={16} className="text-[#e51c23]" />
+              )}
+              {downloadingPdf ? 'กำลังสร้าง PDF...' : 'พิมพ์ใบรับเคลม (PDF)'}
+            </button>
+            <button
+              type="button"
               onClick={startEditing}
               className="bg-[#e51c23] hover:bg-[#c9181f] text-white flex items-center gap-2 shadow-sm font-bold h-10 px-4 rounded-none text-sm shrink-0 cursor-pointer transition-colors"
             >
               <SquarePen size={16} /> แก้ไขข้อมูลและการอนุมัติ
-            </button>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="border border-gray-300 text-gray-700 hover:bg-gray-100 flex items-center gap-2 shadow-xs font-bold h-10 px-4 rounded-none text-sm shrink-0 cursor-pointer bg-white transition-colors"
-            >
-              <Printer size={16} /> พิมพ์ใบเคลม
             </button>
           </div>
         )}

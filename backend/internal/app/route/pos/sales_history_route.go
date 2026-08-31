@@ -24,6 +24,9 @@ func SetupSalesHistoryRoutes(r *gin.Engine, db *gorm.DB) {
 	{
 		salesGroup.GET("/sales/history", ctrl.GetSalesHistory)
 		salesGroup.GET("/sales-history/:id", ctrl.GetSaleHistoryByID)
+		salesGroup.GET("/sales-history/:id/print", ctrl.PrintSaleOrder)
+		salesGroup.GET("/orders/:id/print", ctrl.PrintSaleOrder)
+		salesGroup.GET("/print/:id", ctrl.PrintSaleOrder)
 		salesGroup.POST("/sales-history/:id/request-cancel", ctrl.RequestCancelSale)
 		// เพิ่มพนักงานดูรายการคำขอยกเลิกบิลของตนเอง
 		salesGroup.GET("/my-cancellation-requests", ctrl.GetMyCancellationRequests)

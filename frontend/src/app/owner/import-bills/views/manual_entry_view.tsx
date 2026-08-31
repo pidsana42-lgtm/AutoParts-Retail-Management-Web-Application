@@ -1,6 +1,9 @@
+import { useMemo } from 'react';
 import { ChevronRight, Save, Trash2, AlertCircle } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
+import TreeSelect from '../../../../components/elements/tree_select';
+import type { CascaderOption } from '../../../../components/elements/cascader';
 import type { ViewState, Supplier, Product, ScannedBillData } from '../../../../interface/import';
 import { validateBillItems, type ItemIssue } from '../../../../utils/excelImport';
 import ProductSearchSelect from '../components/product_search_select';
@@ -20,6 +23,12 @@ interface ManualEntryViewProps {
   products: Product[];
   categories: any[];
   handleItemChange: (idx: number, field: string, val: any) => void;
+  handleItemCategoryChange?: (
+    idx: number,
+    categoryId: number | null,
+    subCategoryId: number | null,
+    subSubCategoryId: number | null
+  ) => void;
   handleRemoveRow: (idx: number) => void;
   handleAddRow: () => void;
   exportBillItemsToExcel: () => void;
@@ -49,6 +58,7 @@ export default function ManualEntryView({
   products,
   categories,
   handleItemChange,
+  handleItemCategoryChange,
   handleRemoveRow,
   handleAddRow,
   handleSaveBill,
@@ -87,6 +97,32 @@ export default function ManualEntryView({
   const issueCount = Object.keys(itemIssues).length;
   const issueField = (idx: number, field: string): boolean => !!itemIssues[idx]?.fields.includes(field);
   const errInputClass = 'border-red-400 bg-red-50/40 focus:border-red-500 focus:ring-red-400';
+
+  // สร้างต้นไม้หมวดหมู่ (หลัก > ย่อย) สำหรับ TreeSelect แบบ cascading — รูปแบบเดียวกับฟอร์มสินค้าของ WMS
+  // prefix value ด้วย category-/subcategory- กัน id ชนกันข้ามตาราง
+  const categoryTreeOptions: CascaderOption[] = useMemo(() => {
+    return (categories || []).map((c: any, cIdx: number) => {
+      const catId = c.id ?? c.ID ?? cIdx;
+      return {
+        value: `category-${catId}`,
+        label: c.category_name || c.name || `หมวดหมู่ ${catId}`,
+        children: (c.sub_categories || []).map((sc: any, scIdx: number) => {
+          const subCatId = sc.id ?? sc.ID ?? scIdx;
+          return {
+            value: `subcategory-${subCatId}`,
+            label: sc.sub_category_name || sc.name || `หมวดหมู่ย่อย ${subCatId}`,
+            children: (sc.sub_sub_categories || []).map((ssc: any, sscIdx: number) => {
+              const subSubCatId = ssc.id ?? ssc.ID ?? sscIdx;
+              return {
+                value: `subsubcategory-${subSubCatId}`,
+                label: ssc.sub_sub_category_name || ssc.name || `หมวดหมู่ย่อยย่อย ${subSubCatId}`,
+              };
+            }),
+          };
+        }),
+      };
+    });
+  }, [categories]);
 
   return (
     <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
@@ -171,7 +207,7 @@ export default function ManualEntryView({
                 <option value="">-- นำเข้าทั่วไป (ไม่มีอ้างอิง PO) --</option>
                 {poList.map((po) => (
                   <option key={po.id} value={String(po.id)}>
-                    {po.order_number} ({po.supplier_name || 'ไม่ระบุซัพพลายเออร์'}) - ฿{po.total_amount?.toLocaleString() || 0}
+                    {po.po_number || po.order_number} ({po.supplier_name || 'ไม่ระบุซัพพลายเออร์'}) - ฿{po.total_amount?.toLocaleString() || 0}
                   </option>
                 ))}
               </select>
@@ -198,8 +234,8 @@ export default function ManualEntryView({
 
           {/* Row Issues Summary */}
           {issueCount > 0 && (
-            <div className="mx-6 mt-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-none flex items-start gap-2">
-              <AlertCircle size={16} className="shrink-0 text-amber-500 mt-0.5" />
+            <div className="mx-6 mt-2 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-none flex items-start gap-2">
+              <AlertCircle size={16} className="shrink-0 text-red-500 mt-0.5" />
               <div>
                 <span className="font-bold">พบข้อมูลที่ควรตรวจสอบ {issueCount} รายการ</span>
                 <ul className="list-disc ml-4 mt-1 space-y-0.5">
@@ -210,7 +246,7 @@ export default function ManualEntryView({
                   ))}
                   {issueCount > 5 && <li>และอีก {issueCount - 5} รายการ (ดูในตารางด้านล่าง)</li>}
                 </ul>
-                <p className="mt-1 text-amber-600">* ยังสามารถบันทึกได้ แตะที่ช่องสีแดงในตารางเพื่อแก้ไข</p>
+                <p className="mt-1 text-red-500">* ยังสามารถบันทึกได้ แตะที่ช่องสีแดงในตารางเพื่อแก้ไข</p>
               </div>
             </div>
           )}
@@ -223,10 +259,9 @@ export default function ManualEntryView({
                   <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[150px]">รหัสสินค้าคู่ค้า</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[260px]">ชื่อสินค้าตามบิล</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[280px]">จับคู่สินค้าในร้าน</TableHead>
-                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[160px]">บาร์โค้ด</TableHead>
-                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่หลัก</TableHead>
-                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[130px]">หมวดหมู่ย่อย</TableHead>
-                  <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">จำนวน</TableHead>
+                  <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[200px]">หมวดหมู่</TableHead>
+                  <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[80px]">จำนวน</TableHead>
+                  <TableHead className="py-3.5 px-4 font-bold text-center text-[#5F5E5E] min-w-[70px]">หน่วย</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[110px]">ราคา/หน่วย</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">ยอดรวม</TableHead>
                   <TableHead className="py-3.5 px-4 font-bold text-center text-[#5F5E5E] w-12">ลบ</TableHead>
@@ -235,7 +270,7 @@ export default function ManualEntryView({
               <TableBody className="divide-y divide-gray-100">
                 {formData.items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="py-12 text-center text-gray-500 bg-gray-50/50">
+                    <TableCell colSpan={9} className="py-12 text-center text-gray-500 bg-gray-50/50">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <AlertCircle size={36} className="text-gray-400" />
                         <p className="font-bold text-[#1C1B1B] text-sm">ไม่พบรายการสินค้าในบิลนี้</p>
@@ -283,8 +318,8 @@ export default function ManualEntryView({
                             <span className="text-[10px] font-bold text-red-600">กรอกชื่อสินค้า</span>
                           )}
                           {item.pre_order_item_id && (
-                            <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 border border-purple-200 w-fit">
-                              ★ สินค้าพรีออเดอร์ของลูกค้า
+                            <span className="text-[10px] font-bold text-purple-700">
+                              สินค้าพรีออเดอร์ของลูกค้า
                             </span>
                           )}
                         </div>
@@ -302,120 +337,63 @@ export default function ManualEntryView({
                         {item.product_id ? (
                           (() => {
                             const prod = products.find(p => p.id === Number(item.product_id));
-                            if (!prod) return <span className="text-gray-400">-</span>;
-
-                            const paddedId = String(prod.id).padStart(6, '0');
-                            const code = prod.barcode || prod.product_code || '';
-                            const sanitized = code.replace(/[^a-zA-Z0-9_\-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-                            const baseName = sanitized ? `prod_${paddedId}_${sanitized}` : `prod_${paddedId}_PROD-${paddedId}`;
-                            const barcodeImgUrl = `/barcode/${baseName}.png`;
-
-                            return (
-                              <div className="flex flex-col items-center gap-1">
-                                <img 
-                                  src={barcodeImgUrl} 
-                                  alt={prod.barcode} 
-                                  className="max-h-8 object-contain bg-white p-0.5 border border-gray-200"
-                                  onError={(e) => {
-                                    (e.target as HTMLElement).style.display = 'none';
-                                  }}
-                                />
-                                <span className="font-mono text-xs font-semibold text-[#1C1B1B]">
-                                  {prod.barcode || '-'}
-                                </span>
-                              </div>
-                            );
-                          })()
-                        ) : (
-                          <span className="text-xs text-black">
-                            [สร้างให้อัตโนมัติ]
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2.5 px-3">
-                        {item.product_id ? (
-                          (() => {
-                            const prod = products.find(p => p.id === Number(item.product_id));
-                            if (prod) {
+                            if (prod && (prod.category_name || prod.sub_category_name || prod.sub_sub_category_name)) {
                               return (
-                                <span className="text-xs text-[#5F5E5E] bg-gray-100 px-2 py-1 rounded-none font-medium inline-block truncate max-w-[140px]" title={prod.category_name}>
-                                  {prod.category_name || 'ไม่ระบุหมวดหมู่'}
+                                <span className="text-sm text-[#1C1B1B]" title={[prod.category_name, prod.sub_category_name, prod.sub_sub_category_name].filter(Boolean).join(' / ')}>
+                                  {[prod.category_name, prod.sub_category_name, prod.sub_sub_category_name].filter(Boolean).join(' / ')}
                                 </span>
                               );
                             }
-                            return <span className="text-gray-400 text-xs">-</span>;
-                          })()
-                         ) : (
-                           <select
-                             value={item.category_id || ''}
-                             onChange={(e) => {
-                               handleItemChange(idx, 'category_id', e.target.value ? Number(e.target.value) : null);
-                             }}
-                             className="bg-white border border-gray-300 rounded-none p-1.5 text-sm w-full focus:ring-1 focus:ring-[#e51c23] focus:border-[#e51c23] text-gray-700 font-medium"
-                           >
-                             <option value="">-- หมวดหมู่หลัก --</option>
-                             {categories.map((c: any, cIdx: number) => {
-                               const catId = c.id ?? c.ID ?? cIdx;
-                               return (
-                                 <option key={catId} value={catId}>{c.category_name || c.name}</option>
-                               );
-                             })}
-                           </select>
-                         )}
-                      </TableCell>
-                      <TableCell className="py-2.5 px-3">
-                        {item.product_id ? (
-                          (() => {
-                            const prod = products.find(p => p.id === Number(item.product_id));
-                            if (prod && prod.sub_category_name) {
-                              return (
-                                <span className="text-xs text-gray-500 pl-1 truncate max-w-[140px]" title={prod.sub_category_name}>
-                                  └─ {prod.sub_category_name}
-                                </span>
-                              );
-                            }
-                            return <span className="text-gray-400 text-xs">-</span>;
+                            return <span className="text-gray-400 text-sm">-</span>;
                           })()
                         ) : (
-                          <select
-                            value={item.sub_category_id || ''}
-                            disabled={!item.category_id}
-                            onChange={(e) => {
-                              handleItemChange(idx, 'sub_category_id', e.target.value ? Number(e.target.value) : null);
+                          <TreeSelect
+                            options={categoryTreeOptions}
+                            placeholder="เลือกหมวดหมู่"
+                            searchPlaceholder="ค้นหาหมวดหมู่..."
+                            value={
+                              item.sub_sub_category_id
+                                ? `subsubcategory-${item.sub_sub_category_id}`
+                                : item.sub_category_id
+                                ? `subcategory-${item.sub_category_id}`
+                                : item.category_id
+                                  ? `category-${item.category_id}`
+                                  : ''
+                            }
+                            onChange={(_val, path) => {
+                              if (!handleItemCategoryChange) return;
+                              const catVal = path[0]?.value || '';
+                              const subVal = path[1]?.value || '';
+                              const subSubVal = path[2]?.value || '';
+                              const catId = catVal.startsWith('category-') ? Number(catVal.replace('category-', '')) : null;
+                              const subCatId = subVal.startsWith('subcategory-') ? Number(subVal.replace('subcategory-', '')) : null;
+                              const subSubCatId = subSubVal.startsWith('subsubcategory-') ? Number(subSubVal.replace('subsubcategory-', '')) : null;
+                              handleItemCategoryChange(idx, catId, subCatId, subSubCatId);
                             }}
-                            className="bg-white border border-gray-300 rounded-none p-1.5 text-sm w-full focus:ring-1 focus:ring-[#e51c23] focus:border-[#e51c23] text-gray-700 font-medium disabled:opacity-50"
-                          >
-                            <option value="">-- หมวดหมู่ย่อย --</option>
-                            {item.category_id ? ((categories.find((c: any) => (c.id ?? c.ID) === item.category_id))?.sub_categories || []).map((sc: any, scIdx: number) => {
-                              const subCatId = sc.id ?? sc.ID ?? scIdx;
-                              return (
-                                <option key={subCatId} value={subCatId}>{sc.sub_category_name || sc.name}</option>
-                              );
-                            }) : null}
-                          </select>
+                          />
                         )}
                       </TableCell>
                       {Number(item.order_quantity) === 0 ? (
-                        <TableCell colSpan={3} className="py-2.5 px-3 text-center font-bold text-[#e51c23] bg-red-50/20">
+                        <TableCell colSpan={4} className="py-2.5 px-3 text-center font-bold text-[#e51c23] bg-red-50/20">
                           ไม่มีสินค้า
                         </TableCell>
                       ) : (
                         <>
                           <TableCell className="py-2.5 px-3 text-right">
-                            <div className="flex items-center gap-1 justify-end">
-                              <input 
-                                type="number" 
-                                value={item.order_quantity ?? 0}
-                                onChange={(e) => handleItemChange(idx, 'order_quantity', e.target.value)}
-                                className={`bg-white border rounded-none focus:ring-1 w-14 text-right text-sm text-[#1C1B1B] p-1.5 font-medium ${issueField(idx, 'quantity') ? errInputClass : 'border-gray-300 focus:border-[#e51c23] focus:ring-[#e51c23]'}`}
-                              />
-                              <input 
-                                type="text" 
-                                value={item.unit || ''}
-                                onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
-                                className="bg-white border border-gray-300 rounded-none focus:border-[#e51c23] focus:ring-1 focus:ring-[#e51c23] w-12 text-center text-sm text-[#5F5E5E] p-1.5 font-medium"
-                              />
-                            </div>
+                            <input
+                              type="number"
+                              value={item.order_quantity ?? 0}
+                              onChange={(e) => handleItemChange(idx, 'order_quantity', e.target.value)}
+                              className={`bg-white border rounded-none focus:ring-1 w-16 text-right text-sm text-[#1C1B1B] p-1.5 font-medium ${issueField(idx, 'quantity') ? errInputClass : 'border-gray-300 focus:border-[#e51c23] focus:ring-[#e51c23]'}`}
+                            />
+                          </TableCell>
+                          <TableCell className="py-2.5 px-3 text-center">
+                            <input
+                              type="text"
+                              value={item.unit || ''}
+                              onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
+                              className="bg-white border border-gray-300 rounded-none focus:border-[#e51c23] focus:ring-1 focus:ring-[#e51c23] w-14 text-center text-sm text-[#5F5E5E] p-1.5 font-medium"
+                            />
                           </TableCell>
                           <TableCell className="py-2.5 px-3 text-right">
                             <input 

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"backend/internal/app/enum"
 	preOrderDTO "backend/internal/app/dto/pre_oder"
 	"backend/internal/app/entity"
+	"backend/internal/app/enum"
 	preOrderRepo "backend/internal/app/repository/pre_oder"
 	preOrderService "backend/internal/app/service/pre_oder"
 
@@ -142,9 +142,9 @@ func samplePreOrderEntity(id uint, status string, items ...entity.PreOrderItem) 
 		items[i].PreOrderID = id
 	}
 	return entity.PreOrder{
-		Model:       gorm.Model{ID: id},
+		Model:        gorm.Model{ID: id},
 		PreOrderType: "LINE",
-		CustomerID:  10,
+		CustomerID:   10,
 		Customer: &entity.Customer{
 			Model:        gorm.Model{ID: 10},
 			CustomerName: "ลูกค้าทดสอบ",
@@ -194,7 +194,15 @@ func TestCreatePreOrder_Success(t *testing.T) {
 		OrderDate:     orderDate,
 		SupplierID:    0, // ต้องถูก default เป็น 1
 		PreOrderItems: []preOrderDTO.CreatePreOrderItemDTO{
-			{ProductID: 3, Quantity: 2, UnitPrice: 150.5},
+			{
+				ProductID:        3,
+				ProductName:      "กรองน้ำมันเครื่อง",
+				ProductCode:      "OIL-001",
+				SupplierPartCode: "SUP-OIL-99",
+				SupplierName:     "บริษัทคู่ค้าทดสอบ",
+				Quantity:         2,
+				UnitPrice:        150.5,
+			},
 			{ProductID: 4, Quantity: 1, UnitPrice: 99},
 		},
 	}
@@ -221,8 +229,17 @@ func TestCreatePreOrder_Success(t *testing.T) {
 	if captured.PreOrderItems[0].ProductID != 3 || captured.PreOrderItems[0].Quantity != 2 || captured.PreOrderItems[0].UnitPrice != 150.5 {
 		t.Errorf("item[0] not mapped correctly: %+v", captured.PreOrderItems[0])
 	}
+	if captured.PreOrderItems[0].ProductNameSnapshot != "กรองน้ำมันเครื่อง" ||
+		captured.PreOrderItems[0].ProductCodeSnapshot != "OIL-001" ||
+		captured.PreOrderItems[0].SupplierPartCode != "SUP-OIL-99" ||
+		captured.PreOrderItems[0].SupplierName != "บริษัทคู่ค้าทดสอบ" {
+		t.Errorf("item snapshot fields not mapped correctly: %+v", captured.PreOrderItems[0])
+	}
 	if len(got.PreOrderItems) != 2 {
 		t.Errorf("expected 2 items in response, got %d", len(got.PreOrderItems))
+	}
+	if got.PreOrderItems[0].SupplierPartCode != "SUP-OIL-99" || got.PreOrderItems[0].SupplierName != "บริษัทคู่ค้าทดสอบ" {
+		t.Errorf("snapshot fields missing from response: %+v", got.PreOrderItems[0])
 	}
 }
 

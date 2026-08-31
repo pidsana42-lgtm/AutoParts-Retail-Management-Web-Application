@@ -1,6 +1,7 @@
 package claim
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -19,6 +20,8 @@ type CustomerClaimService interface {
 	UpdateCustomerClaimItem(id uint, input claimDTO.UpdateCustomerClaimItemDTO) (claimDTO.CustomerClaimItemResponseDTO, error)
 	UpdateCustomerClaimItemStatus(id uint, status string) (claimDTO.CustomerClaimItemResponseDTO, error)
 	DeleteCustomerClaim(id uint) error
+	GenerateCustomerClaimPDF(ctx context.Context, claimID uint) ([]byte, error)
+	GenerateCustomerClaimChecklistPDF(ctx context.Context, status string, search string) ([]byte, error)
 }
 
 type customerClaimService struct {

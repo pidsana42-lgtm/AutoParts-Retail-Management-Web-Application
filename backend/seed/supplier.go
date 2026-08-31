@@ -58,9 +58,12 @@ func Supplier(db *gorm.DB) error {
 
 	for _, s := range suppliers {
 		var result entity.Supplier
-		err := db.Where("supplier_name = ?", s.SupplierName).
+		// Unscoped() ตั้งใจใส่ไว้: ต้องเจอแม้แถวนี้เคยถูกลบ (soft delete) ไปแล้วจากการทดสอบฟีเจอร์ลบบริษัท
+		// ไม่งั้น FirstOrCreate จะมองไม่เห็นแถวเดิม แล้วพยายาม INSERT ซ้ำ ชน unique constraint ของ email_sale
+		// ที่ยังถูกแถวเดิม (แม้ลบไปแล้ว) จับจองอยู่ — ถ้าเจอแถวที่ถูกลบไปแล้วก็ปล่อยผ่าน ไม่ไปฟื้นคืนให้อัตโนมัติ
+		err := db.Unscoped().Where("supplier_name = ?", s.SupplierName).
 			FirstOrCreate(&result, s).Error
-		if err == nil {
+		if err == nil && !result.DeletedAt.Valid {
 			db.Model(&result).Updates(s)
 		}
 		if err != nil {

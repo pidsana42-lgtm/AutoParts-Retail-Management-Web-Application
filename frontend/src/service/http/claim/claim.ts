@@ -117,3 +117,36 @@ export const searchCustomerCreditByPhone = async (phone: string) => {
   }
   return response.data || null;
 };
+
+// ==========================================
+// Customer Claim PDF Export
+// ==========================================
+export const generateCustomerClaimPDF = async (id: number): Promise<Blob> => {
+  try {
+    const response = await apiClient.get(`/claims/customer-claims/${id}/pdf`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  } catch (error) {
+    console.error("เกิดข้อผิดพลาดในการโหลด PDF ใบรับเคลม:", error);
+    throw error;
+  }
+};
+
+export const exportCustomerClaimChecklistPDF = async (status?: string, search?: string): Promise<Blob> => {
+  try {
+    const params = new URLSearchParams();
+    if (status) params.append('status', status);
+    if (search) params.append('search', search);
+
+    const response = await apiClient.get(`/claims/customer-claims/export/checklist-pdf?${params.toString()}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  } catch (error) {
+    console.error("เกิดข้อผิดพลาดในการสร้าง PDF ใบเช็คลิสต์เคลม:", error);
+    throw error;
+  }
+};
+
+

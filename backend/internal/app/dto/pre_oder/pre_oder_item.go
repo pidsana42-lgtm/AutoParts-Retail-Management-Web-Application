@@ -1,43 +1,58 @@
 package pre_order
 
 import (
+	"strings"
 	"time"
 
 	"backend/internal/app/entity"
 )
 
 type CreatePreOrderItemDTO struct {
-	PreOrderID uint    `json:"pre_order_id" binding:"required"`
-	ProductID  uint    `json:"product_id" binding:"required"`
-	Quantity   int     `json:"quantity" binding:"required"`
-	UnitPrice  float64 `json:"unit_price"`
+	PreOrderID       uint    `json:"pre_order_id" binding:"required"`
+	ProductID        uint    `json:"product_id" binding:"required"`
+	ProductName      string  `json:"product_name"`
+	ProductCode      string  `json:"product_code"`
+	SupplierPartCode string  `json:"supplier_part_code"`
+	SupplierName     string  `json:"supplier_name"`
+	Quantity         int     `json:"quantity" binding:"required"`
+	UnitPrice        float64 `json:"unit_price"`
 }
 
 type UpdatePreOrderItemDTO struct {
-	PreOrderID *uint    `json:"pre_order_id,omitempty"`
-	ProductID  *uint    `json:"product_id,omitempty"`
-	Quantity   *int     `json:"quantity,omitempty"`
-	UnitPrice  *float64 `json:"unit_price,omitempty"`
+	PreOrderID       *uint    `json:"pre_order_id,omitempty"`
+	ProductID        *uint    `json:"product_id,omitempty"`
+	ProductName      *string  `json:"product_name,omitempty"`
+	ProductCode      *string  `json:"product_code,omitempty"`
+	SupplierPartCode *string  `json:"supplier_part_code,omitempty"`
+	SupplierName     *string  `json:"supplier_name,omitempty"`
+	Quantity         *int     `json:"quantity,omitempty"`
+	UnitPrice        *float64 `json:"unit_price,omitempty"`
 }
 
 type PreOrderItemResponseDTO struct {
-	ID          uint      `json:"id"`
-	PreOrderID  uint      `json:"pre_order_id"`
-	ProductID   uint      `json:"product_id"`
-	ProductName string    `json:"product_name,omitempty"`
-	ProductCode string    `json:"product_code,omitempty"`
-	Quantity    int       `json:"quantity"`
-	UnitPrice   float64   `json:"unit_price"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID               uint      `json:"id"`
+	PreOrderID       uint      `json:"pre_order_id"`
+	ProductID        uint      `json:"product_id"`
+	ProductName      string    `json:"product_name,omitempty"`
+	ProductCode      string    `json:"product_code,omitempty"`
+	SupplierPartCode string    `json:"supplier_part_code,omitempty"`
+	SupplierName     string    `json:"supplier_name,omitempty"`
+	Quantity         int       `json:"quantity"`
+	UnitPrice        float64   `json:"unit_price"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 func (d *CreatePreOrderItemDTO) ToEntity() entity.PreOrderItem {
 	return entity.PreOrderItem{
-		PreOrderID: d.PreOrderID,
-		ProductID:  d.ProductID,
-		Quantity:   d.Quantity,
-		UnitPrice:  d.UnitPrice,
+		PreOrderID:          d.PreOrderID,
+		ProductID:           d.ProductID,
+		ProductNameSnapshot: strings.TrimSpace(d.ProductName),
+		ProductCodeSnapshot: strings.TrimSpace(d.ProductCode),
+		SupplierPartCode:    strings.TrimSpace(d.SupplierPartCode),
+		SupplierName:        strings.TrimSpace(d.SupplierName),
+		Quantity:            d.Quantity,
+		UnitPrice:           d.UnitPrice,
 	}
 }
 
@@ -47,6 +62,18 @@ func (d *UpdatePreOrderItemDTO) ToEntity(existing entity.PreOrderItem) entity.Pr
 	}
 	if d.ProductID != nil {
 		existing.ProductID = *d.ProductID
+	}
+	if d.ProductName != nil {
+		existing.ProductNameSnapshot = strings.TrimSpace(*d.ProductName)
+	}
+	if d.ProductCode != nil {
+		existing.ProductCodeSnapshot = strings.TrimSpace(*d.ProductCode)
+	}
+	if d.SupplierPartCode != nil {
+		existing.SupplierPartCode = strings.TrimSpace(*d.SupplierPartCode)
+	}
+	if d.SupplierName != nil {
+		existing.SupplierName = strings.TrimSpace(*d.SupplierName)
 	}
 	if d.Quantity != nil {
 		existing.Quantity = *d.Quantity
@@ -58,63 +85,117 @@ func (d *UpdatePreOrderItemDTO) ToEntity(existing entity.PreOrderItem) entity.Pr
 }
 
 func ToPreOrderItemResponseDTO(m *entity.PreOrderItem) PreOrderItemResponseDTO {
-	prodName := ""
-	prodCode := ""
+	prodName := strings.TrimSpace(m.ProductNameSnapshot)
+	prodCode := strings.TrimSpace(m.ProductCodeSnapshot)
+	supplierPartCode := strings.TrimSpace(m.SupplierPartCode)
+	supplierName := strings.TrimSpace(m.SupplierName)
 	if m.Product != nil {
-		prodName = m.Product.Product_Name
-		prodCode = m.Product.Product_Code
+		if prodName == "" {
+			prodName = m.Product.Product_Name
+		}
+		if prodCode == "" {
+			prodCode = m.Product.Product_Code
+		}
+		// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
+		for _, inventory := range m.Product.Inventories {
+			if supplierPartCode == "" && strings.TrimSpace(inventory.CompanyProductCode) != "" {
+				supplierPartCode = strings.TrimSpace(inventory.CompanyProductCode)
+			}
+			if supplierPartCode == "" && strings.TrimSpace(inventory.Variant_Code) != "" {
+				supplierPartCode = strings.TrimSpace(inventory.Variant_Code)
+			}
+			if supplierName == "" && inventory.Supplier != nil {
+				supplierName = strings.TrimSpace(inventory.Supplier.SupplierName)
+			}
+			if supplierPartCode != "" && supplierName != "" {
+				break
+			}
+		}
+
+		if supplierPartCode == "" {
+			supplierPartCode = strings.TrimSpace(m.Product.Part_Number)
+		}
 	}
 
 	return PreOrderItemResponseDTO{
-		ID:          m.ID,
-		PreOrderID:  m.PreOrderID,
-		ProductID:   m.ProductID,
-		ProductName: prodName,
-		ProductCode: prodCode,
-		Quantity:    m.Quantity,
-		UnitPrice:   m.UnitPrice,
-		CreatedAt:   m.CreatedAt,
-		UpdatedAt:   m.UpdatedAt,
+		ID:               m.ID,
+		PreOrderID:       m.PreOrderID,
+		ProductID:        m.ProductID,
+		ProductName:      prodName,
+		ProductCode:      prodCode,
+		SupplierPartCode: supplierPartCode,
+		SupplierName:     supplierName,
+		Quantity:         m.Quantity,
+		UnitPrice:        m.UnitPrice,
+		CreatedAt:        m.CreatedAt,
+		UpdatedAt:        m.UpdatedAt,
 	}
 }
 
 // แยก Struct ใหม่มาใช้เฉพาะหน้าเลือก PreOrder เข้า PO
 type PreOrderItemForPODTO struct {
-	ID          uint      `json:"id"`
-	PreOrderID  uint      `json:"pre_order_id"`
-	ProductID   uint      `json:"product_id"`
-	ProductCode string    `json:"product_code"`
-	ProductName string    `json:"product_name"`
-	Unit        string    `json:"unit"`
-	Quantity    int       `json:"quantity"`
-	UnitPrice   float64   `json:"unit_price"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID               uint      `json:"id"`
+	PreOrderID       uint      `json:"pre_order_id"`
+	ProductID        uint      `json:"product_id"`
+	ProductCode      string    `json:"product_code"`
+	ProductName      string    `json:"product_name"`
+	SupplierPartCode string    `json:"supplier_part_code,omitempty"`
+	SupplierName     string    `json:"supplier_name,omitempty"`
+	Unit             string    `json:"unit"`
+	Quantity         int       `json:"quantity"`
+	UnitPrice        float64   `json:"unit_price"`
+	Status           string    `json:"status"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // ฟังก์ชัน Map สำหรับ DTO ตัวใหม่
 func ToPreOrderItemForPODTO(m *entity.PreOrderItem) PreOrderItemForPODTO {
-	var pCode, pName, pUnit string
+	pCode := strings.TrimSpace(m.ProductCodeSnapshot)
+	pName := strings.TrimSpace(m.ProductNameSnapshot)
+	pSupplierCode := strings.TrimSpace(m.SupplierPartCode)
+	pSupplierName := strings.TrimSpace(m.SupplierName)
+	var pUnit string
 	if m.Product != nil {
-		pCode = m.Product.Product_Code
-		pName = m.Product.Product_Name
+		if pCode == "" {
+			pCode = m.Product.Product_Code
+		}
+		if pName == "" {
+			pName = m.Product.Product_Name
+		}
+		// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
+		for _, inventory := range m.Product.Inventories {
+			if pSupplierCode == "" && inventory.CompanyProductCode != "" {
+				pSupplierCode = inventory.CompanyProductCode
+			}
+			if pSupplierCode == "" && inventory.Variant_Code != "" {
+				pSupplierCode = inventory.Variant_Code
+			}
+			if pSupplierName == "" && inventory.Supplier != nil {
+				pSupplierName = inventory.Supplier.SupplierName
+			}
+		}
+		if pSupplierCode == "" {
+			pSupplierCode = m.Product.Part_Number
+		}
 		if m.Product.Unit != nil {
 			pUnit = m.Product.Unit.Unit_Name
 		}
 	}
 
 	return PreOrderItemForPODTO{
-		ID:          m.ID,
-		PreOrderID:  m.PreOrderID,
-		ProductID:   m.ProductID,
-		ProductCode: pCode,
-		ProductName: pName,
-		Unit:        pUnit,
-		Quantity:    m.Quantity,
-		UnitPrice:   m.UnitPrice,
-		Status:      m.Status,
-		CreatedAt:   m.CreatedAt,
-		UpdatedAt:   m.UpdatedAt,
+		ID:               m.ID,
+		PreOrderID:       m.PreOrderID,
+		ProductID:        m.ProductID,
+		ProductCode:      pCode,
+		ProductName:      pName,
+		SupplierPartCode: pSupplierCode,
+		SupplierName:     pSupplierName,
+		Unit:             pUnit,
+		Quantity:         m.Quantity,
+		UnitPrice:        m.UnitPrice,
+		Status:           m.Status,
+		CreatedAt:        m.CreatedAt,
+		UpdatedAt:        m.UpdatedAt,
 	}
 }
