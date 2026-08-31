@@ -3,6 +3,7 @@ export interface Category {
   category_name: string;
   category_short_name: string;
   description: string;
+  created_at?: string;
 }
 
 export interface SubCategory {
@@ -12,6 +13,7 @@ export interface SubCategory {
   description: string;
   category_id: number;
   category?: Category;
+  created_at?: string;
 }
 
 export interface SubSubCategory {
@@ -22,6 +24,7 @@ export interface SubSubCategory {
   sub_category_id: number;
   sub_category_name?: string;
   sub_category?: SubCategory;
+  created_at?: string;
 }
 
 export interface Unit {
@@ -38,12 +41,14 @@ export interface Zone {
   id: number;
   zone_name: string;
   shelves?: Shelf[];
+  created_at?: string;
 }
 
 export interface ShelfLevel {
   id: number;
   level_name: string;
   shelf_id: number;
+  created_at?: string;
 }
 
 export interface Shelf {
@@ -52,18 +57,22 @@ export interface Shelf {
   zone_id: number;
   zone?: Zone;
   shelf_levels?: ShelfLevel[];
+  created_at?: string;
 }
 
 export interface Brand {
   id: number;
   brand_name: string;
   models?: Model[];
+  // Brand/Model ส่งกลับมาจาก backend เป็น entity ดิบ (ไม่ผ่าน DTO) เลยได้ field ชื่อ CreatedAt (ตัวใหญ่) มาแทน created_at
+  CreatedAt?: string;
 }
 
 export interface Model {
   id: number;
   model_name: string;
   brand_id: number;
+  CreatedAt?: string;
 }
 
 export interface Supplier {
@@ -78,4 +87,5 @@ export interface Supplier {
   phone_number_sale_2?: string;
   email_sale_2?: string;
   bank_account_number: string;
+  created_at?: string;
 }

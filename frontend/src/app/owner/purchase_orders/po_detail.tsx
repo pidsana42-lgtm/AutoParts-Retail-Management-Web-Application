@@ -8,7 +8,7 @@ import Card from '../../../components/elements/card';
 import Input from '../../../components/elements/input';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '../../../components/elements/table';
 import Button from '../../../components/elements/button';
-import Modal from '../../../components/elements/modal';
+import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { useToast } from '../../../components/elements/toast';
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
 // Interface
@@ -805,7 +805,7 @@ function OrderDetail() {
                 </div>
             )}
 
-            <Modal
+            <ConfirmDialog
                 isOpen={isRestoreConfirmOpen}
                 onClose={() => setIsRestoreConfirmOpen(false)}
                 onConfirm={handleRestore}
@@ -816,7 +816,7 @@ function OrderDetail() {
                 isSubmitting={activeAction === 'restore'}
             />
 
-            <Modal
+            <ConfirmDialog
                 isOpen={!!removeConfirm}
                 onClose={() => setRemoveConfirm(null)}
                 onConfirm={confirmRemoveItem}
@@ -830,7 +830,7 @@ function OrderDetail() {
                 variant='danger'
             />
 
-            <Modal
+            <ConfirmDialog
                 isOpen={!!duplicatePrompt}
                 onClose={cancelDuplicateAdd}
                 onConfirm={confirmDuplicateAdd}

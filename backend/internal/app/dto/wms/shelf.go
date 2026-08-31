@@ -1,9 +1,12 @@
 package wms
 
+import "time"
+
 type ShelfResponseDTO struct {
-	ID         uint   `json:"id"`
-	Shelf_Name string `json:"shelf_name"`
-	ZoneID     uint                    `json:"zone_id"`
+	ID          uint                    `json:"id"`
+	Shelf_Name  string                  `json:"shelf_name"`
+	ZoneID      uint                    `json:"zone_id"`
+	CreatedAt   time.Time               `json:"created_at"`
 	ShelfLevels []ShelfLevelResponseDTO `json:"shelf_levels"`
 }
 

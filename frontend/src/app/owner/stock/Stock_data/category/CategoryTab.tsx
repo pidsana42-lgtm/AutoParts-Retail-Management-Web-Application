@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Trash2, SquarePen, Loader2 } from "lucide-react";
+import { Trash2, SquarePen, Loader2, Eye } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Category, SubCategory, SubSubCategory } from "../../../../../interface/wms/stock_data";
+import { buildFuzzyIndex, fuzzyMatchIds } from "../../../../../utils/fuzzySearch";
 
 // Extracted Modals
 import EditCategoryRowModal from "./EditCategoryRowModal";
 import AddCategorySubCategoryModal from "./AddCategorySubCategoryModal";
+import CategoryDetailModal from "./CategoryDetailModal";
 import TablePagination from "../components/TablePagination";
 
 interface CategoryTabProps {
@@ -34,6 +36,8 @@ export default function CategoryTab({
   const [addOpen, setAddOpen] = useState(false);
   const [addMode, setAddMode] = useState<"new_category" | "existing_category">("new_category");
   const [editRowOpen, setEditRowOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailCategory, setDetailCategory] = useState<Category | null>(null);
 
   // Selected records for editing
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -137,6 +141,29 @@ export default function CategoryTab({
     setAddOpen(true);
   };
 
+  const openDetail = (category: Category) => {
+    setDetailCategory(category);
+    setDetailOpen(true);
+  };
+
+  // สร้าง index ไว้แค่ตอน categories/subCategories เปลี่ยน แล้วค่อยค้นหาแบบ fuzzy ทุกครั้งที่ search เปลี่ยน
+  const categorySearchIndex = useMemo(
+    () => buildFuzzyIndex(categories, ["category_name", "category_short_name"]),
+    [categories]
+  );
+  const subCategorySearchIndex = useMemo(
+    () => buildFuzzyIndex(subCategories, ["sub_category_name", "sub_category_short_name"]),
+    [subCategories]
+  );
+  const matchedCategoryIds = useMemo(
+    () => fuzzyMatchIds(categorySearchIndex, search),
+    [categorySearchIndex, search]
+  );
+  const matchedSubCategoryIds = useMemo(
+    () => fuzzyMatchIds(subCategorySearchIndex, search),
+    [subCategorySearchIndex, search]
+  );
+
   // --- Filtering ---
   const filteredRows = useMemo(() => {
     const list: {
@@ -154,16 +181,11 @@ export default function CategoryTab({
         return;
       }
 
-      const matchesSearch = (text: string) =>
-        text.toLowerCase().includes(search.toLowerCase());
-
       const filteredSubs = subs.filter(
         (sub) =>
           !search ||
-          matchesSearch(sub.sub_category_name) ||
-          matchesSearch(sub.sub_category_short_name) ||
-          matchesSearch(cat.category_name) ||
-          matchesSearch(cat.category_short_name)
+          matchedSubCategoryIds?.has(sub.id) ||
+          matchedCategoryIds?.has(cat.id)
       );
 
       if (filteredSubs.length > 0) {
@@ -190,9 +212,7 @@ export default function CategoryTab({
         });
       } else if (
         !categoryFilter &&
-        (!search ||
-          matchesSearch(cat.category_name) ||
-          matchesSearch(cat.category_short_name))
+        (!matchedCategoryIds || matchedCategoryIds.has(cat.id))
       ) {
         list.push({
           category: cat,
@@ -203,7 +223,7 @@ export default function CategoryTab({
     });
 
     return list;
-  }, [categories, subCategories, subSubCategories, search, categoryFilter]);
+  }, [categories, subCategories, subSubCategories, matchedCategoryIds, matchedSubCategoryIds, categoryFilter]);
 
   // จัดกลุ่มแถวตามประเภทหลัก เพื่อแบ่งหน้าโดยไม่ตัดกลุ่มขาดจากกัน
   const groupedByCategory = useMemo(() => {
@@ -257,6 +277,13 @@ export default function CategoryTab({
                   <td className="px-6 py-3 text-slate-700">{row.subCategory?.sub_category_name || "-"}</td>
                   <td className="px-6 py-3 text-slate-600">{row.subSubCategory?.sub_sub_category_name || "-"}</td>
                   <td className="px-6 py-3 flex items-center justify-end gap-3 text-slate-400">
+                      <button
+                        onClick={() => openDetail(row.category)}
+                        className="hover:text-slate-700 transition-colors"
+                        title="ดูรายละเอียด"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
                       <button
                         onClick={() => openEditRow(row.category, row.subCategory, row.subSubCategory)}
                         className="hover:text-slate-700 transition-colors"
@@ -314,6 +341,14 @@ export default function CategoryTab({
         categories={categories}
         subCategories={subCategories}
         onSuccess={reloadCategories}
+      />
+
+      <CategoryDetailModal
+        isOpen={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        category={detailCategory}
+        subCategories={subCategories}
+        subSubCategories={subSubCategories}
       />
     </>
   );
