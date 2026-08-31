@@ -4,6 +4,7 @@ import { useToast } from "../../../../../components/elements/toast";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Unit } from "../../../../../interface/wms/stock_data";
+import { buildFuzzyIndex, fuzzyMatchIds } from "../../../../../utils/fuzzySearch";
 
 // Extracted Modals
 import AddUnitModal from "./AddUnitModal";
@@ -55,11 +56,13 @@ export default function UnitTab({ search, units, loadData, addSignal }: UnitTabP
     setEditOpen(true);
   };
 
+  // สร้าง index ไว้แค่ตอน units เปลี่ยน แล้วค่อยค้นหาแบบ fuzzy ทุกครั้งที่ search เปลี่ยน
+  const searchIndex = useMemo(() => buildFuzzyIndex(units, ["unit_name"]), [units]);
+  const matchedIds = useMemo(() => fuzzyMatchIds(searchIndex, search), [searchIndex, search]);
+
   const filteredUnits = useMemo(() => {
-    return units.filter((unit) =>
-      !search || unit.unit_name.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [units, search]);
+    return units.filter((unit) => !matchedIds || matchedIds.has(unit.id));
+  }, [units, matchedIds]);
 
   const paginatedUnits = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;

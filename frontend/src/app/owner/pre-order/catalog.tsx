@@ -9,9 +9,10 @@ import {
   Smartphone
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Heading from '../../../components/elements/heading';
 import Button from '../../../components/elements/button';
+import Modal from '../../../components/elements/modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import apiClient from '../../../service/http/apiClient';
 import { getCatalogs, createCatalog, updateCatalog, deleteCatalog, extractCatalogFromImage } from '../../../service/http/catalog/catalog_service';
@@ -24,18 +25,26 @@ interface CatalogManagerProps {
 }
 
 export default function CatalogManager({ isEmployee = false }: CatalogManagerProps) {
+  const location = useLocation();
   const navigate = useNavigate();
   const basePath = isEmployee ? '/employee/pre-orders' : '/owner/pre-orders';
+  const catalogPath = `${basePath}/catalog`;
+  const initialCatalogParams = new URLSearchParams(location.search);
 
   // Navigation View Modes: 'home' | 'scan' | 'manual' | 'detail' (matching import-bills)
-  const [currentView, setCurrentView] = useState<'home' | 'scan' | 'manual' | 'detail'>('home');
+  const [currentView, setCurrentViewInternal] = useState<'home' | 'scan' | 'manual' | 'detail'>(() => {
+    const requestedView = initialCatalogParams.get('view');
+    return requestedView === 'scan' || requestedView === 'manual' || requestedView === 'detail'
+      ? requestedView
+      : 'home';
+  });
 
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [selectedSupplier, setSelectedSupplier] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'books' | 'items'>('books');
+  const activeTab: 'books' | 'items' = initialCatalogParams.get('tab') === 'items' ? 'items' : 'books';
   
   // Detail View & PDF
   const [activeCatalog, setActiveCatalog] = useState<Catalog | null>(null);
@@ -87,6 +96,43 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   const coverInputRef = useRef<HTMLInputElement>(null);
   const rowImageInputRef = useRef<HTMLInputElement>(null);
   const [activeRowImageIdx, setActiveRowImageIdx] = useState<number | null>(null);
+
+  const setCurrentView = (
+    nextView: 'home' | 'scan' | 'manual' | 'detail',
+    catalogId?: number,
+  ) => {
+    setCurrentViewInternal(nextView);
+    const params = new URLSearchParams(location.search);
+
+    params.delete('view');
+    params.delete('catalog');
+    params.delete('edit');
+    if (nextView !== 'home') params.set('view', nextView);
+    if (nextView === 'detail' && catalogId) params.set('catalog', String(catalogId));
+    if ((nextView === 'scan' || nextView === 'manual') && catalogId) params.set('edit', String(catalogId));
+
+    const query = params.toString();
+    navigate(`${catalogPath}${query ? `?${query}` : ''}`);
+  };
+
+  const setActiveTab = (tab: 'books' | 'items') => {
+    const params = new URLSearchParams(location.search);
+    if (tab === 'items') params.set('tab', 'items');
+    else params.delete('tab');
+
+    const query = params.toString();
+    navigate(`${catalogPath}${query ? `?${query}` : ''}`);
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const requestedView = params.get('view');
+    setCurrentViewInternal(
+      requestedView === 'scan' || requestedView === 'manual' || requestedView === 'detail'
+        ? requestedView
+        : 'home',
+    );
+  }, [location.search]);
 
   // Mobile Upload Session
   const [mobileSessionId] = useState<string>(
@@ -202,19 +248,37 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
     }
   });
 
-  // Split-Screen Resize Logic
+  // Split-Screen Resize Logic (measure against the split container, not the window)
   const handleMouseDown = () => setIsResizing(true);
-  const handleMouseUp = () => setIsResizing(false);
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isResizing) return;
-    const newWidth = (e.clientX / window.innerWidth) * 100;
-    if (newWidth >= 25 && newWidth <= 75) setLeftWidth(newWidth);
-  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      const container = document.getElementById('split-pane-container');
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const newWidth = ((e.clientX - rect.left) / rect.width) * 100;
+      if (newWidth >= 25 && newWidth <= 75) setLeftWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      if (isResizing) setIsResizing(false);
+    };
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   const handleOpenDetail = (catalog: Catalog) => {
     setActiveCatalog(catalog);
     setShowPdfViewer(false);
-    setCurrentView('detail');
+    setCurrentView('detail', catalog.id);
   };
 
   const handleOpenScan = () => {
@@ -263,7 +327,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
     setCurrentView('manual');
   };
 
-  const handleOpenEdit = (catalog: Catalog) => {
+  const handleOpenEdit = (catalog: Catalog, updateUrl = true) => {
     setEditingCatalogId(catalog.id);
     setNewCatalog({
       catalog_code: catalog.catalog_code,
@@ -296,7 +360,8 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
     setSelectedFile(null);
     setPreviewImage(catalog.cover_image || null);
     setPdfFileName(catalog.catalog_file ? 'เอกสาร PDF แนบไว้แล้ว' : '');
-    setCurrentView('manual');
+    if (updateUrl) setCurrentView('manual', catalog.id);
+    else setCurrentViewInternal('manual');
   };
 
   const handleDelete = async (id: number) => {
@@ -369,7 +434,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
     reader.readAsDataURL(file);
   };
 
-  const handleAppendScan = (catalog: Catalog) => {
+  const handleAppendScan = (catalog: Catalog, updateUrl = true) => {
     setEditingCatalogId(catalog.id);
     setNewCatalog({
       catalog_code: catalog.catalog_code,
@@ -402,8 +467,31 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
     setPdfFileName('');
     setZoom(1);
     setRotate(0);
-    setCurrentView('scan');
+    if (updateUrl) setCurrentView('scan', catalog.id);
+    else setCurrentViewInternal('scan');
   };
+
+  // โหลดแคตตาล็อกเดิมคืนตาม URL หลังรีเฟรช ทั้งหน้ารายละเอียดและหน้าแก้ไข/สแกนเพิ่ม
+  useEffect(() => {
+    if (catalogs.length === 0) return;
+
+    const params = new URLSearchParams(location.search);
+    const detailId = Number(params.get('catalog'));
+    const editId = Number(params.get('edit'));
+
+    if (currentView === 'detail' && detailId > 0) {
+      const found = catalogs.find((catalog) => catalog.id === detailId);
+      if (found && activeCatalog?.id !== detailId) setActiveCatalog(found);
+      return;
+    }
+
+    if (editId > 0 && editingCatalogId !== editId) {
+      const found = catalogs.find((catalog) => catalog.id === editId);
+      if (!found) return;
+      if (currentView === 'scan') handleAppendScan(found, false);
+      else if (currentView === 'manual') handleOpenEdit(found, false);
+    }
+  }, [location.search, catalogs, currentView, activeCatalog?.id, editingCatalogId]);
 
   // AI Scan Execution
   const handleRunAiScan = async () => {
@@ -513,47 +601,44 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
     }
   };
 
+  const qrModal = (
+    <Modal
+      isOpen={showQR}
+      onClose={() => setShowQR(false)}
+      title="เปิดบนมือถือ"
+      size="sm"
+    >
+      <div className="flex flex-col items-center gap-5">
+        {isLocalhost ? (
+          <div className="bg-amber-50 border border-amber-300 text-amber-800 text-xs p-3 w-full">
+            <p className="font-bold mb-1">⚠ เปิดเว็บด้วย IP Address ก่อน</p>
+            <p>มือถือไม่สามารถเข้า <code>localhost</code> ได้</p>
+            <p className="mt-1">ให้เปิดใน browser ด้วย:</p>
+            <p className="font-mono font-bold text-amber-900 mt-1 break-all">
+              http://192.168.1.109:{window.location.port || '5173'}
+            </p>
+            <p className="mt-1 text-[10px] text-amber-600">แล้วคลิกปุ่ม "เปิดบนมือถือ" อีกครั้ง</p>
+          </div>
+        ) : (
+          <>
+            <QRCodeSVG value={mobileUrl} size={220} marginSize={2} />
+            <div className="bg-gray-50 border border-gray-200 text-gray-600 text-xs p-3 w-full text-center space-y-1">
+              <p className="font-bold text-[#1C1B1B]">สแกนด้วยมือถือที่อยู่บน WiFi เดียวกัน</p>
+              <p>มือถือจะเห็นหน้าส่งรูปอย่างง่าย — ถ่ายหรืออัปรูป แล้วรูปจะขึ้นบนคอมทันที</p>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+
   // =========================================================================
   // VIEW 1: HOME VIEW (MATCHING IMPORT-BILLS ACTION CARDS & HUB LAYOUT)
   // =========================================================================
   if (currentView === 'home') {
     return (
       <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300 font-sans">
-        {/* QR Modal */}
-        {showQR && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowQR(false)}>
-            <div className="bg-white shadow-2xl p-8 flex flex-col items-center gap-5 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between w-full">
-                <p className="font-extrabold text-[#1C1B1B] text-base flex items-center gap-2">
-                  <Smartphone size={18} className="text-[#e51c23]" /> เปิดบนมือถือ
-                </p>
-                <button onClick={() => setShowQR(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
-                  <X size={20} />
-                </button>
-              </div>
-
-              {isLocalhost ? (
-                <div className="bg-amber-50 border border-amber-300 text-amber-800 text-xs p-3 w-full">
-                  <p className="font-bold mb-1">⚠ เปิดเว็บด้วย IP Address ก่อน</p>
-                  <p>มือถือไม่สามารถเข้า <code>localhost</code> ได้</p>
-                  <p className="mt-1">ให้เปิดใน browser ด้วย:</p>
-                  <p className="font-mono font-bold text-amber-900 mt-1 break-all">
-                    http://192.168.1.109:{window.location.port || '5173'}
-                  </p>
-                  <p className="mt-1 text-[10px] text-amber-600">แล้วคลิกปุ่ม "เปิดบนมือถือ" อีกครั้ง</p>
-                </div>
-              ) : (
-                <>
-                  <QRCodeSVG value={mobileUrl} size={220} marginSize={2} />
-                  <div className="bg-gray-50 border border-gray-200 text-gray-600 text-xs p-3 w-full text-center space-y-1">
-                    <p className="font-bold text-[#1C1B1B]">สแกนด้วยมือถือที่อยู่บน WiFi เดียวกัน</p>
-                    <p>มือถือจะเห็นหน้าส่งรูปอย่างง่าย — ถ่ายหรืออัปรูป แล้วรูปจะขึ้นบนคอมทันที</p>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
+        {qrModal}
 
         <div className="flex items-center justify-between mb-8">
           <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
@@ -885,8 +970,6 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
     return (
       <div 
         className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300 font-sans"
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
       >
         <input
           type="file"
@@ -910,41 +993,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
           onChange={handlePdfUpload}
         />
 
-        {/* QR Modal */}
-        {showQR && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowQR(false)}>
-            <div className="bg-white shadow-2xl p-8 flex flex-col items-center gap-5 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between w-full">
-                <p className="font-extrabold text-[#1C1B1B] text-base flex items-center gap-2">
-                  <Smartphone size={18} className="text-[#e51c23]" /> เปิดบนมือถือ
-                </p>
-                <button onClick={() => setShowQR(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
-                  <X size={20} />
-                </button>
-              </div>
-
-              {isLocalhost ? (
-                <div className="bg-amber-50 border border-amber-300 text-amber-800 text-xs p-3 w-full">
-                  <p className="font-bold mb-1">⚠ เปิดเว็บด้วย IP Address ก่อน</p>
-                  <p>มือถือไม่สามารถเข้า <code>localhost</code> ได้</p>
-                  <p className="mt-1">ให้เปิดใน browser ด้วย:</p>
-                  <p className="font-mono font-bold text-amber-900 mt-1 break-all">
-                    http://192.168.1.109:{window.location.port || '5173'}
-                  </p>
-                  <p className="mt-1 text-[10px] text-amber-600">แล้วคลิกปุ่ม "เปิดบนมือถือ" อีกครั้ง</p>
-                </div>
-              ) : (
-                <>
-                  <QRCodeSVG value={mobileUrl} size={220} marginSize={2} />
-                  <div className="bg-gray-50 border border-gray-200 text-gray-600 text-xs p-3 w-full text-center space-y-1">
-                    <p className="font-bold text-[#1C1B1B]">สแกนด้วยมือถือที่อยู่บน WiFi เดียวกัน</p>
-                    <p>มือถือจะเห็นหน้าส่งรูปอย่างง่าย — ถ่ายหรืออัปรูป แล้วรูปจะขึ้นบนคอมทันที</p>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
+        {qrModal}
 
         {/* Breadcrumbs & Header Bar */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
@@ -972,7 +1021,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         </div>
 
         {/* Split Screen Container */}
-        <div className="flex flex-col lg:flex-row gap-6 min-h-[750px] relative">
+        <div id="split-pane-container" className="flex flex-col lg:flex-row gap-6 min-h-[750px] relative">
           {/* LEFT PANEL: Interactive Image / Document Viewer with Zoom & Rotate */}
           <div 
             style={{ width: `${leftWidth}%` }} 
@@ -1023,19 +1072,19 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
             </div>
 
             {/* Viewer Canvas */}
-            <div className="flex-1 overflow-auto flex items-center justify-center p-4 min-h-[450px]">
+            <div className="flex-1 min-h-[450px] overflow-auto flex items-center justify-center p-2">
               {previewImage ? (
                 <div 
                   style={{ 
                     transform: `scale(${zoom}) rotate(${rotate}deg)`,
                     transition: 'transform 0.15s ease-out'
                   }}
-                  className="origin-center max-w-full max-h-full flex items-center justify-center"
+                  className="origin-center w-full h-full min-h-[450px] flex items-center justify-center"
                 >
                   <img 
                     src={previewImage} 
                     alt="Catalog scan" 
-                    className="max-h-[600px] object-contain shadow-md border border-gray-200" 
+                    className="w-full h-full max-w-full max-h-full object-contain shadow-md border border-gray-200" 
                   />
                 </div>
               ) : selectedFile?.name.toLowerCase().endsWith('.pdf') ? (
@@ -1202,7 +1251,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                 <Table className="min-w-[750px]">
                   <TableHeader className="bg-gray-100 text-gray-700 text-xs font-bold">
                     <TableRow>
-                      <TableHead className="py-2 px-2 w-8 text-center">#</TableHead>
+                      <TableHead className="py-2 px-2 w-20 text-center">ลำดับที่</TableHead>
                       <TableHead className="py-2 px-2 w-28 text-center">ภาพอะไหล่</TableHead>
                       <TableHead className="py-2 px-2 w-28">รหัสสินค้าคู่ค้า</TableHead>
                       <TableHead className="py-2 px-2 w-36">PART NO *</TableHead>
@@ -1531,7 +1580,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCurrentView('scan')}
+                  onClick={() => setCurrentView('scan', editingCatalogId || undefined)}
                   className="bg-red-50 hover:bg-[#e51c23] border border-red-200 hover:border-[#e51c23] text-[#e51c23] hover:text-white text-xs font-bold px-3 py-1.5 flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
                   title="เปิดหน้าสแกนด้วยรูปภาพหรือ PDF เพื่อดึงรายการเข้าเล่มนี้"
                 >
@@ -1544,7 +1593,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
               <Table className="min-w-[1000px]">
                 <TableHeader className="bg-gray-100 text-gray-600 text-xs font-bold">
                   <TableRow>
-                    <TableHead className="py-2.5 px-3 w-10 text-center">#</TableHead>
+                    <TableHead className="py-2.5 px-3 w-20 text-center">ลำดับที่</TableHead>
                     <TableHead className="py-2.5 px-3 w-36 text-center">ภาพอะไหล่</TableHead>
                     <TableHead className="py-2.5 px-3 w-36">รหัสสินค้าคู่ค้า</TableHead>
                     <TableHead className="py-2.5 px-3 w-48">รหัส PART NO *</TableHead>
@@ -1803,7 +1852,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
             <Table className="min-w-[850px]">
               <TableHeader className="bg-gray-100 text-gray-600 text-xs font-bold">
                 <TableRow>
-                  <TableHead className="py-3 px-3 w-12 text-center">ลำดับ</TableHead>
+                  <TableHead className="py-3 px-3 w-20 text-center">ลำดับที่</TableHead>
                   <TableHead className="py-3 px-3 w-28 text-center">ภาพอะไหล่</TableHead>
                   <TableHead className="py-3 px-3 w-36">รหัสสินค้าคู่ค้า</TableHead>
                   <TableHead className="py-3 px-3 w-40">PART NO (พาร์ทนัมเบอร์)</TableHead>

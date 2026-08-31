@@ -65,6 +65,7 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	wms.SetupCheckStockScheduleRoutes(r, db, notificationService)
 	wms.SetupCheckStockRoutes(r, db)
 	wms.SetupStockMovementRoutes(r, db)
+	wms.SetupMovementFeedRoutes(r, db)
 	wms.SetupSupplierRoutes(r, db)
 	wms.SetupStockAlertRoutes(r, db)
 	wms.SetupCategoryRoutes(r, db)
@@ -75,4 +76,7 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	wms.SetupShelfRoutes(r, db)
 	wms.SetupShelfLevelRoutes(r, db)
 	wms.SetupSubSubCategoryRoutes(r, db)
+
+	// inventory lots (variant code ต่อบริษัท — ใช้พิมพ์ QR/บาร์โค้ดแยกบริษัท)
+	wms.SetupInventoryLotRoutes(r, db)
 }

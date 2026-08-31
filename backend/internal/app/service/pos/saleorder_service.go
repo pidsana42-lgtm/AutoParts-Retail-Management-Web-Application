@@ -354,14 +354,18 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         paidAmount = 0.0
         balanceDue = totalAmount
         changeAmount = 0.0
-    } else if req.PaymentMethodID == 1 { // Cash
+    } else if req.PaymentMethodID == 1 || req.PaymentMethodID == 2 { // Cash or QR Code / Transfer
         orderStatus = "completed"
         paymentStatus = "paid"
-        receivedAmount = req.ReceivedAmount
+        if req.ReceivedAmount > 0 {
+            receivedAmount = req.ReceivedAmount
+        } else {
+            receivedAmount = totalAmount
+        }
         paidAmount = totalAmount
         balanceDue = 0.0
-        if req.ReceivedAmount > totalAmount {
-            changeAmount = req.ReceivedAmount - totalAmount
+        if receivedAmount > totalAmount {
+            changeAmount = receivedAmount - totalAmount
         }
     }
 
@@ -398,13 +402,13 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         return nil, err
     }
 
-    // สร้าง Payment Record สำหรับกรณีชำระเงินสดทันที
-    if req.PaymentMethodID == 1 {
+    // สร้าง Payment Record สำหรับกรณีชำระเงินสด / QR Code ทันที
+    if req.PaymentMethodID == 1 || req.PaymentMethodID == 2 {
         payment := &entity.Payment{
             OrderID:         order.ID,
             PaymentMethodID: req.PaymentMethodID,
             Amount:          totalAmount,
-            ReceivedAmount:  req.ReceivedAmount,
+            ReceivedAmount:  receivedAmount,
             ChangeAmount:    changeAmount,
             ReferenceNumber: fmt.Sprintf("PAY-%s-%d", order.OrderNumber, now.Unix()),
             ReceivedByID:    userID,
@@ -412,7 +416,7 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         }
         if err := tx.Session(&gorm.Session{}).Create(payment).Error; err != nil {
             tx.Rollback()
-            return nil, fmt.Errorf("สร้างรายการชำระเงินสดล้มเหลว: %w", err)
+            return nil, fmt.Errorf("สร้างรายการชำระเงินล้มเหลว: %w", err)
         }
     }
 
@@ -753,14 +757,18 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
 	var balanceDue float64 = totalAmount
 	var changeAmount float64 = 0.0
 
-	if req.PaymentMethodID == 1 { // Cash
+	if req.PaymentMethodID == 1 || req.PaymentMethodID == 2 { // Cash or QR Code / Transfer
 		orderStatus = "completed"
 		paymentStatus = "paid"
-		receivedAmount = req.ReceivedAmount
+		if req.ReceivedAmount > 0 {
+			receivedAmount = req.ReceivedAmount
+		} else {
+			receivedAmount = totalAmount
+		}
 		paidAmount = totalAmount
 		balanceDue = 0.0
-		if req.ReceivedAmount > totalAmount {
-			changeAmount = req.ReceivedAmount - totalAmount
+		if receivedAmount > totalAmount {
+			changeAmount = receivedAmount - totalAmount
 		}
 	} else if req.PaymentMethodID == 3 { // Credit
 		orderStatus = "completed"
@@ -801,8 +809,8 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
 		return nil, fmt.Errorf("อัปเดตข้อมูลออเดอร์ล้มเหลว: %w", err)
 	}
 
-	// สร้างหรืออัปเดต Payment Record สำหรับกรณีชำระเงินสดทันที
-	if req.PaymentMethodID == 1 {
+	// สร้างหรืออัปเดต Payment Record สำหรับกรณีชำระเงินสด / QR Code ทันที
+	if req.PaymentMethodID == 1 || req.PaymentMethodID == 2 {
 		var payment entity.Payment
 		err := tx.Where("order_id = ?", existingOrder.ID).First(&payment).Error
 		if err != nil {
@@ -811,7 +819,7 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
 				OrderID:         existingOrder.ID,
 				PaymentMethodID: req.PaymentMethodID,
 				Amount:          totalAmount,
-				ReceivedAmount:  req.ReceivedAmount,
+				ReceivedAmount:  receivedAmount,
 				ChangeAmount:    changeAmount,
 				ReferenceNumber: fmt.Sprintf("PAY-%s-%d", existingOrder.OrderNumber, now.Unix()),
 				ReceivedByID:    userID,
@@ -825,7 +833,7 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
 			// อัปเดตของเดิม
 			payment.PaymentMethodID = req.PaymentMethodID
 			payment.Amount = totalAmount
-			payment.ReceivedAmount = req.ReceivedAmount
+			payment.ReceivedAmount = receivedAmount
 			payment.ChangeAmount = changeAmount
 			payment.PaidAt = &now
 			if err := tx.Save(&payment).Error; err != nil {

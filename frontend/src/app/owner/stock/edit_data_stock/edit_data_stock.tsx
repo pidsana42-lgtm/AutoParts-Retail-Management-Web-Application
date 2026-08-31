@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import Heading from "../../../../components/elements/heading";
+import Breadcrumb from "../../../../components/elements/breadcrumb";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
 import Input from "../../../../components/elements/input";
 import Select from "../../../../components/elements/select";
@@ -13,11 +14,13 @@ import ImageUploader from "../../../../components/elements/image_uploader";
 import { getProductById, updateProduct, uploadProductImage } from "../../../../service/http/wms/product";
 import type { StockItem } from "../../../../interface/wms/product";
 import { useProductFormOptions } from "../hooks/useProductFormOptions";
+import SupplierRowsField, { rowsToPayload, suppliersToRows, type SupplierRow } from "../SupplierRowsField";
 
 export default function EditProductPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { models, categories, grades, units, zones, loading: loadingOptions } = useProductFormOptions();
+  const { models, categories, grades, units, zones, suppliers, loading: loadingOptions } = useProductFormOptions();
+  const [supplierRows, setSupplierRows] = useState<SupplierRow[]>([]);
 
   const [product, setProduct] = useState<StockItem | null>(null);
   const [loadingProduct, setLoadingProduct] = useState(true);
@@ -154,6 +157,7 @@ export default function EditProductPage() {
     });
     setImageFile(null);
     setImagePreview(product.ThumbnailUrl || "");
+    setSupplierRows(suppliersToRows(product.Suppliers));
   }, [product, loadingOptions, models, categories, grades, units, zones]);
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -180,6 +184,15 @@ export default function EditProductPage() {
         return;
       }
 
+      const supplierPayload = rowsToPayload(supplierRows);
+      const supplierQtySum = supplierPayload.reduce((sum, s) => sum + s.quantity, 0);
+      if (supplierQtySum > Number(formData.quantity)) {
+        alert(
+          `จำนวนสินค้าที่รับมาจาก Supplier รวมกัน (${supplierQtySum}) เกินจำนวนสินค้าทั้งหมด (${Number(formData.quantity)}) กรุณาแก้ไขจำนวนให้ถูกต้อง`
+        );
+        return;
+      }
+
       // หา shelf/level จาก path ด้วย prefix แทนตำแหน่ง index เพราะ zone_path มาจาก TreeSelect
       // ที่ prefix ค่าตามประเภทไว้แล้ว (zone-/shelf-/level-) กัน id ชนกันข้ามตาราง
       const shelfEntry = formData.zone_path.find((p) => p.startsWith("shelf-"));
@@ -200,6 +213,7 @@ export default function EditProductPage() {
         unit_id: Number(formData.unit_id),
         shelf_id: shelfEntry ? Number(shelfEntry.split("-").pop()) : 0,
         shelf_level_id: levelEntry ? Number(levelEntry.split("-").pop()) : null,
+        suppliers: supplierPayload,
       };
 
       await updateProduct(product.ID, payload);
@@ -244,23 +258,21 @@ export default function EditProductPage() {
 
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
+      <Breadcrumb
+        items={[
+          { label: "คลังสินค้า", path: "/owner/stock" },
+          { label: "แก้ไขข้อมูล" },
+        ]}
+      />
+
       {/* Header */}
-      <div className="flex items-center gap-4 border-b border-slate-200 pb-4">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
-        >
-          <ChevronLeft size={24} className="text-slate-600" />
-        </button>
-        <div>
-          <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
-            แก้ไขข้อมูลสินค้า
-          </Heading>
-          <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
-            แก้ไขข้อมูลสินค้า: {product.ProductCode}
-          </Heading>
-        </div>
+      <div className="border-b border-slate-200 pb-4">
+        <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
+          แก้ไขข้อมูลสินค้า
+        </Heading>
+        <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
+          แก้ไขข้อมูลสินค้า: {product.ProductCode}
+        </Heading>
       </div>
 
       <Card className="border-l-[5px] border-l-red-800">
@@ -392,6 +404,8 @@ export default function EditProductPage() {
               onChange={(e) => setFormData({ ...formData, note: e.target.value })}
               placeholder="เช่น รุ่นรถที่รองรับ หรือรายละเอียดเพิ่มเติม"
             />
+
+            <SupplierRowsField rows={supplierRows} onChange={setSupplierRows} options={suppliers} disabled={submitting} />
 
             <ImageUploader preview={imagePreview} onChange={handleImageChange} onClear={handleImageClear} />
 

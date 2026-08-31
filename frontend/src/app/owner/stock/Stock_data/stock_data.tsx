@@ -61,29 +61,34 @@ function StockDataContent() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
 
-  // Load all data
+  // ดึงข้อมูลทั้งหมดของหน้าตั้งค่านี้ (ไม่แตะ state `loading` เอง — แยกให้ผู้เรียกตัดสินใจว่าจะโชว์ loading เต็มจอไหม)
+  const fetchAllData = async () => {
+    const [cats, unts, zns, shlvs, sups, grds] = await Promise.all([
+      stockDataService.getCategories(),
+      stockDataService.getUnits(),
+      stockDataService.getZones(),
+      stockDataService.getShelves(),
+      stockDataService.getSuppliers(),
+      stockDataService.getGrades(),
+    ]);
+
+    setCategories(cats);
+    setUnits(unts);
+    setZones(zns);
+    setShelves(shlvs);
+    setSuppliers(sups);
+    setGrades(grds);
+
+    // Load Brands from Backend
+    const backendBrands = await stockDataService.getBrands();
+    setBrands(backendBrands);
+  };
+
+  // Load all data — ใช้ตอนเปิดหน้านี้ครั้งแรกเท่านั้น (โชว์ loading เต็มจอตอนยังไม่มีข้อมูลอะไรเลย)
   const loadData = async () => {
     try {
       setLoading(true);
-      const [cats, unts, zns, shlvs, sups, grds] = await Promise.all([
-        stockDataService.getCategories(),
-        stockDataService.getUnits(),
-        stockDataService.getZones(),
-        stockDataService.getShelves(),
-        stockDataService.getSuppliers(),
-        stockDataService.getGrades(),
-      ]);
-
-      setCategories(cats);
-      setUnits(unts);
-      setZones(zns);
-      setShelves(shlvs);
-      setSuppliers(sups);
-      setGrades(grds);
-
-      // Load Brands from Backend
-      const backendBrands = await stockDataService.getBrands();
-      setBrands(backendBrands);
+      await fetchAllData();
     } catch (err) {
       console.error(err);
       toast({
@@ -93,6 +98,23 @@ function StockDataContent() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // refreshData: ใช้รีเฟรชข้อมูลหลังเพิ่ม/แก้ไข/ลบสำเร็จจากแท็บย่อยต่างๆ — ตั้งใจไม่แตะ `loading` เต็มจอ
+  // (ถ้าใช้ loadData ตรงๆ จะไปเซ็ต loading=true ระหว่างรอ ทำให้ทั้งหน้ารวมถึง modal ที่เพิ่งบันทึกเสร็จโดน unmount
+  // ทิ้งกลางคันชั่วครู่ พอโหลดเสร็จ tab ก็ mount ใหม่ แล้ว effect เปิด modal อัตโนมัติจาก addSignal เดิมก็ทำงานซ้ำ
+  // เห็นเป็นอาการ "กดบันทึกแล้วเด้งฟอร์มเปล่ากลับมาใหม่ทันที")
+  const refreshData = async () => {
+    try {
+      await fetchAllData();
+    } catch (err) {
+      console.error(err);
+      toast({
+        variant: "error",
+        title: "เกิดข้อผิดพลาด",
+        message: "ไม่สามารถโหลดข้อมูลระบบตั้งค่าได้",
+      });
     }
   };
 
@@ -252,7 +274,7 @@ function StockDataContent() {
           <UnitTab
             search={search}
             units={units}
-            loadData={loadData}
+            loadData={refreshData}
             addSignal={addSignal}
           />
         )}
@@ -262,7 +284,7 @@ function StockDataContent() {
             zoneFilter={zoneFilter}
             zones={zones}
             shelves={shelves}
-            loadData={loadData}
+            loadData={refreshData}
             addSignal={addSignal}
           />
         )}
@@ -279,7 +301,7 @@ function StockDataContent() {
           <SupplierTab
             search={search}
             suppliers={suppliers}
-            loadData={loadData}
+            loadData={refreshData}
             addSignal={addSignal}
           />
         )}
@@ -287,7 +309,7 @@ function StockDataContent() {
           <GradeTab
             search={search}
             grades={grades}
-            loadData={loadData}
+            loadData={refreshData}
             addSignal={addSignal}
           />
         )}

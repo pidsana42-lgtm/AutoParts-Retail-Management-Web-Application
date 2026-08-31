@@ -14,7 +14,10 @@ export function CustomerCard({ customer, address }: CustomerCardProps): React.JS
   const {
     customerName,
     phoneNumber,
+    isGuest,
     isSpecialPrice,
+    isDiscountEnabled,
+    ontopDiscountRate,
     creditUsagePercentage,
     currentDebtStr,
     remainingCreditStr,
@@ -42,8 +45,26 @@ export function CustomerCard({ customer, address }: CustomerCardProps): React.JS
             </Text>
           </div>
         </div>
-        <div className="bg-[#006E0A] text-white text-[10px] px-2.5 py-1 select-none uppercase tracking-wide shrink-0">
-          {isSpecialPrice ? "ระดับราคาพิเศษ" : "ระดับราคามาตรฐาน"}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <div className={`text-white text-[10px] px-2.5 py-1 select-none uppercase tracking-wide shrink-0 ${
+            isSpecialPrice ? "bg-[#259B24]" : "bg-zinc-700 text-zinc-300"
+          }`}>
+            {isSpecialPrice ? "ระดับราคาพิเศษ" : "ระดับราคามาตรฐาน"}
+          </div>
+          {!isGuest && !isDiscountEnabled ? (
+            <span className="text-[11px] text-[#6B7280] font-normal tracking-wide flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#6B7280] inline-block shrink-0" />
+              <span>On-Top: {ontopDiscountRate > 0 ? `+${ontopDiscountRate}%` : "0%"} (ปิดใช้งาน)</span>
+            </span>
+          ) : ontopDiscountRate > 0 ? (
+            <span className="text-[11px] text-[#259B24] font-normal tracking-wide">
+              On-Top: +{ontopDiscountRate}%
+            </span>
+          ) : (
+            <span className="text-[11px] text-zinc-500 font-light tracking-wide">
+              On-Top: 0%
+            </span>
+          )}
         </div>
       </div>
 
@@ -71,11 +92,24 @@ export function CustomerCard({ customer, address }: CustomerCardProps): React.JS
         </div>
       </div>
 
-      <div className="mt-4 pl-1 flex items-center gap-1.5">
-        <BadgeCheck className="w-3.5 h-3.5 text-zinc-400" strokeWidth={2}/>
-        <Text variant="xs" className="mb-0 text-zinc-400 font-extralight tracking-wider whitespace-nowrap">
-          วงเงินเครดิต: ฿{maxCreditLimitStr}
-        </Text>
+      <div className="mt-4 pl-1 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <BadgeCheck className="w-3.5 h-3.5 text-zinc-400" strokeWidth={2}/>
+          <Text variant="xs" className="mb-0 text-zinc-400 font-extralight tracking-wider whitespace-nowrap">
+            วงเงินเครดิต: ฿{maxCreditLimitStr}
+          </Text>
+        </div>
+        {/* <div>
+          {ontopDiscountRate > 0 ? (
+            <span className="text-[#259B24] bg-[#259B24]/20 border border-[#86F976]/50 px-2 py-0.5 text-[10px] font-medium tracking-wide">
+              ส่วนลด On-Top {ontopDiscountRate}%
+            </span>
+          ) : (
+            <span className="text-zinc-500 text-[10px] font-light">
+              ไม่มีส่วนลด On-Top
+            </span>
+          )}
+        </div> */}
       </div>
 
     </div>

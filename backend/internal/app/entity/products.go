@@ -22,14 +22,15 @@ type Product struct {
 	Import_DateTime time.Time `json:"import_datetime"`
 	Note            string    `json:"note"`
 
-	UnitID             uint   `json:"unit_id"`
-	CategoryID         uint   `json:"category_id"`
-	SubCategoryID      *uint  `json:"sub_category_id" gorm:"default:null"`
-	SubSubCategoryID   *uint  `json:"sub_sub_category_id" gorm:"default:null"`
-	GradeID            uint   `json:"grade_id"`
-	ShelfID            uint   `json:"shelf_id"`
-	ShelfLevelID       *uint  `json:"shelf_level_id" gorm:"default:null"`
-	CompanyProductCode string `json:"company_product_code"`
+	UnitID           uint  `json:"unit_id"`
+	CategoryID       uint  `json:"category_id"`
+	SubCategoryID    *uint `json:"sub_category_id" gorm:"default:null"`
+	SubSubCategoryID *uint `json:"sub_sub_category_id" gorm:"default:null"`
+	GradeID          uint  `json:"grade_id"`
+	ShelfID          uint  `json:"shelf_id"`
+	ShelfLevelID     *uint `json:"shelf_level_id" gorm:"default:null"`
+	// CompanyProductCode ย้ายไปอยู่ที่ entity.Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้าแทน) เพราะสินค้า 1 ชื่อ
+	// ในร้านมาได้จากหลายบริษัท แต่ละเจ้าใช้รหัสสินค้าของตัวเองไม่เหมือนกัน เก็บไว้ที่ Product เดียวไม่ครอบคลุม
 
 	Models         []Models        `gorm:"many2many:product_models;" json:"models"`
 	Unit           *Unit           `gorm:"foreignKey:UnitID" json:"unit"`

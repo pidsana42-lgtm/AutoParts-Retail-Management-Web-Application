@@ -24,6 +24,7 @@ type CreateBillItemDTO struct {
 	ProductID          uint    `json:"product_id"`
 	CategoryID         *uint   `json:"category_id"`
 	SubCategoryID      *uint   `json:"sub_category_id"`
+	SubSubCategoryID   *uint   `json:"sub_sub_category_id"`
 }
 
 type UpdateBillItemDTO struct {
@@ -40,6 +41,9 @@ type UpdateBillItemDTO struct {
 	IsFreebie          *bool    `json:"is_freebie,omitempty"`
 	Remark             *string  `json:"remark,omitempty"`
 	ProductID          *uint    `json:"product_id,omitempty"`
+	CategoryID         *uint    `json:"category_id,omitempty"`
+	SubCategoryID      *uint    `json:"sub_category_id,omitempty"`
+	SubSubCategoryID   *uint    `json:"sub_sub_category_id,omitempty"`
 }
 
 type BillItemResponseDTO struct {
@@ -57,6 +61,9 @@ type BillItemResponseDTO struct {
 	IsFreebie          bool      `json:"is_freebie"`
 	Remark             string    `json:"remark"`
 	ProductID          uint      `json:"product_id"`
+	CategoryID         *uint     `json:"category_id,omitempty"`
+	SubCategoryID      *uint     `json:"sub_category_id,omitempty"`
+	SubSubCategoryID   *uint     `json:"sub_sub_category_id,omitempty"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
@@ -80,6 +87,7 @@ func (d *CreateBillItemDTO) ToEntity() entity.BillItem {
 		ProductID:          d.ProductID,
 		CategoryID:         d.CategoryID,
 		SubCategoryID:      d.SubCategoryID,
+		SubSubCategoryID:   d.SubSubCategoryID,
 	}
 }
 
@@ -123,6 +131,15 @@ func (d *UpdateBillItemDTO) ToEntity(existing entity.BillItem) entity.BillItem {
 	if d.ProductID != nil {
 		existing.ProductID = *d.ProductID
 	}
+	if d.CategoryID != nil {
+		existing.CategoryID = d.CategoryID
+	}
+	if d.SubCategoryID != nil {
+		existing.SubCategoryID = d.SubCategoryID
+	}
+	if d.SubSubCategoryID != nil {
+		existing.SubSubCategoryID = d.SubSubCategoryID
+	}
 	return existing
 }
 
@@ -142,6 +159,9 @@ func ToBillItemResponseDTO(m *entity.BillItem) BillItemResponseDTO {
 		IsFreebie:          m.IsFreebie,
 		Remark:             m.Remark,
 		ProductID:          m.ProductID,
+		CategoryID:         m.CategoryID,
+		SubCategoryID:      m.SubCategoryID,
+		SubSubCategoryID:   m.SubSubCategoryID,
 		CreatedAt:          m.CreatedAt,
 		UpdatedAt:          m.UpdatedAt,
 	}

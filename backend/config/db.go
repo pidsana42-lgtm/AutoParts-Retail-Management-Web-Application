@@ -19,7 +19,18 @@ func DB() *gorm.DB {
 }
 
 func ConnectDB() {
-	_ = godotenv.Overload(".env", "../.env", "backend/.env")
+	// โหลดไฟล์ local ทีหลังเพื่อให้ตั้งค่าพอร์ตของแต่ละเครื่องได้
+	// และแยกเรียกทีละไฟล์ เพราะ Overload จะหยุดทันทีเมื่อพบไฟล์ที่ไม่มีอยู่
+	for _, envFile := range []string{
+		".env",
+		"../.env",
+		"backend/.env",
+		".env.local",
+		"../.env.local",
+		"backend/.env.local",
+	} {
+		_ = godotenv.Overload(envFile)
+	}
 
 	host := os.Getenv("DB_HOST")
 	port := os.Getenv("DB_PORT")
@@ -132,7 +143,6 @@ func SetupDatabase() {
 	seed.Role(db)
 	seed.CustomerType(db)
 	seed.PaymentMethod(db)
-	seed.StoreConfig(db)
     
 	// Toto WMS
 	seed.Zone(db)

@@ -36,7 +36,6 @@ export default function SettleBillsPage(): React.JSX.Element {
     searchQuery,
     setSearchQuery,
     customerId,
-    setCustomerId,
     customerName,
     bills,
     filteredBills,
@@ -115,11 +114,11 @@ export default function SettleBillsPage(): React.JSX.Element {
           {/* Header */}
           <div className="flex justify-between items-start mb-6">
             <div>
-              <Text variant="xs" className="text-[#E51C23] uppercase tracking-wider mb-0">
-                จัดการบิลค้างชำระและตัดยอดหนี้ลูกค้า
-              </Text>
-              <Heading level="h1" weight="normal" className="mb-0 text-[#1C1B1B]">
+              <Heading level='h1' weight='semibold' className='m-0 text-black'>
                 ชำระหนี้คงค้าง
+              </Heading>
+              <Heading level='h6' className='m-0 mt-1'>
+                จัดการบิลค้างชำระและตัดยอดหนี้ลูกค้า
               </Heading>
             </div>
 
@@ -873,7 +872,7 @@ export default function SettleBillsPage(): React.JSX.Element {
                   size="md"
                   disabled={isSubmitting || totalPayAmount <= 0 || (paymentMethodId === 1 && receivedAmount < totalPayAmount)}
                   isLoading={isSubmitting}
-                  onClick={() => handleFinalConfirm(1)}
+                  onClick={() => handleFinalConfirm()}
                   leftIcon={<Printer className="w-4 h-4" />}
                   className="flex-1 py-3 bg-[#E51C23] hover:bg-red-700 text-white font-normal text-sm rounded-none cursor-pointer disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >

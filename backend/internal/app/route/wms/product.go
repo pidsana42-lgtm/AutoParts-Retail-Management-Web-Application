@@ -18,8 +18,13 @@ func SetupProductRoutes(r *gin.Engine, db *gorm.DB) {
 	{
 		wms.POST("/products", controller.CreateProduct)
 		wms.GET("/products", controller.ListProducts)
+		// หมายเหตุ: ต้องใช้ path แยก /deleted-products แทน /products/deleted เพราะ gin จะ panic ตอนสตาร์ท
+		// ("conflicts with existing wildcard") ถ้ามี path segment คงที่ (deleted) ชนกับ :id ที่ตำแหน่งเดียวกัน
+		wms.GET("/deleted-products", controller.ListDeletedProducts)
 		wms.GET("/products/:id", controller.GetProductByID)
 		wms.PUT("/products/:id", controller.UpdateProduct)
+		wms.POST("/products/:id/receive-stock", controller.ReceiveStock)
+		wms.POST("/products/:id/restore", controller.RestoreProduct)
 		wms.POST("/products/:id/images", controller.UploadProductImage)
 		wms.DELETE("/products/:id", controller.DeleteProduct)
 		wms.POST("/brands", controller.CreateBrand)

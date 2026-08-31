@@ -48,11 +48,7 @@ type PreOrderResponseDTO struct {
 func (d *CreatePreOrderDTO) ToEntity() entity.PreOrder {
 	var items []entity.PreOrderItem
 	for _, item := range d.PreOrderItems {
-		items = append(items, entity.PreOrderItem{
-			ProductID: item.ProductID,
-			Quantity:  item.Quantity,
-			UnitPrice: item.UnitPrice,
-		})
+		items = append(items, item.ToEntity())
 	}
 
 	supplierID := d.SupplierID
@@ -93,11 +89,7 @@ func (d *UpdatePreOrderDTO) ToEntity(existing entity.PreOrder) entity.PreOrder {
 	if d.PreOrderItems != nil {
 		var items []entity.PreOrderItem
 		for _, item := range *d.PreOrderItems {
-			items = append(items, entity.PreOrderItem{
-				ProductID: item.ProductID,
-				Quantity:  item.Quantity,
-				UnitPrice: item.UnitPrice,
-			})
+			items = append(items, item.ToEntity())
 		}
 		existing.PreOrderItems = items
 	}
@@ -142,7 +134,7 @@ func ToPreOrderResponseDTO(m *entity.PreOrder) PreOrderResponseDTO {
 type PreOrderForPODTO struct {
 	ID            uint                   `json:"id"`
 	Status        string                 `json:"status"`
-	PreOrderItems []PreOrderItemForPODTO `json:"pre_order_items"` 
+	PreOrderItems []PreOrderItemForPODTO `json:"pre_order_items"`
 }
 
 func ToPreOrderForPODTO(m *entity.PreOrder) PreOrderForPODTO {

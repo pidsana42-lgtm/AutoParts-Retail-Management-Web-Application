@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import Input from "../../../../../components/elements/input";
+import AddressMapPicker from "../../../../../components/elements/address_map_picker";
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
@@ -133,11 +134,11 @@ export default function AddSupplierModal({ isOpen, onClose, onSuccess }: AddSupp
           placeholder="เช่น somchai@yingcharoen.com..."
           containerClassName="col-span-2 sm:col-span-1"
         />
-        <Input
+        <AddressMapPicker
           label="ที่อยู่บริษัท"
           required
           value={form.supplier_address}
-          onChange={(e) => setForm({ ...form, supplier_address: e.target.value })}
+          onChange={(address) => setForm({ ...form, supplier_address: address })}
           placeholder="ที่อยู่สำหรับออกใบเสนอราคา/ส่งของ..."
           containerClassName="col-span-2"
         />

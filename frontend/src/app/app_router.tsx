@@ -9,7 +9,6 @@ import Pos from './employee/pos/pos';
 import SalesHistory from './employee/pos/sales_history';
 import { getMenuByRole } from '../config/menu'; 
 import { useAuth } from '../contexts/AuthContexts'; 
-import StoreConfig from './owner/storeconfig/storeconfig'; 
 import Stock from './owner/stock/stock';
 import StockMovement from './owner/stock/stock_movement/stock_movement';
 import Stockdata from './owner/stock/Stock_data/stock_data';
@@ -23,6 +22,7 @@ import EmployeeStockData from './employee/wms/stock_data/stock';
 import EmployeeProductDetail from './employee/wms/stock_data/product_detail/product_detail';
 import AddProductPage from './owner/stock/add_data_stock/add_data_stock';
 import EditProductPage from './owner/stock/edit_data_stock/edit_data_stock';
+import TrashStockPage from './owner/stock/trash_stock/trash_stock';
 import ImportBill from './owner/import-bills/import_bill';
 import EditStockBillPage from './owner/import-bills/edit-stock-bill';
 import PreOrder from './owner/pre-order/pre-order';
@@ -43,9 +43,13 @@ import MobileScanPage from './mobile-scan/mobile_scan_page';
 import PublicProductPage from './public-product/public_product_page';
 import SalesCancellationHistory from './employee/pos/sales_cancellation_history';
 import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_history';
-import RepaymentHistory from './employee/transactions/repayment_history';
-import OwnerRepaymentHistory from './owner/transactions/repayment_history';
 import SettleBills from './employee/transactions/settle_bills';
+import PaymentHistory from './employee/transactions/payment_history';
+import PaymentCancellationHistory from './employee/transactions/payment_cancellation_history';
+import CustomerRegistration from './employee/customer/customer_registration';
+import FinancialPolicy from './owner/storeconfig/financial_policy';
+import CustomerCreditControl from './owner/storeconfig/customer_credit_control';
+import StoreConfig from './owner/storeconfig/storeconfig';
 import DeletedPoHistory from './owner/purchase_orders/restore_po';
 import NewReturnPage from './owner/return/new_return';
 
@@ -91,7 +95,19 @@ export default function AppRouter(): React.JSX.Element {
           isAdminOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
-        <Route path="/owner/storeconfig" element={<StoreConfig />} />
+        {/* -------------------- การตั้งค่า ------------------------ */}
+        <Route path="/owner/storeconfig" element={
+          isAdminOrOwner ? <StoreConfig /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/storeconfig/financial-policy" element={
+          isAdminOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/storeconfig/customer-credit-control" element={
+          isAdminOrOwner ? <CustomerCreditControl /> : <Navigate to={firstMenuPath} replace />
+        } />
+        {/* ------------------------------------------------------ */}
+
+        
 
         <Route path="/owner/stock" element={
           isAdminOrOwner ? <Stock /> : <Navigate to={firstMenuPath} replace />
@@ -99,6 +115,10 @@ export default function AppRouter(): React.JSX.Element {
 
         <Route path="/owner/stock/new" element={
           isAdminOrOwner ? <AddProductPage /> : <Navigate to={firstMenuPath} replace />
+        } />
+
+        <Route path="/owner/stock/trash" element={
+          isAdminOrOwner ? <TrashStockPage /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/owner/stock/:id" element={
@@ -132,8 +152,10 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/owner/import-bills" element={<ImportBill />} />
         <Route path="/owner/import-bills/scan" element={<ImportBill />} />
         <Route path="/owner/import-bills/excel" element={<ImportBill />} />
+        <Route path="/owner/import-bills/mapping" element={<ImportBill />} />
         <Route path="/owner/import-bills/manual" element={<ImportBill />} />
         <Route path="/owner/import-bills/po" element={<ImportBill />} />
+        <Route path="/owner/import-bills/approve/:id" element={<ImportBill />} />
         <Route path="/owner/import-bills/edit-stock-bill" element={
           isAdminOrOwner ? <EditStockBillPage /> : <Navigate to={firstMenuPath} replace />
         } />
@@ -176,13 +198,27 @@ export default function AppRouter(): React.JSX.Element {
 
         {/* -------- หน้ารายการธุรกรรม / การเงิน -------- */}
         <Route path="/employee/transactions/settle-bills" element={<SettleBills />} />
-        <Route path="/employee/transactions/repayment-history" element={<RepaymentHistory />} />
+        <Route path="/employee/transactions/payment-history" element={<PaymentHistory />} />
+        <Route path="/employee/transactions/payment-cancellation-history" element={<PaymentCancellationHistory />} />
 
         <Route path="/owner/transactions/settle-bills" element={
           isAdminOrOwner ? <SettleBills /> : <Navigate to={firstMenuPath} replace />
         } />
-        <Route path="/owner/transactions/repayment-history" element={
-          isAdminOrOwner ? <OwnerRepaymentHistory /> : <Navigate to={firstMenuPath} replace />
+        <Route path="/owner/transactions/payment-history" element={
+          isAdminOrOwner ? <PaymentHistory /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/transactions/payment-cancellation-history" element={
+          isAdminOrOwner ? <PaymentCancellationHistory /> : <Navigate to={firstMenuPath} replace />
+        } />
+        {/* --------------------------------------------------- */}
+
+        {/* ------------------ ข้อมูลลูกค้า ----------------- */}
+        {/* พนักงาน */}
+        <Route path="/employee/customers/customer-registration" element={<CustomerRegistration />} />
+
+        {/* เจ้าของร้าน */}
+        <Route path="/owner/customers/customer-registration" element={
+          isAdminOrOwner ? <CustomerRegistration /> : <Navigate to={firstMenuPath} replace />
         } />
         {/* --------------------------------------------------- */}
 
@@ -210,6 +246,7 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/employee/import" element={<EmployeeImport />} />
         <Route path="/employee/import/scan" element={<EmployeeImport />} />
         <Route path="/employee/import/excel" element={<EmployeeImport />} />
+        <Route path="/employee/import/mapping" element={<EmployeeImport />} />
         <Route path="/employee/import/manual" element={<EmployeeImport />} />
         <Route path="/employee/import/po" element={<EmployeeImport />} />
 

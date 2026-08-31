@@ -7,6 +7,7 @@ import (
 
 type StoreConfigRepository interface {
 	GetStoreConfig() (*entity.StoreConfig, error)
+	CreateStoreConfig(config *entity.StoreConfig) error
 	UpdateStoreConfig(config *entity.StoreConfig) error
 }
 
@@ -20,8 +21,15 @@ func NewStoreConfigRepository(db *gorm.DB) StoreConfigRepository {
 
 func (r *storeConfigRepository) GetStoreConfig() (*entity.StoreConfig, error) {
 	var config entity.StoreConfig
-	err := r.db.First(&config, 1).Error
-	return &config, err
+	err := r.db.First(&config).Error
+	if err != nil {
+		return nil, err
+	}
+	return &config, nil
+}
+
+func (r *storeConfigRepository) CreateStoreConfig(config *entity.StoreConfig) error {
+	return r.db.Create(config).Error
 }
 
 func (r *storeConfigRepository) UpdateStoreConfig(config *entity.StoreConfig) error {

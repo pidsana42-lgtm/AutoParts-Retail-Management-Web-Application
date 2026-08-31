@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Minus,
   ChevronLeft, ChevronRight,
   ChevronsLeft, ChevronsRight, History, Trash2,
-  FileText, Loader2, Eye, Camera, X, Printer, SquarePen,
+  FileText, Loader2, Camera, X, Printer, SquarePen,
   Truck,
 } from 'lucide-react';
 import ClaimTrackingTab from './claim_tracking_tab';
@@ -14,12 +14,13 @@ import Input from '../../../components/elements/input';
 import Button from '../../../components/elements/button';
 import Badge from '../../../components/elements/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
-import { getCustomerClaims, searchSaleOrders, deleteCustomerClaim, searchCustomerCreditByPhone } from '../../../service/http/claim/claim';
+import { getCustomerClaims, searchSaleOrders, deleteCustomerClaim, searchCustomerCreditByPhone, generateCustomerClaimPDF, exportCustomerClaimChecklistPDF } from '../../../service/http/claim/claim';
 import type { CustomerDiscountResponse } from '../../../interface/pos/customer_interface';
 import apiClient from '../../../service/http/apiClient';
 import type { CustomerClaim } from '../../../interface/claim/claim';
 import { cn } from '../../../utils/component';
 import { useNotification } from '../../../contexts/NotificationContext';
+import { useToast } from '../../../components/elements/toast';
 
 interface ClaimFormProduct {
   product_id: number;
@@ -161,10 +162,15 @@ interface ClaimsPageProps {
 }
 
 export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): React.JSX.Element {
+  const location = useLocation();
   const navigate = useNavigate();
   const { addNotification } = useNotification();
+  const { toast } = useToast();
+  const basePath = canApprove ? '/owner/claims' : '/employee/claims';
+  const pageParams = new URLSearchParams(location.search);
+  const view: 'list' | 'claim-form' = pageParams.get('view') === 'new' ? 'claim-form' : 'list';
+  const activeTab: 'claims' | 'tracking' = pageParams.get('tab') === 'tracking' ? 'tracking' : 'claims';
 
-  const [view, setView] = useState<'list' | 'claim-form'>('list');
   const [claimSearch, setClaimSearch] = useState('');
   const [showSearchDrop, setShowSearchDrop] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -176,8 +182,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // Tab & Tracking state
-  const [activeTab, setActiveTab] = useState<'claims' | 'tracking'>('claims');
+  // Tracking state
   const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
 
   const handleUpdateTrackingStage = async (itemId: number, newStage: string) => {
@@ -191,9 +196,10 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
         ...c,
         items: c.items?.map(i => i.id === itemId ? { ...i, resolution: newStage } : i),
       })));
+      toast({ variant: 'success', message: 'อัปเดตขั้นตอนการเคลมเรียบร้อยแล้ว' });
     } catch (err) {
       console.error('Failed to update tracking stage:', err);
-      alert('เกิดข้อผิดพลาดในการอัปเดตขั้นตอน กรุณาลองใหม่');
+      toast({ variant: 'error', message: 'เกิดข้อผิดพลาดในการอัปเดตขั้นตอน กรุณาลองใหม่' });
     } finally {
       setUpdatingItemId(null);
     }
@@ -246,6 +252,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
       setRawClaims(data);
     } catch (err) {
       console.error('Failed to load claims:', err);
+      toast({ variant: 'error', message: 'ไม่สามารถโหลดรายการเคลมได้' });
     } finally {
       setLoading(false);
     }
@@ -333,7 +340,10 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
   const handleItemEvidenceSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || activeEvidenceIdx === null) return;
-    if (file.size > 5 * 1024 * 1024) { alert('ไฟล์ใหญ่เกินไป (สูงสุด 5MB)'); return; }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ variant: 'warning', message: 'ไฟล์ใหญ่เกินไป (สูงสุด 5MB)' });
+      return;
+    }
     const preview = URL.createObjectURL(file);
     setClaimItems(prev =>
       prev.map((item, i) => i === activeEvidenceIdx ? { ...item, evidenceFile: file, evidencePreview: preview } : item)
@@ -351,17 +361,27 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
   const handleSaveClaim = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!claimCustomerName || !claimCustomerPhone) {
-      alert('กรุณาค้นหาใบเสร็จเพื่อโหลดข้อมูลลูกค้าก่อน'); return;
+      toast({ variant: 'warning', message: 'กรุณาค้นหาใบเสร็จเพื่อโหลดข้อมูลลูกค้าก่อน' });
+      return;
     }
     const selected = claimItems.filter(i => i.claim_qty > 0);
-    if (selected.length === 0) { alert('กรุณาเลือกจำนวนสินค้าที่ต้องการเคลมอย่างน้อย 1 ชิ้น'); return; }
+    if (selected.length === 0) {
+      toast({ variant: 'warning', message: 'กรุณาเลือกจำนวนสินค้าที่ต้องการเคลมอย่างน้อย 1 ชิ้น' });
+      return;
+    }
     const missing = selected.find(p => !p.reason.trim());
-    if (missing) { alert(`กรุณาระบุสาเหตุที่เคลมสำหรับ "${missing.product_name}"`); return; }
+    if (missing) {
+      toast({ variant: 'warning', message: `กรุณาระบุสาเหตุที่เคลมสำหรับ "${missing.product_name}"` });
+      return;
+    }
 
     const isCreditEligible = Boolean(posCustomerCredit && posCustomerCredit.is_credit_enabled);
     const hasCreditAccountItem = selected.some(p => (p.claim_type || claimType) === 'CREDIT_ACCOUNT');
     if (hasCreditAccountItem && !isCreditEligible) {
-      alert('ลูกค้าท่านนี้ไม่มีสิทธิ์ใช้วงเงินสินเชื่อ/เงินเชื่อ กรุณาเปลี่ยนประเภทการเคลมเป็น "เปลี่ยนทันที" หรือ "ฝากส่งบริษัทตรวจ"');
+      toast({
+        variant: 'warning',
+        message: 'ลูกค้าท่านนี้ไม่มีสิทธิ์ใช้วงเงินสินเชื่อ/เงินเชื่อ กรุณาเปลี่ยนประเภทการเคลมเป็น "เปลี่ยนทันที" หรือ "ฝากส่งบริษัทตรวจ"',
+      });
       return;
     }
 
@@ -399,14 +419,77 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
         items: itemsWithUrls,
       });
       await loadClaims();
-      setView('list');
+      navigate(basePath, { replace: true });
       resetClaimForm();
       addNotification('สร้างใบเคลมสำเร็จ', `ใบเคลมของคุณถูกบันทึกในระบบเรียบร้อยแล้ว`, 'success');
+      toast({ variant: 'success', message: 'สร้างใบเคลมเรียบร้อยแล้ว' });
     } catch (err) {
       console.error('Failed to create claim:', err);
-      alert('เกิดข้อผิดพลาดในการบันทึกใบเคลม กรุณาลองใหม่อีกครั้ง');
+      toast({ variant: 'error', message: 'เกิดข้อผิดพลาดในการบันทึกใบเคลม กรุณาลองใหม่อีกครั้ง' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const [downloadingClaimId, setDownloadingClaimId] = useState<number | null>(null);
+
+  const handleDownloadPDF = async (claimId: number, claimNoStr?: string) => {
+    setDownloadingClaimId(claimId);
+    try {
+      const blob = await generateCustomerClaimPDF(claimId);
+      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      const fileNameId = claimNoStr || `CLM-${claimId}`;
+      a.download = `${fileNameId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast({
+        variant: 'success',
+        title: 'ดาวน์โหลดสำเร็จ',
+        message: `ดาวน์โหลดไฟล์ PDF ใบรับเคลม ${fileNameId} เรียบร้อยแล้ว`,
+      });
+    } catch (err: any) {
+      toast({
+        variant: 'error',
+        title: 'ดาวน์โหลดไม่สำเร็จ',
+        message: 'ไม่สามารถสร้างไฟล์ PDF ใบรับเคลมได้: ' + (err.message || err),
+      });
+    } finally {
+      setDownloadingClaimId(null);
+    }
+  };
+
+  const [downloadingChecklist, setDownloadingChecklist] = useState(false);
+
+  const handleDownloadChecklistPDF = async () => {
+    setDownloadingChecklist(true);
+    try {
+      const blob = await exportCustomerClaimChecklistPDF(statusFilter, claimSearch);
+      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      a.download = `Claim_Checklist_${dateStr}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast({
+        variant: 'success',
+        title: 'ดาวน์โหลดสำเร็จ',
+        message: 'ดาวน์โหลดไฟล์ PDF ใบเช็คลิสต์เคลมเรียบร้อยแล้ว',
+      });
+    } catch (err: any) {
+      toast({
+        variant: 'error',
+        title: 'ดาวน์โหลดไม่สำเร็จ',
+        message: 'ไม่สามารถสร้างไฟล์ PDF ใบเช็คลิสต์ได้: ' + (err.message || err),
+      });
+    } finally {
+      setDownloadingChecklist(false);
     }
   };
 
@@ -415,9 +498,10 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
     try {
       await deleteCustomerClaim(claimId);
       setRawClaims(prev => prev.filter(c => c.id !== claimId));
+      toast({ variant: 'success', message: 'ลบใบเคลมเรียบร้อยแล้ว' });
     } catch (err) {
       console.error('Failed to delete claim:', err);
-      alert('เกิดข้อผิดพลาดในการลบ กรุณาลองใหม่');
+      toast({ variant: 'error', message: 'เกิดข้อผิดพลาดในการลบ กรุณาลองใหม่' });
     }
   };
 
@@ -434,11 +518,9 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
     setInvoiceResults([]);
   };
 
-  const basePath = canApprove ? '/owner/claims' : '/employee/claims';
-
   // ─── LIST VIEW ────────────────────────────────────────────────────────────────
   if (view === 'list') {
-    const pendingCount = flatRows.filter(r => r.itemStatus === 'PENDING' && r.itemId > 0).length;
+    const pendingCount = flatRows.filter(r => r.itemStatus === 'PENDING').length;
     const approvedCount = flatRows.filter(r => r.itemStatus === 'APPROVED').length;
     const rejectedCount = flatRows.filter(r => r.itemStatus === 'REJECTED').length;
 
@@ -473,17 +555,6 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
         }).slice(0, 8)
       : [];
 
-    // Active tracking items count for badge
-    const activeTrackingCount = rawClaims.reduce((acc, c) => {
-      const items = c.items ?? [];
-      return acc + items.filter(i => {
-        const res = (i.resolution || '').trim();
-        const isCompleted = res === 'COMPLETED' || res.includes('ส่งมอบ') || res.includes('สำเร็จ');
-        const isRejected = (i.status || '').toUpperCase() === 'REJECTED';
-        return !isCompleted && !isRejected;
-      }).length;
-    }, 0);
-
     return (
       <div className="p-8 space-y-5 bg-gray-50 min-h-screen font-sans">
 
@@ -493,7 +564,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
             จัดการเคลมสินค้า
           </Heading>
           <button
-            onClick={() => setView('claim-form')}
+            onClick={() => navigate(`${basePath}?view=new`)}
             className="flex items-center gap-2 px-5 py-2.5 bg-[#e51c23] hover:bg-[#c9181f] text-white text-sm font-bold transition-colors cursor-pointer rounded-none shadow-sm"
           >
             <Plus size={16} /> สร้างใบเคลม
@@ -504,7 +575,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
         <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-3 pt-2 shadow-xs">
           <button
             type="button"
-            onClick={() => setActiveTab('claims')}
+            onClick={() => navigate(basePath)}
             className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition-all cursor-pointer ${
               activeTab === 'claims'
                 ? 'border-[#e51c23] text-[#e51c23]'
@@ -512,16 +583,11 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
             }`}
           >
             <FileText size={16} /> รายการใบเคลมทั้งหมด
-            <span className={`px-2 py-0.5 text-xs rounded-full ${
-              activeTab === 'claims' ? 'bg-red-50 text-[#e51c23] font-bold' : 'bg-gray-100 text-gray-600'
-            }`}>
-              {rawClaims.length}
-            </span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab('tracking')}
+            onClick={() => navigate(`${basePath}?tab=tracking`)}
             className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition-all cursor-pointer ${
               activeTab === 'tracking'
                 ? 'border-[#e51c23] text-[#e51c23]'
@@ -529,44 +595,69 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
             }`}
           >
             <Truck size={16} /> ติดตามสินค้าส่งเคลม
-            <span className={`px-2 py-0.5 text-xs rounded-full ${
-              activeTab === 'tracking' ? 'bg-red-50 text-[#e51c23] font-bold' : 'bg-gray-100 text-gray-600'
-            }`}>
-              {activeTrackingCount}
-            </span>
           </button>
         </div>
 
         {activeTab === 'claims' ? (
           <>
-            {/* 2. Stats row */}
-            <div className="grid grid-cols-4 gap-4">
-          <div className="bg-[#1C1B1B] text-white p-5 col-span-1 relative overflow-hidden">
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">รายการทั้งหมด</p>
-            <p className="text-4xl font-bold mt-1">{rawClaims.length}</p>
-            <p className="text-xs text-gray-500 mt-1">ใบเคลม</p>
-            <div className="absolute right-3 bottom-3 opacity-5 pointer-events-none">
-              <History className="w-16 h-16" />
+            {/* 2. Summary cards — use the same item-level unit as the table and act as filters */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <button
+                type="button"
+                aria-pressed={statusFilter === ''}
+                onClick={() => { setStatusFilter(''); setCurrentPage(1); }}
+                className={`text-left text-white p-5 col-span-1 relative overflow-hidden border transition-all cursor-pointer ${
+                  statusFilter === ''
+                    ? 'bg-[#1C1B1B] border-[#1C1B1B] shadow-md -translate-y-0.5'
+                    : 'bg-[#2B2A2A] border-[#2B2A2A] hover:bg-[#1C1B1B] hover:-translate-y-0.5'
+                }`}
+              >
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">รายการสินค้าเคลมทั้งหมด</p>
+                <p className="text-4xl font-bold mt-1">{flatRows.length}</p>
+                <p className="text-xs text-gray-400 mt-1">รายการ</p>
+                <div className="absolute right-3 bottom-3 opacity-5 pointer-events-none">
+                  <History className="w-16 h-16" />
+                </div>
+              </button>
+              <button
+                type="button"
+                aria-pressed={statusFilter === 'PENDING'}
+                onClick={() => { setStatusFilter('PENDING'); setCurrentPage(1); }}
+                className={`text-left bg-white border border-l-[4px] border-l-amber-400 p-5 transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md ${
+                  statusFilter === 'PENDING' ? 'border-amber-400 shadow-md -translate-y-0.5 bg-amber-50/40' : 'border-gray-200 shadow-sm'
+                }`}
+              >
+                <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">รอดำเนินการ</p>
+                <p className="text-3xl font-bold mt-1 text-[#1C1B1B]">{pendingCount}</p>
+                <p className="text-xs text-[#5F5E5E] mt-1">รายการ</p>
+              </button>
+              <button
+                type="button"
+                aria-pressed={statusFilter === 'APPROVED'}
+                onClick={() => { setStatusFilter('APPROVED'); setCurrentPage(1); }}
+                className={`text-left bg-white border border-l-[4px] border-l-[#259b24] p-5 transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md ${
+                  statusFilter === 'APPROVED' ? 'border-[#259b24] shadow-md -translate-y-0.5 bg-green-50/40' : 'border-gray-200 shadow-sm'
+                }`}
+              >
+                <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">อนุมัติแล้ว</p>
+                <p className="text-3xl font-bold mt-1 text-[#259b24]">{approvedCount}</p>
+                <p className="text-xs text-[#5F5E5E] mt-1">รายการ</p>
+              </button>
+              <button
+                type="button"
+                aria-pressed={statusFilter === 'REJECTED'}
+                onClick={() => { setStatusFilter('REJECTED'); setCurrentPage(1); }}
+                className={`text-left bg-white border border-l-[4px] border-l-[#e51c23] p-5 transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md ${
+                  statusFilter === 'REJECTED' ? 'border-[#e51c23] shadow-md -translate-y-0.5 bg-red-50/40' : 'border-gray-200 shadow-sm'
+                }`}
+              >
+                <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">ปฏิเสธ</p>
+                <p className="text-3xl font-bold mt-1 text-[#e51c23]">{rejectedCount}</p>
+                <p className="text-xs text-[#5F5E5E] mt-1">รายการ</p>
+              </button>
             </div>
-          </div>
-          <div className="bg-white border border-gray-200 border-l-[4px] border-l-amber-400 p-5 shadow-sm">
-            <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">รอดำเนินการ</p>
-            <p className="text-3xl font-bold mt-1 text-[#1C1B1B]">{pendingCount}</p>
-            <p className="text-xs text-[#5F5E5E] mt-1">รายการ</p>
-          </div>
-          <div className="bg-white border border-gray-200 border-l-[4px] border-l-[#259b24] p-5 shadow-sm">
-            <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">อนุมัติแล้ว</p>
-            <p className="text-3xl font-bold mt-1 text-[#259b24]">{approvedCount}</p>
-            <p className="text-xs text-[#5F5E5E] mt-1">รายการ</p>
-          </div>
-          <div className="bg-white border border-gray-200 border-l-[4px] border-l-[#e51c23] p-5 shadow-sm">
-            <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">ปฏิเสธ</p>
-            <p className="text-3xl font-bold mt-1 text-[#e51c23]">{rejectedCount}</p>
-            <p className="text-xs text-[#5F5E5E] mt-1">รายการ</p>
-          </div>
-        </div>
 
-        {/* 3. Search & Filter Bar */}
+        {/* 3. Search Bar */}
         <div className="bg-white border border-gray-200 p-3.5 flex flex-col md:flex-row gap-3 items-center justify-between shadow-sm">
           <div className="flex flex-1 items-center gap-3 w-full">
             <div ref={searchRef} className="relative flex-1 min-w-[240px]">
@@ -613,61 +704,21 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
               )}
             </div>
 
-            <div className="flex items-center gap-1.5 overflow-x-auto">
-              <button
-                type="button"
-                onClick={() => { setStatusFilter(''); setCurrentPage(1); }}
-                className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
-                  statusFilter === ''
-                    ? 'bg-[#1C1B1B] text-white border-[#1C1B1B]'
-                    : 'bg-white text-[#1C1B1B] border-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                ทั้งหมด ({flatRows.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => { setStatusFilter('PENDING'); setCurrentPage(1); }}
-                className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
-                  statusFilter === 'PENDING'
-                    ? 'bg-amber-500 text-white border-amber-500'
-                    : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50'
-                }`}
-              >
-                รอดำเนินการ ({pendingCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => { setStatusFilter('APPROVED'); setCurrentPage(1); }}
-                className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
-                  statusFilter === 'APPROVED'
-                    ? 'bg-[#259b24] text-white border-[#259b24]'
-                    : 'bg-white text-[#259b24] border-[#259b24]/30 hover:bg-[#259b24]/10'
-                }`}
-              >
-                อนุมัติแล้ว ({approvedCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => { setStatusFilter('REJECTED'); setCurrentPage(1); }}
-                className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
-                  statusFilter === 'REJECTED'
-                    ? 'bg-[#e51c23] text-white border-[#e51c23]'
-                    : 'bg-white text-[#e51c23] border-red-200 hover:bg-red-50'
-                }`}
-              >
-                ปฏิเสธ ({rejectedCount})
-              </button>
-            </div>
           </div>
 
           <button
             type="button"
-            onClick={() => window.print()}
-            className="flex items-center justify-center gap-2 px-4 h-10 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-sm font-semibold cursor-pointer transition-colors rounded-none shrink-0"
+            onClick={handleDownloadChecklistPDF}
+            disabled={downloadingChecklist}
+            className="flex items-center justify-center gap-2 px-4 h-10 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-sm font-semibold cursor-pointer transition-colors rounded-none shrink-0 disabled:opacity-50"
+            title="ดาวน์โหลดหรือพิมพ์เอกสารใบเช็คลิสต์เคลม PDF (Maroto)"
           >
-            <Printer size={15} className="text-gray-500" />
-            <span>พิมพ์ใบเช็คลิสต์เคลม</span>
+            {downloadingChecklist ? (
+              <Loader2 size={15} className="text-[#e51c23] animate-spin" />
+            ) : (
+              <Printer size={15} className="text-gray-500" />
+            )}
+            <span>{downloadingChecklist ? 'กำลังสร้าง PDF...' : 'พิมพ์ใบเช็คลิสต์เคลม (PDF)'}</span>
           </button>
         </div>
 
@@ -774,11 +825,16 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                       {row.isFirst && (
                         <div className="flex items-center justify-center gap-1">
                           <button
-                            onClick={() => navigate(`${basePath}/detail/${row.claimId}`)}
-                            className="p-1.5 text-gray-400 hover:text-[#e51c23] hover:bg-red-50 rounded transition cursor-pointer"
-                            title="ดูรายละเอียด"
+                            onClick={() => handleDownloadPDF(row.claimId, row.claimNo)}
+                            disabled={downloadingClaimId === row.claimId}
+                            className="p-1.5 text-gray-400 hover:text-[#e51c23] hover:bg-red-50 rounded transition cursor-pointer disabled:opacity-50"
+                            title="พิมพ์/ดาวน์โหลด PDF ใบรับเคลม"
                           >
-                            <Eye className="w-4 h-4" />
+                            {downloadingClaimId === row.claimId ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-[#e51c23]" />
+                            ) : (
+                              <Printer className="w-4 h-4" />
+                            )}
                           </button>
                           <button
                             onClick={() => canApprove
@@ -992,7 +1048,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
             <nav className="flex items-center text-sm text-gray-500 gap-2 font-light">
               <button
                 type="button"
-                onClick={() => { setView('list'); resetClaimForm(); }}
+                onClick={() => { navigate(basePath); resetClaimForm(); }}
                 className="hover:text-gray-900 transition-colors cursor-pointer"
               >
                 จัดการเคลมสินค้า
@@ -1232,7 +1288,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                                       onChange={(e) => {
                                         const val = e.target.value as 'INSTANT' | 'SUPPLIER_PENDING' | 'CREDIT_ACCOUNT';
                                         if (val === 'CREDIT_ACCOUNT' && !isCreditEligible) {
-                                          alert('ลูกค้าท่านนี้ไม่มีสิทธิ์ใช้วงเงินสินเชื่อ/เงินเชื่อ');
+                                          toast({ variant: 'warning', message: 'ลูกค้าท่านนี้ไม่มีสิทธิ์ใช้วงเงินสินเชื่อ/เงินเชื่อ' });
                                           return;
                                         }
                                         setClaimItems(prev => prev.map((it, i) => i === idx ? { ...it, claim_type: val } : it));
@@ -1359,7 +1415,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
             type="button"
             variant="outline"
             size='lg'
-            onClick={() => { setView('list'); resetClaimForm(); }}
+            onClick={() => { navigate(basePath); resetClaimForm(); }}
             disabled={saving}
             className="w-full sm:w-auto px-6 text-gray-600 border-gray-300 hover:bg-gray-50"
           >

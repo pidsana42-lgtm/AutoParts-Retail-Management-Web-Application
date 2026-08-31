@@ -39,7 +39,6 @@ type ConfirmPaymentResponse struct {
 	PaidAt    time.Time `json:"paid_at"`
 }
 
-//  DTO สำหรับดึงบิลค้างชำระของลูกค้า (Unpaid Bills)
 type UnpaidBillItem struct {
 	OrderID       uint      `json:"order_id"`
 	OrderNumber   string    `json:"order_number"`
@@ -59,7 +58,7 @@ type CustomerUnpaidBillsResponse struct {
 	Bills        []UnpaidBillItem `json:"bills"`
 }
 
-// DTO สำหรับบันทึกเคลียร์บิล 
+// DTO สำหรับบันทึกเคลียร์บิล
 type SettleBillAllocation struct {
 	OrderID   uint    `json:"order_id" binding:"required"`
 	PayAmount float64 `json:"pay_amount" binding:"required,gt=0"`
@@ -75,32 +74,55 @@ type SettleBillsRequest struct {
 }
 
 type SettleBillsResponse struct {
-	ReceiptID       uint      `json:"receipt_id"`
-	ReceiptNumber   string    `json:"receipt_number"`
-	CustomerID      uint      `json:"customer_id"`
-	TotalReceived   float64   `json:"total_received"`
-	SettledBillsCount int     `json:"settled_bills_count"`
-	PaidAt          time.Time `json:"paid_at"`
+	ReceiptID         uint      `json:"receipt_id"`
+	ReceiptNumber     string    `json:"receipt_number"`
+	CustomerID        uint      `json:"customer_id"`
+	CustomerName      string    `json:"customer_name"`
+	TotalReceived     float64   `json:"total_received"`
+	SettledBillsCount int       `json:"settled_bills_count"`
+	ReceivedByID      uint      `json:"received_by_id"`
+	ReceivedByName    string    `json:"received_by_name"`
+	PaidAt            time.Time `json:"paid_at"`
 }
 
-// DTO สำหรับประวัติการรับชำระเงิน 
+// DTO สำหรับประวัติการรับชำระเงิน
 type PaymentHistoryItem struct {
-	ReceiptID       uint      `json:"receipt_id"`
-	ReceiptNumber   string    `json:"receipt_number"`
-	PaidAt          time.Time `json:"paid_at"`
-	CustomerName    string    `json:"customer_name"`
-	PaymentMethod   string    `json:"payment_method"`
-	OrderNumbers    string    `json:"order_numbers"` // รวมเลขบิล เช่น "INV-001, INV-002"
-	TotalReceived   float64   `json:"total_received"`
-	Status          string    `json:"status"` // completed, cancelled
-	ReceivedByName  string    `json:"received_by_name"`
-	PaymentType     string    `json:"payment_type,omitempty"`
+	ReceiptID             uint       `json:"receipt_id"`
+	ReceiptNumber         string     `json:"receipt_number"`
+	PaidAt                time.Time  `json:"paid_at"`
+	CustomerName          string     `json:"customer_name"`
+	PaymentMethod         string     `json:"payment_method"`
+	OrderNumbers          string     `json:"order_numbers"` // รวมเลขบิล เช่น "INV-001, INV-002"
+	TotalReceived         float64    `json:"total_received"`
+	Status                string     `json:"status"` // completed, pending_cancel, cancelled
+	ReceivedByID          uint       `json:"received_by_id"`
+	ReceivedByName        string     `json:"received_by_name"`
+	PaymentType           string     `json:"payment_type,omitempty"`
+	CancelReason          string     `json:"cancel_reason,omitempty"`
+	CancelRequestedByID   *uint      `json:"cancel_requested_by_id,omitempty"`
+	CancelRequestedByName string     `json:"cancel_requested_by_name,omitempty"`
+	CancelRequestedAt     *time.Time `json:"cancel_requested_at,omitempty"`
+	CancelledByID         *uint      `json:"cancelled_by_id,omitempty"`
+	CancelledByName       string     `json:"cancelled_by_name,omitempty"`
+	CancelledAt           *time.Time `json:"cancelled_at,omitempty"`
+	CancelRemark          string     `json:"cancel_remark,omitempty"`
+}
+
+// DTO สำหรับพนักงานส่งคำขอยกเลิกใบเสร็จ (Request Cancel Payment Receipt)
+type RequestCancelPaymentReceiptRequest struct {
+	Reason string `json:"reason" binding:"required"`
+}
+
+// DTO สำหรับเจ้าของร้านอนุมัติ/ปฏิเสธคำขอยกเลิก (Process Cancel Payment Receipt)
+type ProcessCancelPaymentReceiptRequest struct {
+	Remark string `json:"remark"`
 }
 
 // DTO สำหรับยกเลิกการชำระเงิน (Cancel Payment)
 type CancelPaymentReceiptRequest struct {
-	CancelledByID uint   `json:"cancelled_by_id" binding:"required"`
+	CancelledByID uint   `json:"cancelled_by_id"`
 	Reason        string `json:"reason" binding:"required"`
+	PaymentType   string `json:"payment_type,omitempty"`
 }
 
 type CancelledPaymentItem struct {

@@ -22,11 +22,18 @@ func PurchaseOrdersItems(db *gorm.DB) error {
             return fmt.Errorf("failed to find PO %s: %w", poNumber, err)
         }
 
+        // CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า) — หารหัสของ Supplier เจ้าที่ตรงกับ PO ใบนี้
+        companyProductCode := ""
+        var inv entity.Inventory
+        if err := db.Where("product_id = ? AND supplier_id = ?", product.ID, po.SupplierID).First(&inv).Error; err == nil {
+            companyProductCode = inv.CompanyProductCode
+        }
+
         item := entity.POItems{
             POID:                         po.ID,
             ProductID:                    product.ID,
             Product_name_snapshot:        product.Product_Name,
-            Supply_product_code_snapshot: product.CompanyProductCode,
+            Supply_product_code_snapshot: companyProductCode,
             Quantity:                     quantity,
             Unit:                         product.Unit.Unit_Name,
             UnitPrice:                    product.Cost_price,
