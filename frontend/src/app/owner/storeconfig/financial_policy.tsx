@@ -18,6 +18,7 @@ import Input from "../../../components/elements/input";
 import Badge from "../../../components/elements/badge";
 import Modal from "../../../components/elements/modal";
 import { useFinancialPolicy } from "./hook/UseFinancialPolicy";
+import ConfirmModal from "../../../components/elements/confirm_modal";
 
 export default function FinancialPolicyPage() {
   const {
@@ -253,7 +254,7 @@ export default function FinancialPolicyPage() {
       </div>
 
       {/* Audit History Modal */}
-      <Modal
+      <ConfirmModal
         isOpen={showAuditModal}
         onClose={() => setShowAuditModal(false)}
         title="ประวัติการแก้ไขการตั้งค่านโยบาย"
@@ -298,7 +299,7 @@ export default function FinancialPolicyPage() {
             ))}
           </div>
         )}
-      </Modal>
+      </ConfirmModal>
     </div>
   );
 }
