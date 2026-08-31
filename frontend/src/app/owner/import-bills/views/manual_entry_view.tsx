@@ -23,7 +23,12 @@ interface ManualEntryViewProps {
   products: Product[];
   categories: any[];
   handleItemChange: (idx: number, field: string, val: any) => void;
-  handleItemCategoryChange?: (idx: number, categoryId: number | null, subCategoryId: number | null) => void;
+  handleItemCategoryChange?: (
+    idx: number,
+    categoryId: number | null,
+    subCategoryId: number | null,
+    subSubCategoryId: number | null
+  ) => void;
   handleRemoveRow: (idx: number) => void;
   handleAddRow: () => void;
   exportBillItemsToExcel: () => void;
@@ -106,6 +111,13 @@ export default function ManualEntryView({
           return {
             value: `subcategory-${subCatId}`,
             label: sc.sub_category_name || sc.name || `หมวดหมู่ย่อย ${subCatId}`,
+            children: (sc.sub_sub_categories || []).map((ssc: any, sscIdx: number) => {
+              const subSubCatId = ssc.id ?? ssc.ID ?? sscIdx;
+              return {
+                value: `subsubcategory-${subSubCatId}`,
+                label: ssc.sub_sub_category_name || ssc.name || `หมวดหมู่ย่อยย่อย ${subSubCatId}`,
+              };
+            }),
           };
         }),
       };
@@ -195,7 +207,7 @@ export default function ManualEntryView({
                 <option value="">-- นำเข้าทั่วไป (ไม่มีอ้างอิง PO) --</option>
                 {poList.map((po) => (
                   <option key={po.id} value={String(po.id)}>
-                    {po.order_number} ({po.supplier_name || 'ไม่ระบุซัพพลายเออร์'}) - ฿{po.total_amount?.toLocaleString() || 0}
+                    {po.po_number || po.order_number} ({po.supplier_name || 'ไม่ระบุซัพพลายเออร์'}) - ฿{po.total_amount?.toLocaleString() || 0}
                   </option>
                 ))}
               </select>
@@ -325,10 +337,10 @@ export default function ManualEntryView({
                         {item.product_id ? (
                           (() => {
                             const prod = products.find(p => p.id === Number(item.product_id));
-                            if (prod && (prod.category_name || prod.sub_category_name)) {
+                            if (prod && (prod.category_name || prod.sub_category_name || prod.sub_sub_category_name)) {
                               return (
-                                <span className="text-sm text-[#1C1B1B]" title={[prod.category_name, prod.sub_category_name].filter(Boolean).join(' > ')}>
-                                  {[prod.category_name, prod.sub_category_name].filter(Boolean).join(' > ')}
+                                <span className="text-sm text-[#1C1B1B]" title={[prod.category_name, prod.sub_category_name, prod.sub_sub_category_name].filter(Boolean).join(' / ')}>
+                                  {[prod.category_name, prod.sub_category_name, prod.sub_sub_category_name].filter(Boolean).join(' / ')}
                                 </span>
                               );
                             }
@@ -340,7 +352,9 @@ export default function ManualEntryView({
                             placeholder="เลือกหมวดหมู่"
                             searchPlaceholder="ค้นหาหมวดหมู่..."
                             value={
-                              item.sub_category_id
+                              item.sub_sub_category_id
+                                ? `subsubcategory-${item.sub_sub_category_id}`
+                                : item.sub_category_id
                                 ? `subcategory-${item.sub_category_id}`
                                 : item.category_id
                                   ? `category-${item.category_id}`
@@ -350,9 +364,11 @@ export default function ManualEntryView({
                               if (!handleItemCategoryChange) return;
                               const catVal = path[0]?.value || '';
                               const subVal = path[1]?.value || '';
+                              const subSubVal = path[2]?.value || '';
                               const catId = catVal.startsWith('category-') ? Number(catVal.replace('category-', '')) : null;
                               const subCatId = subVal.startsWith('subcategory-') ? Number(subVal.replace('subcategory-', '')) : null;
-                              handleItemCategoryChange(idx, catId, subCatId);
+                              const subSubCatId = subSubVal.startsWith('subsubcategory-') ? Number(subSubVal.replace('subsubcategory-', '')) : null;
+                              handleItemCategoryChange(idx, catId, subCatId, subSubCatId);
                             }}
                           />
                         )}

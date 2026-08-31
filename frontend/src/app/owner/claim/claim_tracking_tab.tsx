@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Loader2, Truck,
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+  ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from 'lucide-react';
 import Input from '../../../components/elements/input';
+import Badge from '../../../components/elements/badge';
+import Select from '../../../components/elements/select';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import type { CustomerClaim } from '../../../interface/claim/claim';
 import { cn } from '../../../utils/component';
@@ -17,6 +19,16 @@ interface ClaimTrackingTabProps {
   updatingItemId: number | null;
 }
 
+type TrackingStage = 'WAITING_SEND' | 'SENT_TO_SUPPLIER' | 'REPLACEMENT_RECEIVED' | 'COMPLETED';
+type TrackingFilter = 'ALL' | TrackingStage;
+
+const TRACKING_STAGE_OPTIONS = [
+  { value: 'WAITING_SEND', label: 'รอรวบรวมส่ง' },
+  { value: 'SENT_TO_SUPPLIER', label: 'ส่งบริษัทแล้ว' },
+  { value: 'REPLACEMENT_RECEIVED', label: 'ได้รับของเปลี่ยน' },
+  { value: 'COMPLETED', label: 'ส่งมอบลูกค้าแล้ว' },
+];
+
 const parseNote = (note: string | undefined, key: string): string => {
   if (!note) return '-';
   const match = note.match(new RegExp(`${key}:\\s*([^|]+)`));
@@ -25,10 +37,17 @@ const parseNote = (note: string | undefined, key: string): string => {
 
 function TypeBadge({ type }: { type: 'INSTANT' | 'SUPPLIER_PENDING' | 'CREDIT_ACCOUNT' | string }) {
   if (type === 'SUPPLIER_PENDING')
-    return <span className="px-2 py-0.5 text-[10px] font-bold text-[#1C1B1B] bg-gray-100 border border-gray-300 rounded-none inline-block">ส่งบริษัทตรวจ</span>;
+    return <Badge variant="neutral" size="sm">ส่งบริษัทตรวจ</Badge>;
   if (type === 'CREDIT_ACCOUNT')
-    return <span className="px-2 py-0.5 text-[10px] font-bold text-gray-800 bg-gray-200 border border-gray-300 rounded-none inline-block">ลงบัญชีเชื่อ</span>;
-  return <span className="px-2 py-0.5 text-[10px] font-bold text-[#e51c23] bg-red-50 border border-red-200 rounded-none inline-block">เปลี่ยนทันที</span>;
+    return <Badge variant="info" size="sm">ลงบัญชีเชื่อ</Badge>;
+  return <Badge variant="primary" size="sm">เปลี่ยนทันที</Badge>;
+}
+
+function TrackingStageBadge({ stage }: { stage: TrackingStage }) {
+  if (stage === 'COMPLETED') return <Badge variant="success" size="md" dot>ส่งมอบแล้ว</Badge>;
+  if (stage === 'REPLACEMENT_RECEIVED') return <Badge variant="info" size="md" dot>ได้รับของแล้ว</Badge>;
+  if (stage === 'SENT_TO_SUPPLIER') return <Badge variant="neutral" size="md" dot>ส่งบริษัทแล้ว</Badge>;
+  return <Badge variant="warning" size="md" dot>รอรวบรวมส่ง</Badge>;
 }
 
 function getPageNumbers(current: number, total: number): (number | "...")[] {
@@ -55,7 +74,7 @@ export default function ClaimTrackingTab({
 }: ClaimTrackingTabProps): React.JSX.Element {
   const navigate = useNavigate();
 
-  const [trackingFilter, setTrackingFilter] = useState<'ALL' | 'WAITING_SEND' | 'SENT_TO_SUPPLIER' | 'REPLACEMENT_RECEIVED' | 'COMPLETED'>('ALL');
+  const [trackingFilter, setTrackingFilter] = useState<TrackingFilter>('ALL');
   const [trackingSearch, setTrackingSearch] = useState('');
   const [trackingPage, setTrackingPage] = useState(1);
   const [trackingPerPage, setTrackingPerPage] = useState(10);
@@ -71,7 +90,7 @@ export default function ClaimTrackingTab({
 
     return (claim.items ?? []).map(item => {
       const resolution = (item.resolution || '').trim();
-      let stage: 'WAITING_SEND' | 'SENT_TO_SUPPLIER' | 'REPLACEMENT_RECEIVED' | 'COMPLETED' = 'WAITING_SEND';
+      let stage: TrackingStage = 'WAITING_SEND';
       if (resolution === 'COMPLETED' || resolution.includes('ส่งมอบ') || resolution.includes('สำเร็จ')) {
         stage = 'COMPLETED';
       } else if (resolution === 'REPLACEMENT_RECEIVED' || resolution.includes('ได้รับของ') || resolution.includes('รับสินค้าทดแทน')) {
@@ -125,27 +144,59 @@ export default function ClaimTrackingTab({
   return (
     <div className="space-y-5">
       {/* Tracking Stats Row */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white border border-gray-200 border-l-[4px] border-l-amber-500 p-5 shadow-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <button
+          type="button"
+          aria-pressed={trackingFilter === 'WAITING_SEND'}
+          onClick={() => { setTrackingFilter(trackingFilter === 'WAITING_SEND' ? 'ALL' : 'WAITING_SEND'); setTrackingPage(1); }}
+          className={cn(
+            'text-left bg-white border border-l-[4px] border-l-amber-500 p-5 transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md',
+            trackingFilter === 'WAITING_SEND' ? 'border-amber-500 bg-amber-50/40 shadow-md -translate-y-0.5' : 'border-gray-200 shadow-sm',
+          )}
+        >
           <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">รอรวบรวมส่งบริษัท</p>
           <p className="text-3xl font-bold mt-1 text-amber-600">{waitingSendCount}</p>
           <p className="text-xs text-[#5F5E5E] mt-1">รายการที่ต้องนำส่ง</p>
-        </div>
-        <div className="bg-white border border-gray-200 border-l-[4px] border-l-[#1C1B1B] p-5 shadow-sm">
+        </button>
+        <button
+          type="button"
+          aria-pressed={trackingFilter === 'SENT_TO_SUPPLIER'}
+          onClick={() => { setTrackingFilter(trackingFilter === 'SENT_TO_SUPPLIER' ? 'ALL' : 'SENT_TO_SUPPLIER'); setTrackingPage(1); }}
+          className={cn(
+            'text-left bg-white border border-l-[4px] border-l-[#1C1B1B] p-5 transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md',
+            trackingFilter === 'SENT_TO_SUPPLIER' ? 'border-[#1C1B1B] bg-gray-50 shadow-md -translate-y-0.5' : 'border-gray-200 shadow-sm',
+          )}
+        >
           <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">ส่งบริษัทแล้ว</p>
           <p className="text-3xl font-bold mt-1 text-[#1C1B1B]">{sentSupplierCount}</p>
           <p className="text-xs text-[#5F5E5E] mt-1">อยู่ระหว่างรอผลตรวจ/ของใหม่</p>
-        </div>
-        <div className="bg-white border border-gray-200 border-l-[4px] border-l-[#5F5E5E] p-5 shadow-sm">
+        </button>
+        <button
+          type="button"
+          aria-pressed={trackingFilter === 'REPLACEMENT_RECEIVED'}
+          onClick={() => { setTrackingFilter(trackingFilter === 'REPLACEMENT_RECEIVED' ? 'ALL' : 'REPLACEMENT_RECEIVED'); setTrackingPage(1); }}
+          className={cn(
+            'text-left bg-white border border-l-[4px] border-l-blue-500 p-5 transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md',
+            trackingFilter === 'REPLACEMENT_RECEIVED' ? 'border-blue-500 bg-blue-50/40 shadow-md -translate-y-0.5' : 'border-gray-200 shadow-sm',
+          )}
+        >
           <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">ได้รับของเปลี่ยนแล้ว</p>
-          <p className="text-3xl font-bold mt-1 text-[#5F5E5E]">{replacementReceivedCount}</p>
+          <p className="text-3xl font-bold mt-1 text-blue-600">{replacementReceivedCount}</p>
           <p className="text-xs text-[#5F5E5E] mt-1">รอลูกค้ามารับสินค้า</p>
-        </div>
-        <div className="bg-white border border-gray-200 border-l-[4px] border-l-[#259b24] p-5 shadow-sm">
+        </button>
+        <button
+          type="button"
+          aria-pressed={trackingFilter === 'COMPLETED'}
+          onClick={() => { setTrackingFilter(trackingFilter === 'COMPLETED' ? 'ALL' : 'COMPLETED'); setTrackingPage(1); }}
+          className={cn(
+            'text-left bg-white border border-l-[4px] border-l-[#259b24] p-5 transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md',
+            trackingFilter === 'COMPLETED' ? 'border-[#259b24] bg-green-50/40 shadow-md -translate-y-0.5' : 'border-gray-200 shadow-sm',
+          )}
+        >
           <p className="text-xs text-[#5F5E5E] font-medium uppercase tracking-wider">เคลมสำเร็จ (ส่งมอบแล้ว)</p>
           <p className="text-3xl font-bold mt-1 text-[#259b24]">{completedCount}</p>
           <p className="text-xs text-[#5F5E5E] mt-1">ปิดงานเรียบร้อย</p>
-        </div>
+        </button>
       </div>
 
       {/* Tracking Search & Filter */}
@@ -162,69 +213,31 @@ export default function ClaimTrackingTab({
             />
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto">
-            <button
-              type="button"
-              onClick={() => { setTrackingFilter('ALL'); setTrackingPage(1); }}
-              className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
-                trackingFilter === 'ALL'
-                  ? 'bg-[#1C1B1B] text-white border-[#1C1B1B]'
-                  : 'bg-white text-[#1C1B1B] border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              ทั้งหมด ({allTrackingItems.filter(i => i.itemStatus !== 'REJECTED').length})
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTrackingFilter('WAITING_SEND'); setTrackingPage(1); }}
-              className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
-                trackingFilter === 'WAITING_SEND'
-                  ? 'bg-amber-500 text-white border-amber-500'
-                  : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50'
-              }`}
-            >
-              รอรวบรวมส่ง ({waitingSendCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTrackingFilter('SENT_TO_SUPPLIER'); setTrackingPage(1); }}
-              className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
-                trackingFilter === 'SENT_TO_SUPPLIER'
-                  ? 'bg-[#1C1B1B] text-white border-[#1C1B1B]'
-                  : 'bg-white text-[#1C1B1B] border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              ส่งบริษัทแล้ว ({sentSupplierCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTrackingFilter('REPLACEMENT_RECEIVED'); setTrackingPage(1); }}
-              className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
-                trackingFilter === 'REPLACEMENT_RECEIVED'
-                  ? 'bg-[#5F5E5E] text-white border-[#5F5E5E]'
-                  : 'bg-white text-[#5F5E5E] border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              ได้รับของแล้ว ({replacementReceivedCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTrackingFilter('COMPLETED'); setTrackingPage(1); }}
-              className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer rounded-none border ${
-                trackingFilter === 'COMPLETED'
-                  ? 'bg-[#259b24] text-white border-[#259b24]'
-                  : 'bg-white text-[#259b24] border-[#259b24]/30 hover:bg-[#259b24]/10'
-              }`}
-            >
-              เคลมสำเร็จ ({completedCount})
-            </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {trackingFilter === 'ALL' ? (
+              <span className="px-3 h-10 inline-flex items-center border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-500">
+                แสดงทุกสถานะ
+              </span>
+            ) : (
+              <>
+                <span className="text-xs text-gray-400">กำลังกรอง:</span>
+                <TrackingStageBadge stage={trackingFilter} />
+                <button
+                  type="button"
+                  onClick={() => { setTrackingFilter('ALL'); setTrackingPage(1); }}
+                  className="h-10 px-3 border border-gray-300 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-[#e51c23] cursor-pointer transition-colors"
+                >
+                  แสดงทั้งหมด
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
 
       {/* Tracking Table */}
-      <div className="bg-white border border-gray-200 overflow-hidden shadow-sm">
-        <Table>
+      <div className="bg-white border border-gray-200 overflow-x-auto shadow-sm">
+        <Table className="min-w-[1000px]">
           <TableHeader className="bg-gray-50">
             <TableRow className="border-b border-gray-200">
               <TableHead className="pl-6 w-40 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">เลขใบเคลม / วันที่</TableHead>
@@ -232,7 +245,7 @@ export default function ClaimTrackingTab({
               <TableHead className="text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">สินค้าที่เคลม</TableHead>
               <TableHead className="text-center w-20 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">จำนวน</TableHead>
               <TableHead className="w-28 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">ประเภทเคลม</TableHead>
-              <TableHead className="text-center pr-6 w-52 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">อัปเดตขั้นตอน</TableHead>
+              <TableHead className="text-center pr-6 w-52 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">สถานะติดตาม</TableHead>
             </TableRow>
           </TableHeader>
 
@@ -305,16 +318,24 @@ export default function ClaimTrackingTab({
                         {isUpdating ? (
                           <Loader2 size={16} className="animate-spin text-[#e51c23]" />
                         ) : (
-                          <select
+                          <Select
                             value={item.stage}
+                            options={TRACKING_STAGE_OPTIONS}
                             onChange={e => onUpdateStage(item.itemId, e.target.value)}
-                            className="border border-gray-300 text-xs px-2 py-1 font-semibold rounded-none bg-white hover:border-[#e51c23] focus:outline-none focus:border-[#e51c23] cursor-pointer"
-                          >
-                            <option value="WAITING_SEND">รอรวบรวมส่ง</option>
-                            <option value="SENT_TO_SUPPLIER">ส่งบริษัทแล้ว</option>
-                            <option value="REPLACEMENT_RECEIVED">ได้รับของเปลี่ยน</option>
-                            <option value="COMPLETED">ส่งมอบลูกค้าแล้ว</option>
-                          </select>
+                            containerClassName="inline-flex"
+                            menuAlign="right"
+                            renderTrigger={({ toggle, isOpen }) => (
+                              <button
+                                type="button"
+                                onClick={toggle}
+                                className="h-9 px-2 flex items-center gap-1.5 border border-gray-200 bg-white hover:border-[#e51c23] cursor-pointer transition-colors"
+                                title="เปลี่ยนสถานะติดตาม"
+                              >
+                                <TrackingStageBadge stage={item.stage} />
+                                <ChevronDown className={cn('w-3.5 h-3.5 text-gray-400 transition-transform', isOpen && 'rotate-180')} />
+                              </button>
+                            )}
+                          />
                         )}
                       </div>
                     </TableCell>

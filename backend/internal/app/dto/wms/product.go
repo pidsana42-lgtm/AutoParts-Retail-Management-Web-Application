@@ -42,8 +42,8 @@ type ProductSupplierInput struct {
 // ReceiveStockRequestDTO: รับสินค้าเข้าเพิ่มให้สินค้าที่มีอยู่แล้วในระบบ (ไม่ใช่สร้างสินค้าใหม่)
 // บวกจำนวนที่รับเพิ่มเข้ากับยอดคงเหลือเดิม + บวกจำนวนต่อ Supplier เข้ากับของเดิม (ไม่ใช่แทนที่)
 type ReceiveStockRequestDTO struct {
-	Quantity  int                     `json:"quantity" binding:"required,gt=0"`
-	Suppliers []ProductSupplierInput  `json:"suppliers"`
+	Quantity  int                    `json:"quantity" binding:"required,gt=0"`
+	Suppliers []ProductSupplierInput `json:"suppliers"`
 }
 
 func (r *ProductRequestDTO) ToEntity() entity.Product {
@@ -70,18 +70,19 @@ func (r *ProductRequestDTO) ToEntity() entity.Product {
 }
 
 type ProductListResponseDTO struct {
-	ID              uint    `json:"id"`
-	Product_Code    string  `json:"product_code"`
-	Part_Number     string  `json:"part_number"`
-	Product_Name    string  `json:"product_name"`
-	Barcode         string  `json:"barcode"`
-	Quantity        int     `json:"quantity"`
-	Limit_Quantity  int     `json:"limit_quantity"`
-	Sale_price      float64 `json:"sale_price"`
-	Cost_price      float64 `json:"cost_price"`
-	Is_Active       bool    `json:"is_active"`
-	MaxDiscountRate float64 `json:"max_discount_rate"`
-	Models          []struct {
+	ID                 uint    `json:"id"`
+	Product_Code       string  `json:"product_code"`
+	Part_Number        string  `json:"part_number"`
+	CompanyProductCode string  `json:"company_product_code"`
+	Product_Name       string  `json:"product_name"`
+	Barcode            string  `json:"barcode"`
+	Quantity           int     `json:"quantity"`
+	Limit_Quantity     int     `json:"limit_quantity"`
+	Sale_price         float64 `json:"sale_price"`
+	Cost_price         float64 `json:"cost_price"`
+	Is_Active          bool    `json:"is_active"`
+	MaxDiscountRate    float64 `json:"max_discount_rate"`
+	Models             []struct {
 		ID        uint   `json:"id"`
 		ModelName string `json:"model_name"`
 		BrandName string `json:"brand_name"`
@@ -94,11 +95,11 @@ type ProductListResponseDTO struct {
 	ShelfName          string `json:"shelf_name"`
 	ShelfLevelName     string `json:"shelf_level_name"`
 	ZoneName           string `json:"zone_name"`
-	ThumbnailUrl string `json:"thumbnail_url"`
+	ThumbnailUrl       string `json:"thumbnail_url"`
 	// SupplierName: รวมชื่อ Supplier ทุกเจ้าที่สินค้านี้รับมาจาก คั่นด้วย ", " (เผื่อหน้าตาราง/ตัวกรองเดิมที่คาดหวังค่าเดียว)
-	SupplierName string                     `json:"supplier_name"`
+	SupplierName string                       `json:"supplier_name"`
 	Suppliers    []ProductSupplierResponseDTO `json:"suppliers"`
-	Note         string                     `json:"note"`
+	Note         string                       `json:"note"`
 }
 
 // ProductSupplierResponseDTO: รายละเอียด Supplier แต่ละเจ้าที่สินค้านี้รับมาจาก (จากตาราง Inventory)
@@ -120,6 +121,7 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	d.ID = p.ID
 	d.Product_Code = p.Product_Code
 	d.Part_Number = p.Part_Number
+	d.CompanyProductCode = p.CompanyProductCode
 	d.Product_Name = p.Product_Name
 	d.Barcode = p.Barcode
 	d.Quantity = p.Quantity

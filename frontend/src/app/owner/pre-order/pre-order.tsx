@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import apiClient from '../../../service/http/apiClient';
 import { 
-  Plus, Search, Edit, Trash2, ChevronRight, Save, 
+  Plus, Search, Edit, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Save,
   FileText, BookOpen, Building2, X,
   Loader2, AlertCircle, ImageIcon, Package
 } from 'lucide-react';
@@ -15,6 +15,7 @@ import Heading from '../../../components/elements/heading';
 import Card from '../../../components/elements/card';
 import Select from '../../../components/elements/select';
 import Button from '../../../components/elements/button';
+import { useToast } from '../../../components/elements/toast';
 import GenericTable, { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import type { Product } from '../../../interface/import';
 import type { Catalog, CatalogItem } from '../../../interface/catalog/catalog';
@@ -27,17 +28,38 @@ interface Customer {
   phone_number?: string;
 }
 
+function getPageNumbers(current: number, total: number): (number | '...')[] {
+  const pages: (number | '...')[] = [1];
+  const left = Math.max(2, current - 1);
+  const right = Math.min(total - 1, current + 1);
+
+  if (left > 2) pages.push('...');
+  for (let page = left; page <= right; page += 1) pages.push(page);
+  if (right < total - 1) pages.push('...');
+  if (total > 1) pages.push(total);
+
+  return pages;
+}
+
 export default function PreOrderManager() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const basePath = location.pathname.startsWith('/employee') ? '/employee/pre-orders' : '/owner/pre-orders';
+  const initialPageParams = new URLSearchParams(location.search);
   const [preOrders, setPreOrders] = useState<PreOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   
   // UI Views & states
-  const [view, setView] = useState<'list' | 'form'>('list');
+  const [view, setView] = useState<'list' | 'form'>(() =>
+    initialPageParams.get('view') === 'new' || initialPageParams.has('edit') ? 'form' : 'list'
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -95,10 +117,10 @@ export default function PreOrderManager() {
       setView('form');
       setErrorMsg(null);
 
-      // Clean state so refreshing won't re-trigger
-      window.history.replaceState({}, document.title);
+      // เก็บหน้าฟอร์มไว้ใน URL และล้าง navigation state เพื่อไม่ให้เติมสินค้าซ้ำ
+      navigate(`${basePath}?view=new`, { replace: true });
     }
-  }, [location.state]);
+  }, [location.state, navigate, basePath]);
 
   // Fetch initial data
   useEffect(() => {
@@ -115,6 +137,7 @@ export default function PreOrderManager() {
     } catch (err: any) {
       console.error('Error fetching pre-orders:', err);
       setErrorMsg('ล้มเหลวในการโหลดรายการจองล่วงหน้า');
+      toast({ variant: 'error', message: 'ล้มเหลวในการโหลดรายการจองล่วงหน้า' });
     } finally {
       setLoading(false);
     }
@@ -151,6 +174,7 @@ export default function PreOrderManager() {
     setFormItems([]);
     setView('form');
     setErrorMsg(null);
+    navigate(`${basePath}?view=new`);
   };
 
   // Add item(s) from catalog
@@ -199,6 +223,7 @@ export default function PreOrderManager() {
     ).slice(0, 10);
     
     matchedProducts.forEach(p => {
+       const preferredSupplier = p.suppliers?.find(supplier => supplier.supplier_name || supplier.variant_code);
        results.push({
          type: 'STOCK',
          id: `stock-${p.id}`,
@@ -207,6 +232,9 @@ export default function PreOrderManager() {
          code: p.product_code,
          category: p.category_name,
          price: p.sale_price || p.retail_price || 0,
+         supplier_part_code:
+           p.company_product_code || preferredSupplier?.variant_code || p.part_number || '',
+         supplier_name: preferredSupplier?.supplier_name || p.supplier_name || '',
          rawProd: p
        });
     });
@@ -252,6 +280,8 @@ export default function PreOrderManager() {
          product_id: prod.id,
          product_name: prod.product_name,
          product_code: prod.product_code,
+         supplier_part_code: res.supplier_part_code || '',
+         supplier_name: res.supplier_name || '',
          quantity: 1,
          unit_price: prod.sale_price || prod.retail_price || 0
        };
@@ -263,7 +293,7 @@ export default function PreOrderManager() {
     setShowQuickSearch(false);
   };
 
-  const handleEdit = async (id: number) => {
+  const handleEdit = async (id: number, updateUrl = true) => {
     setLoading(true);
     setErrorMsg(null);
     try {
@@ -293,23 +323,46 @@ export default function PreOrderManager() {
         setFormStatus(data.status);
         setFormItems(data.pre_order_items || []);
         setView('form');
+        if (updateUrl) navigate(`${basePath}?edit=${id}`);
       }
     } catch (err: any) {
       console.error('Error fetching pre-order detail:', err);
       setErrorMsg('ไม่สามารถดึงข้อมูลรายละเอียดรายการจองนี้ได้');
+      toast({ variant: 'error', message: 'ไม่สามารถดึงข้อมูลรายละเอียดรายการจองนี้ได้' });
     } finally {
       setLoading(false);
     }
   };
+
+  // URL เป็นแหล่งข้อมูลของหน้าปัจจุบัน จึงเปิดหน้าเดิมและโหลดรายการเดิมได้หลังรีเฟรช
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const editId = Number(params.get('edit'));
+
+    if (Number.isInteger(editId) && editId > 0) {
+      setView('form');
+      if (editingId !== editId) void handleEdit(editId, false);
+      return;
+    }
+
+    if (params.get('view') === 'new') {
+      setView('form');
+      return;
+    }
+
+    setView('list');
+    setEditingId(null);
+  }, [location.search]);
 
   const handleDelete = async (id: number) => {
     if (!window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบรายการสั่งจองนี้?')) return;
     try {
       await deletePreOrder(id);
       setPreOrders(prev => prev.filter(po => po.id !== id));
+      toast({ variant: 'success', message: 'ลบรายการสั่งจองเรียบร้อยแล้ว' });
     } catch (err) {
       console.error('Error deleting pre-order:', err);
-      alert('ล้มเหลวในการลบรายการสั่งจอง');
+      toast({ variant: 'error', message: 'ล้มเหลวในการลบรายการสั่งจอง' });
     }
   };
 
@@ -331,11 +384,11 @@ export default function PreOrderManager() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formCustomerFirstName.trim() && !formCustomerId) {
-      alert('กรุณาระบุชื่อลูกค้า');
+      toast({ variant: 'warning', message: 'กรุณาระบุชื่อลูกค้า' });
       return;
     }
     if (formItems.length === 0) {
-      alert('กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ');
+      toast({ variant: 'warning', message: 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ' });
       return;
     }
 
@@ -357,6 +410,8 @@ export default function PreOrderManager() {
           unit_price: Number(item.unit_price) || 0,
           product_name: item.product_name,
           product_code: item.product_code,
+          supplier_part_code: item.supplier_part_code,
+          supplier_name: item.supplier_name,
         }))
       };
 
@@ -365,11 +420,19 @@ export default function PreOrderManager() {
       } else {
         await createPreOrder(payload);
       }
+      toast({
+        variant: 'success',
+        message: editingId ? 'แก้ไขรายการสั่งจองเรียบร้อยแล้ว' : 'สร้างรายการสั่งจองเรียบร้อยแล้ว',
+      });
       await fetchPreOrders();
       setView('list');
+      setEditingId(null);
+      navigate(basePath, { replace: true });
     } catch (err: any) {
       console.error('Error saving pre-order:', err);
-      setErrorMsg(err.response?.data?.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูลใบจอง');
+      const message = err.response?.data?.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูลใบจอง';
+      setErrorMsg(message);
+      toast({ variant: 'error', message });
     } finally {
       setSaving(false);
     }
@@ -424,6 +487,17 @@ export default function PreOrderManager() {
 
     return po.status === statusFilter;
   });
+
+  const totalItems = filteredOrders.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const paginatedOrders = filteredOrders.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   const columns = [
     {
@@ -580,7 +654,7 @@ export default function PreOrderManager() {
                   type="text"
                   placeholder="ค้นหาชื่อลูกค้า, เบอร์โทร, เลขใบจอง หรือเลข PO..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                   className="w-full bg-white border border-gray-300 rounded-none pl-9 pr-3 py-2 text-xs font-medium text-[#1C1B1B] focus:border-[#e51c23] outline-none"
                 />
               </div>
@@ -594,7 +668,7 @@ export default function PreOrderManager() {
                   <button
                     key={st.value}
                     type="button"
-                    onClick={() => setStatusFilter(st.value)}
+                    onClick={() => { setStatusFilter(st.value); setCurrentPage(1); }}
                     className={`px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer rounded-none border ${
                       statusFilter === st.value
                         ? 'bg-[#1C1B1B] text-white border-[#1C1B1B] shadow-xs'
@@ -620,12 +694,97 @@ export default function PreOrderManager() {
                 <p className="text-xs text-[#5F5E5E] mt-1">ลองเปลี่ยนคำค้นหา หรือกดสร้างใบสั่งจองใหม่</p>
               </div>
             ) : (
-              <GenericTable 
-                columns={columns}
-                data={filteredOrders}
-                rowKey={(row) => row.id!}
-                isLoading={loading}
-              />
+              <>
+                <GenericTable
+                  columns={columns}
+                  data={paginatedOrders}
+                  rowKey={(row) => row.id!}
+                  isLoading={loading}
+                  onRowClick={(po) => handleEdit(po.id!)}
+                  className="border-0"
+                />
+
+                <div className="bg-gray-50 px-5 py-3 border-t border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-gray-500">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span>
+                      แสดง {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} ถึง {Math.min(currentPage * itemsPerPage, totalItems)} จาก {totalItems} รายการ
+                    </span>
+                    <label className="flex items-center gap-1.5">
+                      <span>แสดงทีละ:</span>
+                      <select
+                        value={itemsPerPage}
+                        onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                        className="border border-gray-200 bg-white px-2 py-1 text-gray-700 outline-none cursor-pointer"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      aria-label="หน้าแรก"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(1)}
+                      className="p-1.5 text-gray-400 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <ChevronsLeft size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="หน้าก่อนหน้า"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(page => page - 1)}
+                      className="p-1.5 text-gray-400 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <ChevronLeft size={15} />
+                    </button>
+
+                    {getPageNumbers(currentPage, totalPages).map((page, index) =>
+                      page === '...' ? (
+                        <span key={`ellipsis-${index}`} className="px-2 py-1 text-gray-400">…</span>
+                      ) : (
+                        <button
+                          key={page}
+                          type="button"
+                          aria-current={currentPage === page ? 'page' : undefined}
+                          onClick={() => setCurrentPage(page)}
+                          className={`min-w-8 px-2 py-1.5 font-bold transition-colors cursor-pointer ${
+                            currentPage === page
+                              ? 'bg-[#e51c23] text-white'
+                              : 'text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      )
+                    )}
+
+                    <button
+                      type="button"
+                      aria-label="หน้าถัดไป"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(page => page + 1)}
+                      className="p-1.5 text-gray-400 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <ChevronRight size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="หน้าสุดท้าย"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(totalPages)}
+                      className="p-1.5 text-gray-400 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <ChevronsRight size={15} />
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </Card>
         </div>
@@ -635,7 +794,7 @@ export default function PreOrderManager() {
           <nav className="flex items-center gap-2 text-xs text-gray-500 mb-4">
             <button 
               type="button" 
-              onClick={() => { setView('list'); setEditingId(null); }} 
+              onClick={() => { setView('list'); setEditingId(null); navigate(basePath); }}
               className="hover:text-[#e51c23] transition-colors cursor-pointer font-bold"
             >
               ระบบจัดการสั่งจองสินค้า
@@ -668,17 +827,16 @@ export default function PreOrderManager() {
               {/* ข้อมูลการสั่งจอง */}
               <Card title="ข้อมูลผู้สั่งจอง">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start relative">
-                  <Select 
-                    label="ช่องทางการจอง" 
+                  <Select
+                    label="ช่องทางการจอง"
                     value={formType}
                     onChange={(e) => setFormType(e.target.value)}
                     options={[
                       { label: 'หน้าร้าน', value: 'WALK_IN' },
-                      { label: 'LINE OA', value: 'LINE' },
                       { label: 'โทรศัพท์', value: 'TEL' }
-                    ]} 
+                    ]}
                   />
-                  
+
                   {/* First Name Autocomplete */}
                   <div className="relative flex flex-col gap-1.5">
                     <label className="text-sm font-bold text-[#1C1B1B]">
@@ -771,7 +929,7 @@ export default function PreOrderManager() {
                     <Search size={16} className="text-gray-400 mr-2 shrink-0" />
                     <input
                       type="text"
-                      placeholder="พิมพ์ค้นหา หรือยิงบาร์โค้ดเพิ่ม..."
+                      placeholder="พิมพ์ค้นหา"
                       value={quickSearch}
                       onChange={(e) => { setQuickSearch(e.target.value); setShowQuickSearch(true); }}
                       onFocus={() => { if(quickSearch) setShowQuickSearch(true); }}
@@ -836,7 +994,7 @@ export default function PreOrderManager() {
                 <Table className="min-w-[800px] text-left text-sm border-collapse">
                   <TableHeader className="bg-gray-100 text-[#5F5E5E] border-b border-gray-200 text-xs font-bold uppercase tracking-wider">
                     <TableRow>
-                      <TableHead className="py-3 px-3 text-center w-10 font-bold text-[#5F5E5E]">#</TableHead>
+                      <TableHead className="py-3 px-3 text-center w-20 font-bold text-[#5F5E5E]">ลำดับที่</TableHead>
                       <TableHead className="py-3 px-3 text-center w-24 font-bold text-[#5F5E5E]">ภาพสินค้า</TableHead>
                       <TableHead className="py-3 px-3 font-bold text-left text-[#5F5E5E] min-w-[260px]">ชื่อสินค้า</TableHead>
                       <TableHead className="py-3 px-3 font-bold text-left text-[#5F5E5E] w-36">รหัสสินค้า</TableHead>
@@ -859,10 +1017,10 @@ export default function PreOrderManager() {
                     ) : (
                       formItems.map((item, idx) => {
                         const matchedProd = products.find(p => p.id === Number(item.product_id));
-                        const code = matchedProd?.product_code || item.product_code || '-';
-                        const supplierPartCode = (item as any).supplier_part_code || '';
-                        const supplierName = (item as any).supplier_name || '';
-                        const fromCatalog = !!(item as any).supplier_part_code;
+                        const code = item.product_code || matchedProd?.product_code || '-';
+                        const supplierPartCode = item.supplier_part_code || '';
+                        const supplierName = item.supplier_name || '';
+                        const fromCatalog = !!item.supplier_part_code;
                         const imgUrl = (item as any).image || matchedProd?.thumbnail_url || matchedProd?.image || '';
 
                         return (
@@ -970,7 +1128,7 @@ export default function PreOrderManager() {
               <div className="flex items-center gap-3 self-end sm:self-auto">
                 <button
                   type="button"
-                  onClick={() => setView('list')}
+                  onClick={() => { setView('list'); setEditingId(null); navigate(basePath); }}
                   disabled={saving}
                   className="bg-white border border-gray-300 text-[#1C1B1B] hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50 h-[42px]"
                 >

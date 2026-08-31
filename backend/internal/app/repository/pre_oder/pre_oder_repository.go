@@ -2,8 +2,8 @@ package pre_oder
 
 import (
 	"backend/internal/app/entity"
-	"gorm.io/gorm"
 	"context"
+	"gorm.io/gorm"
 )
 
 // 1. กำหนด Interface สำหรับ PreOrder Repository
@@ -51,14 +51,15 @@ func (r *preOrderRepository) CreatePreOrderItem(item *entity.PreOrderItem) error
 // 5. Implement Method: ดึงข้อมูล Pre-Order ตาม ID
 func (r *preOrderRepository) GetPreOrderByID(id uint) (*entity.PreOrder, error) {
 	var preOrder entity.PreOrder
-	
+
 	// ใช้ Preload ดึงข้อมูลลูกค้า, ซัพพลายเออร์ และรายการสินค้าในบิลพรีออเดอร์
 	err := r.db.Preload("Customer").
 		Preload("Supplier").
 		Preload("PreOrderItems").
 		Preload("PreOrderItems.Product").
+		Preload("PreOrderItems.Product.Inventories.Supplier").
 		First(&preOrder, id).Error
-		
+
 	if err != nil {
 		return nil, err
 	}
@@ -68,15 +69,16 @@ func (r *preOrderRepository) GetPreOrderByID(id uint) (*entity.PreOrder, error) 
 // 6. Implement Method: ดึงรายการ Pre-Order ทั้งหมด
 func (r *preOrderRepository) ListPreOrders() ([]entity.PreOrder, error) {
 	var preOrders []entity.PreOrder
-	
+
 	// ใช้ Preload เช่นเดียวกันเพื่อให้แสดงผลในหน้ารายการได้ครบถ้วน
 	err := r.db.Preload("Customer").
 		Preload("Supplier").
 		Preload("PreOrderItems").
 		Preload("PreOrderItems.Product").
+		Preload("PreOrderItems.Product.Inventories.Supplier").
 		Order("id DESC").
 		Find(&preOrders).Error
-		
+
 	return preOrders, err
 }
 
@@ -107,16 +109,17 @@ func (r *preOrderRepository) DeletePreOrder(id uint) error {
 // 9. Implement Method: ค้นหา PreOrder ตามสถานะของ Item
 func (r *preOrderRepository) ListByStatus(ctx context.Context, status string) ([]entity.PreOrder, error) {
 	var preOrders []entity.PreOrder
-	
+
 	err := r.db.WithContext(ctx).
 		Preload("Customer").
 		Preload("Supplier").
 		Preload("PreOrderItems", "status = ?", status).
 		Preload("PreOrderItems.Product").
 		Preload("PreOrderItems.Product.Unit").
+		Preload("PreOrderItems.Product.Inventories.Supplier").
 		Where("EXISTS (SELECT 1 FROM pre_order_items WHERE pre_order_items.pre_order_id = pre_orders.id AND pre_order_items.status = ?)", status).
 		Find(&preOrders).Error
-		
+
 	return preOrders, err
 }
 
@@ -125,7 +128,7 @@ func (r *preOrderRepository) UpdateItemsStatusByIDs(ctx context.Context, ids []u
 	if len(ids) == 0 {
 		return nil
 	}
-	
+
 	return r.db.WithContext(ctx).
 		Model(&entity.PreOrderItem{}).
 		Where("id IN ?", ids).

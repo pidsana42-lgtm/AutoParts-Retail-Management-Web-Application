@@ -18,22 +18,34 @@ import google.generativeai as genai
 
 # Parse environment variables manually (matching main.py)
 def load_env():
-    env_paths = [".env", "../.env", "../../.env"]
+    model_dir = os.path.dirname(os.path.abspath(__file__))
+    backend_dir = os.path.dirname(model_dir)
+    project_dir = os.path.dirname(backend_dir)
+    env_paths = [
+        os.path.join(project_dir, ".env"),
+        os.path.join(backend_dir, ".env"),
+        os.path.join(model_dir, ".env"),
+        os.path.join(project_dir, ".env.local"),
+        os.path.join(backend_dir, ".env.local"),
+        os.path.join(model_dir, ".env.local"),
+    ]
+    explicit_env_keys = set(os.environ)
+
     for path in env_paths:
         if os.path.exists(path):
             with open(path, "r") as f:
                 for line in f:
                     if "=" in line and not line.startswith("#"):
                         parts = line.strip().split("=", 1)
-                        if len(parts) == 2:
+                        if len(parts) == 2 and parts[0].strip() not in explicit_env_keys:
                             os.environ[parts[0].strip()] = parts[1].strip()
-            break
 
 load_env()
 
 import argparse
 parser = argparse.ArgumentParser(description="AutoParts Bill OCR FastAPI Server")
 parser.add_argument("--mode", "-m", type=str, default=os.getenv("OCR_MODE", "2"), help="OCR Processing Mode: 1 = Typhoon + Local Model, 2 = Lightning AI Cloud 100%%")
+parser.add_argument("--port", type=int, default=int(os.getenv("OCR_PORT", "8000")), help="Port for the OCR FastAPI server")
 args, unknown = parser.parse_known_args()
 
 RAW_MODE = str(args.mode).strip().lower()
@@ -1269,4 +1281,4 @@ async def extract_catalog_endpoint(file: UploadFile = File(...), crop_thumbnails
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=args.port)

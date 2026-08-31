@@ -12,7 +12,8 @@ import {
   approveBill,
   getPurchaseOrders,
   getPurchaseOrderById,
-  updateProductCostPrice
+  updateProductCostPrice,
+  resolveImageUrl
 } from '../../../service/http/import/import_service';
 
 import type { 
@@ -37,6 +38,7 @@ import ValidationModal from './components/validation_modal';
 import PriceUpdateModal from './components/price_update_modal';
 import type { PriceMismatchItem } from './components/price_update_modal';
 import { guessColumnMapping, normalizeDateValue, REQUIRED_MAPPING_FIELDS } from '../../../utils/excelImport';
+import { ToastProvider, useToast } from '../../../components/elements/toast';
 
 const isPlaceholder = (val: any): boolean => {
   if (!val) return true;
@@ -57,12 +59,134 @@ interface ImportBillProps {
   isEmployee?: boolean;
 }
 
-export default function ImportBill({ isEmployee = false }: ImportBillProps) {
+interface ImportBillSavedSession {
+  formData: ScannedBillData | null;
+  editingBillId: number | null;
+  poReference: string;
+  batchResults: ScannedBillData[];
+  activeBatchIndex: number;
+  excelPreview: ExcelImportPreview | null;
+  excelMapping: ColumnMapping | null;
+  excelBillMeta: { bill_no: string; supplier_name: string; due_date: string; receive_date: string } | null;
+  originalPOItems: any[];
+  savedAt: string;
+}
+
+interface ImportBillSavedFiles {
+  billImage: File | null;
+  batchImages: File[];
+  activeBatchIndex: number;
+}
+
+const IMPORT_BILL_FILES_DB = 'autoparts-import-bill-files';
+const IMPORT_BILL_FILES_STORE = 'sessions';
+
+const openImportBillFilesDb = (): Promise<IDBDatabase> => new Promise((resolve, reject) => {
+  const request = indexedDB.open(IMPORT_BILL_FILES_DB, 1);
+  request.onupgradeneeded = () => {
+    const db = request.result;
+    if (!db.objectStoreNames.contains(IMPORT_BILL_FILES_STORE)) {
+      db.createObjectStore(IMPORT_BILL_FILES_STORE);
+    }
+  };
+  request.onsuccess = () => resolve(request.result);
+  request.onerror = () => reject(request.error);
+});
+
+const loadImportBillFiles = async (key: string): Promise<ImportBillSavedFiles | null> => {
+  const db = await openImportBillFilesDb();
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = db.transaction(IMPORT_BILL_FILES_STORE, 'readonly')
+        .objectStore(IMPORT_BILL_FILES_STORE)
+        .get(key);
+      request.onsuccess = () => resolve((request.result as ImportBillSavedFiles | undefined) ?? null);
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    db.close();
+  }
+};
+
+const saveImportBillFiles = async (key: string, files: ImportBillSavedFiles): Promise<void> => {
+  const db = await openImportBillFilesDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(IMPORT_BILL_FILES_STORE, 'readwrite');
+      transaction.objectStore(IMPORT_BILL_FILES_STORE).put(files, key);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  } finally {
+    db.close();
+  }
+};
+
+const clearImportBillFiles = async (key: string): Promise<void> => {
+  const db = await openImportBillFilesDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(IMPORT_BILL_FILES_STORE, 'readwrite');
+      transaction.objectStore(IMPORT_BILL_FILES_STORE).delete(key);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  } finally {
+    db.close();
+  }
+};
+
+const getImportBillSessionKey = (isEmployee: boolean): string => {
+  let userKey = 'current-user';
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    userKey = String(user.id || user.username || userKey);
+  } catch {
+    // ใช้ fallback key เมื่อข้อมูลผู้ใช้ใน localStorage ไม่สมบูรณ์
+  }
+  return `import-bill-session:${isEmployee ? 'employee' : 'owner'}:${userKey}`;
+};
+
+const loadImportBillSession = (key: string): ImportBillSavedSession | null => {
+  try {
+    const saved = sessionStorage.getItem(key);
+    if (!saved) return null;
+    const parsed = JSON.parse(saved) as ImportBillSavedSession;
+    return {
+      ...parsed,
+      batchResults: Array.isArray(parsed.batchResults) ? parsed.batchResults.filter(Boolean) : [],
+      originalPOItems: Array.isArray(parsed.originalPOItems) ? parsed.originalPOItems : [],
+    };
+  } catch (error) {
+    console.error('Failed to restore import bill session:', error);
+    sessionStorage.removeItem(key);
+    return null;
+  }
+};
+
+function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const basePath = isEmployee ? '/employee/import' : '/owner/import-bills';
+  const importSessionKey = getImportBillSessionKey(isEmployee);
+  const [restoredSession] = useState<ImportBillSavedSession | null>(() => loadImportBillSession(importSessionKey));
+
+  const clearSavedImportSession = useCallback(() => {
+    try {
+      sessionStorage.removeItem(importSessionKey);
+    } catch (error) {
+      console.error('Failed to clear import bill session:', error);
+    }
+    void clearImportBillFiles(importSessionKey).catch((error) => {
+      console.error('Failed to clear saved import bill image:', error);
+    });
+  }, [importSessionKey]);
 
   const getViewFromPath = (path: string): ViewState => {
+    if (/\/approve\/\d+$/.test(path)) return 'approve';
     if (path.endsWith('/scan')) return 'scan';
     if (path.endsWith('/excel')) return 'excel';
     if (path.endsWith('/mapping')) return 'mapping';
@@ -79,6 +203,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
   }, [location.pathname]);
 
   const setCurrentView = (view: ViewState) => {
+    if (view === 'home') clearSavedImportSession();
     setCurrentViewInternal(view);
     let targetPath = basePath;
     if (view === 'scan') targetPath = `${basePath}/scan`;
@@ -91,7 +216,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
       navigate(targetPath);
     }
   };
-  const [editingBillId, setEditingBillId] = useState<number | null>(null);
+  const [editingBillId, setEditingBillId] = useState<number | null>(() => restoredSession?.editingBillId ?? null);
   const [approvingBill, setApprovingBill] = useState<SavedBill | null>(null);
   const [bills, setBills] = useState<SavedBill[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -99,7 +224,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
   const [categories, setCategories] = useState<any[]>([]);
   
   // Validation & Warning States
-  const [originalPOItems, setOriginalPOItems] = useState<any[]>([]);
+  const [originalPOItems, setOriginalPOItems] = useState<any[]>(() => restoredSession?.originalPOItems ?? []);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [showValidationModal, setShowValidationModal] = useState<boolean>(false);
   const [onConfirmAction, setOnConfirmAction] = useState<(() => void) | null>(null);
@@ -118,15 +243,15 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Excel Import States
-  const [excelPreview, setExcelPreview] = useState<ExcelImportPreview | null>(null);
-  const [excelMapping, setExcelMapping] = useState<ColumnMapping | null>(null);
-  const [excelBillMeta, setExcelBillMeta] = useState<{ bill_no: string; supplier_name: string; due_date: string; receive_date: string } | null>(null);
+  const [excelPreview, setExcelPreview] = useState<ExcelImportPreview | null>(() => restoredSession?.excelPreview ?? null);
+  const [excelMapping, setExcelMapping] = useState<ColumnMapping | null>(() => restoredSession?.excelMapping ?? null);
+  const [excelBillMeta, setExcelBillMeta] = useState<{ bill_no: string; supplier_name: string; due_date: string; receive_date: string } | null>(() => restoredSession?.excelBillMeta ?? null);
 
   // Batch Mode States
   const [batchImages, setBatchImages] = useState<File[]>([]);
   const [batchPreviewUrls, setBatchPreviewUrls] = useState<string[]>([]);
-  const [batchResults, setBatchResults] = useState<ScannedBillData[]>([]);
-  const [activeBatchIndex, setActiveBatchIndex] = useState<number>(0);
+  const [batchResults, setBatchResults] = useState<ScannedBillData[]>(() => restoredSession?.batchResults ?? []);
+  const [activeBatchIndex, setActiveBatchIndex] = useState<number>(() => restoredSession?.activeBatchIndex ?? 0);
   const [batchProgress, setBatchProgress] = useState<{ [key: string]: 'pending' | 'scanning' | 'success' | 'failed' }>({});
   const [batchErrorMsg, setBatchErrorMsg] = useState<string | null>(null);
 
@@ -150,10 +275,11 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
   // Scan View Form & Image Preview
   const [billImage, setBillImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [fileSessionReady, setFileSessionReady] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [rotate, setRotate] = useState(0);
 
-  const [formData, setFormData] = useState<ScannedBillData | null>(null);
+  const [formData, setFormData] = useState<ScannedBillData | null>(() => restoredSession?.formData ?? null);
 
   useEffect(() => { activeBatchIndexRef.current = activeBatchIndex; }, [activeBatchIndex]);
   useEffect(() => { batchResultsRef.current = batchResults; }, [batchResults]);
@@ -165,7 +291,61 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
   const [poList, setPoList] = useState<any[]>([]);
   const [loadingPOs, setLoadingPOs] = useState(false);
   const [poSearchQuery, setPoSearchQuery] = useState('');
-  const [poReference, setPoReference] = useState('');
+  const [poReference, setPoReference] = useState(() => restoredSession?.poReference ?? '');
+
+  // ข้อมูลฟอร์มเก็บใน sessionStorage ส่วนไฟล์รูปเก็บแยกใน IndexedDB
+  useEffect(() => {
+    if (!fileSessionReady) return;
+
+    if (currentView === 'home') {
+      clearSavedImportSession();
+      return;
+    }
+
+    const completedBatchResults = batchResults.filter(Boolean);
+    const hasRecoverableData = Boolean(
+      formData || completedBatchResults.length > 0 || excelPreview || billImage || batchImages.length > 0
+    );
+    if (!hasRecoverableData) {
+      clearSavedImportSession();
+      return;
+    }
+
+    const session: ImportBillSavedSession = {
+      formData,
+      editingBillId,
+      poReference,
+      batchResults: completedBatchResults,
+      activeBatchIndex,
+      excelPreview,
+      excelMapping,
+      excelBillMeta,
+      originalPOItems,
+      savedAt: new Date().toISOString(),
+    };
+
+    try {
+      sessionStorage.setItem(importSessionKey, JSON.stringify(session));
+    } catch (error) {
+      console.error('Failed to save import bill session:', error);
+    }
+  }, [
+    currentView,
+    formData,
+    editingBillId,
+    poReference,
+    batchResults,
+    activeBatchIndex,
+    excelPreview,
+    excelMapping,
+    excelBillMeta,
+    originalPOItems,
+    billImage,
+    batchImages,
+    fileSessionReady,
+    importSessionKey,
+    clearSavedImportSession,
+  ]);
 
   // Handle Split Pane Resizing
   useEffect(() => {
@@ -222,11 +402,25 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
       const found = billList.find((b: SavedBill) => b.id === targetBillId);
       if (found) {
         setApprovingBill(found);
-        setCurrentView('approve');
+        setCurrentViewInternal('approve');
+        navigate(`${basePath}/approve/${found.id}`, { replace: true });
       }
     };
     open();
   }, [location.state]);
+
+  // คืนหน้าตรวจอนุมัติบิลจาก URL หลังรีเฟรช เมื่อรายการบิลโหลดเสร็จแล้ว
+  useEffect(() => {
+    const match = location.pathname.match(/\/approve\/(\d+)$/);
+    if (!match) return;
+
+    const billId = Number(match[1]);
+    const found = bills.find((bill) => bill.id === billId);
+    if (found) {
+      setApprovingBill(found);
+      setCurrentViewInternal('approve');
+    }
+  }, [location.pathname, bills]);
 
   const fetchBills = async () => {
     setLoadingBills(true);
@@ -244,19 +438,37 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
   const fetchSuppliersAndProducts = async () => {
     setLoadingSuppliersProducts(true);
     try {
-      const [suppResp, prodResp, catResp] = await Promise.all([
+      const [suppResp, prodResp, catResp, subSubCatResp] = await Promise.all([
         apiClient.get('/wms/suppliers'),
         apiClient.get('/wms/products'),
-        apiClient.get('/wms/categories')
+        apiClient.get('/wms/categories'),
+        apiClient.get('/wms/sub-sub-categories')
       ]);
 
       const suppData = suppResp.data?.data || suppResp.data || [];
       const prodData = prodResp.data?.data || prodResp.data || [];
       const catData = catResp.data?.data || catResp.data || [];
+      const subSubCatData = subSubCatResp.data?.data || subSubCatResp.data || [];
+      const categoriesWithThreeLevels = Array.isArray(catData)
+        ? catData.map((category: any) => ({
+            ...category,
+            sub_categories: (category.sub_categories || []).map((subCategory: any) => {
+              const subCategoryId = subCategory.id ?? subCategory.ID;
+              return {
+                ...subCategory,
+                sub_sub_categories: Array.isArray(subSubCatData)
+                  ? subSubCatData.filter((subSubCategory: any) =>
+                      Number(subSubCategory.sub_category_id) === Number(subCategoryId)
+                    )
+                  : [],
+              };
+            }),
+          }))
+        : [];
 
       setSuppliers(Array.isArray(suppData) ? suppData : []);
       setProducts(Array.isArray(prodData) ? prodData : []);
-      setCategories(Array.isArray(catData) ? catData : []);
+      setCategories(categoriesWithThreeLevels);
     } catch (err) {
       console.error('Error fetching suppliers/products/categories:', err);
     } finally {
@@ -297,6 +509,87 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
     }
     return URL.createObjectURL(file);
   };
+
+  // คืนไฟล์รูปจาก IndexedDB หลัง Refresh และสร้าง Blob URL ใหม่สำหรับแสดงตัวอย่าง
+  useEffect(() => {
+    let cancelled = false;
+
+    const restoreSavedFiles = async () => {
+      if (!restoredSession || currentView === 'home') {
+        if (!cancelled) setFileSessionReady(true);
+        return;
+      }
+
+      try {
+        const savedFiles = await loadImportBillFiles(importSessionKey);
+        if (!savedFiles) return;
+
+        const restoredBatchImages = Array.isArray(savedFiles.batchImages)
+          ? savedFiles.batchImages.filter((file): file is File => file instanceof Blob)
+          : [];
+
+        if (restoredBatchImages.length > 0) {
+          const urls = await Promise.all(restoredBatchImages.map(toPreviewUrl));
+          if (cancelled) {
+            urls.forEach((url) => {
+              if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+            });
+            return;
+          }
+
+          const restoredIndex = Math.min(
+            Math.max(savedFiles.activeBatchIndex || 0, 0),
+            restoredBatchImages.length - 1
+          );
+          setBatchImages(restoredBatchImages);
+          setBatchPreviewUrls(urls);
+          setActiveBatchIndex(restoredIndex);
+          setBillImage(restoredBatchImages[restoredIndex]);
+          setPreviewUrl(urls[restoredIndex]);
+          return;
+        }
+
+        if (savedFiles.billImage instanceof Blob) {
+          const url = await toPreviewUrl(savedFiles.billImage);
+          if (cancelled) {
+            if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+            return;
+          }
+          setBillImage(savedFiles.billImage);
+          setPreviewUrl(url);
+        }
+      } catch (error) {
+        console.error('Failed to restore saved import bill image:', error);
+      } finally {
+        if (!cancelled) setFileSessionReady(true);
+      }
+    };
+
+    void restoreSavedFiles();
+    return () => {
+      cancelled = true;
+    };
+  }, [importSessionKey]);
+
+  // IndexedDB รองรับ File/Blob โดยตรง จึงคงรูปเดิมได้แม้หน้าเว็บถูก Refresh
+  useEffect(() => {
+    if (!fileSessionReady || currentView === 'home') return;
+
+    if (!billImage && batchImages.length === 0) {
+      void clearImportBillFiles(importSessionKey).catch((error) => {
+        console.error('Failed to clear saved import bill image:', error);
+      });
+      return;
+    }
+
+    void saveImportBillFiles(importSessionKey, {
+      billImage,
+      batchImages,
+      activeBatchIndex,
+    }).catch((error) => {
+      console.error('Failed to save import bill image:', error);
+    });
+  }, [fileSessionReady, currentView, importSessionKey, billImage, batchImages, activeBatchIndex]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -431,19 +724,28 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
           let matchedProdId: number | null = item.product_id ? Number(item.product_id) : null;
           let matchedCatId: number | null = null;
           let matchedSubCatId: number | null = null;
+          let matchedSubSubCatId: number | null = null;
 
           if (matchedProdId) {
             const foundProd = products.find(p => p.id === matchedProdId);
             if (foundProd) {
               if (foundProd.category_name) {
                 const foundCat = categories.find(c => c.category_name === foundProd.category_name);
-                if (foundCat) matchedCatId = foundCat.ID;
+                if (foundCat) matchedCatId = foundCat.id ?? foundCat.ID;
               }
               if (foundProd.sub_category_name && matchedCatId) {
-                const foundCat = categories.find(c => c.ID === matchedCatId);
+                const foundCat = categories.find(c => Number(c.id ?? c.ID) === Number(matchedCatId));
                 if (foundCat && foundCat.sub_categories) {
                   const foundSub = foundCat.sub_categories.find((sc: any) => sc.sub_category_name === foundProd.sub_category_name);
-                  if (foundSub) matchedSubCatId = foundSub.ID;
+                  if (foundSub) {
+                    matchedSubCatId = foundSub.id ?? foundSub.ID;
+                    if (foundProd.sub_sub_category_name) {
+                      const foundSubSub = (foundSub.sub_sub_categories || []).find(
+                        (ssc: any) => ssc.sub_sub_category_name === foundProd.sub_sub_category_name
+                      );
+                      if (foundSubSub) matchedSubSubCatId = foundSubSub.id ?? foundSubSub.ID;
+                    }
+                  }
                 }
               }
             }
@@ -468,7 +770,8 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
             remark: item.remark || '',
             product_id: matchedProdId,
             category_id: matchedCatId,
-            sub_category_id: matchedSubCatId
+            sub_category_id: matchedSubCatId,
+            sub_sub_category_id: matchedSubSubCatId
           };
         });
 
@@ -544,19 +847,28 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
             let matchedProdId: number | null = item.product_id ? Number(item.product_id) : null;
             let matchedCatId: number | null = null;
             let matchedSubCatId: number | null = null;
+            let matchedSubSubCatId: number | null = null;
 
             if (matchedProdId) {
               const foundProd = products.find(p => p.id === matchedProdId);
               if (foundProd) {
                 if (foundProd.category_name) {
                   const foundCat = categories.find(c => c.category_name === foundProd.category_name);
-                  if (foundCat) matchedCatId = foundCat.ID;
+                  if (foundCat) matchedCatId = foundCat.id ?? foundCat.ID;
                 }
                 if (foundProd.sub_category_name && matchedCatId) {
-                  const foundCat = categories.find(c => c.ID === matchedCatId);
+                  const foundCat = categories.find(c => Number(c.id ?? c.ID) === Number(matchedCatId));
                   if (foundCat && foundCat.sub_categories) {
                     const foundSub = foundCat.sub_categories.find((sc: any) => sc.sub_category_name === foundProd.sub_category_name);
-                    if (foundSub) matchedSubCatId = foundSub.ID;
+                    if (foundSub) {
+                      matchedSubCatId = foundSub.id ?? foundSub.ID;
+                      if (foundProd.sub_sub_category_name) {
+                        const foundSubSub = (foundSub.sub_sub_categories || []).find(
+                          (ssc: any) => ssc.sub_sub_category_name === foundProd.sub_sub_category_name
+                        );
+                        if (foundSubSub) matchedSubSubCatId = foundSubSub.id ?? foundSubSub.ID;
+                      }
+                    }
                   }
                 }
               }
@@ -581,7 +893,8 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
               remark: item.remark || '',
               product_id: matchedProdId,
               category_id: matchedCatId,
-              sub_category_id: matchedSubCatId
+              sub_category_id: matchedSubCatId,
+              sub_sub_category_id: matchedSubSubCatId
             };
           });
 
@@ -745,6 +1058,11 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
 
     if (field === 'category_id') {
       targetItem.sub_category_id = null;
+      targetItem.sub_sub_category_id = null;
+    }
+
+    if (field === 'sub_category_id') {
+      targetItem.sub_sub_category_id = null;
     }
 
     if (field === 'order_quantity' || field === 'price_per_unit' || field === 'discount_amount') {
@@ -777,14 +1095,20 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
     updateBatchResultForActiveIndex(updatedForm);
   };
 
-  // ตั้งหมวดหมู่หลัก + ย่อยของรายการในครั้งเดียว (ใช้กับ TreeSelect แบบ cascading ของหน้ากรอกบิล)
-  const handleItemCategoryChange = (index: number, categoryId: number | null, subCategoryId: number | null) => {
+  // ตั้งหมวดหมู่ทั้ง 3 ระดับของรายการในครั้งเดียว (รูปแบบเดียวกับ TreeSelect ของ WMS)
+  const handleItemCategoryChange = (
+    index: number,
+    categoryId: number | null,
+    subCategoryId: number | null,
+    subSubCategoryId: number | null
+  ) => {
     if (!formData) return;
     const updatedItems = [...formData.items];
     updatedItems[index] = {
       ...updatedItems[index],
       category_id: categoryId,
-      sub_category_id: subCategoryId
+      sub_category_id: subCategoryId,
+      sub_sub_category_id: subSubCategoryId
     };
 
     const updatedForm = { ...formData, items: updatedItems };
@@ -809,6 +1133,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
       product_id: null,
       category_id: null,
       sub_category_id: null,
+      sub_sub_category_id: null,
     };
     
     const updatedItems = [...formData.items, newRow];
@@ -896,7 +1221,8 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
 
   const handleOpenApprove = (bill: SavedBill) => {
     setApprovingBill(bill);
-    setCurrentView('approve');
+    setCurrentViewInternal('approve');
+    navigate(`${basePath}/approve/${bill.id}`);
   };
 
   const handleApproveBill = async (billId: number) => {
@@ -904,6 +1230,11 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
     if (!bill) return;
     // approveBill sets is_verified=true; backend UpdateBill auto-updates cost_price for all items
     await approveBill(billId, bill);
+    toast({
+      variant: 'success',
+      title: 'อนุมัติบิลสำเร็จ',
+      message: `บิล ${bill.bill_no || ''} ถูกอนุมัติเรียบร้อยแล้ว`,
+    });
     await fetchBills();
     setApprovingBill(null);
     setCurrentView('home');
@@ -941,6 +1272,9 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
           is_freebie: item.is_freebie,
           remark: item.remark,
           product_id: item.product_id,
+          category_id: item.category_id,
+          sub_category_id: item.sub_category_id,
+          sub_sub_category_id: item.sub_sub_category_id,
         })),
       });
       await fetchBills();
@@ -980,14 +1314,18 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
         net_amount: item.net_amount,
         is_freebie: item.is_freebie,
         remark: item.remark,
-        product_id: item.product_id
+        product_id: item.product_id,
+        category_id: item.category_id,
+        sub_category_id: item.sub_category_id,
+        sub_sub_category_id: item.sub_sub_category_id
       })),
       db_job_id: 0,
       bill_image_id: bill.bill_image?.id || 0
     });
 
-    if (bill.bill_image && bill.bill_image.image_url) {
-      setPreviewUrl(bill.bill_image.image_url);
+    const rawImgUrl = bill.bill_image?.image_url || bill.evidence_file_url;
+    if (rawImgUrl) {
+      setPreviewUrl(resolveImageUrl(rawImgUrl));
     } else {
       setPreviewUrl(null);
     }
@@ -1255,7 +1593,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
     try {
       const poData = await getPurchaseOrderById(poId);
       if (!poData) {
-        alert('ไม่พบข้อมูลรายละเอียดใบสั่งซื้อ');
+        toast({ variant: 'error', message: 'ไม่พบข้อมูลรายละเอียดใบสั่งซื้อ' });
         return;
       }
 
@@ -1283,13 +1621,24 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
       });
 
       const subtotal = mappedItems.reduce((sum, i) => sum + i.net_amount, 0);
+      const selectedPO = poList.find(po => Number(po.id) === Number(poId));
+      const supplierId = Number(poData.supplier_id || selectedPO?.supplier_id || 0);
+      const registeredSupplier = suppliers.find(supplier => Number(supplier.id) === supplierId);
+      const supplierName = String(
+        poData.supplier_name ||
+        poData.supplier?.supplier_name ||
+        selectedPO?.supplier_name ||
+        registeredSupplier?.supplier_name ||
+        ''
+      );
 
       setFormData({
         bill_no: `PO-IMPORT-${poData.po_number || poData.order_number || poId}`,
         total_amount: poData.total_amount || subtotal,
         due_date: new Date().toISOString().split('T')[0],
         transport_by: '',
-        supplier_id: poData.supplier_id || suppliers[0]?.id || 1,
+        supplier_id: supplierId,
+        supplier_name: supplierName,
         subtotal: subtotal,
         discount_total: 0,
         receive_date: new Date().toISOString().split('T')[0],
@@ -1306,7 +1655,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
       setCurrentView('manual');
     } catch (err: any) {
       console.error('Error selecting PO:', err);
-      alert('เกิดข้อผิดพลาดในการดึงข้อมูล PO: ' + (err.message || err));
+      toast({ variant: 'error', message: 'เกิดข้อผิดพลาดในการดึงข้อมูล PO: ' + (err.message || err) });
     }
   };
 
@@ -1344,15 +1693,19 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
       const itemHeaders = [
         'ลำดับ', 'รหัสสินค้าคู่ค้า', 'ชื่อสินค้าคู่ค้า',
         'รหัสในระบบ', 'ชื่อในระบบ',
-        'หมวดหมู่หลัก', 'หมวดหมู่ย่อย',
+        'หมวดหมู่หลัก', 'หมวดหมู่ย่อย', 'หมวดหมู่ย่อยย่อย',
         'จำนวน', 'หน่วย', 'ราคาต่อหน่วย', 'ส่วนลด', 'ยอดสุทธิ', 'สินค้าแถม',
       ];
 
       const itemRows = formData.items.map((item, idx) => {
         const matchingProd = products.find(p => p.id === Number(item.product_id));
-        const matchingCat  = categories.find((c: any) => c.ID === Number(item.category_id));
+        const matchingCat  = categories.find((c: any) => Number(c.id ?? c.ID) === Number(item.category_id));
         const subCategories = matchingCat?.sub_categories || [];
-        const matchingSubCat = subCategories.find((sc: any) => sc.ID === Number(item.sub_category_id));
+        const matchingSubCat = subCategories.find((sc: any) => Number(sc.id ?? sc.ID) === Number(item.sub_category_id));
+        const subSubCategories = matchingSubCat?.sub_sub_categories || [];
+        const matchingSubSubCat = subSubCategories.find(
+          (ssc: any) => Number(ssc.id ?? ssc.ID) === Number(item.sub_sub_category_id)
+        );
         return [
           item.item_sequence || (idx + 1),
           item.company_product_code || '-',
@@ -1361,6 +1714,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
           matchingProd ? matchingProd.product_name : '-',
           matchingCat   ? (matchingCat as any).category_name : '-',
           matchingSubCat ? (matchingSubCat as any).sub_category_name : '-',
+          matchingSubSubCat ? (matchingSubSubCat as any).sub_sub_category_name : '-',
           item.order_quantity,
           item.unit,
           item.price_per_unit,
@@ -1398,6 +1752,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
         { wch: 36 }, // ชื่อในระบบ
         { wch: 20 }, // หมวดหมู่หลัก
         { wch: 20 }, // หมวดหมู่ย่อย
+        { wch: 20 }, // หมวดหมู่ย่อยย่อย
         { wch: 10 }, // จำนวน
         { wch: 10 }, // หน่วย
         { wch: 16 }, // ราคาต่อหน่วย
@@ -1609,7 +1964,8 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
           remark: String(item.remark || ''),
           product_id: item.product_id ? Number(item.product_id) : 0,
           category_id: item.category_id ? Number(item.category_id) : undefined,
-          sub_category_id: item.sub_category_id ? Number(item.sub_category_id) : undefined
+          sub_category_id: item.sub_category_id ? Number(item.sub_category_id) : undefined,
+          sub_sub_category_id: item.sub_sub_category_id ? Number(item.sub_sub_category_id) : undefined
         })),
         draft_json: JSON.stringify(formData)
       };
@@ -1620,6 +1976,19 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
         await confirmBillImport(formData.db_job_id || 0, payload);
       }
 
+      toast({
+        variant: 'success',
+        title: isDraft
+          ? 'บันทึกแบบร่างสำเร็จ'
+          : editingBillId
+            ? 'แก้ไขบิลสำเร็จ'
+            : 'นำเข้าบิลสำเร็จ',
+        message: isDraft
+          ? `บิล ${formData.bill_no || ''} ถูกบันทึกเป็นแบบร่างแล้ว`
+          : editingBillId
+            ? `แก้ไขข้อมูลบิล ${formData.bill_no || ''} เรียบร้อยแล้ว`
+            : `บิล ${formData.bill_no || ''} ถูกบันทึกเข้าระบบเรียบร้อยแล้ว`,
+      });
       await fetchBills();
       setCurrentView('home');
       setFormData(null);
@@ -1711,7 +2080,8 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
             remark: item.remark,
             product_id: item.product_id ? Number(item.product_id) : 0,
             category_id: item.category_id ? Number(item.category_id) : undefined,
-            sub_category_id: item.sub_category_id ? Number(item.sub_category_id) : undefined
+            sub_category_id: item.sub_category_id ? Number(item.sub_category_id) : undefined,
+            sub_sub_category_id: item.sub_sub_category_id ? Number(item.sub_sub_category_id) : undefined
           })),
           draft_json: JSON.stringify(bill)
         };
@@ -1725,7 +2095,12 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
 
     setSaving(false);
     await fetchBills();
-    alert(`บันทึกบิลแบบกลุ่มสำเร็จทั้งหมด ${successCount} จาก ${batchResults.length} รายการ!`);
+    const allSucceeded = successCount === batchResults.length;
+    toast({
+      variant: allSucceeded ? 'success' : successCount > 0 ? 'warning' : 'error',
+      title: allSucceeded ? 'นำเข้าบิลแบบกลุ่มสำเร็จ' : 'นำเข้าบิลแบบกลุ่มเสร็จสิ้น',
+      message: `บันทึกสำเร็จ ${successCount} จาก ${batchResults.length} บิล`,
+    });
     setCurrentView('home');
     setFormData(null);
     setBatchResults([]);
@@ -1806,6 +2181,7 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
           products={products}
           categories={categories}
           handleItemChange={handleItemChange}
+          handleItemCategoryChange={handleItemCategoryChange}
           handleRemoveRow={handleRemoveRow}
           handleAddRow={handleAddRow}
           exportBillItemsToExcel={exportBillItemsToExcel}
@@ -1924,5 +2300,13 @@ export default function ImportBill({ isEmployee = false }: ImportBillProps) {
         }}
       />
     </>
+  );
+}
+
+export default function ImportBill(props: ImportBillProps) {
+  return (
+      <ToastProvider position="top-center">
+      <ImportBillContent {...props} />
+    </ToastProvider>
   );
 }

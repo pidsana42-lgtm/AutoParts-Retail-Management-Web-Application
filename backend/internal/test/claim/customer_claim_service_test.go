@@ -104,6 +104,13 @@ func (m *mockClaimRepo) DeleteCustomerClaim(id uint) error {
 	return nil
 }
 
+func (m *mockClaimRepo) GetCompanySetting() (*entity.CompanySetting, error) {
+	m.track("GetCompanySetting")
+	return &entity.CompanySetting{
+		CompanyName: "Test Company",
+	}, nil
+}
+
 var _ claimRepo.CustomerClaimRepository = (*mockClaimRepo)(nil)
 
 type mockSORepo struct {

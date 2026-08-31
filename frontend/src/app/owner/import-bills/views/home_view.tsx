@@ -99,8 +99,8 @@ export default function HomeView({
               <Camera size={32} className="text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold mb-1">สแกนบิลด้วยรูปภาพ / PDF</h2>
-              <p className="text-xs text-white/70">Scan Invoice using Image or PDF</p>
+              <h2 className="text-xl font-bold mb-1">สแกนบิลด้วยรูปภาพหรือเอกสาร</h2>
+              <p className="text-xs text-white/70">นำเข้าบิลจากไฟล์รูปภาพหรือเอกสาร</p>
             </div>
           </div>
           <ArrowRight size={32} className="text-white/50 group-hover:text-white transition-colors" />
@@ -116,8 +116,8 @@ export default function HomeView({
               <FileUp size={32} className="text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold mb-1">อัปโหลดไฟล์ Excel</h2>
-              <p className="text-xs text-gray-400">Upload Excel File (.xlsx, .csv)</p>
+              <h2 className="text-xl font-bold mb-1">อัปโหลดไฟล์ตารางสินค้า</h2>
+              <p className="text-xs text-gray-400">นำเข้ารายการสินค้าจากไฟล์ตาราง</p>
             </div>
           </div>
           <LayoutPanelLeft size={36} className="text-white/20" />
@@ -134,7 +134,7 @@ export default function HomeView({
           <div className="flex items-center gap-6">
             <div>
               <h2 className="text-xl font-bold mb-1">นำเข้าจากใบสั่งซื้อ</h2>
-              <p className="text-xs text-white/70">Import from Purchase Order</p>
+              <p className="text-xs text-white/70">นำเข้าข้อมูลจากใบสั่งซื้อในระบบ</p>
             </div>
           </div>
           <ArrowRight size={32} className="text-white/50 group-hover:text-white transition-colors" />
@@ -188,7 +188,7 @@ export default function HomeView({
           <div className="flex items-center gap-6">
             <div>
               <h2 className="text-xl font-bold mb-1">กรอกข้อมูลด้วยตนเอง</h2>
-              <p className="text-xs text-white/70">Manual Entry</p>
+              <p className="text-xs text-white/70">สร้างบิลและกรอกรายการสินค้าเอง</p>
             </div>
           </div>
           <ArrowRight size={32} className="text-white/50 group-hover:text-white transition-colors" />
@@ -200,14 +200,14 @@ export default function HomeView({
         <div className="flex flex-col md:flex-row md:items-center justify-between p-6 border-b border-gray-100 gap-4">
           <div className="flex items-center gap-2 text-[#e51c23] font-bold">
             <History size={20} />
-            <span className="text-sm font-bold">รายการนำเข้าสินค้าล่าสุด (Recent Product Imports)</span>
+            <span className="text-sm font-bold">รายการนำเข้าสินค้าล่าสุด</span>
           </div>
 
           {/* Status Filter Tabs */}
           <div className="flex items-center gap-1.5 flex-wrap">
             {(
               [
-                { key: 'ALL',            label: `ทั้งหมด (${bills.length})`,  activeClass: 'bg-[#1C1B1B] text-white' },
+                { key: 'ALL',            label: `ทั้งหมด ${bills.length}`,  activeClass: 'bg-[#1C1B1B] text-white' },
                 ...(!isEmployee ? [{ key: 'PENDING_REVIEW', label: 'รอเจ้าของอนุมัติ', activeClass: 'bg-[#e51c23] text-white', count: pendingCount }] : []),
                 { key: 'APPROVED',       label: 'อนุมัติแล้ว',               activeClass: 'bg-[#1C1B1B] text-white' },
                 { key: 'DRAFT',          label: 'แบบร่าง',                   activeClass: 'bg-[#1C1B1B] text-white' },
@@ -298,7 +298,7 @@ export default function HomeView({
                         <button
                           onClick={() => handleDeleteBill(row.id)}
                           className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
-                          title={isEmployee ? "ลบบิล (เฉพาะบิลที่ยังไม่อนุมัติ)" : "ลบบิล"}
+                          title={isEmployee ? "ลบบิลเฉพาะรายการที่ยังไม่อนุมัติ" : "ลบบิล"}
                         >
                           <Trash2 size={20} />
                         </button>

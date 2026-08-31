@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import Heading from '../../../../components/elements/heading';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
 import type { SavedBill, Supplier, Product } from '../../../../interface/import';
+import { resolveImageUrl } from '../../../../service/http/import/import_service';
 import BillSummaryFooterBar from '../components/BillSummaryFooterBar';
 
 interface ApproveViewProps {
@@ -34,9 +35,7 @@ export default function ApproveView({
     try { await onApprove(bill.id); } finally { setLoading(false); }
   };
 
-  const imageUrl = bill.bill_image?.image_url
-    ? `http://localhost:8080/${bill.bill_image.image_url}`
-    : null;
+  const imageUrl = resolveImageUrl(bill.bill_image?.image_url || bill.evidence_file_url);
 
   const totalNetAmount = (bill.bill_items || []).reduce((s, i) => s + (i.net_amount || 0), 0);
 
@@ -155,7 +154,7 @@ export default function ApproveView({
               <Table>
                 <TableHeader className="bg-gray-50 text-[#5F5E5E]">
                   <TableRow>
-                    <TableHead className="pl-6 w-10">#</TableHead>
+                    <TableHead className="pl-6 w-20 text-center">ลำดับที่</TableHead>
                     <TableHead>ชื่อสินค้า</TableHead>
                     <TableHead className="text-center">จำนวน</TableHead>
                     <TableHead className="text-right">ราคาทุนเดิม</TableHead>
