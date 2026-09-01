@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useLocation, useSearchParams, useNavigate } from "react-router-dom";
-import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, ScanBarcode, RotateCcw, AlertCircle, RefreshCw} from "lucide-react";
+import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, ScanBarcode} from "lucide-react";
 import Button from "../../../components/elements/button";
 import { usePosPayment } from "./hooks/usepospayment";
 import { usePosCart } from "./hooks/useposcart";
@@ -15,8 +15,6 @@ import Input from "../../../components/elements/input";
 import { usePosSessionMeta } from "./hooks/usePosSessionMeta";
 import {useCustomerFinancials} from "./hooks/useCustomerFinancials";
 import Heading from "../../../components/elements/heading";
-import { posApiService } from "../../../service/http/pos/pos_service";
-import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
 
 export default function PosPage(): React.JSX.Element {
   // ─── STATE & HOOK SETUP ───

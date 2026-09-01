@@ -1,6 +1,9 @@
 import type { TopSellerItem, DebtAgingItem } from '../interface/dashboard/dashboard_interface';
 import { formatDateThai } from './formatdate';
 
+// Re-export all POS print utilities and statement interfaces
+export * from './payment_history_print';
+
 function printHtml(html: string) {
   const win = window.open('', '_blank');
   if (!win) return;

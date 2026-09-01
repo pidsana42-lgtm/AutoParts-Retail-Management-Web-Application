@@ -23,6 +23,7 @@ type PaymentController interface {
 	GetPaymentHistory(c *gin.Context)
 	GetPaymentHistoryByID(c *gin.Context)
 	GenerateDebtReceiptPDF(c *gin.Context)
+	GenerateCustomerStatementPDF(c *gin.Context)
 	GetCancelledPaymentHistory(c *gin.Context)
 	RequestCancelPaymentReceipt(c *gin.Context)
 	RevertCancelPaymentReceiptRequest(c *gin.Context)
@@ -483,5 +484,29 @@ func (ctrl *paymentController) GenerateDebtReceiptPDF(c *gin.Context) {
 
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=receipt-%s.pdf", identifier))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+// GenerateCustomerStatementPDF GET /api/pos/payments/customers/:id/statement-pdf?start_date=...&end_date=...
+func (ctrl *paymentController) GenerateCustomerStatementPDF(c *gin.Context) {
+	customerIDParam := c.Param("id")
+	customerID, err := strconv.ParseUint(customerIDParam, 10, 32)
+	if err != nil || customerID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสลูกค้าไม่ถูกต้อง"})
+		return
+	}
+
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+
+	pdfBytes, err := ctrl.paymentService.GenerateCustomerStatementPDF(c.Request.Context(), uint(customerID), startDate, endDate)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate customer statement PDF: " + err.Error()})
+		return
+	}
+
+	fileName := fmt.Sprintf("statement-customer-%d.pdf", customerID)
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", fileName))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }

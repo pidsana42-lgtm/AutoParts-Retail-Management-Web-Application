@@ -8,6 +8,7 @@ import {
   ScanBarcode,
   Printer,
   X,
+  FileText,
 } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
@@ -38,7 +39,7 @@ import { PaymentTypeBadge, PaymentStatusBadge } from "../../../components/elemen
 import { formatDate } from "../../../utils/date";
 import { useUserRole } from "../../../hooks/useUserRole";
 import { posApiService } from "../../../service/http/pos/pos_service";
-import { downloadPdfBlob } from "../../../utils/print";
+import { downloadPdfBlob } from "../../../utils/payment_history_print";
 
 
 export default function PaymentHistoryPage() {
@@ -89,6 +90,7 @@ export default function PaymentHistoryPage() {
     cancelReason,
     cancelRemark,
     isCancelling,
+    isPrintingStatement,
     setSearch,
     setTypeFilter,
     setStatusFilter,
@@ -107,6 +109,7 @@ export default function PaymentHistoryPage() {
     handleApproveCancelReceipt,
     handleRejectCancelReceipt,
     handleCancelReceipt,
+    handlePrintCustomerStatement,
   } = usePaymentHistory();
 
   const formatCurrency = (val: number) => {
@@ -137,8 +140,9 @@ export default function PaymentHistoryPage() {
           {/* Filter Bar */}
           <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
             <CardContent className="p-5 md:p-6 space-y-4">
-              {/* ช่องที่ 1: ค้นหาคำ */}
+              {/* ช่องที่ 1: ค้นหาคำ + พนักงาน */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                {/* 1.1 ค้นหาเลขที่ใบเสร็จ / บิล / ชื่อลูกค้า */}
                 <div className={cn("flex flex-col gap-1.5", isOwnerOrAdmin ? "md:col-span-8" : "md:col-span-12")}>
                   <Text variant="xs" className="text-[#5F5E5E]">
                     ค้นหาเลขที่ใบเสร็จ / หมายเลขบิล / ชื่อลูกค้า
@@ -149,16 +153,15 @@ export default function PaymentHistoryPage() {
                       size={18}
                     />
                     <Input
-                      placeholder="พิมพ์เลขที่ใบเสร็จ RE-XXX, INV-XXX หรือชื่อลูกค้า..."
+                      placeholder="พิมพ์เลขที่ใบเสร็จ RE-XXX, INV-XXX, ชื่อลูกค้า..."
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      autoFocus
                       className="w-full h-10 bg-white border border-gray-200 rounded-none pl-11 pr-4 text-sm text-[#1C1B1B] font-light focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 shadow-sm transition-all placeholder:text-[#6B7280]"
                     />
                   </div>
                 </div>
 
-                {/* ช่องที่ 2: พนักงานขาย (เฉพาะเจ้าของร้าน 4/12) */}
+                {/* 1.2 พนักงานขาย (เฉพาะเจ้าของร้าน 4/12) */}
                 {isOwnerOrAdmin && (
                   <div className="md:col-span-4 flex flex-col gap-1.5">
                     <Text variant="xs" className="text-[#5F5E5E]">
@@ -178,7 +181,7 @@ export default function PaymentHistoryPage() {
                 )}
               </div>
 
-              {/* บรรทัดที่ 2: ตัวกรองประเภท + วันที่ + ช่องทาง + ปุ่มค้นหา */}
+              {/* บรรทัดที่ 2: ตัวกรองประเภท + วันที่ + ช่องทาง + ปุ่มค้นหาและพิมพ์สรุปยอด */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end pt-1 border-t border-gray-200/60">
                 <div className="md:col-span-3 lg:col-span-2 flex flex-col gap-1.5">
                   <Text variant="xs" className="text-[#5F5E5E]">
@@ -256,10 +259,10 @@ export default function PaymentHistoryPage() {
                   />
                 </div>
 
-                <div className="md:col-span-6 lg:col-span-2">
+                <div className="md:col-span-6 lg:col-span-2 flex items-center gap-2">
                   <Button
                     onClick={handleApplyFilter}
-                    className="w-full h-10 rounded-none bg-[#E51C23] hover:bg-[#c9151b] text-white text-sm font-normal transition-colors border-none shadow-none cursor-pointer"
+                    className="flex-1 h-10 rounded-none bg-[#E51C23] hover:bg-[#c9151b] text-white text-sm font-normal transition-colors border-none shadow-none cursor-pointer"
                   >
                     ค้นหา
                   </Button>
@@ -433,6 +436,17 @@ export default function PaymentHistoryPage() {
             </div>
           )}
 
+          <Button
+            type="button"
+            disabled={isPrintingStatement || items.length === 0}
+            onClick={() => handlePrintCustomerStatement()}
+            className="h-10 px-3 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs font-normal flex items-center justify-center gap-1.5 rounded-none cursor-pointer shadow-sm disabled:opacity-50"
+            title="พิมพ์สรุปยอดชำระและยอดคงเหลือตามตัวกรองปัจจุบัน"
+            >
+            <Printer className="w-4 h-4 text-[#E51C23]" />
+            <span className="hidden sm:inline">พิมพ์สรุปยอด</span>
+          </Button>
+                  
           {/* Data Table */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
             <Table className="text-left border-collapse">
@@ -497,9 +511,22 @@ export default function PaymentHistoryPage() {
 
                       {/* 3. ชื่อลูกค้า + เลขที่บิล */}
                       <TableCell className="py-3.5 px-3">
-                        <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate max-w-[200px]">
-                          {getDisplayCustomerName(item)}
-                        </Text>
+                        {item.customer_name ? (
+                          <button
+                            type="button"
+                            onClick={() => setSearch(item.customer_name)}
+                            className="text-left font-normal text-[#1C1B1B] hover:text-[#E51C23] hover:underline mb-0 truncate max-w-[200px] cursor-pointer bg-transparent border-none p-0 block"
+                            title="คลิกเพื่อกรองค้นหาเฉพาะลูกค้าคนนี้"
+                          >
+                            <Text variant="small" className="font-normal text-inherit mb-0 truncate">
+                              {getDisplayCustomerName(item)}
+                            </Text>
+                          </button>
+                        ) : (
+                          <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate max-w-[200px]">
+                            {getDisplayCustomerName(item)}
+                          </Text>
+                        )}
                         <Text variant="xs" className="font-light text-[#A8A29E] mb-0 truncate max-w-[200px]">
                           บิล: {item.order_numbers || "-"}
                         </Text>
@@ -536,7 +563,7 @@ export default function PaymentHistoryPage() {
                         </Badge>
                       </TableCell>
 
-                      {/* 9. จัดการ: ปุ่มดูรายละเอียด + ปุ่มพิมพ์ใบเสร็จ */}
+                      {/* 9. จัดการ: ปุ่มดูรายละเอียด + ปุ่มพิมพ์ใบเสร็จ + ปุ่มพิมพ์สรุปยอดลูกค้า */}
                       <TableCell className="py-3.5 px-3 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <button
@@ -545,20 +572,34 @@ export default function PaymentHistoryPage() {
                             title="ดูรายละเอียดใบเสร็จ"
                             onClick={() => setSelectedReceipt(item)}
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye className="w-4 h-4 text-gray-600" />
                           </button>
                           <button
                             type="button"
                             disabled={printingReceiptId === (item.receipt_id || item.receipt_number)}
                             className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100 disabled:opacity-40"
-                            title="พิมพ์/ดาวน์โหลดใบเสร็จ"
+                            title="พิมพ์ใบเสร็จของบิลนี้"
                             onClick={(e) => {
                               e.stopPropagation();
                               handlePrintReceipt(item);
                             }}
                           >
-                            <Printer className={cn("w-4 h-4", printingReceiptId === (item.receipt_id || item.receipt_number) && "animate-pulse")} />
+                            <Printer className={cn("w-4 h-4 text-gray-600", printingReceiptId === (item.receipt_id || item.receipt_number) && "animate-pulse")} />
                           </button>
+                          {item.customer_name && (
+                            <button
+                              type="button"
+                              disabled={isPrintingStatement}
+                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-red-50 text-gray-600 hover:text-[#E51C23] disabled:opacity-40"
+                              title={`พิมพ์ใบสรุปยอดชำระและยอดคงเหลือของ ${item.customer_name}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePrintCustomerStatement(item.customer_name);
+                              }}
+                            >
+                              <FileText className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

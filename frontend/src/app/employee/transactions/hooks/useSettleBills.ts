@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { posApiService } from "../../../../service/http/pos/pos_service";
-import type { CustomerDiscountResponse } from "../../../../interface/pos/customer_interface";
 import { getCurrentUserId } from "../../../../utils/auth";
 import type {
   UnpaidBillItem,
