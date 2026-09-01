@@ -282,7 +282,9 @@ export default function StockPage() {
         (item.Suppliers && item.Suppliers.some((s) => s.SupplierName.toUpperCase() === supplier.toUpperCase()));
 
       return matchesSearch && matchesCategory && matchesSupplier;
-    });
+    })
+    // สินค้าที่เพิ่มล่าสุดอยู่บนสุด (ID มากกว่า = สร้างทีหลัง เพราะเป็นเลขรันตามลำดับการสร้าง)
+    .sort((a, b) => b.ID - a.ID);
   }, [stockData, search, categoryNames, supplier]);
 
   // กลับไปหน้า 1 ทุกครั้งที่ตัวกรองเปลี่ยน กันกรณีหน้าปัจจุบันเกินจำนวนหน้าที่กรองได้แล้ว

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import Modal from "../../../../components/elements/modal";
 import Input from "../../../../components/elements/input";
 import Select from "../../../../components/elements/select";
 import Button from "../../../../components/elements/button";
 import TreeSelect from "../../../../components/elements/tree_select";
 import SearchableSelect from "./SearchableSelect";
-import ProductQuickView from "./ProductQuickView";
 import CheckDateTimeRangeField, {
   type CheckDateTimeRangeValue,
   validateCheckDateTimeRange,
@@ -16,7 +16,6 @@ import { useCheckStockOptions } from "./useCheckStockOptions";
 import { buildZoneTree, buildCategoryTree, getRelatedProducts } from "./checkStockTargets";
 
 import { stockCheckService, type CheckStockScheduleCreateInput, type CheckStockSchedule } from "../../../../service/http/wms/stock_check_service";
-import type { StockItem } from "../../../../interface/wms/product";
 
 interface EditCheckStockScheduleModalProps {
   isOpen: boolean;
@@ -31,9 +30,9 @@ export default function EditCheckStockScheduleModal({
   onSuccess,
   schedule,
 }: EditCheckStockScheduleModalProps) {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { loading: loadingOptions, employees, zones, categories, products } = useCheckStockOptions();
-  const [quickViewProduct, setQuickViewProduct] = useState<StockItem | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -153,7 +152,6 @@ export default function EditCheckStockScheduleModal({
   const isEditable = !schedule || schedule.status === "รอดำเนินการ";
 
   return (
-    <>
       <Modal
         isOpen={isOpen}
         onClose={onClose}
@@ -259,9 +257,17 @@ export default function EditCheckStockScheduleModal({
               {relatedProducts.slice(0, 10).map(p => (
                 <div
                   key={p.ID}
-                  onClick={() => setQuickViewProduct(p)}
+                  onClick={() =>
+                    navigate(`/owner/stock/${p.ID}`, {
+                      state: {
+                        from: "check_stock",
+                        scheduleId: schedule?.id,
+                        scheduleName: schedule?.target_name,
+                      },
+                    })
+                  }
                   className="flex cursor-pointer items-center gap-2 bg-white p-1.5 border border-slate-100 rounded-sm shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-                  title="ดูข้อมูลสินค้า"
+                  title="ดูรายละเอียดสินค้า"
                 >
                   {p.ThumbnailUrl ? (
                     <img src={p.ThumbnailUrl} alt="" className="h-8 w-8 shrink-0 rounded object-cover" />
@@ -293,9 +299,5 @@ export default function EditCheckStockScheduleModal({
         </div>
       </form>
     </Modal>
-    {quickViewProduct && (
-      <ProductQuickView product={quickViewProduct} onClose={() => setQuickViewProduct(null)} />
-    )}
-    </>
   );
 }

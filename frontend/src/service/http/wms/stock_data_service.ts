@@ -217,10 +217,11 @@ export const stockDataService = {
     const res = await apiClient.get<any[]>("/wms/suppliers");
     return stockDataService._mapIds(res.data);
   },
-  createSupplier: async (data: Omit<Supplier, "id">): Promise<any> => {
+  // คืนข้อมูล Supplier ที่เพิ่งสร้าง (มี id) กลับมาด้วย เผื่อผู้เรียกอยากเลือกใช้ Supplier นี้ต่อทันที
+  createSupplier: async (data: Omit<Supplier, "id">): Promise<Supplier> => {
     const res = await apiClient.post("/wms/suppliers", data);
     return res.data;
-  }, 
+  },
   updateSupplier: async (id: number, data: Partial<Supplier>): Promise<any> => {
     const res = await apiClient.put(`/wms/suppliers/${id}`, data);
     return res.data;

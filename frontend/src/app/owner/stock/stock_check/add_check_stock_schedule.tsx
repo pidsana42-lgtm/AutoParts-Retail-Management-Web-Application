@@ -10,7 +10,6 @@ import Button from "../../../../components/elements/button";
 import TreeSelect from "../../../../components/elements/tree_select";
 import { ToastProvider, useToast } from "../../../../components/elements/toast";
 import SearchableSelect from "./SearchableSelect";
-import ProductQuickView from "./ProductQuickView";
 import CheckDateTimeRangeField, {
   type CheckDateTimeRangeValue,
   validateCheckDateTimeRange,
@@ -19,13 +18,11 @@ import CheckDateTimeRangeField, {
 import { useCheckStockOptions } from "./useCheckStockOptions";
 import { buildZoneTree, buildCategoryTree, getRelatedProducts } from "./checkStockTargets";
 import { stockCheckService, type CheckStockScheduleCreateInput } from "../../../../service/http/wms/stock_check_service";
-import type { StockItem } from "../../../../interface/wms/product";
 
 function AddCheckStockScheduleContent() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { loading: loadingOptions, employees, zones, categories, products } = useCheckStockOptions();
-  const [quickViewProduct, setQuickViewProduct] = useState<StockItem | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -215,9 +212,9 @@ function AddCheckStockScheduleContent() {
                   {relatedProducts.slice(0, 10).map((p) => (
                     <div
                       key={p.ID}
-                      onClick={() => setQuickViewProduct(p)}
+                      onClick={() => navigate(`/owner/stock/${p.ID}`, { state: { from: "check_stock" } })}
                       className="flex cursor-pointer items-center gap-2 rounded-sm border border-slate-100 bg-white p-1.5 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-                      title="ดูข้อมูลสินค้า"
+                      title="ดูรายละเอียดสินค้า"
                     >
                       {p.ThumbnailUrl ? (
                         <img src={p.ThumbnailUrl} alt="" className="h-8 w-8 shrink-0 rounded object-cover" />
@@ -250,10 +247,6 @@ function AddCheckStockScheduleContent() {
           </form>
         </CardContent>
       </Card>
-
-      {quickViewProduct && (
-        <ProductQuickView product={quickViewProduct} onClose={() => setQuickViewProduct(null)} />
-      )}
     </div>
   );
 }

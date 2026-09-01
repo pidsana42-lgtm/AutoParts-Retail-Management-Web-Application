@@ -7,7 +7,7 @@ import (
 )
 
 type SupplierService interface {
-	Create(req *wmsDto.SupplierRequestDTO) error
+	Create(req *wmsDto.SupplierRequestDTO) (*wmsDto.SupplierResponseDTO, error)
 	GetByID(id uint) (*wmsDto.SupplierResponseDTO, error)
 	Update(id uint, req *wmsDto.SupplierRequestDTO) error
 	Delete(id uint) error
@@ -22,7 +22,7 @@ func NewSupplierService(repo wmsRepo.SupplierRepository) SupplierService {
 	return &supplierService{repo: repo}
 }
 
-func (s *supplierService) Create(req *wmsDto.SupplierRequestDTO) error {
+func (s *supplierService) Create(req *wmsDto.SupplierRequestDTO) (*wmsDto.SupplierResponseDTO, error) {
 	supplier := entity.Supplier{
 		SupplierName:      req.SupplierName,
 		SupplierAddress:   req.SupplierAddress,
@@ -35,7 +35,12 @@ func (s *supplierService) Create(req *wmsDto.SupplierRequestDTO) error {
 		BankAccountNumber: req.BankAccountNumber,
 		ShortSupplierName: req.ShortSupplierName,
 	}
-	return s.repo.Create(&supplier)
+	if err := s.repo.Create(&supplier); err != nil {
+		return nil, err
+	}
+	// คืนข้อมูลที่เพิ่งสร้างกลับไปพร้อม ID เลย เผื่อฝั่ง frontend ต้องเลือกใช้ Supplier ที่เพิ่งเพิ่มทันที
+	// (เช่น เพิ่มบริษัทใหม่จากฟอร์มเพิ่มสินค้า แล้วอยากให้เลือกบริษัทนั้นในแถวให้เลยโดยไม่ต้องกดเลือกซ้ำ)
+	return toSupplierResponse(&supplier), nil
 }
 
 func (s *supplierService) GetByID(id uint) (*wmsDto.SupplierResponseDTO, error) {

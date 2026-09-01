@@ -1,6 +1,12 @@
+import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import Select from "../../../components/elements/select";
 import Input from "../../../components/elements/input";
+import AddSupplierModal from "./Stock_data/supplier/AddSupplierModal";
+import type { Supplier } from "../../../service/http/wms/stock_data_service";
+
+// ค่าพิเศษในดรอปดาวน์ Supplier ที่ไม่ใช่ id จริง — เลือกแล้วจะเปิดฟอร์ม "เพิ่มบริษัทใหม่" แทนการตั้งค่าแถว
+const ADD_NEW_SUPPLIER_VALUE = "__add_new_supplier__";
 
 export interface SupplierRow {
   supplier_id: string;
@@ -20,11 +26,17 @@ interface SupplierRowsFieldProps {
   onChange: (rows: SupplierRow[]) => void;
   options: SupplierOption[];
   disabled?: boolean;
+  // แจ้งกลับไปให้หน้าที่เรียกใช้ผสาน Supplier ที่เพิ่งสร้างใหม่เข้ากับรายการตัวเลือกที่ตัวเองถืออยู่
+  // (options เป็น prop จากข้างนอก คอมโพเนนต์นี้เองแก้ไขไม่ได้ตรงๆ)
+  onSupplierCreated?: (created: Supplier) => void;
 }
 
 // สินค้า 1 ชิ้น รับมาจาก Supplier ได้หลายเจ้า แยกจำนวน + รหัสสินค้าของแต่ละเจ้า (บันทึกลงตาราง Inventory)
 // ใช้ร่วมกันทั้งหน้าเพิ่ม/แก้ไขสินค้า และหน้ารับสินค้าเข้าเพิ่ม
-export default function SupplierRowsField({ rows, onChange, options, disabled }: SupplierRowsFieldProps) {
+export default function SupplierRowsField({ rows, onChange, options, disabled, onSupplierCreated }: SupplierRowsFieldProps) {
+  // แถวที่กำลังกดปุ่ม "+ เพิ่มบริษัทใหม่" จากในดรอปดาวน์ (ไว้เลือก Supplier ที่เพิ่งสร้างเสร็จให้อัตโนมัติ)
+  const [addSupplierRowIndex, setAddSupplierRowIndex] = useState<number | null>(null);
+
   const handleAddRow = () => {
     onChange([...rows, { supplier_id: "", quantity: "", company_code: "" }]);
   };
@@ -37,12 +49,33 @@ export default function SupplierRowsField({ rows, onChange, options, disabled }:
     onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
 
+  // เลือกค่าในดรอปดาวน์ของแถวใดแถวหนึ่ง — ถ้าเลือก "เพิ่มบริษัทใหม่" ให้เปิดฟอร์มแทนที่จะตั้งค่าแถวตรงๆ
+  const handleSelectSupplier = (index: number, value: string) => {
+    if (value === ADD_NEW_SUPPLIER_VALUE) {
+      setAddSupplierRowIndex(index);
+      return;
+    }
+    handleRowChange(index, { supplier_id: value });
+  };
+
+  // สร้าง Supplier ใหม่สำเร็จ -> เลือกให้แถวที่กดเข้ามาทันที + ส่งข้อมูลกลับไปให้หน้าแม่ผสานเข้ารายการตัวเลือก
+  const handleSupplierCreated = (created?: Supplier) => {
+    if (created && addSupplierRowIndex !== null) {
+      handleRowChange(addSupplierRowIndex, { supplier_id: String(created.id) });
+    }
+    if (created) onSupplierCreated?.(created);
+    setAddSupplierRowIndex(null);
+  };
+
   // กันเลือก Supplier ซ้ำกันคนละแถว — ตัดตัวที่แถวอื่นเลือกไปแล้วออกจาก dropdown ของแถวนี้
   const optionsForRow = (index: number) => {
     const usedElsewhere = new Set(
       rows.filter((_, i) => i !== index).map((r) => r.supplier_id).filter(Boolean)
     );
-    return options.map((opt) => ({ ...opt, disabled: usedElsewhere.has(opt.value) }));
+    return [
+      { label: "+ เพิ่มบริษัทใหม่...", value: ADD_NEW_SUPPLIER_VALUE },
+      ...options.map((opt) => ({ ...opt, disabled: usedElsewhere.has(opt.value) })),
+    ];
   };
 
   return (
@@ -72,7 +105,7 @@ export default function SupplierRowsField({ rows, onChange, options, disabled }:
                 <Select
                   options={[{ label: "เลือก Supplier...", value: "" }, ...optionsForRow(index)]}
                   value={row.supplier_id}
-                  onChange={(e) => handleRowChange(index, { supplier_id: e.target.value })}
+                  onChange={(e) => handleSelectSupplier(index, e.target.value)}
                   disabled={disabled}
                 />
               </div>
@@ -106,6 +139,14 @@ export default function SupplierRowsField({ rows, onChange, options, disabled }:
             </div>
           ))}
         </div>
+      )}
+
+      {addSupplierRowIndex !== null && (
+        <AddSupplierModal
+          isOpen
+          onClose={() => setAddSupplierRowIndex(null)}
+          onSuccess={handleSupplierCreated}
+        />
       )}
     </div>
   );
