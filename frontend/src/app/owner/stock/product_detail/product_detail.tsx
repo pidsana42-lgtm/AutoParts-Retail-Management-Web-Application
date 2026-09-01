@@ -61,8 +61,13 @@ export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   // ที่มาของการเข้าหน้านี้ (ถ้ามี) — ใช้ปรับเกล็ดขนมปังให้ตรงกับหน้าที่กดเข้ามาจริงๆ เช่นจากหน้า "การเคลื่อนไหวของคลังสินค้า"
+  // หรือ "ตรวจสอบสินค้า" (ทั้งกดตรงจากตาราง หรือไล่ผ่านหน้ารายละเอียดตารางเช็คสต็อกมาอีกที ก็ต้องรักษาต้นทางเดิมไว้)
   const location = useLocation();
-  const cameFromMovement = (location.state as { from?: string } | null)?.from === "movement";
+  const navOrigin = location.state as
+    | { from?: string; scheduleId?: number; scheduleName?: string }
+    | null;
+  const cameFromMovement = navOrigin?.from === "movement";
+  const cameFromCheckStock = navOrigin?.from === "check_stock";
 
   const [product, setProduct] = useState<StockItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -324,9 +329,21 @@ export default function ProductDetailPage() {
                 { label: "ถังขยะสินค้า", path: "/owner/stock/trash" },
                 { label: product.Name || "รายละเอียดสินค้า" },
               ]
-            : cameFromMovement
+            : cameFromMovement || cameFromCheckStock
               ? [
-                  { label: "การเคลื่อนไหวของคลังสินค้า", path: "/owner/stock/stock-movement" },
+                  cameFromMovement
+                    ? { label: "การเคลื่อนไหวของคลังสินค้า", path: "/owner/stock/stock-movement" }
+                    : { label: "ตรวจสอบสินค้า", path: "/owner/stock/stock-check" },
+                  // เป้าหมายการตรวจสอบ: ชื่อตารางเช็คสต็อกที่กดเข้ามา (ถ้ามี ไม่ว่าจะไล่มาจากหน้าไหนก็ตาม)
+                  // ให้ย้อนกลับไปหน้ารายละเอียดตารางนั้นได้ — รักษาต้นทางเดิมไว้แม้กดผ่านหน้ารายละเอียดตารางมาอีกที
+                  ...(navOrigin?.scheduleId
+                    ? [
+                        {
+                          label: navOrigin.scheduleName || "เป้าหมายการตรวจสอบ",
+                          path: `/owner/stock/stock-check/${navOrigin.scheduleId}`,
+                        },
+                      ]
+                    : []),
                   { label: product.Name || "รายละเอียดสินค้า" },
                 ]
               : [

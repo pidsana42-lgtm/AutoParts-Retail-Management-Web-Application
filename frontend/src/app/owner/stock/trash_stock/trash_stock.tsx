@@ -13,6 +13,9 @@ import { getDeletedProductsList, restoreProduct } from "../../../../service/http
 import type { StockItem } from "../../../../interface/wms/product";
 import { buildProductSearchIndex, searchProductIndex } from "../../../../utils/productSearch";
 
+// แสดงเฉพาะสินค้าที่ถูกลบไม่เกิน 14 วัน — เกินกว่านี้ไม่ต้องแสดงในถังขยะแล้ว (ข้อมูลจริงยังอยู่ครบในระบบ แค่ไม่โชว์ในหน้านี้)
+const TRASH_RETENTION_DAYS = 14;
+
 // หน้าถังขยะสินค้า — สินค้าที่ลบเป็น soft delete เสมอ (ข้อมูลจริงยังอยู่ครบ) เลยกู้คืนกลับมาได้จากที่นี่
 export default function TrashStockPage() {
   const navigate = useNavigate();
@@ -40,11 +43,21 @@ export default function TrashStockPage() {
     loadDeleted();
   }, []);
 
-  // สร้าง index ไว้แค่ตอน deletedProducts เปลี่ยน แล้วค่อยค้นหาแบบ fuzzy ทุกครั้งที่ query เปลี่ยน
-  const searchIndex = useMemo(() => buildProductSearchIndex(deletedProducts), [deletedProducts]);
+  // ตัดสินค้าที่ลบเกิน 14 วันแล้วออกจากรายการที่แสดง (ข้อมูลจริงยังอยู่ในระบบ แค่ไม่โชว์ในถังขยะอีกต่อไป)
+  const recentlyDeleted = useMemo(() => {
+    const cutoff = Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    return deletedProducts.filter((p) => {
+      if (!p.DeletedAt) return true; // ไม่มีวันที่ลบ (ไม่ควรเกิดขึ้น) ให้แสดงไว้ก่อนเผื่อพลาด
+      const deletedAt = new Date(p.DeletedAt).getTime();
+      return isNaN(deletedAt) || deletedAt >= cutoff;
+    });
+  }, [deletedProducts]);
+
+  // สร้าง index ไว้แค่ตอน recentlyDeleted เปลี่ยน แล้วค่อยค้นหาแบบ fuzzy ทุกครั้งที่ query เปลี่ยน
+  const searchIndex = useMemo(() => buildProductSearchIndex(recentlyDeleted), [recentlyDeleted]);
   const filtered = useMemo(
-    () => searchProductIndex(searchIndex, search, deletedProducts),
-    [searchIndex, search, deletedProducts]
+    () => searchProductIndex(searchIndex, search, recentlyDeleted),
+    [searchIndex, search, recentlyDeleted]
   );
 
   const handleRestore = async (product: StockItem) => {
@@ -77,7 +90,9 @@ export default function TrashStockPage() {
       {/* Header */}
       <div>
         <Heading level="h1" className="mb-1">ถังขยะสินค้า</Heading>
-        <Text variant="muted" className="mb-0">สินค้าที่ถูกลบไว้ กู้คืนกลับมาใช้งานได้ตลอดเวลา ไม่มีข้อมูลสูญหาย</Text>
+        <Text variant="muted" className="mb-0">
+          สินค้าที่ถูกลบไว้ กู้คืนกลับมาใช้งานได้ภายใน {TRASH_RETENTION_DAYS} วันหลังจากลบ พ้นกำหนดนี้จะไม่แสดงในรายการนี้อีก
+        </Text>
       </div>
 
       <Card noPadding>

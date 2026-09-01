@@ -20,7 +20,7 @@ import { cn } from "../../../../utils/component";
 
 export default function AddProductPage() {
   const navigate = useNavigate();
-  const { models, categories, grades, units, zones, suppliers, loading } = useProductFormOptions();
+  const { models, categories, grades, units, zones, suppliers, loading, addSupplierOption } = useProductFormOptions();
   const [supplierRows, setSupplierRows] = useState<SupplierRow[]>([]);
 
   // โหมด: "new" = เพิ่มสินค้าใหม่ทั้งหมด (ของเดิม), "existing" = รับสินค้าเข้าเพิ่มให้สินค้าที่มีอยู่แล้ว (บวกยอด ไม่สร้างซ้ำ)
@@ -369,7 +369,13 @@ export default function AddProductPage() {
                 placeholder="เช่น รุ่นรถที่รองรับ หรือรายละเอียดเพิ่มเติม"
               />
 
-              <SupplierRowsField rows={supplierRows} onChange={setSupplierRows} options={suppliers} disabled={submitting} />
+              <SupplierRowsField
+                rows={supplierRows}
+                onChange={setSupplierRows}
+                options={suppliers}
+                disabled={submitting}
+                onSupplierCreated={addSupplierOption}
+              />
 
               <ImageUploader preview={imagePreview} onChange={handleImageChange} onClear={handleImageClear} />
 
@@ -446,6 +452,7 @@ export default function AddProductPage() {
                 onChange={setReceiveSupplierRows}
                 options={suppliers}
                 disabled={receiveSubmitting}
+                onSupplierCreated={addSupplierOption}
               />
 
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">

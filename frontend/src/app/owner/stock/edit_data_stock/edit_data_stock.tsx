@@ -19,7 +19,7 @@ import SupplierRowsField, { rowsToPayload, suppliersToRows, type SupplierRow } f
 export default function EditProductPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { models, categories, grades, units, zones, suppliers, loading: loadingOptions } = useProductFormOptions();
+  const { models, categories, grades, units, zones, suppliers, loading: loadingOptions, addSupplierOption } = useProductFormOptions();
   const [supplierRows, setSupplierRows] = useState<SupplierRow[]>([]);
 
   const [product, setProduct] = useState<StockItem | null>(null);
@@ -405,7 +405,13 @@ export default function EditProductPage() {
               placeholder="เช่น รุ่นรถที่รองรับ หรือรายละเอียดเพิ่มเติม"
             />
 
-            <SupplierRowsField rows={supplierRows} onChange={setSupplierRows} options={suppliers} disabled={submitting} />
+            <SupplierRowsField
+              rows={supplierRows}
+              onChange={setSupplierRows}
+              options={suppliers}
+              disabled={submitting}
+              onSupplierCreated={addSupplierOption}
+            />
 
             <ImageUploader preview={imagePreview} onChange={handleImageChange} onClear={handleImageClear} />
 

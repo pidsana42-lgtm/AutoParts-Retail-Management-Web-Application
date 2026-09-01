@@ -515,7 +515,8 @@ function EmployeeCheckStockExecuteContent() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle className="text-lg">รายการสินค้าที่ต้องนับ</CardTitle>
-          {scheduleProducts.length > 0 && (
+          {/* เจ้าของร้านอนุมัติและบันทึกลงสต็อกแล้ว (เสร็จสิ้น) ไม่ต้องโชว์ปุ่มนี้อีก เพราะรายการนับไม่มีความหมายให้พิมพ์ต่อแล้ว */}
+          {scheduleProducts.length > 0 && schedule.status !== "เสร็จสิ้น" && (
             <Button onClick={openChecklistPrintWindow} variant="outline" className="flex shrink-0 items-center gap-1.5">
               <FileDown className="h-3.5 w-3.5" />
               ดาวน์โหลด/พิมพ์ PDF
