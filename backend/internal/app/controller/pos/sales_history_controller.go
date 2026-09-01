@@ -6,6 +6,7 @@ import (
     "fmt"
     "net/http"
 	"log"
+	"strings"
     "github.com/gin-gonic/gin"
 )
 
@@ -360,7 +361,15 @@ func (c *SalesHistoryController) PrintSaleOrder(ctx *gin.Context) {
 		return
 	}
 
+	fileName := identifier
+	if !strings.HasPrefix(fileName, "INV") && !strings.HasPrefix(fileName, "Receipt-") {
+		fileName = fmt.Sprintf("INV%s", fileName)
+	}
+	if !strings.HasSuffix(fileName, ".pdf") {
+		fileName = fmt.Sprintf("%s.pdf", fileName)
+	}
+
 	ctx.Header("Content-Type", "application/pdf")
-	ctx.Header("Content-Disposition", fmt.Sprintf("inline; filename=Receipt-%s.pdf", identifier))
+	ctx.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", fileName))
 	ctx.Data(http.StatusOK, "application/pdf", pdfBytes)
 }

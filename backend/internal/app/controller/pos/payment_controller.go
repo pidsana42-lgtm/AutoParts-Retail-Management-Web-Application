@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv" //(String Conversion) ใช้แปลง string → uint
 	"strings"
+	"time"
 
 	posDto "backend/internal/app/dto/pos"
 	"backend/internal/app/enum"
@@ -482,8 +483,16 @@ func (ctrl *paymentController) GenerateDebtReceiptPDF(c *gin.Context) {
 		return
 	}
 
+	receiptFileName := identifier
+	if !strings.HasPrefix(receiptFileName, "PAY-") && !strings.HasPrefix(receiptFileName, "RCP-") && !strings.HasPrefix(receiptFileName, "receipt-") {
+		receiptFileName = fmt.Sprintf("PAY-%s", receiptFileName)
+	}
+	if !strings.HasSuffix(receiptFileName, ".pdf") {
+		receiptFileName = fmt.Sprintf("%s.pdf", receiptFileName)
+	}
+
 	c.Header("Content-Type", "application/pdf")
-	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=receipt-%s.pdf", identifier))
+	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", receiptFileName))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
 
@@ -505,7 +514,8 @@ func (ctrl *paymentController) GenerateCustomerStatementPDF(c *gin.Context) {
 		return
 	}
 
-	fileName := fmt.Sprintf("statement-customer-%d.pdf", customerID)
+	currentDateStr := time.Now().Format("20060102")
+	fileName := fmt.Sprintf("STM-%d-%s.pdf", customerID, currentDateStr)
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", fileName))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
