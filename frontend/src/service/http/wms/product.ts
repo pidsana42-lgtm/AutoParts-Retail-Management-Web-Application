@@ -42,6 +42,8 @@ const mapProductItem = (item: any): StockItem => ({
     Quantity: s.quantity || 0,
     CompanyProductCode: s.company_product_code || "",
     VariantCode: s.variant_code || "",
+    Barcode: s.barcode || "",
+    QRCode: s.qr_code || "",
   })),
   DeletedAt: item.deleted_at || undefined,
 });

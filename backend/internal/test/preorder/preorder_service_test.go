@@ -35,6 +35,8 @@ type mockPreOrderRepo struct {
 	called map[string]int
 }
 
+func uintPtr(u uint) *uint { return &u }
+
 // compile-time check: mock ต้อง implement PreOrderRepository ครบทุก method
 var _ preOrderRepo.PreOrderRepository = (*mockPreOrderRepo)(nil)
 
@@ -226,7 +228,7 @@ func TestCreatePreOrder_Success(t *testing.T) {
 	if len(captured.PreOrderItems) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(captured.PreOrderItems))
 	}
-	if captured.PreOrderItems[0].ProductID != 3 || captured.PreOrderItems[0].Quantity != 2 || captured.PreOrderItems[0].UnitPrice != 150.5 {
+	if captured.PreOrderItems[0].ProductID == nil || *captured.PreOrderItems[0].ProductID != 3 || captured.PreOrderItems[0].Quantity != 2 || captured.PreOrderItems[0].UnitPrice != 150.5 {
 		t.Errorf("item[0] not mapped correctly: %+v", captured.PreOrderItems[0])
 	}
 	if captured.PreOrderItems[0].ProductNameSnapshot != "กรองน้ำมันเครื่อง" ||
@@ -435,7 +437,7 @@ func TestListPreOrders_RepoError(t *testing.T) {
 
 func TestUpdatePreOrder_AppliesOnlyProvidedFields(t *testing.T) {
 	repo := newMockRepo()
-	existing := samplePreOrderEntity(5, "PENDING", entity.PreOrderItem{ProductID: 3, Quantity: 1, UnitPrice: 100})
+	existing := samplePreOrderEntity(5, "PENDING", entity.PreOrderItem{ProductID: uintPtr(3), Quantity: 1, UnitPrice: 100})
 	existing.DepositAmount = 100
 
 	repo.getPreOrderByIDFn = func(uint) (*entity.PreOrder, error) { return &existing, nil }
@@ -517,7 +519,7 @@ func TestListPreOrdersForPOSelection_QueriesPendingAndMapsItems(t *testing.T) {
 	repo := newMockRepo()
 	ent := samplePreOrderEntity(5, "PENDING",
 		entity.PreOrderItem{
-			ProductID: 3,
+			ProductID: uintPtr(3),
 			Quantity:  2,
 			UnitPrice: 199.99,
 			Status:    "PENDING",

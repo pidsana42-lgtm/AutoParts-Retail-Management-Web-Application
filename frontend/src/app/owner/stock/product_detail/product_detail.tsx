@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
-import { Download, Printer, X, Loader2 } from "lucide-react";
+import JsBarcode from "jsbarcode";
+import { Download, Printer, X, Loader2, Building2 } from "lucide-react";
 
 import Heading from "../../../../components/elements/heading";
 import Breadcrumb from "../../../../components/elements/breadcrumb";
@@ -69,6 +70,23 @@ export default function ProductDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<"barcode" | "qr" | "image" | null>(null);
   const [barcodeMode, setBarcodeMode] = useState<BarcodeDisplayMode>("full");
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | "global">("global");
+
+  const cardBarcodeSvgRef = useRef<SVGSVGElement>(null);
+  const lightboxBarcodeSvgRef = useRef<SVGSVGElement>(null);
+
+  const currentSupplier =
+    selectedSupplierId !== "global"
+      ? product?.Suppliers?.find((s) => s.SupplierID === selectedSupplierId)
+      : null;
+
+  const code = currentSupplier
+    ? (currentSupplier.VariantCode || currentSupplier.Barcode || currentSupplier.CompanyProductCode || product?.ProductCode || "")
+    : (product?.Barcode || product?.ProductCode || "");
+
+  const qrPayload = currentSupplier
+    ? `${window.location.origin}/product/${product?.ID || id}?variant=${currentSupplier.VariantCode || ""}`
+    : `${window.location.origin}/product/${product?.ID || id}`;
 
   useEffect(() => {
     if (!id) return;
@@ -94,6 +112,37 @@ export default function ProductDetailPage() {
     };
   }, [id]);
 
+  useEffect(() => {
+    if (!cardBarcodeSvgRef.current || !code) return;
+    try {
+      JsBarcode(cardBarcodeSvgRef.current, code, {
+        format: "CODE128",
+        displayValue: false,
+        margin: 2,
+        height: 48,
+        width: 1.6,
+      });
+    } catch (e) {
+      console.error("Barcode generation error:", e);
+    }
+  }, [code, product, selectedSupplierId]);
+
+  useEffect(() => {
+    if (!lightboxBarcodeSvgRef.current || !code || lightbox !== "barcode") return;
+    try {
+      JsBarcode(lightboxBarcodeSvgRef.current, code, {
+        format: "CODE128",
+        displayValue: true,
+        fontSize: 15,
+        margin: 8,
+        height: barcodeMode === "plain" ? 80 : 60,
+        width: 2,
+      });
+    } catch (e) {
+      console.error("Barcode generation error:", e);
+    }
+  }, [code, lightbox, barcodeMode, selectedSupplierId]);
+
   if (loading) {
     return (
       <div className="flex h-[calc(100vh-8rem)] w-full flex-col items-center justify-center gap-3">
@@ -114,16 +163,24 @@ export default function ProductDetailPage() {
     );
   }
 
-  // Logic for barcode image URL
-  const code = product.Barcode || product.ProductCode || "";
-  const sanitizedCode = code.replace(/[^a-zA-Z0-9_\-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-  const baseName = `prod_${String(product.ID).padStart(6, "0")}_${sanitizedCode}`;
-  const barcodeImgUrl = `/barcode/${baseName}.png`;
-
-  // Content for QR code
-  const qrPayload = `${window.location.origin}/product/${product.ID}`;
-
   const isLowStock = product.Stock <= product.MinStock;
+
+  const getPlainBarcodeDataUrl = (): string => {
+    const canvas = document.createElement("canvas");
+    try {
+      JsBarcode(canvas, code, {
+        format: "CODE128",
+        displayValue: true,
+        fontSize: 16,
+        margin: 10,
+        height: 80,
+        width: 2,
+      });
+      return canvas.toDataURL("image/png");
+    } catch {
+      return "";
+    }
+  };
 
   // ประกอบเป็น "ป้ายราคา" แบบที่ใช้จริงหน้าร้าน ด้วยฟอนต์เดียวกับที่ใช้ทั้งเว็บ
   // mode "price": มีแค่ราคา (กึ่งกลางด้านบน) + รูปบาร์โค้ด
@@ -137,104 +194,97 @@ export default function ProductDetailPage() {
       // ไม่มี Font Loading API ก็วาดต่อได้ แค่ฟอนต์อาจไม่ตรง
     }
 
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-          if (!ctx) throw new Error("Canvas is not supported");
+    const padding = 20;
+    const canvasWidth = 360;
+    const headerHeight = 46;
+    const headerGap = 16;
+    const barcodeInset = 2; // ขอบรูปบาร์โค้ดแคบกว่า padding ของหัวป้าย เพื่อให้ตัวรูปใหญ่ขึ้นโดยไม่ขยายทั้งป้าย
+    const maxBarcodeHeight = 220;
 
-          const padding = 20;
-          const canvasWidth = 360;
-          const headerHeight = 46;
-          const headerGap = 16;
-          const barcodeInset = 2; // ขอบรูปบาร์โค้ดแคบกว่า padding ของหัวป้าย เพื่อให้ตัวรูปใหญ่ขึ้นโดยไม่ขยายทั้งป้าย
-          const maxBarcodeHeight = 220;
+    const barcodeCanvas = document.createElement("canvas");
+    try {
+      JsBarcode(barcodeCanvas, code, {
+        format: "CODE128",
+        displayValue: true,
+        fontSize: 14,
+        margin: 6,
+        height: 70,
+        width: 2,
+      });
+    } catch {
+      // fallback
+    }
 
-          // ขนาดรูปบาร์โค้ด: เต็มความกว้างที่เหลือ (โดยใช้ inset ของตัวเอง) แต่ไม่สูงเกินไป
-          let barcodeWidth = canvasWidth - barcodeInset * 2;
-          let barcodeHeight = (img.naturalHeight / img.naturalWidth) * barcodeWidth;
-          if (barcodeHeight > maxBarcodeHeight) {
-            const scale = maxBarcodeHeight / barcodeHeight;
-            barcodeWidth *= scale;
-            barcodeHeight = maxBarcodeHeight;
-          }
+    let barcodeWidth = canvasWidth - barcodeInset * 2;
+    let barcodeHeight = (barcodeCanvas.height / (barcodeCanvas.width || 1)) * barcodeWidth;
+    if (barcodeHeight > maxBarcodeHeight) {
+      const scale = maxBarcodeHeight / barcodeHeight;
+      barcodeWidth *= scale;
+      barcodeHeight = maxBarcodeHeight;
+    }
 
-          canvas.width = canvasWidth;
-          canvas.height = padding + headerHeight + headerGap + barcodeHeight + padding;
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas is not supported");
 
-          // พื้นหลัง + กรอบมุมโค้ง
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          traceRoundedRect(ctx, 1, 1, canvas.width - 2, canvas.height - 2, 14);
-          ctx.strokeStyle = "#e2e8f0";
-          ctx.lineWidth = 2;
-          ctx.stroke();
+    canvas.width = canvasWidth;
+    canvas.height = padding + headerHeight + headerGap + barcodeHeight + padding;
 
-          const priceText = product?.Price != null ? `฿${product.Price.toLocaleString()}` : "-";
+    // พื้นหลัง + กรอบมุมโค้ง
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    traceRoundedRect(ctx, 1, 1, canvas.width - 2, canvas.height - 2, 14);
+    ctx.strokeStyle = "#e2e8f0";
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
-          if (mode === "full") {
-            // ราคา (มุมขวาบน) — วัดขนาดก่อนเพื่อกันชื่อสินค้าชนราคา
-            ctx.font = `700 22px ${LABEL_FONT}`;
-            const priceWidth = ctx.measureText(priceText).width;
+    const priceText = product?.Price != null ? `฿${product.Price.toLocaleString()}` : "-";
 
-            // ชื่อสินค้า + รหัสสินค้า (มุมซ้ายบน)
-            const nameMaxWidth = canvas.width - padding * 2 - priceWidth - 16;
-            const nameText = fitText(ctx, product?.Name || "", nameMaxWidth, 16, 11, 700);
-            const skuText = fitText(ctx, product?.ProductCode || "", nameMaxWidth, 12, 9, 500);
+    if (mode === "full") {
+      // ราคา (มุมขวาบน) — วัดขนาดก่อนเพื่อกันชื่อสินค้าชนราคา
+      ctx.font = `700 22px ${LABEL_FONT}`;
+      const priceWidth = ctx.measureText(priceText).width;
 
-            ctx.textAlign = "left";
-            ctx.fillStyle = "#0f172a";
-            ctx.font = `700 16px ${LABEL_FONT}`;
-            ctx.fillText(nameText, padding, padding + 16);
+      // ชื่อสินค้า + รหัสสินค้า (มุมซ้ายบน)
+      const nameMaxWidth = canvas.width - padding * 2 - priceWidth - 16;
+      const nameText = fitText(ctx, product?.Name || "", nameMaxWidth, 16, 11, 700);
+      const subInfo = currentSupplier 
+        ? `${code} • ${currentSupplier.SupplierName || "ผู้จำหน่าย"}`
+        : (product?.ProductCode || code);
+      const skuText = fitText(ctx, subInfo, nameMaxWidth, 12, 9, 500);
 
-            ctx.fillStyle = "#94a3b8";
-            ctx.font = `500 12px ${LABEL_FONT}`;
-            ctx.fillText(skuText, padding, padding + 34);
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `700 16px ${LABEL_FONT}`;
+      ctx.fillText(nameText, padding, padding + 16);
 
-            ctx.textAlign = "right";
-            ctx.fillStyle = "#0f172a";
-            ctx.font = `700 22px ${LABEL_FONT}`;
-            ctx.fillText(priceText, canvas.width - padding, padding + 22);
-          } else {
-            // ราคาเดี่ยว กึ่งกลางด้านบน (ไม่มีชื่อ/รหัสสินค้า)
-            ctx.textAlign = "center";
-            ctx.fillStyle = "#0f172a";
-            ctx.font = `700 24px ${LABEL_FONT}`;
-            ctx.fillText(priceText, canvas.width / 2, padding + headerHeight / 2 + 8);
-          }
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = `500 12px ${LABEL_FONT}`;
+      ctx.fillText(skuText, padding, padding + 34);
 
-          // รูปบาร์โค้ด (กึ่งกลาง)
-          const y = padding + headerHeight + headerGap;
-          const barcodeX = (canvas.width - barcodeWidth) / 2;
-          ctx.drawImage(img, barcodeX, y, barcodeWidth, barcodeHeight);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `700 22px ${LABEL_FONT}`;
+      ctx.fillText(priceText, canvas.width - padding, padding + 22);
+    } else {
+      // ราคาเดี่ยว กึ่งกลางด้านบน (ไม่มีชื่อ/รหัสสินค้า)
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `700 24px ${LABEL_FONT}`;
+      ctx.fillText(priceText, canvas.width / 2, padding + headerHeight / 2 + 8);
+    }
 
-          resolve(canvas.toDataURL("image/png"));
-        } catch (e) {
-          reject(e);
-        }
-      };
-      img.onerror = () => reject(new Error("Failed to load barcode image"));
-      img.src = barcodeImgUrl;
-    });
+    // รูปบาร์โค้ด (กึ่งกลาง)
+    const y = padding + headerHeight + headerGap;
+    const barcodeX = (canvas.width - barcodeWidth) / 2;
+    ctx.drawImage(barcodeCanvas, barcodeX, y, barcodeWidth, barcodeHeight);
+
+    return canvas.toDataURL("image/png");
   };
 
-  // mode "plain": ใช้ไฟล์รูปบาร์โค้ดจาก backend ตรงๆ ไม่ผ่าน canvas เลย (เหมือนต้นฉบับทุกจุด)
   const handleDownloadBarcode = async () => {
     try {
-      if (barcodeMode === "plain") {
-        const res = await fetch(barcodeImgUrl);
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `barcode_${code}.png`;
-        a.click();
-        URL.revokeObjectURL(url);
-        return;
-      }
-      const dataUrl = await buildBarcodeLabelDataUrl(barcodeMode);
+      const dataUrl = barcodeMode === "plain" ? getPlainBarcodeDataUrl() : await buildBarcodeLabelDataUrl(barcodeMode);
       const a = document.createElement("a");
       a.href = dataUrl;
       a.download = `barcode_${code}.png`;
@@ -246,7 +296,7 @@ export default function ProductDetailPage() {
 
   const handlePrintBarcode = async () => {
     try {
-      const src = barcodeMode === "plain" ? barcodeImgUrl : await buildBarcodeLabelDataUrl(barcodeMode);
+      const src = barcodeMode === "plain" ? getPlainBarcodeDataUrl() : await buildBarcodeLabelDataUrl(barcodeMode);
       const printWindow = window.open("", "_blank");
       if (printWindow) {
         // title เป็นค่าว่าง กัน browser เอาไปโชว์เป็นหัวกระดาษตอนพิมพ์ ("Print Barcode")
@@ -432,26 +482,37 @@ export default function ProductDetailPage() {
                     {product.Suppliers && product.Suppliers.length > 0 && (
                       <div className="col-span-2">
                         <span className="text-slate-400">ผู้จำหน่าย:</span>
-                        <div className="mt-1 flex flex-col gap-1">
-                          {product.Suppliers.map((s) => (
-                            <div
-                              key={s.SupplierID}
-                              className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-slate-100 bg-slate-50 px-2 py-1"
-                            >
-                              <div className="min-w-0">
-                                <span className="font-medium text-slate-700">{s.SupplierName || `Supplier #${s.SupplierID}`}</span>
-                                {s.CompanyProductCode && (
-                                  <span className="ml-2 text-xs text-slate-400">รหัส: {s.CompanyProductCode}</span>
+                        <div className="mt-1.5 flex flex-col gap-1.5">
+                          {product.Suppliers.map((s) => {
+                            const isSelected = selectedSupplierId === s.SupplierID;
+                            return (
+                              <div
+                                key={s.SupplierID}
+                                onClick={() => setSelectedSupplierId(s.SupplierID)}
+                                className={cn(
+                                  "group/sup flex cursor-pointer items-center justify-between gap-3 rounded-md border p-2.5 transition text-sm",
+                                  isSelected
+                                    ? "border-red-400 bg-red-50/60 shadow-sm"
+                                    : "border-slate-200 bg-slate-50 hover:border-red-300 hover:bg-red-50/20"
                                 )}
+                                title="คลิกเพื่อเลือกบาร์โค้ดของบริษัทนี้"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="font-semibold text-slate-800 group-hover/sup:text-red-700">
+                                    {s.SupplierName || `Supplier #${s.SupplierID}`}
+                                  </span>
+                                  {s.CompanyProductCode && (
+                                    <span className="rounded bg-slate-200/70 px-1.5 py-0.5 text-xs font-medium text-slate-600">
+                                      รหัส: {s.CompanyProductCode}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="shrink-0 text-slate-600 text-sm font-medium">
+                                  คงเหลือ: <span className="font-bold text-slate-800">{s.Quantity}</span> {product.Unit || "ชิ้น"}
+                                </div>
                               </div>
-                              <span className="shrink-0 text-slate-500">
-                                {s.Quantity} {product.Unit || "ชิ้น"}
-                              </span>
-                              {s.VariantCode && (
-                                <VariantCodeBadge code={s.VariantCode} label="รหัสล็อตบริษัทนี้" />
-                              )}
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -478,37 +539,61 @@ export default function ProductDetailPage() {
         {/* Right Side: Barcode & QR */}
         <div className="flex w-full flex-col gap-6 lg:w-1/3">
           <Card className="border-t-[5px] border-t-red-800">
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="text-lg">บาร์โค้ดและคิวอาร์โค้ด</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col gap-3">
+                {/* Supplier Selector Dropdown */}
+                {product.Suppliers && product.Suppliers.length > 0 && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-2.5">
+                    <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                      <Building2 className="h-3.5 w-3.5 text-red-700" />
+                      เลือกแสดงรหัสตาม:
+                    </label>
+                    <select
+                      value={selectedSupplierId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedSupplierId(val === "global" ? "global" : Number(val));
+                      }}
+                      className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 shadow-sm focus:border-red-500 focus:outline-none"
+                    >
+                      <option value="global">รหัสกลางของร้าน ({product.ProductCode})</option>
+                      {product.Suppliers.map((s) => (
+                        <option key={s.SupplierID} value={s.SupplierID}>
+                          {s.SupplierName || `Supplier #${s.SupplierID}`} ({s.VariantCode || s.CompanyProductCode || "ไม่มีรหัสล็อต"})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {/* Barcode Section */}
                 <div
                   onClick={() => setLightbox("barcode")}
                   className="group flex cursor-zoom-in flex-col items-center rounded-md border border-slate-200 bg-slate-50 p-4 transition hover:border-slate-400 hover:shadow-md"
                 >
-                  <span className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-500">
-                    Barcode
-                  </span>
-                  <img
-                    src={barcodeImgUrl}
-                    alt="Barcode"
-                    className="h-16 object-contain mix-blend-multiply transition group-hover:scale-105"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                      const nextSibling = (e.target as HTMLImageElement).nextElementSibling;
-                      if (nextSibling) (nextSibling as HTMLElement).style.display = "block";
-                    }}
-                  />
-                  <div className="mt-2 hidden text-center text-xs text-red-500">
-                    ไม่พบรูปภาพบาร์โค้ด
-                    <br />
-                    (กรุณาสร้างใหม่)
+                  <div className="mb-2 flex w-full items-center justify-between">
+                    <span className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                      Barcode
+                    </span>
+                    {currentSupplier ? (
+                      <span className="truncate max-w-[120px] rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800">
+                        {currentSupplier.SupplierName}
+                      </span>
+                    ) : (
+                      <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                        รหัสกลาง
+                      </span>
+                    )}
+                  </div>
+                  <div className="rounded border border-slate-100 bg-white p-2 shadow-sm transition group-hover:scale-105 flex items-center justify-center">
+                    <svg ref={cardBarcodeSvgRef} className="h-14 max-w-full" />
                   </div>
                   <span className="mt-2 text-xs font-bold text-slate-700">{code}</span>
                   <span className="mt-1 text-[10px] text-slate-400 opacity-0 transition group-hover:opacity-100">
-                    คลิกเพื่อขยาย
+                    คลิกเพื่อขยาย / พิมพ์
                   </span>
                 </div>
 
@@ -517,9 +602,20 @@ export default function ProductDetailPage() {
                   onClick={() => setLightbox("qr")}
                   className="group flex cursor-zoom-in flex-col items-center rounded-md border border-slate-200 bg-slate-50 p-4 transition hover:border-slate-400 hover:shadow-md"
                 >
-                  <span className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-500">
-                    QR Code
-                  </span>
+                  <div className="mb-2 flex w-full items-center justify-between">
+                    <span className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                      QR Code
+                    </span>
+                    {currentSupplier ? (
+                      <span className="truncate max-w-[120px] rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800">
+                        {currentSupplier.SupplierName}
+                      </span>
+                    ) : (
+                      <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                        รหัสกลาง
+                      </span>
+                    )}
+                  </div>
                   <div className="rounded border border-slate-100 bg-white p-2 shadow-sm transition group-hover:scale-105">
                     <QRCodeSVG value={qrPayload} size={100} level="L" />
                   </div>
@@ -541,7 +637,7 @@ export default function ProductDetailPage() {
           onClick={() => setLightbox(null)}
         >
           <div
-            className="relative flex flex-col items-center gap-4 rounded-2xl bg-white p-8 shadow-2xl"
+            className="relative flex flex-col items-center gap-4 rounded-2xl bg-white p-8 shadow-2xl max-w-md w-full"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button */}
@@ -551,6 +647,31 @@ export default function ProductDetailPage() {
             >
               <X className="h-4 w-4" />
             </button>
+
+            {/* Supplier Selector in Lightbox */}
+            {product.Suppliers && product.Suppliers.length > 0 && (
+              <div className="w-full">
+                <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                  <Building2 className="h-3.5 w-3.5 text-red-700" />
+                  เลือกรหัสตามบริษัท / ซัพพลายเออร์:
+                </label>
+                <select
+                  value={selectedSupplierId}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedSupplierId(val === "global" ? "global" : Number(val));
+                  }}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-800 shadow-sm focus:border-red-500 focus:outline-none"
+                >
+                  <option value="global">รหัสกลางของร้าน ({product.ProductCode})</option>
+                  {product.Suppliers.map((s) => (
+                    <option key={s.SupplierID} value={s.SupplierID}>
+                      {s.SupplierName || `Supplier #${s.SupplierID}`} ({s.VariantCode || s.CompanyProductCode || "ไม่มีรหัสล็อต"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {lightbox === "barcode" ? (
               <>
@@ -572,41 +693,38 @@ export default function ProductDetailPage() {
                 </div>
 
                 {barcodeMode === "plain" ? (
-                  <img
-                    src={barcodeImgUrl}
-                    alt="Barcode (ขยาย)"
-                    className="max-h-72 w-80 object-contain mix-blend-multiply"
-                  />
+                  <div className="flex flex-col items-center p-4 bg-white rounded-lg border border-slate-200 w-full">
+                    <svg ref={lightboxBarcodeSvgRef} className="max-h-72 w-80" />
+                    {currentSupplier && (
+                      <span className="mt-2 text-xs font-semibold text-slate-600">
+                        {currentSupplier.SupplierName}
+                      </span>
+                    )}
+                  </div>
                 ) : barcodeMode === "price" ? (
-                  <div className="w-80 rounded-xl border border-slate-200 p-5">
+                  <div className="w-80 rounded-xl border border-slate-200 p-5 bg-white">
                     <p className="text-center text-xl font-bold text-slate-900">
                       {product.Price != null ? `฿${product.Price.toLocaleString()}` : "-"}
                     </p>
                     <div className="-mx-5 mt-4 flex flex-col items-center">
-                      <img
-                        src={barcodeImgUrl}
-                        alt="Barcode (ขยาย)"
-                        className="h-56 w-full object-contain mix-blend-multiply"
-                      />
+                      <svg ref={lightboxBarcodeSvgRef} className="h-44 w-full" />
                     </div>
                   </div>
                 ) : (
-                  <div className="w-80 rounded-xl border border-slate-200 p-5">
+                  <div className="w-80 rounded-xl border border-slate-200 p-5 bg-white">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold text-slate-900">{product.Name}</p>
-                        <p className="mt-0.5 truncate text-xs text-slate-400">{product.ProductCode}</p>
+                        <p className="mt-0.5 truncate text-xs text-slate-400">
+                          {currentSupplier ? `${code} (${currentSupplier.SupplierName})` : product.ProductCode}
+                        </p>
                       </div>
                       <p className="shrink-0 text-xl font-bold text-slate-900">
                         {product.Price != null ? `฿${product.Price.toLocaleString()}` : "-"}
                       </p>
                     </div>
                     <div className="-mx-5 mt-4 flex flex-col items-center">
-                      <img
-                        src={barcodeImgUrl}
-                        alt="Barcode (ขยาย)"
-                        className="h-56 w-full object-contain mix-blend-multiply"
-                      />
+                      <svg ref={lightboxBarcodeSvgRef} className="h-44 w-full" />
                     </div>
                   </div>
                 )}

@@ -40,6 +40,8 @@ type ProductSupplierInput struct {
 	Quantity   int  `json:"quantity" binding:"min=0"`
 	// CompanyProductCode: รหัสสินค้าตามที่ Supplier เจ้านี้ใช้เรียกสินค้าชิ้นนี้ (ไม่บังคับ)
 	CompanyProductCode string `json:"company_product_code"`
+	Barcode            string `json:"barcode"`
+	QRCode             string `json:"qr_code"`
 }
 
 // ReceiveStockRequestDTO: รับสินค้าเข้าเพิ่มให้สินค้าที่มีอยู่แล้วในระบบ (ไม่ใช่สร้างสินค้าใหม่)
@@ -116,6 +118,8 @@ type ProductSupplierResponseDTO struct {
 	CompanyProductCode string `json:"company_product_code"`
 	// VariantCode: รหัสล็อตต่อบริษัทที่ระบบออกให้อัตโนมัติ (เช่น BP-123-SU3) ใช้พิมพ์ QR/บาร์โค้ดแยกบริษัท
 	VariantCode string `json:"variant_code"`
+	Barcode     string `json:"barcode"`
+	QRCode      string `json:"qr_code"`
 }
 
 type ProductImageResponseDTO struct {
@@ -212,6 +216,8 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 			Quantity:           inv.Inventory_Quantity,
 			CompanyProductCode: inv.CompanyProductCode,
 			VariantCode:        inv.Variant_Code,
+			Barcode:            inv.Barcode,
+			QRCode:             inv.QRCode,
 		})
 		if name != "" {
 			supplierNames = append(supplierNames, name)

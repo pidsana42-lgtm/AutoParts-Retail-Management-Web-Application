@@ -97,20 +97,30 @@ func ToPreOrderItemResponseDTO(m *entity.PreOrderItem) PreOrderItemResponseDTO {
 	prodCode := strings.TrimSpace(m.ProductCodeSnapshot)
 	supplierPartCode := strings.TrimSpace(m.SupplierPartCode)
 	supplierName := strings.TrimSpace(m.SupplierName)
-	if m.Product != nil {
-		if prodName == "" {
-			prodName = m.Product.Product_Name
-		}
-		if prodCode == "" {
-			prodCode = m.Product.Product_Code
-		}
-		// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
-		for _, inventory := range m.Product.Inventories {
-			if supplierPartCode == "" && strings.TrimSpace(inventory.CompanyProductCode) != "" {
-				supplierPartCode = strings.TrimSpace(inventory.CompanyProductCode)
+	var productID uint
+	if m.ProductID != nil && *m.ProductID > 0 {
+		productID = *m.ProductID
+		if m.Product != nil {
+			if prodName == "" {
+				prodName = m.Product.Product_Name
 			}
-			if supplierPartCode == "" && strings.TrimSpace(inventory.Variant_Code) != "" {
-				supplierPartCode = strings.TrimSpace(inventory.Variant_Code)
+			if prodCode == "" {
+				prodCode = m.Product.Product_Code
+			}
+			// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
+			for _, inventory := range m.Product.Inventories {
+				if supplierPartCode == "" && strings.TrimSpace(inventory.CompanyProductCode) != "" {
+					supplierPartCode = strings.TrimSpace(inventory.CompanyProductCode)
+				}
+				if supplierPartCode == "" && strings.TrimSpace(inventory.Variant_Code) != "" {
+					supplierPartCode = strings.TrimSpace(inventory.Variant_Code)
+				}
+				if supplierName == "" && inventory.Supplier != nil {
+					supplierName = strings.TrimSpace(inventory.Supplier.SupplierName)
+				}
+				if supplierPartCode != "" && supplierName != "" {
+					break
+				}
 			}
 
 			if supplierPartCode == "" {
@@ -158,37 +168,33 @@ func ToPreOrderItemForPODTO(m *entity.PreOrderItem) PreOrderItemForPODTO {
 	pSupplierCode := strings.TrimSpace(m.SupplierPartCode)
 	pSupplierName := strings.TrimSpace(m.SupplierName)
 	var pUnit string
-	if m.Product != nil {
-		if pCode == "" {
-			pCode = m.Product.Product_Code
-		}
-		if pName == "" {
-			pName = m.Product.Product_Name
-		}
-		// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
-		for _, inventory := range m.Product.Inventories {
-			if pSupplierCode == "" && inventory.CompanyProductCode != "" {
-				pSupplierCode = inventory.CompanyProductCode
-			}
-			if pSupplierCode == "" && inventory.Variant_Code != "" {
-				pSupplierCode = inventory.Variant_Code
+	var productID uint
+	if m.ProductID != nil && *m.ProductID > 0 {
+		productID = *m.ProductID
+		if m.Product != nil {
+			if pCode == "" {
+				pCode = m.Product.Product_Code
 			}
 			if pName == "" {
 				pName = m.Product.Product_Name
 			}
-			if pSupplierCode == "" {
-				pSupplierCode = m.Product.CompanyProductCode
-			}
+			// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
 			for _, inventory := range m.Product.Inventories {
-				if pSupplierCode == "" && inventory.Variant_Code != "" {
-					pSupplierCode = inventory.Variant_Code
+				if pSupplierCode == "" && strings.TrimSpace(inventory.CompanyProductCode) != "" {
+					pSupplierCode = strings.TrimSpace(inventory.CompanyProductCode)
+				}
+				if pSupplierCode == "" && strings.TrimSpace(inventory.Variant_Code) != "" {
+					pSupplierCode = strings.TrimSpace(inventory.Variant_Code)
 				}
 				if pSupplierName == "" && inventory.Supplier != nil {
-					pSupplierName = inventory.Supplier.SupplierName
+					pSupplierName = strings.TrimSpace(inventory.Supplier.SupplierName)
+				}
+				if pSupplierCode != "" && pSupplierName != "" {
+					break
 				}
 			}
 			if pSupplierCode == "" {
-				pSupplierCode = m.Product.Part_Number
+				pSupplierCode = strings.TrimSpace(m.Product.Part_Number)
 			}
 			if m.Product.Unit != nil {
 				pUnit = m.Product.Unit.Unit_Name
