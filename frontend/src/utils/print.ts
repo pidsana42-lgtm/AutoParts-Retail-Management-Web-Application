@@ -4,15 +4,16 @@ import { formatDateThai } from './formatdate';
 // Re-export all POS & statement print utilities
 export {
   printCustomerStatement,
-  thaiBahtText,
-  autoPrintPdfBlob,
+  printCustomerStatementFromBackend,
+  type CustomerStatementBackendOptions,
   type CustomerStatementPrintParams,
-  type CustomerStatementPrintItem,
-  type CustomerStatementUnpaidBill,
+  autoPrintPdfBlob,
 } from './payment_history_print';
 
 export {
   printPosReceipt,
+  printPosReceiptFromBackend,
+  type PosPrintBackendOptions,
   type PosReceiptPrintParams,
   type PosReceiptPrintItem,
 } from './pos_print';

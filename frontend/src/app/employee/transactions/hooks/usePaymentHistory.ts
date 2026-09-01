@@ -1,13 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { posApiService } from "../../../../service/http/pos/pos_service";
-import { companyService } from "../../../../service/http/companysetting/company_service";
 import type { PaymentHistoryItem } from "../../../../interface/pos/payment_interface";
 import type { CustomerDiscountResponse } from "../../../../interface/pos/customer_interface";
 import { useEmployeeOptions } from "../../../../hooks/useEmployeeOptions";
 import { getTodayDateString, getDaysAgoDateString } from "../../../../utils/date";
 import { useUserRole } from "../../../../hooks/useUserRole";
 import { getCurrentUserId } from "../../../../utils/auth";
-import { printCustomerStatement } from "../../../../utils/payment_history_print";
+import { printCustomerStatementFromBackend } from "../../../../utils/payment_history_print";
 
 export function usePaymentHistory() {
   const { isOwnerOrAdmin } = useUserRole();
@@ -360,7 +359,7 @@ export function usePaymentHistory() {
     }
   };
 
-  // สั่งพิมพ์ใบสรุปประวัติการชำระเงินและยอดค้างชำระ (พิมพ์ตามตัวกรองที่เลือก)
+  // สั่งพิมพ์ใบสรุปประวัติการชำระเงินและยอดค้างชำระ (ดึง PDF ตรงจาก Backend)
   const handlePrintCustomerStatement = useCallback(
     async (targetCust?: CustomerDiscountResponse | string) => {
       setIsPrintingStatement(true);
@@ -374,22 +373,19 @@ export function usePaymentHistory() {
           custNameQuery = search.trim();
         }
 
-        // ค้นหาข้อมูลลูกค้าและบิลค้างชำระ
-        let currentUnpaidBills: any[] = [];
+        // 1. ค้นหาข้อมูลลูกค้า
         if (custNameQuery) {
           try {
             const results = await posApiService.searchCustomerDiscount(custNameQuery);
             if (results && results.length > 0) {
               customerObj = results[0];
-              const res = await posApiService.getUnpaidBillsByCustomer(customerObj.id);
-              currentUnpaidBills = res?.bills || [];
             }
           } catch (e) {
             console.warn("Could not fetch customer details:", e);
           }
         }
 
-        // ถ้าค้นหาไม่พบ หรือไม่ได้พิมพ์ ให้ตรวจดูว่า filteredItems เป็นของลูกค้ารายเดียวหรือไม่
+        // 2. ถ้าค้นหาไม่พบ ให้ตรวจดูว่า filteredItems เป็นของลูกค้ารายเดียวหรือไม่
         if (!customerObj && filteredItems.length > 0) {
           const firstCustName = filteredItems[0].customer_name;
           const allSameCustomer = filteredItems.every((it) => it.customer_name === firstCustName);
@@ -398,8 +394,6 @@ export function usePaymentHistory() {
               const results = await posApiService.searchCustomerDiscount(firstCustName);
               if (results && results.length > 0) {
                 customerObj = results[0];
-                const res = await posApiService.getUnpaidBillsByCustomer(customerObj.id);
-                currentUnpaidBills = res?.bills || [];
               }
             } catch (e) {
               console.warn("Could not fetch customer details:", e);
@@ -407,92 +401,20 @@ export function usePaymentHistory() {
           }
         }
 
-        // รายการที่จะพิมพ์: กรองตามตัวกรองปัจจุบัน (หรือเจาะจงลูกค้าถ้ากดจากแถว)
-        const targetItems = targetCust
-          ? filteredItems.filter((item) =>
-              item.customer_name?.toLowerCase().includes(custNameQuery.toLowerCase())
-            )
-          : filteredItems;
-
-        if (targetItems.length === 0 && currentUnpaidBills.length === 0) {
-          alert("ไม่พบข้อมูลรายการชำระเงินตามตัวกรองที่เลือก");
+        if (!customerObj || !customerObj.id) {
+          alert("กรุณาระบุหรือค้นหาชื่อลูกค้าที่ต้องการพิมพ์ใบสรุปยอด (Customer Statement)");
           return;
         }
 
-        // ดึงข้อมูลบริษัท
-        let compInfo: any = undefined;
-        try {
-          compInfo = await companyService.getCompanySetting();
-        } catch (e) {
-          console.warn("Could not fetch company setting for print, using defaults");
-        }
-
-        const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
-        const staffName = currentUser.first_name
-          ? `${currentUser.first_name} ${currentUser.last_name || ""}`.trim()
-          : currentUser.username || "พนักงาน";
-
-        const periodLabel =
-          startDate && endDate
-            ? `${startDate} ถึง ${endDate}`
-            : startDate
-            ? `ตั้งแต่ ${startDate}`
-            : endDate
-            ? `ถึง ${endDate}`
-            : "ทั้งหมด";
-
-        const formattedPayments = targetItems.map((item, idx) => ({
-          round: idx + 1,
-          paid_at: item.paid_at ? new Date(item.paid_at).toLocaleString("th-TH") : "-",
-          receipt_number: item.receipt_number || "-",
-          order_numbers: item.order_numbers || "-",
-          payment_type: item.payment_type,
-          payment_method: item.payment_method,
-          received_by_name: item.received_by_name || "-",
-          amount_paid: item.total_received,
-          status: item.status,
-        }));
-
-        const formattedUnpaidBills = currentUnpaidBills.map((b) => ({
-          order_number: b.order_number,
-          order_date: b.order_date ? new Date(b.order_date).toLocaleDateString("th-TH") : "-",
-          total_amount: b.total_amount,
-          paid_amount: b.paid_amount,
-          balance_due: b.balance_due,
-          payment_status: b.payment_status,
-        }));
-
-        const totalUnpaidFromBills = currentUnpaidBills.reduce(
-          (sum, b) => sum + (Number(b.balance_due) || 0),
-          0
-        );
-
-        // เรียกฟังก์ชันพิมพ์จาก payment_history_print.ts
-        printCustomerStatement({
-          companyInfo: compInfo,
-          customer: {
-            id: customerObj?.id,
-            customer_name: customerObj?.customer_name || custNameQuery || "ลูกค้าตามตัวกรอง",
-            phone_number: customerObj?.phone_number || "-",
-            customer_type: customerObj?.customer_type?.type_label,
-            address:
-              customerObj?.shipping_address ||
-              customerObj?.registered_address ||
-              customerObj?.address ||
-              "-",
-            current_debt_amount:
-              totalUnpaidFromBills > 0
-                ? totalUnpaidFromBills
-                : customerObj?.current_debt_amount || 0,
-            credit_limit: customerObj?.max_credit_limit,
-          },
-          periodLabel,
-          payments: formattedPayments,
-          unpaidBills: formattedUnpaidBills,
-          printedBy: staffName,
+        // 3. เรียก API ดึงไฟล์ PDF มาตรฐานจาก Backend (Single Source of Truth) เพื่อสั่งพิมพ์
+        await printCustomerStatementFromBackend(customerObj.id, {
+          customerName: customerObj.customer_name,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          action: "print",
         });
       } catch (err) {
-        console.error("Failed to print customer statement:", err);
+        console.error("Failed to print customer statement from backend:", err);
         alert("เกิดข้อผิดพลาดในการสร้างเอกสารพิมพ์สรุปยอด");
       } finally {
         setIsPrintingStatement(false);

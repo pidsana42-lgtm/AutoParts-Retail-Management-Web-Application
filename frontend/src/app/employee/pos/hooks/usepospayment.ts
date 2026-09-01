@@ -8,8 +8,7 @@ import type { CreateSaleOrderRequest } from "../../../../interface/pos/pos_inter
 import type { CartItem } from "../../../../interface/pos/usePosCart.interface";
 import type { PosSession } from "../../../../interface/pos/pos_session_interface"; 
 import { getCurrentUserId } from "../../../../utils/auth"; 
-import { printPosReceipt } from "../../../../utils/pos_print";
-import { companyService } from "../../../../service/http/companysetting/company_service";
+import { printPosReceiptFromBackend } from "../../../../utils/pos_print";
 import { useToast } from "../../../../components/elements/toast";    
 
 interface UsePosPaymentProps {
@@ -746,69 +745,16 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     const printReceiptAuto = async (orderIdToPrint: number | string) => {
       try {
         const orderNum = currentOrderNumberRef.current || posSession.currentOrderNumber || orderIdToPrint;
+        const docTitle = activePaymentMethodId === 3 ? "ใบส่งของชั่วคราว" : "ใบเสร็จรับเงิน";
 
-        // 1. ดึงข้อมูลบริษัท
-        let compInfo: any = undefined;
-        try {
-          compInfo = await companyService.getCompanySetting();
-        } catch (e) {
-          console.warn("Could not fetch company setting for receipt print:", e);
-        }
-
-        // 2. ข้อมูลพนักงาน
-        const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
-        const staffName = currentUser.first_name
-          ? `${currentUser.first_name} ${currentUser.last_name || ""}`.trim()
-          : currentUser.username || "พนักงานขาย";
-
-        // 3. ชื่อประเภทการชำระเงิน
-        let methodStr = "เงินสด";
-        if (activePaymentMethodId === 2) methodStr = "เงินโอน / QR";
-        if (activePaymentMethodId === 3) methodStr = "เงินเชื่อ";
-
-        // 4. แปลงรายการในตะกร้าสำหรับพิมพ์ใบเสร็จ
-        const formattedItems = cart.map((c, idx) => {
-          const qty = c.qty || c.quantity || 1;
-          const itemDiscount = calculateLineDiscountAmount(c.unit_price, qty, c.discount_type, c.discount_value);
-          const subtotal = c.unit_price * qty - itemDiscount;
-
-          return {
-            index: idx + 1,
-            product_code: c.product_code || c.part_number || "-",
-            product_name: c.product_name || "-",
-            quantity: qty,
-            unit: "ชิ้น",
-            unit_price: c.unit_price || 0,
-            discount: itemDiscount,
-            subtotal: subtotal,
-          };
-        });
-
-        // 5. สั่งพิมพ์ใบเสร็จอัตโนมัติ (Trigger หน้าต่างสั่งพิมพ์ทันทีเหมือน payment_history.tsx)
-        printPosReceipt({
-          companyInfo: compInfo,
+        // เรียก API ดึงไฟล์ PDF มาตรฐานจาก Backend (Single Source of Truth) เพื่อสั่งพิมพ์
+        await printPosReceiptFromBackend(orderIdToPrint, {
           orderNumber: String(orderNum),
-          orderDate: new Date().toLocaleString("th-TH"),
-          salesStaff: staffName,
-          paymentMethod: methodStr,
-          docTitle: activePaymentMethodId === 3 ? "ใบส่งของชั่วคราว" : "ใบเสร็จรับเงิน",
-          customer: {
-            customer_name: customer?.customer_name || "ลูกค้าทั่วไป",
-            customer_type: customer?.customer_type?.type_label,
-            phone_number: customer?.phone_number || "-",
-            address: customer?.shipping_address || customer?.registered_address || "-",
-          },
-          items: formattedItems,
-          totalItemPrice: totalItemPrice,
-          lineDiscountTotal: totalLineDiscount,
-          billDiscount: computedBillDiscount,
-          totalDiscount: totalLineDiscount + computedBillDiscount,
-          finalTotal: finalTotal,
-          receivedAmount: activePaymentMethodId === 1 ? (receivedAmount || finalTotal) : finalTotal,
-          changeAmount: activePaymentMethodId === 1 ? Math.max(0, (receivedAmount || finalTotal) - finalTotal) : 0,
+          customTitle: docTitle,
+          action: "print",
         });
       } catch (err) {
-        console.error("Error auto-printing POS receipt:", err);
+        console.error("Error auto-printing POS receipt from backend:", err);
       }
     };
 
