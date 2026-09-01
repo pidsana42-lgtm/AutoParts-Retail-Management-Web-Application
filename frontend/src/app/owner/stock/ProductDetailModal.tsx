@@ -1,7 +1,10 @@
+import { useEffect, useRef, useState } from "react";
 import Modal from "../../../components/elements/modal";
 import Button from "../../../components/elements/button";
 import type { StockItem } from "../../../interface/wms/product";
 import { QRCodeSVG } from "qrcode.react";
+import JsBarcode from "jsbarcode";
+import { Building2 } from "lucide-react";
 
 interface ProductDetailModalProps {
   isOpen: boolean;
@@ -10,17 +13,40 @@ interface ProductDetailModalProps {
 }
 
 export default function ProductDetailModal({ isOpen, onClose, product }: ProductDetailModalProps) {
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | "global">("global");
+  const barcodeSvgRef = useRef<SVGSVGElement>(null);
+
+  const currentSupplier =
+    selectedSupplierId !== "global"
+      ? product?.Suppliers?.find((s) => s.SupplierID === selectedSupplierId)
+      : null;
+
+  const code = currentSupplier
+    ? (currentSupplier.VariantCode || currentSupplier.Barcode || currentSupplier.CompanyProductCode || product?.ProductCode || "")
+    : (product?.Barcode || product?.ProductCode || "");
+
+  useEffect(() => {
+    if (!barcodeSvgRef.current || !code) return;
+    try {
+      JsBarcode(barcodeSvgRef.current, code, {
+        format: "CODE128",
+        displayValue: true,
+        fontSize: 13,
+        margin: 4,
+        height: 48,
+        width: 1.5,
+      });
+    } catch (e) {
+      console.error("Barcode generation error:", e);
+    }
+  }, [code, isOpen, selectedSupplierId]);
+
   if (!product) return null;
 
-  // Logic for barcode image URL
-  const code = product.Barcode || product.ProductCode || "";
-  const sanitizedCode = code.replace(/[^a-zA-Z0-9_\-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-  const baseName = `prod_${String(product.ID).padStart(6, "0")}_${sanitizedCode}`;
-  const barcodeImgUrl = `/barcode/${baseName}.png`;
-
   // Content for QR code
-  // Creating a URL pointing to the public product page
-  const qrPayload = `${window.location.origin}/product/${product.ID}`;
+  const qrPayload = currentSupplier
+    ? `${window.location.origin}/product/${product.ID}?variant=${currentSupplier.VariantCode || ""}`
+    : `${window.location.origin}/product/${product.ID}`;
 
   return (
     <Modal
@@ -79,32 +105,44 @@ export default function ProductDetailModal({ isOpen, onClose, product }: Product
         </div>
 
         <div className="border-t border-slate-100 pt-6 mt-6">
-          <h4 className="text-sm font-semibold text-slate-800 mb-4 text-center">รหัสและสแกนเนอร์</h4>
+          <h4 className="text-sm font-semibold text-slate-800 mb-3 text-center">รหัสและสแกนเนอร์</h4>
+          
+          {product.Suppliers && product.Suppliers.length > 0 && (
+            <div className="mb-4 max-w-xs mx-auto">
+              <label className="mb-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-600">
+                <Building2 className="h-3.5 w-3.5 text-red-700" />
+                เลือกรหัสตามบริษัท / ซัพพลายเออร์:
+              </label>
+              <select
+                value={selectedSupplierId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedSupplierId(val === "global" ? "global" : Number(val));
+                }}
+                className="w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-800 shadow-sm focus:border-red-500 focus:outline-none"
+              >
+                <option value="global">รหัสกลางของร้าน ({product.ProductCode})</option>
+                {product.Suppliers.map((s) => (
+                  <option key={s.SupplierID} value={s.SupplierID}>
+                    {s.SupplierName || `Supplier #${s.SupplierID}`} ({s.VariantCode || s.CompanyProductCode || "ไม่มีรหัสล็อต"})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row items-center justify-center gap-8">
             {/* Barcode Section */}
             <div className="flex flex-col items-center bg-slate-50 p-4 rounded-md border border-slate-200 min-w-[200px]">
-              <span className="text-xs font-medium text-slate-500 mb-3 uppercase tracking-wider">Barcode</span>
-              <img 
-                src={barcodeImgUrl} 
-                alt="Barcode" 
-                className="h-16 object-contain mix-blend-multiply"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                  const nextSibling = (e.target as HTMLImageElement).nextElementSibling;
-                  if (nextSibling) {
-                    (nextSibling as HTMLElement).style.display = 'block';
-                  }
-                }}
-              />
-              <div className="text-xs text-red-500 text-center hidden mt-2">
-                ไม่พบรูปภาพบาร์โค้ด<br/>(กรุณาสร้างใหม่)
+              <span className="text-xs font-medium text-slate-500 mb-2 uppercase tracking-wider">Barcode</span>
+              <div className="bg-white p-2 rounded border border-slate-100 shadow-sm flex items-center justify-center">
+                <svg ref={barcodeSvgRef} className="max-w-full" />
               </div>
-              <span className="text-xs font-bold text-slate-700 mt-2">{code}</span>
             </div>
 
             {/* QR Code Section */}
             <div className="flex flex-col items-center bg-slate-50 p-4 rounded-md border border-slate-200 min-w-[200px]">
-              <span className="text-xs font-medium text-slate-500 mb-3 uppercase tracking-wider">QR Code</span>
+              <span className="text-xs font-medium text-slate-500 mb-2 uppercase tracking-wider">QR Code</span>
               <div className="bg-white p-2 rounded shadow-sm border border-slate-100">
                 <QRCodeSVG value={qrPayload} size={100} level="L" />
               </div>

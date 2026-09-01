@@ -23,17 +23,16 @@ func NewPOSProductRepository(db *gorm.DB) POSProductRepository {
 func (r *posProductRepository) SearchProducts(search string) ([]entity.Product, error) {
     var products []entity.Product
 
-    query := r.db.Preload("Grade").Preload("Models").Preload("Models.Brand").Where("is_active = ?", true)
+    query := r.db.Preload("Grade").Preload("Models").Preload("Models.Brand").Preload("Inventories").Where("is_active = ?", true)
     
     if search != "" {
-        // แปลงคำค้นหาเป็นตัวพิมพ์เล็ก และตัดช่องว่างส่วนเกิน
         cleanSearch := strings.ToLower(strings.TrimSpace(search))
         likeSearch := "%" + cleanSearch + "%"
 
-        // 	เปลี่ยน barcode = ? ให้ใช้ LIKE และใช้ LOWER() ป้องกันปัญหา Case-Sensitive ครบทุกฟิลด์
+        // ค้นหาครอบคลุม product_code, barcode, product_name, part_number และ barcode/variant_code/company_product_code จากตาราง inventories
         query = query.Where(
-            "LOWER(product_code) LIKE ? OR LOWER(barcode) LIKE ? OR LOWER(product_name) LIKE ? OR LOWER(part_number) LIKE ?", 
-            likeSearch, likeSearch, likeSearch, likeSearch,
+            "LOWER(product_code) LIKE ? OR LOWER(barcode) LIKE ? OR LOWER(product_name) LIKE ? OR LOWER(part_number) LIKE ? OR EXISTS (SELECT 1 FROM inventories WHERE inventories.product_id = products.id AND (LOWER(inventories.barcode) LIKE ? OR LOWER(inventories.variant_code) LIKE ? OR LOWER(inventories.company_product_code) LIKE ?))", 
+            likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch,
         )
     }
 
