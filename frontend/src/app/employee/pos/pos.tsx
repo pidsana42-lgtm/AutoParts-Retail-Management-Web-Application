@@ -18,8 +18,34 @@ import Heading from "../../../components/elements/heading";
 
 export default function PosPage(): React.JSX.Element {
   // ─── STATE & HOOK SETUP ───
-  const [customerForCart, setCustomerForCart] = React.useState<any>(null);
-  const [activeTypeForCart, setActiveTypeForCart] = React.useState<number>(1);
+  const [customerForCart, setCustomerForCart] = React.useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("pos_session");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          return parsed.customer || null;
+        } catch {
+          return null;
+        }
+      }
+    }
+    return null;
+  });
+  const [activeTypeForCart, setActiveTypeForCart] = React.useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("pos_session");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          return parsed.activeTypeId || 1;
+        } catch {
+          return 1;
+        }
+      }
+    }
+    return 1;
+  });
   const [isRecoverMode, setIsRecoverMode] = React.useState<boolean>(() => {
     return typeof window !== "undefined" && Boolean(localStorage.getItem("pos_recovered_order"));
   });

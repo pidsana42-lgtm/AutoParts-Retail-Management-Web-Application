@@ -22,6 +22,7 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
   const { calculateLineDiscountAmount, validateLineDiscountPolicy } = useDiscountCalculation();
 
   // เก็บ ID ลูกค้า และค่าสิทธิ์ส่วนลดล่าสุดไว้เช็คความเปลี่ยนแปลง ป้องกัน Loop
+  const isInitialMountRef = useRef<boolean>(true);
   const prevCustomerIdRef = useRef<number | undefined>(customer?.id);
   const prevActiveTypeIdRef = useRef<number | undefined>(activeTypeId);
   const prevIsDiscountEnabledRef = useRef<boolean | undefined>(customer?.is_discount_enabled);
@@ -74,11 +75,14 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
   // ตัวดักจับเมื่อพนักงานสั่งสลับกลุ่มสิทธิ์ลูกค้า หรือข้อมูลสิทธิ์ส่วนลดลูกค้าเปลี่ยนแปลง
   useEffect(() => {
     const isCustomerUnchanged =
+      !isInitialMountRef.current &&
       prevCustomerIdRef.current === customer?.id &&
       prevActiveTypeIdRef.current === activeTypeId &&
       prevIsDiscountEnabledRef.current === customer?.is_discount_enabled &&
       prevOntopDiscountRateRef.current === customer?.ontop_discount_rate &&
       prevStandardDiscountRateRef.current === customer?.standard_discount_rate;
+
+    isInitialMountRef.current = false;
 
     if (isCustomerUnchanged) {
       return;

@@ -311,6 +311,10 @@ export const calculateValidatedDiscount = (
 
 /**
  * ฟังก์ชันหาค่าส่วนลดเริ่มต้น (Default) ทันทีตอนดึงสินค้าเข้าตะกร้า
+ * กฎระบบ:
+ * - ถ้ายังไม่ได้เพิ่มลูกค้า (ไม่มี customer หรือเป็นลูกค้าขาจร id === 0): ไม่กรอกส่วนลดเริ่มต้นเด็ดขาด
+ * - ส่วนลดจะขึ้นอัตโนมัติเฉพาะเมื่อเป็นลูกค้าอู่ (GARAGE) ที่เปิดใช้งานสิทธิ์ส่วนลด
+ * - ลูกค้ากลุ่มบริษัท (WHOLESALE) ไม่ได้รับสิทธิ์ส่วนลดใดๆ
  */
 export const getDefaultProductDiscount = (
   product: any,
@@ -320,38 +324,49 @@ export const getDefaultProductDiscount = (
   const currentCustomerTypeId = customer?.customer_type?.id || activeTypeId;
   const currentCustomerTypeName = customer?.customer_type?.type_name || "";
 
-  // ลูกค้ากลุ่มบริษัท (WHOLESALE) ไม่ได้รับสิทธิ์ส่วนลดใดๆ
+  // 1. ลูกค้ากลุ่มบริษัท (WHOLESALE) ไม่ได้รับสิทธิ์ส่วนลดใดๆ
   if (currentCustomerTypeId === 3 || currentCustomerTypeName === "WHOLESALE") {
+    return { type: "none", value: 0 };
+  }
+
+  // 2. ถ้ายังไม่ได้เพิ่มลูกค้า (ไม่มี customer หรือเป็นลูกค้าขาจร/guest id === 0)
+  // ยังไม่ต้องกรอกส่วนลดให้ และตรงกล่องยังไม่ต้องขึ้นว่าลด
+  if (!customer || customer.id === 0) {
     return { type: "none", value: 0 };
   }
 
   // เพดานส่วนลดของสินค้าที่ตั้งค่าไว้ (max_discount_rate)
   const productRate = Number(product?.max_discount_rate) || 0;
 
+  // ตรวจสอบสิทธิ์กลุ่มอู่ซ่อมรถ (GARAGE)
   const isGarage = 
-    currentCustomerTypeId === 2 || 
-    currentCustomerTypeName === "GARAGE" || 
-    customer?.customer_name?.includes("อู่");
+    customer.customer_type?.id === 2 || 
+    customer.customer_type?.type_name === "GARAGE" || 
+    customer.customer_type?.type_label?.includes("อู่") ||
+    customer.customer_name?.includes("อู่") ||
+    activeTypeId === 2;
 
-  // กรณี 1: ลูกค้าอู่ซ่อมรถ และ เปิดใช้งานส่วนลดระบบ
-  if (isGarage && customer && customer.is_discount_enabled) {
+  // กรณี 1: ลูกค้าอู่ซ่อมรถ และ เปิดใช้งานส่วนลดระบบ -> ให้ส่วนลดอัตโนมัติ (ส่วนลดสินค้า + On-Top)
+  if (isGarage && customer.is_discount_enabled !== false) {
     const ontopRate = Number((customer as any).ontop_discount_rate) || 0;
-    const baseRate = productRate > 0 ? productRate : 2.0;
-    return { type: "percentage", value: baseRate + ontopRate };
+    const baseRate = productRate > 0 ? productRate : 0;
+    const totalRate = baseRate + ontopRate;
+    if (totalRate > 0) {
+      return { type: "percentage", value: totalRate };
+    }
+    return { type: "none", value: 0 };
   }
 
   // กรณี 2: ลูกค้าประจำที่มีสิทธิ์ส่วนลดเฉพาะตัว (standard_discount_rate)
-  if (customer && customer.is_discount_enabled && Number(customer.standard_discount_rate) > 0) {
+  if (customer.is_discount_enabled !== false && Number(customer.standard_discount_rate) > 0) {
     const stdRate = Number(customer.standard_discount_rate);
     const rate = productRate > 0 ? Math.min(stdRate, productRate) : stdRate;
-    return { type: "percentage", value: rate };
+    if (rate > 0) {
+      return { type: "percentage", value: rate };
+    }
+    return { type: "none", value: 0 };
   }
 
-  // กรณี 3: สินค้าที่มีการตั้งค่าส่วนลดไว้ (set product มีส่วนลดแล้ว)
-  if (productRate > 0) {
-    return { type: "percentage", value: productRate };
-  }
-
-  // สินค้าทั่วไปที่ไม่ได้ตั้งส่วนลด
+  // กรณีอื่นๆ (เช่น ลูกค้าทั่วไป ที่ไม่ได้เป็นลูกค้าอู่): ไม่ตั้งส่วนลดอัตโนมัติ
   return { type: "none", value: 0 };
 };
