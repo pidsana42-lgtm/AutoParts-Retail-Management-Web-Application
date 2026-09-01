@@ -137,7 +137,9 @@ func buildInventories(suppliers []wmsDto.ProductSupplierInput) []entity.Inventor
 			SupplierID:            sup.SupplierID,
 			Inventory_Quantity:    sup.Quantity,
 			Last_Updated_DateTime: time.Now(),
-			CompanyProductCode:    sup.CompanyProductCode,
+			CompanyProductCode:    strings.TrimSpace(sup.CompanyProductCode),
+			Barcode:               strings.TrimSpace(sup.Barcode),
+			QRCode:                strings.TrimSpace(sup.QRCode),
 		})
 	}
 	return inventories

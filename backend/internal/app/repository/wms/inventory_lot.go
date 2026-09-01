@@ -77,8 +77,17 @@ func (r *inventoryLotRepository) BackfillMissingCodes(productID uint, allProduct
 		}
 
 		code := lotcode.Build(prodCode, shortName, lot.ID)
+		updates := map[string]interface{}{
+			"variant_code": code,
+		}
+		if lot.Barcode == "" {
+			updates["barcode"] = code
+		}
+		if lot.QRCode == "" {
+			updates["qr_code"] = code
+		}
 		if err := r.db.Model(&entity.Inventory{}).Where("id = ?", lot.ID).
-			Update("variant_code", code).Error; err != nil {
+			Updates(updates).Error; err != nil {
 			return count, err
 		}
 		count++

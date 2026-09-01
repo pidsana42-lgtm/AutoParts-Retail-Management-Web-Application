@@ -429,13 +429,13 @@ export default function PreOrderManager() {
         supplier_id: 1, // Default supplier id
         order_date: new Date().toISOString(), // Fixed 400 Bad Request (OrderDate is required)
         pre_order_items: formItems.map(item => ({
-          product_id: Number(item.product_id) || 1, // Fallback to 1 if 0/NaN to pass binding:"required"
+          product_id: Number(item.product_id) || 0,
           quantity: Number(item.quantity) || 1,
           unit_price: Number(item.unit_price) || 0,
           product_name: item.product_name,
-          product_code: item.product_code,
-          supplier_part_code: item.supplier_part_code,
-          supplier_name: item.supplier_name,
+          product_code: item.product_code || '',
+          supplier_part_code: item.supplier_part_code || '',
+          supplier_name: item.supplier_name || '',
         }))
       };
 

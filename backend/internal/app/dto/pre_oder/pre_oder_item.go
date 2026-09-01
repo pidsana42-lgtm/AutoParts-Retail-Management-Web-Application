@@ -9,7 +9,7 @@ import (
 
 type CreatePreOrderItemDTO struct {
 	PreOrderID       uint    `json:"pre_order_id" binding:"required"`
-	ProductID        uint    `json:"product_id" binding:"required"`
+	ProductID        uint    `json:"product_id"`
 	ProductName      string  `json:"product_name"`
 	ProductCode      string  `json:"product_code"`
 	SupplierPartCode string  `json:"supplier_part_code"`
@@ -44,9 +44,13 @@ type PreOrderItemResponseDTO struct {
 }
 
 func (d *CreatePreOrderItemDTO) ToEntity() entity.PreOrderItem {
+	var prodID *uint
+	if d.ProductID > 0 {
+		prodID = &d.ProductID
+	}
 	return entity.PreOrderItem{
 		PreOrderID:          d.PreOrderID,
-		ProductID:           d.ProductID,
+		ProductID:           prodID,
 		ProductNameSnapshot: strings.TrimSpace(d.ProductName),
 		ProductCodeSnapshot: strings.TrimSpace(d.ProductCode),
 		SupplierPartCode:    strings.TrimSpace(d.SupplierPartCode),
@@ -61,7 +65,11 @@ func (d *UpdatePreOrderItemDTO) ToEntity(existing entity.PreOrderItem) entity.Pr
 		existing.PreOrderID = *d.PreOrderID
 	}
 	if d.ProductID != nil {
-		existing.ProductID = *d.ProductID
+		if *d.ProductID > 0 {
+			existing.ProductID = d.ProductID
+		} else {
+			existing.ProductID = nil
+		}
 	}
 	if d.ProductName != nil {
 		existing.ProductNameSnapshot = strings.TrimSpace(*d.ProductName)
@@ -89,38 +97,42 @@ func ToPreOrderItemResponseDTO(m *entity.PreOrderItem) PreOrderItemResponseDTO {
 	prodCode := strings.TrimSpace(m.ProductCodeSnapshot)
 	supplierPartCode := strings.TrimSpace(m.SupplierPartCode)
 	supplierName := strings.TrimSpace(m.SupplierName)
-	if m.Product != nil {
-		if prodName == "" {
-			prodName = m.Product.Product_Name
-		}
-		if prodCode == "" {
-			prodCode = m.Product.Product_Code
-		}
-		// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
-		for _, inventory := range m.Product.Inventories {
-			if supplierPartCode == "" && strings.TrimSpace(inventory.CompanyProductCode) != "" {
-				supplierPartCode = strings.TrimSpace(inventory.CompanyProductCode)
+	var productID uint
+	if m.ProductID != nil && *m.ProductID > 0 {
+		productID = *m.ProductID
+		if m.Product != nil {
+			if prodName == "" {
+				prodName = m.Product.Product_Name
 			}
-			if supplierPartCode == "" && strings.TrimSpace(inventory.Variant_Code) != "" {
-				supplierPartCode = strings.TrimSpace(inventory.Variant_Code)
+			if prodCode == "" {
+				prodCode = m.Product.Product_Code
 			}
-			if supplierName == "" && inventory.Supplier != nil {
-				supplierName = strings.TrimSpace(inventory.Supplier.SupplierName)
+			// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
+			for _, inventory := range m.Product.Inventories {
+				if supplierPartCode == "" && strings.TrimSpace(inventory.CompanyProductCode) != "" {
+					supplierPartCode = strings.TrimSpace(inventory.CompanyProductCode)
+				}
+				if supplierPartCode == "" && strings.TrimSpace(inventory.Variant_Code) != "" {
+					supplierPartCode = strings.TrimSpace(inventory.Variant_Code)
+				}
+				if supplierName == "" && inventory.Supplier != nil {
+					supplierName = strings.TrimSpace(inventory.Supplier.SupplierName)
+				}
+				if supplierPartCode != "" && supplierName != "" {
+					break
+				}
 			}
-			if supplierPartCode != "" && supplierName != "" {
-				break
-			}
-		}
 
-		if supplierPartCode == "" {
-			supplierPartCode = strings.TrimSpace(m.Product.Part_Number)
+			if supplierPartCode == "" {
+				supplierPartCode = strings.TrimSpace(m.Product.Part_Number)
+			}
 		}
 	}
 
 	return PreOrderItemResponseDTO{
 		ID:               m.ID,
 		PreOrderID:       m.PreOrderID,
-		ProductID:        m.ProductID,
+		ProductID:        productID,
 		ProductName:      prodName,
 		ProductCode:      prodCode,
 		SupplierPartCode: supplierPartCode,
@@ -156,37 +168,44 @@ func ToPreOrderItemForPODTO(m *entity.PreOrderItem) PreOrderItemForPODTO {
 	pSupplierCode := strings.TrimSpace(m.SupplierPartCode)
 	pSupplierName := strings.TrimSpace(m.SupplierName)
 	var pUnit string
-	if m.Product != nil {
-		if pCode == "" {
-			pCode = m.Product.Product_Code
-		}
-		if pName == "" {
-			pName = m.Product.Product_Name
-		}
-		// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
-		for _, inventory := range m.Product.Inventories {
-			if pSupplierCode == "" && inventory.CompanyProductCode != "" {
-				pSupplierCode = inventory.CompanyProductCode
+	var productID uint
+	if m.ProductID != nil && *m.ProductID > 0 {
+		productID = *m.ProductID
+		if m.Product != nil {
+			if pCode == "" {
+				pCode = m.Product.Product_Code
 			}
-			if pSupplierCode == "" && inventory.Variant_Code != "" {
-				pSupplierCode = inventory.Variant_Code
+			if pName == "" {
+				pName = m.Product.Product_Name
 			}
-			if pSupplierName == "" && inventory.Supplier != nil {
-				pSupplierName = inventory.Supplier.SupplierName
+			// CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า ไม่ใช่ Product โดยตรง) — วนหาจาก Inventory แทน
+			for _, inventory := range m.Product.Inventories {
+				if pSupplierCode == "" && strings.TrimSpace(inventory.CompanyProductCode) != "" {
+					pSupplierCode = strings.TrimSpace(inventory.CompanyProductCode)
+				}
+				if pSupplierCode == "" && strings.TrimSpace(inventory.Variant_Code) != "" {
+					pSupplierCode = strings.TrimSpace(inventory.Variant_Code)
+				}
+				if pSupplierName == "" && inventory.Supplier != nil {
+					pSupplierName = strings.TrimSpace(inventory.Supplier.SupplierName)
+				}
+				if pSupplierCode != "" && pSupplierName != "" {
+					break
+				}
 			}
-		}
-		if pSupplierCode == "" {
-			pSupplierCode = m.Product.Part_Number
-		}
-		if m.Product.Unit != nil {
-			pUnit = m.Product.Unit.Unit_Name
+			if pSupplierCode == "" {
+				pSupplierCode = strings.TrimSpace(m.Product.Part_Number)
+			}
+			if m.Product.Unit != nil {
+				pUnit = m.Product.Unit.Unit_Name
+			}
 		}
 	}
 
 	return PreOrderItemForPODTO{
 		ID:               m.ID,
 		PreOrderID:       m.PreOrderID,
-		ProductID:        m.ProductID,
+		ProductID:        productID,
 		ProductCode:      pCode,
 		ProductName:      pName,
 		SupplierPartCode: pSupplierCode,
