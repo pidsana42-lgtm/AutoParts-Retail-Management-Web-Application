@@ -4,7 +4,7 @@ import type { POSProductResponse } from "../../../interface/pos/product_interfac
 import type { StoreConfigInterface } from "../../../interface/pos/store_config_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
 import type { CancelledPaymentItem, CancelPaymentReceiptRequest, ConfirmPaymentRequest, PaymentHistoryItem, RequestCancelPaymentReceiptRequest, ProcessCancelPaymentReceiptRequest } from "../../../interface/pos/payment_interface";
-import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, GetSaleHistoryByIDResponse, RevertCancellationRequestResponse } from "../../../interface/pos/sales_history_interface";
+import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, SalesHistoryItemResponse, GetSaleHistoryByIDResponse, RevertCancellationRequestResponse } from "../../../interface/pos/sales_history_interface";
 import type { CustomerUnpaidBillsResponse, SettleBillsRequest, SettleBillsResponse, GenerateSettleQRRequest, GenerateSettleQRResponse } from "../../../interface/pos/settle_bills_interface";
 
 // ==================== API Services ====================
@@ -230,6 +230,24 @@ export const posApiService = {
       return response.data;
     } catch (error) {
       console.error("เกิดข้อผิดพลาดในการโหลด PDF ใบเสร็จชำระหนี้:", error);
+      throw error;
+    }
+  },
+
+  /** สั่งพิมพ์หรือดึงไฟล์ PDF ใบสรุปประวัติการชำระเงินและยอดค้างชำระของลูกค้า (Customer Statement) */
+  printCustomerStatementPDF: async (
+    customerId: number,
+    startDate?: string,
+    endDate?: string
+  ): Promise<Blob> => {
+    try {
+      const response = await apiClient.get(`/pos/payments/customers/${customerId}/statement-pdf`, {
+        params: { start_date: startDate || undefined, end_date: endDate || undefined },
+        responseType: "blob",
+      });
+      return response.data;
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการโหลด PDF สรุปประวัติการชำระเงินลูกค้า:", error);
       throw error;
     }
   },

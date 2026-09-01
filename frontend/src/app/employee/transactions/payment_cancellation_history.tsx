@@ -68,8 +68,6 @@ const PaymentCancellationHistory: React.FC = () => {
     setEndDate,
     status,
     setStatus,
-    paymentType,
-    setPaymentType,
     employeeId,
     setEmployeeId,
     handleSearch,

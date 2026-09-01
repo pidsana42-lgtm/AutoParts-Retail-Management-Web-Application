@@ -8,7 +8,8 @@ import type { CreateSaleOrderRequest } from "../../../../interface/pos/pos_inter
 import type { CartItem } from "../../../../interface/pos/usePosCart.interface";
 import type { PosSession } from "../../../../interface/pos/pos_session_interface"; 
 import { getCurrentUserId } from "../../../../utils/auth"; 
-import { downloadPdfBlob } from "../../../../utils/print"; 
+import { printPosReceipt } from "../../../../utils/payment_history_print";
+import { companyService } from "../../../../service/http/companysetting/company_service";
 import { useToast } from "../../../../components/elements/toast";    
 
 interface UsePosPaymentProps {
@@ -20,7 +21,7 @@ interface UsePosPaymentProps {
 
 export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount }: UsePosPaymentProps) {
   const { toast } = useToast();
-  const { calculateProRataWeight } = useDiscountCalculation();
+  const { calculateProRataWeight, calculateLineDiscountAmount } = useDiscountCalculation();
 
   // 1. โครงสร้างการดึง Session เริ่มต้นจาก LocalStorage
   const [posSession, setPosSession] = useState<PosSession>(() => {
@@ -742,19 +743,72 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
 
     setIsConfirming(true);
 
-    const printReceiptPdf = async (orderIdToPrint: number | string) => {
+    const printReceiptAuto = async (orderIdToPrint: number | string) => {
       try {
         const orderNum = currentOrderNumberRef.current || posSession.currentOrderNumber || orderIdToPrint;
-        const blob = await posApiService.printOrderReceipt(orderIdToPrint);
-        const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
-        const win = window.open(blobUrl, "_blank");
-        if (!win) {
-          const fileName = String(orderNum).startsWith("INV") ? `${orderNum}.pdf` : `INV-${orderNum}.pdf`;
-          downloadPdfBlob(blob, fileName);
+
+        // 1. ดึงข้อมูลบริษัท
+        let compInfo: any = undefined;
+        try {
+          compInfo = await companyService.getCompanySetting();
+        } catch (e) {
+          console.warn("Could not fetch company setting for receipt print:", e);
         }
-        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 120000);
+
+        // 2. ข้อมูลพนักงาน
+        const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+        const staffName = currentUser.first_name
+          ? `${currentUser.first_name} ${currentUser.last_name || ""}`.trim()
+          : currentUser.username || "พนักงานขาย";
+
+        // 3. ชื่อประเภทการชำระเงิน
+        let methodStr = "เงินสด";
+        if (activePaymentMethodId === 2) methodStr = "เงินโอน / QR";
+        if (activePaymentMethodId === 3) methodStr = "เงินเชื่อ";
+
+        // 4. แปลงรายการในตะกร้าสำหรับพิมพ์ใบเสร็จ
+        const formattedItems = cart.map((c, idx) => {
+          const qty = c.qty || c.quantity || 1;
+          const itemDiscount = calculateLineDiscountAmount(c.unit_price, qty, c.discount_type, c.discount_value);
+          const subtotal = c.unit_price * qty - itemDiscount;
+
+          return {
+            index: idx + 1,
+            product_code: c.product_code || c.part_number || "-",
+            product_name: c.product_name || "-",
+            quantity: qty,
+            unit: "ชิ้น",
+            unit_price: c.unit_price || 0,
+            discount: itemDiscount,
+            subtotal: subtotal,
+          };
+        });
+
+        // 5. สั่งพิมพ์ใบเสร็จอัตโนมัติ (Trigger หน้าต่างสั่งพิมพ์ทันทีเหมือน payment_history.tsx)
+        printPosReceipt({
+          companyInfo: compInfo,
+          orderNumber: String(orderNum),
+          orderDate: new Date().toLocaleString("th-TH"),
+          salesStaff: staffName,
+          paymentMethod: methodStr,
+          docTitle: activePaymentMethodId === 3 ? "ใบส่งของชั่วคราว" : "ใบเสร็จรับเงิน",
+          customer: {
+            customer_name: customer?.customer_name || "ลูกค้าทั่วไป",
+            customer_type: customer?.customer_type?.type_label,
+            phone_number: customer?.phone_number || "-",
+            address: customer?.shipping_address || customer?.registered_address || "-",
+          },
+          items: formattedItems,
+          totalItemPrice: totalItemPrice,
+          lineDiscountTotal: totalLineDiscount,
+          billDiscount: computedBillDiscount,
+          totalDiscount: totalLineDiscount + computedBillDiscount,
+          finalTotal: finalTotal,
+          receivedAmount: activePaymentMethodId === 1 ? (receivedAmount || finalTotal) : finalTotal,
+          changeAmount: activePaymentMethodId === 1 ? Math.max(0, (receivedAmount || finalTotal) - finalTotal) : 0,
+        });
       } catch (err) {
-        console.error("Error opening receipt PDF:", err);
+        console.error("Error auto-printing POS receipt:", err);
       }
     };
 
@@ -766,7 +820,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
           setIsConfirming(false);
           return false;
         }
-        await printReceiptPdf(orderId);
+        await printReceiptAuto(orderId);
         toast({ variant: "success", message: "ยืนยันการชำระเงินและจบการขายสำเร็จ!" });
         resetPaymentState();
         setCart([]);
@@ -793,7 +847,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         received_by_id: getCurrentUserId() || 1, 
       });
 
-      await printReceiptPdf(orderId);
+      await printReceiptAuto(orderId);
       toast({ variant: "success", message: "ยืนยันการชำระเงินและจบการขายสำเร็จ!" });
 
       // จบการขายสำเร็จ ค่อยสั่ง reset เพื่อล้าง orderNumber ให้บิลถัดไป

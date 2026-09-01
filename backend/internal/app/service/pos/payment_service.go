@@ -30,6 +30,7 @@ type PaymentService interface {
 	RejectCancelPaymentReceipt(repaymentID uint, remark string) error
 	CancelPaymentReceipt(repaymentID uint, req posDto.CancelPaymentReceiptRequest) error
 	GenerateDebtRepaymentReceiptPDF(ctx context.Context, identifier string) ([]byte, error)
+	GenerateCustomerStatementPDF(ctx context.Context, customerID uint, startDate, endDate string) ([]byte, error)
 }
 
 type paymentService struct {

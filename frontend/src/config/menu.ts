@@ -1,8 +1,7 @@
 import {
   LayoutDashboard, FileText, Boxes, MonitorSmartphone,
   ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight, CircleCheck, History,
-  FileX, ReceiptText, BookOpen, ShieldCheck, UserCheck, RotateCcw, MonitorCog
-
+  FileX, ReceiptText, BookOpen, ShieldCheck, UserCheck, RotateCcw
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
