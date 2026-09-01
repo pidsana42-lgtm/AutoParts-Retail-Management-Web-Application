@@ -8,7 +8,7 @@ import type { CreateSaleOrderRequest } from "../../../../interface/pos/pos_inter
 import type { CartItem } from "../../../../interface/pos/usePosCart.interface";
 import type { PosSession } from "../../../../interface/pos/pos_session_interface"; 
 import { getCurrentUserId } from "../../../../utils/auth"; 
-import { printPosReceipt } from "../../../../utils/payment_history_print";
+import { printPosReceipt } from "../../../../utils/pos_print";
 import { companyService } from "../../../../service/http/companysetting/company_service";
 import { useToast } from "../../../../components/elements/toast";    
 

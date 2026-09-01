@@ -1,8 +1,21 @@
 import type { TopSellerItem, DebtAgingItem } from '../interface/dashboard/dashboard_interface';
 import { formatDateThai } from './formatdate';
 
-// Re-export all POS print utilities and statement interfaces
-export * from './payment_history_print';
+// Re-export all POS & statement print utilities
+export {
+  printCustomerStatement,
+  thaiBahtText,
+  autoPrintPdfBlob,
+  type CustomerStatementPrintParams,
+  type CustomerStatementPrintItem,
+  type CustomerStatementUnpaidBill,
+} from './payment_history_print';
+
+export {
+  printPosReceipt,
+  type PosReceiptPrintParams,
+  type PosReceiptPrintItem,
+} from './pos_print';
 
 function printHtml(html: string) {
   const win = window.open('', '_blank');

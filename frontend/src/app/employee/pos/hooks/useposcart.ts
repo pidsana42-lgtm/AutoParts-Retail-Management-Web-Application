@@ -341,9 +341,12 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
       prev.map((item, i) => {
         if (i !== index) return item;
         if (isChecked) {
-          // ถ้าเปิด ให้ใช้เงื่อนไขตั้งต้นตามสิทธิ์ลูกค้า
+          // ถ้าเปิด ให้ใช้เงื่อนไขตั้งต้นตามสิทธิ์ลูกค้าหรือค่าเพดานส่วนลดของสินค้า
           const cfg = getDefaultProductDiscount(item as any, customer, activeTypeId);
-          return { ...item, discount_type: cfg.type, discount_value: cfg.value };
+          const maxRate = Number(item.max_discount_rate) || 0;
+          const newType = cfg.type !== "none" ? cfg.type : "percentage";
+          const newValue = cfg.value > 0 ? cfg.value : maxRate;
+          return { ...item, discount_type: newType, discount_value: newValue };
         }
         // ถ้าปิด ให้เซ็ตส่วนลดเป็น 0
         return { ...item, discount_type: "none", discount_value: 0 };
@@ -376,9 +379,10 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
 
     if (!policy.isValid) {
       if (policy.errorMsg) alert(policy.errorMsg);
+      const maxRate = Number(item.max_discount_rate) || 0;
       setCart((prev) =>
         prev.map((cartItem, i) =>
-          i === index ? { ...cartItem, discount_value: 0, discount_type: "none" } : cartItem
+          i === index ? { ...cartItem, discount_value: maxRate } : cartItem
         )
       );
       return; 
