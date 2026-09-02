@@ -16,7 +16,6 @@ import Button from "../../../components/elements/button";
 import { Card } from "../../../components/elements/card";
 import Input from "../../../components/elements/input";
 import Badge from "../../../components/elements/badge";
-import Modal from "../../../components/elements/modal";
 import { useFinancialPolicy } from "./hook/UseFinancialPolicy";
 import ConfirmModal from "../../../components/elements/confirm_modal";
 
@@ -30,25 +29,12 @@ export default function FinancialPolicyPage() {
     successMessage,
     showAuditModal,
     setShowAuditModal,
+    auditLogs,
+    isLoadingAuditLogs,
     handleChange,
     handleReset,
     handleSave,
   } = useFinancialPolicy();
-
-  // Audit Logs state for the history modal
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (showAuditModal) {
-      try {
-        const historyKey = "financial_policy_audit_logs";
-        const logs = JSON.parse(localStorage.getItem(historyKey) || "[]");
-        setAuditLogs(logs);
-      } catch (e) {
-        setAuditLogs([]);
-      }
-    }
-  }, [showAuditModal]);
 
   return (
     <div className="relative flex min-h-screen bg-white text-slate-800 font-sans overflow-x-hidden">
@@ -261,7 +247,12 @@ export default function FinancialPolicyPage() {
         description="บันทึกการเปลี่ยนแปลงและประวัติการตรวจสอบกิจกรรมภายในระบบ"
         size="lg"
       >
-        {auditLogs.length === 0 ? (
+        {isLoadingAuditLogs ? (
+          <div className="py-12 flex flex-col items-center justify-center text-slate-400 text-xs font-light">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#E51C23] mb-3"></div>
+            <p className="m-0">กำลังโหลดประวัติการแก้ไข...</p>
+          </div>
+        ) : auditLogs.length === 0 ? (
           <div className="py-12 flex flex-col items-center justify-center text-slate-400 text-xs font-light">
             <History size={32} className="text-slate-300 mb-2 stroke-[1.5]" />
             <p className="m-0">ยังไม่มีประวัติการแก้ไขการตั้งค่าในระบบ</p>

@@ -24,6 +24,22 @@ func (ctrl *StoreConfigController) GetStoreConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, config)
 }
 
+func getUserIDFromContext(c *gin.Context) uint {
+	if val, exists := c.Get("user_id"); exists {
+		switch v := val.(type) {
+		case float64:
+			return uint(v)
+		case uint:
+			return v
+		case int:
+			return uint(v)
+		case int64:
+			return uint(v)
+		}
+	}
+	return 0
+}
+
 func (ctrl *StoreConfigController) CreateStoreConfig(c *gin.Context) {
 	var req storeconfigDto.StoreConfigRequest
 
@@ -32,7 +48,8 @@ func (ctrl *StoreConfigController) CreateStoreConfig(c *gin.Context) {
 		return
 	}
 
-	if err := ctrl.svc.CreateStoreConfig(&req); err != nil {
+	userID := getUserIDFromContext(c)
+	if err := ctrl.svc.CreateStoreConfig(&req, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -48,10 +65,20 @@ func (ctrl *StoreConfigController) UpdateStoreConfig(c *gin.Context) {
 		return
 	}
 
-	if err := ctrl.svc.UpdateStoreConfig(&req); err != nil {
+	userID := getUserIDFromContext(c)
+	if err := ctrl.svc.UpdateStoreConfig(&req, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "อัปเดตการตั้งค่าร้านค้าสำเร็จเรียบร้อยแล้ว"})
+}
+
+func (ctrl *StoreConfigController) GetAuditLogs(c *gin.Context) {
+	logs, err := ctrl.svc.GetAuditLogs()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, logs)
 }

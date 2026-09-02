@@ -6,12 +6,17 @@ import type { CustomerDiscountResponse } from "../../../interface/pos/customer_i
 import type { CancelledPaymentItem, CancelPaymentReceiptRequest, ConfirmPaymentRequest, PaymentHistoryItem, RequestCancelPaymentReceiptRequest, ProcessCancelPaymentReceiptRequest } from "../../../interface/pos/payment_interface";
 import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, SalesHistoryItemResponse, GetSaleHistoryByIDResponse, RevertCancellationRequestResponse } from "../../../interface/pos/sales_history_interface";
 import type { CustomerUnpaidBillsResponse, SettleBillsRequest, SettleBillsResponse, GenerateSettleQRRequest, GenerateSettleQRResponse } from "../../../interface/pos/settle_bills_interface";
+import type { FinancialPolicyAuditLog } from "../../../interface/storeconfig/financial_policy_interface";
 
 // ==================== API Services ====================
 export const posApiService = {
   /** ดึงค่าตั้งค่าคอนฟิกร้านค้า */
   getStoreConfig: (): Promise<StoreConfigInterface> => 
     apiClient.get<StoreConfigInterface>("/pos/store-config").then((res) => res.data),
+
+  /** ดึงประวัติการแก้ไขการตั้งค่าร้านค้า (Audit Logs) */
+  getStoreConfigAuditLogs: (): Promise<FinancialPolicyAuditLog[]> =>
+    apiClient.get<FinancialPolicyAuditLog[]>("/pos/store-config/audit-logs").then((res) => res.data || []),
 
   /** สร้างค่าตั้งค่าคอนฟิกร้านค้าครั้งแรก (POST) */
   createStoreConfig: (payload: Partial<StoreConfigInterface>): Promise<any> =>
