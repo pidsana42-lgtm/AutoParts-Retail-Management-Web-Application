@@ -14,6 +14,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   RotateCcw,
+  CopyPlus,
   ScanBarcode,
   X,
 } from "lucide-react";
@@ -408,7 +409,7 @@ const SalesCancellationHistory: React.FC = () => {
                             {(item.status || "").toUpperCase() === "CANCELLED" && (
                               <button
                                 type="button"
-                                title="กู้คืนและแก้ไขที่หน้า POS"
+                                title="ดึงรายการไปเปิดบิลใหม่ที่หน้า POS (ไม่กระทบบิลเดิม)"
                                 onClick={() =>
                                   navigate(`/employee/pos/pos?recover_order_id=${item.id}`, {
                                     state: { recoverOrderId: item.id },
@@ -416,7 +417,7 @@ const SalesCancellationHistory: React.FC = () => {
                                 }
                                 className="p-1.5 text-red-600 hover:text-red-800 cursor-pointer"
                               >
-                                <RotateCcw className="w-4 h-4" />
+                                <CopyPlus className="w-4 h-4" />
                               </button>
                             )}
                           </div>
@@ -935,9 +936,12 @@ const SalesCancellationHistory: React.FC = () => {
                             }}
                             className="w-full text-xs h-10 font-normal rounded-none flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                           >
-                            <RotateCcw className="w-4 h-4" />
-                            <span>กู้คืน/แก้ไขรายการที่หน้า POS</span>
+                            <CopyPlus className="w-4 h-4" />
+                            <span>ดึงรายการไปเปิดบิลใหม่ที่หน้า POS</span>
                           </Button>
+                          <p className="text-[11px] text-[#6B7280] text-center mt-1.5 mb-0">
+                            *เป็นการคัดลอกรายการสินค้าและลูกค้าไปเปิดบิลขายใหม่ โดยไม่มีผลต่อบิลเดิมที่ยกเลิก
+                          </p>
                         </div>
                       );
                     }

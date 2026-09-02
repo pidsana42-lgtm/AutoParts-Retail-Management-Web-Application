@@ -157,7 +157,7 @@ export default function PosPage(): React.JSX.Element {
                 POS
               </Heading>
               <Heading level='h6' className='m-0 mt-1'>
-                {isRecoverMode ? "ทำรายการจากบิลเก่าที่ยกเลิก" : "รายการที่กำลังขาย"}
+                {isRecoverMode ? "เปิดบิลใหม่จากรายการเดิมที่ยกเลิก" : "รายการที่กำลังขาย"}
               </Heading>
             </div>
             
@@ -172,7 +172,7 @@ export default function PosPage(): React.JSX.Element {
                     สถานะรายการขาย
                   </Text>
                   <h2 className="text-2xl text-zinc-800 ">
-                    {paymentData.recoveredOrderInfo ? "บิลกู้คืน" : "บิลร่าง (DRAFT)"}
+                    {paymentData.recoveredOrderInfo ? "เปิดบิลใหม่ (อ้างอิงบิลเดิม)" : "บิลร่าง (DRAFT)"}
                   </h2>
                 </div>
                 <Button
@@ -206,7 +206,7 @@ export default function PosPage(): React.JSX.Element {
               <div className="flex items-center justify-between gap-2 text-xs text-[#6B7280] bg-[#F6F3F2] px-3.5 py-2 mb-3">
                 <div className="flex items-center gap-2">
                   <span>
-                    กำลังแก้ไขรายการจากบิลยกเลิก: <strong className="font-medium text-[#1C1B1A]">{paymentData.recoveredOrderInfo.orderNumber}</strong>
+                    กำลังเปิดบิลใหม่โดยดึงข้อมูลจากบิลเดิม: <strong className="font-medium text-[#1C1B1A]">{paymentData.recoveredOrderInfo.orderNumber}</strong>
                     {customerName && ` (ลูกค้า: ${customerName})`}
                   </span>
                 </div>
