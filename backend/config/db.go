@@ -94,6 +94,7 @@ func SetupDatabase() {
 		&entity.SaleOrder{},
 		&entity.SaleOrderItem{},
 		&entity.StoreConfig{},
+		&entity.StoreConfigAuditLog{},
 
 		// โตโต้ WMS
 		&entity.Category{},
