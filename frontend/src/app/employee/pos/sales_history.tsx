@@ -8,6 +8,7 @@ import {
   ChevronsRight,
   ScanBarcode,
   RotateCcw,
+  CopyPlus,
   X,
   Printer,
 } from "lucide-react";
@@ -1073,9 +1074,12 @@ export default function TransactionHistoryPage() {
                             }}
                             className="w-full text-xs h-10 font-normal rounded-none flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                           >
-                            <RotateCcw className="w-4 h-4" />
-                            <span>กู้คืน/แก้ไขรายการที่หน้า POS</span>
+                            <CopyPlus className="w-4 h-4" />
+                            <span>ดึงรายการไปเปิดบิลใหม่ที่หน้า POS</span>
                           </Button>
+                          <p className="text-[11px] text-[#6B7280] text-center mt-1.5 mb-0">
+                            *เป็นการคัดลอกรายการสินค้าและลูกค้าไปเปิดบิลขายใหม่ โดยไม่มีผลต่อบิลเดิมที่ยกเลิก
+                          </p>
                         </div>
                       );
                     }

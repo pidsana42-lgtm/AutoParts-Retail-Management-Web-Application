@@ -179,7 +179,7 @@ func GenerateDebtRepaymentReceiptPDF(
 	// หัวตาราง
 	m.Row(8, func() {
 		m.Col(1, func() { m.Text("ลำดับ", props.Text{Size: 10, Style: consts.Bold, Align: consts.Center}) })
-		m.Col(2, func() { m.Text("เลขที่เอกสาร", props.Text{Size: 10, Style: consts.Bold, Align: consts.Left}) })
+		m.Col(2, func() { m.Text("เลขที่บิลขาย", props.Text{Size: 10, Style: consts.Bold, Align: consts.Left}) })
 		m.Col(1, func() { m.Text("วันที่", props.Text{Size: 10, Style: consts.Bold, Align: consts.Center}) })
 		m.Col(2, func() { m.Text("ยอดตามบิล", props.Text{Size: 10, Style: consts.Bold, Align: consts.Right}) })
 		m.Col(2, func() { m.Text("ชำระแล้ว", props.Text{Size: 10, Style: consts.Bold, Align: consts.Right}) })

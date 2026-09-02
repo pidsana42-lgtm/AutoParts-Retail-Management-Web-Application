@@ -436,16 +436,19 @@ export default function PaymentHistoryPage() {
             </div>
           )}
 
-          <Button
-            type="button"
-            disabled={isPrintingStatement || items.length === 0}
-            onClick={() => handlePrintCustomerStatement()}
-            className="h-10 px-3 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs font-normal flex items-center justify-center gap-1.5 rounded-none cursor-pointer shadow-sm disabled:opacity-50"
-            title="พิมพ์สรุปยอดชำระและยอดคงเหลือตามตัวกรองปัจจุบัน"
+          <div className="flex w-full items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline-cancel"
+              leftIcon={<Printer size={16} />}
+              disabled={isPrintingStatement || items.length === 0}
+              onClick={() => handlePrintCustomerStatement()}
+              className="rounded-none h-11 px-4 text-xs font-normal text-[#5F5E5E] bg-white border border-gray-200 hover:bg-[#F6F3F2] shadow-none cursor-pointer transition-colors"
+              title="พิมพ์สรุปยอดชำระและยอดคงเหลือตามตัวกรองปัจจุบัน"
             >
-            <Printer className="w-4 h-4 text-[#E51C23]" />
-            <span className="hidden sm:inline">พิมพ์สรุปยอด</span>
-          </Button>
+              พิมพ์สรุปยอด
+            </Button>
+          </div>
                   
           {/* Data Table */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
