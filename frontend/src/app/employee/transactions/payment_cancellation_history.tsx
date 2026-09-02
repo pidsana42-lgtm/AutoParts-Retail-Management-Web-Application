@@ -423,13 +423,27 @@ const PaymentCancellationHistory: React.FC = () => {
                   dataList.map((item: PaymentHistoryItem) => {
                     const isChecked = selectedIds.includes(item.receipt_id);
                     const isPendingCancel = (item.status || "").toLowerCase() === "pending_cancel";
+                    const isSelected =
+                      selectedReceipt?.receipt_id === item.receipt_id &&
+                      selectedReceipt?.payment_type === item.payment_type;
                     return (
                       <TableRow
                         key={`${item.payment_type}-${item.receipt_id}-${item.receipt_number}`}
-                        className={isChecked ? "bg-red-50/40" : "hover:bg-slate-50 transition-colors"}
+                        onClick={() => setSelectedReceipt(item)}
+                        className={cn(
+                          "cursor-pointer transition-colors",
+                          isSelected
+                            ? "bg-red-50/70 border-l-2 border-l-[#E51C23]"
+                            : isChecked
+                            ? "bg-red-50/40"
+                            : "hover:bg-slate-50"
+                        )}
                       >
                         {/* Checkbox */}
-                        <TableCell className="py-3.5 px-3 text-center">
+                        <TableCell
+                          className="py-3.5 px-3 text-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <input
                             type="checkbox"
                             checked={isChecked}
@@ -487,7 +501,10 @@ const PaymentCancellationHistory: React.FC = () => {
                         </TableCell>
 
                         {/* 7. จัดการ */}
-                        <TableCell className="py-3.5 px-3 text-center">
+                        <TableCell
+                          className="py-3.5 px-3 text-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <div className="flex items-center justify-center gap-1">
                             <button
                               type="button"

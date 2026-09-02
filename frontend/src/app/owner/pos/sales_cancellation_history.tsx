@@ -345,13 +345,25 @@ const OwnerSalesCancellationHistory: React.FC = () => {
               dataList.map((item) => {
                 const isChecked = selectedIds.includes(item.id);
                 const isPendingCancel = (item.status || "").toUpperCase() === "PENDING_CANCEL";
+                const isSelected = selectedOrderId === item.id;
                 return (
                   <TableRow
                     key={item.id}
-                    className={isChecked ? "bg-red-50/40" : "hover:bg-slate-50 transition-colors"}
+                    onClick={() => setSelectedOrderId(item.id)}
+                    className={cn(
+                      "cursor-pointer transition-colors",
+                      isSelected
+                        ? "bg-red-50/70 border-l-2 border-l-[#E51C23]"
+                        : isChecked
+                        ? "bg-red-50/40"
+                        : "hover:bg-slate-50"
+                    )}
                   >
                     {/* Checkbox */}
-                    <TableCell className="py-3 px-2 text-center">
+                    <TableCell
+                      className="py-3 px-2 text-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -419,7 +431,10 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                     </TableCell>
 
                     {/* จัดการ */}
-                    <TableCell className="py-3 px-2 text-center">
+                    <TableCell
+                      className="py-3 px-2 text-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="flex items-center justify-center gap-1">
                           <button
                             type="button"
@@ -445,11 +460,12 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                             <button
                               type="button"
                               title="ดึงรายการไปเปิดบิลใหม่ที่หน้า POS (ไม่กระทบบิลเดิม)"
-                              onClick={() =>
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 navigate(`/owner/pos/pos?recover_order_id=${item.id}`, {
                                   state: { recoverOrderId: item.id },
-                                })
-                              }
+                                });
+                              }}
                               className="p-1.5 text-red-600 hover:text-red-800 cursor-pointer"
                             >
                               <CopyPlus className="w-4 h-4" />
