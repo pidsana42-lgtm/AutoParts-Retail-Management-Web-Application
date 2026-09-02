@@ -2,6 +2,7 @@ package pdf
 
 import (
 	"fmt"
+	"strings"
 
 	"backend/internal/app/entity"
 
@@ -104,6 +105,16 @@ func GenerateDebtRepaymentReceiptPDF(
 		custPhone = order.Customer.PhoneNumber
 	}
 
+	isCancelled := false
+	var cancelledRepayment *entity.PaymentRepayment
+	for i := range repayments {
+		if strings.EqualFold(repayments[i].Status, "cancelled") {
+			isCancelled = true
+			cancelledRepayment = &repayments[i]
+			break
+		}
+	}
+
 	// 4. ส่วนหัวเอกสาร (Header)
 	m.RegisterHeader(func() {
 		m.Row(25, func() {
@@ -115,21 +126,29 @@ func GenerateDebtRepaymentReceiptPDF(
 					})
 				}
 			})
-			m.Col(5, func() {})
-			m.Col(4, func() {
+			m.Col(4, func() {})
+			m.Col(5, func() {
+				titleSize := 22.0
+				subSize := 16.0
+				subText := "(ชำระหนี้)"
+				if isCancelled {
+					titleSize = 20.0
+					subSize = 13.5
+					subText = "(ชำระหนี้ - ยกเลิกแล้ว / VOID)"
+				}
 				m.Text("ใบเสร็จรับเงิน", props.Text{
-					Size:  22.0,
+					Size:  titleSize,
 					Style: consts.Bold,
 					Align: consts.Center,
 					Color: HexToColor("#E51C23"),
 					Top:   0,
 				})
-				m.Text("(ชำระหนี้)", props.Text{
-					Size:  16.0,
+				m.Text(subText, props.Text{
+					Size:  subSize,
 					Style: consts.Bold,
 					Align: consts.Center,
 					Color: HexToColor("#E51C23"),
-					Top:   7.0,
+					Top:   6.5,
 				})
 			})
 		})
@@ -137,8 +156,60 @@ func GenerateDebtRepaymentReceiptPDF(
 
 	m.Row(5, func() {})
 
+	// แถบแจ้งเตือนเอกสารถูกยกเลิก (Void / Cancelled Banner)
+	if isCancelled && cancelledRepayment != nil {
+		cancelDateStr := "-"
+		if cancelledRepayment.CancelledAt != nil {
+			cancelDateStr = FormatThaiDate(*cancelledRepayment.CancelledAt) + " " + cancelledRepayment.CancelledAt.Format("15:04 น.")
+		} else if cancelledRepayment.CancelRequestedAt != nil {
+			cancelDateStr = FormatThaiDate(*cancelledRepayment.CancelRequestedAt) + " " + cancelledRepayment.CancelRequestedAt.Format("15:04 น.")
+		} else {
+			cancelDateStr = FormatThaiDate(cancelledRepayment.UpdatedAt) + " " + cancelledRepayment.UpdatedAt.Format("15:04 น.")
+		}
+
+		approverStr := "เจ้าของร้าน"
+		if cancelledRepayment.CancelledBy != nil && cancelledRepayment.CancelledBy.FirstName != "" {
+			approverStr = fmt.Sprintf("%s %s", cancelledRepayment.CancelledBy.FirstName, cancelledRepayment.CancelledBy.LastName)
+		} else if cancelledRepayment.CancelRequestedBy != nil && cancelledRepayment.CancelRequestedBy.FirstName != "" {
+			approverStr = fmt.Sprintf("%s %s", cancelledRepayment.CancelRequestedBy.FirstName, cancelledRepayment.CancelRequestedBy.LastName)
+		}
+
+		reasonStr := "-"
+		if cancelledRepayment.CancelReason != "" {
+			reasonStr = cancelledRepayment.CancelReason
+		} else if cancelledRepayment.CancelRemark != "" {
+			reasonStr = cancelledRepayment.CancelRemark
+		}
+
+		m.Row(16, func() {
+			m.Col(12, func() {
+				m.Text("*** รายการชำระเงินนี้ถูกยกเลิกแล้ว (CANCELLED / VOID) ***", props.Text{
+					Size:  12.5,
+					Style: consts.Bold,
+					Align: consts.Center,
+					Color: HexToColor("#E51C23"),
+					Top:   1.0,
+				})
+				detailText := fmt.Sprintf("วันที่ยกเลิก: %s    |    ผู้อนุมัติ: %s    |    เหตุผลการยกเลิก: %s", cancelDateStr, approverStr, reasonStr)
+				m.Text(detailText, props.Text{
+					Size:  9.5,
+					Style: consts.Normal,
+					Align: consts.Center,
+					Color: HexToColor("#1C1B1B"),
+					Top:   6.5,
+				})
+			})
+		})
+		m.Line(1)
+		m.Row(3, func() {})
+	}
+
 	// 5. ข้อมูลบริษัท (ซ้าย) และ ข้อมูลเอกสาร (ขวา)
-	m.Row(25, func() {
+	companyRowHeight := 25.0
+	if isCancelled {
+		companyRowHeight = 30.0
+	}
+	m.Row(companyRowHeight, func() {
 		m.Col(8, func() {
 			m.Text(companyName, props.Text{Size: 12, Style: consts.Bold})
 			m.Text(companyAddress, props.Text{Size: 11, Top: 5})
@@ -151,12 +222,18 @@ func GenerateDebtRepaymentReceiptPDF(
 			m.Text("วันที่", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 5, Color: HexToColor("#E51C23")})
 			m.Text("พนักงาน", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 10, Color: HexToColor("#E51C23")})
 			m.Text("ชำระโดย", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 15, Color: HexToColor("#E51C23")})
+			if isCancelled {
+				m.Text("สถานะ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 20, Color: HexToColor("#E51C23")})
+			}
 		})
 		m.Col(3, func() {
 			m.Text(firstRepayment.ReceiptNumber, props.Text{Size: 11, Align: consts.Left})
 			m.Text(paidDate, props.Text{Size: 11, Align: consts.Left, Top: 5})
 			m.Text(salesStaff, props.Text{Size: 11, Align: consts.Left, Top: 10})
 			m.Text(paymentMethodStr, props.Text{Size: 11, Align: consts.Left, Top: 15})
+			if isCancelled {
+				m.Text("ยกเลิกแล้ว (CANCELLED)", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 20, Color: HexToColor("#E51C23")})
+			}
 		})
 	})
 

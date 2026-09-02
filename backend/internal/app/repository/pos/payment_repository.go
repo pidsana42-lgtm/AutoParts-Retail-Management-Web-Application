@@ -192,6 +192,7 @@ func (r *paymentRepository) GetRepaymentByID(repaymentID uint) (*entity.PaymentR
     var repayment entity.PaymentRepayment
     err := r.db.Preload("Order").
         Preload("Order.Customer").
+        Preload("Order.Customer.CustomerType").
         Preload("PaymentMethod").
         Preload("RecordedBy").
         Preload("CancelRequestedBy").
@@ -349,6 +350,8 @@ func (r *paymentRepository) GetRepaymentsByReceiptNumber(receiptNo string) ([]en
         Preload("Order.Customer.CustomerType").
         Preload("PaymentMethod").
         Preload("RecordedBy").
+        Preload("CancelledBy").
+        Preload("CancelRequestedBy").
         Where("receipt_number = ?", receiptNo).
         Find(&repayments).Error
     return repayments, err

@@ -449,7 +449,7 @@ export default function PaymentHistoryPage() {
               พิมพ์สรุปยอด
             </Button>
           </div>
-                  
+                   
           {/* Data Table */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
             <Table className="text-left border-collapse">
@@ -818,7 +818,11 @@ export default function PaymentHistoryPage() {
                   className="w-full text-xs h-10 font-normal flex items-center justify-center gap-1.5 shadow-sm bg-[#1C1B1B] hover:bg-zinc-800 text-white cursor-pointer rounded-none"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>พิมพ์ใบเสร็จรับเงิน (PDF)</span>
+                  <span>
+                    {selectedReceipt.status === "cancelled"
+                      ? "พิมพ์ใบเสร็จที่ยกเลิก (Void Receipt)"
+                      : "พิมพ์ใบเสร็จรับเงิน (PDF)"}
+                  </span>
                 </Button>
 
                 {/* 2. กรณีเป็น Direct Payment (ชำระสดหน้าร้าน) -> มีปุ่มเด้งไปหน้าประวัติการขายสินค้าและเลือกบิลให้อัตโนมัติ */}
@@ -1066,6 +1070,17 @@ export default function PaymentHistoryPage() {
                         )}
                       </div>
                     </Card>
+
+                    <Button
+                      type="button"
+                      variant="outline-cancel"
+                      onClick={() => handlePrintReceipt(selectedReceipt)}
+                      disabled={printingReceiptId === (selectedReceipt.receipt_id || selectedReceipt.receipt_number)}
+                      className="w-full text-xs h-10 font-normal rounded-none flex items-center justify-center gap-2 cursor-pointer shadow-sm border border-gray-300 hover:bg-gray-50 mt-2"
+                    >
+                      <Printer className={cn("w-4 h-4 text-[#E51C23]", printingReceiptId === (selectedReceipt.receipt_id || selectedReceipt.receipt_number) && "animate-pulse")} />
+                      <span>พิมพ์ใบเสร็จที่ยกเลิก (เอกสารหลักฐาน)</span>
+                    </Button>
                   </div>
                 )}
               </div>
