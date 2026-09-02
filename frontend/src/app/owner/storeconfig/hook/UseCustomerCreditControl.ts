@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useToast } from "../../../../components/elements/toast";
 import { customerApiService } from "../../../../service/http/customer/customer_service";
 import type { CustomerTypeItem } from "../../../../interface/customer/customer_interface";
 import type {
@@ -11,6 +12,7 @@ import type {
 } from "../../../../interface/storeconfig/customer_credit_interface";
 
 export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
+  const { toast } = useToast();
   const [customers, setCustomers] = useState<CustomerCreditItem[]>([]);
   const [customerTypes, setCustomerTypes] = useState<CustomerTypeItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -324,31 +326,29 @@ export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
 
       // Validation
       if (payload.ontop_discount_rate < 0 || payload.ontop_discount_rate > 100) {
-        setError("อัตราส่วนลด On-Top ต้องอยู่ระหว่าง 0 - 100%");
+        const msg = "อัตราส่วนลด On-Top ต้องอยู่ระหว่าง 0 - 100%";
+        setError(msg);
+        toast({
+          variant: "error",
+          title: "ข้อมูลไม่ถูกต้อง",
+          message: msg,
+        });
         return false;
       }
 
       const targetCustomer = customers.find((c) => c.id === payload.customerId);
       const customerName = targetCustomer?.customer_name || `รหัส ${payload.customerId}`;
 
-      // Update On-Top discount & Discount Enabled status via PUT /api/customers/:id/discount
+      // Update On-Top discount, Credit limit & Standard discount via PUT /api/customers/:id/discount
       await customerApiService.updateCustomerDiscount(payload.customerId, {
         is_discount_enabled: payload.is_discount_enabled,
         ontop_discount_rate: payload.ontop_discount_rate,
+        credit_limit: payload.max_credit_limit,
+        standard_discount_rate: payload.standard_discount_rate,
       });
 
-      // If standard_discount_rate is also provided, update via bulk endpoint
-      if (payload.standard_discount_rate !== undefined) {
-        await customerApiService.bulkUpdateCustomerDiscounts([
-          {
-            id: payload.customerId,
-            standard_discount_rate: payload.standard_discount_rate,
-            is_discount_enabled: payload.is_discount_enabled,
-          },
-        ]);
-      }
-
       // Log audit
+      const creditText = payload.max_credit_limit !== undefined ? `, วงเงินเครดิต: ฿${payload.max_credit_limit.toLocaleString("th-TH")}` : "";
       addAuditLog(
         "แก้ไขสิทธิ์และส่วนลดลูกค้า",
         customerName,
@@ -356,7 +356,7 @@ export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
           payload.is_discount_enabled ? "เปิดใช้งาน" : "ปิดใช้งาน"
         }, On-Top: ${payload.ontop_discount_rate}%, ส่วนลดมาตรฐาน: ${
           payload.standard_discount_rate ?? targetCustomer?.standard_discount_rate ?? 0
-        }%`,
+        }%${creditText}`,
         payload.customerId
       );
 
@@ -370,21 +370,42 @@ export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
                 ontop_discount_rate: payload.ontop_discount_rate,
                 standard_discount_rate:
                   payload.standard_discount_rate ?? c.standard_discount_rate,
+                max_credit_limit:
+                  payload.max_credit_limit !== undefined
+                    ? payload.max_credit_limit
+                    : c.max_credit_limit,
               }
             : c
         )
       );
 
-      setSuccessMessage(`อัปเดตสิทธิ์และส่วนลดของ ${customerName} สำเร็จแล้ว`);
       setIsEditModalOpen(false);
+      setSuccessMessage(`อัปเดตสิทธิ์และส่วนลดของ ${customerName} สำเร็จแล้ว`);
+      toast({
+        variant: "success",
+        title: "บันทึกสำเร็จ",
+        message: `อัปเดตสิทธิ์และส่วนลดของ ${customerName} สำเร็จแล้ว`,
+      });
+
+      setTimeout(() => {
+        setSuccessMessage((prev) => (prev?.includes(customerName) ? null : prev));
+      }, 4000);
+
+      // Background silent refetch
+      fetchData(true);
       return true;
     } catch (err: any) {
       console.error("Failed to update customer discount:", err);
-      setError(
+      const errMsg =
         err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          "ไม่สามารถบันทึกการเปลี่ยนแปลงสิทธิ์ส่วนลดได้"
-      );
+        err?.response?.data?.error ||
+        "ไม่สามารถบันทึกการเปลี่ยนแปลงสิทธิ์ส่วนลดได้";
+      setError(errMsg);
+      toast({
+        variant: "error",
+        title: "เกิดข้อผิดพลาด",
+        message: errMsg,
+      });
       return false;
     } finally {
       setIsUpdating(false);
@@ -420,17 +441,31 @@ export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
         )
       );
 
-      setSuccessMessage(
-        `${newStatus ? "เปิดใช้งาน" : "ระงับ"}สิทธิ์ส่วนลดของ ${customer.customer_name} สำเร็จ`
-      );
+      const successMsg = `${newStatus ? "เปิดใช้งาน" : "ระงับ"}สิทธิ์ส่วนลดของ ${customer.customer_name} สำเร็จ`;
+      setSuccessMessage(successMsg);
+      toast({
+        variant: "success",
+        title: "เปลี่ยนสถานะสำเร็จ",
+        message: successMsg,
+      });
+
+      setTimeout(() => {
+        setSuccessMessage((prev) => (prev?.includes(customer.customer_name) ? null : prev));
+      }, 4000);
+
       return true;
     } catch (err: any) {
       console.error("Failed to toggle customer discount status:", err);
-      setError(
+      const errMsg =
         err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          "ไม่สามารถเปลี่ยนสถานะสิทธิ์ส่วนลดได้"
-      );
+        err?.response?.data?.error ||
+        "ไม่สามารถเปลี่ยนสถานะสิทธิ์ส่วนลดได้";
+      setError(errMsg);
+      toast({
+        variant: "error",
+        title: "เกิดข้อผิดพลาด",
+        message: errMsg,
+      });
       return false;
     } finally {
       setIsUpdating(false);

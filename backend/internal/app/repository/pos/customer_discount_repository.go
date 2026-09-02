@@ -29,7 +29,7 @@ func (r *customerDiscountRepository) GetCreditCustomers() ([]entity.Customer, er
 
 func (r *customerDiscountRepository) GetCreditCustomerByID(id uint) (*entity.Customer, error) {
 	var customer entity.Customer
-	err := r.db.Where("id = ? AND customer_type_id = ?", id, 2).First(&customer).Error
+	err := r.db.Where("id = ?", id).First(&customer).Error
 	return &customer, err
 }
 

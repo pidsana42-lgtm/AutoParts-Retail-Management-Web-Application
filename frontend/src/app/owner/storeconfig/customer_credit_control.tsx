@@ -107,11 +107,13 @@ export default function CustomerCreditControl() {
     is_discount_enabled: boolean;
     ontop_discount_rate: number;
     standard_discount_rate: number;
+    max_credit_limit: number;
   }>({
     customerId: 0,
     is_discount_enabled: false,
     ontop_discount_rate: 0,
     standard_discount_rate: 0,
+    max_credit_limit: 0,
   });
 
   // When opening edit modal, initialize form state
@@ -121,6 +123,7 @@ export default function CustomerCreditControl() {
       is_discount_enabled: customer.is_discount_enabled,
       ontop_discount_rate: customer.ontop_discount_rate,
       standard_discount_rate: customer.standard_discount_rate,
+      max_credit_limit: customer.max_credit_limit || 0,
     });
     handleOpenEditModal(customer);
   };
@@ -133,6 +136,7 @@ export default function CustomerCreditControl() {
       is_discount_enabled: editFormData.is_discount_enabled,
       ontop_discount_rate: editFormData.ontop_discount_rate,
       standard_discount_rate: editFormData.standard_discount_rate,
+      max_credit_limit: editFormData.max_credit_limit,
     });
   };
 
@@ -168,30 +172,7 @@ export default function CustomerCreditControl() {
             </div>
 
 
-          {/* ==================== Feedback Alerts ====================
-          {successMessage && (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between rounded-none animate-fade-in shadow-xs">
-              <div className="flex items-center gap-2.5">
-                <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
-                <span className="font-medium">{successMessage}</span>
-              </div>
-              <Badge variant="success" className="rounded-none font-normal text-xs">
-                บันทึกสำเร็จ
-              </Badge>
-            </div>
-          )} */}
 
-          {/* {error && (
-            <div className="p-4 bg-red-50 border border-red-200 text-red-800 text-sm flex items-center justify-between rounded-none animate-fade-in shadow-xs">
-              <div className="flex items-center gap-2.5">
-                <AlertCircle size={18} className="text-red-600 shrink-0" />
-                <span className="font-medium">{error}</span>
-              </div>
-              <Badge variant="destructive" className="rounded-none font-normal text-xs">
-                ข้อผิดพลาด
-              </Badge>
-            </div>
-          )} */}
 
           {/* ==================== Summary Stats Cards ==================== */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -613,6 +594,13 @@ export default function CustomerCreditControl() {
       >
         {selectedCustomer && (
           <form onSubmit={handleSubmitEdit} className="space-y-5">
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle size={16} className="text-red-600 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
             {/* Customer Summary Box */}
             <div className="bg-white p-4 border-l-3 border-l-[#1C1B1B] border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
@@ -694,11 +682,33 @@ export default function CustomerCreditControl() {
               />
             </div>
 
+            {/* Field 3: วงเงินเครดิตเฉพาะลูกค้ารายนี้ (บาท) */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-normal text-[#1C1B1B]">
+                วงเงินเครดิตเฉพาะลูกค้ารายนี้ (บาท)
+              </label>
+              <Input
+                type="number"
+                min="0"
+                step="1000"
+                value={editFormData.max_credit_limit}
+                onChange={(e) =>
+                  setEditFormData((prev) => ({
+                    ...prev,
+                    max_credit_limit: Number(e.target.value) || 0,
+                  }))
+                }
+                rightIcon={<CreditCard size={16} className="text-gray-400" />}
+                className="font-medium text-base text-[#1C1B1B] bg-[#F6F3F2] border border-gray-200"
+                helperText="วงเงินเครดิตสูงสุดที่ลูกค้ารายนี้สามารถติดค้างชำระได้ หากตั้งค่าเป็น 0 จะไม่สามารถซื้อเชื่อได้"
+              />
+            </div>
+
             {/* Notice Note */}
             <div className="bg-[#FFDAD6]/30 border border-[#BA1A1A]/20 p-3.5 flex items-start gap-2.5">
               <ShieldCheck className="text-[#E51C23] shrink-0 mt-0.5" size={18} />
               <Text variant="xs" className="text-[#E51C23] font-normal m-0 leading-relaxed">
-                <span className="font-medium">กฎเกณฑ์ของระบบ:</span> ลูกค้ากลุ่มบริษัท (WHOLESALE) จะไม่ได้รับส่วนลดตามนโยบายร้านค้า สำหรับลูกค้าอู่ (GARAGE) ระบบจะคำนวณส่วนลดรวม = (ส่วนลดสินค้า + On-Top {editFormData.ontop_discount_rate}%) อัตโนมัติ
+                <span className="font-medium">กฎเกณฑ์ของระบบ:</span> สามารถกำหนดวงเงินเครดิตและสิทธิ์ส่วนลดพิเศษให้กับลูกค้าที่ลงทะเบียนในระบบได้ทุกประเภท (ทั้งลูกค้าทั่วไปและอู่ซ่อมรถ) โดยลูกค้าที่ไม่ได้ลงทะเบียนในระบบจะไม่สามารถซื้อเชื่อหรือรับสิทธิ์ส่วนลดได้
               </Text>
             </div>
 

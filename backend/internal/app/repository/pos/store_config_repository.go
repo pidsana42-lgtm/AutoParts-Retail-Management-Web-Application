@@ -12,6 +12,7 @@ type StoreConfigRepository interface {
 	CreateAuditLog(log *entity.StoreConfigAuditLog) error
 	GetAuditLogs(limit int) ([]entity.StoreConfigAuditLog, error)
 	GetUserByID(userID uint) (*entity.User, error)
+	SyncAllCustomersCreditLimit(creditLimit float64) error
 }
 
 type storeConfigRepository struct {
@@ -59,4 +60,8 @@ func (r *storeConfigRepository) GetUserByID(userID uint) (*entity.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+func (r *storeConfigRepository) SyncAllCustomersCreditLimit(creditLimit float64) error {
+	return r.db.Model(&entity.Customer{}).Where("1 = 1").Update("credit_limit", creditLimit).Error
 }

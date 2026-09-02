@@ -47,7 +47,11 @@ func (s *customerService) RegisterNewCustomer(req customerDto.RegisterCustomerRe
 		return errors.New("ประเภทลูกค้าที่เลือกไม่ถูกต้อง")
 	}
 	// กำหนดค่าเริ่มต้นของ CreditLimit ตามนโยบายร้านค้า
-	defaultCreditFromConfig := 50000.00 // ตัวอย่างค่าที่กำหนดเอง
+	defaultCreditFromConfig := 50000.00
+	var storeConfig entity.StoreConfig
+	if err := s.db.First(&storeConfig).Error; err == nil && storeConfig.MaxCredit > 0 {
+		defaultCreditFromConfig = storeConfig.MaxCredit
+	}
 
 	newCustomer := customerDto.ToCustomerEntity(req, idCardImagePath, defaultCreditFromConfig)
 
@@ -112,35 +116,41 @@ func (s *customerService) UpdateCustomerDiscount(id uint, req customerDto.Update
 		return errors.New("ไม่พบข้อมูลสมาชิกคนนี้ในระบบ")
 	}
 
-	if customer.CustomerType.TypeName != "GARAGE" {
-		return errors.New("ไม่สามารถปรับส่วนลดให้กับลูกค้าประเภทนี้ได้")
-	}
-
 	oldEnabled := customer.IsDiscountEnabled
 	oldOntop := customer.OntopDiscountRate
+	oldCredit := customer.CreditLimit
+	oldStandard := customer.StandardDiscountRate
 
 	customer.IsDiscountEnabled = req.IsDiscountEnabled
 	customer.OntopDiscountRate = req.OntopDiscountRate
+	if req.CreditLimit != nil && *req.CreditLimit >= 0 {
+		customer.CreditLimit = *req.CreditLimit
+	}
+	if req.StandardDiscountRate != nil && *req.StandardDiscountRate >= 0 {
+		customer.StandardDiscountRate = *req.StandardDiscountRate
+	}
 
 	if err := s.repo.UpdateCustomerDiscountRequest(customer); err != nil {
 		return err
 	}
 
 	// บันทึก Audit Log อัตโนมัติเมื่อมีการเปลี่ยนแปลง
-	if oldEnabled != req.IsDiscountEnabled || oldOntop != req.OntopDiscountRate {
+	if oldEnabled != req.IsDiscountEnabled || oldOntop != req.OntopDiscountRate || (req.CreditLimit != nil && oldCredit != *req.CreditLimit) || (req.StandardDiscountRate != nil && oldStandard != *req.StandardDiscountRate) {
 		action := "แก้ไขสิทธิ์และส่วนลดลูกค้า"
-		if oldEnabled != req.IsDiscountEnabled && oldOntop == req.OntopDiscountRate {
+		if oldEnabled != req.IsDiscountEnabled && oldOntop == req.OntopDiscountRate && (req.CreditLimit == nil || oldCredit == *req.CreditLimit) {
 			if req.IsDiscountEnabled {
 				action = "เปิดสิทธิ์ส่วนลดพิเศษ"
 			} else {
 				action = "ระงับสิทธิ์ส่วนลดพิเศษ"
 			}
+		} else if req.CreditLimit != nil && oldCredit != *req.CreditLimit && oldEnabled == req.IsDiscountEnabled && oldOntop == req.OntopDiscountRate {
+			action = "ปรับวงเงินเครดิตลูกค้า"
 		}
 		statusText := "ปิดใช้งาน"
 		if req.IsDiscountEnabled {
 			statusText = "เปิดใช้งาน"
 		}
-		details := fmt.Sprintf("สถานะสิทธิ์ส่วนลด: %s, On-Top: %.2f%%, ส่วนลดมาตรฐาน: %.2f%%", statusText, req.OntopDiscountRate, customer.StandardDiscountRate)
+		details := fmt.Sprintf("สถานะสิทธิ์ส่วนลด: %s, On-Top: %.2f%%, ส่วนลดมาตรฐาน: %.2f%%, วงเงินเครดิต: ฿%.2f", statusText, req.OntopDiscountRate, customer.StandardDiscountRate, customer.CreditLimit)
 		s.recordCustomerAuditLog(&customer.ID, customer.CustomerName, action, details, userID)
 	}
 

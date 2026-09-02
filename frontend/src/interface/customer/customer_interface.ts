@@ -18,6 +18,8 @@ export interface RegisterCustomerRequest {
 export interface UpdateCustomerDiscountRequest {
   is_discount_enabled: boolean;
   ontop_discount_rate: number;
+  credit_limit?: number;
+  standard_discount_rate?: number;
 }
 
 // ==================== Responses ====================
