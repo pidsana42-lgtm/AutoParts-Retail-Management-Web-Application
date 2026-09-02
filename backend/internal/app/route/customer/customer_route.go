@@ -26,6 +26,7 @@ func SetupCustomerRoutes(r *gin.Engine, db *gorm.DB) {
 		customerGroup.GET("", customerCtrl.GetAllCustomers)
 		customerGroup.GET("/:id", customerCtrl.GetCustomerByID)
 		customerGroup.PUT("/:id/discount", customerCtrl.UpdateCustomerDiscount)
-		
+		customerGroup.GET("/credit/audit-logs", customerCtrl.GetCreditAuditLogs)
+		customerGroup.POST("/credit/audit-logs", customerCtrl.CreateCreditAuditLog)
 	}
 }

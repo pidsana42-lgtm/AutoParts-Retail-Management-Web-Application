@@ -37,3 +37,14 @@ type Customer struct {
 	// เช่น อู่เครดิตดีมาก ใส่ตรงนี้เป็น 3.00 (%) พอไปดึงของเพื่อนมา มันจะเอาไป +3% อัตโนมัติ
 	OntopDiscountRate float64 `gorm:"type:decimal(5,2);not null;default:0.00" json:"ontop_discount_rate"`
 }
+
+type CustomerCreditAuditLog struct {
+	gorm.Model
+	CustomerID   *uint  `json:"customer_id"`
+	CustomerName string `gorm:"type:varchar(100);not null" json:"customer_name"`
+	Action       string `gorm:"type:varchar(255);not null" json:"action"`
+	Details      string `gorm:"type:text;not null" json:"details"`
+	ChangedBy    string `gorm:"type:varchar(100);not null" json:"changed_by"`
+	UserID       *uint  `json:"user_id"`
+	User         *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}

@@ -99,6 +99,7 @@ export interface UseCustomerCreditControlReturn {
   isAuditModalOpen: boolean;
   setIsAuditModalOpen: (open: boolean) => void;
   auditLogs: CustomerCreditAuditLog[];
+  isLoadingAuditLogs: boolean;
 
   // Actions
   handleOpenEditModal: (customer: CustomerCreditItem) => void;

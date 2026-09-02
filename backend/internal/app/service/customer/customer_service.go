@@ -6,13 +6,17 @@ import (
 	"gorm.io/gorm"
 	"backend/internal/app/entity"
 	"errors"
+	"fmt"
+	"strings"
 )
 
 type CustomerService interface {
 	RegisterNewCustomer(customer customerDto.RegisterCustomerRequest, idCardImagePath string) error
 	GetAllCustomers() ([]customerDto.CustomerResponse, error)
 	GetCustomerByID(id uint) (customerDto.CustomerDetailResponse, error) 
-	UpdateCustomerDiscount(id uint, req customerDto.UpdateCustomerDiscountRequest) error
+	UpdateCustomerDiscount(id uint, req customerDto.UpdateCustomerDiscountRequest, userID uint) error
+	CreateCreditAuditLog(req customerDto.CreateCustomerCreditAuditLogRequest, userID uint) error
+	GetCreditAuditLogs() ([]customerDto.CustomerCreditAuditLogResponse, error)
 }
 
 type customerService struct {
@@ -76,7 +80,33 @@ func (s *customerService) GetCustomerByID(id uint) (customerDto.CustomerDetailRe
 	return customerDto.ToCustomerDetailResponse(*customer), nil
 }
 
-func (s *customerService) UpdateCustomerDiscount(id uint, req customerDto.UpdateCustomerDiscountRequest) error {
+func (s *customerService) recordCustomerAuditLog(customerID *uint, customerName, action, details string, userID uint) {
+	userName := "เจ้าของร้าน"
+	var userPtr *uint
+	if userID > 0 {
+		userPtr = &userID
+		if user, err := s.repo.GetUserByID(userID); err == nil && user != nil {
+			fullName := strings.TrimSpace(user.FirstName + " " + user.LastName)
+			if fullName != "" {
+				userName = fullName
+			} else if user.Username != "" {
+				userName = user.Username
+			}
+		}
+	}
+
+	log := &entity.CustomerCreditAuditLog{
+		CustomerID:   customerID,
+		CustomerName: customerName,
+		Action:       action,
+		Details:      details,
+		ChangedBy:    userName,
+		UserID:       userPtr,
+	}
+	_ = s.repo.CreateCreditAuditLog(log)
+}
+
+func (s *customerService) UpdateCustomerDiscount(id uint, req customerDto.UpdateCustomerDiscountRequest, userID uint) error {
 	customer, err := s.repo.GetCustomerByID(id)
 	if err != nil {
 		return errors.New("ไม่พบข้อมูลสมาชิกคนนี้ในระบบ")
@@ -86,8 +116,50 @@ func (s *customerService) UpdateCustomerDiscount(id uint, req customerDto.Update
 		return errors.New("ไม่สามารถปรับส่วนลดให้กับลูกค้าประเภทนี้ได้")
 	}
 
+	oldEnabled := customer.IsDiscountEnabled
+	oldOntop := customer.OntopDiscountRate
+
 	customer.IsDiscountEnabled = req.IsDiscountEnabled
 	customer.OntopDiscountRate = req.OntopDiscountRate
 
-	return s.repo.UpdateCustomerDiscountRequest(customer)
+	if err := s.repo.UpdateCustomerDiscountRequest(customer); err != nil {
+		return err
+	}
+
+	// บันทึก Audit Log อัตโนมัติเมื่อมีการเปลี่ยนแปลง
+	if oldEnabled != req.IsDiscountEnabled || oldOntop != req.OntopDiscountRate {
+		action := "แก้ไขสิทธิ์และส่วนลดลูกค้า"
+		if oldEnabled != req.IsDiscountEnabled && oldOntop == req.OntopDiscountRate {
+			if req.IsDiscountEnabled {
+				action = "เปิดสิทธิ์ส่วนลดพิเศษ"
+			} else {
+				action = "ระงับสิทธิ์ส่วนลดพิเศษ"
+			}
+		}
+		statusText := "ปิดใช้งาน"
+		if req.IsDiscountEnabled {
+			statusText = "เปิดใช้งาน"
+		}
+		details := fmt.Sprintf("สถานะสิทธิ์ส่วนลด: %s, On-Top: %.2f%%, ส่วนลดมาตรฐาน: %.2f%%", statusText, req.OntopDiscountRate, customer.StandardDiscountRate)
+		s.recordCustomerAuditLog(&customer.ID, customer.CustomerName, action, details, userID)
+	}
+
+	return nil
+}
+
+func (s *customerService) CreateCreditAuditLog(req customerDto.CreateCustomerCreditAuditLogRequest, userID uint) error {
+	s.recordCustomerAuditLog(req.CustomerID, req.CustomerName, req.Action, req.Details, userID)
+	return nil
+}
+
+func (s *customerService) GetCreditAuditLogs() ([]customerDto.CustomerCreditAuditLogResponse, error) {
+	logs, err := s.repo.GetCreditAuditLogs(100)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]customerDto.CustomerCreditAuditLogResponse, 0, len(logs))
+	for i := range logs {
+		res = append(res, *customerDto.ToCustomerCreditAuditLogResponse(&logs[i]))
+	}
+	return res, nil
 }

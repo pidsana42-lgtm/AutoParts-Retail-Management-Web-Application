@@ -87,6 +87,7 @@ func SetupDatabase() {
 		&entity.User{},
 		&entity.Supplier{},
 		&entity.Customer{},
+		&entity.CustomerCreditAuditLog{},
 		&entity.Bank{},
 		&entity.Payment{},
 		&entity.PaymentMethod{},

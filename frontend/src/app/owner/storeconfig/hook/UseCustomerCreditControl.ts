@@ -10,8 +10,6 @@ import type {
   UseCustomerCreditControlReturn,
 } from "../../../../interface/storeconfig/customer_credit_interface";
 
-const AUDIT_STORAGE_KEY = "customer_credit_audit_logs";
-
 export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
   const [customers, setCustomers] = useState<CustomerCreditItem[]>([]);
   const [customerTypes, setCustomerTypes] = useState<CustomerTypeItem[]>([]);
@@ -38,14 +36,19 @@ export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
   const [auditLogs, setAuditLogs] = useState<CustomerCreditAuditLog[]>([]);
+  const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState<boolean>(false);
 
-  // Load audit logs from localStorage
-  const loadAuditLogs = useCallback(() => {
+  // Load audit logs from Backend API
+  const loadAuditLogs = useCallback(async () => {
     try {
-      const logs = JSON.parse(localStorage.getItem(AUDIT_STORAGE_KEY) || "[]");
-      setAuditLogs(logs);
-    } catch {
+      setIsLoadingAuditLogs(true);
+      const logs = await customerApiService.getCustomerCreditAuditLogs();
+      setAuditLogs(logs || []);
+    } catch (err) {
+      console.error("Failed to load customer credit audit logs:", err);
       setAuditLogs([]);
+    } finally {
+      setIsLoadingAuditLogs(false);
     }
   }, []);
 
@@ -53,34 +56,24 @@ export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
     loadAuditLogs();
   }, [loadAuditLogs]);
 
-  // Save an audit log entry
-  const addAuditLog = (action: string, customerName: string, details: string) => {
+  useEffect(() => {
+    if (isAuditModalOpen) {
+      loadAuditLogs();
+    }
+  }, [isAuditModalOpen, loadAuditLogs]);
+
+  // Save an audit log entry to Backend API
+  const addAuditLog = async (action: string, customerName: string, details: string, customerId?: number) => {
     try {
-      let userName = "เจ้าของร้าน";
-      try {
-        const user = JSON.parse(localStorage.getItem("user") || "{}");
-        userName = user.first_name || user.username || "เจ้าของร้าน";
-      } catch {
-        // fallback
-      }
-
-      const newLog: CustomerCreditAuditLog = {
-        id: Date.now(),
-        action,
+      await customerApiService.createCustomerCreditAuditLog({
+        customer_id: customerId,
         customer_name: customerName,
+        action,
         details,
-        changed_by: userName,
-        changed_at: new Date().toISOString(),
-      };
-
-      const existingLogs: CustomerCreditAuditLog[] = JSON.parse(
-        localStorage.getItem(AUDIT_STORAGE_KEY) || "[]"
-      );
-      const updated = [newLog, ...existingLogs.slice(0, 99)];
-      localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(updated));
-      setAuditLogs(updated);
+      });
+      loadAuditLogs();
     } catch (e) {
-      console.error("Failed to append audit log", e);
+      console.error("Failed to save audit log to backend:", e);
     }
   };
 
@@ -363,7 +356,8 @@ export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
           payload.is_discount_enabled ? "เปิดใช้งาน" : "ปิดใช้งาน"
         }, On-Top: ${payload.ontop_discount_rate}%, ส่วนลดมาตรฐาน: ${
           payload.standard_discount_rate ?? targetCustomer?.standard_discount_rate ?? 0
-        }%`
+        }%`,
+        payload.customerId
       );
 
       // Update local state directly
@@ -416,7 +410,8 @@ export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
       addAuditLog(
         newStatus ? "เปิดสิทธิ์ส่วนลดพิเศษ" : "ระงับสิทธิ์ส่วนลดพิเศษ",
         customer.customer_name,
-        `เปลี่ยนสถานะสิทธิ์ส่วนลดเป็น ${newStatus ? "เปิดใช้งาน (Active)" : "ปิดใช้งาน (Disabled)"}`
+        `เปลี่ยนสถานะสิทธิ์ส่วนลดเป็น ${newStatus ? "เปิดใช้งาน (Active)" : "ปิดใช้งาน (Disabled)"}`,
+        customer.id
       );
 
       setCustomers((prev) =>
@@ -474,6 +469,7 @@ export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
     isAuditModalOpen,
     setIsAuditModalOpen,
     auditLogs,
+    isLoadingAuditLogs,
     handleOpenEditModal,
     handleUpdateDiscount,
     handleQuickToggleDiscount,
