@@ -145,8 +145,10 @@ func ToCustomerTypeListResponse(customerTypes []entity.CustomerType) []CustomerT
 }
 
 type UpdateCustomerDiscountRequest struct {
-	IsDiscountEnabled bool    `json:"is_discount_enabled"`
-	OntopDiscountRate float64 `json:"ontop_discount_rate" binding:"required,min=0"`
+	IsDiscountEnabled    bool     `json:"is_discount_enabled"`
+	OntopDiscountRate    float64  `json:"ontop_discount_rate" binding:"min=0"`
+	CreditLimit          *float64 `json:"credit_limit,omitempty"`
+	StandardDiscountRate *float64 `json:"standard_discount_rate,omitempty"`
 }
 
 type CustomerCreditAuditLogResponse struct {
