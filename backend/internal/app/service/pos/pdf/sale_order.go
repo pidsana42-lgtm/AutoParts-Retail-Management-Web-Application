@@ -46,6 +46,7 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 	}
 
 	// 2. กำหนดหัวข้อเอกสาร (Document Title)
+	isCancelled := strings.EqualFold(string(order.Status), "cancelled")
 	docTitle := customTitle
 	if docTitle == "" {
 		if order.PaymentMethodID != nil && *order.PaymentMethodID == 3 {
@@ -55,6 +56,10 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 		}
 	} else if strings.Contains(docTitle, "ชำระหนี้") {
 		docTitle = "ใบเสร็จรับเงิน\n(ชำระหนี้)"
+	}
+
+	if isCancelled {
+		docTitle = docTitle + "\n(ยกเลิกแล้ว / CANCELLED)"
 	}
 
 	// 3. ตั้งค่าหน้ากระดาษและฟอนต์
@@ -129,12 +134,12 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 					})
 				}
 			})
-			m.Col(5, func() {}) // ช่องว่างตรงกลาง
-			m.Col(4, func() {
+			m.Col(4, func() {}) // ช่องว่างตรงกลาง
+			m.Col(5, func() {
 				titleLines := strings.Split(docTitle, "\n")
-				fontSize := 24.0
+				fontSize := 22.0
 				if len(titleLines) > 1 {
-					fontSize = 18.0
+					fontSize = 16.0
 				}
 				topOffset := 0.0
 				for _, line := range titleLines {
@@ -145,7 +150,7 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 						Color: HexToColor("#E51C23"),
 						Top:   topOffset,
 					})
-					topOffset += 6.5
+					topOffset += 6.0
 				}
 			})
 		})
@@ -153,8 +158,58 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 
 	m.Row(5, func() {}) // เว้นบรรทัด
 
+	// แถบแจ้งเตือนเอกสารถูกยกเลิก (Void / Cancelled Banner)
+	if isCancelled {
+		cancelDateStr := "-"
+		if order.CancelProcessedAt != nil {
+			cancelDateStr = FormatThaiDate(*order.CancelProcessedAt) + " " + order.CancelProcessedAt.Format("15:04 น.")
+		} else if order.CancelRequestedAt != nil {
+			cancelDateStr = FormatThaiDate(*order.CancelRequestedAt) + " " + order.CancelRequestedAt.Format("15:04 น.")
+		} else {
+			cancelDateStr = FormatThaiDate(order.UpdatedAt) + " " + order.UpdatedAt.Format("15:04 น.")
+		}
+
+		approverStr := "เจ้าของร้าน"
+		if order.CancelRequestedBy != nil && order.CancelRequestedBy.FirstName != "" {
+			approverStr = fmt.Sprintf("%s %s", order.CancelRequestedBy.FirstName, order.CancelRequestedBy.LastName)
+		}
+
+		reasonStr := "-"
+		if order.CancelReason != nil && *order.CancelReason != "" {
+			reasonStr = *order.CancelReason
+		} else if order.CancelRemark != nil && *order.CancelRemark != "" {
+			reasonStr = *order.CancelRemark
+		}
+
+		m.Row(16, func() {
+			m.Col(12, func() {
+				m.Text("*** เอกสารนี้ถูกยกเลิกแล้ว (CANCELLED / VOID) ***", props.Text{
+					Size:  12.5,
+					Style: consts.Bold,
+					Align: consts.Center,
+					Color: HexToColor("#E51C23"),
+					Top:   1.0,
+				})
+				detailText := fmt.Sprintf("วันที่ยกเลิก: %s    |    ผู้อนุมัติ: %s    |    เหตุผลการยกเลิก: %s", cancelDateStr, approverStr, reasonStr)
+				m.Text(detailText, props.Text{
+					Size:  9.5,
+					Style: consts.Normal,
+					Align: consts.Center,
+					Color: HexToColor("#1C1B1B"),
+					Top:   6.5,
+				})
+			})
+		})
+		m.Line(1)
+		m.Row(3, func() {})
+	}
+
 	// 5. ข้อมูลบริษัท (ซ้าย) และ ข้อมูลเอกสาร (ขวา)
-	m.Row(25, func() {
+	companyRowHeight := 25.0
+	if isCancelled {
+		companyRowHeight = 30.0
+	}
+	m.Row(companyRowHeight, func() {
 		// ฝั่งซ้าย: ข้อมูลบริษัท
 		m.Col(8, func() {
 			m.Text(companyName, props.Text{Size: 12, Style: consts.Bold})
@@ -169,12 +224,18 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 			m.Text("วันที่", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 5, Color: HexToColor("#E51C23")})
 			m.Text("พนักงาน", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 10, Color: HexToColor("#E51C23")})
 			m.Text("ชำระโดย", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 15, Color: HexToColor("#E51C23")})
+			if isCancelled {
+				m.Text("สถานะ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 20, Color: HexToColor("#E51C23")})
+			}
 		})
 		m.Col(3, func() {
 			m.Text(order.OrderNumber, props.Text{Size: 11, Align: consts.Left})
 			m.Text(orderDate, props.Text{Size: 11, Align: consts.Left, Top: 5})
 			m.Text(salesStaff, props.Text{Size: 11, Align: consts.Left, Top: 10})
 			m.Text(paymentMethodStr, props.Text{Size: 11, Align: consts.Left, Top: 15})
+			if isCancelled {
+				m.Text("ยกเลิกแล้ว (CANCELLED)", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 20, Color: HexToColor("#E51C23")})
+			}
 		})
 	})
 

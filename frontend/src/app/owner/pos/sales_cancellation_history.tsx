@@ -14,8 +14,8 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ScanBarcode,
-  RotateCcw,
   CopyPlus,
+  Printer,
   X,
 } from "lucide-react";
 import {
@@ -33,6 +33,8 @@ import { SalesCancellationStatusBadge } from "../../../components/elements/statu
 // นำเข้า Custom Hook ของเจ้าของร้าน
 import { useOwnerSalesCancellationHistory } from "./hooks/useOwnerSalesCancellationHistory";
 import { useSalesHistory } from "../../employee/pos/hooks/useSalesHistory";
+import { posApiService } from "../../../service/http/pos/pos_service";
+import { downloadPdfBlob } from "../../../utils/payment_history_print";
 import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
 
 const OwnerSalesCancellationHistory: React.FC = () => {
@@ -90,6 +92,23 @@ const OwnerSalesCancellationHistory: React.FC = () => {
     handleRejectCancelByOwner,
     getStatusText,
   } = useSalesHistory();
+
+  const [printingOrderId, setPrintingOrderId] = React.useState<number | string | null>(null);
+
+  const handlePrintReceipt = async (orderId: number | string, orderNumber?: string) => {
+    setPrintingOrderId(orderId);
+    try {
+      const blob = await posApiService.printOrderReceipt(orderId);
+      const rawNum = orderNumber || `INV-${orderId}`;
+      const fileName = String(rawNum).endsWith(".pdf") ? `${rawNum}` : `${rawNum}.pdf`;
+      downloadPdfBlob(blob, fileName);
+    } catch (err) {
+      console.error("Failed to print receipt:", err);
+      alert("ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setPrintingOrderId(null);
+    }
+  };
 
   // Wrap drawer action handlers to also refetch table data
   const handleApproveDrawer = async () => {
@@ -293,13 +312,13 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                   className="w-4 h-4 border border-gray-300 rounded-none bg-white checked:bg-[#E51C23] checked:border-[#E51C23] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 appearance-none flex items-center justify-center after:content-['✓'] after:text-white after:text-[10px] after:font-bold after:hidden checked:after:block"
                 />
               </TableHead>
-              <TableHead className="py-3 px-3 w-[14%]">หมายเลขคำสั่งซื้อ</TableHead>
-              <TableHead className="py-3 px-3 w-[14%]">วันที่ทำรายการยกเลิก</TableHead>
-              <TableHead className="py-3 px-3 w-[26%]">ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท</TableHead>
-              <TableHead className="py-3 px-3 text-right w-[12%]">จำนวนเงิน</TableHead>
-              <TableHead className="py-3 px-3 text-center w-[12%]">ผู้ยกขอเลิก</TableHead>
-              <TableHead className="py-3 px-3 text-center w-[10%]">สถานะ</TableHead>
-              <TableHead className="py-3 px-3 text-center w-[8%]">จัดการ</TableHead>
+              <TableHead className="py-3 px-2.5 w-[14%] ">หมายเลขคำสั่งซื้อ</TableHead>
+              <TableHead className="py-3 px-2.5 w-[13%]">วันที่ทำรายการยกเลิก</TableHead>
+              <TableHead className="py-3 px-2.5 w-[28%] ">ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท</TableHead>
+              <TableHead className="py-3 px-2.5 text-right w-[10%] ">จำนวนเงิน</TableHead>
+              <TableHead className="py-3 px-2.5 text-left w-[11%]">ผู้ขอยกเลิก</TableHead>
+              <TableHead className="py-3 px-2.5 text-center w-[12%] ">สถานะ</TableHead>
+              <TableHead className="py-3 px-2 text-center w-[9.5%]">จัดการ</TableHead>
             </TableRow>
           </TableHeader>
 
@@ -332,7 +351,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                     className={isChecked ? "bg-red-50/40" : "hover:bg-slate-50 transition-colors"}
                   >
                     {/* Checkbox */}
-                    <TableCell className="py-3.5 px-3 text-center">
+                    <TableCell className="py-3 px-2 text-center">
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -343,14 +362,14 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                     </TableCell>
 
                     {/* หมายเลขคำสั่งซื้อ */}
-                    <TableCell className="py-3.5 px-4">
-                      <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
+                    <TableCell className="py-3 px-2.5">
+                      <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate">
                         {item.order_number}
                       </Text>
                     </TableCell>
 
                     {/* วันที่ทำรายการยกเลิก */}
-                    <TableCell className="py-3.5 px-3">
+                    <TableCell className="py-3 px-2.5">
                       <Text variant="xs" className="font-light text-[#5B5B5B] mb-0">
                         {formatDate(
                           item.cancel_processed_at ||
@@ -363,7 +382,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                     </TableCell>
 
                     {/* ชื่อลูกค้า */}
-                    <TableCell className="py-3.5 px-3 truncate">
+                    <TableCell className="py-3 px-2.5 truncate">
                       <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate">
                         {item.customer_name || item.customer_name_temp || "ลูกค้าทั่วไป"}
                       </Text>
@@ -376,21 +395,21 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                     </TableCell>
 
                     {/* จำนวนเงิน */}
-                    <TableCell className="py-3.5 px-3 text-right">
+                    <TableCell className="py-3 px-2.5 text-right">
                       <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
                         {item.total_amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </Text>
                     </TableCell>
 
                     {/* ผู้ยกเลิก */}
-                    <TableCell className="py-3.5 px-3 text-center">
-                      <Text variant="xs" className="font-normal text-[#1C1B1B] mb-0">
+                    <TableCell className="py-3 px-2.5 text-left">
+                      <Text variant="xs" className="font-normal text-[#1C1B1B] mb-0 truncate">
                         {item.canceller || "-"}
                       </Text>
                     </TableCell>
 
                     {/* สถานะ */}
-                    <TableCell className="py-3.5 px-3 text-center">
+                    <TableCell className="py-3 px-2.5 text-center">
                       <SalesCancellationStatusBadge
                         status={item.status}
                         paymentStatus={item.payment_status}
@@ -400,31 +419,43 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                     </TableCell>
 
                     {/* จัดการ */}
-                    <TableCell className="py-3.5 px-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          type="button"
-                          title="ดูรายละเอียด"
-                          onClick={() => setSelectedOrderId(item.id)}
-                          className="p-1.5 text-gray-500 hover:text-gray-700 cursor-pointer"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {(item.status || "").toUpperCase() === "CANCELLED" && (
+                    <TableCell className="py-3 px-2 text-center">
+                        <div className="flex items-center justify-center gap-1">
                           <button
                             type="button"
-                            title="ดึงรายการไปเปิดบิลใหม่ที่หน้า POS (ไม่กระทบบิลเดิม)"
-                            onClick={() =>
-                              navigate(`/owner/pos/pos?recover_order_id=${item.id}`, {
-                                state: { recoverOrderId: item.id },
-                              })
-                            }
-                            className="p-1.5 text-red-600 hover:text-red-800 cursor-pointer"
+                            title="ดูรายละเอียด"
+                            onClick={() => setSelectedOrderId(item.id)}
+                            className="p-1.5 text-gray-500 hover:text-gray-700 cursor-pointer"
                           >
-                            <CopyPlus className="w-4 h-4" />
+                            <Eye className="w-4 h-4" />
                           </button>
-                        )}
-                      </div>
+                          <button
+                            type="button"
+                            disabled={printingOrderId === item.id}
+                            title="พิมพ์/ดาวน์โหลดใบเสร็จที่ยกเลิก (Void Receipt)"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePrintReceipt(item.id, item.order_number);
+                            }}
+                            className="p-1.5 text-gray-500 hover:text-[#E51C23] cursor-pointer disabled:opacity-40 transition-colors"
+                          >
+                            <Printer className={cn("w-4 h-4", printingOrderId === item.id && "animate-pulse")} />
+                          </button>
+                          {(item.status || "").toUpperCase() === "CANCELLED" && (
+                            <button
+                              type="button"
+                              title="ดึงรายการไปเปิดบิลใหม่ที่หน้า POS (ไม่กระทบบิลเดิม)"
+                              onClick={() =>
+                                navigate(`/owner/pos/pos?recover_order_id=${item.id}`, {
+                                  state: { recoverOrderId: item.id },
+                                })
+                              }
+                              className="p-1.5 text-red-600 hover:text-red-800 cursor-pointer"
+                            >
+                              <CopyPlus className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -826,6 +857,17 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                               )}
                             </div>
                           </Card>
+
+                          <Button
+                            type="button"
+                            variant="outline-cancel"
+                            onClick={() => handlePrintReceipt(orderDetail.id, orderDetail.order_number)}
+                            disabled={printingOrderId === orderDetail.id}
+                            className="w-full text-xs h-10 font-normal rounded-none flex items-center justify-center gap-2 cursor-pointer shadow-sm border border-gray-300 hover:bg-gray-50"
+                          >
+                            <Printer className={cn("w-4 h-4 text-[#E51C23]", printingOrderId === orderDetail.id && "animate-pulse")} />
+                            <span>พิมพ์ใบเสร็จที่ยกเลิก (เอกสารหลักฐาน)</span>
+                          </Button>
 
                           <Button
                             type="button"

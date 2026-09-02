@@ -658,7 +658,7 @@ export default function TransactionHistoryPage() {
                     </Text>
                   </div>
                   <div className="flex items-center gap-2">
-                    {/* <Button
+                    <Button
                       type="button"
                       variant="solid-red"
                       onClick={() => handlePrintReceipt(orderDetail.id || orderDetail.order_number, orderDetail.order_number)}
@@ -667,7 +667,7 @@ export default function TransactionHistoryPage() {
                     >
                       <Printer size={14} />
                       {printingOrderId !== null ? "กำลังดาวน์โหลด..." : "พิมพ์ใบเสร็จ/ใบส่งของ"}
-                    </Button> */}
+                    </Button>
                     <button
                       type="button"
                       onClick={() => setSelectedOrderId(null)}
@@ -1061,6 +1061,17 @@ export default function TransactionHistoryPage() {
                               </div>
                             </div>
                           </Card>
+
+                          <Button
+                            type="button"
+                            variant="outline-cancel"
+                            onClick={() => handlePrintReceipt(orderDetail.id, orderDetail.order_number)}
+                            disabled={printingOrderId !== null}
+                            className="w-full text-xs h-10 font-normal rounded-none flex items-center justify-center gap-2 cursor-pointer shadow-sm border border-gray-300 hover:bg-gray-50"
+                          >
+                            <Printer className={cn("w-4 h-4 text-[#E51C23]", printingOrderId === orderDetail.id && "animate-pulse")} />
+                            <span>พิมพ์ใบเสร็จที่ยกเลิก (เอกสารหลักฐาน)</span>
+                          </Button>
 
                           <Button
                             type="button"

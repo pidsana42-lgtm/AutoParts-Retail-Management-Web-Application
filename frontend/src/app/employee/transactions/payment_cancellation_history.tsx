@@ -15,6 +15,7 @@ import {
   ScanBarcode,
   X,
   RotateCcw,
+  Printer,
 } from "lucide-react";
 import {
   Table,
@@ -36,6 +37,8 @@ import { usePaymentCancellationHistory } from "./hooks/usePaymentCancellationHis
 import { useUserRole } from "../../../hooks/useUserRole";
 import { useEmployeeOptions } from "../../../hooks/useEmployeeOptions";
 import type { PaymentHistoryItem } from "../../../interface/pos/payment_interface";
+import { posApiService } from "../../../service/http/pos/pos_service";
+import { downloadPdfBlob } from "../../../utils/payment_history_print";
 
 const PaymentCancellationHistory: React.FC = () => {
   const { isOwnerOrAdmin } = useUserRole();
@@ -83,6 +86,29 @@ const PaymentCancellationHistory: React.FC = () => {
     handleRevertCancel,
     handleResubmitCancel,
   } = usePaymentCancellationHistory();
+
+  const [printingReceiptId, setPrintingReceiptId] = React.useState<number | string | null>(null);
+
+  const handlePrintReceipt = async (item: PaymentHistoryItem) => {
+    const targetId = item.receipt_id || item.receipt_number;
+    setPrintingReceiptId(targetId);
+    try {
+      let blob: Blob;
+      if (item.payment_type === "repayment") {
+        blob = await posApiService.printPaymentReceiptPDF(targetId);
+      } else {
+        blob = await posApiService.printOrderReceipt(item.order_numbers || targetId);
+      }
+      const rawNum = item.receipt_number || targetId;
+      const fileName = String(rawNum).endsWith(".pdf") ? `${rawNum}` : `${rawNum}.pdf`;
+      downloadPdfBlob(blob, fileName);
+    } catch (err) {
+      console.error("Failed to print receipt:", err);
+      alert("ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setPrintingReceiptId(null);
+    }
+  };
 
   const kpiValue = (value: React.ReactNode) =>
     isStatsLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
@@ -462,14 +488,28 @@ const PaymentCancellationHistory: React.FC = () => {
 
                         {/* 7. จัดการ */}
                         <TableCell className="py-3.5 px-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedReceipt(item)}
-                            className="p-1.5 cursor-pointer transition-colors"
-                            title="ดูรายละเอียดคำขอ"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReceipt(item)}
+                              className="p-1.5 cursor-pointer transition-colors text-gray-500 hover:text-gray-700"
+                              title="ดูรายละเอียดคำขอ"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={printingReceiptId === (item.receipt_id || item.receipt_number)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePrintReceipt(item);
+                              }}
+                              className="p-1.5 cursor-pointer transition-colors text-gray-500 hover:text-[#E51C23] disabled:opacity-40"
+                              title="พิมพ์/ดาวน์โหลดใบเสร็จที่ยกเลิก (Void Receipt)"
+                            >
+                              <Printer className={cn("w-4 h-4", printingReceiptId === (item.receipt_id || item.receipt_number) && "animate-pulse")} />
+                            </button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -628,13 +668,25 @@ const PaymentCancellationHistory: React.FC = () => {
                     </span>
                   </Text>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedReceipt(null)}
-                  className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline-cancel"
+                    onClick={() => handlePrintReceipt(selectedReceipt)}
+                    disabled={printingReceiptId === (selectedReceipt.receipt_id || selectedReceipt.receipt_number)}
+                    className="text-xs h-8 px-3 font-normal rounded-none flex items-center gap-1.5 cursor-pointer border border-gray-200 hover:bg-[#F6F3F2]"
+                  >
+                    <Printer className={cn("w-3.5 h-3.5 text-[#E51C23]", printingReceiptId === (selectedReceipt.receipt_id || selectedReceipt.receipt_number) && "animate-pulse")} />
+                    <span>พิมพ์ใบเสร็จ</span>
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedReceipt(null)}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               {/* Body */}
@@ -951,7 +1003,16 @@ const PaymentCancellationHistory: React.FC = () => {
                         </div>
                       </Card>
 
-                      
+                      <Button
+                        type="button"
+                        variant="outline-cancel"
+                        onClick={() => handlePrintReceipt(selectedReceipt)}
+                        disabled={printingReceiptId === (selectedReceipt.receipt_id || selectedReceipt.receipt_number)}
+                        className="w-full text-xs h-10 font-normal rounded-none flex items-center justify-center gap-2 cursor-pointer shadow-sm border border-gray-300 hover:bg-gray-50"
+                      >
+                        <Printer className={cn("w-4 h-4 text-[#E51C23]", printingReceiptId === (selectedReceipt.receipt_id || selectedReceipt.receipt_number) && "animate-pulse")} />
+                        <span>พิมพ์ใบเสร็จที่ยกเลิก (เอกสารหลักฐาน)</span>
+                      </Button>
                     </div>
                   );
                 })()}
