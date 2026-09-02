@@ -493,120 +493,137 @@ export default function PaymentHistoryPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  items.map((item: PaymentHistoryItem) => (
-                    <TableRow
-                      key={`${item.payment_type}-${item.receipt_id}-${item.receipt_number}`}
-                      className="hover:bg-slate-50 transition-colors"
-                    >
-                      {/* 1. เลขที่ใบเสร็จ */}
-                      <TableCell className="py-3.5 px-3">
-                        <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 whitespace-nowrap">
-                          {item.receipt_number}
-                        </Text>
-                      </TableCell>
-
-                      {/* 2. วันที่ทำรายการ */}
-                      <TableCell className="py-3.5 px-3">
-                        <Text variant="xs" className="font-light text-[#5B5B5B] mb-0 whitespace-nowrap">
-                          {formatDate(item.paid_at)}
-                        </Text>
-                      </TableCell>
-
-                      {/* 3. ชื่อลูกค้า + เลขที่บิล */}
-                      <TableCell className="py-3.5 px-3">
-                        {item.customer_name ? (
-                          <button
-                            type="button"
-                            onClick={() => setSearch(item.customer_name)}
-                            className="text-left font-normal text-[#1C1B1B] hover:text-[#E51C23] hover:underline mb-0 truncate max-w-[200px] cursor-pointer bg-transparent border-none p-0 block"
-                            title="คลิกเพื่อกรองค้นหาเฉพาะลูกค้าคนนี้"
-                          >
-                            <Text variant="small" className="font-normal text-inherit mb-0 truncate">
-                              {getDisplayCustomerName(item)}
-                            </Text>
-                          </button>
-                        ) : (
-                          <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate max-w-[200px]">
-                            {getDisplayCustomerName(item)}
-                          </Text>
+                  items.map((item: PaymentHistoryItem) => {
+                    const isSelected =
+                      selectedReceipt?.receipt_id === item.receipt_id &&
+                      selectedReceipt?.payment_type === item.payment_type;
+                    return (
+                      <TableRow
+                        key={`${item.payment_type}-${item.receipt_id}-${item.receipt_number}`}
+                        onClick={() => setSelectedReceipt(item)}
+                        className={cn(
+                          "cursor-pointer transition-colors",
+                          isSelected
+                            ? "bg-red-50/70 border-l-2 border-l-[#E51C23]"
+                            : "hover:bg-slate-50"
                         )}
-                        <Text variant="xs" className="font-light text-[#A8A29E] mb-0 truncate max-w-[200px]">
-                          บิล: {item.order_numbers || "-"}
-                        </Text>
-                      </TableCell>
+                      >
+                        {/* 1. เลขที่ใบเสร็จ */}
+                        <TableCell className="py-3.5 px-3">
+                          <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 whitespace-nowrap">
+                            {item.receipt_number}
+                          </Text>
+                        </TableCell>
 
-                      {/* 4. ประเภทการชำระ */}
-                      <TableCell className="py-3.5 px-3">
-                        <PaymentTypeBadge type={item.payment_type} />
-                      </TableCell>
+                        {/* 2. วันที่ทำรายการ */}
+                        <TableCell className="py-3.5 px-3">
+                          <Text variant="xs" className="font-light text-[#5B5B5B] mb-0 whitespace-nowrap">
+                            {formatDate(item.paid_at)}
+                          </Text>
+                        </TableCell>
 
-                      {/* 5. สถานะ */}
-                      <TableCell className="py-3.5 px-3">
-                        <PaymentStatusBadge status={item.status} />
-                      </TableCell>
-
-                      {/* 6. ผู้บันทึกยอด */}
-                      <TableCell className="py-3.5 px-3">
-                        <Text variant="xs" className="font-normal text-[#1C1B1B] mb-0 whitespace-nowrap">
-                          {item.received_by_name || "-"}
-                        </Text>
-                      </TableCell>
-
-                      {/* 7. ยอดเงินที่รับ */}
-                      <TableCell className="py-3.5 px-3 text-right">
-                        <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 whitespace-nowrap">
-                          {formatCurrency(item.total_received)}
-                        </Text>
-                      </TableCell> 
-
-                      {/* 8. ช่องทางชำระเงิน */}
-                      <TableCell className="py-3.5 px-3 text-center">
-                        <Badge variant={getPaymentVariant(item.payment_method)} className="rounded-none whitespace-nowrap">
-                          {item.payment_method || "เงินสด"}
-                        </Badge>
-                      </TableCell>
-
-                      {/* 9. จัดการ: ปุ่มดูรายละเอียด + ปุ่มพิมพ์ใบเสร็จ + ปุ่มพิมพ์สรุปยอดลูกค้า */}
-                      <TableCell className="py-3.5 px-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            type="button"
-                            className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
-                            title="ดูรายละเอียดใบเสร็จ"
-                            onClick={() => setSelectedReceipt(item)}
-                          >
-                            <Eye className="w-4 h-4 text-gray-600" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={printingReceiptId === (item.receipt_id || item.receipt_number)}
-                            className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100 disabled:opacity-40"
-                            title="พิมพ์ใบเสร็จของบิลนี้"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handlePrintReceipt(item);
-                            }}
-                          >
-                            <Printer className={cn("w-4 h-4 text-gray-600", printingReceiptId === (item.receipt_id || item.receipt_number) && "animate-pulse")} />
-                          </button>
-                          {item.customer_name && (
+                        {/* 3. ชื่อลูกค้า + เลขที่บิล */}
+                        <TableCell className="py-3.5 px-3">
+                          {item.customer_name ? (
                             <button
                               type="button"
-                              disabled={isPrintingStatement}
-                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-red-50 text-gray-600 hover:text-[#E51C23] disabled:opacity-40"
-                              title={`พิมพ์ใบสรุปยอดชำระและยอดคงเหลือของ ${item.customer_name}`}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handlePrintCustomerStatement(item.customer_name);
+                                setSearch(item.customer_name);
+                              }}
+                              className="text-left font-normal text-[#1C1B1B] hover:text-[#E51C23] hover:underline mb-0 truncate max-w-[200px] cursor-pointer bg-transparent border-none p-0 block"
+                              title="คลิกเพื่อกรองค้นหาเฉพาะลูกค้าคนนี้"
+                            >
+                              <Text variant="small" className="font-normal text-inherit mb-0 truncate">
+                                {getDisplayCustomerName(item)}
+                              </Text>
+                            </button>
+                          ) : (
+                            <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate max-w-[200px]">
+                              {getDisplayCustomerName(item)}
+                            </Text>
+                          )}
+                          <Text variant="xs" className="font-light text-[#A8A29E] mb-0 truncate max-w-[200px]">
+                            บิล: {item.order_numbers || "-"}
+                          </Text>
+                        </TableCell>
+
+                        {/* 4. ประเภทการชำระ */}
+                        <TableCell className="py-3.5 px-3">
+                          <PaymentTypeBadge type={item.payment_type} />
+                        </TableCell>
+
+                        {/* 5. สถานะ */}
+                        <TableCell className="py-3.5 px-3">
+                          <PaymentStatusBadge status={item.status} />
+                        </TableCell>
+
+                        {/* 6. ผู้บันทึกยอด */}
+                        <TableCell className="py-3.5 px-3">
+                          <Text variant="xs" className="font-normal text-[#1C1B1B] mb-0 whitespace-nowrap">
+                            {item.received_by_name || "-"}
+                          </Text>
+                        </TableCell>
+
+                        {/* 7. ยอดเงินที่รับ */}
+                        <TableCell className="py-3.5 px-3 text-right">
+                          <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 whitespace-nowrap">
+                            {formatCurrency(item.total_received)}
+                          </Text>
+                        </TableCell> 
+
+                        {/* 8. ช่องทางชำระเงิน */}
+                        <TableCell className="py-3.5 px-3 text-center">
+                          <Badge variant={getPaymentVariant(item.payment_method)} className="rounded-none whitespace-nowrap">
+                            {item.payment_method || "เงินสด"}
+                          </Badge>
+                        </TableCell>
+
+                        {/* 9. จัดการ: ปุ่มดูรายละเอียด + ปุ่มพิมพ์ใบเสร็จ + ปุ่มพิมพ์สรุปยอดลูกค้า */}
+                        <TableCell
+                          className="py-3.5 px-3 text-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
+                              title="ดูรายละเอียดใบเสร็จ"
+                              onClick={() => setSelectedReceipt(item)}
+                            >
+                              <Eye className="w-4 h-4 text-gray-600" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={printingReceiptId === (item.receipt_id || item.receipt_number)}
+                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100 disabled:opacity-40"
+                              title="พิมพ์ใบเสร็จของบิลนี้"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePrintReceipt(item);
                               }}
                             >
-                              <FileText className="w-4 h-4" />
+                              <Printer className={cn("w-4 h-4 text-gray-600", printingReceiptId === (item.receipt_id || item.receipt_number) && "animate-pulse")} />
                             </button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                            {item.customer_name && (
+                              <button
+                                type="button"
+                                disabled={isPrintingStatement}
+                                className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-red-50 text-gray-600 hover:text-[#E51C23] disabled:opacity-40"
+                                title={`พิมพ์ใบสรุปยอดชำระและยอดคงเหลือของ ${item.customer_name}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePrintCustomerStatement(item.customer_name);
+                                }}
+                              >
+                                <FileText className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

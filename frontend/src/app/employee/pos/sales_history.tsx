@@ -400,115 +400,127 @@ export default function TransactionHistoryPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  items.map((item: SalesHistoryItemResponse) => (
-                    <TableRow
-                      key={item.id}
-                      className="hover:bg-slate-50 transition-colors"
-                    >
-                      {/* 1. หมายเลขคำสั่งซื้อ */}
-                      <TableCell className="py-3.5 px-4">
-                        <Text
-                          variant="small"
-                          className="font-normal text-[#1C1B1B] mb-0"
-                        >
-                          {item.order_number}
-                        </Text>
-                      </TableCell>
-
-                      {/* 2. วันที่ทำรายการ */}
-                      <TableCell className="py-3.5 px-4">
-                        <Text
-                          variant="xs"
-                          className="font-light text-[#5B5B5B] mb-0"
-                        >
-                          {formatDate(item.order_date || item.created_at)}
-                        </Text>
-                      </TableCell>
-
-                      {/* 3. ชื่อลูกค้า + เบอร์โทรศัพท์ + ประเภท */}
-                      <TableCell className="py-3.5 px-4 truncate">
-                        <Text
-                          variant="small"
-                          className="font-normal text-[#1C1B1B] mb-0 truncate"
-                        >
-                          {getDisplayCustomerName(item)}
-                        </Text>
-                        <Text
-                          variant="xs"
-                          className="font-light text-[#A8A29E] mb-0"
-                        >
-                          {item.phone_number || item.customer_phone_temp || "-"}
-                        </Text>
-                        <Text 
-                          variant="xs" 
-                          className="font-light text-[#A8A29E] mb-0">
-                          ประเภท: {item.customer_type_name || "-"}
-                        </Text>
-                      </TableCell>
-
-                      {/* 3.5 พนักงานขาย */}
-                      <TableCell className="py-3.5 px-4 truncate">
-                        <Text
-                          variant="xs"
-                          className="font-normal text-[#1C1B1B] mb-0"
-                        >
-                          {item.created_by_name || "-"}
-                        </Text>
-                      </TableCell>
-
-                      {/* 4. จำนวนเงิน */}
-                      <TableCell className="py-3.5 px-4 text-right">
-                        <Text
-                          variant="small"
-                          className="font-normal text-[#1C1B1B] mb-0"
-                        >
-                          {(item.total_amount || 0).toLocaleString("th-TH", {
-                            minimumFractionDigits: 2,
-                          })}
-                        </Text>
-                      </TableCell>
-
-                      {/* 5. วิธีการชำระเงิน */}
-                      <TableCell className="py-3.5 px-4 text-center">
-                        <Badge
-                          variant={getPaymentVariant(item.payment_method_name)}
-                        >
-                          {item.payment_method_name || "-"}
-                        </Badge>
-                      </TableCell>
-
-                      {/* 6. สถานะ */}
-                      <TableCell className="py-3.5 px-4 text-center">
-                        <SalesStatusBadge status={item.status} paymentStatus={item.payment_status} />
-                      </TableCell>
-
-                      {/* 7. ปุ่มจัดการ */}
-                      <TableCell className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            className="inline-flex items-center justify-center p-1.5 cursor-pointer rounded-full"
-                            title="ดูรายละเอียด"
-                            onClick={() => setSelectedOrderId(item.id)}
+                  items.map((item: SalesHistoryItemResponse) => {
+                    const isSelected = selectedOrderId === item.id;
+                    return (
+                      <TableRow
+                        key={item.id}
+                        onClick={() => setSelectedOrderId(item.id)}
+                        className={cn(
+                          "cursor-pointer transition-colors",
+                          isSelected
+                            ? "bg-red-50/70 border-l-2 border-l-[#E51C23]"
+                            : "hover:bg-slate-50"
+                        )}
+                      >
+                        {/* 1. หมายเลขคำสั่งซื้อ */}
+                        <TableCell className="py-3.5 px-4">
+                          <Text
+                            variant="small"
+                            className="font-normal text-[#1C1B1B] mb-0"
                           >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={printingOrderId === item.id}
-                            className="inline-flex items-center justify-center p-1.5 cursor-pointer rounded-full disabled:opacity-40"
-                            title="พิมพ์/ดาวน์โหลดใบเสร็จ"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handlePrintReceipt(item.id, item.order_number);
-                            }}
+                            {item.order_number}
+                          </Text>
+                        </TableCell>
+
+                        {/* 2. วันที่ทำรายการ */}
+                        <TableCell className="py-3.5 px-4">
+                          <Text
+                            variant="xs"
+                            className="font-light text-[#5B5B5B] mb-0"
                           >
-                            <Printer className={cn("w-4 h-4", printingOrderId === item.id && "animate-pulse")} />
-                          </button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                            {formatDate(item.order_date || item.created_at)}
+                          </Text>
+                        </TableCell>
+
+                        {/* 3. ชื่อลูกค้า + เบอร์โทรศัพท์ + ประเภท */}
+                        <TableCell className="py-3.5 px-4 truncate">
+                          <Text
+                            variant="small"
+                            className="font-normal text-[#1C1B1B] mb-0 truncate"
+                          >
+                            {getDisplayCustomerName(item)}
+                          </Text>
+                          <Text
+                            variant="xs"
+                            className="font-light text-[#A8A29E] mb-0"
+                          >
+                            {item.phone_number || item.customer_phone_temp || "-"}
+                          </Text>
+                          <Text 
+                            variant="xs" 
+                            className="font-light text-[#A8A29E] mb-0">
+                            ประเภท: {item.customer_type_name || "-"}
+                          </Text>
+                        </TableCell>
+
+                        {/* 3.5 พนักงานขาย */}
+                        <TableCell className="py-3.5 px-4 truncate">
+                          <Text
+                            variant="xs"
+                            className="font-normal text-[#1C1B1B] mb-0"
+                          >
+                            {item.created_by_name || "-"}
+                          </Text>
+                        </TableCell>
+
+                        {/* 4. จำนวนเงิน */}
+                        <TableCell className="py-3.5 px-4 text-right">
+                          <Text
+                            variant="small"
+                            className="font-normal text-[#1C1B1B] mb-0"
+                          >
+                            {(item.total_amount || 0).toLocaleString("th-TH", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </Text>
+                        </TableCell>
+
+                        {/* 5. วิธีการชำระเงิน */}
+                        <TableCell className="py-3.5 px-4 text-center">
+                          <Badge
+                            variant={getPaymentVariant(item.payment_method_name)}
+                          >
+                            {item.payment_method_name || "-"}
+                          </Badge>
+                        </TableCell>
+
+                        {/* 6. สถานะ */}
+                        <TableCell className="py-3.5 px-4 text-center">
+                          <SalesStatusBadge status={item.status} paymentStatus={item.payment_status} />
+                        </TableCell>
+
+                        {/* 7. ปุ่มจัดการ */}
+                        <TableCell
+                          className="py-3.5 px-4 text-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              className="inline-flex items-center justify-center p-1.5 cursor-pointer rounded-full"
+                              title="ดูรายละเอียด"
+                              onClick={() => setSelectedOrderId(item.id)}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={printingOrderId === item.id}
+                              className="inline-flex items-center justify-center p-1.5 cursor-pointer rounded-full disabled:opacity-40"
+                              title="พิมพ์/ดาวน์โหลดใบเสร็จ"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePrintReceipt(item.id, item.order_number);
+                              }}
+                            >
+                              <Printer className={cn("w-4 h-4", printingOrderId === item.id && "animate-pulse")} />
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
