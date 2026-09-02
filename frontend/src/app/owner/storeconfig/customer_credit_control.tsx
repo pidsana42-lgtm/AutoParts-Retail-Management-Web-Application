@@ -92,6 +92,7 @@ export default function CustomerCreditControl() {
     isAuditModalOpen,
     setIsAuditModalOpen,
     auditLogs,
+    isLoadingAuditLogs,
 
     // Actions
     handleOpenEditModal,
@@ -734,7 +735,12 @@ export default function CustomerCreditControl() {
         description="บันทึกประวัติการปรับแต่งวงเงินและสิทธิ์ส่วนลดภายในระบบ"
         size="lg"
       >
-        {auditLogs.length === 0 ? (
+        {isLoadingAuditLogs ? (
+          <div className="py-12 flex flex-col items-center justify-center text-slate-400 text-xs font-light">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#E51C23] mb-3"></div>
+            <p className="m-0">กำลังโหลดประวัติการแก้ไข...</p>
+          </div>
+        ) : auditLogs.length === 0 ? (
           <div className="py-12 flex flex-col items-center justify-center text-slate-400 text-xs font-light">
             <History size={32} className="text-slate-300 mb-2 stroke-[1.5]" />
             <p className="m-0">ยังไม่มีประวัติการแก้ไขการตั้งค่าในระบบ</p>

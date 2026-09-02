@@ -1,6 +1,9 @@
 package customer
 
-import "backend/internal/app/entity"
+import (
+	"time"
+	"backend/internal/app/entity"
+)
 
 type RegisterCustomerRequest struct {
 	CustomerName         string `json:"customer_name" binding:"required"`
@@ -144,4 +147,33 @@ func ToCustomerTypeListResponse(customerTypes []entity.CustomerType) []CustomerT
 type UpdateCustomerDiscountRequest struct {
 	IsDiscountEnabled bool    `json:"is_discount_enabled"`
 	OntopDiscountRate float64 `json:"ontop_discount_rate" binding:"required,min=0"`
+}
+
+type CustomerCreditAuditLogResponse struct {
+	ID           uint      `json:"id"`
+	CustomerID   *uint     `json:"customer_id,omitempty"`
+	CustomerName string    `json:"customer_name"`
+	Action       string    `json:"action"`
+	Details      string    `json:"details"`
+	ChangedBy    string    `json:"changed_by"`
+	ChangedAt    time.Time `json:"changed_at"`
+}
+
+func ToCustomerCreditAuditLogResponse(log *entity.CustomerCreditAuditLog) *CustomerCreditAuditLogResponse {
+	return &CustomerCreditAuditLogResponse{
+		ID:           log.ID,
+		CustomerID:   log.CustomerID,
+		CustomerName: log.CustomerName,
+		Action:       log.Action,
+		Details:      log.Details,
+		ChangedBy:    log.ChangedBy,
+		ChangedAt:    log.CreatedAt,
+	}
+}
+
+type CreateCustomerCreditAuditLogRequest struct {
+	CustomerID   *uint  `json:"customer_id"`
+	CustomerName string `json:"customer_name" binding:"required"`
+	Action       string `json:"action" binding:"required"`
+	Details      string `json:"details" binding:"required"`
 }

@@ -62,6 +62,22 @@ func (ctrl *CustomerController) GetCustomerByID(c *gin.Context) {
     c.JSON(http.StatusOK, customer)
 }
 
+func getUserIDFromContext(c *gin.Context) uint {
+	if val, exists := c.Get("user_id"); exists {
+		switch v := val.(type) {
+		case float64:
+			return uint(v)
+		case uint:
+			return v
+		case int:
+			return uint(v)
+		case int64:
+			return uint(v)
+		}
+	}
+	return 0
+}
+
 func (ctrl *CustomerController) UpdateCustomerDiscount(c *gin.Context) {
 	//ดึง id ของลูกค้าที่ต้องการแก้ไขจาก URL
 	idStr := c.Param("id")
@@ -77,10 +93,36 @@ func (ctrl *CustomerController) UpdateCustomerDiscount(c *gin.Context) {
 		return
 	}
 
-	if err := ctrl.svc.UpdateCustomerDiscount(uint(id), req); err != nil {
+	userID := getUserIDFromContext(c)
+	if err := ctrl.svc.UpdateCustomerDiscount(uint(id), req, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถอัปเดตข้อมูลส่วนลดลูกค้าได้: " + err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "อัปเดตข้อมูลส่วนลดลูกค้าสำเร็จ"})
+}
+
+func (ctrl *CustomerController) GetCreditAuditLogs(c *gin.Context) {
+	logs, err := ctrl.svc.GetCreditAuditLogs()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, logs)
+}
+
+func (ctrl *CustomerController) CreateCreditAuditLog(c *gin.Context) {
+	var req customerDto.CreateCustomerCreditAuditLogRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง: " + err.Error()})
+		return
+	}
+
+	userID := getUserIDFromContext(c)
+	if err := ctrl.svc.CreateCreditAuditLog(req, userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "บันทึกประวัติการแก้ไขสำเร็จ"})
 }

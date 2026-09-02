@@ -7,7 +7,7 @@ import type {
   UpdateCustomerDiscountRequest,
 } from "../../../interface/customer/customer_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
-import type { BulkUpdateCustomerDiscountItem } from "../../../interface/storeconfig/customer_credit_interface";
+import type { BulkUpdateCustomerDiscountItem, CustomerCreditAuditLog } from "../../../interface/storeconfig/customer_credit_interface";
 
 export const customerApiService = {
   /** ดึงรายชื่อประเภทลูกค้าสำหรับ Dropdown */
@@ -58,6 +58,23 @@ export const customerApiService = {
     const res = await apiClient.put("/pos/customer-discount", {
       discount_items: items,
     });
+    return res.data;
+  },
+
+  /** ดึงประวัติการแก้ไขสิทธิ์และเครดิตลูกค้า (GET /api/customers/credit/audit-logs) */
+  getCustomerCreditAuditLogs: async (): Promise<CustomerCreditAuditLog[]> => {
+    const res = await apiClient.get<CustomerCreditAuditLog[]>("/customers/credit/audit-logs");
+    return res.data || [];
+  },
+
+  /** บันทึกประวัติการแก้ไขสิทธิ์และเครดิตลูกค้า (POST /api/customers/credit/audit-logs) */
+  createCustomerCreditAuditLog: async (payload: {
+    customer_id?: number;
+    customer_name: string;
+    action: string;
+    details: string;
+  }): Promise<any> => {
+    const res = await apiClient.post("/customers/credit/audit-logs", payload);
     return res.data;
   },
 };
