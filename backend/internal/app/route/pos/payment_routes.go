@@ -5,15 +5,16 @@ import (
 	"backend/internal/app/enum"
 	posRepository "backend/internal/app/repository/pos"
 	posService "backend/internal/app/service/pos"
+	svcNotification "backend/internal/app/service/notification"
 	"backend/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func SetupPaymentRoutes(r *gin.Engine, db *gorm.DB) {
+func SetupPaymentRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotification.NotificationService) {
 	paymentRepo := posRepository.NewPaymentRepository(db)
-	paymentService := posService.NewPaymentService(paymentRepo)
+	paymentService := posService.NewPaymentService(paymentRepo, notificationService)
 	paymentCtrl := posController.NewPaymentController(paymentService)
 
 	paymentGroup := r.Group("/api/pos/payments")
