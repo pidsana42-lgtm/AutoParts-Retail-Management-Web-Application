@@ -76,6 +76,7 @@ export default function TransactionHistoryPage() {
     search,
     customerType,
     paymentMethod,
+    paymentStatus,
     employeeId,
     employeeList,
     startDate,
@@ -85,6 +86,7 @@ export default function TransactionHistoryPage() {
     setSearch,
     setCustomerType,
     setPaymentMethod,
+    setPaymentStatus,
     setEmployeeId,
     setStartDate,    
     setEndDate,    
@@ -202,7 +204,7 @@ export default function TransactionHistoryPage() {
                 </div>
 
                 {/* ประเภทลูกค้า */}
-                <div className="md:col-span-3 lg:col-span-3 flex flex-col gap-1.5">
+                <div className="md:col-span-3 lg:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     ประเภทลูกค้า
                   </label>
@@ -221,7 +223,7 @@ export default function TransactionHistoryPage() {
                 </div>
 
                 {/* การชำระเงิน */}
-                <div className="md:col-span-3 lg:col-span-3 flex flex-col gap-1.5">
+                <div className="md:col-span-3 lg:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     การชำระเงิน
                   </label>
@@ -239,8 +241,29 @@ export default function TransactionHistoryPage() {
                   />
                 </div>
 
+                {/* สถานะการชำระ */}
+                <div className="md:col-span-3 lg:col-span-2 flex flex-col gap-1.5">
+                  <label className="text-xs font-normal text-[#5F5E5E]">
+                    สถานะการชำระ
+                  </label>
+                  <Select
+                    value={paymentStatus}
+                    onChange={(e: any) => {
+                      setPage(1);
+                      setPaymentStatus(e.target.value);
+                    }}
+                    placeholder="สถานะทั้งหมด"
+                    className="bg-white border-none rounded-none h-10 text-sm font-normal text-[#1C1B1B] px-3 shadow-none focus-visible:ring-0 cursor-pointer"
+                    options={[
+                      { label: "ทั้งหมด", value: "" },
+                      { label: "ชำระแล้ว", value: "PAID" },
+                      { label: "ค้างชำระ", value: "UNPAID" },
+                    ]}
+                  />
+                </div>
+
                 {/* ปุ่มใช้ตัวกรอง */}
-                <div className="md:col-span-12 lg:col-span-2">
+                <div className="md:col-span-3 lg:col-span-2">
                   <Button
                     onClick={handleApplyFilter}
                     className="w-full h-10 rounded-none bg-[#E51C23] hover:bg-[#c9151b] text-white text-sm font-normal transition-colors border-none shadow-none cursor-pointer"

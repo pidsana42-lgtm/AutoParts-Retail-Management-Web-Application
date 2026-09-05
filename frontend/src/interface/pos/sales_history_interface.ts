@@ -7,6 +7,7 @@ export interface SalesHistoryFilterRequest {
   payment_method?: string;
   employee_id?: number | string;
   status?: string;
+  payment_status?: string;
   page?: number;
   limit?: number;
 }
