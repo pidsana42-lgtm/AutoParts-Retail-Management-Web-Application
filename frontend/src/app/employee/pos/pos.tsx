@@ -437,8 +437,8 @@ export default function PosPage(): React.JSX.Element {
                     disabled={isCompanyCustomer || paymentData.billDiscountType === "none"}
                     className={`h-9 pl-9 text-sm rounded-none border transition-colors focus:outline-none ${
                       isCompanyCustomer || paymentData.billDiscountType === "none"
-                        ? "!bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"
-                        : "!bg-[#2A2929] text-white "
+                        ? "bg-zinc-800! text-zinc-500 cursor-not-allowed border border-zinc-700"
+                        : "bg-[#2A2929]! text-white "
                     }`}
                     placeholder={isCompanyCustomer ? "ไม่มีสิทธิ์ส่วนลด" : paymentData.billDiscountType === "none" ? "ล็อกไว้" : "0.00"}
                   />
@@ -503,7 +503,7 @@ export default function PosPage(): React.JSX.Element {
                   บิลทั้งหมด (%)
                 </button>
               </div>
-              <div className="bg-[#2D2C2C] p-2 text-[11px] leading-tight text-[#D1D5DB] max-w-[265px] text-left rounded-none">
+              <div className="bg-[#2D2C2C] p-2 text-[11px] leading-tight text-[#D1D5DB] max-w-66.25 text-left rounded-none">
                 <span className="text-[#E51C23] mr-1 ">ⓘ</span>
                 {isCompanyCustomer ? (
                   <span className="text-zinc-400">ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น</span>
@@ -606,7 +606,7 @@ export default function PosPage(): React.JSX.Element {
                         <td className="py-4 px-4 text-center">
                           {!isCompanyCustomer && item.discount_type !== "none" ? (
                             <div className="flex flex-col items-center gap-1">
-                              <div className="relative inline-flex items-center justify-center px-2 py-1 min-w-[75px] transition-all border bg-gray-100 text-gray-700 border-gray-300 rounded-none">
+                              <div className="relative inline-flex items-center justify-center px-2 py-1 min-w-18.75 transition-all border bg-gray-100 text-gray-700 border-gray-300 rounded-none">
                                 {item.discount_type === "amount" && item.discount_value > 0 && <span className="mr-0.5 text-gray-500 select-none">-</span>}
                                 <input type="number" step="any" value={item.discount_value === 0 ? "" : item.discount_value} placeholder="0" onChange={(e) => cartHook.handleDiscountValueChange(index, e.target.value)} className="w-12 bg-transparent text-center border-b window-fix outline-none focus:border-zinc-400" />
                                 {item.discount_type === "percentage" && <span className="ml-0.5 text-gray-400 select-none">%</span>}
@@ -879,7 +879,7 @@ export default function PosPage(): React.JSX.Element {
 
         {/* ================= PAYMENT MODAL ================= */}
         {paymentData.isPaymentModalOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-none">
+          <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/60 backdrop-blur-none">
             <div className="bg-[#FCF9F8] w-full max-w-xl rounded-none shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
               
               {/* Header */}
@@ -971,7 +971,7 @@ export default function PosPage(): React.JSX.Element {
                               onFocus={paymentData.handleReceivedAmountFocus} placeholder="0.00" />
                           <Text variant="xs" className="text-[#1C1B1B] ml-2 font-medium">บาท</Text>
                         </div>
-                        <div className="flex items-center justify-between w-full px-4 py-6 border-b-1 border-[#E7BDB8]"></div>
+                        <div className="flex items-center justify-between w-full px-4 py-6 border-b border-[#E7BDB8]"></div>
                       </div>   
                       <div className="grid grid-cols-2 gap-4">
                         {/* ฝั่งขวา ปุ่มเพิ่มจำนวนเงินที่รับมา */}
@@ -1054,7 +1054,7 @@ export default function PosPage(): React.JSX.Element {
                       </div>
 
                       {/* ข้อความใต้ QR Code */}
-                      <div className="text-center space-y-0.5 max-w-[220px]">
+                      <div className="text-center space-y-0.5 max-w-55">
                         <Text variant="small" className="font-medium text-[#1C1B1B] leading-tight block mb-0">เจเจ อะไหล่ยนต์</Text>
                         <Text variant="xs" className="font-normal text-[#6B7280] leading-tight block mb-0">ชื่อบัญชี เจเจ อะไหล่ยนต์</Text>
                         {/* Ref No. ด้านล่างสุด */}
@@ -1136,7 +1136,7 @@ export default function PosPage(): React.JSX.Element {
                             />
                             <User className="w-5 h-5 text-[#1C1B1B] shrink-0" />
                         </div>
-                        <div className="flex items-center justify-between w-full px-4 py-6 border-b-1 border-[#E7BDB8]"></div>
+                        <div className="flex items-center justify-between w-full px-4 py-6 border-b border-[#E7BDB8]"></div>
                       </div>   */}
                       <div className="grid grid-cols-2 gap-4 border-t border-[#E7BDB8] pt-4 mt-4">
                         <div className="border-l-3 border-[#E7BDB8] p-4 mt-1 bg-[#F0EDEC] ">

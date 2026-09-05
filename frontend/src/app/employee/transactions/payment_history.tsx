@@ -276,7 +276,7 @@ export default function PaymentHistoryPage() {
             /* 1. ฝั่งเจ้าของร้าน (Owner System) */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
               {/* Card 1: ยอดรับชำระสุทธิ (Net Total Collected) */}
-              <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-emerald-500! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -294,7 +294,7 @@ export default function PaymentHistoryPage() {
               </Card>
 
               {/* Card 2: ช่องทางการเงิน (Payment Methods) */}
-              <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-sky-700! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -318,7 +318,7 @@ export default function PaymentHistoryPage() {
               </Card>
 
               {/* Card 3: ประเภทการรับชำระ (Payment Types) */}
-              <Card className="!border-l-[5px] !border-l-teal-500 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-teal-500! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -342,7 +342,7 @@ export default function PaymentHistoryPage() {
               </Card>
 
               {/* Card 4: รายการที่ยกเลิก (Cancelled Payments) */}
-              <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-[#E51C23]! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -363,7 +363,7 @@ export default function PaymentHistoryPage() {
             /* 2. ฝั่งพนักงาน (Employee / Somchai หน้าร้าน) */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
               {/* Card 1: ยอดรับชำระของฉัน (My Collected Total) */}
-              <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-sky-700! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -381,7 +381,7 @@ export default function PaymentHistoryPage() {
               </Card>
 
               {/* Card 2: เงินสดที่ต้องส่งมอบ (Cash in Hand) — สำคัญที่สุด */}
-              <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-emerald-500! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -399,7 +399,7 @@ export default function PaymentHistoryPage() {
               </Card>
 
               {/* Card 3: เงินโอน/สแกน QR (Transfer / QR Code) */}
-              <Card className="!border-l-[5px] !border-l-gray-300 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-gray-300! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -417,7 +417,7 @@ export default function PaymentHistoryPage() {
               </Card>
 
               {/* Card 4: บิลที่ถูกยกเลิก (My Cancelled Transactions) */}
-              <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-[#E51C23]! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -531,7 +531,7 @@ export default function PaymentHistoryPage() {
                                 e.stopPropagation();
                                 setSearch(item.customer_name);
                               }}
-                              className="text-left font-normal text-[#1C1B1B] hover:text-[#E51C23] hover:underline mb-0 truncate max-w-[200px] cursor-pointer bg-transparent border-none p-0 block"
+                              className="text-left font-normal text-[#1C1B1B] hover:text-[#E51C23] hover:underline mb-0 truncate max-w-50 cursor-pointer bg-transparent border-none p-0 block"
                               title="คลิกเพื่อกรองค้นหาเฉพาะลูกค้าคนนี้"
                             >
                               <Text variant="small" className="font-normal text-inherit mb-0 truncate">
@@ -539,11 +539,11 @@ export default function PaymentHistoryPage() {
                               </Text>
                             </button>
                           ) : (
-                            <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate max-w-[200px]">
+                            <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate max-w-50">
                               {getDisplayCustomerName(item)}
                             </Text>
                           )}
-                          <Text variant="xs" className="font-light text-[#A8A29E] mb-0 truncate max-w-[200px]">
+                          <Text variant="xs" className="font-light text-[#A8A29E] mb-0 truncate max-w-50">
                             บิล: {item.order_numbers || "-"}
                           </Text>
                         </TableCell>

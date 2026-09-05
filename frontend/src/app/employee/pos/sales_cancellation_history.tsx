@@ -223,7 +223,7 @@ const SalesCancellationHistory: React.FC = () => {
           {/* Small Stat Cards เหนือตาราง (คำขอของฉัน) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
             {/* 1. คำขอของฉันทั้งหมด (Total Requests) */}
-            <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+            <Card className="border-l-[5px]! border-l-sky-700! flex flex-col justify-between p-4 md:p-5">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -241,7 +241,7 @@ const SalesCancellationHistory: React.FC = () => {
             </Card>
 
             {/* 2. รอเจ้าของร้านอนุมัติ (Pending) */}
-            <Card className="!border-l-[5px] !border-l-amber-300 flex flex-col justify-between p-4 md:p-5">
+            <Card className="border-l-[5px]! border-l-amber-300 flex flex-col justify-between p-4 md:p-5">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -259,7 +259,7 @@ const SalesCancellationHistory: React.FC = () => {
             </Card>
 
             {/* 3. อนุมัติแล้ว (Approved) */}
-            <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+            <Card className="border-l-[5px]! border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -277,7 +277,7 @@ const SalesCancellationHistory: React.FC = () => {
             </Card>
 
             {/* 4. ไม่อนุมัติ (Rejected) */}
-            <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+            <Card className="border-l-[5px]! border-l-[#E51C23]! flex flex-col justify-between p-4 md:p-5">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -297,7 +297,7 @@ const SalesCancellationHistory: React.FC = () => {
 
           {/* Table */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
-            <Table className="!w-full !min-w-0 table-fixed text-left border-collapse">
+            <Table className="w-full! min-w-0! table-fixed text-left border-collapse">
               <TableHeader className="bg-[#F6F3F2] rounded-none border-b border-gray-200 text-[11px] text-[#6B7280] uppercase tracking-wider">
                 <TableRow>
                   <TableHead className="py-3 px-3 w-[4%] text-center">

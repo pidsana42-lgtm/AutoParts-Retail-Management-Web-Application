@@ -205,7 +205,7 @@ export default function CustomerRegistration() {
                         onBlur={() => handleBlur("registered_address")}
                         className={`w-full p-2.5 bg-[#F6F3F2] border-none rounded-none text-sm text-[#1C1B1B] placeholder:text-[#6B7280] placeholder:font-light resize-none outline-none transition-colors ${
                           errors.registered_address
-                            ? "!border-red-500 !border-solid ring-1 ring-red-500"
+                            ? "border-red-500! border-solid! ring-1 ring-red-500"
                             : "border-gray-200 focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
                         }`}
                       />
@@ -227,7 +227,7 @@ export default function CustomerRegistration() {
                         onBlur={() => handleBlur("shipping_address")}
                         className={`w-full p-2.5 bg-[#F6F3F2] border-none rounded-none text-sm text-[#1C1B1B] placeholder:text-[#6B7280] placeholder:font-light resize-none outline-none transition-colors ${
                           errors.shipping_address
-                            ? "!border-red-500 !border-solid ring-1 ring-red-500"
+                            ? "border-red-500! border-solid! ring-1 ring-red-500"
                             : "border-gray-200 focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
                         }`}
                       />
@@ -369,7 +369,7 @@ export default function CustomerRegistration() {
           {/* Customer Table List */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
             {/* Table Content */}
-            <Table className="!w-full !min-w-0 table-fixed text-left border-collapse">
+            <Table className="w-full! min-w-0! table-fixed text-left border-collapse">
               <TableHeader className="bg-[#F6F3F2] border-b border-gray-200 text-[11px] text-[#6B7280] uppercase tracking-wider">
                 <TableRow>
                   <TableHead className="py-3 px-4 w-[25%]">ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท</TableHead>
