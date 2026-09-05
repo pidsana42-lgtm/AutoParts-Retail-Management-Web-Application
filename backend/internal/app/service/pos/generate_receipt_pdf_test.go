@@ -30,3 +30,28 @@ func TestThaiBahtText(t *testing.T) {
 		}
 	}
 }
+
+func TestMatchPaymentMethod(t *testing.T) {
+	tests := []struct {
+		methodName  string
+		queryMethod string
+		want        bool
+	}{
+		{"เงินสด", "เงินสด", true},
+		{"Cash", "เงินสด", true},
+		{"เงินสด", "cash", true},
+		{"เงินสด", "QR", false},
+		{"QR Code / พร้อมเพย์", "QR", true},
+		{"โอนเงินธนาคาร", "QR", true},
+		{"PromptPay", "QR", true},
+		{"เงินสด", "", true},
+		{"", "", true},
+	}
+
+	for _, tt := range tests {
+		got := matchPaymentMethod(tt.methodName, tt.queryMethod)
+		if got != tt.want {
+			t.Errorf("matchPaymentMethod(%q, %q) = %v, want %v", tt.methodName, tt.queryMethod, got, tt.want)
+		}
+	}
+}

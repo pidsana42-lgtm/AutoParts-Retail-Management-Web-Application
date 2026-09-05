@@ -609,7 +609,7 @@ export default function PaymentHistoryPage() {
                               <button
                                 type="button"
                                 disabled={isPrintingStatement}
-                                className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-red-50 text-gray-600 hover:text-[#E51C23] disabled:opacity-40"
+                                className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
                                 title={`พิมพ์ใบสรุปยอดชำระและยอดคงเหลือของ ${item.customer_name}`}
                                 onClick={(e) => {
                                   e.stopPropagation();

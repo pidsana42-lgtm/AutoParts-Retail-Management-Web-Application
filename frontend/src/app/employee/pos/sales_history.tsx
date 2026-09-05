@@ -498,7 +498,7 @@ export default function TransactionHistoryPage() {
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"
-                              className="inline-flex items-center justify-center p-1.5 cursor-pointer rounded-full"
+                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
                               title="ดูรายละเอียด"
                               onClick={() => setSelectedOrderId(item.id)}
                             >
@@ -507,7 +507,7 @@ export default function TransactionHistoryPage() {
                             <button
                               type="button"
                               disabled={printingOrderId === item.id}
-                              className="inline-flex items-center justify-center p-1.5 cursor-pointer rounded-full disabled:opacity-40"
+                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
                               title="พิมพ์/ดาวน์โหลดใบเสร็จ"
                               onClick={(e) => {
                                 e.stopPropagation();

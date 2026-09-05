@@ -432,7 +432,7 @@ export default function CustomerRegistration() {
                         <button
                           type="button"
                           onClick={() => setSelectedCustomer(c)}
-                          className="inline-flex items-center justify-center p-1.5 text-[#E51C23] hover:text-[#c9151b] hover:bg-red-50 transition-colors rounded-full"
+                          className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
                           title="ดูรายละเอียดลูกค้า"
                         >
                           <Eye className="w-4 h-4" />
