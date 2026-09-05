@@ -7,6 +7,9 @@ export interface CustomerStatementBackendOptions {
   customerName?: string;
   startDate?: string;
   endDate?: string;
+  paymentType?: string;
+  status?: string;
+  paymentMethod?: string;
   action?: 'print' | 'preview' | 'download';
 }
 
@@ -15,7 +18,7 @@ export interface CustomerStatementBackendOptions {
  * โดยดึงไฟล์ PDF ตรงจาก Backend (Single Source of Truth)
  *
  * @param customerId ID ของลูกค้า
- * @param options ตัวเลือกเสริม เช่น startDate, endDate, action ('print' | 'preview' | 'download'), customerName
+ * @param options ตัวเลือกเสริม เช่น startDate, endDate, paymentType, status, paymentMethod, action ('print' | 'preview' | 'download'), customerName
  */
 export async function printCustomerStatementFromBackend(
   customerId: number,
@@ -24,7 +27,10 @@ export async function printCustomerStatementFromBackend(
   const blob = await posApiService.printCustomerStatementPDF(
     customerId,
     options?.startDate,
-    options?.endDate
+    options?.endDate,
+    options?.paymentType,
+    options?.status,
+    options?.paymentMethod
   );
 
   const now = new Date();
@@ -62,6 +68,9 @@ export function printCustomerStatement(params: CustomerStatementPrintParams) {
     customerName: params.customerName || params.customer?.customer_name,
     startDate: params.startDate,
     endDate: params.endDate,
+    paymentType: params.paymentType,
+    status: params.status,
+    paymentMethod: params.paymentMethod,
     action: params.action || 'print',
   }).catch((err) => {
     console.error('Error auto-printing customer statement from backend:', err);

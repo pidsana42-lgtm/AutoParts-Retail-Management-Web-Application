@@ -3,6 +3,9 @@ export interface CustomerStatementPrintParams {
   customerName?: string;
   startDate?: string;
   endDate?: string;
+  paymentType?: string;
+  status?: string;
+  paymentMethod?: string;
   action?: 'print' | 'preview' | 'download';
   customer?: {
     id?: number;

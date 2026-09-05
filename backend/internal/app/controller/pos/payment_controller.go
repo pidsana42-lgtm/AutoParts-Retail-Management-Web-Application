@@ -507,8 +507,22 @@ func (ctrl *paymentController) GenerateCustomerStatementPDF(c *gin.Context) {
 
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
+	paymentType := c.Query("payment_type")
+	if paymentType == "" {
+		paymentType = c.Query("type")
+	}
+	status := c.Query("status")
+	paymentMethod := c.Query("payment_method")
 
-	pdfBytes, err := ctrl.paymentService.GenerateCustomerStatementPDF(c.Request.Context(), uint(customerID), startDate, endDate)
+	pdfBytes, err := ctrl.paymentService.GenerateCustomerStatementPDF(
+		c.Request.Context(),
+		uint(customerID),
+		startDate,
+		endDate,
+		paymentType,
+		status,
+		paymentMethod,
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate customer statement PDF: " + err.Error()})
 		return

@@ -440,7 +440,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                             type="button"
                             title="ดูรายละเอียด"
                             onClick={() => setSelectedOrderId(item.id)}
-                            className="p-1.5 text-gray-500 hover:text-gray-700 cursor-pointer"
+                            className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
@@ -452,7 +452,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                               e.stopPropagation();
                               handlePrintReceipt(item.id, item.order_number);
                             }}
-                            className="p-1.5 text-gray-500 hover:text-[#E51C23] cursor-pointer disabled:opacity-40 transition-colors"
+                            className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
                           >
                             <Printer className={cn("w-4 h-4", printingOrderId === item.id && "animate-pulse")} />
                           </button>
@@ -466,7 +466,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                                   state: { recoverOrderId: item.id },
                                 });
                               }}
-                              className="p-1.5 text-red-600 hover:text-red-800 cursor-pointer"
+                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
                             >
                               <CopyPlus className="w-4 h-4" />
                             </button>

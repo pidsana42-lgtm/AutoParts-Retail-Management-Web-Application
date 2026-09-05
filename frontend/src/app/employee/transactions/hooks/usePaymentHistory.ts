@@ -411,6 +411,9 @@ export function usePaymentHistory() {
           customerName: customerObj.customer_name,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
+          paymentType: typeFilter || undefined,
+          status: statusFilter || undefined,
+          paymentMethod: paymentMethod || undefined,
           action: "print",
         });
       } catch (err) {
@@ -420,7 +423,7 @@ export function usePaymentHistory() {
         setIsPrintingStatement(false);
       }
     },
-    [filteredItems, search, startDate, endDate]
+    [filteredItems, search, startDate, endDate, typeFilter, statusFilter, paymentMethod]
   );
   return {
     items: paginatedItems,

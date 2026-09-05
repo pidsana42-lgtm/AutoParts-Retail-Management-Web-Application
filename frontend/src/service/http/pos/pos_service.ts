@@ -243,11 +243,20 @@ export const posApiService = {
   printCustomerStatementPDF: async (
     customerId: number,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    paymentType?: string,
+    status?: string,
+    paymentMethod?: string
   ): Promise<Blob> => {
     try {
       const response = await apiClient.get(`/pos/payments/customers/${customerId}/statement-pdf`, {
-        params: { start_date: startDate || undefined, end_date: endDate || undefined },
+        params: {
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          payment_type: paymentType || undefined,
+          status: status || undefined,
+          payment_method: paymentMethod || undefined,
+        },
         responseType: "blob",
       });
       return response.data;

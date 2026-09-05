@@ -509,7 +509,7 @@ const PaymentCancellationHistory: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setSelectedReceipt(item)}
-                              className="p-1.5 cursor-pointer transition-colors text-gray-500 hover:text-gray-700"
+                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
                               title="ดูรายละเอียดคำขอ"
                             >
                               <Eye className="w-4 h-4" />
@@ -521,7 +521,7 @@ const PaymentCancellationHistory: React.FC = () => {
                                 e.stopPropagation();
                                 handlePrintReceipt(item);
                               }}
-                              className="p-1.5 cursor-pointer transition-colors text-gray-500 hover:text-[#E51C23] disabled:opacity-40"
+                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
                               title="พิมพ์/ดาวน์โหลดใบเสร็จที่ยกเลิก (Void Receipt)"
                             >
                               <Printer className={cn("w-4 h-4", printingReceiptId === (item.receipt_id || item.receipt_number) && "animate-pulse")} />
