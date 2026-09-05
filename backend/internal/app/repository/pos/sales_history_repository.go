@@ -128,7 +128,19 @@ func (r *salesHistoryRepository) GetSalesHistory(req pos.SalesHistoryFilterReque
         query = query.Where("sale_orders.created_by_id = ?", req.EmployeeID)
     }
 
-    // 4.6 กรองตามสถานะคำสั่งซื้อ (Status)
+    // 4.6 กรองตามสถานะการชำระเงิน (Payment Status)
+    if req.PaymentStatus != "" {
+        cleanPayStatus := strings.ToLower(strings.TrimSpace(req.PaymentStatus))
+        if cleanPayStatus == "paid" || cleanPayStatus == "ชำระแล้ว" {
+            query = query.Where("(sale_orders.payment_status = 'paid' OR (sale_orders.total_amount > 0 AND sale_orders.balance_due = 0)) AND LOWER(sale_orders.status) NOT IN ('cancelled', 'ยกเลิก')")
+        } else if cleanPayStatus == "unpaid" || cleanPayStatus == "ค้างชำระ" {
+            query = query.Where("(sale_orders.payment_status IN ('unpaid', 'partial') OR sale_orders.balance_due > 0) AND LOWER(sale_orders.status) NOT IN ('cancelled', 'ยกเลิก')")
+        } else if cleanPayStatus == "partial" {
+            query = query.Where("sale_orders.payment_status = 'partial' AND LOWER(sale_orders.status) NOT IN ('cancelled', 'ยกเลิก')")
+        }
+    }
+
+    // 4.7 กรองตามสถานะคำสั่งซื้อ (Status)
     if req.Status != "" {
         cleanStatus := strings.ToLower(strings.TrimSpace(req.Status))
         query = query.Where("sale_orders.status = ?", cleanStatus)
@@ -325,6 +337,18 @@ func (r *salesHistoryRepository) GetCancellationRequests(req pos.SalesHistoryFil
         query = query.Where("sale_orders.cancel_requested_by_id = ?", req.EmployeeID)
     }
 
+    // 4.6 กรองตามสถานะการชำระเงิน (Payment Status)
+    if req.PaymentStatus != "" {
+        cleanPayStatus := strings.ToLower(strings.TrimSpace(req.PaymentStatus))
+        if cleanPayStatus == "paid" || cleanPayStatus == "ชำระแล้ว" {
+            query = query.Where("sale_orders.payment_status = 'paid' OR (sale_orders.total_amount > 0 AND sale_orders.balance_due = 0)")
+        } else if cleanPayStatus == "unpaid" || cleanPayStatus == "ค้างชำระ" {
+            query = query.Where("sale_orders.payment_status IN ('unpaid', 'partial') OR sale_orders.balance_due > 0")
+        } else if cleanPayStatus == "partial" {
+            query = query.Where("sale_orders.payment_status = 'partial'")
+        }
+    }
+
     // นับจำนวนรายการทั้งหมด
     if err := query.Count(&totalRows).Error; err != nil {
         return nil, 0, err
@@ -395,6 +419,18 @@ func (r *salesHistoryRepository) GetMyCancellationRequests(userID uint, req pos.
             query = query.Where("sale_orders.status = ?", enum.OrderPendingCancel)
         } else {
             query = query.Where("sale_orders.status = ?", strings.ToLower(req.Status))
+        }
+    }
+
+    // 4.5 กรองตามสถานะการชำระเงิน (Payment Status)
+    if req.PaymentStatus != "" {
+        cleanPayStatus := strings.ToLower(strings.TrimSpace(req.PaymentStatus))
+        if cleanPayStatus == "paid" || cleanPayStatus == "ชำระแล้ว" {
+            query = query.Where("sale_orders.payment_status = 'paid' OR (sale_orders.total_amount > 0 AND sale_orders.balance_due = 0)")
+        } else if cleanPayStatus == "unpaid" || cleanPayStatus == "ค้างชำระ" {
+            query = query.Where("sale_orders.payment_status IN ('unpaid', 'partial') OR sale_orders.balance_due > 0")
+        } else if cleanPayStatus == "partial" {
+            query = query.Where("sale_orders.payment_status = 'partial'")
         }
     }
 
