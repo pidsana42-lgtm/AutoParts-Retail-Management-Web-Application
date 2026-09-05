@@ -7,7 +7,6 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ScanBarcode,
-  RotateCcw,
   CopyPlus,
   X,
   Printer,
@@ -278,7 +277,7 @@ export default function TransactionHistoryPage() {
           {/* Small Stat Cards เหนือตาราง */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
             {/* 1. ยอดขายรวม (Total Sales) */}
-            <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+            <Card className="border-l-[5px]! border-l-[#E51C23]! flex flex-col justify-between p-4 md:p-5">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -296,7 +295,7 @@ export default function TransactionHistoryPage() {
             </Card>
 
             {/* 2. จำนวนบิลทั้งหมด (Total Orders) */}
-            <Card className="border-l-5 !border-l-slate-300 flex flex-col justify-between p-4 md:p-5">
+            <Card className="border-l-[5px]! border-l-slate-300! flex flex-col justify-between p-4 md:p-5">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -342,7 +341,7 @@ export default function TransactionHistoryPage() {
             </Card>
 
             {/* 4. ยอดที่ชำระแล้ว vs ค้างชำระ (Paid vs Balance Due) */}
-            <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+            <Card className="border-l-[5px]! border-l-emerald-500! flex flex-col justify-between p-4 md:p-5">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -381,7 +380,7 @@ export default function TransactionHistoryPage() {
 
           {/* Data Table */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
-            <Table className="!w-full !min-w-0 table-fixed text-left border-collapse">
+            <Table className="w-full! min-w-0! table-fixed text-left border-collapse">
               {/* Header Table */}
               <TableHeader className="bg-[#F6F3F2] rounded-none border-b border-gray-200 text-[11px] text-[#6B7280] uppercase tracking-wider">
                 <TableRow>

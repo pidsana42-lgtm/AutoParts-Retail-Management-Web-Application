@@ -228,7 +228,7 @@ const PaymentCancellationHistory: React.FC = () => {
             /* 1. ฝั่งเจ้าของร้าน (Owner System) */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
               {/* Card 1: รออนุมัติ */}
-              <Card className="!border-l-[5px] !border-l-amber-300   flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-amber-300!   flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -246,7 +246,7 @@ const PaymentCancellationHistory: React.FC = () => {
               </Card>
 
               {/* Card 2: อนุมัติแล้ว (Approved) */}
-              <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-emerald-500! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -264,7 +264,7 @@ const PaymentCancellationHistory: React.FC = () => {
               </Card>
 
               {/* Card 3: ปฏิเสธ / ไม่อนุมัติ (Rejected) */}
-              <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-[#E51C23]! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -282,7 +282,7 @@ const PaymentCancellationHistory: React.FC = () => {
               </Card>
 
               {/* Card 4: คำขอทั้งหมด (Total Requests) */}
-              <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-sky-700! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -303,7 +303,7 @@ const PaymentCancellationHistory: React.FC = () => {
             /* 2. ฝั่งพนักงาน (Employee) */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
               {/* Card 1: คำขอทั้งหมดของฉัน (My Total Requests) */}
-              <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-sky-700! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -321,7 +321,7 @@ const PaymentCancellationHistory: React.FC = () => {
               </Card>
 
               {/* Card 2: รอเจ้าของร้านอนุมัติ (Pending) */}
-              <Card className="!border-l-[5px] !border-l-amber-300 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-amber-300! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -339,7 +339,7 @@ const PaymentCancellationHistory: React.FC = () => {
               </Card>
 
               {/* Card 3: อนุมัติแล้ว (Approved) */}
-              <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-emerald-500! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -357,7 +357,7 @@ const PaymentCancellationHistory: React.FC = () => {
               </Card>
 
               {/* Card 4: ไม่อนุมัติ (Rejected) */}
-              <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-[#E51C23]! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -469,10 +469,10 @@ const PaymentCancellationHistory: React.FC = () => {
 
                         {/* 3. ชื่อลูกค้า + บิล */}
                         <TableCell className="py-3.5 px-3">
-                          <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate max-w-[200px]">
+                          <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate max-w-50">
                             {item.customer_name || "ลูกค้าทั่วไป"}
                           </Text>
-                          <Text variant="xs" className="font-light text-[#A8A29E] mb-0 truncate max-w-[200px]">
+                          <Text variant="xs" className="font-light text-[#A8A29E] mb-0 truncate max-w-50">
                             บิล: {item.order_numbers || "-"}
                           </Text>
                         </TableCell>
