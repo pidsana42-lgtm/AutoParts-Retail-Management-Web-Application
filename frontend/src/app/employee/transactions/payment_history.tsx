@@ -8,7 +8,7 @@ import {
   X,
 } from "lucide-react";
 
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 // Components
 import Heading from "../../../components/elements/heading";
@@ -39,7 +39,10 @@ import { useUserRole } from "../../../hooks/useUserRole";
 
 export default function PaymentHistoryPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isOwnerOrAdmin } = useUserRole();
+  const initialSearch = searchParams.get("search")?.trim() ?? "";
+  const initialTypeFilter = searchParams.get("type") === "repayment" ? "repayment" : "";
 
   const {
     items,
@@ -81,7 +84,7 @@ export default function PaymentHistoryPage() {
     handleApproveCancelReceipt,
     handleRejectCancelReceipt,
     handleCancelReceipt,
-  } = usePaymentHistory();
+  } = usePaymentHistory(initialSearch, initialTypeFilter);
 
   const formatCurrency = (val: number) => {
     return (val || 0).toLocaleString("th-TH", {

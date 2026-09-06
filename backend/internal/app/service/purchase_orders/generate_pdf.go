@@ -3,6 +3,9 @@ package purchaseorders
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/johnfercher/maroto/pkg/color"
 	"github.com/johnfercher/maroto/pkg/consts"
@@ -30,13 +33,14 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 	m.SetDefaultFontFamily("THSarabun")
 
 	poDate := poData.CreatedAt.Format("02/01/2006")
+	logoPath := resolvePOLogoPath(companyData.LogoURL)
 
 	// 3. ส่วนหัวเอกสาร (ลดขนาด Row ลงให้ดูกระชับ)
 	m.RegisterHeader(func() {
 		m.Row(25, func() {
 			m.Col(3, func() {
-				if companyData.LogoURL != "" {
-					_ = m.FileImage(companyData.LogoURL, props.Rect{
+				if logoPath != "" {
+					_ = m.FileImage(logoPath, props.Rect{
 						Percent: 400,
 						Center:  false, // ให้โลโก้ชิดซ้าย
 					})
@@ -180,6 +184,33 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 }
 
 // --------------------------------------------------------
+
+func resolvePOLogoPath(logoURL string) string {
+	logoPath := strings.TrimSpace(logoURL)
+	if logoPath == "" || strings.HasPrefix(logoPath, "http://") || strings.HasPrefix(logoPath, "https://") {
+		return ""
+	}
+
+	// Local upload URLs are stored for browser access as /uploads/<file>.
+	// PDF generation needs the corresponding filesystem path instead.
+	if strings.HasPrefix(filepath.ToSlash(logoPath), "/uploads/") {
+		logoPath = strings.TrimLeft(logoPath, `/\\`)
+	}
+	logoPath = filepath.Clean(filepath.FromSlash(logoPath))
+
+	candidates := []string{logoPath}
+	if !filepath.IsAbs(logoPath) {
+		candidates = append(candidates, filepath.Join("backend", logoPath))
+	}
+
+	for _, candidate := range candidates {
+		info, err := os.Stat(candidate)
+		if err == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+	return ""
+}
 
 func hexToColor(hex string) color.Color {
 	var r, g, b uint8

@@ -6,7 +6,7 @@ import { getTodayDateString, getDaysAgoDateString } from "../../../../utils/date
 import { useUserRole } from "../../../../hooks/useUserRole";
 import { getCurrentUserId } from "../../../../utils/auth";
 
-export function usePaymentHistory() {
+export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
   const { isOwnerOrAdmin } = useUserRole();
   const [items, setItems] = useState<PaymentHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -16,8 +16,8 @@ export function usePaymentHistory() {
   const { employeeList } = useEmployeeOptions();
 
   // Filter States
-  const [search, setSearch] = useState<string>("");
-  const [typeFilter, setTypeFilter] = useState<string>("");
+  const [search, setSearch] = useState<string>(() => initialSearch);
+  const [typeFilter, setTypeFilter] = useState<string>(() => initialTypeFilter);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [employeeId, setEmployeeId] = useState<string>("");

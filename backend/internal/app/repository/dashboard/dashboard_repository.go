@@ -17,7 +17,7 @@ import (
 
 type DashboardRepository interface {
 	GetSummaryDataByQuery(ctx context.Context, query dashDto.SummaryQuery) ([]dashEntity.DailySummary, int64, error)
-	GetRecentSaleOrders(ctx context.Context, start, end time.Time, limit int) ([]dashEntity.SaleOrder, error)
+	GetRecentSaleOrders(ctx context.Context, start, end time.Time, page, pageSize int) ([]dashEntity.SaleOrder, int64, error)
 	GetProductsInStock(ctx context.Context) ([]dashEntity.Product, error)
 	GetLastSoldDates(ctx context.Context) (map[uint]time.Time, error)
 	GetHistoricalSummaries(ctx context.Context, start, end time.Time) ([]dashEntity.DailySummary, error)
@@ -96,15 +96,26 @@ func (r *dashboardRepository) GetSummaryDataByQuery(ctx context.Context, query d
 	return dailysummary, total, err
 }
 
-func (r *dashboardRepository) GetRecentSaleOrders(ctx context.Context, start, end time.Time, limit int) ([]dashEntity.SaleOrder, error) {
+func (r *dashboardRepository) GetRecentSaleOrders(ctx context.Context, start, end time.Time, page, pageSize int) ([]dashEntity.SaleOrder, int64, error) {
 	var orders []dashEntity.SaleOrder
+	var total int64
+
+	baseQuery := r.db.WithContext(ctx).
+		Model(&dashEntity.SaleOrder{}).
+		Where("created_at >= ? AND created_at < ?", start, end)
+	if err := baseQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
 	err := r.db.WithContext(ctx).
 		Preload("PaymentMethod").
 		Where("created_at >= ? AND created_at < ?", start, end).
 		Order("created_at desc").
-		Limit(limit).
+		Offset(offset).
+		Limit(pageSize).
 		Find(&orders).Error
-	return orders, err
+	return orders, total, err
 }
 
 type lastSoldRow struct {

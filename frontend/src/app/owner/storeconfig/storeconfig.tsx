@@ -233,6 +233,8 @@ const StoreConfig: React.FC = () => {
           <CardContent>
             <ImageUploader
               label="อัปโหลดโลโก้ร้าน"
+              className="w-full rounded-none"
+              variant="document"
               preview={logoPreview}
               onChange={(file) => setLogoFile(file)}
               onClear={() => {

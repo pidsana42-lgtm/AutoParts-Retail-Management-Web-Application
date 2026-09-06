@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Eye, ReceiptText } from 'lucide-react';
+import { RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Eye, ReceiptText, AlertTriangle } from 'lucide-react';
 // Components
 import { Card, CardHeader, CardContent, CardTitle } from '../../../components/elements/card';
 import Heading from '../../../components/elements/heading';
@@ -145,6 +145,13 @@ const DeletedPoHistory: React.FC = () => {
           กู้คืนใบสั่งซื้อ
         </Heading>
       </div>
+
+      {statusFilter === "DELETED" && (
+        <div className="flex items-start gap-3 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <span>ใบสั่งซื้อในถังขยะสามารถกู้คืนได้ภายใน 30 วัน หลังจากนั้นระบบจะลบถาวรโดยอัตโนมัติ</span>
+        </div>
+      )}
 
       {/* Search Card */}
       <Card className="flex-1">

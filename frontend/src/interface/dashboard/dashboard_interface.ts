@@ -85,6 +85,13 @@ export interface RecentSaleItem {
   payment_method: string;
 }
 
+export interface RecentSalesResponse {
+  data: RecentSaleItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface AgingStockItem {
   rank: number;
   product_code: string;

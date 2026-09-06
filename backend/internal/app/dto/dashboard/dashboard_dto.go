@@ -68,6 +68,13 @@ type SummaryResponse struct {
 	Total       int64                 `json:"total"`
 }
 
+type RecentSalesResponse struct {
+	Data     []RecentSaleDTO `json:"data"`
+	Total    int64           `json:"total"`
+	Page     int             `json:"page"`
+	PageSize int             `json:"page_size"`
+}
+
 type StockHealthDTO struct {
 	TotalProducts   int64   `json:"total_products"`
 	HealthyCount    int64   `json:"healthy_count"`
