@@ -48,8 +48,9 @@ const CreatePurchaseOrders: React.FC = () => {
         duplicatePrompt, confirmDuplicateAdd, cancelDuplicateAdd } = usePoScanner(listsSupplier, item, setItem);
     // ดึงข้อมูลจาก Hook เรียกรายการพรีออเดอร์
     const { preorders, totalPreorders, isLoading: isPreordersLoading } = usePreorders(item, setItem, setIsPreorderModalOpen);
-    // สิทธิ์เจ้าของร้าน: กดส่งอนุมัติแล้วอนุมัติทันทีโดยไม่ต้องรอ
+    // สิทธิ์เจ้าของร้าน: กดอนุมัติแล้วอนุมัติทันทีโดยไม่ต้องรอ
     const userRole = localStorage.getItem('role');
+    const isOwner = userRole?.toUpperCase() === 'OWNER';
     // สำหรับดึงข้อมูลคาดการณ์ระยะเวลาจัดส่ง
     const [deliveryEstimate, setDeliveryEstimate] = useState<POAnalyticsResponse | null>(null);
     const [isEstimateLoading, setIsEstimateLoading] = useState(false);
@@ -218,6 +219,7 @@ const CreatePurchaseOrders: React.FC = () => {
 
     // ฟังก์ชัน: บันทึกร่าง / ส่งอนุมัติ
     const handleSavePO = async (submitStatus: 'DRAFT' | 'PENDING') => {
+        if (isSaving) return;
         if (item.length === 0) {
             toast({ title: 'เกิดข้อผิดพลาด', message: 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ', variant: 'warning' });
             return;
@@ -228,6 +230,7 @@ const CreatePurchaseOrders: React.FC = () => {
             return;
         }
 
+        setIsSaving(true);
         try {
             // เตรียมข้อมูลรายการสินค้า
             const poItemsPayload = item.map((p) => ({
@@ -250,14 +253,17 @@ const CreatePurchaseOrders: React.FC = () => {
             const response = await poService.createPurchaseOrder(payload);
             const createdPoNumber = response?.po_number || "";
 
-            // ถ้าเจ้าของร้านเป็นคนกดส่งอนุมัติเอง ให้อนุมัติต่อทันที ไม่ต้องรอขั้นตอนแยก
+            // Backend รุ่นใหม่จะสร้างเป็น APPROVED ให้ Owner ตั้งแต่ transaction แรก
+            // fallback ด้านล่างยังรองรับ backend รุ่นเก่าระหว่าง deploy
             let message = submitStatus === 'DRAFT'
                 ? `บันทึกฉบับร่าง ${createdPoNumber} เรียบร้อยแล้ว`
                 : `ส่งใบสั่งซื้อ ${createdPoNumber} เพื่อขออนุมัติเรียบร้อยแล้ว`;
 
-            if (submitStatus === 'PENDING' && userRole === 'Owner' && response?.id) {
+            if (submitStatus === 'PENDING' && isOwner && response?.id) {
                 try {
-                    await poService.updatePOStatus(response.id, 'APPROVED');
+                    if (response.status !== 'APPROVED') {
+                        await poService.updatePOStatus(response.id, 'APPROVED');
+                    }
                     message = `อนุมัติใบสั่งซื้อ ${createdPoNumber} เรียบร้อยแล้ว`;
                 } catch (approveError: any) {
                     // สร้าง PO สำเร็จแล้ว แต่อนุมัติอัตโนมัติไม่สำเร็จ -> แจ้งเตือนแยก ไม่บล็อกการสร้าง
@@ -324,7 +330,9 @@ const CreatePurchaseOrders: React.FC = () => {
                 </div>
                 <div className='flex items-end gap-4 justify-end'>
                     <Button size='md' variant='tertiary' disabled={isSaving} onClick={() => handleSavePO('DRAFT')}>{isSaving ? "กำลังบันทึก..." : "บันทึกฉบับร่าง"}</Button>
-                    <Button size='md' disabled={isSaving} onClick={() => handleSavePO('PENDING')}>{isSaving ? "กำลังบันทึก..." : "ส่งอนุมัติ"}</Button>
+                    <Button size='md' disabled={isSaving} onClick={() => handleSavePO('PENDING')}>
+                        {isSaving ? (isOwner ? "กำลังอนุมัติใบสั่งซื้อ..." : "กำลังส่งอนุมัติ...") : (isOwner ? "อนุมัติใบสั่งซื้อ" : "ส่งอนุมัติ")}
+                    </Button>
                 </div>
             </div>
 

@@ -1,6 +1,6 @@
 import apiClient from '../apiClient';
-import type { DashboardSummaryResponse, StockAlertItem, SummaryQuery, RecentSaleItem, AgingStockItem, StockHealthStats,
-  RevenueBreakdownResponse, TopSellerItem, DebtAgingQuery, DebtAgingResponse } from '../../../interface/dashboard/dashboard_interface';
+import type { DashboardSummaryResponse, StockAlertItem, SummaryQuery, AgingStockItem, StockHealthStats,
+  RecentSalesResponse, RevenueBreakdownResponse, TopSellerItem, DebtAgingQuery, DebtAgingResponse } from '../../../interface/dashboard/dashboard_interface';
 
 export const dashboardService = {
   getSummaryData: (query: SummaryQuery) =>
@@ -12,13 +12,15 @@ export const dashboardService = {
   getStockHealth: () =>
     apiClient.get<StockHealthStats>('/dashboard/stock-health'),
 
-  getRecentSales: (query: SummaryQuery, limit = 10) =>
-    apiClient.get<{ data: RecentSaleItem[] }>('/dashboard/recent-sales', {
-      params: { ...query, limit },
+  getRecentSales: (query: SummaryQuery, page = 1, pageSize = 10) =>
+    apiClient.get<RecentSalesResponse>('/dashboard/recent-sales', {
+      params: { ...query, page, page_size: pageSize },
     }),
 
-  getAgingStock: () =>
-    apiClient.get<{ data: AgingStockItem[] }>('/dashboard/aging-stock'),
+  getAgingStock: (days = 180) =>
+    apiClient.get<{ data: AgingStockItem[] }>('/dashboard/aging-stock', {
+      params: { days },
+    }),
 
   getSummaryIncomeData: (query: SummaryQuery) =>
     apiClient.get<RevenueBreakdownResponse>('/dashboard/income-summary', { params: query }),

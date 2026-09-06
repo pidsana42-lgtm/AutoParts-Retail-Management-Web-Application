@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Banknote, Users, Loader2, Eye, Trophy } from 'lucide-react';
+import { TrendingUp, TrendingDown, Banknote, Users, Loader2, Eye, Trophy, Filter as FilterIcon } from 'lucide-react';
 // Components
 import Button from '../../../components/elements/button';
 import { Card, CardHeader } from '../../../components/elements/card';
@@ -11,6 +11,7 @@ import DateRangePicker from '../../../components/elements/date_range_picker';
 // Hooks
 import { useDashboardMetrics } from '../../owner/dashboard/hooks/useDashboardMetrics';
 import { useRevenueBreakdown } from './hooks/useRevenueBreakdown';
+import { useTopSellers, TOP_SELLER_PRESETS } from './hooks/useTopSellers';
 // Service & Interface
 import { dashboardService } from '../../../service/http/dashboard/dashboard_service';
 import type { DashboardSummaryItem, SummaryQuery, StockHealthStats, TopSellerItem } from '../../../interface/dashboard/dashboard_interface';
@@ -57,8 +58,6 @@ const SaleDashboard: React.FC = () => {
   const [orderTrend, setOrderTrend] = useState<number | null>(null);
   const [stockHealth, setStockHealth] = useState<StockHealthStats | null>(null);
 
-  const [topSellerProduct, setTopSellerProduct] = useState<TopSellerItem[]>([]);
-  const [topSellerProductLoading, setTopSellerProductLoading] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
   const query = useMemo<SummaryQuery>(() => {
@@ -81,6 +80,21 @@ const SaleDashboard: React.FC = () => {
 
   const { aggr, marginPct } = useDashboardMetrics(summaryData, stockHealth);
   const { customerData, paymentData, totalCustomerRevenue, totalPaymentRevenue, isLoading: isChartLoading } = useRevenueBreakdown(query);
+  const {
+    topLimit,
+    topSellerProduct,
+    topSellerProductLoading,
+    topFilterOpen,
+    setTopFilterOpen,
+    topFilterPos,
+    customTopInput,
+    setCustomTopInput,
+    topFilterRef,
+    handleTopPresetClick,
+    handleCustomTopApply,
+    handleTopReset,
+    toggleTopFilterOpen,
+  } = useTopSellers(query, 10);
 
   const pad = (n: number) => String(n).padStart(2, '0');
   const dateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -201,22 +215,6 @@ const SaleDashboard: React.FC = () => {
     fetchStockHealth();
   }, []);
 
-  useEffect(() => {
-    const fetchTopSellers = async () => {
-      setTopSellerProductLoading(true);
-      try {
-        const res = await dashboardService.getTopSellers(query, 10);
-        const list = Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
-        setTopSellerProduct(Array.isArray(list) ? list : []);
-      } catch {
-        setTopSellerProduct([]);
-      } finally {
-        setTopSellerProductLoading(false);
-      }
-    };
-    fetchTopSellers();
-  }, [query]);
-  
   const handleFilterClick = (value: string) => {
     setSelectedFilter(value);
     setStartDate('');
@@ -401,12 +399,114 @@ const SaleDashboard: React.FC = () => {
       </div>
       <div className='col-span-1 flex flex-col gap-6'>
         <Card className='col-span-1 overflow-hidden' noPadding>
-            <CardHeader className='flex items-center bg-[#F6F3F2]/50'>
-              <Heading level='h4'>สินค้าขายดี 10 อันดับของร้าน</Heading>
-              <Button variant='outline' size='sm' onClick={handleExportPdf} disabled={exportingPdf || topSellerProduct.length === 0}
-                className='border-none hover:bg-transparent hover:text-red-700 hover:underline p-0 h-auto font-light'>
-                ส่งออกรายการทั้งหมด
-              </Button>
+            <CardHeader className='flex items-center justify-between bg-[#F6F3F2]/50 px-6 py-4'>
+              <Heading level='h4' className='m-0'>สินค้าขายดี {topLimit} อันดับของร้าน</Heading>
+              <div className='flex items-center gap-4'>
+                {/* Filter dropdown */}
+                <div className='relative flex items-center' ref={topFilterRef}>
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    className='border-none hover:bg-transparent hover:text-red-700 hover:underline p-0 h-auto font-light inline-flex items-center gap-1.5'
+                    leftIcon={<FilterIcon size={14} className='shrink-0' />}
+                    onClick={toggleTopFilterOpen}
+                  >
+                    ตัวกรอง
+                    {topLimit !== 10 && (
+                      <span className='text-red-600 font-normal'>
+                        ({topLimit} อันดับ)
+                      </span>
+                    )}
+                  </Button>
+
+                  {topFilterOpen && (
+                    <div
+                      style={{
+                        position: 'fixed',
+                        ...(topFilterPos.top !== undefined ? { top: topFilterPos.top } : {}),
+                        ...(topFilterPos.bottom !== undefined ? { bottom: topFilterPos.bottom } : {}),
+                        right: topFilterPos.right,
+                      }}
+                      className='z-9999 w-64 bg-white border border-gray-200 shadow-lg p-4 space-y-4'
+                    >
+                      {/* ช่วงจำนวนอันดับ */}
+                      <div>
+                        <Heading level='p'>เลือกจำนวนอันดับ</Heading>
+                        <div className='flex flex-wrap gap-1.5 mt-1'>
+                          {TOP_SELLER_PRESETS.map((opt) => (
+                            <Button
+                              key={opt.value}
+                              size='sm'
+                              variant={topLimit === opt.value ? 'solid-red' : 'outline-cancel'}
+                              onClick={() => handleTopPresetClick(opt.value)}
+                              className='px-2.5 py-1 h-auto text-xs font-normal cursor-pointer'
+                            >
+                              {opt.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* หรือระบุจำนวนอันดับเอง */}
+                      <div className='pt-2 border-t border-gray-100'>
+                        <Heading level='p'>หรือระบุจำนวนอันดับเอง</Heading>
+                        <div className='flex items-center gap-2 mt-1.5'>
+                          <input
+                            type='number'
+                            min={1}
+                            placeholder='เช่น 15'
+                            value={customTopInput}
+                            onChange={(e) => setCustomTopInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleCustomTopApply();
+                              }
+                            }}
+                            className='w-full h-8 px-2.5 text-sm border border-gray-300 rounded-none focus:outline-none focus:border-red-500'
+                          />
+                          <span className='text-xs text-gray-500 shrink-0'>อันดับ</span>
+                          <Button
+                            size='sm'
+                            variant='solid-red'
+                            onClick={handleCustomTopApply}
+                            className='px-3 py-1 h-8 text-xs font-normal shrink-0'
+                          >
+                            ใช้
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Reset and Close */}
+                      <div className='pt-2 border-t border-gray-100 flex justify-between items-center'>
+                        <button
+                          type='button'
+                          onClick={handleTopReset}
+                          className='text-xs text-gray-400 hover:text-gray-600 transition cursor-pointer'
+                        >
+                          รีเซ็ตเป็น 10 อันดับ
+                        </button>
+                        <button
+                          type='button'
+                          onClick={() => setTopFilterOpen(false)}
+                          className='text-xs text-red-500 hover:text-red-700 font-medium transition cursor-pointer'
+                        >
+                          ปิด
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={handleExportPdf}
+                  disabled={exportingPdf || topSellerProduct.length === 0}
+                  className='border-none hover:bg-transparent hover:text-red-700 hover:underline p-0 h-auto font-light inline-flex items-center'
+                >
+                  ส่งออกรายการทั้งหมด
+                </Button>
+              </div>
             </CardHeader>
             <Table>
               <TableHeader className='bg-[#F6F3F2] text-[#797878]'>
@@ -427,7 +527,7 @@ const SaleDashboard: React.FC = () => {
                 ) : !Array.isArray(topSellerProduct) || topSellerProduct.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className='text-center py-12 text-gray-400'>
-                      <Trophy size={40} strokeWidth={0.7} className='mx-auto' /> <br />ยังไม่มีข้อมูลสินค้าขายดี 10 อับดับ
+                      <Trophy size={40} strokeWidth={0.7} className='mx-auto' /> <br />ยังไม่มีข้อมูลสินค้าขายดี {topLimit} อันดับ
                     </TableCell>
                   </TableRow>
                 ) : (

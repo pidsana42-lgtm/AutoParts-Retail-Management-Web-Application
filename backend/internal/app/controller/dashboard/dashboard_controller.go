@@ -43,22 +43,34 @@ func (ctrl *DashboardController) GetRecentSales(c *gin.Context) {
 		return
 	}
 
-	limitStr := c.DefaultQuery("limit", "10")
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 {
-		limit = 10
+	pageStr := c.DefaultQuery("page", "1")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page <= 0 {
+		page = 1
 	}
 
-	data, err := ctrl.svc.GetRecentSales(c.Request.Context(), query, limit)
+	// รองรับ limit เดิมชั่วคราว เพื่อไม่ให้ client รุ่นเก่าพังระหว่าง deploy
+	pageSizeStr := c.DefaultQuery("page_size", c.DefaultQuery("limit", "10"))
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize <= 0 {
+		pageSize = 10
+	}
+
+	result, err := ctrl.svc.GetRecentSales(c.Request.Context(), query, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถโหลดรายการขายล่าสุดได้"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": data})
+	c.JSON(http.StatusOK, result)
 }
 
 func (ctrl *DashboardController) GetAgingStock(c *gin.Context) {
-	data, err := ctrl.svc.GetAgingStock(c.Request.Context())
+	daysStr := c.DefaultQuery("days", "180")
+	days, err := strconv.Atoi(daysStr)
+	if err != nil || days <= 0 {
+		days = 180
+	}
+	data, err := ctrl.svc.GetAgingStock(c.Request.Context(), days)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถโหลดข้อมูลสินค้าค้างสต๊อกได้"})
 		return

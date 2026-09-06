@@ -14,8 +14,8 @@ import (
 
 type DashboardService interface {
 	GetSummaryData(ctx context.Context, query dashDto.SummaryQuery) (*dashDto.SummaryResponse, error)
-	GetRecentSales(ctx context.Context, query dashDto.SummaryQuery, limit int) ([]dashDto.RecentSaleDTO, error)
-	GetAgingStock(ctx context.Context) ([]dashDto.AgingStockDTO, error)
+	GetRecentSales(ctx context.Context, query dashDto.SummaryQuery, page, pageSize int) (*dashDto.RecentSalesResponse, error)
+	GetAgingStock(ctx context.Context, thresholdDays int) ([]dashDto.AgingStockDTO, error)
 	GetStockHealth(ctx context.Context) (*dashDto.StockHealthDTO, error)
 	GetIncomeSummary(ctx context.Context, query dashDto.SummaryQuery) (*dashDto.RevenueBreakdownResponse, error)
 	GetTopSellers(ctx context.Context, query dashDto.SummaryQuery, limit int) ([]dashDto.TopSellerDTO, error)
@@ -140,9 +140,15 @@ var orderStatusLabel = map[enum.OrderStatus]string{
 	enum.OrderClaimed:       "เคลม",
 }
 
-func (s *dashboardService) GetRecentSales(ctx context.Context, query dashDto.SummaryQuery, limit int) ([]dashDto.RecentSaleDTO, error) {
-	if limit <= 0 {
-		limit = 10
+func (s *dashboardService) GetRecentSales(ctx context.Context, query dashDto.SummaryQuery, page, pageSize int) (*dashDto.RecentSalesResponse, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+	if pageSize > 100 {
+		pageSize = 100
 	}
 
 	now := time.Now()
@@ -162,7 +168,7 @@ func (s *dashboardService) GetRecentSales(ctx context.Context, query dashDto.Sum
 		start, end = today, today.AddDate(0, 0, 1)
 	}
 
-	orders, err := s.dashboardRepository.GetRecentSaleOrders(ctx, start, end, limit)
+	orders, total, err := s.dashboardRepository.GetRecentSaleOrders(ctx, start, end, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +184,12 @@ func (s *dashboardService) GetRecentSales(ctx context.Context, query dashDto.Sum
 			PaymentMethod: resolvePaymentMethodLabel(o),
 		}
 	}
-	return result, nil
+	return &dashDto.RecentSalesResponse{
+		Data:     result,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	}, nil
 }
 
 func resolveOrderStatusLabel(status enum.OrderStatus) string {
@@ -195,8 +206,10 @@ func resolvePaymentMethodLabel(o entity.SaleOrder) string {
 	return string(o.PaymentMethod.MethodName)
 }
 
-func (s *dashboardService) GetAgingStock(ctx context.Context) ([]dashDto.AgingStockDTO, error) {
-	thresholdDays := config.GetEnvInt("AGING_STOCK_THRESHOLD_DAYS", 180)
+func (s *dashboardService) GetAgingStock(ctx context.Context, thresholdDays int) ([]dashDto.AgingStockDTO, error) {
+	if thresholdDays <= 0 {
+		thresholdDays = config.GetEnvInt("AGING_STOCK_THRESHOLD_DAYS", 180)
+	}
 
 	products, err := s.dashboardRepository.GetProductsInStock(ctx)
 	if err != nil {
