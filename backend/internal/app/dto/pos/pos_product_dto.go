@@ -40,12 +40,29 @@ func ToPOSProductResponseList(products []entity.Product) []POSProductResponse {
 			}
 		}
 
+		barcode := p.Barcode
+		if barcode == "" && len(p.Inventories) > 0 {
+			for _, inv := range p.Inventories {
+				if inv.Barcode != "" {
+					barcode = inv.Barcode
+					break
+				}
+				if inv.Variant_Code != "" {
+					barcode = inv.Variant_Code
+					break
+				}
+			}
+		}
+		if barcode == "" {
+			barcode = p.Product_Code
+		}
+
 		list = append(list, POSProductResponse{
 			ID:              p.ID,
 			ProductCode:     p.Product_Code,
 			PartNumber:      p.Part_Number,
 			ProductName:     p.Product_Name,
-			Barcode:         p.Barcode,
+			Barcode:         barcode,
 			Quantity:        p.Quantity,
 			SalePrice:       p.Sale_price,
 			MaxDiscountRate: p.MaxDiscountRate,

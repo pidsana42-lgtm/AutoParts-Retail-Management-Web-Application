@@ -6,7 +6,7 @@ type PreOrderItem struct {
 	gorm.Model
 	PreOrderID uint      `gorm:"not null;index" json:"pre_order_id"`
 	PreOrder   *PreOrder `gorm:"foreignKey:PreOrderID" json:"pre_order,omitempty"`
-	ProductID  uint      `gorm:"not null;index" json:"product_id"`
+	ProductID  *uint     `gorm:"index" json:"product_id"`
 	Product    *Product  `gorm:"foreignKey:ProductID" json:"product,omitempty"`
 	// Snapshot fields keep the exact catalog/supplier values used when the pre-order was created.
 	// They must not change when the WMS product or supplier master data is edited later.

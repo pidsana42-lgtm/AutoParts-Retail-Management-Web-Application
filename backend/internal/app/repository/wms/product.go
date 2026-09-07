@@ -22,8 +22,17 @@ func assignVariantCode(tx *gorm.DB, inv *entity.Inventory) error {
 	if err := tx.Select("product_code").First(&prod, inv.ProductID).Error; err == nil {
 		prodCode = prod.Product_Code
 	}
-	return tx.Model(&entity.Inventory{}).Where("id = ?", inv.ID).
-		Update("variant_code", lotcode.Build(prodCode, shortName, inv.ID)).Error
+	code := lotcode.Build(prodCode, shortName, inv.ID)
+	updates := map[string]interface{}{
+		"variant_code": code,
+	}
+	if inv.Barcode == "" {
+		updates["barcode"] = code
+	}
+	if inv.QRCode == "" {
+		updates["qr_code"] = code
+	}
+	return tx.Model(&entity.Inventory{}).Where("id = ?", inv.ID).Updates(updates).Error
 }
 
 type ProductRepository interface {

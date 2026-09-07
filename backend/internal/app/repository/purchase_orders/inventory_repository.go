@@ -90,8 +90,8 @@ func (r *inventoryRepository) SearchProducts(ctx context.Context, supplierID str
 		Table("inventories").
 		Select(`DISTINCT
 			products.id AS id,
-			COALESCE(NULLIF(inventories.company_product_code, ''), products.product_code) AS code,
-			products.barcode AS barcode,
+			products.product_code AS code,
+			COALESCE(NULLIF(inventories.barcode, ''), products.barcode, products.product_code) AS barcode,
 			products.product_name AS name,
 			products.cost_price AS price,
 			units.unit_name AS unit,
@@ -100,8 +100,8 @@ func (r *inventoryRepository) SearchProducts(ctx context.Context, supplierID str
 		Joins("LEFT JOIN units ON units.id = products.unit_id").
 		Where("inventories.supplier_id = ?", supplierID).
 		Where(
-			"products.product_name LIKE ? OR products.product_code LIKE ? OR products.barcode LIKE ? OR inventories.company_product_code LIKE ?",
-			"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%",
+			"products.product_name LIKE ? OR products.product_code LIKE ? OR inventories.barcode LIKE ? OR inventories.variant_code LIKE ? OR inventories.company_product_code LIKE ? OR products.barcode LIKE ?",
+			"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%",
 		).
 		Limit(20).
 		Find(&products).Error
