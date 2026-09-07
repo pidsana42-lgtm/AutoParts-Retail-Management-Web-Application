@@ -5,6 +5,7 @@ import type {
   CustomerTypeItem,
   CustomerListItem,
   RegisterCustomerRequest,
+  UpdateCustomerRequest,
 } from "../../../../interface/customer/customer_interface";
 
 export const useCustomerRegistration = () => {
@@ -199,16 +200,19 @@ export const useCustomerRegistration = () => {
     setSubmitting(true);
 
     try {
-      const payload: RegisterCustomerRequest = {
-        customer_name: formData.customer_name.trim(),
-        customer_type_id: Number(formData.customer_type_id),
-        phone_number: formData.phone_number.trim(),
-        id_card_number_customer: formData.id_card_number_customer.trim(),
-        registered_address: formData.registered_address.trim(),
-        shipping_address: formData.shipping_address.trim(),
-      };
+      const formDataToSend = new FormData();
+      formDataToSend.append("customer_name", formData.customer_name.trim());
+      formDataToSend.append("customer_type_id", String(formData.customer_type_id));
+      formDataToSend.append("phone_number", formData.phone_number.trim());
+      formDataToSend.append("id_card_number_customer", formData.id_card_number_customer.trim());
+      formDataToSend.append("registered_address", formData.registered_address.trim());
+      formDataToSend.append("shipping_address", formData.shipping_address.trim());
 
-      await customerApiService.registerCustomer(payload);
+      if (idCardFile) {
+        formDataToSend.append("file", idCardFile);
+      }
+
+      await customerApiService.registerCustomer(formDataToSend);
       alert("ลงทะเบียนสมาชิกสำเร็จ");
       handleReset();
       fetchInitialData();
@@ -218,6 +222,167 @@ export const useCustomerRegistration = () => {
       setSubmitting(false);
     }
   };
+
+
+  // --- Edit Modal State ---
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [editingCustomer, setEditingCustomer] = useState<CustomerListItem | null>(null);
+  const [editFormData, setEditFormData] = useState<UpdateCustomerRequest>({
+    customer_name: "",
+    customer_type_id: 1,
+    phone_number: "",
+    id_card_number_customer: "",
+    registered_address: "",
+    shipping_address: "",
+    id_card_image_path: "",
+  });
+  const [editIdCardFile, setEditIdCardFile] = useState<File | null>(null);
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const [editSubmitting, setEditSubmitting] = useState<boolean>(false);
+
+  const openEditModal = async (customer: CustomerListItem) => {
+    setEditingCustomer(customer);
+    setEditIdCardFile(null);
+    setEditErrors({});
+
+    let regAddress = "";
+    let shipAddress = customer.display_address || "";
+    let idCardPath = customer.id_card_image_path || "";
+
+    try {
+      const detail = await customerApiService.getCustomerById(customer.id);
+      regAddress = detail.registered_address || "";
+      shipAddress = detail.shipping_address || "";
+      idCardPath = detail.id_card_image_path || "";
+    } catch {
+      // Fallback to customerListItem properties
+    }
+
+    setEditFormData({
+      customer_name: customer.customer_name,
+      customer_type_id: customer.customer_type?.id || 1,
+      phone_number: customer.phone_number,
+      id_card_number_customer: customer.id_card_number_customer,
+      registered_address: regAddress,
+      shipping_address: shipAddress,
+      id_card_image_path: idCardPath,
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setIsEditModalOpen(false);
+    setEditingCustomer(null);
+    setEditIdCardFile(null);
+    setEditErrors({});
+  };
+
+  const handleEditInputChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    let val: any = value;
+    if (name === "customer_type_id") {
+      val = Number(value);
+    } else if (name === "phone_number") {
+      val = formatPhoneNumber(value);
+    } else if (name === "id_card_number_customer") {
+      val = formatIdCardNumber(value);
+    }
+
+    setEditFormData((prev) => ({
+      ...prev,
+      [name]: val,
+    }));
+  };
+
+  const handleEditFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setEditIdCardFile(e.target.files[0]);
+    }
+  };
+
+  const validateEditForm = () => {
+    const newErrors: Record<string, string> = {};
+    if (!editFormData.customer_name?.trim()) {
+      newErrors.customer_name = "กรุณากรอกชื่อลูกค้า/อู่ซ่อมรถ/บริษัท";
+    }
+    if (!editFormData.customer_type_id) {
+      newErrors.customer_type_id = "กรุณาเลือกประเภทลูกค้า";
+    }
+    const rawPhone = (editFormData.phone_number || "").replace(/\D/g, "");
+    if (!rawPhone) {
+      newErrors.phone_number = "กรุณากรอกหมายเลขโทรศัพท์หลัก";
+    } else if (rawPhone.length !== 10) {
+      newErrors.phone_number = "กรุณากรอกหมายเลขโทรศัพท์ให้ครบ 10 หลัก (XXX-XXXXXXX)";
+    }
+
+    const rawIdCard = (editFormData.id_card_number_customer || "").replace(/\D/g, "");
+    if (!rawIdCard) {
+      newErrors.id_card_number_customer = "กรุณากรอกเลขประจำตัวประชาชน (13 หลัก)";
+    } else if (rawIdCard.length !== 13) {
+      newErrors.id_card_number_customer = "กรุณากรอกเลขประจำตัวประชาชนให้ครบ 13 หลัก (X-XXXX-XXXXX-XX-X)";
+    }
+
+    if (!editFormData.registered_address?.trim()) {
+      newErrors.registered_address = "กรุณากรอกที่อยู่ตามทะเบียนบ้าน";
+    }
+    if (!editFormData.shipping_address?.trim()) {
+      newErrors.shipping_address = "กรุณากรอกที่อยู่จัดส่ง / ที่ตั้งอู่";
+    }
+
+    setEditErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleEditSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editingCustomer || !validateEditForm()) return;
+
+    setEditSubmitting(true);
+    try {
+      const formDataToSend = new FormData();
+      formDataToSend.append("customer_name", editFormData.customer_name.trim());
+      formDataToSend.append("customer_type_id", String(editFormData.customer_type_id));
+      formDataToSend.append("phone_number", editFormData.phone_number.trim());
+      formDataToSend.append("id_card_number_customer", editFormData.id_card_number_customer.trim());
+      formDataToSend.append("registered_address", editFormData.registered_address.trim());
+      formDataToSend.append("shipping_address", editFormData.shipping_address.trim());
+      if (editFormData.id_card_image_path) {
+        formDataToSend.append("id_card_image_path", editFormData.id_card_image_path);
+      }
+
+      if (editIdCardFile) {
+        formDataToSend.append("file", editIdCardFile);
+      }
+
+      await customerApiService.updateCustomer(editingCustomer.id, formDataToSend);
+      alert("แก้ไขข้อมูลลูกค้าสำเร็จ");
+      closeEditModal();
+      await fetchInitialData();
+      if (selectedCustomer && selectedCustomer.id === editingCustomer.id) {
+        const updated = await customerApiService.getCustomerById(editingCustomer.id);
+        setSelectedCustomer((prev) =>
+          prev
+            ? {
+                ...prev,
+                customer_name: updated.customer_name,
+                phone_number: updated.phone_number,
+                id_card_number_customer: updated.id_card_number_customer,
+                id_card_image_path: updated.id_card_image_path,
+                display_address: updated.shipping_address || updated.registered_address,
+                customer_type_label: updated.customer_type_label,
+              }
+            : null
+        );
+      }
+    } catch (err: any) {
+      alert("เกิดข้อผิดพลาดในการแก้ไขข้อมูล: " + (err.response?.data?.error || err.response?.data?.message || err.message));
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
 
   // --- Filter Handlers ---
   const handleSearchChange = (value: string) => {
@@ -334,6 +499,21 @@ export const useCustomerRegistration = () => {
     // Details Modal
     selectedCustomer,
     setSelectedCustomer,
+
+    // Edit Modal
+    isEditModalOpen,
+    editingCustomer,
+    editFormData,
+    editIdCardFile,
+    editErrors,
+    editSubmitting,
+    openEditModal,
+    closeEditModal,
+    handleEditInputChange,
+    handleEditFileChange,
+    handleEditSubmit,
+    setEditFormData,
+    setIdCardFile,
 
     // Refetch
     refetch: fetchInitialData,

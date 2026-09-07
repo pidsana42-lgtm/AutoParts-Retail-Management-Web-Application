@@ -77,3 +77,10 @@ func UploadCompanyLogo(filename, mimeType string, data []byte) (string, error) {
 	return UploadToSupabase(companyLogoBucket, filename, mimeType, data)
 }
 
+const customerDocumentBucket = "G03-Capstone"
+
+// UploadCustomerDocument stores customer ID card / registration documents under the shared Supabase bucket.
+func UploadCustomerDocument(filename, mimeType string, data []byte) (string, error) {
+	return UploadToSupabase(customerDocumentBucket, filename, mimeType, data)
+}
+

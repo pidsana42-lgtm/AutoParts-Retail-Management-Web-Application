@@ -6,16 +6,34 @@ import (
 )
 
 type RegisterCustomerRequest struct {
-	CustomerName         string `json:"customer_name" binding:"required"`
-	CustomerTypeID       uint   `json:"customer_type_id" binding:"required"`
-	PhoneNumber          string `json:"phone_number" binding:"required"`
-	IdCardNumberCustomer string `json:"id_card_number_customer" binding:"required"`
-	RegisteredAddress    string `json:"registered_address" binding:"required"`
-	ShippingAddress      string `json:"shipping_address" binding:"required"`
+	CustomerName         string `json:"customer_name" form:"customer_name" binding:"required"`
+	CustomerTypeID       uint   `json:"customer_type_id" form:"customer_type_id" binding:"required"`
+	PhoneNumber          string `json:"phone_number" form:"phone_number" binding:"required"`
+	IdCardNumberCustomer string `json:"id_card_number_customer" form:"id_card_number_customer" binding:"required"`
+	RegisteredAddress    string `json:"registered_address" form:"registered_address" binding:"required"`
+	ShippingAddress      string `json:"shipping_address" form:"shipping_address" binding:"required"`
+	IdCardImagePath      string `json:"id_card_image_path" form:"id_card_image_path"`
+}
+
+type UpdateCustomerRequest struct {
+	CustomerName         string   `json:"customer_name" form:"customer_name" binding:"required"`
+	CustomerTypeID       uint     `json:"customer_type_id" form:"customer_type_id" binding:"required"`
+	PhoneNumber          string   `json:"phone_number" form:"phone_number" binding:"required"`
+	IdCardNumberCustomer string   `json:"id_card_number_customer" form:"id_card_number_customer" binding:"required"`
+	RegisteredAddress    string   `json:"registered_address" form:"registered_address" binding:"required"`
+	ShippingAddress      string   `json:"shipping_address" form:"shipping_address" binding:"required"`
+	IdCardImagePath      string   `json:"id_card_image_path" form:"id_card_image_path"`
+	CreditLimit          *float64 `json:"credit_limit,omitempty" form:"credit_limit"`
+	StandardDiscountRate *float64 `json:"standard_discount_rate,omitempty" form:"standard_discount_rate"`
+	IsDiscountEnabled    *bool    `json:"is_discount_enabled,omitempty" form:"is_discount_enabled"`
+	OntopDiscountRate    *float64 `json:"ontop_discount_rate,omitempty" form:"ontop_discount_rate"`
 }
 
 // idCardImagePath ตอนrequestมันมาเป็นภาพไฟล์ดิบ
 func ToCustomerEntity(req RegisterCustomerRequest, idCardImagePath string, defaultCreditLimit float64) *entity.Customer {
+	if idCardImagePath == "" && req.IdCardImagePath != "" {
+		idCardImagePath = req.IdCardImagePath
+	}
 	return &entity.Customer{
 		CustomerName:         req.CustomerName,
 		CustomerTypeID:       req.CustomerTypeID,
@@ -42,6 +60,7 @@ type CustomerResponse struct {
 	CustomerName         string `json:"customer_name"`
 	PhoneNumber          string `json:"phone_number"`
 	IdCardNumberCustomer string `json:"id_card_number_customer"`
+	IdCardImagePath      string `json:"id_card_image_path"`
 	DisplayAddress       string `json:"display_address"`
 	CustomerTypeLabel    string `json:"customer_type_label"` // ค้างไว้เพื่อให้ระบบเดิมทำงานได้
 
@@ -68,6 +87,7 @@ func ToCustomerListResponse(customers []entity.Customer) []CustomerResponse {
 			CustomerName:         c.CustomerName,
 			PhoneNumber:          c.PhoneNumber,
 			IdCardNumberCustomer: c.IdCardNumberCustomer,
+			IdCardImagePath:      c.IdCardImagePath,
 			DisplayAddress:       address,
 			CustomerTypeLabel:    c.CustomerType.TypeLabel, // ดึงชื่อภาษาไทยมาจากตารางประเภทลูกค้าที่เรา Preload ไว้
 			CurrentDebtAmount:    c.CurrentDebtAmount,
@@ -85,6 +105,7 @@ func ToCustomerListResponse(customers []entity.Customer) []CustomerResponse {
 
 	return list
 }
+
 
 type CustomerDetailResponse struct {
 	ID                   uint    `json:"id"`

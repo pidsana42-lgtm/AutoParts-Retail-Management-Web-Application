@@ -9,6 +9,7 @@ type CustomerRepository interface {
 	CreateCustomer(customer *entity.Customer) error
 	GetAllCustomers() ([]entity.Customer, error)
 	GetCustomerByID(id uint) (*entity.Customer, error)
+	UpdateCustomer(customer *entity.Customer) error
 	UpdateCustomerDiscountRequest(customer *entity.Customer) error
 	CreateCreditAuditLog(log *entity.CustomerCreditAuditLog) error
 	GetCreditAuditLogs(limit int) ([]entity.CustomerCreditAuditLog, error)
@@ -38,6 +39,10 @@ func (r *customerRepository) GetCustomerByID(id uint) (*entity.Customer, error) 
 	var customer entity.Customer
 	err := r.db.Preload("CustomerType").First(&customer, id).Error
 	return &customer, err
+}
+
+func (r *customerRepository) UpdateCustomer(customer *entity.Customer) error {
+	return r.db.Omit("CustomerType").Save(customer).Error
 }
 
 func (r *customerRepository) UpdateCustomerDiscountRequest(customer *entity.Customer) error {
