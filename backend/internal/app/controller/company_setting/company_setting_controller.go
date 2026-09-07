@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -22,11 +20,11 @@ func NewCompanySettingController(svc service.CompanySettingService) *CompanySett
 	return &CompanySettingController{svc: svc}
 }
 
-var allowedLogoMIME = map[string]bool{
-	"image/jpeg": true,
-	"image/png":  true,
-	"image/webp": true,
-	"image/gif":  true,
+var logoExtensionByMIME = map[string]string{
+	"image/jpeg": ".jpg",
+	"image/png":  ".png",
+	"image/webp": ".webp",
+	"image/gif":  ".gif",
 }
 
 func (ctrl *CompanySettingController) GetCompanySetting(c *gin.Context) {
@@ -87,20 +85,17 @@ func (ctrl *CompanySettingController) UploadLogo(c *gin.Context) {
 		mimeType = http.DetectContentType(data)
 	}
 
-	if !allowedLogoMIME[mimeType] {
+	ext, allowed := logoExtensionByMIME[mimeType]
+	if !allowed {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "รองรับเฉพาะไฟล์ภาพ (JPEG, PNG, WEBP, GIF)"})
 		return
 	}
 
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if ext == "" {
-		ext = ".png"
-	}
 	filename := fmt.Sprintf("logo_%d%s", time.Now().UnixNano(), ext)
 
 	publicURL, err := storage.UploadCompanyLogo(filename, mimeType, data)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 

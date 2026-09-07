@@ -1,11 +1,14 @@
 import { useRef, useState } from "react";
 import { ImagePlus, X, UploadCloud } from "lucide-react";
+import { cn } from "../../utils/component";
 
 interface ImageUploaderProps {
   preview: string;
   onChange: (file: File) => void;
   onClear: () => void;
   label?: string;
+  className?: string;
+  variant?: "default" | "document";
 }
 
 export default function ImageUploader({
@@ -13,6 +16,8 @@ export default function ImageUploader({
   onChange,
   onClear,
   label = "อัปโหลดรูปสินค้า",
+  className,
+  variant = "default",
 }: ImageUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -58,7 +63,10 @@ export default function ImageUploader({
       {preview ? (
         /* ─── Preview state ─── */
         <div
-          className="group relative w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm"
+          className={cn(
+            "group relative w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm",
+            className
+          )}
           style={{ aspectRatio: "16/7" }}
         >
           <img
@@ -93,26 +101,38 @@ export default function ImageUploader({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={[
-            "flex w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-8 text-center select-none transition-all duration-200",
+          className={cn(
+            "flex w-full cursor-pointer flex-col items-center justify-center text-center select-none transition-all duration-200",
+            variant === "document"
+              ? "gap-2 border border-dashed border-[#E7BDB8] bg-white p-8 hover:bg-red-50/20"
+              : "gap-3 rounded-xl border-2 border-dashed py-8",
             dragging
               ? "border-red-400 bg-red-50 text-red-500 scale-[1.01]"
-              : "border-slate-200 bg-slate-50 text-slate-400 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-500",
-          ].join(" ")}
+              : variant === "document"
+                ? "text-[#5B5B5B]"
+                : "border-slate-200 bg-slate-50 text-slate-400 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-500",
+            className
+          )}
         >
-          <div
-            className={[
-              "flex h-12 w-12 items-center justify-center rounded-full transition-colors duration-200",
-              dragging ? "bg-red-100" : "bg-white shadow-sm",
-            ].join(" ")}
-          >
-            <UploadCloud className={["h-6 w-6 transition-colors", dragging ? "text-red-500" : "text-slate-400"].join(" ")} />
-          </div>
+          {variant === "document" ? (
+            <UploadCloud className={cn("h-10 w-10 stroke-[1.5]", dragging ? "text-red-500" : "text-[#5B5B5B]")} />
+          ) : (
+            <div
+              className={cn(
+                "flex h-12 w-12 items-center justify-center rounded-full transition-colors duration-200",
+                dragging ? "bg-red-100" : "bg-white shadow-sm"
+              )}
+            >
+              <UploadCloud className={cn("h-6 w-6 transition-colors", dragging ? "text-red-500" : "text-slate-400")} />
+            </div>
+          )}
           <div>
-            <p className="text-sm font-semibold">
+            <p className={cn("text-sm", variant === "document" ? "font-normal text-[#1C1B1B]" : "font-semibold")}>
               {dragging ? "วางไฟล์ที่นี่เลย!" : "ลากและวางรูปภาพ หรือคลิกเพื่อเลือก"}
             </p>
-            <p className="mt-1 text-xs text-slate-400">รองรับ JPG, PNG, WEBP, GIF — ขนาดไม่เกิน 5MB</p>
+            <p className={cn("mt-1 text-xs", variant === "document" ? "font-light text-[#5B5B5B]" : "text-slate-400")}>
+              JPG, PNG, WEBP, GIF (ขนาดไม่เกิน 5MB)
+            </p>
           </div>
         </div>
       )}

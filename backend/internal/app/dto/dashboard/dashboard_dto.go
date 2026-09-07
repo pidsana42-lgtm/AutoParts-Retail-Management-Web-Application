@@ -54,6 +54,8 @@ type DisplayDashboardDTO struct {
 
 type SummaryQuery struct {
 	SummaryDate string `form:"summary_date"`
+	StartDate   string `form:"start_date"`
+	EndDate     string `form:"end_date"`
 	Weekly      string `form:"weekly_summary"`
 	Monthly     string `form:"monthly_summary"`
 	Quarterly   string `form:"quarterly_summary"`
@@ -64,6 +66,13 @@ type SummaryQuery struct {
 type SummaryResponse struct {
 	SummaryData []DisplayDashboardDTO `json:"summary_data"`
 	Total       int64                 `json:"total"`
+}
+
+type RecentSalesResponse struct {
+	Data     []RecentSaleDTO `json:"data"`
+	Total    int64           `json:"total"`
+	Page     int             `json:"page"`
+	PageSize int             `json:"page_size"`
 }
 
 type StockHealthDTO struct {

@@ -35,6 +35,7 @@ func SetupPORoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotificati
 	)
 
 	cron.StartPOReminderCron(poService)
+	cron.StartPOCleanupCron(poService)
 
 	poController := poCtrl.NewPOController(poService)
 

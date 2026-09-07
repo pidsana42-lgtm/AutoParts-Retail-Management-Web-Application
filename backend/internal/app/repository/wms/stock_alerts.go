@@ -6,12 +6,20 @@ import (
 	"gorm.io/gorm"
 )
 
+type ActivePOInfo struct {
+	POID      uint
+	PONumber  string
+	POCount   int
+	PONumbers []string
+}
+
 type StockAlertRepository interface {
 	Create(sa *entity.StockAlert) error
 	GetByID(id uint) (*entity.StockAlert, error)
 	List(isResolved string) ([]entity.StockAlert, error)
 	Update(sa *entity.StockAlert) error
 	ResolveByIDs(ids []uint) error
+	GetActivePOAlertMap(alertIDs []uint) (map[uint]ActivePOInfo, error)
 }
 
 type stockAlertRepository struct {
@@ -63,4 +71,54 @@ func (r *stockAlertRepository) ResolveByIDs(ids []uint) error {
 	return r.db.Model(&entity.StockAlert{}).
 		Where("id IN ?", ids).
 		Update("is_resolved", "true").Error
+}
+
+func (r *stockAlertRepository) GetActivePOAlertMap(alertIDs []uint) (map[uint]ActivePOInfo, error) {
+	if len(alertIDs) == 0 {
+		return map[uint]ActivePOInfo{}, nil
+	}
+
+	type Result struct {
+		AlertID  uint   `gorm:"column:alert_id"`
+		POID     uint   `gorm:"column:po_id"`
+		PONumber string `gorm:"column:po_number"`
+	}
+
+	var rows []Result
+	err := r.db.Table("purchase_order_items poi").
+		Select("poi.alert_id, po.id as po_id, po.po_number").
+		Joins("JOIN purchase_orders po ON po.id = poi.po_id").
+		Where("poi.alert_id IN ? AND poi.deleted_at IS NULL AND po.deleted_at IS NULL AND po.status NOT IN ('CANCELLED', 'DELETED')", alertIDs).
+		Order("po.id DESC").
+		Scan(&rows).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	resultMap := make(map[uint]ActivePOInfo)
+	for _, row := range rows {
+		if existing, exists := resultMap[row.AlertID]; !exists {
+			resultMap[row.AlertID] = ActivePOInfo{
+				POID:      row.POID,
+				PONumber:  row.PONumber,
+				POCount:   1,
+				PONumbers: []string{row.PONumber},
+			}
+		} else {
+			found := false
+			for _, num := range existing.PONumbers {
+				if num == row.PONumber {
+					found = true
+					break
+				}
+			}
+			if !found {
+				existing.POCount++
+				existing.PONumbers = append(existing.PONumbers, row.PONumber)
+				resultMap[row.AlertID] = existing
+			}
+		}
+	}
+	return resultMap, nil
 }

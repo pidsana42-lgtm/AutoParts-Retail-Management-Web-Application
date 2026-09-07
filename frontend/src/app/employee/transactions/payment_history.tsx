@@ -11,7 +11,7 @@ import {
   FileText,
 } from "lucide-react";
 
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 // Components
 import Heading from "../../../components/elements/heading";
@@ -44,7 +44,10 @@ import { downloadPdfBlob } from "../../../utils/payment_history_print";
 
 export default function PaymentHistoryPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isOwnerOrAdmin } = useUserRole();
+  const initialSearch = searchParams.get("search")?.trim() ?? "";
+  const initialTypeFilter = searchParams.get("type") === "repayment" ? "repayment" : "";
   const [printingReceiptId, setPrintingReceiptId] = useState<number | string | null>(null);
 
   const handlePrintReceipt = async (item: PaymentHistoryItem) => {
@@ -110,7 +113,7 @@ export default function PaymentHistoryPage() {
     handleRejectCancelReceipt,
     handleCancelReceipt,
     handlePrintCustomerStatement,
-  } = usePaymentHistory();
+  } = usePaymentHistory(initialSearch, initialTypeFilter);
 
   const formatCurrency = (val: number) => {
     return (val || 0).toLocaleString("th-TH", {

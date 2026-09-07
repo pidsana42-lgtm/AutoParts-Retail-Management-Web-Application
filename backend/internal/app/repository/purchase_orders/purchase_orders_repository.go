@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"hash/fnv"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ type PurchaseOrderRepository interface {
 	FindAll(ctx context.Context, query poDto.ListPOQuery) ([]poEntity.PO, int64, error)
 	FindAvailableYears(ctx context.Context) ([]int, error)
 	DeletePOByID(ctx context.Context, id uint) error
+	PurgeDeletedPOs(ctx context.Context, cutoff time.Time) (int64, error)
 	GetPOByID(ctx context.Context, id uint) (*poEntity.PO, error)
 	GetPOForPDF(ctx context.Context, id uint) (*poEntity.PO, error)
 	GetPOSummary(ctx context.Context) (*poDto.POSummaryResponse, error)
@@ -211,17 +213,47 @@ func (r *purchaseOrderRepository) GetPOSummary(ctx context.Context) (*poDto.POSu
 		return nil, fmt.Errorf("query resubmitted amount: %w", err)
 	}
 
-	// 4. ยอดที่ถูกตีกลับแยกตามบริษัท
+	// 4. PO ที่ถูกตีกลับแยกตามบริษัท พร้อมรายละเอียดสำหรับขยายดูใน Modal
+	var rejectedPOs []struct {
+		ID           uint
+		SupplierID   uint
+		SupplierName string
+		PONumber     string
+		TotalAmount  float64
+		UpdatedAt    time.Time
+	}
 	if err := r.db.WithContext(ctx).Table("purchase_orders").
-		Select("suppliers.supplier_name, COALESCE(SUM(purchase_orders.total_amount), 0) as amount").
+		Select("purchase_orders.id, purchase_orders.supplier_id, suppliers.supplier_name, purchase_orders.po_number, purchase_orders.total_amount, purchase_orders.updated_at").
 		Joins("JOIN suppliers ON suppliers.id = purchase_orders.supplier_id").
-		Where("UPPER(purchase_orders.status) = ?", "RESUBMITTED").Group("suppliers.supplier_name").
-		Scan(&summary.RejectedBySupplier).Error; err != nil {
+		Where("UPPER(purchase_orders.status) = ?", "RESUBMITTED").
+		Order("suppliers.supplier_name ASC, purchase_orders.updated_at DESC").
+		Scan(&rejectedPOs).Error; err != nil {
 		return nil, fmt.Errorf("query resubmitted by supplier: %w", err)
 	}
 
-	if summary.RejectedBySupplier == nil {
-		summary.RejectedBySupplier = []poDto.SupplierRejectedSummary{}
+	summary.RejectedBySupplier = make([]poDto.SupplierRejectedSummary, 0)
+	supplierIndexes := make(map[uint]int)
+	for _, po := range rejectedPOs {
+		index, exists := supplierIndexes[po.SupplierID]
+		if !exists {
+			index = len(summary.RejectedBySupplier)
+			supplierIndexes[po.SupplierID] = index
+			summary.RejectedBySupplier = append(summary.RejectedBySupplier, poDto.SupplierRejectedSummary{
+				SupplierID:     po.SupplierID,
+				SupplierName:   po.SupplierName,
+				PurchaseOrders: make([]poDto.RejectedPurchaseOrderSummary, 0),
+			})
+	}
+
+		supplier := &summary.RejectedBySupplier[index]
+		supplier.Amount += po.TotalAmount
+		supplier.POCount++
+		supplier.PurchaseOrders = append(supplier.PurchaseOrders, poDto.RejectedPurchaseOrderSummary{
+			ID:          po.ID,
+			PONumber:    po.PONumber,
+			TotalAmount: po.TotalAmount,
+			UpdatedAt:   po.UpdatedAt,
+		})
 	}
 
 	if summary.MonthlyApprovedLastCount > 0 {
@@ -268,6 +300,42 @@ func (r *purchaseOrderRepository) DeletePOByID(ctx context.Context, id uint) err
 		}
 		return nil
 	})
+}
+
+// PurgeDeletedPOs ลบ PO ในถังขยะที่พ้นระยะเวลากู้คืนแล้วแบบถาวร
+// รายการที่มีบิลหรือหลักฐานรับสินค้าจะถูกข้ามเพื่อรักษาประวัติทางบัญชี
+func (r *purchaseOrderRepository) PurgeDeletedPOs(ctx context.Context, cutoff time.Time) (int64, error) {
+	var purgedCount int64
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var poIDs []uint
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
+			Model(&poEntity.PO{}).
+			Where("UPPER(status) = ? AND updated_at <= ?", "DELETED", cutoff).
+			Where("NOT EXISTS (SELECT 1 FROM bills WHERE bills.po_id = purchase_orders.id)").
+			Where("NOT EXISTS (SELECT 1 FROM receive_evidence_excel WHERE receive_evidence_excel.po_id = purchase_orders.id)").
+			Pluck("id", &poIDs).Error; err != nil {
+			return err
+		}
+
+		if len(poIDs) == 0 {
+			return nil
+		}
+
+		if err := tx.Unscoped().Where("po_id IN ?", poIDs).Delete(&poEntity.POItems{}).Error; err != nil {
+			return err
+		}
+
+		result := tx.Unscoped().
+			Where("id IN ? AND UPPER(status) = ? AND updated_at <= ?", poIDs, "DELETED", cutoff).
+			Delete(&poEntity.PO{})
+		if result.Error != nil {
+			return result.Error
+		}
+
+		purgedCount = result.RowsAffected
+		return nil
+	})
+	return purgedCount, err
 }
 
 // Get เพื่อไปทำ PDF
@@ -450,7 +518,6 @@ func (r *purchaseOrderRepository) RestorePOByID(ctx context.Context, id uint, up
 func (r *purchaseOrderRepository) FindDuePOReminders(ctx context.Context, cutoff time.Time) ([]poEntity.PO, error) {
 	var pos []poEntity.PO
 	err := r.db.WithContext(ctx).
-		Preload("Creator.Role").
 		Where("status IN ? AND GREATEST(updated_at, COALESCE(last_reminder_at, updated_at)) <= ?",
 			[]string{"DRAFT", "RESUBMITTED"}, cutoff).
 		Find(&pos).Error
