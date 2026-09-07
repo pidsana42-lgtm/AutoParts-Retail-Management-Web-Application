@@ -9,8 +9,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// assignVariantCode ออกรหัสล็อตต่อบริษัท (variant code) ให้แถว inventory ที่เพิ่งสร้าง
-// เช่น BP-123-SU3 — ใช้พิมพ์ QR/บาร์โค้ดแยกบริษัทเพื่อให้ตัดสต็อกถูกเจ้า
+// assignVariantCode ออกรหัสประจำบริษัท (variant code) ให้แถว inventory ที่เพิ่งสร้าง
+// เช่น TRAGSP-00002-TAP — ใช้พิมพ์ QR/บาร์โค้ดแยกบริษัทเพื่อให้ตัดสต็อกถูกเจ้า
 func assignVariantCode(tx *gorm.DB, inv *entity.Inventory) error {
 	var supp entity.Supplier
 	shortName := ""
@@ -22,7 +22,7 @@ func assignVariantCode(tx *gorm.DB, inv *entity.Inventory) error {
 	if err := tx.Select("product_code").First(&prod, inv.ProductID).Error; err == nil {
 		prodCode = prod.Product_Code
 	}
-	code := lotcode.Build(prodCode, shortName, inv.ID)
+	code := lotcode.Build(prodCode, shortName)
 	updates := map[string]interface{}{
 		"variant_code": code,
 	}
@@ -39,6 +39,9 @@ type ProductRepository interface {
 	CreateProduct(product *entity.Product) error
 	GetProductByID(id uint) (*entity.Product, error)
 	UpdateProduct(product *entity.Product) error
+	// UpdateBarcode: อัปเดตเฉพาะฟิลด์ Barcode แบบเจาะจง (ไม่กระทบความสัมพันธ์อื่นๆ เช่น Models/ProductImages)
+	// ใช้ตอนต้องประกอบบาร์โค้ดอัตโนมัติใหม่หลังผูก Supplier เสร็จแล้ว (ตอนสร้าง/แก้ไขสินค้ายังไม่รู้ชื่อย่อ Supplier)
+	UpdateBarcode(id uint, barcode string) error
 	DeleteProduct(id uint) error
 	CreateProductImage(image *entity.ProductImage) error
 	ListProducts() ([]entity.Product, error)
@@ -105,6 +108,10 @@ func (r *productRepository) UpdateProduct(product *entity.Product) error {
 		return err
 	}
 	return r.db.Model(product).Association("Models").Replace(product.Models)
+}
+
+func (r *productRepository) UpdateBarcode(id uint, barcode string) error {
+	return r.db.Model(&entity.Product{}).Where("id = ?", id).Update("barcode", barcode).Error
 }
 
 func (r *productRepository) DeleteProduct(id uint) error {

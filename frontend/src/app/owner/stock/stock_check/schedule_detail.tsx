@@ -9,7 +9,6 @@ import Badge from "../../../../components/elements/badge";
 import Button from "../../../../components/elements/button";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
 import { ToastProvider, useToast } from "../../../../components/elements/toast";
-import ProductQuickView from "./ProductQuickView";
 import { useCheckStockOptions } from "./useCheckStockOptions";
 import { getScheduleProducts, CHECK_STATUS_BADGE_VARIANT } from "./checkStockTargets";
 import {
@@ -50,7 +49,6 @@ function ScheduleDetailContent() {
   const [schedule, setSchedule] = useState<CheckStockSchedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [quickViewProduct, setQuickViewProduct] = useState<StockItem | null>(null);
   const [reviewRecords, setReviewRecords] = useState<CheckStockRecord[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -324,9 +322,18 @@ function ScheduleDetailContent() {
                     {checkedProducts.map((p) => (
                       <div
                         key={p.ID}
-                        onClick={() => setQuickViewProduct(p)}
+                        onClick={() =>
+                          // รักษาต้นทางเดิมไว้ — ถ้าไล่มาจากหน้าการเคลื่อนไหวของคลังสินค้า ก็ให้ breadcrumb ของหน้าสินค้ายังโยงกลับไปที่นั่นต่อ
+                          navigate(`/owner/stock/${p.ID}`, {
+                            state: {
+                              from: cameFromMovement ? "movement" : "check_stock",
+                              scheduleId: schedule.id,
+                              scheduleName: schedule.target_name,
+                            },
+                          })
+                        }
                         className="flex cursor-pointer items-center gap-3 rounded-md border border-slate-100 bg-slate-50 p-3 transition hover:border-slate-300 hover:bg-white hover:shadow-sm"
-                        title="ดูข้อมูลสินค้า"
+                        title="ดูรายละเอียดสินค้า"
                       >
                         {p.ThumbnailUrl ? (
                           <img src={p.ThumbnailUrl} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" />
@@ -458,10 +465,6 @@ function ScheduleDetailContent() {
           </Card>
         </div>
       </div>
-
-      {quickViewProduct && (
-        <ProductQuickView product={quickViewProduct} onClose={() => setQuickViewProduct(null)} />
-      )}
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { Save } from "lucide-react";
 import Input from "../../../../../components/elements/input";
 import Select from "../../../../../components/elements/select";
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Zone, Shelf, ShelfLevel } from "../../../../../interface/wms/stock_data";
 
@@ -29,6 +31,7 @@ export default function EditRowModal({
   shelves,
 }: EditRowModalProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
 
   const [zoneName, setZoneName] = useState("");
   const [shelfName, setShelfName] = useState("");
@@ -65,16 +68,42 @@ export default function EditRowModal({
     e.preventDefault();
     if (!zone) return;
 
+    // ตรวจข้อมูลที่กรอกให้ครบก่อนถามยืนยัน — ไม่ให้ผู้ใช้กดยืนยันแล้วเพิ่งเจอ error
+    if (!shelf && !level && zoneName.trim() !== zone.zone_name && !zoneName.trim()) {
+      toast({ variant: "error", message: "กรุณากรอกชื่อโซนสินค้า" });
+      return;
+    }
+    if (
+      shelf &&
+      !level &&
+      (shelfName.trim() !== shelf.shelf_name || selectedZoneId !== shelf.zone_id) &&
+      !shelfName.trim()
+    ) {
+      toast({ variant: "error", message: "กรุณากรอกชื่อตู้วางสินค้า (หรือหากต้องการลบ ให้ใช้ปุ่มลบด้านนอก)" });
+      return;
+    }
+    if (
+      level &&
+      (levelName.trim() !== level.level_name || selectedShelfId !== level.shelf_id) &&
+      !levelName.trim()
+    ) {
+      toast({ variant: "error", message: "กรุณากรอกชื่อชั้นระดับ (หรือหากต้องการลบ ให้ใช้ปุ่มลบด้านนอก)" });
+      return;
+    }
+
+    // ยืนยันก่อนบันทึก (เคสนี้ทั้งแก้ไขและเพิ่มใหม่ได้ในครั้งเดียว)
+    const confirmed = await confirmDialog(
+      "ยืนยันบันทึกข้อมูลนี้หรือไม่?",
+      { title: "ยืนยันการบันทึก", confirmText: "บันทึกข้อมูล", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
+
     try {
       let isUpdated = false;
 
       // 1. Update Zone (Only if we are editing the Zone itself, meaning no shelf/level)
       if (!shelf && !level) {
         if (zoneName.trim() !== zone.zone_name) {
-          if (!zoneName.trim()) {
-            toast({ variant: "error", message: "กรุณากรอกชื่อโซนสินค้า" });
-            return;
-          }
           await stockDataService.updateZone(zone.id, { zone_name: zoneName.trim() });
           isUpdated = true;
         }
@@ -86,10 +115,6 @@ export default function EditRowModal({
       if (shelf && !level) {
         // Editing Shelf itself
         if (shelfName.trim() !== shelf.shelf_name || selectedZoneId !== shelf.zone_id) {
-          if (!shelfName.trim()) {
-            toast({ variant: "error", message: "กรุณากรอกชื่อตู้วางสินค้า (หรือหากต้องการลบ ให้ใช้ปุ่มลบด้านนอก)" });
-            return;
-          }
           await stockDataService.updateShelf(shelf.id, { shelf_name: shelfName.trim(), zone_id: selectedZoneId });
           isUpdated = true;
           currentShelfId = shelf.id;
@@ -109,10 +134,6 @@ export default function EditRowModal({
       if (level) {
         // Editing Level itself
         if (levelName.trim() !== level.level_name || selectedShelfId !== level.shelf_id) {
-          if (!levelName.trim()) {
-            toast({ variant: "error", message: "กรุณากรอกชื่อชั้นระดับ (หรือหากต้องการลบ ให้ใช้ปุ่มลบด้านนอก)" });
-            return;
-          }
           if (selectedShelfId) {
             await stockDataService.updateShelfLevel(level.id, { level_name: levelName.trim(), shelf_id: selectedShelfId });
             isUpdated = true;

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Trash2, Plus } from "lucide-react";
+import { Save, Trash2, Plus } from "lucide-react";
 import Input from "../../../../../components/elements/input";
 import Select from "../../../../../components/elements/select";
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Category, SubCategory, SubSubCategory } from "../../../../../interface/wms/stock_data";
 
@@ -24,6 +25,7 @@ export default function EditSubCategoryModal({
   subCategory
 }: EditSubCategoryModalProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const [form, setForm] = useState({
     sub_category_name: "",
     sub_category_short_name: "",
@@ -85,6 +87,12 @@ export default function EditSubCategoryModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subCategory) return;
+    const confirmed = await confirmDialog(
+      `ยืนยันบันทึกการแก้ไขประเภทย่อย "${form.sub_category_name}" หรือไม่?`,
+      { title: "ยืนยันการแก้ไขประเภทย่อย", confirmText: "บันทึกการแก้ไข", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
+
     try {
       // Update sub_category
       await stockDataService.updateSubCategory(subCategory.id, form);

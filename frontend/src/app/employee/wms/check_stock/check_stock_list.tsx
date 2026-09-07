@@ -8,7 +8,8 @@ import Text from "../../../../components/elements/text";
 import { Card } from "../../../../components/elements/card";
 import Badge from "../../../../components/elements/badge";
 import Button from "../../../../components/elements/button";
-import { ToastProvider, useToast } from "../../../../components/elements/toast";
+import { ToastProvider } from "../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 import { useAuth } from "../../../../contexts/AuthContexts";
 
 import { CHECK_STATUS_BADGE_VARIANT, isValidScheduleDate } from "../../../owner/stock/stock_check/checkStockTargets";
@@ -30,7 +31,7 @@ const STATUS_TABS = ["ทั้งหมด", "รอดำเนินการ
 
 function EmployeeCheckStockListContent() {
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { alertDialog } = useAlertDialog();
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
@@ -49,7 +50,8 @@ function EmployeeCheckStockListContent() {
         if (alive) setSchedules(mine);
       } catch (err) {
         console.error(err);
-        toast({ variant: "error", message: "ไม่สามารถโหลดตารางเช็คสต็อกได้" });
+        // โหลดข้อมูลไม่สำเร็จ = หน้านี้ว่างเปล่าทั้งหน้า ต้องแจ้งเป็นป๊อปอัพให้รับทราบชัดๆ ไม่ใช่ toast ที่มองพลาดง่าย
+        if (alive) await alertDialog("ไม่สามารถโหลดตารางเช็คสต็อกได้");
       } finally {
         if (alive) setLoading(false);
       }

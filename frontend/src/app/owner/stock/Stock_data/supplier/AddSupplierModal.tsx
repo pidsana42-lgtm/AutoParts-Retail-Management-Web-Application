@@ -4,12 +4,13 @@ import AddressMapPicker from "../../../../../components/elements/address_map_pic
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
-import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
+import { stockDataService, type Supplier } from "../../../../../service/http/wms/stock_data_service";
 
 interface AddSupplierModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  // ส่งข้อมูล Supplier ที่เพิ่งสร้างกลับไปด้วย เผื่อผู้เรียก (เช่น ฟอร์มเพิ่มสินค้า) อยากเลือกใช้ต่อทันทีโดยไม่ต้องกดเลือกซ้ำ
+  onSuccess: (created?: Supplier) => void;
 }
 
 export default function AddSupplierModal({ isOpen, onClose, onSuccess }: AddSupplierModalProps) {
@@ -30,7 +31,7 @@ export default function AddSupplierModal({ isOpen, onClose, onSuccess }: AddSupp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await stockDataService.createSupplier(form);
+      const created = await stockDataService.createSupplier(form);
       toast({ variant: "success", message: "เพิ่มบริษัทสั่งซื้อสำเร็จ" });
       setForm({
         supplier_name: "",
@@ -44,7 +45,7 @@ export default function AddSupplierModal({ isOpen, onClose, onSuccess }: AddSupp
         email_sale_2: "",
         bank_account_number: "",
       });
-      onSuccess();
+      onSuccess(created);
       onClose();
     } catch (err) {
       toast({ variant: "error", message: "ไม่สามารถบันทึกข้อมูลบริษัทสั่งซื้อได้" });

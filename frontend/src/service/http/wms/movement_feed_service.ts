@@ -1,13 +1,16 @@
 import apiClient from "../apiClient";
 
-// ประเภทเหตุการณ์ในฟีด "การเคลื่อนไหวของสินค้า" — ชุดนี้เป็นฝั่ง WMS ที่ดึงข้อมูลจริงแล้ว
-// ส่วนขาย/คืน-เคลม/พรีออเดอร์ เป็นของทีมอื่นตาม work.md จะต่อเพิ่มเป็นประเภทใหม่ทีหลังได้โดยไม่ต้องแก้โครงสร้างนี้
+// ประเภทเหตุการณ์ในฟีด "การเคลื่อนไหวของสินค้า" — ครอบคลุมทั้งฝั่ง WMS และฝั่งขาย/คืน-เคลม/พรีออเดอร์แล้ว
 export type MovementFeedType =
   | "PRODUCT_ADDED"
   | "STOCK_IN"
   | "CHECK_FLAGGED"
   | "STOCK_ADJUSTED"
-  | "LOW_STOCK";
+  | "LOW_STOCK"
+  | "SALE_OUT"
+  | "SALES_RETURN"
+  | "CUSTOMER_CLAIM"
+  | "PRE_ORDER";
 
 export interface MovementFeedItem {
   type: MovementFeedType;

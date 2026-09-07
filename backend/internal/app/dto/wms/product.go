@@ -80,15 +80,15 @@ type ProductListResponseDTO struct {
 	Part_Number  string `json:"part_number"`
 	// CompanyProductCode ของสินค้าทั้งชิ้นเป็นค่าเดียวไม่ได้อีกแล้ว เพราะ 1 สินค้ามาได้จากหลาย Supplier
 	// แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน — ดูได้ที่ Suppliers[].CompanyProductCode แทน (แยกตามเจ้า)
-	Product_Name string  `json:"product_name"`
-	Barcode            string  `json:"barcode"`
-	Quantity           int     `json:"quantity"`
-	Limit_Quantity     int     `json:"limit_quantity"`
-	Sale_price         float64 `json:"sale_price"`
-	Cost_price         float64 `json:"cost_price"`
-	Is_Active          bool    `json:"is_active"`
-	MaxDiscountRate    float64 `json:"max_discount_rate"`
-	Models             []struct {
+	Product_Name    string  `json:"product_name"`
+	Barcode         string  `json:"barcode"`
+	Quantity        int     `json:"quantity"`
+	Limit_Quantity  int     `json:"limit_quantity"`
+	Sale_price      float64 `json:"sale_price"`
+	Cost_price      float64 `json:"cost_price"`
+	Is_Active       bool    `json:"is_active"`
+	MaxDiscountRate float64 `json:"max_discount_rate"`
+	Models          []struct {
 		ID        uint   `json:"id"`
 		ModelName string `json:"model_name"`
 		BrandName string `json:"brand_name"`
@@ -105,7 +105,7 @@ type ProductListResponseDTO struct {
 	// SupplierName: รวมชื่อ Supplier ทุกเจ้าที่สินค้านี้รับมาจาก คั่นด้วย ", " (เผื่อหน้าตาราง/ตัวกรองเดิมที่คาดหวังค่าเดียว)
 	SupplierName string                       `json:"supplier_name"`
 	Suppliers    []ProductSupplierResponseDTO `json:"suppliers"`
-	Note         string                     `json:"note"`
+	Note         string                       `json:"note"`
 	// DeletedAt: มีค่าเฉพาะตอนดึงรายการ "สินค้าที่ถูกลบ" (ถังขยะ) เท่านั้น ไว้โชว์วันที่ลบให้เจ้าของร้านดู
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
@@ -179,7 +179,10 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	if p.Grade != nil {
 		d.GradeName = p.Grade.Grade_Name
 	}
-	d.UnitName = p.Unit.Unit_Name
+	d.UnitName = ""
+	if p.Unit != nil {
+		d.UnitName = p.Unit.Unit_Name
+	}
 	d.ShelfName = ""
 	d.ZoneName = ""
 	if p.Shelf != nil {

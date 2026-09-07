@@ -76,7 +76,7 @@ func (r *inventoryLotRepository) BackfillMissingCodes(productID uint, allProduct
 			}
 		}
 
-		code := lotcode.Build(prodCode, shortName, lot.ID)
+		code := lotcode.Build(prodCode, shortName)
 		updates := map[string]interface{}{
 			"variant_code": code,
 		}

@@ -56,6 +56,8 @@ func (s *productService) CreateProduct(req *wmsDto.ProductRequestDTO) (*wmsDto.P
 	if err := validateSupplierQuantities(req.Suppliers, req.Quantity); err != nil {
 		return nil, err
 	}
+	// ผู้ใช้ไม่ได้กรอกบาร์โค้ดหลักมาเอง -> ให้ระบบออกให้อัตโนมัติ (รูปแบบ: รหัสสินค้า-เลขอะไหล่-ชื่อย่อบริษัทที่นำเข้า)
+	autoBarcode := req.Barcode == ""
 	product := req.ToEntity()
 	for _, id := range req.ModelIDs {
 		product.Models = append(product.Models, entity.Models{
@@ -72,6 +74,11 @@ func (s *productService) CreateProduct(req *wmsDto.ProductRequestDTO) (*wmsDto.P
 	if err := s.repo.ReplaceProductSuppliers(product.ID, buildInventories(req.Suppliers)); err != nil {
 		return nil, err
 	}
+
+	if autoBarcode {
+		s.applyAutoBarcode(product.ID, product.Product_Code, product.Part_Number)
+	}
+
 	triggerBarcodeGen([]uint{product.ID})
 
 	created, err := s.GetProductByID(product.ID)
@@ -79,6 +86,31 @@ func (s *productService) CreateProduct(req *wmsDto.ProductRequestDTO) (*wmsDto.P
 		return nil, err
 	}
 	return created, nil
+}
+
+// applyAutoBarcode ประกอบบาร์โค้ดหลักของสินค้าจาก "รหัสสินค้า-เลขอะไหล่(Part No.)-ชื่อย่อบริษัทที่นำเข้าสินค้าชิ้นนี้"
+// แล้วบันทึกทับ Barcode ที่ใส่ไว้ชั่วคราว (= รหัสสินค้าเฉยๆ) — ต้องเรียกหลังผูก Supplier เสร็จแล้วเท่านั้น เพราะต้องอ่าน
+// ชื่อย่อของ Supplier รายแรกที่ผูกกับสินค้านี้ (สินค้า 1 ชิ้นรับมาได้จากหลายเจ้า เลยใช้รายแรกเป็นตัวตั้งชื่อ)
+func (s *productService) applyAutoBarcode(productID uint, productCode, partNumber string) {
+	full, err := s.repo.GetProductByID(productID)
+	if err != nil || len(full.Inventories) == 0 || full.Inventories[0].Supplier == nil {
+		return
+	}
+	supplierName := strings.TrimSpace(full.Inventories[0].Supplier.ShortSupplierName)
+	if supplierName == "" {
+		return
+	}
+
+	parts := []string{strings.TrimSpace(productCode)}
+	if pn := strings.TrimSpace(partNumber); pn != "" {
+		parts = append(parts, pn)
+	}
+	parts = append(parts, supplierName)
+	generated := strings.Join(parts, "-")
+
+	if err := s.repo.UpdateBarcode(productID, generated); err != nil {
+		log.Printf("[Product] failed to apply auto barcode for product %d: %v\n", productID, err)
+	}
 }
 
 func (s *productService) GetProductByID(id uint) (*wmsDto.ProductListResponseDTO, error) {
@@ -95,6 +127,7 @@ func (s *productService) UpdateProduct(id uint, req *wmsDto.ProductRequestDTO) e
 	if err := validateSupplierQuantities(req.Suppliers, req.Quantity); err != nil {
 		return err
 	}
+	autoBarcode := req.Barcode == ""
 	product := req.ToEntity()
 	product.ID = id
 	for _, modelId := range req.ModelIDs {
@@ -112,6 +145,11 @@ func (s *productService) UpdateProduct(id uint, req *wmsDto.ProductRequestDTO) e
 	if err := s.repo.ReplaceProductSuppliers(id, buildInventories(req.Suppliers)); err != nil {
 		return err
 	}
+
+	if autoBarcode {
+		s.applyAutoBarcode(id, product.Product_Code, product.Part_Number)
+	}
+
 	triggerBarcodeGen([]uint{id})
 	return nil
 }

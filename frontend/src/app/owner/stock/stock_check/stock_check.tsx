@@ -185,6 +185,11 @@ function StockCheckContent() {
       }
 
       return match;
+    })
+    // รายการที่สร้างล่าสุดอยู่บนสุด (เรียงตาม created_at ใหม่ไปเก่า, ใช้ id เป็นตัวตัดสินสำรองถ้าเวลาสร้างชนกัน)
+    .sort((a, b) => {
+      const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      return diff !== 0 ? diff : b.id - a.id;
     });
   }, [schedules, search, dateFilter, zoneFilterProductIds, categoryFilterProductIds, statusQuickFilter, products, zones, categories]);
 
