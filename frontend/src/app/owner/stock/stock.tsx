@@ -24,6 +24,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from ".
 import Button from "../../../components/elements/button";
 import TreeSelect from "../../../components/elements/tree_select";
 import type { CascaderOption } from "../../../components/elements/cascader";
+import { useAlertDialog } from "../../../components/elements/alert_dialog";
 
 // นำเข้า API service สำหรับดึงข้อมูลสินค้า
 import { getProductsList, getSuppliersList, deleteProduct, getDeletedProductsList } from "../../../service/http/wms/product";
@@ -114,6 +115,7 @@ function StockLevelBar({ stock, minStock }: { stock: number; minStock: number })
 // -----------------------------------------------------------------------------
 export default function StockPage() {
   const navigate = useNavigate();
+  const { alertDialog, confirmDialog } = useAlertDialog();
   const [stockData, setStockData] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -140,7 +142,11 @@ export default function StockPage() {
   };
 
   const handleDeleteClick = async (product: StockItem) => {
-    const confirmed = window.confirm(`ต้องการลบสินค้า "${product.Name}" ใช่หรือไม่?`);
+    // ลบเป็น soft delete (ไปอยู่ถังขยะ กู้คืนได้) จึงบอกผู้ใช้ไว้ด้วยว่าไม่ได้หายถาวร
+    const confirmed = await confirmDialog(
+      `ต้องการลบสินค้า "${product.Name}" ใช่หรือไม่? สินค้าจะย้ายไปอยู่ในถังขยะ และกู้คืนได้ภายใน 14 วัน`,
+      { title: "ลบสินค้า", confirmText: "ลบสินค้า", variant: "danger", icon: Trash2 }
+    );
     if (!confirmed) return;
 
     try {
@@ -150,7 +156,7 @@ export default function StockPage() {
       setDeletedCount((prev) => prev + 1);
     } catch (err: any) {
       console.error("Error deleting product:", err);
-      alert(err.response?.data?.error || "เกิดข้อผิดพลาดในการลบสินค้า");
+      await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการลบสินค้า");
     } finally {
       setDeletingId(null);
     }
@@ -282,7 +288,9 @@ export default function StockPage() {
         (item.Suppliers && item.Suppliers.some((s) => s.SupplierName.toUpperCase() === supplier.toUpperCase()));
 
       return matchesSearch && matchesCategory && matchesSupplier;
-    });
+    })
+    // สินค้าที่เพิ่มล่าสุดอยู่บนสุด (ID มากกว่า = สร้างทีหลัง เพราะเป็นเลขรันตามลำดับการสร้าง)
+    .sort((a, b) => b.ID - a.ID);
   }, [stockData, search, categoryNames, supplier]);
 
   // กลับไปหน้า 1 ทุกครั้งที่ตัวกรองเปลี่ยน กันกรณีหน้าปัจจุบันเกินจำนวนหน้าที่กรองได้แล้ว

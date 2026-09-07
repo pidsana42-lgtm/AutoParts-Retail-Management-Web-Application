@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
+import { Save } from "lucide-react";
 import Modal from "../../../../../components/elements/modal";
 import Input from "../../../../../components/elements/input";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Grade } from "../../../../../interface/wms/stock_data";
 
@@ -20,6 +22,7 @@ export default function EditGradeModal({
   onSuccess,
 }: EditGradeModalProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const [gradeName, setGradeName] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,6 +39,12 @@ export default function EditGradeModal({
       toast({ variant: "error", message: "กรุณากรอกชื่อเกรดสินค้า" });
       return;
     }
+
+    const confirmed = await confirmDialog(
+      `ยืนยันบันทึกการแก้ไขเกรดสินค้า "${gradeName}" หรือไม่?`,
+      { title: "ยืนยันการแก้ไขเกรดสินค้า", confirmText: "บันทึกการแก้ไข", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
 
     try {
       setSubmitting(true);

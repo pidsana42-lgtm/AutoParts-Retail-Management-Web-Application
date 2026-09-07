@@ -16,6 +16,8 @@ interface ProductFormOptions {
   zones: CascaderOption[];
   suppliers: SelectOption[];
   loading: boolean;
+  // เติม Supplier ที่เพิ่งสร้างใหม่เข้ารายการตัวเลือกทันที โดยไม่ต้องโหลดข้อมูลใหม่ทั้งหมด
+  addSupplierOption: (supplier: { id: number; supplier_name: string }) => void;
 }
 
 // ดึงข้อมูลอ้างอิงที่ฟอร์มเพิ่ม/แก้ไขสินค้าต้องใช้ (รุ่นรถ, หมวดหมู่ 3 ระดับ, เกรด, หน่วยนับ, โซนจัดเก็บ)
@@ -128,5 +130,14 @@ export function useProductFormOptions(): ProductFormOptions {
     };
   }, []);
 
-  return { models, categories, grades, units, zones, suppliers, loading };
+  // กันเผื่อ Supplier นี้ถูกเพิ่มเข้ามาแล้ว (เช่น กด "เพิ่มบริษัทใหม่" ซ้ำในหลายแถว) ไม่ให้ตัวเลือกซ้ำกันในดรอปดาวน์
+  const addSupplierOption = (supplier: { id: number; supplier_name: string }) => {
+    setSuppliers((prev) => {
+      const value = String(supplier.id);
+      if (prev.some((opt) => opt.value === value)) return prev;
+      return [...prev, { label: supplier.supplier_name, value }];
+    });
+  };
+
+  return { models, categories, grades, units, zones, suppliers, loading, addSupplierOption };
 }

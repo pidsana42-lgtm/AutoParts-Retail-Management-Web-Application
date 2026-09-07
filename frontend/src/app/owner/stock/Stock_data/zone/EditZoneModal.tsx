@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
+import { Save } from "lucide-react";
 import Input from "../../../../../components/elements/input";
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Zone } from "../../../../../interface/wms/stock_data";
 
@@ -15,6 +17,7 @@ interface EditZoneModalProps {
 
 export default function EditZoneModal({ isOpen, onClose, onSuccess, zone }: EditZoneModalProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const [zoneName, setZoneName] = useState("");
 
   useEffect(() => {
@@ -26,6 +29,12 @@ export default function EditZoneModal({ isOpen, onClose, onSuccess, zone }: Edit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!zone) return;
+    const confirmed = await confirmDialog(
+      `ยืนยันบันทึกการแก้ไขโซนคลังสินค้า "${zoneName}" หรือไม่?`,
+      { title: "ยืนยันการแก้ไขโซนคลังสินค้า", confirmText: "บันทึกการแก้ไข", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
+
     try {
       await stockDataService.updateZone(zone.id, { zone_name: zoneName });
       toast({ variant: "success", message: "แก้ไขโซนสำเร็จ" });

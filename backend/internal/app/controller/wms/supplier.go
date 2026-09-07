@@ -23,11 +23,12 @@ func (ctrl *SupplierController) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := ctrl.service.Create(&req); err != nil {
+	res, err := ctrl.service.Create(&req)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"message": "supplier created successfully"})
+	c.JSON(http.StatusCreated, res)
 }
 
 func (ctrl *SupplierController) GetByID(c *gin.Context) {

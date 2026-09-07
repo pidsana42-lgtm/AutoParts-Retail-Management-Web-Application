@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
+import { Save } from "lucide-react";
 import Input from "../../../../../components/elements/input";
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Category } from "../../../../../interface/wms/stock_data";
 
@@ -15,6 +17,7 @@ interface EditCategoryModalProps {
 
 export default function EditCategoryModal({ isOpen, onClose, onSuccess, category }: EditCategoryModalProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const [form, setForm] = useState({
     category_name: "",
     category_short_name: "",
@@ -34,6 +37,12 @@ export default function EditCategoryModal({ isOpen, onClose, onSuccess, category
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!category) return;
+    const confirmed = await confirmDialog(
+      `ยืนยันบันทึกการแก้ไขประเภทสินค้า "${form.category_name}" หรือไม่?`,
+      { title: "ยืนยันการแก้ไขประเภทสินค้า", confirmText: "บันทึกการแก้ไข", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
+
     try {
       await stockDataService.updateCategory(category.id, form);
       toast({ variant: "success", message: "แก้ไขประเภทสินค้าสำเร็จ" });

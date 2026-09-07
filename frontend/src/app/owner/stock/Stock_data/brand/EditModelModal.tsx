@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { Save } from "lucide-react";
 import Input from "../../../../../components/elements/input";
 import Select from "../../../../../components/elements/select";
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import type { Brand, Model } from "../../../../../interface/wms/stock_data";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
@@ -24,6 +26,7 @@ export default function EditModelModal({
   onSuccess
 }: EditModelModalProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const [form, setForm] = useState({
     model_name: "",
     brand_id: 0,
@@ -41,6 +44,12 @@ export default function EditModelModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!model) return;
+
+    const confirmed = await confirmDialog(
+      `ยืนยันบันทึกการแก้ไขรุ่นรถยนต์ "${form.model_name}" หรือไม่?`,
+      { title: "ยืนยันการแก้ไขรุ่นรถยนต์", confirmText: "บันทึกการแก้ไข", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
 
     try {
       await stockDataService.updateModel(model.id, {
