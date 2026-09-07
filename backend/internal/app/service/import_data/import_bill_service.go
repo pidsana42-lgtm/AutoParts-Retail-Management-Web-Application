@@ -170,6 +170,19 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 		return importDataDTO.ConfirmBillImportResponseDTO{}, err
 	}
 
+	// บิลยังไม่ถูกอนุมัติอัตโนมัติ (ราคาทุนไม่ตรงกับระบบและผู้ส่งไม่ใช่เจ้าของ) → แจ้งเตือนเจ้าของร้านให้เข้ามาตรวจสอบ
+	if !bill.IsVerified && s.notification != nil {
+		if errNotify := s.notification.NotifyOwners(
+			"IMPORT_BILL_PENDING_APPROVAL",
+			"มีบิลนำเข้าสินค้ารออนุมัติ",
+			fmt.Sprintf("บิลเลขที่ %s ถูกนำเข้าโดยพนักงาน พบราคาทุนไม่ตรงกับระบบ กรุณาตรวจสอบและอนุมัติ", bill.BillNo),
+			"/owner/import-bills",
+			nil,
+		); errNotify != nil {
+			log.Printf("[Notification] failed to notify owners (bill %d): %v\n", bill.ID, errNotify)
+		}
+	}
+
 	// Trigger QR and Barcode generation on FastAPI using internal product IDs
 	var productIDs []uint
 	seenIDs := make(map[uint]bool)
