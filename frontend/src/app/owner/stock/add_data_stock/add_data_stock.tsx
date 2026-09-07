@@ -11,6 +11,7 @@ import MultiSelect from "../../../../components/elements/multiselect";
 import TreeSelect from "../../../../components/elements/tree_select";
 import Button from "../../../../components/elements/button";
 import ImageUploader from "../../../../components/elements/image_uploader";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 import { createProduct, uploadProductImage, getProductsList, receiveStock } from "../../../../service/http/wms/product";
 import { useProductFormOptions } from "../hooks/useProductFormOptions";
 import SupplierRowsField, { rowsToPayload, type SupplierRow } from "../SupplierRowsField";
@@ -20,6 +21,7 @@ import { cn } from "../../../../utils/component";
 
 export default function AddProductPage() {
   const navigate = useNavigate();
+  const { alertDialog, confirmDialog } = useAlertDialog();
   const { models, categories, grades, units, zones, suppliers, loading, addSupplierOption } = useProductFormOptions();
   const [supplierRows, setSupplierRows] = useState<SupplierRow[]>([]);
 
@@ -76,19 +78,19 @@ export default function AddProductPage() {
       if (formData.zone_path.length < 2) missingFields.push("ตำแหน่งจัดเก็บ (เลือกอย่างน้อยถึงระดับตู้)");
 
       if (missingFields.length > 0) {
-        alert("กรุณากรอกข้อมูลหรือเลือกรายการต่อไปนี้ให้ครบถ้วน:\n- " + missingFields.join("\n- "));
+        await alertDialog("กรุณากรอกข้อมูลหรือเลือกรายการต่อไปนี้ให้ครบถ้วน:\n- " + missingFields.join("\n- "));
         return;
       }
 
       if (formData.max_discount_rate < 0 || formData.max_discount_rate > 2) {
-        alert("ส่วนลดสูงสุดต้องอยู่ระหว่าง 0-2% เท่านั้น");
+        await alertDialog("ส่วนลดสูงสุดต้องอยู่ระหว่าง 0-2% เท่านั้น");
         return;
       }
 
       const supplierPayload = rowsToPayload(supplierRows);
       const supplierQtySum = supplierPayload.reduce((sum, s) => sum + s.quantity, 0);
       if (supplierQtySum > Number(formData.quantity)) {
-        alert(
+        await alertDialog(
           `จำนวนสินค้าที่รับมาจาก Supplier รวมกัน (${supplierQtySum}) เกินจำนวนสินค้าทั้งหมด (${Number(formData.quantity)}) กรุณาแก้ไขจำนวนให้ถูกต้อง`
         );
         return;
@@ -130,11 +132,11 @@ export default function AddProductPage() {
           console.error("Error uploading product image:", uploadErr);
         }
       }
-      alert(imageUploadFailed ? "เพิ่มข้อมูลสินค้าสำเร็จ แต่อัปโหลดรูปสินค้าไม่สำเร็จ" : "เพิ่มข้อมูลสินค้าสำเร็จ");
+      await alertDialog(imageUploadFailed ? "เพิ่มข้อมูลสินค้าสำเร็จ แต่อัปโหลดรูปสินค้าไม่สำเร็จ" : "เพิ่มข้อมูลสินค้าสำเร็จ");
       navigate("/owner/stock");
     } catch (err: any) {
       console.error("Error creating product:", err);
-      alert(err.response?.data?.error || "เกิดข้อผิดพลาดในการเพิ่มข้อมูลสินค้า");
+      await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการเพิ่มข้อมูลสินค้า");
     } finally {
       setSubmitting(false);
     }
@@ -173,32 +175,41 @@ export default function AddProductPage() {
   const handleReceiveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProduct) {
-      alert("กรุณาเลือกสินค้าที่ต้องการรับเข้าเพิ่ม");
+      await alertDialog("กรุณาเลือกสินค้าที่ต้องการรับเข้าเพิ่ม");
       return;
     }
     const qty = Number(receiveQuantity);
     if (!qty || qty <= 0) {
-      alert("กรุณากรอกจำนวนที่รับเข้าเพิ่มให้ถูกต้อง");
+      await alertDialog("กรุณากรอกจำนวนที่รับเข้าเพิ่มให้ถูกต้อง");
       return;
     }
 
     const supplierPayload = rowsToPayload(receiveSupplierRows);
     const supplierQtySum = supplierPayload.reduce((sum, s) => sum + s.quantity, 0);
     if (supplierQtySum > qty) {
-      alert(
+      await alertDialog(
         `จำนวนที่รับมาจาก Supplier รวมกัน (${supplierQtySum}) เกินจำนวนที่รับเข้าเพิ่ม (${qty}) กรุณาแก้ไขจำนวนให้ถูกต้อง`
       );
       return;
     }
 
+    // รับเข้าเพิ่ม = ไปบวกยอดสต็อกของสินค้าที่มีอยู่จริง ควรให้ทบทวนยอดก่อนกดจริง
+    const unitLabel = selectedProduct.Unit || "ชิ้น";
+    const confirmedReceive = await confirmDialog(
+      `ยืนยันรับสินค้า "${selectedProduct.Name}" เข้าเพิ่ม ${qty} ${unitLabel} หรือไม่? ` +
+        `ยอดคงเหลือจะเปลี่ยนจาก ${selectedProduct.Stock} เป็น ${selectedProduct.Stock + qty} ${unitLabel}`,
+      { title: "ยืนยันรับสินค้าเข้าเพิ่ม", confirmText: "รับสินค้าเข้า", variant: "info", icon: PackagePlus }
+    );
+    if (!confirmedReceive) return;
+
     try {
       setReceiveSubmitting(true);
       await receiveStock(selectedProduct.ID, { quantity: qty, suppliers: supplierPayload });
-      alert(`รับสินค้าเข้าเพิ่มสำเร็จ: ${selectedProduct.Name} +${qty} ${selectedProduct.Unit || "ชิ้น"}`);
+      await alertDialog(`รับสินค้าเข้าเพิ่มสำเร็จ: ${selectedProduct.Name} +${qty} ${selectedProduct.Unit || "ชิ้น"}`);
       navigate(`/owner/stock/${selectedProduct.ID}`);
     } catch (err: any) {
       console.error("Error receiving stock:", err);
-      alert(err.response?.data?.error || "เกิดข้อผิดพลาดในการรับสินค้าเข้าเพิ่ม");
+      await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการรับสินค้าเข้าเพิ่ม");
     } finally {
       setReceiveSubmitting(false);
     }

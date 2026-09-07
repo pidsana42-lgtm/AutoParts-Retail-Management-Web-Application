@@ -51,10 +51,14 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
   return range;
 }
 
-// ประเภทเหตุการณ์ที่เชื่อมข้อมูลจริงแล้ว (ฝั่ง WMS) — เรียงตามลำดับที่จะแสดงในการ์ดสรุป/ตัวกรอง
+// ลำดับประเภทเหตุการณ์ที่จะแสดงในการ์ดสรุป/ตัวกรอง — ครอบคลุมทั้งฝั่ง WMS และฝั่งขาย/คืน-เคลม/พรีออเดอร์แล้ว
 const TYPE_ORDER: MovementFeedType[] = [
   "PRODUCT_ADDED",
   "STOCK_IN",
+  "SALE_OUT",
+  "SALES_RETURN",
+  "CUSTOMER_CLAIM",
+  "PRE_ORDER",
   "CHECK_FLAGGED",
   "STOCK_ADJUSTED",
   "LOW_STOCK",
@@ -99,15 +103,35 @@ const TYPE_META: Record<
     dot: "bg-red-600",
     badgeClass: "w-auto bg-red-50 px-2.5 text-red-600",
   },
+  SALE_OUT: {
+    label: "POS",
+    icon: ShoppingCart,
+    border: "border-l-orange-500",
+    dot: "bg-orange-500",
+    badgeClass: "w-auto bg-orange-50 px-2.5 text-orange-600",
+  },
+  SALES_RETURN: {
+    label: "คืนสินค้า",
+    icon: Undo2,
+    border: "border-l-cyan-500",
+    dot: "bg-cyan-500",
+    badgeClass: "w-auto bg-cyan-50 px-2.5 text-cyan-600",
+  },
+  CUSTOMER_CLAIM: {
+    label: "เคลมสินค้า",
+    icon: Undo2,
+    border: "border-l-pink-500",
+    dot: "bg-pink-500",
+    badgeClass: "w-auto bg-pink-50 px-2.5 text-pink-600",
+  },
+  PRE_ORDER: {
+    label: "พรีออเดอร์",
+    icon: Hourglass,
+    border: "border-l-indigo-500",
+    dot: "bg-indigo-500",
+    badgeClass: "w-auto bg-indigo-50 px-2.5 text-indigo-600",
+  },
 };
-
-// ประเภทที่ยังไม่ได้เชื่อมข้อมูลจริง — เป็นของทีมอื่นตาม work.md (การขาย/ใบสั่งซื้อ/เคลม/พรีออเดอร์)
-// โชว์เป็นตัวกรองแบบปิดใช้งานไว้ก่อน กันสับสนว่าไม่ได้ลืมออกแบบ รอต่อข้อมูลจริงทีหลังได้โดยไม่ต้องเปลี่ยนหน้าตา
-const COMING_SOON_TYPES: { label: string; icon: LucideIcon }[] = [
-  { label: "ขายออก", icon: ShoppingCart },
-  { label: "คืน/เคลม", icon: Undo2 },
-  { label: "พรีออเดอร์", icon: Hourglass },
-];
 
 function StockMovementContent() {
   const navigate = useNavigate();
@@ -240,7 +264,8 @@ function StockMovementContent() {
           การเคลื่อนไหวของคลังสินค้า
         </Heading>
         <Text variant="muted" className="text-sm mt-1">
-          ติดตามทุกความเคลื่อนไหวของสินค้าในคลัง ตั้งแต่เพิ่มใหม่ รับเข้าเพิ่ม แจ้งเช็คสต็อก ไปจนถึงสินค้าใกล้หมด ในที่เดียว
+          ติดตามทุกความเคลื่อนไหวของสินค้าในคลัง ตั้งแต่เพิ่มใหม่ รับเข้าเพิ่ม POS คืน/เคลม พรีออเดอร์ แจ้งเช็คสต็อก
+          ไปจนถึงสินค้าใกล้หมด ในที่เดียว
         </Text>
       </div>
 
@@ -292,22 +317,6 @@ function StockMovementContent() {
               <Icon className="h-3.5 w-3.5" />
               {meta.label} ({counts[t] || 0})
             </button>
-          );
-        })}
-        {COMING_SOON_TYPES.map((t) => {
-          const Icon = t.icon;
-          return (
-            <div
-              key={t.label}
-              title="ยังไม่เชื่อมข้อมูลจริง — เป็นส่วนของระบบอื่นที่จะต่อเพิ่มทีหลัง"
-              className="flex cursor-not-allowed items-center gap-1.5 rounded-sm border border-dashed border-slate-200 px-3 py-2 text-xs font-medium text-slate-300"
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {t.label}
-              <span className="ml-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-400">
-                เร็วๆ นี้
-              </span>
-            </div>
           );
         })}
       </div>

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
+import { Save } from "lucide-react";
 import Input from "../../../../../components/elements/input";
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Unit } from "../../../../../interface/wms/stock_data";
 
@@ -15,6 +17,7 @@ interface EditUnitModalProps {
 
 export default function EditUnitModal({ isOpen, onClose, onSuccess, unit }: EditUnitModalProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const [unitName, setUnitName] = useState("");
 
   useEffect(() => {
@@ -26,6 +29,12 @@ export default function EditUnitModal({ isOpen, onClose, onSuccess, unit }: Edit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!unit) return;
+    const confirmed = await confirmDialog(
+      `ยืนยันบันทึกการแก้ไขหน่วยนับสินค้า "${unitName}" หรือไม่?`,
+      { title: "ยืนยันการแก้ไขหน่วยนับสินค้า", confirmText: "บันทึกการแก้ไข", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
+
     try {
       await stockDataService.updateUnit(unit.id, { unit_name: unitName });
       toast({ variant: "success", message: "แก้ไขหน่วยสินค้าสำเร็จ" });

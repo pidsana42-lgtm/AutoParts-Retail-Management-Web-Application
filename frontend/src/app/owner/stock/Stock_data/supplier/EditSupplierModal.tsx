@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { Save } from "lucide-react";
 import Input from "../../../../../components/elements/input";
 import AddressMapPicker from "../../../../../components/elements/address_map_picker";
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Supplier } from "../../../../../interface/wms/stock_data";
 
@@ -21,6 +23,7 @@ export default function EditSupplierModal({
   supplier
 }: EditSupplierModalProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const [form, setForm] = useState({
     supplier_name: "",
     short_supplier_name: "",
@@ -54,6 +57,12 @@ export default function EditSupplierModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supplier) return;
+    const confirmed = await confirmDialog(
+      `ยืนยันบันทึกการแก้ไขข้อมูลบริษัทสั่งซื้อ "${form.supplier_name}" หรือไม่?`,
+      { title: "ยืนยันการแก้ไขข้อมูลบริษัทสั่งซื้อ", confirmText: "บันทึกการแก้ไข", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
+
     try {
       await stockDataService.updateSupplier(supplier.id, form);
       toast({ variant: "success", message: "แก้ไขข้อมูลบริษัทสั่งซื้อสำเร็จ" });

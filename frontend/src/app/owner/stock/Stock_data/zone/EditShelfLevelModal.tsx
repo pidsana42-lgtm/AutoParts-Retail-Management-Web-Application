@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
+import { Save } from "lucide-react";
 import Modal from "../../../../../components/elements/modal";
 import Input from "../../../../../components/elements/input";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { ShelfLevel } from "../../../../../interface/wms/stock_data";
 
@@ -20,6 +22,7 @@ export default function EditShelfLevelModal({
   onSuccess,
 }: EditShelfLevelModalProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const [levelName, setLevelName] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,6 +39,12 @@ export default function EditShelfLevelModal({
       toast({ variant: "error", message: "กรุณากรอกชื่อชั้นระดับ" });
       return;
     }
+
+    const confirmed = await confirmDialog(
+      `ยืนยันบันทึกการแก้ไขชั้นระดับ "${levelName}" หรือไม่?`,
+      { title: "ยืนยันการแก้ไขชั้นระดับ", confirmText: "บันทึกการแก้ไข", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
 
     try {
       setSubmitting(true);

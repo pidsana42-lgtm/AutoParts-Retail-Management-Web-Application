@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
+import { Save } from "lucide-react";
 import Input from "../../../../../components/elements/input";
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import type { Brand } from "../../../../../interface/wms/stock_data";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
@@ -21,6 +23,7 @@ export default function EditBrandModal({
   onSuccess
 }: EditBrandModalProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const [brandName, setBrandName] = useState("");
 
   useEffect(() => {
@@ -33,6 +36,12 @@ export default function EditBrandModal({
     e.preventDefault();
     if (!brand) return;
     
+    const confirmed = await confirmDialog(
+      `ยืนยันบันทึกการแก้ไขแบรนด์รถยนต์ "${brandName}" หรือไม่?`,
+      { title: "ยืนยันการแก้ไขแบรนด์รถยนต์", confirmText: "บันทึกการแก้ไข", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
+
     try {
       await stockDataService.updateBrand(brand.id, { brand_name: brandName });
       onSuccess();

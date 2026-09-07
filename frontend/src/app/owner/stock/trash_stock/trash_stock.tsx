@@ -12,6 +12,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from ".
 import { getDeletedProductsList, restoreProduct } from "../../../../service/http/wms/product";
 import type { StockItem } from "../../../../interface/wms/product";
 import { buildProductSearchIndex, searchProductIndex } from "../../../../utils/productSearch";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 
 // แสดงเฉพาะสินค้าที่ถูกลบไม่เกิน 14 วัน — เกินกว่านี้ไม่ต้องแสดงในถังขยะแล้ว (ข้อมูลจริงยังอยู่ครบในระบบ แค่ไม่โชว์ในหน้านี้)
 const TRASH_RETENTION_DAYS = 14;
@@ -19,6 +20,7 @@ const TRASH_RETENTION_DAYS = 14;
 // หน้าถังขยะสินค้า — สินค้าที่ลบเป็น soft delete เสมอ (ข้อมูลจริงยังอยู่ครบ) เลยกู้คืนกลับมาได้จากที่นี่
 export default function TrashStockPage() {
   const navigate = useNavigate();
+  const { alertDialog, confirmDialog } = useAlertDialog();
   const [deletedProducts, setDeletedProducts] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +63,10 @@ export default function TrashStockPage() {
   );
 
   const handleRestore = async (product: StockItem) => {
-    const confirmed = window.confirm(`ต้องการกู้คืนสินค้า "${product.Name}" กลับมาใช้งานหรือไม่?`);
+    const confirmed = await confirmDialog(
+      `ต้องการกู้คืนสินค้า "${product.Name}" กลับมาใช้งานหรือไม่?`,
+      { title: "กู้คืนสินค้า", confirmText: "กู้คืน", variant: "success", icon: RotateCcw }
+    );
     if (!confirmed) return;
 
     try {
@@ -70,7 +75,7 @@ export default function TrashStockPage() {
       setDeletedProducts((prev) => prev.filter((p) => p.ID !== product.ID));
     } catch (err: any) {
       console.error("Error restoring product:", err);
-      alert(err.response?.data?.error || "เกิดข้อผิดพลาดในการกู้คืนสินค้า");
+      await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการกู้คืนสินค้า");
     } finally {
       setRestoringId(null);
     }
