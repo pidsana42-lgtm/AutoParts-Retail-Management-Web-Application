@@ -404,12 +404,12 @@ export default function ManualEntryView({
                               className={`bg-white border rounded-none focus:ring-1 w-20 text-right text-sm text-[#1C1B1B] font-bold p-1.5 ${issueField(idx, 'price') ? errInputClass : 'border-gray-300 focus:border-[#e51c23] focus:ring-[#e51c23]'}`}
                             />
                           </TableCell>
-                          <TableCell className="py-2 px-4 text-right font-bold text-[#1C1B1B] text-sm">
+                          <TableCell className="py-2.5 px-4 text-right font-bold text-[#1C1B1B] text-sm">
                             ฿{((item.order_quantity || 0) * (item.price_per_unit || 0) - (item.discount_amount || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
                           </TableCell>
                         </>
                       )}
-                      <TableCell className="py-2 px-4 text-center">
+                      <TableCell className="py-2.5 px-4 text-center">
                         <button
                           type="button"
                           onClick={() => handleRemoveRow(idx)}
