@@ -4,6 +4,7 @@ import type {
   CustomerListItem,
   CustomerDetailResponse,
   RegisterCustomerRequest,
+  UpdateCustomerRequest,
   UpdateCustomerDiscountRequest,
 } from "../../../interface/customer/customer_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
@@ -28,9 +29,21 @@ export const customerApiService = {
     return res.data;
   },
 
-  /** ลงทะเบียนลูกค้าใหม่ */
-  registerCustomer: async (payload: RegisterCustomerRequest): Promise<any> => {
-    const res = await apiClient.post("/customers/register", payload);
+  /** ลงทะเบียนลูกค้าใหม่ (รองรับทั้ง JSON และ FormData ที่แนบไฟล์) */
+  registerCustomer: async (payload: RegisterCustomerRequest | FormData): Promise<any> => {
+    const isFormData = typeof FormData !== "undefined" && payload instanceof FormData;
+    const res = await apiClient.post("/customers/register", payload, {
+      headers: isFormData ? { "Content-Type": "multipart/form-data" } : undefined,
+    });
+    return res.data;
+  },
+
+  /** แก้ไขข้อมูลลูกค้า (รองรับทั้ง JSON และ FormData ที่แนบไฟล์) */
+  updateCustomer: async (id: number, payload: UpdateCustomerRequest | FormData): Promise<any> => {
+    const isFormData = typeof FormData !== "undefined" && payload instanceof FormData;
+    const res = await apiClient.put(`/customers/${id}`, payload, {
+      headers: isFormData ? { "Content-Type": "multipart/form-data" } : undefined,
+    });
     return res.data;
   },
 

@@ -14,6 +14,7 @@ type CustomerService interface {
 	RegisterNewCustomer(customer customerDto.RegisterCustomerRequest, idCardImagePath string) error
 	GetAllCustomers() ([]customerDto.CustomerResponse, error)
 	GetCustomerByID(id uint) (customerDto.CustomerDetailResponse, error) 
+	UpdateCustomer(id uint, req customerDto.UpdateCustomerRequest, userID uint) error
 	UpdateCustomerDiscount(id uint, req customerDto.UpdateCustomerDiscountRequest, userID uint) error
 	CreateCreditAuditLog(req customerDto.CreateCustomerCreditAuditLogRequest, userID uint) error
 	GetCreditAuditLogs() ([]customerDto.CustomerCreditAuditLogResponse, error)
@@ -29,7 +30,10 @@ func NewCustomerService(repo customerRepo.CustomerRepository, db *gorm.DB) Custo
 }
 
 func (s *customerService) RegisterNewCustomer(req customerDto.RegisterCustomerRequest, idCardImagePath string) error {
-	
+	if idCardImagePath == "" && req.IdCardImagePath != "" {
+		idCardImagePath = req.IdCardImagePath
+	}
+
 	var countIdCard int64
 	s.db.Model(&entity.Customer{}).Where("id_card_number_customer = ?", req.IdCardNumberCustomer).Count(&countIdCard)
 	if countIdCard > 0 { // ถ้ามีมากกว่า 0 แสดงว่าซ้ำ
@@ -65,6 +69,65 @@ func (s *customerService) RegisterNewCustomer(req customerDto.RegisterCustomerRe
 
 	return s.repo.CreateCustomer(newCustomer)
 }
+
+func (s *customerService) UpdateCustomer(id uint, req customerDto.UpdateCustomerRequest, userID uint) error {
+	customer, err := s.repo.GetCustomerByID(id)
+	if err != nil {
+		return errors.New("ไม่พบข้อมูลสมาชิกคนนี้ในระบบ")
+	}
+
+	// ตรวจสอบเลขบัตรประชาชนซ้ำกับลูกค้ารายอื่นหรือไม่
+	var countIdCard int64
+	s.db.Model(&entity.Customer{}).Where("id_card_number_customer = ? AND id != ?", req.IdCardNumberCustomer, id).Count(&countIdCard)
+	if countIdCard > 0 {
+		return errors.New("เลขบัตรประชาชนนี้เคยลงทะเบียนในระบบแล้ว")
+	}
+
+	// ตรวจสอบเบอร์โทรศัพท์ซ้ำกับลูกค้ารายอื่นหรือไม่
+	var countPhone int64
+	s.db.Model(&entity.Customer{}).Where("phone_number = ? AND id != ?", req.PhoneNumber, id).Count(&countPhone)
+	if countPhone > 0 {
+		return errors.New("หมายเลขโทรศัพท์นี้เคยลงทะเบียนในระบบแล้ว")
+	}
+
+	var customerType entity.CustomerType
+	if err := s.db.First(&customerType, req.CustomerTypeID).Error; err != nil {
+		return errors.New("ประเภทลูกค้าที่เลือกไม่ถูกต้อง")
+	}
+
+	oldName := customer.CustomerName
+	customer.CustomerName = req.CustomerName
+	customer.CustomerTypeID = req.CustomerTypeID
+	customer.PhoneNumber = req.PhoneNumber
+	customer.IdCardNumberCustomer = req.IdCardNumberCustomer
+	customer.RegisteredAddress = req.RegisteredAddress
+	customer.ShippingAddress = req.ShippingAddress
+
+	if req.IdCardImagePath != "" {
+		customer.IdCardImagePath = req.IdCardImagePath
+	}
+	if req.CreditLimit != nil && *req.CreditLimit >= 0 {
+		customer.CreditLimit = *req.CreditLimit
+	}
+	if req.StandardDiscountRate != nil && *req.StandardDiscountRate >= 0 {
+		customer.StandardDiscountRate = *req.StandardDiscountRate
+	}
+	if req.IsDiscountEnabled != nil {
+		customer.IsDiscountEnabled = *req.IsDiscountEnabled
+	}
+	if req.OntopDiscountRate != nil && *req.OntopDiscountRate >= 0 {
+		customer.OntopDiscountRate = *req.OntopDiscountRate
+	}
+
+	if err := s.repo.UpdateCustomer(customer); err != nil {
+		return err
+	}
+
+	details := fmt.Sprintf("แก้ไขข้อมูลทั่วไปของลูกค้า: %s (เบอร์โทร: %s, บัตรประชาชน: %s)", customer.CustomerName, customer.PhoneNumber, customer.IdCardNumberCustomer)
+	s.recordCustomerAuditLog(&customer.ID, oldName, "แก้ไขข้อมูลลูกค้า", details, userID)
+	return nil
+}
+
 
 func (s *customerService) GetAllCustomers() ([]customerDto.CustomerResponse, error) {
 	customers, err := s.repo.GetAllCustomers() 
