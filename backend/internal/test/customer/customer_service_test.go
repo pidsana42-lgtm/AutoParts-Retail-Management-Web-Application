@@ -239,3 +239,61 @@ func TestCustomerDocumentPrivateStorage(t *testing.T) {
 	assert.Equal(t, testData, retrievedData)
 	assert.Equal(t, "application/pdf", detectedMime)
 }
+
+func TestCustomerAES256Encryption(t *testing.T) {
+	db, svc := setupCustomerTestDB(t)
+
+	plainIdCard := "1234567890123"
+	req := customerDto.RegisterCustomerRequest{
+		CustomerName:         "นายทดสอบ เข้ารหัส",
+		CustomerTypeID:       1,
+		PhoneNumber:          "0899998888",
+		IdCardNumberCustomer: plainIdCard,
+		RegisteredAddress:    "Address Test",
+		ShippingAddress:      "Shipping Test",
+	}
+
+	err := svc.RegisterNewCustomer(req, "")
+	require.NoError(t, err)
+
+	// 1. ตรวจสอบในระดับฐานข้อมูลดิบ (Raw SQL) ว่าถูกเข้ารหัสจริง (AES-256) และขึ้นต้นด้วย enc:v1:
+	var rawIdInDB string
+	err = db.Table("customers").Select("id_card_number_customer").Where("phone_number = ?", "0899998888").Scan(&rawIdInDB).Error
+	require.NoError(t, err)
+
+	assert.NotEqual(t, plainIdCard, rawIdInDB, "เลขบัตรประชาชนในฐานข้อมูลต้องไม่เป็น Plaintext")
+	assert.True(t, strings.HasPrefix(rawIdInDB, "enc:v1:"), "เลขบัตรประชาชนที่เข้ารหัสต้องขึ้นต้นด้วย enc:v1:")
+
+	// 2. ตรวจสอบการดึงข้อมูลผ่าน Service / Repository ว่าถอดรหัสกลับมาเป็นข้อความปกติได้ถูกต้อง
+	customers, err := svc.GetAllCustomers()
+	require.NoError(t, err)
+	require.Len(t, customers, 1)
+	assert.Equal(t, plainIdCard, customers[0].IdCardNumberCustomer, "เมื่อเรียกผ่าน Service ต้องได้เลขบัตรประชาชนที่ถอดรหัสแล้ว")
+
+	detail, err := svc.GetCustomerByID(customers[0].ID)
+	require.NoError(t, err)
+	assert.Equal(t, plainIdCard, detail.IdCardNumberCustomer)
+
+	// 3. ตรวจสอบการอัปเดตข้อมูล
+	newPlainId := "9876543210987"
+	err = svc.UpdateCustomer(customers[0].ID, customerDto.UpdateCustomerRequest{
+		CustomerName:         "นายทดสอบ เข้ารหัส (แก้ไข)",
+		CustomerTypeID:       1,
+		PhoneNumber:          "0899998888",
+		IdCardNumberCustomer: newPlainId,
+		RegisteredAddress:    "Address Test New",
+		ShippingAddress:      "Shipping Test New",
+	}, 1)
+	require.NoError(t, err)
+
+	var updatedRawInDB string
+	err = db.Table("customers").Select("id_card_number_customer").Where("id = ?", customers[0].ID).Scan(&updatedRawInDB).Error
+	require.NoError(t, err)
+	assert.NotEqual(t, newPlainId, updatedRawInDB)
+	assert.True(t, strings.HasPrefix(updatedRawInDB, "enc:v1:"))
+
+	updatedDetail, err := svc.GetCustomerByID(customers[0].ID)
+	require.NoError(t, err)
+	assert.Equal(t, newPlainId, updatedDetail.IdCardNumberCustomer)
+}
+

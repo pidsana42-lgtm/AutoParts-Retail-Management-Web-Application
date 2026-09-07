@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import {
   Save,
   TriangleAlert,
@@ -39,9 +38,9 @@ export default function FinancialPolicyPage() {
   return (
     <div className="relative flex min-h-screen bg-white text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
-        <main className="p-6 md:p-8 space-y-6 flex-1 max-w-[1200px] mx-auto w-full">
+        <main className="p-6 md:p-8 space-y-6 flex-1 max-w-300 mx-auto w-full">
           {/* Header Section */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4pb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5">
             <div>
               <Heading level='h1' weight='semibold' className='m-0 text-black'>
                 การตั้งค่านโยบายการเงินและเครดิต
@@ -98,7 +97,7 @@ export default function FinancialPolicyPage() {
           {/* Form Content (Cards) */}
           <div className="space-y-6">
             {/* Card 1: การตั้งค่านโยบายการเงิน(ส่วนลด) */}
-            <Card className="bg-white rounded-none border border-gray-200 border-l-4 !border-l-[#E51C23] p-6 md:p-8 space-y-6 shadow-sm">
+            <Card className="bg-white rounded-none border border-gray-200 border-l-4 border-l-[#E51C23]! p-6 md:p-8 space-y-6 shadow-sm">
               <div className="border-b border-gray-100 pb-3">
                 <Heading level="h3" weight="medium" className="text-[#1C1B1B] m-0">
                   การตั้งค่านโยบายการเงิน (ส่วนลด)
@@ -119,7 +118,7 @@ export default function FinancialPolicyPage() {
                   </Text>
                 </div>
 
-                <div className="w-full sm:w-[300px]">
+                <div className="w-full sm:w-75">
                   <Input
                     type="number"
                     min="0"
@@ -147,7 +146,7 @@ export default function FinancialPolicyPage() {
             </Card>
 
             {/* Card 2: การตั้งค่านโยบายเครดิต */}
-            <Card className="bg-white rounded-none border border-gray-200 !border-l-4 !border-l-[#E51C23] p-6 md:p-8 space-y-6 shadow-sm">
+            <Card className="bg-white rounded-none border border-gray-200 border-l-4! border-l-[#E51C23]! p-6 md:p-8 space-y-6 shadow-sm">
               <div className="border-b border-gray-100 pb-3">
                 <Heading level="h3" weight="medium" className="text-[#1C1B1B] m-0">
                   การตั้งค่านโยบายเครดิต
@@ -168,7 +167,7 @@ export default function FinancialPolicyPage() {
                   </Text>
                 </div>
 
-                <div className="w-full sm:w-[300px]">
+                <div className="w-full sm:w-75">
                   <Input
                     type="number"
                     min="0"
@@ -196,7 +195,7 @@ export default function FinancialPolicyPage() {
                   </Text>
                 </div>
 
-                <div className="w-full sm:w-[300px]">
+                <div className="w-full sm:w-75">
                   <Input
                     type="number"
                     min="1"

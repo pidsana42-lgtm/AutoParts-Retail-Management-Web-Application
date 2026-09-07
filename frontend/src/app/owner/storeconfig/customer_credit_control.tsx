@@ -3,26 +3,20 @@ import {
   Users,
   CreditCard,
   Percent,
-  ShieldAlert,
   History,
   RefreshCw,
   ScanBarcode,
-  Search,
   Edit,
   Eye,
+  EyeOff,
   X,
-  CheckCircle2,
   AlertCircle,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  SlidersHorizontal,
-  BadgePercent,
   ShieldCheck,
-  Building2,
-  Wrench,
-  User,
+  Pencil,
 } from "lucide-react";
  
 // Design System Components
@@ -31,7 +25,7 @@ import Text from "../../../components/elements/text";
 import Input from "../../../components/elements/input";
 import Select from "../../../components/elements/select";
 import Button from "../../../components/elements/button";
-import Modal from "../../../components/elements/modal";
+//import Modal from "../../../components/elements/modal";
 import { Card, CardContent } from "../../../components/elements/card";
 import {
   Table,
@@ -45,6 +39,7 @@ import {
 // Helpers & Components
 import { CustomerTypeBadge } from "../../../components/elements/status_badge";
 import { CustomerCard } from "../../employee/pos/components/customercard";
+import { maskPhoneNumber, maskIdCardNumber } from "../../../utils/customerhelpers";
 
 // Hook & Interfaces
 import { useCustomerCreditControl } from "./hook/UseCustomerCreditControl";
@@ -56,7 +51,7 @@ export default function CustomerCreditControl() {
   const {
     // Data & Stats
     customers,
-    filteredCustomers,
+    //filteredCustomers,
     paginatedCustomers,
     customerTypes,
     stats,
@@ -65,7 +60,7 @@ export default function CustomerCreditControl() {
     isLoading,
     isUpdating,
     error,
-    successMessage,
+    //successMessage,
 
     // Filter
     filter,
@@ -98,7 +93,7 @@ export default function CustomerCreditControl() {
     handleOpenEditModal,
     handleUpdateDiscount,
     handleQuickToggleDiscount,
-    refetch,
+    //refetch,
   } = useCustomerCreditControl();
 
   // Edit Modal Form Local State
@@ -115,6 +110,7 @@ export default function CustomerCreditControl() {
     standard_discount_rate: 0,
     max_credit_limit: 0,
   });
+  const [showSensitiveInDrawer, setShowSensitiveInDrawer] = useState(false);
 
   // When opening edit modal, initialize form state
   const onOpenEdit = (customer: CustomerCreditItem) => {
@@ -143,10 +139,10 @@ export default function CustomerCreditControl() {
   return (
     <div className="relative flex min-h-screen bg-white text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
-         <main className="p-6 md:p-8 space-y-6 flex-1 max-w-[1200px] mx-auto w-full">
+         <main className="p-6 md:p-8 space-y-6 flex-1 max-w-300 mx-auto w-full">
           
           {/* ==================== Header Section ==================== */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4pb-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5">
               <div>
                 <Heading level='h1' weight='semibold' className='m-0 text-black'>
                   การควบคุมเครดิตและสิทธิ์ส่วนลดลูกค้า
@@ -177,7 +173,7 @@ export default function CustomerCreditControl() {
           {/* ==================== Summary Stats Cards ==================== */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Card 1: ลูกค้าทั้งหมด */}
-            <Card className="border-l-5 !border-l-slate-300 flex flex-col justify-between p-4 md:p-5">
+            <Card className="border-l-5 border-l-slate-300! flex flex-col justify-between p-4 md:p-5">
                 <div className="flex items-start justify-between">
                 <div>
                  <Heading level="h6" className="uppercase tracking-wider">
@@ -196,7 +192,7 @@ export default function CustomerCreditControl() {
             </Card>
 
             {/* Card 2: หนี้เครดิตคงค้างรวม */}
-            <Card className="border-l-5 !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+            <Card className="border-l-5 border-l-[#E51C23]! flex flex-col justify-between p-4 md:p-5">
               <div className="flex items-start justify-between">
                 <div>
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -214,7 +210,7 @@ export default function CustomerCreditControl() {
             </Card>
 
             {/* Card 3: สิทธิ์ส่วนลดพิเศษ */}
-            <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+            <Card className="border-l-[5px]! border-l-emerald-500! flex flex-col justify-between p-4 md:p-5">
               <div className="flex items-start justify-between">
                 <div>
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -231,7 +227,7 @@ export default function CustomerCreditControl() {
             </Card>
 
             {/* Card 4: เฝ้าระวังวงเงินเครดิต */}
-            <Card className="border-l-5 !border-l-amber-300 flex flex-col justify-between p-4 md:p-5">
+            <Card className="border-l-5 border-l-amber-300! flex flex-col justify-between p-4 md:p-5">
               <div className="flex items-start justify-between">
                 <div>
                   <Heading level="h6" className="uppercase tracking-wider">
@@ -344,7 +340,7 @@ export default function CustomerCreditControl() {
 
           {/* ==================== Customer Credit Table ==================== */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
-            <Table className="!w-full !min-w-0 table-fixed text-left border-collapse">
+            <Table className="w-full! min-w-0! table-fixed text-left border-collapse">
               <TableHeader className="bg-[#F6F3F2] border-b border-gray-200 text-[11px] text-[#6B7280] uppercase tracking-wider">
                 <TableRow>
                   <TableHead className="py-3 px-4 w-[24%]">ชื่อลูกค้า / ติดต่อ</TableHead>
@@ -401,11 +397,11 @@ export default function CustomerCreditControl() {
                             {c.customer_name}
                           </Text>
                           <div className="flex items-center gap-2 mt-0.5 text-xs text-[#5F5E5E] font-light">
-                            <span>โทร: {c.phone_number || "-"}</span>
+                            <span>โทร: {maskPhoneNumber(c.phone_number)}</span>
                             {c.id_card_number_customer && (
                               <>
                                 <span>•</span>
-                                <span className="truncate max-w-[120px]">{c.id_card_number_customer}</span>
+                                <span className="truncate max-w-30">{maskIdCardNumber(c.id_card_number_customer)}</span>
                               </>
                             )}
                           </div>
@@ -487,16 +483,6 @@ export default function CustomerCreditControl() {
                         {/* Action Buttons */}
                         <TableCell className="py-3.5 px-4 text-center">
                           <div className="flex items-center justify-center gap-1.5">
-                            {/* Edit Modal Button */}
-                            <button
-                              type="button"
-                              onClick={() => onOpenEdit(c)}
-                              className="p-1.5 text-gray-600 cursor-pointer"
-                              title="แก้ไขสิทธิ์และส่วนลด"
-                            >
-                              <Edit size={16} />
-                            </button>
-
                             {/* View Profile Drawer Button */}
                             <button
                               type="button"
@@ -506,6 +492,17 @@ export default function CustomerCreditControl() {
                             >
                               <Eye size={16} />
                             </button>
+                            {/* Edit Modal Button */}
+                            <button
+                              type="button"
+                              onClick={() => onOpenEdit(c)}
+                              className="p-1.5 text-gray-600 cursor-pointer"
+                              title="แก้ไขสิทธิ์และส่วนลด"
+                            >
+                              <Pencil size={16} />
+                            </button>
+
+                            
                           </div>
                         </TableCell>
                       </TableRow>
@@ -614,7 +611,7 @@ export default function CustomerCreditControl() {
                   />
                 </div>
                 <Text variant="xs" className="text-[#5F5E5E] font-light m-0 mt-1">
-                  เบอร์โทร: {selectedCustomer.phone_number || "-"} | บัตรประชาชน: {selectedCustomer.id_card_number_customer || "-"}
+                  เบอร์โทร: {maskPhoneNumber(selectedCustomer.phone_number)} | บัตรประชาชน: {maskIdCardNumber(selectedCustomer.id_card_number_customer)}
                 </Text>
               </div>
 
@@ -813,19 +810,45 @@ export default function CustomerCreditControl() {
               <div className="p-6 space-y-6">
                 {/* Basic Details */}
                 <div>
-                  <Text variant="xs" className="font-normal text-[#E51C23] mb-2">
-                    ข้อมูลสมาชิก
-                  </Text>
+                  <div className="flex items-center justify-between mb-2">
+                    <Text variant="xs" className="font-normal text-[#E51C23] mb-0">
+                      ข้อมูลสมาชิก
+                    </Text>
+                    <button
+                      type="button"
+                      onClick={() => setShowSensitiveInDrawer((prev) => !prev)}
+                      className="flex items-center gap-1.5 text-xs text-[#5F5E5E] hover:text-[#1C1B1B] transition-colors cursor-pointer px-1.5 py-0.5 rounded hover:bg-gray-100"
+                      title={showSensitiveInDrawer ? "ซ่อนข้อมูลส่วนบุคคล" : "แสดงข้อมูลส่วนบุคคล"}
+                    >
+                      {showSensitiveInDrawer ? (
+                        <>
+                          <EyeOff className="w-3.5 h-3.5 text-gray-500" />
+                          <span>ซ่อนข้อมูล</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-3.5 h-3.5 text-gray-500" />
+                          <span>แสดงข้อมูล</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                   <Card className="bg-[#F6F3F2] rounded-none border-gray-100 border-l-4 border-l-[#E51C23] shadow-none">
                     <CardContent className="p-4 space-y-1">
                       <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
                         {drawerCustomer.customer_name}
                       </Text>
                       <Text variant="xs" className="text-[#6B7280] mb-0">
-                        เบอร์โทรศัพท์: {drawerCustomer.phone_number}
+                        เบอร์โทรศัพท์:{" "}
+                        {showSensitiveInDrawer
+                          ? drawerCustomer.phone_number || "-"
+                          : maskPhoneNumber(drawerCustomer.phone_number)}
                       </Text>
                       <Text variant="xs" className="text-[#6B7280] mb-0">
-                        เลขประจำตัว: {drawerCustomer.id_card_number_customer || "-"}
+                        เลขประจำตัว:{" "}
+                        {showSensitiveInDrawer
+                          ? drawerCustomer.id_card_number_customer || "-"
+                          : maskIdCardNumber(drawerCustomer.id_card_number_customer)}
                       </Text>
                       <Text variant="xs" className="text-[#6B7280] mb-0">
                         ประเภท: {drawerCustomer.customer_type_label || drawerCustomer.customer_type?.type_label || "-"}

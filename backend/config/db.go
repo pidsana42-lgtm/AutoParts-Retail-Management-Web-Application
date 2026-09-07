@@ -140,6 +140,9 @@ func SetupDatabase() {
 	// 3. สำคัญ: เปิดการตรวจสอบ Foreign Key กลับคืนสู่สถานะปกติ
 	db.Exec("SET session_replication_role = 'origin';")
 
+	// ขยายขนาดคอลัมน์ id_card_number_customer เป็น varchar(255) สำหรับรองรับ AES-256 ciphertext
+	_ = db.Exec("ALTER TABLE customers ALTER COLUMN id_card_number_customer TYPE varchar(255);").Error
+
 	// Looktao
 	seed.Supplier(db)
 	seed.Role(db)
