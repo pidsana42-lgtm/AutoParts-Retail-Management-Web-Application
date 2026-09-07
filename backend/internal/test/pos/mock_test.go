@@ -2,13 +2,19 @@ package pos_test
 
 import (
 	"context"
+	"errors"
+	"testing"
 
 	dtoNotification "backend/internal/app/dto/notification"
 	posDto "backend/internal/app/dto/pos"
 	"backend/internal/app/entity"
 	salesRepo "backend/internal/app/repository/pos"
+	posService "backend/internal/app/service/pos"
 
+	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // -----------------------------------------------------------------------------
@@ -196,3 +202,208 @@ func (f *fakeNotificationService) MarkAllReadForOwners() error {
 func (f *fakeNotificationService) MarkAllReadForUser(userID uint) error {
 	return nil
 }
+
+// -----------------------------------------------------------------------------
+// Mock SaleRepository & POSProductRepository & TestFixture
+// -----------------------------------------------------------------------------
+
+type mockSaleRepo struct {
+	db                    *gorm.DB
+	storeConfig           *entity.StoreConfig
+	storeConfigErr        error
+	paymentMethods        map[uint]*entity.PaymentMethod
+	paymentMethodErr      error
+	customerTypes         []entity.CustomerType
+	customerTypesErr      error
+	searchCustomersResult []entity.Customer
+	searchCustomersErr    error
+	allPaymentMethods     []entity.PaymentMethod
+	allPaymentMethodsErr  error
+	createOrderErr        error
+	updateOrderErr        error
+	deleteItemsErr        error
+	existingOrder         *entity.SaleOrder
+	existingOrderErr      error
+}
+
+var _ salesRepo.SaleRepository = (*mockSaleRepo)(nil)
+
+func (m *mockSaleRepo) BeginTransaction() *gorm.DB {
+	return m.db.Begin()
+}
+
+func (m *mockSaleRepo) CreateOrderWithTx(tx *gorm.DB, order *entity.SaleOrder) error {
+	if m.createOrderErr != nil {
+		return m.createOrderErr
+	}
+	if order.CustomerID != nil && *order.CustomerID == 0 {
+		order.CustomerID = nil
+	}
+	return tx.Omit("Customer").Create(order).Error
+}
+
+func (m *mockSaleRepo) GetStoreConfig() (*entity.StoreConfig, error) {
+	if m.storeConfigErr != nil {
+		return nil, m.storeConfigErr
+	}
+	if m.storeConfig != nil {
+		return m.storeConfig, nil
+	}
+	return &entity.StoreConfig{
+		MaxCredit:            50000.0,
+		MaxOverdueDays:       30,
+		MaxExtraDiscountRate: 10.0,
+		SupervisedPin:        "1234",
+	}, nil
+}
+
+func (m *mockSaleRepo) GetPaymentMethodByID(id uint) (*entity.PaymentMethod, error) {
+	if m.paymentMethodErr != nil {
+		return nil, m.paymentMethodErr
+	}
+	if method, ok := m.paymentMethods[id]; ok {
+		return method, nil
+	}
+	return nil, errors.New("ไม่พบช่องทางการชำระเงินในระบบ")
+}
+
+func (m *mockSaleRepo) GetCustomerTypes() ([]entity.CustomerType, error) {
+	if m.customerTypesErr != nil {
+		return nil, m.customerTypesErr
+	}
+	return m.customerTypes, nil
+}
+
+func (m *mockSaleRepo) SearchCustomers(searchQuery string) ([]entity.Customer, error) {
+	if m.searchCustomersErr != nil {
+		return nil, m.searchCustomersErr
+	}
+	return m.searchCustomersResult, nil
+}
+
+func (m *mockSaleRepo) GetPaymentMethods() ([]entity.PaymentMethod, error) {
+	if m.allPaymentMethodsErr != nil {
+		return nil, m.allPaymentMethodsErr
+	}
+	return m.allPaymentMethods, nil
+}
+
+func (m *mockSaleRepo) GetOrderByID(id uint) (*entity.SaleOrder, error) {
+	if m.existingOrderErr != nil {
+		return nil, m.existingOrderErr
+	}
+	return m.existingOrder, nil
+}
+
+func (m *mockSaleRepo) UpdateOrderWithTx(tx *gorm.DB, order *entity.SaleOrder) error {
+	if m.updateOrderErr != nil {
+		return m.updateOrderErr
+	}
+	if order.CustomerID != nil && *order.CustomerID == 0 {
+		order.CustomerID = nil
+	}
+	return tx.Omit("Customer", "PaymentMethod").Save(order).Error
+}
+
+func (m *mockSaleRepo) DeleteOrderItemsWithTx(tx *gorm.DB, orderID uint) error {
+	if m.deleteItemsErr != nil {
+		return m.deleteItemsErr
+	}
+	return tx.Where("order_id = ?", orderID).Delete(&entity.SaleOrderItem{}).Error
+}
+
+func (m *mockSaleRepo) GetOrderByOrderNumber(orderNumber string) (*entity.SaleOrder, error) {
+	if m.existingOrderErr != nil {
+		return nil, m.existingOrderErr
+	}
+	if m.existingOrder != nil && m.existingOrder.OrderNumber == orderNumber {
+		return m.existingOrder, nil
+	}
+	return nil, errors.New("record not found")
+}
+
+type mockPOSProductRepo struct {
+	products map[uint]*entity.Product
+	getErr   error
+}
+
+var _ salesRepo.POSProductRepository = (*mockPOSProductRepo)(nil)
+
+func (m *mockPOSProductRepo) SearchProducts(search string) ([]entity.Product, error) {
+	return nil, nil
+}
+
+func (m *mockPOSProductRepo) GetProductByID(id uint) (*entity.Product, error) {
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	if p, ok := m.products[id]; ok {
+		// Return copy
+		pCopy := *p
+		if pCopy.Unit == nil {
+			pCopy.Unit = &entity.Unit{Unit_Name: "ชิ้น"}
+		}
+		return &pCopy, nil
+	}
+	return nil, errors.New("record not found")
+}
+
+func (m *mockPOSProductRepo) UpdateProductWithTx(tx *gorm.DB, product *entity.Product) error {
+	if p, ok := m.products[product.ID]; ok {
+		p.Quantity = product.Quantity
+	}
+	return tx.Save(product).Error
+}
+
+// testFixture holds the DB, repos, and service for a test
+type testFixture struct {
+	db          *gorm.DB
+	saleRepo    *mockSaleRepo
+	productRepo *mockPOSProductRepo
+	service     posService.SaleService
+}
+
+func newTestFixture(t *testing.T) *testFixture {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+
+	err = db.AutoMigrate(
+		&entity.CustomerType{},
+		&entity.Customer{},
+		&entity.Unit{},
+		&entity.Product{},
+		&entity.StoreConfig{},
+		&entity.PaymentMethod{},
+		&entity.SaleOrder{},
+		&entity.SaleOrderItem{},
+		&entity.Payment{},
+		&entity.User{},
+	)
+	require.NoError(t, err)
+
+	saleRepo := &mockSaleRepo{
+		db: db,
+		paymentMethods: map[uint]*entity.PaymentMethod{
+			1: {Model: gorm.Model{ID: 1}, MethodName: "CASH", IsActive: true, IsCredit: false},
+			2: {Model: gorm.Model{ID: 2}, MethodName: "QR_PROMPT_PAY", IsActive: true, IsCredit: false},
+			3: {Model: gorm.Model{ID: 3}, MethodName: "CREDIT", IsActive: true, IsCredit: true},
+			4: {Model: gorm.Model{ID: 4}, MethodName: "INACTIVE", IsActive: false, IsCredit: false},
+		},
+	}
+
+	productRepo := &mockPOSProductRepo{
+		products: make(map[uint]*entity.Product),
+	}
+
+	service := posService.NewSaleService(saleRepo, nil, productRepo)
+
+	return &testFixture{
+		db:          db,
+		saleRepo:    saleRepo,
+		productRepo: productRepo,
+		service:     service,
+	}
+}
+
