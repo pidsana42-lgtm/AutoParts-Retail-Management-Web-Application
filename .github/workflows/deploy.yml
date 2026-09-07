@@ -25,11 +25,14 @@ jobs:
             if [ ! -d ".git" ]; then
               git clone -b test-deploy-noto git@github.com:pidsana42-lgtm/AutoParts-Retail-Management-Web-Application.git .
             else
-              # 📍 2. อัปเดตรายชื่อ Branch จาก GitHub และสลับมาใช้ Branch นี้
-              git fetch origin
+              # 📍 2. อัปเดตรายชื่อ Branch จาก GitHub และบังคับ sync เป็นโค้ดล่าสุด 100%
+              git fetch origin test-deploy-noto
               git checkout test-deploy-noto
-              git pull origin test-deploy-noto
+              git reset --hard origin/test-deploy-noto
             fi
+
+            echo "=== Current Commit on Server ==="
+            git log -1 --oneline
 
             # เข้าไปที่โฟลเดอร์ frontend เพื่อ Build โปรเจกต์
             cd frontend
