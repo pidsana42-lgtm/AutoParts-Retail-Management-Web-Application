@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import {
   UploadCloud,
   ChevronLeft,
@@ -6,6 +6,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Eye,
+  EyeOff,
   ScanBarcode,
   X,
   Pencil,
@@ -37,6 +38,7 @@ import ConfirmModal from "../../../components/elements/confirm_modal";
 // Hook & Types
 import { useCustomerRegistration } from "./hook/useCustomerRegustration";
 import { getCustomerDocumentUrl } from "../../../service/http/customer/customer_service";
+import { maskPhoneNumber, maskIdCardNumber } from "../../../utils/customerhelpers";
 
 export default function CustomerRegistration() {
   const {
@@ -95,6 +97,7 @@ export default function CustomerRegistration() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showSensitiveInDrawer, setShowSensitiveInDrawer] = useState(false);
 
 
   
@@ -474,10 +477,10 @@ export default function CustomerRegistration() {
                         </Text> 
                       </TableCell>
                       <TableCell className="py-3.5 px-4 text-sm text-[#1C1B1B]">
-                        {c.phone_number || "-"}
+                        {maskPhoneNumber(c.phone_number)}
                       </TableCell>
                       <TableCell className="py-3.5 px-4 text-sm text-[#5F5E5E]">
-                        {c.id_card_number_customer || "-"} 
+                        {maskIdCardNumber(c.id_card_number_customer)} 
                       </TableCell>
                       <TableCell className="py-3.5 px-4 truncate">
                         <Text variant="xs" className="text-[#5F5E5E] truncate mb-0">
@@ -625,19 +628,45 @@ export default function CustomerRegistration() {
 
               <div className="p-6 space-y-6">
                 <div>
-                  <Text variant="xs" className="font-normal text-[#E51C23] mb-2">
-                    ข้อมูลสมาชิก
-                  </Text>
+                  <div className="flex items-center justify-between mb-2">
+                    <Text variant="xs" className="font-normal text-[#E51C23] mb-0">
+                      ข้อมูลสมาชิก
+                    </Text>
+                    <button
+                      type="button"
+                      onClick={() => setShowSensitiveInDrawer((prev) => !prev)}
+                      className="flex items-center gap-1.5 text-xs text-[#5F5E5E] hover:text-[#1C1B1B] transition-colors cursor-pointer px-1.5 py-0.5 rounded hover:bg-gray-100"
+                      title={showSensitiveInDrawer ? "ซ่อนข้อมูลส่วนบุคคล" : "แสดงข้อมูลส่วนบุคคล"}
+                    >
+                      {showSensitiveInDrawer ? (
+                        <>
+                          <EyeOff className="w-3.5 h-3.5 text-gray-500" />
+                          <span>ซ่อนข้อมูล</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-3.5 h-3.5 text-gray-500" />
+                          <span>แสดงข้อมูล</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                   <Card className="bg-[#F6F3F2] rounded-none border-gray-100 border-l-4 border-l-[#E51C23] shadow-none">
                     <CardContent className="p-4 space-y-1">
                       <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
                         {selectedCustomer.customer_name}
                       </Text>
                       <Text variant="xs" className="text-[#6B7280] mb-0">
-                        เบอร์โทรศัพท์: {selectedCustomer.phone_number}
+                        เบอร์โทรศัพท์:{" "}
+                        {showSensitiveInDrawer
+                          ? selectedCustomer.phone_number || "-"
+                          : maskPhoneNumber(selectedCustomer.phone_number)}
                       </Text>
                       <Text variant="xs" className="text-[#6B7280] mb-0">
-                        เลขประจำตัว: {selectedCustomer.id_card_number_customer || "-"}
+                        เลขประจำตัว:{" "}
+                        {showSensitiveInDrawer
+                          ? selectedCustomer.id_card_number_customer || "-"
+                          : maskIdCardNumber(selectedCustomer.id_card_number_customer)}
                       </Text>
                       <Text variant="xs" className="text-[#6B7280] mb-0">
                         ประเภท: {selectedCustomer.customer_type_label || selectedCustomer.customer_type?.type_label || "-"}
@@ -733,7 +762,7 @@ export default function CustomerRegistration() {
                   />
                 </div>
                 <Text variant="xs" className="text-[#5F5E5E] font-light m-0 mt-1">
-                  รหัสลูกค้า: C-{String(editingCustomer.id).padStart(3, "0")} | เบอร์โทร: {editingCustomer.phone_number || "-"}
+                  รหัสลูกค้า: C-{String(editingCustomer.id).padStart(3, "0")} | เบอร์โทร: {maskPhoneNumber(editingCustomer.phone_number)}
                 </Text>
               </div>
             </div>

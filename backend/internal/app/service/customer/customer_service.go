@@ -5,6 +5,7 @@ import (
 	customerDto "backend/internal/app/dto/customer"
 	"gorm.io/gorm"
 	"backend/internal/app/entity"
+	"backend/internal/pkg/crypto"
 	"errors"
 	"fmt"
 	"strings"
@@ -34,8 +35,9 @@ func (s *customerService) RegisterNewCustomer(req customerDto.RegisterCustomerRe
 		idCardImagePath = req.IdCardImagePath
 	}
 
+	encIdCard, _ := crypto.EncryptAES256(req.IdCardNumberCustomer)
 	var countIdCard int64
-	s.db.Model(&entity.Customer{}).Where("id_card_number_customer = ?", req.IdCardNumberCustomer).Count(&countIdCard)
+	s.db.Model(&entity.Customer{}).Where("id_card_number_customer = ? OR id_card_number_customer = ?", encIdCard, req.IdCardNumberCustomer).Count(&countIdCard)
 	if countIdCard > 0 { // ถ้ามีมากกว่า 0 แสดงว่าซ้ำ
 		return errors.New("เลขบัตรประชาชนนี้เคยลงทะเบียนในระบบ")
 	}
@@ -77,8 +79,9 @@ func (s *customerService) UpdateCustomer(id uint, req customerDto.UpdateCustomer
 	}
 
 	// ตรวจสอบเลขบัตรประชาชนซ้ำกับลูกค้ารายอื่นหรือไม่
+	encIdCard, _ := crypto.EncryptAES256(req.IdCardNumberCustomer)
 	var countIdCard int64
-	s.db.Model(&entity.Customer{}).Where("id_card_number_customer = ? AND id != ?", req.IdCardNumberCustomer, id).Count(&countIdCard)
+	s.db.Model(&entity.Customer{}).Where("(id_card_number_customer = ? OR id_card_number_customer = ?) AND id != ?", encIdCard, req.IdCardNumberCustomer, id).Count(&countIdCard)
 	if countIdCard > 0 {
 		return errors.New("เลขบัตรประชาชนนี้เคยลงทะเบียนในระบบแล้ว")
 	}
