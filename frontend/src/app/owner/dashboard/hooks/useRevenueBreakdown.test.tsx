@@ -30,7 +30,7 @@ describe('useRevenueBreakdown', () => {
           { name: 'โอน', value: 70, fill: '#4' },
         ],
       },
-    });
+    } as any);
 
     const { result } = renderHook(() => useRevenueBreakdown(query));
 

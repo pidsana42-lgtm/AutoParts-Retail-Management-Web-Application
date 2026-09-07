@@ -20,7 +20,7 @@ interface UsePosPaymentProps {
 
 export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount }: UsePosPaymentProps) {
   const { toast } = useToast();
-  const { calculateProRataWeight, calculateLineDiscountAmount } = useDiscountCalculation();
+  const { calculateProRataWeight } = useDiscountCalculation();
 
   // 1. โครงสร้างการดึง Session เริ่มต้นจาก LocalStorage
   const [posSession, setPosSession] = useState<PosSession>(() => {

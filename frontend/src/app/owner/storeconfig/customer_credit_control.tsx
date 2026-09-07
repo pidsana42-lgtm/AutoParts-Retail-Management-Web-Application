@@ -9,16 +9,12 @@ import {
   Eye,
   EyeOff,
   X,
-  CheckCircle2,
   AlertCircle,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   ShieldCheck,
-  Building2,
-  Wrench,
-  User,
   Pencil,
   CreditCard
 } from "lucide-react";
@@ -55,7 +51,6 @@ export default function CustomerCreditControl() {
   const {
     // Data & Stats
     customers,
-    filteredCustomers,
     paginatedCustomers,
     customerTypes,
     stats,
@@ -64,7 +59,6 @@ export default function CustomerCreditControl() {
     isLoading,
     isUpdating,
     error,
-    successMessage,
 
     // Filter
     filter,
@@ -97,7 +91,6 @@ export default function CustomerCreditControl() {
     handleOpenEditModal,
     handleUpdateDiscount,
     handleQuickToggleDiscount,
-    refetch,
   } = useCustomerCreditControl();
 
   // Edit Modal Form Local State

@@ -61,10 +61,10 @@ describe('useDebtDashboard', () => {
             ],
             total: 2,
           },
-    }));
+    } as any));
     getDebtMock.mockResolvedValue({
       data: { data: [], total: 7, total_debtors: 5, yearly_target: 1000 },
-    });
+    } as any);
 
     const { result } = renderHook(() => useDebtDashboard(
       { monthly_summary: '1' },
