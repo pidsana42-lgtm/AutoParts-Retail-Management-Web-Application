@@ -5,15 +5,16 @@ import (
 	"backend/internal/app/enum"
 	salesHistoryRepo "backend/internal/app/repository/pos"
 	salesHistorySvc "backend/internal/app/service/pos"
+	svcNotification "backend/internal/app/service/notification"
 	"backend/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func SetupSalesHistoryRoutes(r *gin.Engine, db *gorm.DB) {
+func SetupSalesHistoryRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotification.NotificationService) {
 	repo := salesHistoryRepo.NewSalesHistoryRepository(db)
-	svc := salesHistorySvc.NewSalesHistoryService(repo)
+	svc := salesHistorySvc.NewSalesHistoryService(repo, notificationService)
 	ctrl := salesHistoryCtrl.NewSalesHistoryController(svc)
 
 	salesGroup := r.Group("/api/pos")

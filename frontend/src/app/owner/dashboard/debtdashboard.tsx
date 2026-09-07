@@ -1,12 +1,11 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FileText, Sheet, Filter as FilterIcon, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, Loader2, AlertCircle, BookUser } from 'lucide-react';
+import { FileText, Sheet, Filter as FilterIcon, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, ChevronDown, Loader2, AlertCircle, BookUser } from 'lucide-react';
 // Components
 import Button from '../../../components/elements/button';
 import Badge from '../../../components/elements/badge';
 import { Card, CardHeader } from '../../../components/elements/card';
 import Heading from '../../../components/elements/heading';
-import Input from '../../../components/elements/input';
 import DateRangePicker from '../../../components/elements/date_range_picker';
 import { Table, TableHeader, TableHead, TableBody, TableCell, TableRow } from '../../../components/elements/table';
 // Hooks
@@ -88,48 +87,93 @@ const DebtDashboard: React.FC = () => {
   const location = useLocation();
   const basePath = usePathBasePrefix();
 
-  // Period filter (กระทบ KPI summary)
+  // Period filter (คุมทั้ง KPI summary และ ตารางวิเคราะห์อายุหนี้)
   const [selectedFilter, setSelectedFilter] = useState('daily');
-  const [customDate, setCustomDate] = useState('');
-
-  // Aging table filter
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
   // Filter dropdown
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filterPos, setFilterPos] = useState({ top: 0, right: 0 });
+  const [filterPos, setFilterPos] = useState<{ top?: number; bottom?: number; right?: number }>({ top: 0, right: 0 });
   const [statusFilter, setStatusFilter] = useState('');
   const [agingBucket, setAgingBucket] = useState('');
+  const [customMinAgeDays, setCustomMinAgeDays] = useState<number | null>(null);
+  const [customMinAgeInput, setCustomMinAgeInput] = useState('');
   const filterRef = useRef<HTMLDivElement>(null);
 
+  // Overdue Card (Card 4) state
+  const [overdueDays, setOverdueDays] = useState<number>(30);
+  const [overdueCount, setOverdueCount] = useState<number>(0);
+  const [overdueCountLoading, setOverdueCountLoading] = useState(false);
+  const [cardOverdueOpen, setCardOverdueOpen] = useState(false);
+  const [customOverdueInput, setCustomOverdueInput] = useState('30');
+  const cardOverdueRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
-        setFilterOpen(false);
+    const handleCardClickOutside = (e: MouseEvent) => {
+      if (cardOverdueRef.current && !cardOverdueRef.current.contains(e.target as Node)) {
+        setCardOverdueOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handleCardClickOutside);
+    return () => document.removeEventListener('mousedown', handleCardClickOutside);
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchOverdueCount = async () => {
+      setOverdueCountLoading(true);
+      try {
+        const res = await dashboardService.getDebtAging({
+          min_age_days: overdueDays,
+          page: 1,
+          page_size: 1,
+        });
+        if (isMounted) {
+          setOverdueCount(res.data.total ?? 0);
+        }
+      } catch {
+        if (isMounted) {
+          setOverdueCount(0);
+        }
+      } finally {
+        if (isMounted) {
+          setOverdueCountLoading(false);
+        }
+      }
+    };
+    fetchOverdueCount();
+    return () => {
+      isMounted = false;
+    };
+  }, [overdueDays]);
 
   // Export loading
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
-
   const summaryQuery = useMemo<SummaryQuery>(() => {
-    if (customDate) return { summary_date: customDate };
+    if (startDate && endDate) {
+      if (startDate === endDate) {
+        return { summary_date: startDate };
+      }
+      return { start_date: startDate, end_date: endDate };
+    }
+    if (startDate) return { summary_date: startDate };
     switch (selectedFilter) {
+      case 'daily':  return { summary_date: getTodayDateString() };
       case 'weekly': return { weekly_summary: '1' };
       case 'monthly': return { monthly_summary: '1' };
       case 'quarterly': return { quarterly_summary: '1' };
       case 'yearly': return { yearly_summary: '1' };
       default: return { summary_date: getTodayDateString() };
     }
-  }, [selectedFilter, customDate]);
+  }, [selectedFilter, startDate, endDate]);
 
   const agingBucketParams = useMemo(() => {
+    if (customMinAgeDays !== null && customMinAgeDays > 0) {
+      return { min_age_days: customMinAgeDays };
+    }
     switch (agingBucket) {
       case '0-30':   return { max_age_days: 30 };
       case '31-60':  return { min_age_days: 31, max_age_days: 60 };
@@ -137,7 +181,7 @@ const DebtDashboard: React.FC = () => {
       case '90+':    return { min_age_days: 91 };
       default:       return {};
     }
-  }, [agingBucket]);
+  }, [agingBucket, customMinAgeDays]);
 
   const agingQuery = useMemo<DebtAgingQuery>(() => ({
     ...(startDate && { start_date: startDate }),
@@ -158,27 +202,38 @@ const DebtDashboard: React.FC = () => {
 
   const handlePeriodClick = (value: string) => {
     setSelectedFilter(value);
-    setCustomDate('');
+    setStartDate('');
+    setEndDate('');
+    setCurrentPage(1);
   };
 
-  const handleCustomDate = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCustomDate(e.target.value);
-    setSelectedFilter(e.target.value ? '' : 'daily');
+  const handleStartDateChange = (d: string) => {
+    setStartDate(d);
+    setSelectedFilter('');
+    setCurrentPage(1);
   };
 
-  const exportQuery: DebtAgingQuery = {
+  const handleEndDateChange = (d: string) => {
+    setEndDate(d);
+    setSelectedFilter('');
+    setCurrentPage(1);
+  };
+
+  const exportQuery = useMemo<DebtAgingQuery>(() => ({
     ...(startDate && { start_date: startDate }),
     ...(endDate && { end_date: endDate }),
     ...(statusFilter && { status: statusFilter }),
     ...agingBucketParams,
-  };
+  }), [startDate, endDate, statusFilter, agingBucketParams]);
 
   const handleExportPdf = async () => {
     setExportingPdf(true);
     try {
-      const res = await dashboardService.getDebtAging({ ...exportQuery, page: 1, page_size: 9999 });
+      const res = await dashboardService.getAllDebtAging(exportQuery);
       const dateLabel = startDate && endDate
         ? `${formatDateThai(startDate)} – ${formatDateThai(endDate)}`
+        : startDate
+        ? formatDateThai(startDate)
         : 'ทั้งหมด';
       exportDebtAgingPdf(res.data.data ?? [], dateLabel);
     } catch { /* silently ignore */ }
@@ -230,21 +285,20 @@ const DebtDashboard: React.FC = () => {
         <div className='bg-[#F6F3F2] flex items-center p-1'>
           {PERIOD_FILTER.map((f) => (
             <button key={f.value} onClick={() => handlePeriodClick(f.value)}
-              className={`w-20 py-2.5 text-sm transition ${
+              className={`w-20 py-2.5 text-sm transition cursor-pointer ${
                 selectedFilter === f.value
-                  ? 'bg-white text-red-500 shadow-sm'
+                  ? 'bg-white text-red-500 shadow-sm font-medium'
                   : 'text-gray-500 hover:text-red-500'
               }`}>
               {f.label}
             </button>
           ))}
-          <div className='min-w-32'>
-            <Input type='date' value={customDate} onChange={handleCustomDate}
-              className={`transition-all ${customDate
-                ? 'bg-white text-red-500 border border-red-500 shadow-sm'
-                : 'bg-transparent text-gray-600 border-transparent'}`}
-            />
-          </div>
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={handleStartDateChange}
+            onEndDateChange={handleEndDateChange}
+          />
         </div>
       </div>
 
@@ -288,30 +342,106 @@ const DebtDashboard: React.FC = () => {
         </Card>
 
         {/* ลูกหนี้ค้างชำระเกินกำหนด */}
-        <Card className='border-l-[5px] border-l-red-500 flex flex-col justify-center p-5'>
-          <Heading level='h6' className='text-gray-500'>ลูกหนี้ค้างชำระเกินกำหนด</Heading>
-          <div className='flex items-baseline gap-2'>
-            <Heading level='h3' className='text-red-500'>
-              {kpiVal(kpi.overdueCount.toLocaleString('th-TH'))}
-            </Heading>
-            <Heading level='h6' className='text-red-500'>ราย</Heading>
+        <Card className='border-l-[5px] border-l-red-500 flex flex-col justify-between p-5 relative overflow-visible'>
+          <div className='flex items-center justify-between'>
+            <Heading level='h6' className='text-gray-500 font-medium'>ลูกหนี้ค้างชำระ</Heading>
+
+            {/* Day Selector Button on Card with exact same secondary button variant */}
+            <div className='relative' ref={cardOverdueRef}>
+              <Button
+                variant='solid-red'
+                size='sm'
+                className='font-normal'
+                onClick={() => setCardOverdueOpen((o) => !o)}
+              >
+                &gt; {overdueDays} วัน
+                <ChevronDown size={13} className={cn('ml-1 transition-transform duration-200', cardOverdueOpen && 'rotate-180')} />
+              </Button>
+
+              {cardOverdueOpen && (
+                <div className='absolute right-0 top-full mt-1 z-50 w-64 bg-white border border-gray-200 shadow-lg p-4 space-y-4'>
+                  <div>
+                    <Heading level='p'>เลือกจำนวนวันค้างชำระ</Heading>
+                    <div className='flex flex-wrap gap-1.5 mt-1'>
+                      {[15, 30, 45, 60, 90, 120].map((d) => (
+                        <Button
+                          key={d}
+                          size='sm'
+                          variant={overdueDays === d ? 'solid-red' : 'outline-cancel'}
+                          onClick={() => {
+                            setOverdueDays(d);
+                            setCustomOverdueInput(String(d));
+                            setCardOverdueOpen(false);
+                          }}
+                          className='px-2.5 py-1 h-auto text-xs font-normal'
+                        >
+                          &gt; {d} วัน
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className='pt-2 border-t border-gray-100'>
+                    <Heading level='p'>หรือระบุอายุหนี้เกิน (วัน)</Heading>
+                    <div className='flex items-center gap-2 mt-1.5'>
+                      <input
+                        type='number'
+                        min={1}
+                        placeholder='เช่น 45'
+                        value={customOverdueInput}
+                        onChange={(e) => setCustomOverdueInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const val = parseInt(customOverdueInput, 10);
+                            if (!isNaN(val) && val > 0) {
+                              setOverdueDays(val);
+                              setCardOverdueOpen(false);
+                            }
+                          }
+                        }}
+                        className='w-full h-8 px-2.5 text-sm border border-gray-300 rounded-none focus:outline-none focus:border-red-500'
+                      />
+                      <span className='text-xs text-gray-500 shrink-0'>วัน</span>
+                      <Button
+                        size='sm'
+                        variant='solid-red'
+                        onClick={() => {
+                          const val = parseInt(customOverdueInput, 10);
+                          if (!isNaN(val) && val > 0) {
+                            setOverdueDays(val);
+                            setCardOverdueOpen(false);
+                          }
+                        }}
+                        className='px-3 py-1 h-8 text-xs font-normal shrink-0'
+                      >
+                        ใช้
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <Heading level='p' className='text-gray-400'>ลูกหนี้ค้างชำระเกิน 30 วัน</Heading>
+
+          <div className='flex items-baseline gap-2 my-1'>
+            <Heading level='h3' className='text-red-500'>
+              {overdueCountLoading
+                ? <span className='text-gray-400 animate-pulse'>...</span>
+                : overdueCount.toLocaleString('th-TH')}
+            </Heading>
+            <Heading level='h6' className='text-red-500 font-medium'>ราย</Heading>
+          </div>
+
+          <Heading level='p' className='text-gray-400 text-xs m-0'>
+            ลูกหนี้ค้างชำระเกิน {overdueDays} วัน
+          </Heading>
         </Card>
       </div>
 
       {/* Debt Aging Table */}
       <Card noPadding>
         <CardHeader className='flex items-center justify-between bg-white px-6 py-4'>
-          <div className='flex items-baseline gap-4'>
-            <Heading level='h4' weight='bold'>รายงานการวิเคราะห์อายุหนี้</Heading>
-            <DateRangePicker
-              startDate={startDate}
-              endDate={endDate}
-              onStartDateChange={(d) => { setStartDate(d); setCurrentPage(1); }}
-              onEndDateChange={(d) => { setEndDate(d); setCurrentPage(1); }}
-            />
-          </div>
+          <Heading level='h4' weight='bold' className='m-0'>รายงานการวิเคราะห์อายุหนี้</Heading>
           <div className='flex items-center gap-2'>
             <Button
               variant='outline'
@@ -336,7 +466,7 @@ const DebtDashboard: React.FC = () => {
             </Button>
 
             {/* Filter dropdown */}
-            <div className='relative' ref={filterRef}>
+            <div className='relative flex items-center' ref={filterRef}>
               <Button
                 variant='secondary'
                 size='sm'
@@ -345,22 +475,36 @@ const DebtDashboard: React.FC = () => {
                 onClick={() => {
                   if (!filterOpen && filterRef.current) {
                     const r = filterRef.current.getBoundingClientRect();
-                    setFilterPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+                    const spaceBelow = window.innerHeight - r.bottom;
+                    const POPOVER_HEIGHT = 280;
+                    const openUpwards = spaceBelow < POPOVER_HEIGHT && r.top > POPOVER_HEIGHT;
+                    setFilterPos({
+                      top: openUpwards ? undefined : r.bottom + 4,
+                      bottom: openUpwards ? window.innerHeight - r.top + 4 : undefined,
+                      right: Math.max(16, window.innerWidth - r.right),
+                    });
                   }
                   setFilterOpen((o) => !o);
                 }}
               >
                 ตัวกรอง
-                {(statusFilter || agingBucket) && (
-                  <span className='ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-500 text-white text-[10px] leading-none'>
-                    {[statusFilter, agingBucket].filter(Boolean).length}
+                {(statusFilter || agingBucket || customMinAgeDays !== null) && (
+                  <span className='ml-1.5 inline-flex items-center justify-center px-1.5 h-4 rounded-full bg-red-500 text-white text-[10px] leading-none'>
+                    {customMinAgeDays !== null
+                      ? `>${customMinAgeDays} วัน`
+                      : [statusFilter, agingBucket].filter(Boolean).length}
                   </span>
                 )}
               </Button>
 
               {filterOpen && (
                 <div
-                  style={{ position: 'fixed', top: filterPos.top, right: filterPos.right }}
+                  style={{
+                    position: 'fixed',
+                    ...(filterPos.top !== undefined ? { top: filterPos.top } : {}),
+                    ...(filterPos.bottom !== undefined ? { bottom: filterPos.bottom } : {}),
+                    right: filterPos.right,
+                  }}
                   className='z-9999 w-64 bg-white border border-gray-200 shadow-lg p-4 space-y-4'
                 >
                   {/* สถานะ */}
@@ -389,8 +533,13 @@ const DebtDashboard: React.FC = () => {
                         <Button
                           key={opt.value}
                           size='sm'
-                          variant={agingBucket === opt.value ? 'solid-red' : 'outline-cancel'}
-                          onClick={() => { setAgingBucket(opt.value); setCurrentPage(1); }}
+                          variant={agingBucket === opt.value && customMinAgeDays === null ? 'solid-red' : 'outline-cancel'}
+                          onClick={() => {
+                            setAgingBucket(opt.value);
+                            setCustomMinAgeDays(null);
+                            setCustomMinAgeInput('');
+                            setCurrentPage(1);
+                          }}
                           className='px-2.5 py-1 h-auto text-xs font-normal'
                         >
                           {opt.label}
@@ -399,11 +548,60 @@ const DebtDashboard: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* หรือระบุจำนวนวันค้างชำระเกินเอง */}
+                  <div className='pt-2 border-t border-gray-100'>
+                    <Heading level='p'>หรือระบุอายุหนี้เกิน (วัน)</Heading>
+                    <div className='flex items-center gap-2 mt-1.5'>
+                      <input
+                        type='number'
+                        min={1}
+                        placeholder='เช่น 45'
+                        value={customMinAgeInput}
+                        onChange={(e) => setCustomMinAgeInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const val = parseInt(customMinAgeInput, 10);
+                            if (!isNaN(val) && val > 0) {
+                              setCustomMinAgeDays(val);
+                              setAgingBucket('');
+                              setCurrentPage(1);
+                              setFilterOpen(false);
+                            }
+                          }
+                        }}
+                        className='w-full h-8 px-2.5 text-sm border border-gray-300 rounded-none focus:outline-none focus:border-red-500'
+                      />
+                      <span className='text-xs text-gray-500 shrink-0'>วัน</span>
+                      <Button
+                        size='sm'
+                        variant='solid-red'
+                        onClick={() => {
+                          const val = parseInt(customMinAgeInput, 10);
+                          if (!isNaN(val) && val > 0) {
+                            setCustomMinAgeDays(val);
+                            setAgingBucket('');
+                            setCurrentPage(1);
+                            setFilterOpen(false);
+                          }
+                        }}
+                        className='px-3 py-1 h-8 text-xs font-normal shrink-0'
+                      >
+                        ใช้
+                      </Button>
+                    </div>
+                  </div>
+
                   {/* ล้างตัวกรอง */}
-                  {(statusFilter || agingBucket) && (
+                  {(statusFilter || agingBucket || customMinAgeDays !== null) && (
                     <button
-                      onClick={() => { setStatusFilter(''); setAgingBucket(''); setCurrentPage(1); }}
-                      className='w-full text-xs text-gray-400 hover:text-red-500 text-left pt-2 border-t border-gray-100 transition'
+                      onClick={() => {
+                        setStatusFilter('');
+                        setAgingBucket('');
+                        setCustomMinAgeDays(null);
+                        setCustomMinAgeInput('');
+                        setCurrentPage(1);
+                      }}
+                      className='w-full text-xs text-gray-400 hover:text-red-500 text-left pt-2 border-t border-gray-100 transition cursor-pointer'
                     >
                       ล้างตัวกรองทั้งหมด
                     </button>
@@ -462,7 +660,12 @@ const DebtDashboard: React.FC = () => {
                     </Badge>
                   </TableCell>
                   <TableCell className='text-center'>
-                    <Button variant='outline' size='sm' onClick={() => navigate(`${basePath}/pos/sales_history/${row.customer_code}`)}
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={() => navigate(
+                        `${basePath}/transactions/payment-history?search=${encodeURIComponent(row.customer_name)}&type=repayment`
+                      )}
                       className='border-none hover:bg-transparent hover:text-red-700 hover:underline p-0 h-auto font-light'>ดูรายละเอียด</Button>
                   </TableCell>
                 </TableRow>

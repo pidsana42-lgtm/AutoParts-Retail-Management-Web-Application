@@ -4,14 +4,19 @@ import type { POSProductResponse } from "../../../interface/pos/product_interfac
 import type { StoreConfigInterface } from "../../../interface/pos/store_config_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
 import type { CancelledPaymentItem, CancelPaymentReceiptRequest, ConfirmPaymentRequest, PaymentHistoryItem, RequestCancelPaymentReceiptRequest, ProcessCancelPaymentReceiptRequest } from "../../../interface/pos/payment_interface";
-import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, GetSaleHistoryByIDResponse, RevertCancellationRequestResponse } from "../../../interface/pos/sales_history_interface";
+import type { SalesHistoryFilterRequest, SalesHistoryPaginationResponse, SalesHistoryItemResponse, GetSaleHistoryByIDResponse, RevertCancellationRequestResponse } from "../../../interface/pos/sales_history_interface";
 import type { CustomerUnpaidBillsResponse, SettleBillsRequest, SettleBillsResponse, GenerateSettleQRRequest, GenerateSettleQRResponse } from "../../../interface/pos/settle_bills_interface";
+import type { FinancialPolicyAuditLog } from "../../../interface/storeconfig/financial_policy_interface";
 
 // ==================== API Services ====================
 export const posApiService = {
   /** ดึงค่าตั้งค่าคอนฟิกร้านค้า */
   getStoreConfig: (): Promise<StoreConfigInterface> => 
     apiClient.get<StoreConfigInterface>("/pos/store-config").then((res) => res.data),
+
+  /** ดึงประวัติการแก้ไขการตั้งค่าร้านค้า (Audit Logs) */
+  getStoreConfigAuditLogs: (): Promise<FinancialPolicyAuditLog[]> =>
+    apiClient.get<FinancialPolicyAuditLog[]>("/pos/store-config/audit-logs").then((res) => res.data || []),
 
   /** สร้างค่าตั้งค่าคอนฟิกร้านค้าครั้งแรก (POST) */
   createStoreConfig: (payload: Partial<StoreConfigInterface>): Promise<any> =>
@@ -101,6 +106,15 @@ export const posApiService = {
     apiClient
       .post<RevertCancellationRequestResponse>(`/pos/sales-history/${id}/cancel-request/revert`)
       .then((res) => res.data),
+
+  /** ค้นหารายการบิลที่ถูกยกเลิก (สำหรับนำมากู้คืนที่หน้า POS) */
+  getCancelledOrders: (search?: string): Promise<SalesHistoryItemResponse[]> =>
+    apiClient
+      .get<{ data: SalesHistoryPaginationResponse; message: string }>("/pos/sales/history", {
+        params: { search: search || undefined, status: "cancelled", limit: 50 },
+      })
+      .then((res) => res.data?.data?.items || [])
+      .catch(() => []),
 
   /** ดึงรายชื่อพนักงาน */
   getEmployees: (): Promise<any[]> =>
@@ -211,6 +225,46 @@ export const posApiService = {
       throw error;
     }
   },
+
+  /** สั่งพิมพ์หรือดึงไฟล์ PDF ใบเสร็จรับเงิน (ชำระหนี้) */
+  printPaymentReceiptPDF: async (receiptIdOrNo: number | string): Promise<Blob> => {
+    try {
+      const response = await apiClient.get(`/pos/payments/history/${receiptIdOrNo}/pdf`, {
+        responseType: "blob",
+      });
+      return response.data;
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการโหลด PDF ใบเสร็จชำระหนี้:", error);
+      throw error;
+    }
+  },
+
+  /** สั่งพิมพ์หรือดึงไฟล์ PDF ใบสรุปประวัติการชำระเงินและยอดค้างชำระของลูกค้า (Customer Statement) */
+  printCustomerStatementPDF: async (
+    customerId: number,
+    startDate?: string,
+    endDate?: string,
+    paymentType?: string,
+    status?: string,
+    paymentMethod?: string
+  ): Promise<Blob> => {
+    try {
+      const response = await apiClient.get(`/pos/payments/customers/${customerId}/statement-pdf`, {
+        params: {
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          payment_type: paymentType || undefined,
+          status: status || undefined,
+          payment_method: paymentMethod || undefined,
+        },
+        responseType: "blob",
+      });
+      return response.data;
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการโหลด PDF สรุปประวัติการชำระเงินลูกค้า:", error);
+      throw error;
+    }
+  },
 };
 
 // ==================== Business Logic Helpers ====================
@@ -271,6 +325,10 @@ export const calculateValidatedDiscount = (
 
 /**
  * ฟังก์ชันหาค่าส่วนลดเริ่มต้น (Default) ทันทีตอนดึงสินค้าเข้าตะกร้า
+ * กฎระบบ:
+ * - ถ้ายังไม่ได้เพิ่มลูกค้า (ไม่มี customer หรือเป็นลูกค้าขาจร id === 0): ไม่กรอกส่วนลดเริ่มต้นเด็ดขาด
+ * - ส่วนลดจะขึ้นอัตโนมัติเฉพาะเมื่อเป็นลูกค้าอู่ (GARAGE) ที่เปิดใช้งานสิทธิ์ส่วนลด
+ * - ลูกค้ากลุ่มบริษัท (WHOLESALE) ไม่ได้รับสิทธิ์ส่วนลดใดๆ
  */
 export const getDefaultProductDiscount = (
   product: any,
@@ -280,23 +338,49 @@ export const getDefaultProductDiscount = (
   const currentCustomerTypeId = customer?.customer_type?.id || activeTypeId;
   const currentCustomerTypeName = customer?.customer_type?.type_name || "";
 
+  // 1. ลูกค้ากลุ่มบริษัท (WHOLESALE) ไม่ได้รับสิทธิ์ส่วนลดใดๆ
   if (currentCustomerTypeId === 3 || currentCustomerTypeName === "WHOLESALE") {
     return { type: "none", value: 0 };
   }
 
-  const isGarage = 
-    currentCustomerTypeId === 2 || 
-    currentCustomerTypeName === "GARAGE" || 
-    customer?.customer_name?.includes("อู่");
-
-  // อู่ซ่อมรถ และ ต้องเปิดใช้งานส่วนลดระบบ
-  if (isGarage && customer && customer.is_discount_enabled) {
-    // อู่ซ่อมรถ: คีย์ปุ๊บ ลดให้ทันทีอัตโนมัติ = สิทธิ์สินค้า + สิทธิ์ออนท็อปอู่
-    const baseRate = product.max_discount_rate ?? 2.0;
-    const ontopRate = (customer as any).ontop_discount_rate ?? 3.0;
-    return { type: "percentage", value: baseRate + ontopRate };
+  // 2. ถ้ายังไม่ได้เพิ่มลูกค้า (ไม่มี customer หรือเป็นลูกค้าขาจร/guest id === 0)
+  // ยังไม่ต้องกรอกส่วนลดให้ และตรงกล่องยังไม่ต้องขึ้นว่าลด
+  if (!customer || customer.id === 0) {
+    return { type: "none", value: 0 };
   }
 
-  // ลูกค้าทั่วไป: เริ่มต้นไม่มีส่วนลดอัตโนมัติ
+  // เพดานส่วนลดของสินค้าที่ตั้งค่าไว้ (max_discount_rate)
+  const productRate = Number(product?.max_discount_rate) || 0;
+
+  // ตรวจสอบสิทธิ์กลุ่มอู่ซ่อมรถ (GARAGE)
+  const isGarage = 
+    customer.customer_type?.id === 2 || 
+    customer.customer_type?.type_name === "GARAGE" || 
+    customer.customer_type?.type_label?.includes("อู่") ||
+    customer.customer_name?.includes("อู่") ||
+    activeTypeId === 2;
+
+  // กรณี 1: ลูกค้าอู่ซ่อมรถ และ เปิดใช้งานส่วนลดระบบ -> ให้ส่วนลดอัตโนมัติ (ส่วนลดสินค้า + On-Top)
+  if (isGarage && customer.is_discount_enabled !== false) {
+    const ontopRate = Number((customer as any).ontop_discount_rate) || 0;
+    const baseRate = productRate > 0 ? productRate : 0;
+    const totalRate = baseRate + ontopRate;
+    if (totalRate > 0) {
+      return { type: "percentage", value: totalRate };
+    }
+    return { type: "none", value: 0 };
+  }
+
+  // กรณี 2: ลูกค้าประจำที่มีสิทธิ์ส่วนลดเฉพาะตัว (standard_discount_rate)
+  if (customer.is_discount_enabled !== false && Number(customer.standard_discount_rate) > 0) {
+    const stdRate = Number(customer.standard_discount_rate);
+    const rate = productRate > 0 ? Math.min(stdRate, productRate) : stdRate;
+    if (rate > 0) {
+      return { type: "percentage", value: rate };
+    }
+    return { type: "none", value: 0 };
+  }
+
+  // กรณีอื่นๆ (เช่น ลูกค้าทั่วไป ที่ไม่ได้เป็นลูกค้าอู่): ไม่ตั้งส่วนลดอัตโนมัติ
   return { type: "none", value: 0 };
 };

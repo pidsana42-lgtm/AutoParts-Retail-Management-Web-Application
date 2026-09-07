@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import {
   UploadCloud,
   ChevronLeft,
@@ -6,8 +6,13 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Eye,
+  EyeOff,
   ScanBarcode,
   X,
+  Pencil,
+  FileText,
+  ExternalLink,
+  Trash2,
 } from "lucide-react";
 
 // Components
@@ -28,9 +33,12 @@ import {
 import { Card, CardContent } from "../../../components/elements/card";
 import { CustomerTypeBadge } from "../../../components/elements/status_badge";
 import { CustomerCard } from "../pos/components/customercard";
+import ConfirmModal from "../../../components/elements/confirm_modal";
 
 // Hook & Types
 import { useCustomerRegistration } from "./hook/useCustomerRegustration";
+import { getCustomerDocumentUrl } from "../../../service/http/customer/customer_service";
+import { maskPhoneNumber, maskIdCardNumber } from "../../../utils/customerhelpers";
 
 export default function CustomerRegistration() {
   const {
@@ -44,6 +52,7 @@ export default function CustomerRegistration() {
     // Form
     formData,
     idCardFile,
+    setIdCardFile,
     errors,
     handleInputChange,
     handleBlur,
@@ -71,9 +80,25 @@ export default function CustomerRegistration() {
     // Details Modal
     selectedCustomer,
     setSelectedCustomer,
+
+    // Edit Modal
+    isEditModalOpen,
+    editingCustomer,
+    editFormData,
+    editIdCardFile,
+    editErrors,
+    editSubmitting,
+    openEditModal,
+    closeEditModal,
+    handleEditInputChange,
+    handleEditFileChange,
+    handleEditSubmit,
   } = useCustomerRegistration();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const editFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showSensitiveInDrawer, setShowSensitiveInDrawer] = useState(false);
+
 
   
 
@@ -95,7 +120,7 @@ export default function CustomerRegistration() {
           <form onSubmit={handleSubmit} className="space-y-6" noValidate>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* 1: ข้อมูลทั่วไป */}
-              <Card className="bg-white rounded-none shadow-none border-y border-r border-gray-200 overflow-hidden">
+              <Card className="bg-white rounded-none shadow-none border border-gray-200 overflow-hidden">
                 <CardContent className="p-6 space-y-4">
                   <div className="flex items-center gap-2 pb-3">
                     <span className="bg-[#1C1B1B] text-white text-sm px-2 py-1 rounded-none font-normal">
@@ -163,7 +188,7 @@ export default function CustomerRegistration() {
               </Card>
 
               {/* 02: ข้อมูลส่วนบุคคล */}
-              <Card className="bg-white rounded-none shadow-none border-y border-r border-gray-200 overflow-hidden">
+              <Card className="bg-white rounded-none shadow-none border border-gray-200 overflow-hidden">
                 <CardContent className="p-6 space-y-4">
                   <div className="flex items-center gap-2  pb-3">
                     <span className="bg-[#1C1B1B] text-white text-sm px-2 py-1 rounded-none font-normal">
@@ -205,7 +230,7 @@ export default function CustomerRegistration() {
                         onBlur={() => handleBlur("registered_address")}
                         className={`w-full p-2.5 bg-[#F6F3F2] border-none rounded-none text-sm text-[#1C1B1B] placeholder:text-[#6B7280] placeholder:font-light resize-none outline-none transition-colors ${
                           errors.registered_address
-                            ? "!border-red-500 !border-solid ring-1 ring-red-500"
+                            ? "border-red-500! border-solid! ring-1 ring-red-500"
                             : "border-gray-200 focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
                         }`}
                       />
@@ -227,7 +252,7 @@ export default function CustomerRegistration() {
                         onBlur={() => handleBlur("shipping_address")}
                         className={`w-full p-2.5 bg-[#F6F3F2] border-none rounded-none text-sm text-[#1C1B1B] placeholder:text-[#6B7280] placeholder:font-light resize-none outline-none transition-colors ${
                           errors.shipping_address
-                            ? "!border-red-500 !border-solid ring-1 ring-red-500"
+                            ? "border-red-500! border-solid! ring-1 ring-red-500"
                             : "border-gray-200 focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
                         }`}
                       />
@@ -241,7 +266,7 @@ export default function CustomerRegistration() {
             </div>
 
             {/* 03: การอัปโหลดเอกสาร */}
-            <Card className="bg-white rounded-none shadow-none border-y border-r border-gray-200 overflow-hidden">
+            <Card className="bg-white rounded-none shadow-none border border-gray-200 overflow-hidden">
               <CardContent className="p-6 space-y-4">
                 <div className="flex items-center gap-2 pb-3">
                    <span className="bg-[#1C1B1B] text-white text-sm px-2 py-1 rounded-none font-normal">
@@ -252,25 +277,65 @@ export default function CustomerRegistration() {
                   </Heading>
                 </div>
 
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border border-dashed border-[#E7BDB8] bg-white hover:bg-red-50/20 transition-colors p-8 flex flex-col items-center justify-center cursor-pointer"
-                >
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    accept="image/*,.pdf"
-                    className="hidden"
-                  />
-                  <UploadCloud className="w-10 h-10 text-[#5B5B5B] mb-2 stroke-[1.5]" />
-                  <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
-                    {idCardFile ? idCardFile.name : "คลิกเพื่ออัปโหลดสำเนาบัตรประชาชน / ภ.พ.20"}
-                  </Text>
-                  <Text variant="xs" className="font-light text-[#5B5B5B] mb-0">
-                    PDF, JPG, PNG (ขนาดไม่เกิน 10MB)
-                  </Text>
-                </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*,.pdf"
+                  className="hidden"
+                />
+
+                {idCardFile ? (
+                  <div className="border border-gray-200 bg-[#F6F3F2] p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 bg-white border border-gray-200 flex items-center justify-center shrink-0">
+                        {idCardFile.type.includes("pdf") ? (
+                          <FileText className="w-5 h-5 text-[#E51C23]" />
+                        ) : (
+                          <UploadCloud className="w-5 h-5 text-gray-600" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <Text variant="small" className="font-medium text-[#1C1B1B] mb-0 truncate">
+                          {idCardFile.name}
+                        </Text>
+                        <Text variant="xs" className="font-light text-[#5F5E5E] mb-0">
+                          {(idCardFile.size / 1024).toFixed(1)} KB
+                        </Text>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-xs text-gray-600 hover:text-black underline cursor-pointer px-2 py-1"
+                      >
+                        เปลี่ยนไฟล์
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIdCardFile(null)}
+                        className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-none cursor-pointer transition-colors"
+                        title="ลบไฟล์"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border border-dashed border-[#E7BDB8] bg-white hover:bg-red-50/20 transition-colors p-8 flex flex-col items-center justify-center cursor-pointer"
+                  >
+                    <UploadCloud className="w-10 h-10 text-[#5B5B5B] mb-2 stroke-[1.5]" />
+                    <Text variant="small" className="font-normal text-[#1C1B1B] mb-0">
+                      คลิกเพื่ออัปโหลดสำเนาบัตรประชาชน / ภ.พ.20
+                    </Text>
+                    <Text variant="xs" className="font-light text-[#5B5B5B] mb-0">
+                      PDF, JPG, PNG (ขนาดไม่เกิน 10MB)
+                    </Text>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -369,7 +434,7 @@ export default function CustomerRegistration() {
           {/* Customer Table List */}
           <Card className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
             {/* Table Content */}
-            <Table className="!w-full !min-w-0 table-fixed text-left border-collapse">
+            <Table className="w-full! min-w-0! table-fixed text-left border-collapse">
               <TableHeader className="bg-[#F6F3F2] border-b border-gray-200 text-[11px] text-[#6B7280] uppercase tracking-wider">
                 <TableRow>
                   <TableHead className="py-3 px-4 w-[25%]">ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท</TableHead>
@@ -412,10 +477,10 @@ export default function CustomerRegistration() {
                         </Text> 
                       </TableCell>
                       <TableCell className="py-3.5 px-4 text-sm text-[#1C1B1B]">
-                        {c.phone_number || "-"}
+                        {maskPhoneNumber(c.phone_number)}
                       </TableCell>
                       <TableCell className="py-3.5 px-4 text-sm text-[#5F5E5E]">
-                        {c.id_card_number_customer || "-"} 
+                        {maskIdCardNumber(c.id_card_number_customer)} 
                       </TableCell>
                       <TableCell className="py-3.5 px-4 truncate">
                         <Text variant="xs" className="text-[#5F5E5E] truncate mb-0">
@@ -429,14 +494,24 @@ export default function CustomerRegistration() {
                         />
                       </TableCell>
                       <TableCell className="py-3.5 px-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedCustomer(c)}
-                          className="inline-flex items-center justify-center p-1.5 text-[#E51C23] hover:text-[#c9151b] hover:bg-red-50 transition-colors rounded-full"
-                          title="ดูรายละเอียดลูกค้า"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCustomer(c)}
+                            className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100 text-gray-600"
+                            title="ดูรายละเอียดลูกค้า"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(c)}
+                            className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100 text-gray-600"
+                            title="แก้ไขข้อมูลลูกค้า"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -532,30 +607,66 @@ export default function CustomerRegistration() {
                     UID: C-{String(selectedCustomer.id).padStart(3, "0")}
                   </Text>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedCustomer(null)}
-                  className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(selectedCustomer)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-normal border border-gray-200 text-[#1C1B1B] hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-[#E51C23]" />
+                    แก้ไขข้อมูล
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCustomer(null)}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               <div className="p-6 space-y-6">
                 <div>
-                  <Text variant="xs" className="font-normal text-[#E51C23] mb-2">
-                    ข้อมูลสมาชิก
-                  </Text>
+                  <div className="flex items-center justify-between mb-2">
+                    <Text variant="xs" className="font-normal text-[#E51C23] mb-0">
+                      ข้อมูลสมาชิก
+                    </Text>
+                    <button
+                      type="button"
+                      onClick={() => setShowSensitiveInDrawer((prev) => !prev)}
+                      className="flex items-center gap-1.5 text-xs text-[#5F5E5E] hover:text-[#1C1B1B] transition-colors cursor-pointer px-1.5 py-0.5 rounded hover:bg-gray-100"
+                      title={showSensitiveInDrawer ? "ซ่อนข้อมูลส่วนบุคคล" : "แสดงข้อมูลส่วนบุคคล"}
+                    >
+                      {showSensitiveInDrawer ? (
+                        <>
+                          <EyeOff className="w-3.5 h-3.5 text-gray-500" />
+                          <span>ซ่อนข้อมูล</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-3.5 h-3.5 text-gray-500" />
+                          <span>แสดงข้อมูล</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                   <Card className="bg-[#F6F3F2] rounded-none border-gray-100 border-l-4 border-l-[#E51C23] shadow-none">
                     <CardContent className="p-4 space-y-1">
                       <Text variant="small" className="font-medium text-[#1C1B1B] mb-0">
                         {selectedCustomer.customer_name}
                       </Text>
                       <Text variant="xs" className="text-[#6B7280] mb-0">
-                        เบอร์โทรศัพท์: {selectedCustomer.phone_number}
+                        เบอร์โทรศัพท์:{" "}
+                        {showSensitiveInDrawer
+                          ? selectedCustomer.phone_number || "-"
+                          : maskPhoneNumber(selectedCustomer.phone_number)}
                       </Text>
                       <Text variant="xs" className="text-[#6B7280] mb-0">
-                        เลขประจำตัว: {selectedCustomer.id_card_number_customer || "-"}
+                        เลขประจำตัว:{" "}
+                        {showSensitiveInDrawer
+                          ? selectedCustomer.id_card_number_customer || "-"
+                          : maskIdCardNumber(selectedCustomer.id_card_number_customer)}
                       </Text>
                       <Text variant="xs" className="text-[#6B7280] mb-0">
                         ประเภท: {selectedCustomer.customer_type_label || selectedCustomer.customer_type?.type_label || "-"}
@@ -563,6 +674,48 @@ export default function CustomerRegistration() {
                       <Text variant="xs" className="text-[#6B7280] mb-0">
                         ที่อยู่: {selectedCustomer.display_address || "-"}
                       </Text>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* สำเนาบัตรประชาชน / เอกสารแนบ */}
+                <div>
+                  <Text variant="xs" className="font-normal text-[#E51C23] mb-2">
+                    สำเนาบัตรประชาชน / เอกสารแนบ
+                  </Text>
+                  <Card className="bg-[#F6F3F2] rounded-none border border-gray-200 shadow-none">
+                    <CardContent className="p-4">
+                      {selectedCustomer.id_card_image_path ? (
+                        <div className="space-y-3">
+                          <div className="overflow-hidden border border-gray-200 bg-white">
+                            {selectedCustomer.id_card_image_path.toLowerCase().includes(".pdf") ? (
+                              <div className="p-6 flex flex-col items-center justify-center text-gray-600">
+                                <FileText className="w-12 h-12 text-[#E51C23] mb-2" />
+                                <span className="text-xs font-light">เอกสารแนบในรูปแบบ PDF</span>
+                              </div>
+                            ) : (
+                              <img
+                                src={getCustomerDocumentUrl(selectedCustomer.id, selectedCustomer.id_card_image_path)}
+                                alt="สำเนาบัตรประชาชน"
+                                className="w-full h-44 object-contain bg-gray-50"
+                              />
+                            )}
+                          </div>
+                          <a
+                            href={getCustomerDocumentUrl(selectedCustomer.id, selectedCustomer.id_card_image_path)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-[#E51C23] hover:underline font-normal cursor-pointer"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            เปิดดูเอกสารฉบับเต็มในแท็บใหม่
+                          </a>
+                        </div>
+                      ) : (
+                        <div className="py-6 text-center text-gray-400 text-xs">
+                          ไม่มีสำเนาเอกสารแนบในระบบ
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
@@ -581,6 +734,222 @@ export default function CustomerRegistration() {
           </aside>
         </div>
       )}
+
+      {/* ==================== EDIT CUSTOMER MODAL ==================== */}
+      <ConfirmModal
+        isOpen={isEditModalOpen}
+        onClose={closeEditModal}
+        title="แก้ไขข้อมูลสมาชิก / ลูกค้า"
+        description={
+          editingCustomer
+            ? `UID: C-${String(editingCustomer.id).padStart(3, "0")} — ปรับปรุงข้อมูลทั่วไปและเอกสารประจำตัวลูกค้า`
+            : "ปรับปรุงข้อมูลทั่วไปและเอกสารประจำตัวลูกค้า"
+        }
+        size="lg"
+      >
+        {editingCustomer && (
+          <form onSubmit={handleEditSubmit} className="space-y-4" noValidate>
+            {/* Customer Summary Box */}
+            <div className="bg-white p-4 border-l-3 border-l-[#1C1B1B] border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate">
+                    {editingCustomer.customer_name}
+                  </Text>
+                  <CustomerTypeBadge
+                    typeName={editingCustomer.customer_type?.type_name}
+                    typeLabel={editingCustomer.customer_type?.type_label}
+                  />
+                </div>
+                <Text variant="xs" className="text-[#5F5E5E] font-light m-0 mt-1">
+                  รหัสลูกค้า: C-{String(editingCustomer.id).padStart(3, "0")} | เบอร์โทร: {maskPhoneNumber(editingCustomer.phone_number)}
+                </Text>
+              </div>
+            </div>
+
+            {/* ชื่อลูกค้า */}
+            <div className="space-y-1.5">
+              <Text className="text-xs text-[#5F5E5E] mb-1">
+                ชื่อลูกค้า/อู่ซ่อมรถ/บริษัท <span className="text-[#E51C23] font-normal">*</span>
+              </Text>
+              <Input
+                name="customer_name"
+                value={editFormData.customer_name}
+                onChange={handleEditInputChange}
+                error={editErrors.customer_name}
+                className="w-full h-10 bg-[#F6F3F2] border border-gray-200 rounded-none text-sm text-[#1C1B1B] focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* ประเภทลูกค้า */}
+              <div className="space-y-1.5">
+                <label className="text-xs text-[#5F5E5E]">
+                  ประเภทลูกค้า <span className="text-[#E51C23] font-normal">*</span>
+                </label>
+                <Select
+                  value={String(editFormData.customer_type_id)}
+                  onChange={(e: any) =>
+                    handleEditInputChange({
+                      target: { name: "customer_type_id", value: e.target.value },
+                    } as any)
+                  }
+                  error={editErrors.customer_type_id}
+                  className="w-full h-10 bg-[#F6F3F2] border-none rounded-none text-sm text-[#1C1B1B] cursor-pointer focus:outline-none focus:ring-0"
+                  options={types.map((t) => ({
+                    label: t.type_label || t.type_name,
+                    value: String(t.id),
+                  }))}
+                />
+              </div>
+
+              {/* เบอร์โทรศัพท์ */}
+              <div className="space-y-1.5">
+                <label className="text-xs text-[#5F5E5E]">
+                  หมายเลขโทรศัพท์หลัก <span className="text-[#E51C23] font-normal">*</span>
+                </label>
+                <Input
+                  type="tel"
+                  name="phone_number"
+                  maxLength={11}
+                  value={editFormData.phone_number}
+                  onChange={handleEditInputChange}
+                  error={editErrors.phone_number}
+                  className="w-full h-10 bg-[#F6F3F2] border-none rounded-none text-sm text-[#1C1B1B] focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
+                />
+              </div>
+            </div>
+
+            {/* บัตรประชาชน */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-[#5F5E5E]">
+                บัตรประจำตัวประชาชน (13 หลัก) <span className="text-[#E51C23] font-normal">*</span>
+              </label>
+              <Input
+                name="id_card_number_customer"
+                maxLength={17}
+                value={editFormData.id_card_number_customer}
+                onChange={handleEditInputChange}
+                error={editErrors.id_card_number_customer}
+                className="w-full h-10 bg-[#F6F3F2] border border-gray-200 rounded-none text-sm text-[#1C1B1B] focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
+              />
+            </div>
+
+            {/* ที่อยู่ */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs text-[#5F5E5E]">
+                  ที่อยู่ตามทะเบียนบ้าน <span className="text-[#E51C23] font-normal">*</span>
+                </label>
+                <textarea
+                  name="registered_address"
+                  rows={3}
+                  value={editFormData.registered_address}
+                  onChange={handleEditInputChange}
+                  className={`w-full p-2.5 bg-[#F6F3F2] border-none rounded-none text-sm text-[#1C1B1B] placeholder:text-[#6B7280] resize-none outline-none transition-colors ${
+                    editErrors.registered_address
+                      ? "border-red-500! border-solid! ring-1 ring-red-500"
+                      : "border-gray-200 focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
+                  }`}
+                />
+                {editErrors.registered_address && (
+                  <p className="text-xs text-red-500 mt-0.5">{editErrors.registered_address}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs text-[#5F5E5E]">
+                  ที่อยู่จัดส่ง / ที่ตั้งอู่ <span className="text-[#E51C23] font-normal">*</span>
+                </label>
+                <textarea
+                  name="shipping_address"
+                  rows={3}
+                  value={editFormData.shipping_address}
+                  onChange={handleEditInputChange}
+                  className={`w-full p-2.5 bg-[#F6F3F2] border-none rounded-none text-sm text-[#1C1B1B] placeholder:text-[#6B7280] resize-none outline-none transition-colors ${
+                    editErrors.shipping_address
+                      ? "border-red-500! border-solid! ring-1 ring-red-500"
+                      : "border-gray-200 focus:border-[#E51C23] focus:ring-1 focus:ring-[#E51C23]"
+                  }`}
+                />
+                {editErrors.shipping_address && (
+                  <p className="text-xs text-red-500 mt-0.5">{editErrors.shipping_address}</p>
+                )}
+              </div>
+            </div>
+
+            {/* อัปโหลด / เปลี่ยนแปลงเอกสาร */}
+            <div className="space-y-2 pt-2 border-t border-gray-200">
+              <label className="text-xs text-[#5F5E5E] block">
+                สำเนาบัตรประชาชน / เอกสารประกอบ (อัปโหลดใหม่เพื่อแทนที่ของเดิม)
+              </label>
+
+              {editFormData.id_card_image_path && !editIdCardFile && (
+                <div className="flex items-center justify-between p-2.5 bg-[#F6F3F2] border border-gray-200 text-xs text-[#1C1B1B]">
+                  <span className="truncate">มีเอกสารเดิมในระบบ</span>
+                  <a
+                    href={getCustomerDocumentUrl(editingCustomer?.id, editFormData.id_card_image_path)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#E51C23] hover:underline flex items-center gap-1 shrink-0 ml-2"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> เปิดดู
+                  </a>
+                </div>
+              )}
+
+              <input
+                type="file"
+                ref={editFileInputRef}
+                onChange={handleEditFileChange}
+                accept="image/*,.pdf"
+                className="hidden"
+              />
+
+              <div
+                onClick={() => editFileInputRef.current?.click()}
+                className="border border-dashed border-[#E7BDB8] bg-white hover:bg-red-50/20 transition-colors p-4 flex flex-col items-center justify-center cursor-pointer"
+              >
+                <UploadCloud className="w-7 h-7 text-[#5B5B5B] mb-1 stroke-[1.5]" />
+                <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 text-center">
+                  {editIdCardFile ? editIdCardFile.name : "คลิกเพื่อเลือกไฟล์ใหม่ (PDF, JPG, PNG)"}
+                </Text>
+                {editIdCardFile ? (
+                  <span className="text-[11px] text-gray-500 mt-0.5">
+                    ขนาด {(editIdCardFile.size / 1024).toFixed(1)} KB
+                  </span>
+                ) : (
+                  <Text variant="xs" className="font-light text-[#5B5B5B] mb-0">
+                    ขนาดไม่เกิน 10MB
+                  </Text>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+              <Button
+                type="button"
+                variant="outline-cancel"
+                onClick={closeEditModal}
+                disabled={editSubmitting}
+                className="rounded-none h-11 px-4 text-xs font-normal text-[#5F5E5E] bg-white border border-gray-200 hover:bg-[#F6F3F2] shadow-none cursor-pointer transition-colors"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                variant="solid-red"
+                isLoading={editSubmitting}
+                disabled={editSubmitting}
+                className="rounded-none px-6 h-10 text-xs font-normal bg-[#E51C23] hover:bg-[#c9151b] text-white"
+              >
+                บันทึกการแก้ไข
+              </Button>
+            </div>
+          </form>
+        )}
+      </ConfirmModal>
     </div>
   );
 }

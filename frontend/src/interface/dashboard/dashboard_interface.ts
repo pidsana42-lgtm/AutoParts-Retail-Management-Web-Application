@@ -21,6 +21,8 @@ export interface DashboardSummaryItem {
 
 export interface SummaryQuery {
   summary_date?: string;
+  start_date?: string;
+  end_date?: string;
   weekly_summary?: string;
   monthly_summary?: string;
   quarterly_summary?: string;
@@ -39,6 +41,11 @@ export interface StockAlertItem {
   quantity_at_alert: number;
   limit_quantity: number;
   is_resolved: string;
+  has_po?: boolean;
+  po_number?: string;
+  po_id?: number;
+  po_count?: number;
+  po_numbers?: string[];
   product_id: number | null;
   product_code?: string;
   product_name?: string;
@@ -76,6 +83,13 @@ export interface RecentSaleItem {
   total_amount: number;
   order_status: string;
   payment_method: string;
+}
+
+export interface RecentSalesResponse {
+  data: RecentSaleItem[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 export interface AgingStockItem {

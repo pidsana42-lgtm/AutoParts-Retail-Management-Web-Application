@@ -43,7 +43,16 @@ func (s *stockAlertService) GetByID(id uint) (*wmsDto.StockAlertResponseDTO, err
 	if err != nil {
 		return nil, err
 	}
-	return toStockAlertResponse(sa), nil
+	resp := toStockAlertResponse(sa)
+	activePOMap, _ := s.repo.GetActivePOAlertMap([]uint{id})
+	if poInfo, ok := activePOMap[id]; ok {
+		resp.HasPO = true
+		resp.POID = &poInfo.POID
+		resp.PONumber = poInfo.PONumber
+		resp.POCount = poInfo.POCount
+		resp.PONumbers = poInfo.PONumbers
+	}
+	return resp, nil
 }
 
 func (s *stockAlertService) List(isResolved string) ([]wmsDto.StockAlertResponseDTO, error) {
@@ -51,9 +60,28 @@ func (s *stockAlertService) List(isResolved string) ([]wmsDto.StockAlertResponse
 	if err != nil {
 		return nil, err
 	}
+	if len(list) == 0 {
+		return []wmsDto.StockAlertResponseDTO{}, nil
+	}
+
+	alertIDs := make([]uint, len(list))
+	for i, sa := range list {
+		alertIDs[i] = sa.ID
+	}
+
+	activePOMap, _ := s.repo.GetActivePOAlertMap(alertIDs)
+
 	result := make([]wmsDto.StockAlertResponseDTO, len(list))
 	for i, sa := range list {
-		result[i] = *toStockAlertResponse(&sa)
+		resp := toStockAlertResponse(&sa)
+		if poInfo, ok := activePOMap[sa.ID]; ok {
+			resp.HasPO = true
+			resp.POID = &poInfo.POID
+			resp.PONumber = poInfo.PONumber
+			resp.POCount = poInfo.POCount
+			resp.PONumbers = poInfo.PONumbers
+		}
+		result[i] = *resp
 	}
 	return result, nil
 }

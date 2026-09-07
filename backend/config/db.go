@@ -1,12 +1,14 @@
 package config
 
 import (
-	"backend/seed"
 	"backend/internal/app/entity"
+	"backend/seed"
 
 	"fmt"
 	"log"
 	"os"
+	"strings"
+
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -29,7 +31,27 @@ func ConnectDB() {
 		"../.env.local",
 		"backend/.env.local",
 	} {
-		_ = godotenv.Overload(envFile)
+		if _, err := os.Stat(envFile); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			log.Fatalf("failed to inspect environment file %s: %v", envFile, err)
+		}
+
+		if err := godotenv.Overload(envFile); err != nil {
+			log.Fatalf("failed to load environment file %s: %v", envFile, err)
+		}
+	}
+
+	requiredVariables := []string{"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME"}
+	missingVariables := make([]string, 0)
+	for _, variable := range requiredVariables {
+		if strings.TrimSpace(os.Getenv(variable)) == "" {
+			missingVariables = append(missingVariables, variable)
+		}
+	}
+	if len(missingVariables) > 0 {
+		log.Fatalf("missing required database environment variables: %s", strings.Join(missingVariables, ", "))
 	}
 
 	host := os.Getenv("DB_HOST")
@@ -87,6 +109,7 @@ func SetupDatabase() {
 		&entity.User{},
 		&entity.Supplier{},
 		&entity.Customer{},
+		&entity.CustomerCreditAuditLog{},
 		&entity.Bank{},
 		&entity.Payment{},
 		&entity.PaymentMethod{},
@@ -94,6 +117,7 @@ func SetupDatabase() {
 		&entity.SaleOrder{},
 		&entity.SaleOrderItem{},
 		&entity.StoreConfig{},
+		&entity.StoreConfigAuditLog{},
 
 		// โตโต้ WMS
 		&entity.Category{},
@@ -138,33 +162,36 @@ func SetupDatabase() {
 	// 3. สำคัญ: เปิดการตรวจสอบ Foreign Key กลับคืนสู่สถานะปกติ
 	db.Exec("SET session_replication_role = 'origin';")
 
+	// ขยายขนาดคอลัมน์ id_card_number_customer เป็น varchar(255) สำหรับรองรับ AES-256 ciphertext
+	_ = db.Exec("ALTER TABLE customers ALTER COLUMN id_card_number_customer TYPE varchar(255);").Error
+
 	// Looktao
 	seed.Supplier(db)
 	seed.Role(db)
 	seed.CustomerType(db)
 	seed.PaymentMethod(db)
-    
+
 	// Toto WMS
 	seed.Zone(db)
-    seed.Unit(db)
-    seed.Category(db)
-    seed.SubCategory(db)
-    seed.Grade(db)
-    seed.Shelf(db)
-    seed.Brand(db) 
-    seed.Models(db) 
-    if err := seed.User(db); err != nil {
-        log.Printf("Warning: failed to seed default user: %v", err)
-    }
-	
-    seed.Customer(db)
-    seed.Product(db)
-	
+	seed.Unit(db)
+	seed.Category(db)
+	seed.SubCategory(db)
+	seed.Grade(db)
+	seed.Shelf(db)
+	seed.Brand(db)
+	seed.Models(db)
+	if err := seed.User(db); err != nil {
+		log.Printf("Warning: failed to seed default user: %v", err)
+	}
+
+	seed.Customer(db)
+	seed.Product(db)
+
 	// Chompoo
 	seed.PurchaseOrdersType(db)
 	seed.PurchaseOrders(db)
 	seed.PurchaseOrdersItems(db)
-	
+
 	// Siri
 	seed.BillImage(db)
 	seed.Bill(db)
@@ -174,5 +201,5 @@ func SetupDatabase() {
 	// Company Setting
 	seed.CompanySetting(db)
 
-    log.Println("Database migration complete! Server Ready.")
+	log.Println("Database migration complete! Server Ready.")
 }

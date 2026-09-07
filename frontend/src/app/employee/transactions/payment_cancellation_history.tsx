@@ -15,6 +15,7 @@ import {
   ScanBarcode,
   X,
   RotateCcw,
+  Printer,
 } from "lucide-react";
 import {
   Table,
@@ -36,6 +37,8 @@ import { usePaymentCancellationHistory } from "./hooks/usePaymentCancellationHis
 import { useUserRole } from "../../../hooks/useUserRole";
 import { useEmployeeOptions } from "../../../hooks/useEmployeeOptions";
 import type { PaymentHistoryItem } from "../../../interface/pos/payment_interface";
+import { posApiService } from "../../../service/http/pos/pos_service";
+import { downloadPdfBlob } from "../../../utils/payment_history_print";
 
 const PaymentCancellationHistory: React.FC = () => {
   const { isOwnerOrAdmin } = useUserRole();
@@ -68,8 +71,6 @@ const PaymentCancellationHistory: React.FC = () => {
     setEndDate,
     status,
     setStatus,
-    paymentType,
-    setPaymentType,
     employeeId,
     setEmployeeId,
     handleSearch,
@@ -85,6 +86,29 @@ const PaymentCancellationHistory: React.FC = () => {
     handleRevertCancel,
     handleResubmitCancel,
   } = usePaymentCancellationHistory();
+
+  const [printingReceiptId, setPrintingReceiptId] = React.useState<number | string | null>(null);
+
+  const handlePrintReceipt = async (item: PaymentHistoryItem) => {
+    const targetId = item.receipt_id || item.receipt_number;
+    setPrintingReceiptId(targetId);
+    try {
+      let blob: Blob;
+      if (item.payment_type === "repayment") {
+        blob = await posApiService.printPaymentReceiptPDF(targetId);
+      } else {
+        blob = await posApiService.printOrderReceipt(item.order_numbers || targetId);
+      }
+      const rawNum = item.receipt_number || targetId;
+      const fileName = String(rawNum).endsWith(".pdf") ? `${rawNum}` : `${rawNum}.pdf`;
+      downloadPdfBlob(blob, fileName);
+    } catch (err) {
+      console.error("Failed to print receipt:", err);
+      alert("ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setPrintingReceiptId(null);
+    }
+  };
 
   const kpiValue = (value: React.ReactNode) =>
     isStatsLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
@@ -204,7 +228,7 @@ const PaymentCancellationHistory: React.FC = () => {
             /* 1. ฝั่งเจ้าของร้าน (Owner System) */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
               {/* Card 1: รออนุมัติ */}
-              <Card className="!border-l-[5px] !border-l-amber-300   flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-amber-300!   flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -222,7 +246,7 @@ const PaymentCancellationHistory: React.FC = () => {
               </Card>
 
               {/* Card 2: อนุมัติแล้ว (Approved) */}
-              <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-emerald-500! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -240,7 +264,7 @@ const PaymentCancellationHistory: React.FC = () => {
               </Card>
 
               {/* Card 3: ปฏิเสธ / ไม่อนุมัติ (Rejected) */}
-              <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-[#E51C23]! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -258,7 +282,7 @@ const PaymentCancellationHistory: React.FC = () => {
               </Card>
 
               {/* Card 4: คำขอทั้งหมด (Total Requests) */}
-              <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-sky-700! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -279,7 +303,7 @@ const PaymentCancellationHistory: React.FC = () => {
             /* 2. ฝั่งพนักงาน (Employee) */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
               {/* Card 1: คำขอทั้งหมดของฉัน (My Total Requests) */}
-              <Card className="!border-l-[5px] !border-l-sky-700 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-sky-700! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -297,7 +321,7 @@ const PaymentCancellationHistory: React.FC = () => {
               </Card>
 
               {/* Card 2: รอเจ้าของร้านอนุมัติ (Pending) */}
-              <Card className="!border-l-[5px] !border-l-amber-300 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-amber-300! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -315,7 +339,7 @@ const PaymentCancellationHistory: React.FC = () => {
               </Card>
 
               {/* Card 3: อนุมัติแล้ว (Approved) */}
-              <Card className="!border-l-[5px] !border-l-emerald-500 flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-emerald-500! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -333,7 +357,7 @@ const PaymentCancellationHistory: React.FC = () => {
               </Card>
 
               {/* Card 4: ไม่อนุมัติ (Rejected) */}
-              <Card className="!border-l-[5px] !border-l-[#E51C23] flex flex-col justify-between p-4 md:p-5">
+              <Card className="border-l-[5px]! border-l-[#E51C23]! flex flex-col justify-between p-4 md:p-5">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Heading level="h6" className="uppercase tracking-wider">
@@ -399,13 +423,27 @@ const PaymentCancellationHistory: React.FC = () => {
                   dataList.map((item: PaymentHistoryItem) => {
                     const isChecked = selectedIds.includes(item.receipt_id);
                     const isPendingCancel = (item.status || "").toLowerCase() === "pending_cancel";
+                    const isSelected =
+                      selectedReceipt?.receipt_id === item.receipt_id &&
+                      selectedReceipt?.payment_type === item.payment_type;
                     return (
                       <TableRow
                         key={`${item.payment_type}-${item.receipt_id}-${item.receipt_number}`}
-                        className={isChecked ? "bg-red-50/40" : "hover:bg-slate-50 transition-colors"}
+                        onClick={() => setSelectedReceipt(item)}
+                        className={cn(
+                          "cursor-pointer transition-colors",
+                          isSelected
+                            ? "bg-red-50/70 border-l-2 border-l-[#E51C23]"
+                            : isChecked
+                            ? "bg-red-50/40"
+                            : "hover:bg-slate-50"
+                        )}
                       >
                         {/* Checkbox */}
-                        <TableCell className="py-3.5 px-3 text-center">
+                        <TableCell
+                          className="py-3.5 px-3 text-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <input
                             type="checkbox"
                             checked={isChecked}
@@ -431,10 +469,10 @@ const PaymentCancellationHistory: React.FC = () => {
 
                         {/* 3. ชื่อลูกค้า + บิล */}
                         <TableCell className="py-3.5 px-3">
-                          <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate max-w-[200px]">
+                          <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate max-w-50">
                             {item.customer_name || "ลูกค้าทั่วไป"}
                           </Text>
-                          <Text variant="xs" className="font-light text-[#A8A29E] mb-0 truncate max-w-[200px]">
+                          <Text variant="xs" className="font-light text-[#A8A29E] mb-0 truncate max-w-50">
                             บิล: {item.order_numbers || "-"}
                           </Text>
                         </TableCell>
@@ -463,15 +501,32 @@ const PaymentCancellationHistory: React.FC = () => {
                         </TableCell>
 
                         {/* 7. จัดการ */}
-                        <TableCell className="py-3.5 px-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedReceipt(item)}
-                            className="p-1.5 cursor-pointer transition-colors"
-                            title="ดูรายละเอียดคำขอ"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                        <TableCell
+                          className="py-3.5 px-3 text-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReceipt(item)}
+                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
+                              title="ดูรายละเอียดคำขอ"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={printingReceiptId === (item.receipt_id || item.receipt_number)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePrintReceipt(item);
+                              }}
+                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
+                              title="พิมพ์/ดาวน์โหลดใบเสร็จที่ยกเลิก (Void Receipt)"
+                            >
+                              <Printer className={cn("w-4 h-4", printingReceiptId === (item.receipt_id || item.receipt_number) && "animate-pulse")} />
+                            </button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -630,13 +685,25 @@ const PaymentCancellationHistory: React.FC = () => {
                     </span>
                   </Text>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedReceipt(null)}
-                  className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline-cancel"
+                    onClick={() => handlePrintReceipt(selectedReceipt)}
+                    disabled={printingReceiptId === (selectedReceipt.receipt_id || selectedReceipt.receipt_number)}
+                    className="text-xs h-8 px-3 font-normal rounded-none flex items-center gap-1.5 cursor-pointer border border-gray-200 hover:bg-[#F6F3F2]"
+                  >
+                    <Printer className={cn("w-3.5 h-3.5 text-[#E51C23]", printingReceiptId === (selectedReceipt.receipt_id || selectedReceipt.receipt_number) && "animate-pulse")} />
+                    <span>พิมพ์ใบเสร็จ</span>
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedReceipt(null)}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               {/* Body */}
@@ -953,7 +1020,16 @@ const PaymentCancellationHistory: React.FC = () => {
                         </div>
                       </Card>
 
-                      
+                      <Button
+                        type="button"
+                        variant="outline-cancel"
+                        onClick={() => handlePrintReceipt(selectedReceipt)}
+                        disabled={printingReceiptId === (selectedReceipt.receipt_id || selectedReceipt.receipt_number)}
+                        className="w-full text-xs h-10 font-normal rounded-none flex items-center justify-center gap-2 cursor-pointer shadow-sm border border-gray-300 hover:bg-gray-50"
+                      >
+                        <Printer className={cn("w-4 h-4 text-[#E51C23]", printingReceiptId === (selectedReceipt.receipt_id || selectedReceipt.receipt_number) && "animate-pulse")} />
+                        <span>พิมพ์ใบเสร็จที่ยกเลิก (เอกสารหลักฐาน)</span>
+                      </Button>
                     </div>
                   );
                 })()}

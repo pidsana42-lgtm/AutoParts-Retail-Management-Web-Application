@@ -174,10 +174,9 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
         // 2. ตั้งต้นเพดานสูงสุดจากตัวสินค้าก่อน (เช่น 2.00%)
         allowedMaxDiscount := product.MaxDiscountRate 
 
-        // 3. ถ้าเป็นลูกค้ากลุ่ม GARAGE และเปิดใช้งานระบบส่วนลดอู่ 
-        // ให้เอาสิทธิ์ On-top ของอู่คนนี้มาขยายเพดานเพิ่มเข้าไปด้วย!
-        if customer.CustomerType.TypeName == "GARAGE" && customer.IsDiscountEnabled {
-            // บวกเพิ่มเพดานตามสิทธิ์ที่เจ้าของร้าน Set ให้ลูกค้าเครดิตดีคนนี้ (เช่น 2% + 3% = 5%)
+        // 3. ถ้าลูกค้าเปิดใช้งานระบบส่วนลดพิเศษ
+        // ให้เอาสิทธิ์ On-top ของลูกค้ารายนี้มาขยายเพดานเพิ่มเข้าไปด้วย!
+        if customer.IsDiscountEnabled {
             allowedMaxDiscount += customer.OntopDiscountRate
         }
 
@@ -627,7 +626,7 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
         }
 
         allowedMaxDiscount := product.MaxDiscountRate
-        if customer.CustomerType.TypeName == "GARAGE" && customer.IsDiscountEnabled {
+        if customer.IsDiscountEnabled {
             allowedMaxDiscount += customer.OntopDiscountRate
         }
 

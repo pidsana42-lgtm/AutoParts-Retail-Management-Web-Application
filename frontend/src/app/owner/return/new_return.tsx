@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { ArrowRightFromLine, ChevronRight, Loader2, Minus, Plus, ReceiptText, Search, Send, Banknote, QrCode, CreditCard } from "lucide-react";
+import { ArrowRightFromLine, Check, ChevronRight, Loader2, Minus, Plus, ReceiptText, Search, Send, Banknote, QrCode, CreditCard } from "lucide-react";
 // Components
 import Badge from "../../../components/elements/badge";
 import Button from "../../../components/elements/button";
@@ -27,6 +27,7 @@ const NewReturnPage: React.FC = () => {
   const navigate = useNavigate();
   const basePath = usePathBasePrefix();
   const { toast } = useToast();
+  const isOwner = localStorage.getItem("role")?.toUpperCase() === "OWNER";
   const { keyword, searchResults, selectedOrder, isSearching, searchError, highlightedIndex, handleSearchInput, handleSelectOrder, handleSearchKeyDown, handleForceSearch } = useReturnSearch();
   const [step, setStep] = useState<1 | 2>(1);
   const [items, setItems] = useState<ReturnLineItem[]>([]);
@@ -190,7 +191,7 @@ const NewReturnPage: React.FC = () => {
       const result = await returnService.createSalesReturn(payload);
       toast({
         title: "สำเร็จ",
-        message: `ส่งคำขออนุมัติการคืนสินค้าสำเร็จ${result?.return_number ? ` (อ้างอิงเลขที่ ${result.return_number})` : ""}`,
+        message: `${isOwner ? "อนุมัติการคืนสินค้าสำเร็จ" : "ส่งคำขออนุมัติการคืนสินค้าสำเร็จ"}${result?.return_number ? ` (อ้างอิงเลขที่ ${result.return_number})` : ""}`,
         variant: "success",
       });
       navigate(`${basePath}/returns`);
@@ -198,7 +199,7 @@ const NewReturnPage: React.FC = () => {
       console.error("Submit Error:", err.response?.data || err);
       toast({
         title: "เกิดข้อผิดพลาด",
-        message: 'ส่งคำขออนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+        message: isOwner ? 'อนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง' : 'ส่งคำขออนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
         variant: "error",
         duration: 4000,
       });
@@ -252,7 +253,13 @@ const NewReturnPage: React.FC = () => {
                 ย้อนกลับ
               </Button>
               <Button size="md" variant="primary" className="bg-[#d61c24] hover:bg-red-700" disabled={!canSubmit} onClick={handleSendReturn}>
-                {isSending ? <Loader2 size={16} className="animate-spin" /> : <><Send size={16} /> ส่งคำขออนุมัติ</>}
+                {isSending ? (
+                  <><Loader2 size={16} className="animate-spin" /> {isOwner ? "กำลังอนุมัติการคืนสินค้า..." : "กำลังส่งอนุมัติ..."}</>
+                ) : isOwner ? (
+                  <><Check size={16} /> อนุมัติการคืนสินค้า</>
+                ) : (
+                  <><Send size={16} /> ส่งคำขออนุมัติ</>
+                )}
               </Button>
             </>
           )}

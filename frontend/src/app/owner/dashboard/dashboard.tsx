@@ -1,22 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TriangleAlert, TrendingUp, TrendingDown, CheckCircle2, Loader2, FileInput, CreditCard, ClipboardList, PackageOpen, ReceiptText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ShoppingCart } from 'lucide-react';
+import { TriangleAlert, TrendingUp, TrendingDown, CheckCircle2, Loader2, FileInput, CreditCard, ClipboardList, PackageOpen, ReceiptText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ShoppingCart, Filter as FilterIcon } from 'lucide-react';
 // Hooks
 import { useDashboardMetrics } from '../../owner/dashboard/hooks/useDashboardMetrics';
+import { useAgingStock, AGING_DAY_PRESETS } from './hooks/useAgingStock';
 // Components
 import Button from '../../../components/elements/button';
-import Input   from '../../../components/elements/input';
 import Heading from '../../../components/elements/heading';
 import { Badge } from '../../../components/elements/badge';
 import Card, { CardContent, CardHeader } from '../../../components/elements/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/elements/table';
+import DateRangePicker from '../../../components/elements/date_range_picker';
 // Service & Interface
 import { dashboardService } from '../../../service/http/dashboard/dashboard_service';
-import type { DashboardSummaryItem, SummaryQuery, StockAlertItem, RecentSaleItem, AgingStockItem, StockHealthStats } from '../../../interface/dashboard/dashboard_interface';
+import type { DashboardSummaryItem, SummaryQuery, StockAlertItem, RecentSaleItem, StockHealthStats } from '../../../interface/dashboard/dashboard_interface';
 // Utils
 import { cn } from '../../../utils/component';
 import { formatDateThai, getTodayDateString } from '../../../utils/formatdate';
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
+import { getDashboardRoleGroup } from '../../../utils/dashboardAccess';
 // Modal
 import StockAlertPOModal from './components/StockAlertPOModal';
 
@@ -35,12 +37,13 @@ const PageFilter = [
 ];
 
 const PAGE_SIZE = 10;
-const PO_BADGE_LS_KEY = 'dashboard_po_created_alerts';
-const PO_BADGE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+const DASHBOARD_POLL_INTERVAL_MS = 15_000;
 
 const fmt = (n: number) =>
   n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const pad = (n: number) => String(n).padStart(2, '0');
+const dateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 function getPageNumbers(current: number, total: number): (number | '...')[] {
   const delta = 1;
@@ -61,13 +64,14 @@ const MainDashboard: React.FC = () => {
   const location = useLocation();
   const basePath = usePathBasePrefix();
   const userRole = localStorage.getItem('role');
-  const isOwner = userRole === 'Owner';
+  const isOwner = getDashboardRoleGroup(userRole) === 'owner';
   // Basic State
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Filter State
   const [selectedFilter, setSelectedFilter] = useState('daily');
-  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [summaryData, setSummaryData] = useState<DashboardSummaryItem[]>([]);
   // State ส่วน KPI Card สภาพสินค้าคงคลัง
   const [stockHealth, setStockHealth] = useState<StockHealthStats | null>(null);
@@ -80,8 +84,9 @@ const MainDashboard: React.FC = () => {
   const [orderTrend, setOrderTrend] = useState<number | null>(null);
   // State รายการขายล่าสุด
   const [recentSale, setRecentSale] = useState<RecentSaleItem[]>([]);
+  const [recentSaleTotal, setRecentSaleTotal] = useState(0);
   const [recentSaleLoading, setRecentSaleLoading] = useState(false);
-  const isFilterToday = selectedFilter === 'daily' && !selectedDate;
+  const isFilterToday = selectedFilter === 'daily' || (!selectedFilter && !startDate && !endDate) || (startDate === getTodayDateString() && (endDate === getTodayDateString() || !endDate));
   const fmtTime = (iso: string) => {
     const d = new Date(iso);
     if (isFilterToday) {
@@ -89,49 +94,73 @@ const MainDashboard: React.FC = () => {
     }
     return d.toLocaleString('th-TH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
-  // Stste รายการค้างสต๊อกเกิน 180 วัน
-  const [agingStock, setAgingStock] = useState<AgingStockItem[]>([]);
-  const [agingStockLoading, setAgingStockLoading] = useState(false);
+  // Hook สินค้าค้างสต๊อก
+  const {
+    agingDays,
+    agingStock,
+    agingStockLoading,
+    agingStockPage,
+    setAgingStockPage,
+    agingFilterOpen,
+    setAgingFilterOpen,
+    agingFilterPos,
+    customAgingInput,
+    setCustomAgingInput,
+    agingFilterRef,
+    handlePresetClick,
+    handleCustomApply,
+    handleReset,
+    toggleFilterOpen,
+  } = useAgingStock(180);
 
-  // State ติดตาม alert ที่สร้าง PO ไปแล้ว (เก็บใน localStorage 7 วัน)
-  const [poCreatedAlertIds, setPoCreatedAlertIds] = useState<Set<number>>(() => {
+  // ล้าง localStorage เก่าที่เคยบันทึก alert PO ไว้ผิดพลาด
+  useEffect(() => {
     try {
-      const raw = localStorage.getItem(PO_BADGE_LS_KEY);
-      if (!raw) return new Set<number>();
-      const map: Record<string, number> = JSON.parse(raw);
-      const now = Date.now();
-      return new Set(
-        Object.entries(map)
-          .filter(([, ts]) => now - ts < PO_BADGE_EXPIRY_MS)
-          .map(([id]) => Number(id))
-      );
-    } catch {
-      return new Set<number>();
-    }
-  });
+      localStorage.removeItem('dashboard_po_created_alerts');
+    } catch { /* ignore */ }
+  }, []);
 
   // Pagination
   const [recentSalePage, setRecentSalePage] = useState(1);
-  const [agingStockPage, setAgingStockPage] = useState(1);
   const { aggr, marginPct, stockHealthLabel } = useDashboardMetrics(summaryData, stockHealth);
 
-  const buildQuery = (): SummaryQuery => {
-    if (selectedDate) return { summary_date: selectedDate };
+  const buildQuery = useCallback((): SummaryQuery => {
+    if (startDate && endDate) {
+      if (startDate === endDate) {
+        return { summary_date: startDate };
+      }
+      return { start_date: startDate, end_date: endDate };
+    }
+    if (startDate) return { summary_date: startDate };
     switch (selectedFilter) {
+      case 'daily':     return { summary_date: getTodayDateString() };
       case 'weekly':    return { weekly_summary: '1' };
       case 'monthly':   return { monthly_summary: '1' };
       case 'quarterly': return { quarterly_summary: '1' };
       case 'yearly':    return { yearly_summary: '1' };
       default:          return { summary_date: getTodayDateString() };
     }
-  };
+  }, [endDate, selectedFilter, startDate]);
 
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const dateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const buildPrevQuery = useCallback((): SummaryQuery | null => {
+    if (startDate && endDate) {
+      const s = new Date(startDate);
+      const e = new Date(endDate);
+      const diffMs = e.getTime() - s.getTime();
+      const diffDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
 
-  const buildPrevQuery = (): SummaryQuery | null => {
-    if (selectedDate) {
-      const d = new Date(selectedDate);
+      const prevEnd = new Date(s);
+      prevEnd.setDate(prevEnd.getDate() - 1);
+      const prevStart = new Date(prevEnd);
+      prevStart.setDate(prevStart.getDate() - diffDays + 1);
+
+      if (diffDays === 1) {
+        return { summary_date: dateStr(prevStart) };
+      }
+      return { start_date: dateStr(prevStart), end_date: dateStr(prevEnd) };
+    }
+    if (startDate) {
+      const d = new Date(startDate);
       d.setDate(d.getDate() - 1);
       return { summary_date: dateStr(d) };
     }
@@ -158,11 +187,16 @@ const MainDashboard: React.FC = () => {
       }
       default: return null;
     }
-  };
+  }, [endDate, selectedFilter, startDate]);
 
   const getTrendLabel = () => {
-    if (selectedDate) return 'เทียบกับเมื่อวาน';
+    if (startDate && endDate) {
+      if (startDate === endDate) return 'เทียบกับเมื่อวาน';
+      return 'เทียบกับช่วงก่อนหน้า';
+    }
+    if (startDate) return 'เทียบกับเมื่อวาน';
     switch (selectedFilter) {
+      case 'daily':     return 'เทียบกับเมื่อวาน';
       case 'weekly':    return 'เทียบกับสัปดาห์ที่แล้ว';
       case 'monthly':   return 'เทียบกับเดือนที่แล้ว';
       case 'quarterly': return 'เทียบกับไตรมาสที่แล้ว';
@@ -172,88 +206,15 @@ const MainDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    const fetch = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const res = await dashboardService.getSummaryData(buildQuery());
-        setSummaryData(res.data.summary_data ?? []);
-      } catch {
-        setError('ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetch();
-  }, [selectedFilter, selectedDate]);
+    let cancelled = false;
 
-  useEffect(() => {
-    const fetchStockHealth = async () => {
-      setStockHealthLoading(true);
-      try {
-        const res = await dashboardService.getStockHealth();
-        setStockHealth(res.data);
-      } catch {
-        setStockHealth(null);
-      } finally {
-        setStockHealthLoading(false);
-      }
-    };
-    fetchStockHealth();
-  }, []);
-
-  useEffect(() => {
-    const fetchStockAlerts = async () => {
-      setStockAlertLoading(true);
-      try {
-        const res = await dashboardService.getStockAlerts();
-        const unresolved = res.data.filter(a => a.is_resolved === 'false');
-        setStockAlerts(unresolved);
-      } catch {
-        setStockAlerts([]);
-      } finally {
-        setStockAlertLoading(false);
-      }
-    };
-    fetchStockAlerts();
-  }, []);
-
-  useEffect(() => {
-    const fetchRecentSalesOrder = async () => {
-      setRecentSaleLoading(true);
-      try {
-        const res = await dashboardService.getRecentSales(buildQuery());
-        setRecentSale(res.data.data ?? []);
-      } catch {
-        setRecentSale([]);
-      } finally {
-        setRecentSaleLoading(false);
-      }
-    };
-    fetchRecentSalesOrder();
-  }, [selectedFilter, selectedDate]);
-
-  useEffect(() => {
-    const fetchAgingStock = async () => {
-      setAgingStockLoading(true);
-      try {
-        const res = await dashboardService.getAgingStock();
-        setAgingStock(res.data.data ?? []);
-      } catch {
-        setAgingStock([]);
-      } finally {
-        setAgingStockLoading(false);
-      }
-    };
-    fetchAgingStock();
-  }, []);
-
-  useEffect(() => {
     const fetchTrend = async () => {
       const prevQuery = buildPrevQuery();
       if (!prevQuery) {
-        setRevenueTrend(null);
-        setOrderTrend(null);
+        if (!cancelled) {
+          setRevenueTrend(null);
+          setOrderTrend(null);
+        }
         return;
       }
       try {
@@ -263,41 +224,180 @@ const MainDashboard: React.FC = () => {
         const prevOrders  = prevData.reduce((s, d) => s + d.total_orders,  0);
         const pct = (curr: number, prev: number) =>
           prev === 0 ? (curr === 0 ? 0 : 100) : ((curr - prev) / prev) * 100;
-        setRevenueTrend(pct(aggr.totalRevenue, prevRevenue));
-        setOrderTrend(pct(aggr.totalOrders,   prevOrders));
+        if (!cancelled) {
+          setRevenueTrend(pct(aggr.totalRevenue, prevRevenue));
+          setOrderTrend(pct(aggr.totalOrders,   prevOrders));
+        }
       } catch {
-        setRevenueTrend(null);
-        setOrderTrend(null);
+        if (!cancelled) {
+          setRevenueTrend(null);
+          setOrderTrend(null);
+        }
       }
     };
-    fetchTrend();
-  }, [summaryData, selectedFilter, selectedDate]);
+    void fetchTrend();
+    return () => { cancelled = true; };
+  }, [aggr.totalOrders, aggr.totalRevenue, buildPrevQuery]);
 
-  const handlePOCreated = (alertIds: number[]) => {
-    setPoCreatedAlertIds((prev) => {
-      const next = new Set(prev);
-      alertIds.forEach((id) => next.add(id));
-      return next;
-    });
-    try {
-      const raw = localStorage.getItem(PO_BADGE_LS_KEY);
-      const map: Record<string, number> = raw ? JSON.parse(raw) : {};
-      const now = Date.now();
-      alertIds.forEach((id) => { map[String(id)] = now; });
-      localStorage.setItem(PO_BADGE_LS_KEY, JSON.stringify(map));
-    } catch { /* ignore */ }
-  };
+  useEffect(() => {
+    let cancelled = false;
+    let inFlight = false;
+
+    const fetchSummary = async (showLoading: boolean) => {
+      if (inFlight) return;
+      inFlight = true;
+      if (showLoading) {
+        setIsLoading(true);
+        setError(null);
+      }
+      try {
+        const res = await dashboardService.getSummaryData(buildQuery());
+        if (!cancelled) {
+          setSummaryData(res.data.summary_data ?? []);
+          setError(null);
+        }
+      } catch {
+        if (!cancelled && showLoading) {
+          setError('ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
+        }
+      } finally {
+        inFlight = false;
+        if (!cancelled && showLoading) setIsLoading(false);
+      }
+    };
+
+    void fetchSummary(true);
+    const intervalId = window.setInterval(() => {
+      if (!document.hidden) void fetchSummary(false);
+    }, DASHBOARD_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [buildQuery]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let inFlight = false;
+
+    const fetchStockHealth = async (showLoading: boolean) => {
+      if (inFlight) return;
+      inFlight = true;
+      if (showLoading) setStockHealthLoading(true);
+      try {
+        const res = await dashboardService.getStockHealth();
+        if (!cancelled) setStockHealth(res.data);
+      } catch {
+        if (!cancelled && showLoading) setStockHealth(null);
+      } finally {
+        inFlight = false;
+        if (!cancelled && showLoading) setStockHealthLoading(false);
+      }
+    };
+
+    void fetchStockHealth(true);
+    const intervalId = window.setInterval(() => {
+      if (!document.hidden) void fetchStockHealth(false);
+    }, DASHBOARD_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let inFlight = false;
+
+    const fetchStockAlerts = async (showLoading: boolean) => {
+      if (inFlight) return;
+      inFlight = true;
+      if (showLoading) setStockAlertLoading(true);
+      try {
+        const res = await dashboardService.getStockAlerts();
+        const unresolved = (res.data ?? []).filter(a => a.is_resolved === 'false');
+        if (!cancelled) setStockAlerts(unresolved);
+      } catch {
+        if (!cancelled && showLoading) setStockAlerts([]);
+      } finally {
+        inFlight = false;
+        if (!cancelled && showLoading) setStockAlertLoading(false);
+      }
+    };
+
+    void fetchStockAlerts(true);
+    const intervalId = window.setInterval(() => {
+      if (!document.hidden) void fetchStockAlerts(false);
+    }, DASHBOARD_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let inFlight = false;
+
+    const fetchRecentSalesOrder = async (showLoading: boolean) => {
+      if (inFlight) return;
+      inFlight = true;
+      if (showLoading) setRecentSaleLoading(true);
+      try {
+        const res = await dashboardService.getRecentSales(buildQuery(), recentSalePage, PAGE_SIZE);
+        if (!cancelled) {
+          const total = res.data.total ?? 0;
+          const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+          setRecentSaleTotal(total);
+          if (recentSalePage > lastPage) {
+            setRecentSalePage(lastPage);
+          } else {
+            setRecentSale(res.data.data ?? []);
+          }
+        }
+      } catch {
+        if (!cancelled && showLoading) {
+          setRecentSale([]);
+          setRecentSaleTotal(0);
+        }
+      } finally {
+        inFlight = false;
+        if (!cancelled && showLoading) setRecentSaleLoading(false);
+      }
+    };
+
+    void fetchRecentSalesOrder(true);
+    const intervalId = window.setInterval(() => {
+      if (!document.hidden) void fetchRecentSalesOrder(false);
+    }, DASHBOARD_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [buildQuery, recentSalePage]);
+
+  const recentSaleTotalPages = Math.max(1, Math.ceil(recentSaleTotal / PAGE_SIZE));
 
   const handleFilterClick = (value: string) => {
     setSelectedFilter(value);
-    setSelectedDate('');
+    setStartDate('');
+    setEndDate('');
     setRecentSalePage(1);
   };
 
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newDate = e.target.value;
-    setSelectedDate(newDate);
-    setSelectedFilter(newDate ? '' : 'daily');
+  const handleStartDateChange = (d: string) => {
+    setStartDate(d);
+    setSelectedFilter('');
+    setRecentSalePage(1);
+  };
+
+  const handleEndDateChange = (d: string) => {
+    setEndDate(d);
+    setSelectedFilter('');
     setRecentSalePage(1);
   };
 
@@ -334,19 +434,18 @@ const MainDashboard: React.FC = () => {
         <div className='bg-[#F6F3F2] flex items-center p-1'>
           {Filter.map((filter) => (
             <button key={filter.value} onClick={() => handleFilterClick(filter.value)}
-              className={`w-20 py-2.5 text-sm transition ${selectedFilter === filter.value
-                ? 'bg-white text-red-500 shadow-sm' : 'text-gray-500 hover:text-red-500'}`}
+              className={`w-20 py-2.5 text-sm transition cursor-pointer ${selectedFilter === filter.value
+                ? 'bg-white text-red-500 shadow-sm font-medium' : 'text-gray-500 hover:text-red-500'}`}
             >
               {filter.label}
             </button>
           ))}
-          <div className='min-w-32'>
-            <Input type='date' value={selectedDate} onChange={handleDateChange}
-              className={`transition-all ${selectedDate
-                ? 'bg-white text-red-500 border border-red-500 shadow-sm'
-                : 'bg-transparent text-gray-600 border-transparent'}`}
-            />
-          </div>
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={handleStartDateChange}
+            onEndDateChange={handleEndDateChange}
+          />
         </div>
       </div>
 
@@ -540,7 +639,7 @@ const MainDashboard: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  recentSale.slice((recentSalePage - 1) * PAGE_SIZE, recentSalePage * PAGE_SIZE).map((item) => (
+                  recentSale.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className='text-left'>{fmtTime(item.time)}</TableCell>
                       <TableCell className='text-left'>{item.order_number}</TableCell>
@@ -552,31 +651,131 @@ const MainDashboard: React.FC = () => {
                 )}
               </TableBody>
             </Table>
-            {(() => {
-              const totalPages = Math.ceil(recentSale.length / PAGE_SIZE);
-              return (
+            {recentSaleTotal > 0 && (
                 <div className='bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500'>
-                  <span>แสดง {Math.min((recentSalePage - 1) * PAGE_SIZE + 1, recentSale.length)} ถึง {Math.min(recentSalePage * PAGE_SIZE, recentSale.length)} จาก {recentSale.length} รายการ</span>
+                  <span>แสดง {Math.min((recentSalePage - 1) * PAGE_SIZE + 1, recentSaleTotal)} ถึง {Math.min(recentSalePage * PAGE_SIZE, recentSaleTotal)} จาก {recentSaleTotal} รายการ</span>
                   <div className='flex items-center gap-1'>
                     <button disabled={recentSalePage === 1} onClick={() => setRecentSalePage(1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsLeft size={16} /></button>
                     <button disabled={recentSalePage === 1} onClick={() => setRecentSalePage((p) => p - 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronLeft size={16} /></button>
-                    {getPageNumbers(recentSalePage, totalPages).map((p, idx) =>
+                    {getPageNumbers(recentSalePage, recentSaleTotalPages).map((p, idx) =>
                       p === '...' ? <span key={`e-${idx}`} className='px-2 text-gray-400'>...</span>
                       : <button key={p} onClick={() => setRecentSalePage(p as number)} className={cn('px-3 py-1.5 rounded-none font-medium transition-colors cursor-pointer', recentSalePage === p ? 'bg-[#d61c24] text-white' : 'text-gray-600 hover:bg-gray-100')}>{p}</button>
                     )}
-                    <button disabled={recentSalePage === totalPages} onClick={() => setRecentSalePage((p) => p + 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronRight size={16} /></button>
-                    <button disabled={recentSalePage === totalPages} onClick={() => setRecentSalePage(totalPages)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsRight size={16} /></button>
+                    <button disabled={recentSalePage === recentSaleTotalPages} onClick={() => setRecentSalePage((p) => p + 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronRight size={16} /></button>
+                    <button disabled={recentSalePage === recentSaleTotalPages} onClick={() => setRecentSalePage(recentSaleTotalPages)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsRight size={16} /></button>
                   </div>
                 </div>
-              );
-            })()}
+            )}
           </Card>
 
           <Card className='col-span-2 overflow-hidden' noPadding>
-            <CardHeader className='flex items-center bg-[#F6F3F2]/50'>
-              <Heading level='h4'>สินค้าค้างสต๊อกเกิน 180 วัน</Heading>
-              <Button variant='outline' size='sm' onClick={() => navigate(`${basePath}/stock`)}
-                className='border-none hover:bg-transparent hover:text-red-700 hover:underline p-0 h-auto font-light'>จัดการสินค้า</Button>
+            <CardHeader className='flex items-center justify-between bg-[#F6F3F2]/50 px-6 py-4'>
+              <Heading level='h4' className='m-0'>สินค้าค้างสต๊อกเกิน {agingDays} วัน</Heading>
+              <div className='flex items-center gap-4'>
+                {/* Filter dropdown */}
+                <div className='relative flex items-center' ref={agingFilterRef}>
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    className='border-none hover:bg-transparent hover:text-red-700 hover:underline p-0 h-auto font-light inline-flex items-center gap-1.5'
+                    leftIcon={<FilterIcon size={14} className='shrink-0' />}
+                    onClick={toggleFilterOpen}
+                  >
+                    ตัวกรอง
+                    {agingDays !== 180 && (
+                      <span className='text-red-600 font-normal'>
+                        ({agingDays} วัน)
+                      </span>
+                    )}
+                  </Button>
+
+                  {agingFilterOpen && (
+                    <div
+                      style={{
+                        position: 'fixed',
+                        ...(agingFilterPos.top !== undefined ? { top: agingFilterPos.top } : {}),
+                        ...(agingFilterPos.bottom !== undefined ? { bottom: agingFilterPos.bottom } : {}),
+                        right: agingFilterPos.right,
+                      }}
+                      className='z-9999 w-64 bg-white border border-gray-200 shadow-lg p-4 space-y-4'
+                    >
+                      {/* ช่วงจำนวนวัน */}
+                      <div>
+                        <Heading level='p'>ช่วงจำนวนวันค้างสต๊อก</Heading>
+                        <div className='flex flex-wrap gap-1.5 mt-1'>
+                          {AGING_DAY_PRESETS.map((opt) => (
+                            <Button
+                              key={opt.value}
+                              size='sm'
+                              variant={agingDays === opt.value ? 'solid-red' : 'outline-cancel'}
+                              onClick={() => handlePresetClick(opt.value)}
+                              className='px-2.5 py-1 h-auto text-xs font-normal cursor-pointer'
+                            >
+                              {opt.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* หรือระบุจำนวนวันเอง */}
+                      <div className='pt-2 border-t border-gray-100'>
+                        <Heading level='p'>หรือระบุจำนวนวันเอง</Heading>
+                        <div className='flex items-center gap-2 mt-1.5'>
+                          <input
+                            type='number'
+                            min={1}
+                            placeholder='เช่น 45'
+                            value={customAgingInput}
+                            onChange={(e) => setCustomAgingInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleCustomApply();
+                              }
+                            }}
+                            className='w-full h-8 px-2.5 text-sm border border-gray-300 rounded-none focus:outline-none focus:border-red-500'
+                          />
+                          <span className='text-xs text-gray-500 shrink-0'>วัน</span>
+                          <Button
+                            size='sm'
+                            variant='solid-red'
+                            onClick={handleCustomApply}
+                            className='px-3 py-1 h-8 text-xs font-normal shrink-0'
+                          >
+                            ใช้
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Reset and Close */}
+                      <div className='pt-2 border-t border-gray-100 flex justify-between items-center'>
+                        <button
+                          type='button'
+                          onClick={handleReset}
+                          className='text-xs text-gray-400 hover:text-gray-600 transition cursor-pointer'
+                        >
+                          รีเซ็ตเป็น 180 วัน
+                        </button>
+                        <button
+                          type='button'
+                          onClick={() => setAgingFilterOpen(false)}
+                          className='text-xs text-red-500 hover:text-red-700 font-medium transition cursor-pointer'
+                        >
+                          ปิด
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={() => navigate(`${basePath}/stock`)}
+                  className='border-none hover:bg-transparent hover:text-red-700 hover:underline p-0 h-auto font-light inline-flex items-center'
+                >
+                  จัดการสินค้า
+                </Button>
+              </div>
             </CardHeader>
             <Table>
               <TableHeader className='bg-[#F6F3F2] text-[#797878]'>
@@ -599,7 +798,7 @@ const MainDashboard: React.FC = () => {
                 ) : agingStock.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className='text-center py-12 text-gray-400'>
-                      <PackageOpen size={40} strokeWidth={0.7} className='mx-auto'/> <br />ไม่มีสินค้าค้างสต๊อกเกิน 180 วัน
+                      <PackageOpen size={40} strokeWidth={0.7} className='mx-auto'/> <br />ไม่มีสินค้าค้างสต๊อกเกิน {agingDays || 180} วัน
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -661,7 +860,7 @@ const MainDashboard: React.FC = () => {
                 </div>
             ) : (
               stockAlerts.map((item) => {
-                const hasPO = poCreatedAlertIds.has(item.id);
+                const hasPO = Boolean(item.has_po);
                 return (
                   <div
                     key={item.id}
@@ -682,7 +881,7 @@ const MainDashboard: React.FC = () => {
                       {hasPO && (
                         <span className='inline-flex items-center gap-1 mt-1 text-xs text-amber-700 font-medium'>
                           <ShoppingCart size={11} />
-                          สร้าง PO แล้ว
+                          สร้าง PO แล้ว {item.po_number ? `(${item.po_number}${(item.po_count ?? 1) > 1 ? ` +${(item.po_count ?? 1) - 1}` : ''})` : ''}
                         </span>
                       )}
                     </div>
@@ -712,7 +911,6 @@ const MainDashboard: React.FC = () => {
       onClose={() => setAlertModalOpen(false)}
       stockAlerts={stockAlerts}
       basePath={basePath}
-      onPOCreated={handlePOCreated}
     />
     </>
   );

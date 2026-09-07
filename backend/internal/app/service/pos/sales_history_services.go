@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 	"backend/internal/app/enum"
+	svcNotification "backend/internal/app/service/notification"
 )
 
 type SalesHistoryService interface {
@@ -28,10 +29,11 @@ type SalesHistoryService interface {
 
 type salesHistoryService struct {
 	salesHistoryRepo salesHistoryRepo.SalesHistoryRepository
+	notification     svcNotification.NotificationService
 }
 
-func NewSalesHistoryService(salesHistoryRepo salesHistoryRepo.SalesHistoryRepository) SalesHistoryService {
-	return &salesHistoryService{salesHistoryRepo: salesHistoryRepo}
+func NewSalesHistoryService(salesHistoryRepo salesHistoryRepo.SalesHistoryRepository, notification svcNotification.NotificationService) SalesHistoryService {
+	return &salesHistoryService{salesHistoryRepo: salesHistoryRepo, notification: notification}
 }
 
 func (s *salesHistoryService) GetSalesHistory(req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error) {
@@ -82,10 +84,10 @@ func (s *salesHistoryService) GetSaleHistoryByID(ctx context.Context, identifier
 
 // ส่งคำขอยกเลิก
 func (s *salesHistoryService) RequestCancelSale(ctx context.Context, identifier string, userID uint, req pos.RequestCancelOrderRequest) error {
-    order, err := s.salesHistoryRepo.GetSaleHistoryByID(identifier)
-    if err != nil {
-    	return err
-    }
+	order, err := s.salesHistoryRepo.GetSaleHistoryByID(identifier)
+	if err != nil {
+		return err
+	}
 
 	if order.Status == enum.OrderCancelled {
 		return errors.New("รายการนี้ถูกยกเลิกไปแล้ว")
@@ -94,7 +96,21 @@ func (s *salesHistoryService) RequestCancelSale(ctx context.Context, identifier 
 		return errors.New("รายการนี้อยู่ระหว่างรออนุมัติการยกเลิกอยู่แล้ว")
 	}
 
-    return s.salesHistoryRepo.RequestCancelOrder(order.ID, userID, req.Reason)
+	if err := s.salesHistoryRepo.RequestCancelOrder(order.ID, userID, req.Reason); err != nil {
+		return err
+	}
+
+	// แจ้งเตือนส่งถึง Owner/Manager ทันทีเมื่อพนักงานยื่นคำขอยกเลิกบิลขาย
+	if s.notification != nil {
+		title := "มีคำขอยกเลิกบิลขาย"
+		msg := fmt.Sprintf("คำขอยกเลิกบิลเลขที่ %s (เหตุผล: %s)", order.OrderNumber, req.Reason)
+		link := "/owner/pos/sales_cancellation_history"
+		if err := s.notification.NotifyOwners("warning", title, msg, link, nil); err != nil {
+			fmt.Printf("[Notification] failed to notify owners (order %s): %v\n", order.OrderNumber, err)
+		}
+	}
+
+	return nil
 }
 
 func (s *salesHistoryService) ApproveCancelSale(ctx context.Context, identifier string, userID uint, req pos.ProcessCancelOrderRequest) error {
@@ -106,6 +122,8 @@ func (s *salesHistoryService) ApproveCancelSale(ctx context.Context, identifier 
 	if order.Status != enum.OrderPendingCancel && order.Status != enum.OrderCompleted {
 		return errors.New("รายการนี้ไม่อยู่ในสถานะที่สามารถอนุมัติหรือยกเลิกได้")
 	}
+
+	targetUserID := order.CancelRequestedByID
 
 	// ถ้าเป็นการยกเลิกตรงโดยเจ้าของร้าน (บิลสำเร็จ) ให้บันทึกข้อมูลผู้ยกเลิกและเหตุผลในตารางด้วย
 	if order.Status == enum.OrderCompleted {
@@ -120,7 +138,24 @@ func (s *salesHistoryService) ApproveCancelSale(ctx context.Context, identifier 
 		order.CancelRequestedAt = &now
 	}
 
-	return s.salesHistoryRepo.ApproveCancelOrder(order, req.Remark)
+	if err := s.salesHistoryRepo.ApproveCancelOrder(order, req.Remark); err != nil {
+		return err
+	}
+
+	// แจ้งเตือนส่งกลับไปยัง Staff ผู้ส่งคำขอ เมื่อ Owner กดอนุมัติ
+	if s.notification != nil && targetUserID != nil && *targetUserID != 0 && *targetUserID != userID {
+		title := "อนุมัติคำขอยกเลิกบิลขายแล้ว"
+		msg := fmt.Sprintf("คำขอยกเลิกบิลเลขที่ %s ได้รับการอนุมัติแล้ว", order.OrderNumber)
+		if req.Remark != "" {
+			msg = fmt.Sprintf("คำขอยกเลิกบิลเลขที่ %s ได้รับการอนุมัติแล้ว (หมายเหตุ: %s)", order.OrderNumber, req.Remark)
+		}
+		link := "/employee/pos/sales_cancellation_history"
+		if err := s.notification.NotifyUser(*targetUserID, "success", title, msg, link, nil); err != nil {
+			fmt.Printf("[Notification] failed to notify user %d (order %s): %v\n", *targetUserID, order.OrderNumber, err)
+		}
+	}
+
+	return nil
 }
 
 // เจ้าของร้านปฏิเสธ
@@ -134,7 +169,26 @@ func (s *salesHistoryService) RejectCancelSale(ctx context.Context, identifier s
 		return errors.New("รายการนี้ไม่ได้อยู่ในสถานะรออนุมัติการยกเลิก")
 	}
 
-	return s.salesHistoryRepo.RejectCancelOrder(order.ID, req.Remark)
+	targetUserID := order.CancelRequestedByID
+
+	if err := s.salesHistoryRepo.RejectCancelOrder(order.ID, req.Remark); err != nil {
+		return err
+	}
+
+	// แจ้งเตือนส่งกลับไปยัง Staff ผู้ส่งคำขอ เมื่อ Owner กดปฏิเสธ
+	if s.notification != nil && targetUserID != nil && *targetUserID != 0 {
+		title := "ปฏิเสธคำขอยกเลิกบิลขาย"
+		msg := fmt.Sprintf("คำขอยกเลิกบิลเลขที่ %s ถูกปฏิเสธ", order.OrderNumber)
+		if req.Remark != "" {
+			msg = fmt.Sprintf("คำขอยกเลิกบิลเลขที่ %s ถูกปฏิเสธ (หมายเหตุ: %s)", order.OrderNumber, req.Remark)
+		}
+		link := "/employee/pos/sales_cancellation_history"
+		if err := s.notification.NotifyUser(*targetUserID, "error", title, msg, link, nil); err != nil {
+			fmt.Printf("[Notification] failed to notify user %d (order %s): %v\n", *targetUserID, order.OrderNumber, err)
+		}
+	}
+
+	return nil
 }
 
 func (s *salesHistoryService) GetCancellationRequests(ctx context.Context, req pos.SalesHistoryFilterRequest) (*pos.SalesHistoryPaginationResponse, error) {

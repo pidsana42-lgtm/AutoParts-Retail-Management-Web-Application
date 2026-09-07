@@ -98,12 +98,17 @@ export default function Navbar(): React.JSX.Element {
   const displayName = getDisplayName() || "ผู้ใช้งานระบบ";
 
   const getNotifIcon = (type?: string) => {
-    switch (type) {
-      case 'success': return <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />;
-      case 'error': return <XCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />;
-      case 'warning': return <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5 shrink-0" />;
-      default: return <Info className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />;
+    const t = type?.toLowerCase() || '';
+    if (t === 'success' || t.includes('approve')) {
+      return <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />;
     }
+    if (t === 'error' || t.includes('reject')) {
+      return <XCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />;
+    }
+    if (t === 'warning' || t.includes('warn') || t.includes('cancel') || t.includes('request')) {
+      return <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5 shrink-0" />;
+    }
+    return <Info className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />;
   };
 
   return (
@@ -196,7 +201,7 @@ export default function Navbar(): React.JSX.Element {
           {showNotif && (
             <div className="absolute right-0 mt-3 w-80 bg-white rounded-lg shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="px-4 py-2 flex items-center justify-between border-b border-gray-50">
-                <h3 className="text-sm font-bold text-gray-800">การแจ้งเตือน</h3>
+                <h3 className="text-sm font-medium text-gray-800">การแจ้งเตือน</h3>
                 <div className="flex gap-2">
                   <button
                     onClick={markAllAsRead}
@@ -229,7 +234,7 @@ export default function Navbar(): React.JSX.Element {
                     >
                       {getNotifIcon(notif.type)}
                       <div className="flex-1">
-                        <p className={`text-xs ${!notif.isRead ? 'font-bold text-gray-800' : 'text-gray-600'}`}>
+                        <p className={`text-xs ${!notif.isRead ? 'font-medium text-gray-800' : 'text-gray-600'}`}>
                           {notif.title}
                         </p>
                         {notif.message && (
