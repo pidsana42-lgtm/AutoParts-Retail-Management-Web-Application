@@ -18,6 +18,7 @@ import type { DashboardSummaryItem, SummaryQuery, StockAlertItem, RecentSaleItem
 import { cn } from '../../../utils/component';
 import { formatDateThai, getTodayDateString } from '../../../utils/formatdate';
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
+import { getDashboardRoleGroup } from '../../../utils/dashboardAccess';
 // Modal
 import StockAlertPOModal from './components/StockAlertPOModal';
 
@@ -63,7 +64,7 @@ const MainDashboard: React.FC = () => {
   const location = useLocation();
   const basePath = usePathBasePrefix();
   const userRole = localStorage.getItem('role');
-  const isOwner = userRole === 'Owner';
+  const isOwner = getDashboardRoleGroup(userRole) === 'owner';
   // Basic State
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

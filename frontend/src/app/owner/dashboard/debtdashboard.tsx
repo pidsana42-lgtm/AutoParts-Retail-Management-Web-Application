@@ -229,7 +229,7 @@ const DebtDashboard: React.FC = () => {
   const handleExportPdf = async () => {
     setExportingPdf(true);
     try {
-      const res = await dashboardService.getDebtAging({ ...exportQuery, page: 1, page_size: 9999 });
+      const res = await dashboardService.getAllDebtAging(exportQuery);
       const dateLabel = startDate && endDate
         ? `${formatDateThai(startDate)} – ${formatDateThai(endDate)}`
         : startDate

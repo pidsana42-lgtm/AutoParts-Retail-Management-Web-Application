@@ -35,6 +35,9 @@ func NewDashboardService(
 }
 
 func (s *dashboardService) GetSummaryData(ctx context.Context, query dashDto.SummaryQuery) (*dashDto.SummaryResponse, error) {
+	if err := dashDto.ValidateSummaryQuery(query); err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
@@ -141,6 +144,9 @@ var orderStatusLabel = map[enum.OrderStatus]string{
 }
 
 func (s *dashboardService) GetRecentSales(ctx context.Context, query dashDto.SummaryQuery, page, pageSize int) (*dashDto.RecentSalesResponse, error) {
+	if err := dashDto.ValidateSummaryQuery(query); err != nil {
+		return nil, err
+	}
 	if page <= 0 {
 		page = 1
 	}
@@ -306,6 +312,9 @@ func (s *dashboardService) GetIncomeSummary(ctx context.Context, query dashDto.S
 }
 
 func (s *dashboardService) GetTopSellers(ctx context.Context, query dashDto.SummaryQuery, limit int) ([]dashDto.TopSellerDTO, error) {
+	if err := dashDto.ValidateSummaryQuery(query); err != nil {
+		return nil, err
+	}
 	if limit <= 0 {
 		limit = 10
 	}
@@ -330,6 +339,9 @@ func (s *dashboardService) GetTopSellers(ctx context.Context, query dashDto.Summ
 }
 
 func (s *dashboardService) GetDebtAging(ctx context.Context, query dashDto.DebtAgingQuery) (*dashDto.DebtAgingResponse, error) {
+	if err := dashDto.ValidateDebtAgingQuery(query); err != nil {
+		return nil, err
+	}
 	data, total, err := s.dashboardRepository.GetDebtAging(ctx, query)
 	if err != nil {
 		return nil, err

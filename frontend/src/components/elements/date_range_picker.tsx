@@ -40,6 +40,8 @@ export default function DateRangePicker({
 
   // sync draft when props change from outside
   useEffect(() => {
+    // Controlled values may be reset by a dashboard period preset.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft({ start: startDate, end: endDate });
   }, [startDate, endDate]);
 
@@ -68,6 +70,7 @@ export default function DateRangePicker({
   };
 
   const handleApply = () => {
+    if (!draft.start || !draft.end || draft.start > draft.end) return;
     onStartDateChange(draft.start);
     onEndDateChange(draft.end);
     setOpen(false);
@@ -85,6 +88,9 @@ export default function DateRangePicker({
       : 'เลือกช่วงวันที่';
 
   const isSelected = Boolean(startDate && endDate) || Boolean(startDate);
+  const validationError = draft.start && draft.end && draft.start > draft.end
+    ? 'วันเริ่มต้นต้องไม่อยู่หลังวันสิ้นสุด'
+    : null;
 
   return (
     <div ref={containerRef} className={cn('relative inline-block', className)}>
@@ -120,6 +126,7 @@ export default function DateRangePicker({
                 value={draft.start}
                 max={draft.end || undefined}
                 onChange={(e) => setDraft((d) => ({ ...d, start: e.target.value }))}
+                aria-invalid={Boolean(validationError)}
                 className='w-full h-9 rounded-none border border-gray-200 px-2 text-sm text-gray-700 focus:outline-none focus:border-red-400 cursor-pointer'
               />
             </div>
@@ -130,17 +137,21 @@ export default function DateRangePicker({
                 value={draft.end}
                 min={draft.start || undefined}
                 onChange={(e) => setDraft((d) => ({ ...d, end: e.target.value }))}
+                aria-invalid={Boolean(validationError)}
                 className='w-full h-9 rounded-none border border-gray-200 px-2 text-sm text-gray-700 focus:outline-none focus:border-red-400 cursor-pointer'
               />
             </div>
           </div>
+          {validationError && (
+            <p role='alert' className='mt-2 text-xs text-red-600'>{validationError}</p>
+          )}
           <div className='flex items-center justify-between mt-4 pt-3 border-t border-gray-100'>
             <button type='button' onClick={handleClear}
               className='text-xs text-gray-400 hover:text-gray-600 transition'>
               ล้างค่า
             </button>
             <button type='button' onClick={handleApply}
-              disabled={!draft.start || !draft.end}
+              disabled={!draft.start || !draft.end || Boolean(validationError)}
               className='px-4 py-1.5 rounded-none bg-red-500 text-white text-sm hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition'>
               ตกลง
             </button>
