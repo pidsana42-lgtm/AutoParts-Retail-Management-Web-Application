@@ -37,7 +37,7 @@ jobs:
             # เข้าไปที่โฟลเดอร์ frontend เพื่อ Build โปรเจกต์
             cd frontend
             npm install
-            npm install -D @rolldown/binding-linux-x64-gnu
+            npm install -D @rolldown/binding-linux-x64-gnu lightningcss-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu
             npm run build
             
             # สั่งรันด้วย PM2
