@@ -40,8 +40,8 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	pos.SetupPOSRoutes(r, db)
 	pos.SetupStoreConfigRoutes(r, db)
 	pos.SetupCustomerDiscountRoutes(r, db)
-	pos.SetupPaymentRoutes(r, db)
-	pos.SetupSalesHistoryRoutes(r, db)
+	pos.SetupPaymentRoutes(r, db, notificationService)
+	pos.SetupSalesHistoryRoutes(r, db, notificationService)
 
 	//ของทุกคนก็เพิ่มเอาในนี้เลย comment ระบบตัวเองไว้ด้วยนะ ใน main มันจะได้ไ่ม่เยอะ
 
@@ -65,6 +65,7 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	wms.SetupCheckStockScheduleRoutes(r, db, notificationService)
 	wms.SetupCheckStockRoutes(r, db)
 	wms.SetupStockMovementRoutes(r, db)
+	wms.SetupMovementFeedRoutes(r, db)
 	wms.SetupSupplierRoutes(r, db)
 	wms.SetupStockAlertRoutes(r, db)
 	wms.SetupCategoryRoutes(r, db)

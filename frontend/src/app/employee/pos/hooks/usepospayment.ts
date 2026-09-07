@@ -8,7 +8,8 @@ import type { CreateSaleOrderRequest } from "../../../../interface/pos/pos_inter
 import type { CartItem } from "../../../../interface/pos/usePosCart.interface";
 import type { PosSession } from "../../../../interface/pos/pos_session_interface"; 
 import { getCurrentUserId } from "../../../../utils/auth"; 
-import { downloadPdfBlob } from "../../../../utils/print"; 
+import { printPosReceiptFromBackend } from "../../../../utils/pos_print";
+import { useToast } from "../../../../components/elements/toast";    
 
 interface UsePosPaymentProps {
   cart: CartItem[];
@@ -18,7 +19,8 @@ interface UsePosPaymentProps {
 }
 
 export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount }: UsePosPaymentProps) {
-  const { calculateProRataWeight } = useDiscountCalculation();
+  const { toast } = useToast();
+  const { calculateProRataWeight, calculateLineDiscountAmount } = useDiscountCalculation();
 
   // 1. โครงสร้างการดึง Session เริ่มต้นจาก LocalStorage
   const [posSession, setPosSession] = useState<PosSession>(() => {
@@ -67,6 +69,23 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   // Ref เก็บ orderNumber & orderId แบบ Persistent (ไม่หลุดตาม Re-render)
   const currentOrderNumberRef = useRef<string | null>(posSession.currentOrderNumber || null);
   const currentOrderIdRef = useRef<number | null>(posSession.currentOrderId || null);
+
+  // ข้อมูลบิลยกเลิกที่กำลังกู้คืนเพื่อแก้ไข/สร้างบิลใหม่
+  const [recoveredOrderInfo, setRecoveredOrderInfo] = useState<{ orderId: number; orderNumber: string } | null>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("pos_recovered_order");
+      return saved ? JSON.parse(saved) : null;
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (recoveredOrderInfo) {
+      localStorage.setItem("pos_recovered_order", JSON.stringify(recoveredOrderInfo));
+    } else {
+      localStorage.removeItem("pos_recovered_order");
+    }
+  }, [recoveredOrderInfo]);
 
   // Sync Ref และ LocalStorage เมื่อ Session เปลี่ยน
   useEffect(() => {
@@ -219,7 +238,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const selectPaymentMethod = async (methodId: number) => {
     const isCustomerSelected = Boolean(customer && customer.customer_name);
     if (methodId === 3 && isCustomerSelected && !isRegisteredCustomer) {
-      alert("สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น กรุณาเลือกลูกค้า หรือลงทะเบียนสมัครสมาชิกก่อนทำรายการ");
+      toast({
+        variant: "warning",
+        message: "สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น กรุณาเลือกลูกค้า หรือลงทะเบียนสมัครสมาชิกก่อนทำรายการ",
+      });
       return false;
     }
     
@@ -391,7 +413,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     const currentCustomerTypeName = customer?.customer_type?.type_name || "";
 
     if (currentCustomerTypeId === 3 || currentCustomerTypeName === "WHOLESALE") {
-      alert("ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น");
+      toast({
+        variant: "warning",
+        message: "ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น",
+      });
       updateSession("billDiscountValue", 0);
       return;
     }
@@ -405,7 +430,11 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     if (billDiscountType === "amount" && remainingAfterLineDiscount > 0 && inputValue > maxDiscountBaht) isExceed = true;
 
     if (isExceed) {
-      alert(`ส่วนลดท้ายบิลเกินนโยบายร้านค้า\n\nระบบอนุญาตให้ลดสูงสุดไม่เกิน:\n• ${maxExtraConfigRate}% ของยอดรวม\n• หรือไม่เกิน ฿${maxDiscountBaht.toFixed(2)}`);
+      toast({
+        variant: "warning",
+        title: "ส่วนลดท้ายบิลเกินนโยบายร้านค้า",
+        message: `ระบบอนุญาตให้ลดสูงสุดไม่เกิน: ${maxExtraConfigRate}% ของยอดรวม หรือไม่เกิน ฿${maxDiscountBaht.toFixed(2)}`,
+      });
       updateSession("billDiscountValue", 0);
       return;
     }
@@ -414,7 +443,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   };
 
   const handleOpenPaymentModal = () => {
-    if (cart.length === 0) return alert("กรุณาเลือกสินค้าลงตะกร้า");
+    if (cart.length === 0) {
+      toast({ variant: "warning", message: "กรุณาเลือกสินค้าลงตะกร้า" });
+      return;
+    }
 
     let targetMethodId = paymentMethodId;
     if (selectedPaymentType === "CASH" && targetMethodId === 3) {
@@ -440,7 +472,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       });
     } catch (error: any) {
       console.error("Error generating QR:", error);
-      alert("ไม่สามารถสร้าง QR Code ได้");
+      toast({ variant: "error", message: "ไม่สามารถสร้าง QR Code ได้" });
     } finally {
       setIsLoadingQR(false);
     }
@@ -450,7 +482,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   const submitOrderToDatabase = async (currentCart?: CartItem[]): Promise<number | null> => {
     const targetCart = currentCart || cart;
     if (targetCart.length === 0) {
-      alert("กรุณาเลือกสินค้าลงตะกร้า");
+      toast({ variant: "warning", message: "กรุณาเลือกสินค้าลงตะกร้า" });
       return null;
     }
 
@@ -491,6 +523,11 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
 
     const finalAddress = customerAddressTemp || posSession.customerAddressTemp || "";
     const rawCustomerId = posSession.customer?.id || 0;
+    let orderNote = "";
+    if (recoveredOrderInfo) {
+      orderNote = `[สร้างใหม่จากบิลยกเลิก: ${recoveredOrderInfo.orderNumber}]`;
+    }
+
     const salePayload: CreateSaleOrderRequest = {
       customer_id: rawCustomerId && rawCustomerId > 0 ? rawCustomerId : (null as any),
       customer_name_temp: posSession.customer?.customer_name || "ลูกค้าทั่วไป",
@@ -500,7 +537,7 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       payment_method_id: finalPaymentMethodId,
       bill_discount_type: posSession.billDiscountType,
       bill_discount_value: posSession.billDiscountValue,
-      note: "",
+      note: orderNote,
       items: computedItems as any,
     };
 
@@ -623,7 +660,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       }
     } catch (error: any) {
       console.error("Submit order failed:", error);
-      alert(error.response?.data?.error || error.response?.data?.message || "เกิดปัญหาที่ระบบหลังบ้าน");
+      toast({
+        variant: "error",
+        message: error.response?.data?.error || error.response?.data?.message || "เกิดปัญหาที่ระบบหลังบ้าน",
+      });
       return null;
     } finally {
       setIsSubmitting(false);
@@ -632,7 +672,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
 
   // ─── 1. กดปุ่ม "ยืนยันการขาย" หน้าร้าน ───
   const handleConfirmSale = async () => {
-    if (cart.length === 0) return alert("กรุณาเลือกสินค้าลงตะกร้า");
+    if (cart.length === 0) {
+      toast({ variant: "warning", message: "กรุณาเลือกสินค้าลงตะกร้า" });
+      return;
+    }
 
     // 1. จัดการ Overwrite paymentMethodId กรณี CASH + CREDIT ให้เสร็จก่อน
     let activePaymentMethod = paymentMethodId || posSession.paymentMethodId;
@@ -642,12 +685,18 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     }
 
     if (activePaymentMethod === 3 && !isRegisteredCustomer) {
-      alert("สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น");
+      toast({
+        variant: "warning",
+        message: "สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น",
+      });
       return;
     }
 
     if (activePaymentMethod === 3 && isExceedCreditLimit) {
-      alert("วงเงินเครดิตของลูกค้าไม่เพียงพอ ไม่สามารถทำรายการเงินเชื่อได้");
+      toast({
+        variant: "warning",
+        message: "วงเงินเครดิตของลูกค้าไม่เพียงพอ ไม่สามารถทำรายการเงินเชื่อได้",
+      });
       return;
     }
 
@@ -662,41 +711,50 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
 
     if (activePaymentMethodId === 1) {
       if (finalTotal > 0 && (!receivedAmount || receivedAmount <= 0)) {
-        alert("กรุณากรอกจำนวนเงินที่รับมา");
+        toast({ variant: "warning", message: "กรุณากรอกจำนวนเงินที่รับมา" });
         return false;
       }
       if (receivedAmount < finalTotal) {
-        alert(`จำนวนเงินที่รับมาไม่ครบ (รับมา ฿${receivedAmount.toLocaleString()} / ยอดชำระ ฿${finalTotal.toLocaleString()})`);
+        toast({
+          variant: "warning",
+          message: `จำนวนเงินที่รับมาไม่ครบ (รับมา ฿${receivedAmount.toLocaleString()} / ยอดชำระ ฿${finalTotal.toLocaleString()})`,
+        });
         return false;
       }
     }
 
     if (activePaymentMethodId === 3) {
       if (!isRegisteredCustomer) {
-        alert("สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น");
+        toast({
+          variant: "warning",
+          message: "สิทธิ์ชำระด้วยเงินเชื่อเฉพาะลูกค้าที่เป็นสมาชิกเท่านั้น",
+        });
         return false;
       }
       if (isExceedCreditLimit) {
-        alert("วงเงินเครดิตของลูกค้าไม่เพียงพอ ไม่สามารถทำรายการเงินเชื่อได้");
+        toast({
+          variant: "warning",
+          message: "วงเงินเครดิตของลูกค้าไม่เพียงพอ ไม่สามารถทำรายการเงินเชื่อได้",
+        });
         return false;
       }
     }
 
     setIsConfirming(true);
 
-    const printReceiptPdf = async (orderIdToPrint: number | string) => {
+    const printReceiptAuto = async (orderIdToPrint: number | string) => {
       try {
         const orderNum = currentOrderNumberRef.current || posSession.currentOrderNumber || orderIdToPrint;
-        const blob = await posApiService.printOrderReceipt(orderIdToPrint);
-        const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
-        const win = window.open(blobUrl, "_blank");
-        if (!win) {
-          const fileName = String(orderNum).startsWith("INV") ? `${orderNum}.pdf` : `INV-${orderNum}.pdf`;
-          downloadPdfBlob(blob, fileName);
-        }
-        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 120000);
+        const docTitle = activePaymentMethodId === 3 ? "ใบส่งของชั่วคราว" : "ใบเสร็จรับเงิน";
+
+        // เรียก API ดึงไฟล์ PDF มาตรฐานจาก Backend (Single Source of Truth) เพื่อสั่งพิมพ์
+        await printPosReceiptFromBackend(orderIdToPrint, {
+          orderNumber: String(orderNum),
+          customTitle: docTitle,
+          action: "print",
+        });
       } catch (err) {
-        console.error("Error opening receipt PDF:", err);
+        console.error("Error auto-printing POS receipt from backend:", err);
       }
     };
 
@@ -708,8 +766,8 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
           setIsConfirming(false);
           return false;
         }
-        await printReceiptPdf(orderId);
-        alert("ยืนยันการชำระเงินและจบการขายสำเร็จ!");
+        await printReceiptAuto(orderId);
+        toast({ variant: "success", message: "ยืนยันการชำระเงินและจบการขายสำเร็จ!" });
         resetPaymentState();
         setCart([]);
         localStorage.removeItem("pos_cart");
@@ -735,8 +793,8 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         received_by_id: getCurrentUserId() || 1, 
       });
 
-      await printReceiptPdf(orderId);
-      alert("ยืนยันการชำระเงินและจบการขายสำเร็จ!");
+      await printReceiptAuto(orderId);
+      toast({ variant: "success", message: "ยืนยันการชำระเงินและจบการขายสำเร็จ!" });
 
       // จบการขายสำเร็จ ค่อยสั่ง reset เพื่อล้าง orderNumber ให้บิลถัดไป
       resetPaymentState();
@@ -746,7 +804,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
       return true;
     } catch (error: any) {
       console.error("Confirm payment failed:", error);
-      alert(error.response?.data?.error || "เกิดข้อผิดพลาดในการยืนยันชำระเงิน");
+      toast({
+        variant: "error",
+        message: error.response?.data?.error || "เกิดข้อผิดพลาดในการยืนยันชำระเงิน",
+      });
       return false;
     } finally {
       setIsConfirming(false);
@@ -770,10 +831,162 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     setDisplayValue(receivedAmount === 0 ? "" : receivedAmount.toString());
   };
 
+  const handleCancelRecovery = () => {
+    setRecoveredOrderInfo(null);
+    localStorage.removeItem("pos_recovered_order");
+    toast({ variant: "info", message: "ยกเลิกการอ้างอิงบิลยกเลิกแล้ว รายการในตะกร้าจะถูกคิดเงินเป็นบิลใหม่ทั่วไป" });
+  };
+
+  const handleRecoverCancelledOrder = async (orderId: number): Promise<boolean> => {
+    try {
+      const orderDetail = await posApiService.getSalesHistoryById(orderId);
+      if (!orderDetail) {
+        toast({ variant: "error", message: "ไม่พบข้อมูลบิลที่ต้องการกู้คืน" });
+        return false;
+      }
+
+      // 1. แปลงรายการสินค้าในบิลเดิมเข้า Cart พร้อมดึงข้อมูลสต็อกปัจจุบัน
+      const newCartItems: CartItem[] = await Promise.all(
+        (orderDetail.items || []).map(async (item) => {
+          let latestStock = 999;
+          let latestModel = "";
+          let latestBrand = "";
+          let latestGrade = "";
+          let latestMaxDiscount = 2.0;
+
+          try {
+            const products = await posApiService.searchProducts(item.part_number || item.product_name);
+            const matched = products?.find((p) => p.id === item.product_id) || products?.[0];
+            if (matched) {
+              latestStock = matched.quantity ?? 0;
+              latestModel = matched.model_name || "";
+              latestBrand = matched.brand_name || "";
+              latestGrade = matched.grade_name || "";
+              latestMaxDiscount = matched.max_discount_rate ?? 2.0;
+            }
+          } catch (e) {
+            console.warn("Could not fetch latest product stock:", e);
+          }
+
+          return {
+            product_id: item.product_id,
+            product_code: item.part_number || item.product_name,
+            product_name: item.product_name,
+            part_number: item.part_number,
+            qty: item.qty,
+            model_name: latestModel,
+            brand_name: latestBrand,
+            grade_name: latestGrade,
+            unit_price: item.unit_price,
+            quantity: latestStock,
+            note: item.note || "",
+            max_discount_rate: latestMaxDiscount,
+            discount_type: (item.discount_type as any) || "none",
+            discount_value: item.discount_value || 0,
+          };
+        })
+      );
+
+      setCart(newCartItems);
+
+      // 2. โหลดข้อมูลลูกค้า
+      if (orderDetail.customer_id && orderDetail.customer_id > 0) {
+        try {
+          const results = await posApiService.searchCustomerDiscount(
+            orderDetail.phone_number || orderDetail.customer_name || String(orderDetail.customer_id)
+          );
+          const matchedCust = results.find((c) => c.id === orderDetail.customer_id) || results[0];
+          if (matchedCust) {
+            setCustomer(matchedCust);
+            updateSession("customer", matchedCust);
+            updateSession("searchQuery", matchedCust.customer_name);
+            setSearchCustomerQuery(matchedCust.customer_name);
+          } else {
+            const fallbackCust: CustomerDiscountResponse = {
+              id: orderDetail.customer_id,
+              customer_name: orderDetail.customer_name || "",
+              phone_number: orderDetail.phone_number || "",
+              customer_type: { id: 1, type_name: orderDetail.customer_type_name || "GENERAL" },
+              standard_discount_rate: 0,
+              is_discount_enabled: true,
+              current_debt_amount: 0,
+              max_credit_limit: 0,
+              is_credit_enabled: false,
+            };
+            setCustomer(fallbackCust);
+            updateSession("customer", fallbackCust);
+          }
+        } catch (e) {
+          console.warn("Failed to load customer profile:", e);
+        }
+      } else {
+        // ลูกค้าทั่วไป / ขาจร
+        setCustomer(null);
+        updateSession("customer", null);
+        const nameTemp = orderDetail.customer_name_temp || orderDetail.customer_name || "";
+        updateSession("searchQuery", nameTemp);
+        setSearchCustomerQuery(nameTemp);
+        if (orderDetail.address) {
+          setCustomerAddressTemp(orderDetail.address);
+          updateSession("customerAddressTemp", orderDetail.address);
+        }
+      }
+
+      // 3. ส่วนลดท้ายบิลเดิม
+      const billDiscType = (orderDetail.bill_discount_type as any) || "none";
+      const billDiscVal = orderDetail.bill_discount_value || 0;
+      setBillDiscountType(billDiscType);
+      setBillDiscountValue(billDiscVal);
+      updateSession("billDiscountType", billDiscType);
+      updateSession("billDiscountValue", billDiscVal);
+
+      // 4. ล้าง Order draft เก่า เพื่อบังคับสร้างเป็น New Order เสมอ
+      currentOrderNumberRef.current = null;
+      currentOrderIdRef.current = null;
+      setCurrentOrderId(null);
+      const rawLocal = localStorage.getItem("pos_session");
+      if (rawLocal) {
+        try {
+          const parsed = JSON.parse(rawLocal);
+          delete parsed.currentOrderNumber;
+          delete parsed.currentOrderId;
+          localStorage.setItem("pos_session", JSON.stringify(parsed));
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // 5. บันทึก recoveredOrderInfo
+      const recInfo = {
+        orderId: orderDetail.id,
+        orderNumber: orderDetail.order_number,
+      };
+      setRecoveredOrderInfo(recInfo);
+      localStorage.setItem("pos_recovered_order", JSON.stringify(recInfo));
+
+      toast({
+        variant: "success",
+        title: "ดึงข้อมูลบิลเดิมสำเร็จ",
+        message: `ดึงข้อมูลจากบิล ${orderDetail.order_number} มาที่หน้า POS เรียบร้อยแล้ว (สามารถแก้ไขรายการได้ตามต้องการ)`,
+      });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to recover order:", err);
+      toast({
+        variant: "error",
+        title: "ดึงข้อมูลบิลเดิมไม่สำเร็จ",
+        message: err?.response?.data?.message || err?.message || "ไม่สามารถดึงข้อมูลบิลเดิมได้",
+      });
+      return false;
+    }
+  };
+
   const resetPaymentState = () => {
     localStorage.removeItem("pos_session");
+    localStorage.removeItem("pos_recovered_order");
     currentOrderNumberRef.current = null;
     currentOrderIdRef.current = null;
+    setRecoveredOrderInfo(null);
 
     setPosSession({
       customer: null, searchQuery: "", activeTypeId: 1, paymentMethodId: 1, billDiscountValue: 0, billDiscountType: "none", receivedAmount: 0, receiverName: "", currentOrderId: null, currentOrderNumber: null, isPaymentModalOpen: false, customerAddressTemp: ""
@@ -836,5 +1049,9 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     customerAddressTemp,
     handleAddressChange,
     refreshCustomerFinancials,
+    recoveredOrderInfo,
+    setRecoveredOrderInfo,
+    handleRecoverCancelledOrder,
+    handleCancelRecovery,
   };
 }

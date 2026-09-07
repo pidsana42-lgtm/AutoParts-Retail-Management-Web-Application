@@ -1,9 +1,11 @@
 package pos
 
 import (
+	"fmt"
 	"net/http"
 	"strconv" //(String Conversion) ใช้แปลง string → uint
 	"strings"
+	"time"
 
 	posDto "backend/internal/app/dto/pos"
 	"backend/internal/app/enum"
@@ -21,6 +23,8 @@ type PaymentController interface {
 	SettleCustomerBills(c *gin.Context)
 	GetPaymentHistory(c *gin.Context)
 	GetPaymentHistoryByID(c *gin.Context)
+	GenerateDebtReceiptPDF(c *gin.Context)
+	GenerateCustomerStatementPDF(c *gin.Context)
 	GetCancelledPaymentHistory(c *gin.Context)
 	RequestCancelPaymentReceipt(c *gin.Context)
 	RevertCancelPaymentReceiptRequest(c *gin.Context)
@@ -463,4 +467,70 @@ func (ctrl *paymentController) CancelPaymentReceipt(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "ยกเลิกการรับชำระเงินและคืนยอดหนี้สำเร็จ"})
+}
+
+// GenerateDebtReceiptPDF GET /api/pos/payments/history/:id/pdf หรือ /api/pos/payments/repayments/:id/pdf
+func (ctrl *paymentController) GenerateDebtReceiptPDF(c *gin.Context) {
+	identifier := c.Param("id")
+	if identifier == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุรหัสใบเสร็จรับเงินหรือเลขที่ใบเสร็จ"})
+		return
+	}
+
+	pdfBytes, err := ctrl.paymentService.GenerateDebtRepaymentReceiptPDF(c.Request.Context(), identifier)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate debt receipt PDF: " + err.Error()})
+		return
+	}
+
+	receiptFileName := identifier
+	if !strings.HasPrefix(receiptFileName, "PAY-") && !strings.HasPrefix(receiptFileName, "RCP-") && !strings.HasPrefix(receiptFileName, "receipt-") {
+		receiptFileName = fmt.Sprintf("PAY-%s", receiptFileName)
+	}
+	if !strings.HasSuffix(receiptFileName, ".pdf") {
+		receiptFileName = fmt.Sprintf("%s.pdf", receiptFileName)
+	}
+
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", receiptFileName))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+// GenerateCustomerStatementPDF GET /api/pos/payments/customers/:id/statement-pdf?start_date=...&end_date=...
+func (ctrl *paymentController) GenerateCustomerStatementPDF(c *gin.Context) {
+	customerIDParam := c.Param("id")
+	customerID, err := strconv.ParseUint(customerIDParam, 10, 32)
+	if err != nil || customerID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสลูกค้าไม่ถูกต้อง"})
+		return
+	}
+
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	paymentType := c.Query("payment_type")
+	if paymentType == "" {
+		paymentType = c.Query("type")
+	}
+	status := c.Query("status")
+	paymentMethod := c.Query("payment_method")
+
+	pdfBytes, err := ctrl.paymentService.GenerateCustomerStatementPDF(
+		c.Request.Context(),
+		uint(customerID),
+		startDate,
+		endDate,
+		paymentType,
+		status,
+		paymentMethod,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate customer statement PDF: " + err.Error()})
+		return
+	}
+
+	currentDateStr := time.Now().Format("20060102")
+	fileName := fmt.Sprintf("STM-%d-%s.pdf", customerID, currentDateStr)
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", fileName))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }

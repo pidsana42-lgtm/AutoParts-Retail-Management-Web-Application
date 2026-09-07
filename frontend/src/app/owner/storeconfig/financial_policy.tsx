@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import {
   Save,
   TriangleAlert,
@@ -16,8 +15,8 @@ import Button from "../../../components/elements/button";
 import { Card } from "../../../components/elements/card";
 import Input from "../../../components/elements/input";
 import Badge from "../../../components/elements/badge";
-import Modal from "../../../components/elements/modal";
 import { useFinancialPolicy } from "./hook/UseFinancialPolicy";
+import ConfirmModal from "../../../components/elements/confirm_modal";
 
 export default function FinancialPolicyPage() {
   const {
@@ -29,32 +28,19 @@ export default function FinancialPolicyPage() {
     successMessage,
     showAuditModal,
     setShowAuditModal,
+    auditLogs,
+    isLoadingAuditLogs,
     handleChange,
     handleReset,
     handleSave,
   } = useFinancialPolicy();
 
-  // Audit Logs state for the history modal
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (showAuditModal) {
-      try {
-        const historyKey = "financial_policy_audit_logs";
-        const logs = JSON.parse(localStorage.getItem(historyKey) || "[]");
-        setAuditLogs(logs);
-      } catch (e) {
-        setAuditLogs([]);
-      }
-    }
-  }, [showAuditModal]);
-
   return (
     <div className="relative flex min-h-screen bg-white text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
-        <main className="p-6 md:p-8 space-y-6 flex-1 max-w-[1200px] mx-auto w-full">
+        <main className="p-6 md:p-8 space-y-6 flex-1 max-w-300 mx-auto w-full">
           {/* Header Section */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4pb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5">
             <div>
               <Heading level='h1' weight='semibold' className='m-0 text-black'>
                 การตั้งค่านโยบายการเงินและเครดิต
@@ -111,7 +97,7 @@ export default function FinancialPolicyPage() {
           {/* Form Content (Cards) */}
           <div className="space-y-6">
             {/* Card 1: การตั้งค่านโยบายการเงิน(ส่วนลด) */}
-            <Card className="bg-white rounded-none border border-gray-200 border-l-4 !border-l-[#E51C23] p-6 md:p-8 space-y-6 shadow-sm">
+            <Card className="bg-white rounded-none border border-gray-200 border-l-4 border-l-[#E51C23]! p-6 md:p-8 space-y-6 shadow-sm">
               <div className="border-b border-gray-100 pb-3">
                 <Heading level="h3" weight="medium" className="text-[#1C1B1B] m-0">
                   การตั้งค่านโยบายการเงิน (ส่วนลด)
@@ -132,7 +118,7 @@ export default function FinancialPolicyPage() {
                   </Text>
                 </div>
 
-                <div className="w-full sm:w-[300px]">
+                <div className="w-full sm:w-75">
                   <Input
                     type="number"
                     min="0"
@@ -160,7 +146,7 @@ export default function FinancialPolicyPage() {
             </Card>
 
             {/* Card 2: การตั้งค่านโยบายเครดิต */}
-            <Card className="bg-white rounded-none border border-gray-200 !border-l-4 !border-l-[#E51C23] p-6 md:p-8 space-y-6 shadow-sm">
+            <Card className="bg-white rounded-none border border-gray-200 border-l-4! border-l-[#E51C23]! p-6 md:p-8 space-y-6 shadow-sm">
               <div className="border-b border-gray-100 pb-3">
                 <Heading level="h3" weight="medium" className="text-[#1C1B1B] m-0">
                   การตั้งค่านโยบายเครดิต
@@ -181,7 +167,7 @@ export default function FinancialPolicyPage() {
                   </Text>
                 </div>
 
-                <div className="w-full sm:w-[300px]">
+                <div className="w-full sm:w-75">
                   <Input
                     type="number"
                     min="0"
@@ -209,7 +195,7 @@ export default function FinancialPolicyPage() {
                   </Text>
                 </div>
 
-                <div className="w-full sm:w-[300px]">
+                <div className="w-full sm:w-75">
                   <Input
                     type="number"
                     min="1"
@@ -253,14 +239,19 @@ export default function FinancialPolicyPage() {
       </div>
 
       {/* Audit History Modal */}
-      <Modal
+      <ConfirmModal
         isOpen={showAuditModal}
         onClose={() => setShowAuditModal(false)}
         title="ประวัติการแก้ไขการตั้งค่านโยบาย"
         description="บันทึกการเปลี่ยนแปลงและประวัติการตรวจสอบกิจกรรมภายในระบบ"
         size="lg"
       >
-        {auditLogs.length === 0 ? (
+        {isLoadingAuditLogs ? (
+          <div className="py-12 flex flex-col items-center justify-center text-slate-400 text-xs font-light">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#E51C23] mb-3"></div>
+            <p className="m-0">กำลังโหลดประวัติการแก้ไข...</p>
+          </div>
+        ) : auditLogs.length === 0 ? (
           <div className="py-12 flex flex-col items-center justify-center text-slate-400 text-xs font-light">
             <History size={32} className="text-slate-300 mb-2 stroke-[1.5]" />
             <p className="m-0">ยังไม่มีประวัติการแก้ไขการตั้งค่าในระบบ</p>
@@ -298,7 +289,7 @@ export default function FinancialPolicyPage() {
             ))}
           </div>
         )}
-      </Modal>
+      </ConfirmModal>
     </div>
   );
 }

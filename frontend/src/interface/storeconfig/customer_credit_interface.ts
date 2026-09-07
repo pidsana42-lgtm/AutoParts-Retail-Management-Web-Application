@@ -30,6 +30,7 @@ export interface UpdateCustomerDiscountPayload {
   is_discount_enabled: boolean;
   ontop_discount_rate: number;
   standard_discount_rate?: number;
+  max_credit_limit?: number;
 }
 
 export interface BulkUpdateCustomerDiscountItem {
@@ -99,6 +100,7 @@ export interface UseCustomerCreditControlReturn {
   isAuditModalOpen: boolean;
   setIsAuditModalOpen: (open: boolean) => void;
   auditLogs: CustomerCreditAuditLog[];
+  isLoadingAuditLogs: boolean;
 
   // Actions
   handleOpenEditModal: (customer: CustomerCreditItem) => void;

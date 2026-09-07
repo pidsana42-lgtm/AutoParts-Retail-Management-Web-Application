@@ -22,6 +22,7 @@ import EmployeeStockData from './employee/wms/stock_data/stock';
 import EmployeeProductDetail from './employee/wms/stock_data/product_detail/product_detail';
 import AddProductPage from './owner/stock/add_data_stock/add_data_stock';
 import EditProductPage from './owner/stock/edit_data_stock/edit_data_stock';
+import TrashStockPage from './owner/stock/trash_stock/trash_stock';
 import ImportBill from './owner/import-bills/import_bill';
 import EditStockBillPage from './owner/import-bills/edit-stock-bill';
 import PreOrder from './owner/pre-order/pre-order';
@@ -51,19 +52,23 @@ import CustomerCreditControl from './owner/storeconfig/customer_credit_control';
 import StoreConfig from './owner/storeconfig/storeconfig';
 import DeletedPoHistory from './owner/purchase_orders/restore_po';
 import NewReturnPage from './owner/return/new_return';
+import { getDashboardRoleGroup } from '../utils/dashboardAccess';
 
 export default function AppRouter(): React.JSX.Element {
-  const { role } = useAuth() as any;
+  const { role } = useAuth();
 
-  const { isAdminOrOwner, firstMenuPath } = useMemo(() => {
+  const { isAdminOrOwner, isEmployeeOrStaff, firstMenuPath } = useMemo(() => {
     const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
-    const isOwnerOrAdmin = currentRole === "OWNER" || currentRole === "ADMIN";
+    const dashboardRoleGroup = getDashboardRoleGroup(currentRole);
+    const isOwnerOrAdmin = dashboardRoleGroup === 'owner';
+    const isEmployee = dashboardRoleGroup === 'employee';
     
     const userMenus = getMenuByRole(currentRole);
     const firstPath = userMenus && userMenus.length > 0 ? userMenus[0].path : "/login";
 
     return {
       isAdminOrOwner: isOwnerOrAdmin,
+      isEmployeeOrStaff: isEmployee,
       firstMenuPath: firstPath
     };
   }, [role]); 
@@ -114,6 +119,10 @@ export default function AppRouter(): React.JSX.Element {
 
         <Route path="/owner/stock/new" element={
           isAdminOrOwner ? <AddProductPage /> : <Navigate to={firstMenuPath} replace />
+        } />
+
+        <Route path="/owner/stock/trash" element={
+          isAdminOrOwner ? <TrashStockPage /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/owner/stock/:id" element={
@@ -224,13 +233,13 @@ export default function AppRouter(): React.JSX.Element {
 
         {/* แดชบอร์ดของฝั่งพนักงาน */}
         <Route path="/employee/dashboard/maindashboard" element={
-          !isAdminOrOwner ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeOrStaff ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
         <Route path="/employee/dashboard/salesdashboard" element={
-          !isAdminOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeOrStaff ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
         <Route path="/employee/dashboard/debtdashboard" element={
-          !isAdminOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeOrStaff ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/employee/orders" element={<PurchaseOrders />} />

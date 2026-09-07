@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, Loader2, MapPin, Package, ClipboardCheck, Download, Printer, QrCode } from "lucide-react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Loader2, MapPin, Package, ClipboardCheck, Download, Printer, QrCode } from "lucide-react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 
 import Heading from "../../../../components/elements/heading";
+import Breadcrumb from "../../../../components/elements/breadcrumb";
 import Badge from "../../../../components/elements/badge";
 import Button from "../../../../components/elements/button";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
 import { ToastProvider, useToast } from "../../../../components/elements/toast";
-import ProductQuickView from "./ProductQuickView";
 import { useCheckStockOptions } from "./useCheckStockOptions";
 import { getScheduleProducts, CHECK_STATUS_BADGE_VARIANT } from "./checkStockTargets";
 import {
@@ -40,13 +40,15 @@ function getStatusBadge(status: string) {
 function ScheduleDetailContent() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // ที่มาของการเข้าหน้านี้ (ถ้ามี) — ใช้ปรับเกล็ดขนมปังให้ตรงกับหน้าที่กดเข้ามาจริงๆ เช่นจากหน้า "การเคลื่อนไหวของคลังสินค้า"
+  const location = useLocation();
+  const cameFromMovement = (location.state as { from?: string } | null)?.from === "movement";
   const { toast } = useToast();
   const { products, zones, categories } = useCheckStockOptions();
 
   const [schedule, setSchedule] = useState<CheckStockSchedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [quickViewProduct, setQuickViewProduct] = useState<StockItem | null>(null);
   const [reviewRecords, setReviewRecords] = useState<CheckStockRecord[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -220,25 +222,30 @@ function ScheduleDetailContent() {
 
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
+      <Breadcrumb
+        items={
+          cameFromMovement
+            ? [
+                { label: "การเคลื่อนไหวของคลังสินค้า", path: "/owner/stock/stock-movement" },
+                { label: schedule.target_name || "รายละเอียดตาราง" },
+              ]
+            : [
+                { label: "ตรวจสอบสินค้า", path: "/owner/stock/stock-check" },
+                { label: schedule.target_name || "รายละเอียดตาราง" },
+              ]
+        }
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => navigate("/owner/stock/stock-check")}
-            className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
-          >
-            <ChevronLeft size={24} className="text-slate-600" />
-          </button>
-          <div>
-            <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
-              รายละเอียดตารางเช็คสต็อก
-            </Heading>
-            <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
-              {dateStr} · {startTimeStr}
-              {endTimeStr ? ` - ${endTimeStr}` : ""}
-            </Heading>
-          </div>
+        <div>
+          <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
+            รายละเอียดตารางเช็คสต็อก
+          </Heading>
+          <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
+            {dateStr} · {startTimeStr}
+            {endTimeStr ? ` - ${endTimeStr}` : ""}
+          </Heading>
         </div>
         {getStatusBadge(schedule.status)}
       </div>
@@ -315,9 +322,18 @@ function ScheduleDetailContent() {
                     {checkedProducts.map((p) => (
                       <div
                         key={p.ID}
-                        onClick={() => setQuickViewProduct(p)}
+                        onClick={() =>
+                          // รักษาต้นทางเดิมไว้ — ถ้าไล่มาจากหน้าการเคลื่อนไหวของคลังสินค้า ก็ให้ breadcrumb ของหน้าสินค้ายังโยงกลับไปที่นั่นต่อ
+                          navigate(`/owner/stock/${p.ID}`, {
+                            state: {
+                              from: cameFromMovement ? "movement" : "check_stock",
+                              scheduleId: schedule.id,
+                              scheduleName: schedule.target_name,
+                            },
+                          })
+                        }
                         className="flex cursor-pointer items-center gap-3 rounded-md border border-slate-100 bg-slate-50 p-3 transition hover:border-slate-300 hover:bg-white hover:shadow-sm"
-                        title="ดูข้อมูลสินค้า"
+                        title="ดูรายละเอียดสินค้า"
                       >
                         {p.ThumbnailUrl ? (
                           <img src={p.ThumbnailUrl} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" />
@@ -449,10 +465,6 @@ function ScheduleDetailContent() {
           </Card>
         </div>
       </div>
-
-      {quickViewProduct && (
-        <ProductQuickView product={quickViewProduct} onClose={() => setQuickViewProduct(null)} />
-      )}
     </div>
   );
 }

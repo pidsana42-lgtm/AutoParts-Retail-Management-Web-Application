@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { Save } from "lucide-react";
 import Input from "../../../../../components/elements/input";
 import Select from "../../../../../components/elements/select";
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import type { Category, SubCategory, SubSubCategory } from "../../../../../interface/wms/stock_data";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
@@ -30,6 +32,7 @@ export default function EditCategoryRowModal({
   subCategories,
 }: EditCategoryRowModalProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
 
   const [categoryName, setCategoryName] = useState("");
   const [shortName, setShortName] = useState("");
@@ -67,16 +70,48 @@ export default function EditCategoryRowModal({
     e.preventDefault();
     if (!category) return;
 
+    // ตรวจข้อมูลที่กรอกให้ครบก่อนถามยืนยัน — ไม่ให้ผู้ใช้กดยืนยันแล้วเพิ่งเจอ error
+    if (
+      !subCategory &&
+      !subSubCategory &&
+      (categoryName.trim() !== category.category_name || shortName.trim() !== category.category_short_name) &&
+      (!categoryName.trim() || !shortName.trim())
+    ) {
+      toast({ variant: "error", message: "กรุณากรอกชื่อและตัวย่อประเภทหลัก" });
+      return;
+    }
+    if (
+      subCategory &&
+      !subSubCategory &&
+      (subCategoryName.trim() !== subCategory.sub_category_name || selectedCategoryId !== subCategory.category_id) &&
+      !subCategoryName.trim()
+    ) {
+      toast({ variant: "error", message: "กรุณากรอกชื่อประเภทย่อย" });
+      return;
+    }
+    if (
+      subSubCategory &&
+      (subSubCategoryName.trim() !== subSubCategory.sub_sub_category_name ||
+        selectedSubCategoryId !== subSubCategory.sub_category_id) &&
+      !subSubCategoryName.trim()
+    ) {
+      toast({ variant: "error", message: "กรุณากรอกชื่อประเภทย่อยย่อย" });
+      return;
+    }
+
+    // ยืนยันก่อนบันทึก (เคสนี้ทั้งแก้ไขและเพิ่มใหม่ได้ในครั้งเดียว)
+    const confirmed = await confirmDialog(
+      "ยืนยันบันทึกข้อมูลนี้หรือไม่?",
+      { title: "ยืนยันการบันทึก", confirmText: "บันทึกข้อมูล", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
+
     try {
       let isUpdated = false;
 
       // 1. Update Category
       if (!subCategory && !subSubCategory) {
         if (categoryName.trim() !== category.category_name || shortName.trim() !== category.category_short_name) {
-          if (!categoryName.trim() || !shortName.trim()) {
-            toast({ variant: "error", message: "กรุณากรอกชื่อและตัวย่อประเภทหลัก" });
-            return;
-          }
           await stockDataService.updateCategory(category.id, { 
             category_name: categoryName.trim(),
             category_short_name: shortName.trim()
@@ -90,10 +125,6 @@ export default function EditCategoryRowModal({
       // 2. Update or Create Sub Category
       if (subCategory && !subSubCategory) {
         if (subCategoryName.trim() !== subCategory.sub_category_name || selectedCategoryId !== subCategory.category_id) {
-          if (!subCategoryName.trim()) {
-            toast({ variant: "error", message: "กรุณากรอกชื่อประเภทย่อย" });
-            return;
-          }
           await stockDataService.updateSubCategory(subCategory.id, { 
             sub_category_name: subCategoryName.trim(), 
             category_id: selectedCategoryId 
@@ -119,10 +150,6 @@ export default function EditCategoryRowModal({
       // 3. Update or Create Sub Sub Category
       if (subSubCategory) {
         if (subSubCategoryName.trim() !== subSubCategory.sub_sub_category_name || selectedSubCategoryId !== subSubCategory.sub_category_id) {
-          if (!subSubCategoryName.trim()) {
-            toast({ variant: "error", message: "กรุณากรอกชื่อประเภทย่อยย่อย" });
-            return;
-          }
           if (selectedSubCategoryId) {
             await stockDataService.updateSubSubCategory(subSubCategory.id, { 
               sub_sub_category_name: subSubCategoryName.trim(), 

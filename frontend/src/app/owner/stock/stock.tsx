@@ -24,12 +24,14 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from ".
 import Button from "../../../components/elements/button";
 import TreeSelect from "../../../components/elements/tree_select";
 import type { CascaderOption } from "../../../components/elements/cascader";
+import { useAlertDialog } from "../../../components/elements/alert_dialog";
 
 // นำเข้า API service สำหรับดึงข้อมูลสินค้า
-import { getProductsList, getSuppliersList } from "../../../service/http/wms/product";
+import { getProductsList, getSuppliersList, deleteProduct, getDeletedProductsList } from "../../../service/http/wms/product";
 import { stockDataService } from "../../../service/http/wms/stock_data_service";
 
 import type { StockItem } from "../../../interface/wms/product";
+import { buildProductSearchIndex, searchProductIndex } from "../../../utils/productSearch";
 import { cn } from "../../../utils/component";
 
 // คอนฟิก Badge ตามเกรดสินค้า
@@ -113,6 +115,7 @@ function StockLevelBar({ stock, minStock }: { stock: number; minStock: number })
 // -----------------------------------------------------------------------------
 export default function StockPage() {
   const navigate = useNavigate();
+  const { alertDialog, confirmDialog } = useAlertDialog();
   const [stockData, setStockData] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +129,9 @@ export default function StockPage() {
 
   const [suppliers, setSuppliers] = useState<{ label: string; value: string }[]>([]);
   const [formCascaderOptions, setFormCascaderOptions] = useState<CascaderOption[]>([]);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  // จำนวนสินค้าที่อยู่ในถังขยะตอนนี้ ไว้โชว์เป็น badge เตือนที่ปุ่ม "ถังขยะ" ให้เห็นว่ามีของค้างอยู่โดยไม่ต้องกดเข้าไปดู
+  const [deletedCount, setDeletedCount] = useState(0);
 
   const handleEditClick = (product: StockItem) => {
     navigate(`/owner/stock/${product.ID}/edit`);
@@ -133,6 +139,27 @@ export default function StockPage() {
 
   const handleViewClick = (product: StockItem) => {
     navigate(`/owner/stock/${product.ID}`);
+  };
+
+  const handleDeleteClick = async (product: StockItem) => {
+    // ลบเป็น soft delete (ไปอยู่ถังขยะ กู้คืนได้) จึงบอกผู้ใช้ไว้ด้วยว่าไม่ได้หายถาวร
+    const confirmed = await confirmDialog(
+      `ต้องการลบสินค้า "${product.Name}" ใช่หรือไม่? สินค้าจะย้ายไปอยู่ในถังขยะ และกู้คืนได้ภายใน 14 วัน`,
+      { title: "ลบสินค้า", confirmText: "ลบสินค้า", variant: "danger", icon: Trash2 }
+    );
+    if (!confirmed) return;
+
+    try {
+      setDeletingId(product.ID);
+      await deleteProduct(product.ID);
+      setStockData((prev) => prev.filter((p) => p.ID !== product.ID));
+      setDeletedCount((prev) => prev + 1);
+    } catch (err: any) {
+      console.error("Error deleting product:", err);
+      await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการลบสินค้า");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const fetchStock = async () => {
@@ -207,6 +234,13 @@ export default function StockPage() {
     fetchStock();
   }, []);
 
+  // เช็คจำนวนสินค้าในถังขยะไว้โชว์ badge เตือนที่ปุ่ม "ถังขยะ" (ไม่กระทบ loading หลักของหน้า แยก fetch ต่างหาก)
+  useEffect(() => {
+    getDeletedProductsList()
+      .then((list) => setDeletedCount(list.length))
+      .catch((err) => console.error("Failed to load deleted products count:", err));
+  }, []);
+
   // สร้าง options สำหรับ TreeSelect โดยทำให้ value ไม่ซ้ำกัน (ป้องกันบัค ID ชนกันระหว่าง Table)
   const treeSelectOptions = useMemo(() => {
     const mapUnique = (options: CascaderOption[], parentValue = ""): CascaderOption[] => {
@@ -222,13 +256,17 @@ export default function StockPage() {
     return [{ label: "ประเภททั้งหมด", value: "" }, ...mapUnique(formCascaderOptions)];
   }, [formCascaderOptions]);
 
+  // ค้นหาแบบ fuzzy (พิมพ์ผิด/พลาดบางตัวอักษรก็ยังเจอ) — สร้าง index ไว้แค่ตอน stockData เปลี่ยน ไม่ใช่ทุกครั้งที่พิมพ์
+  const searchIndex = useMemo(() => buildProductSearchIndex(stockData), [stockData]);
+  const searchMatchedIds = useMemo(() => {
+    if (!search.trim()) return null; // null = ยังไม่ได้พิมพ์ค้นหา ไม่ต้องกรองด้วยคำค้นหาเลย
+    return new Set(searchProductIndex(searchIndex, search, stockData).map((p) => p.ID));
+  }, [searchIndex, search, stockData]);
+
   // ระบบค้นหาและกรองข้อมูล (Filter & Search)
   const filteredData = useMemo(() => {
     return stockData.filter((item) => {
-      const matchesSearch =
-        !search ||
-        (item.Name && item.Name.toLowerCase().includes(search.toLowerCase())) ||
-        (item.ProductCode && item.ProductCode.toLowerCase().includes(search.toLowerCase()));
+      const matchesSearch = !searchMatchedIds || searchMatchedIds.has(item.ID);
 
       let matchesCategory = true;
       if (categoryNames.length > 0) {
@@ -250,7 +288,9 @@ export default function StockPage() {
         (item.Suppliers && item.Suppliers.some((s) => s.SupplierName.toUpperCase() === supplier.toUpperCase()));
 
       return matchesSearch && matchesCategory && matchesSupplier;
-    });
+    })
+    // สินค้าที่เพิ่มล่าสุดอยู่บนสุด (ID มากกว่า = สร้างทีหลัง เพราะเป็นเลขรันตามลำดับการสร้าง)
+    .sort((a, b) => b.ID - a.ID);
   }, [stockData, search, categoryNames, supplier]);
 
   // กลับไปหน้า 1 ทุกครั้งที่ตัวกรองเปลี่ยน กันกรณีหน้าปัจจุบันเกินจำนวนหน้าที่กรองได้แล้ว
@@ -289,14 +329,31 @@ export default function StockPage() {
           <Heading level="h1" className="mb-1">จัดการคลังสินค้า</Heading>
           <Text variant="muted" className="mb-0">จัดการคลังสินค้าและอะไหล่จริงจากระบบ</Text>
         </div>
-        <Button
-          onClick={() => navigate("/owner/stock/new")}
-          variant="primary"
-          className="flex items-center gap-2 self-start sm:self-auto"
-        >
-          <Plus className="h-4 w-4" />
-          เพิ่มข้อมูลสินค้า
-        </Button>
+        <div className="flex shrink-0 items-center gap-2 self-start sm:self-auto">
+          <div className="relative">
+            <Button
+              onClick={() => navigate("/owner/stock/trash")}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              ถังขยะ
+            </Button>
+            {deletedCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-[#E51C23] text-[9px] font-bold text-white">
+                {deletedCount > 9 ? "9+" : deletedCount}
+              </span>
+            )}
+          </div>
+          <Button
+            onClick={() => navigate("/owner/stock/new")}
+            variant="primary"
+            className="flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            เพิ่มข้อมูลสินค้า
+          </Button>
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -410,7 +467,12 @@ export default function StockPage() {
                         >
                           <SquarePen className="h-4 w-4" />
                         </button>
-                        <button className="hover:text-red-600" aria-label="ลบ">
+                        <button
+                          onClick={() => handleDeleteClick(row)}
+                          disabled={deletingId === row.ID}
+                          className="hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label="ลบ"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>

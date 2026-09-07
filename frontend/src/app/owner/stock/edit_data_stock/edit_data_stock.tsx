@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
 
 import Heading from "../../../../components/elements/heading";
+import Breadcrumb from "../../../../components/elements/breadcrumb";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
 import Input from "../../../../components/elements/input";
 import Select from "../../../../components/elements/select";
@@ -10,6 +11,7 @@ import MultiSelect from "../../../../components/elements/multiselect";
 import TreeSelect from "../../../../components/elements/tree_select";
 import Button from "../../../../components/elements/button";
 import ImageUploader from "../../../../components/elements/image_uploader";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 import { getProductById, updateProduct, uploadProductImage } from "../../../../service/http/wms/product";
 import type { StockItem } from "../../../../interface/wms/product";
 import { useProductFormOptions } from "../hooks/useProductFormOptions";
@@ -18,7 +20,8 @@ import SupplierRowsField, { rowsToPayload, suppliersToRows, type SupplierRow } f
 export default function EditProductPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { models, categories, grades, units, zones, suppliers, loading: loadingOptions } = useProductFormOptions();
+  const { alertDialog, confirmDialog } = useAlertDialog();
+  const { models, categories, grades, units, zones, suppliers, loading: loadingOptions, addSupplierOption } = useProductFormOptions();
   const [supplierRows, setSupplierRows] = useState<SupplierRow[]>([]);
 
   const [product, setProduct] = useState<StockItem | null>(null);
@@ -168,29 +171,36 @@ export default function EditProductPage() {
       if (!formData.product_code) missingFields.push("รหัสสินค้า (Code)");
       if (!formData.product_name) missingFields.push("ชื่อสินค้า (Name)");
       if (formData.model_ids.length === 0) missingFields.push("รุ่นรถ (Models)");
-      if (formData.category_path.length < 2) missingFields.push("หมวดหมู่สินค้า (ระบุให้ครบ 3 ระดับ)");
+      if (formData.category_path.length < 2) missingFields.push("หมวดหมู่สินค้า (ระบุให้ถึงระดับประเภทย่อย)");
       if (!formData.grade_id) missingFields.push("เกรดสินค้า");
       if (!formData.unit_id) missingFields.push("หน่วยนับ");
       if (formData.zone_path.length < 2) missingFields.push("ตำแหน่งจัดเก็บ (เลือกอย่างน้อยถึงระดับตู้)");
 
       if (missingFields.length > 0) {
-        alert("กรุณากรอกข้อมูลหรือเลือกรายการต่อไปนี้ให้ครบถ้วน:\n- " + missingFields.join("\n- "));
+        await alertDialog("กรุณากรอกข้อมูลหรือเลือกรายการต่อไปนี้ให้ครบถ้วน:\n- " + missingFields.join("\n- "));
         return;
       }
 
       if (formData.max_discount_rate < 0 || formData.max_discount_rate > 2) {
-        alert("ส่วนลดสูงสุดต้องอยู่ระหว่าง 0-2% เท่านั้น");
+        await alertDialog("ส่วนลดสูงสุดต้องอยู่ระหว่าง 0-2% เท่านั้น");
         return;
       }
 
       const supplierPayload = rowsToPayload(supplierRows);
       const supplierQtySum = supplierPayload.reduce((sum, s) => sum + s.quantity, 0);
       if (supplierQtySum > Number(formData.quantity)) {
-        alert(
+        await alertDialog(
           `จำนวนสินค้าที่รับมาจาก Supplier รวมกัน (${supplierQtySum}) เกินจำนวนสินค้าทั้งหมด (${Number(formData.quantity)}) กรุณาแก้ไขจำนวนให้ถูกต้อง`
         );
         return;
       }
+
+      // ผ่าน validation ครบแล้วค่อยถามยืนยัน — ทับข้อมูลเดิมของสินค้าที่มีอยู่จริง ควรให้ทบทวนก่อนบันทึก
+      const confirmed = await confirmDialog(
+        `ยืนยันบันทึกการแก้ไขข้อมูลสินค้า "${formData.product_name}" หรือไม่? ข้อมูลเดิมจะถูกแทนที่ด้วยข้อมูลใหม่ทั้งหมด`,
+        { title: "ยืนยันการแก้ไขสินค้า", confirmText: "บันทึกการแก้ไข", variant: "info", icon: Save }
+      );
+      if (!confirmed) return;
 
       // หา shelf/level จาก path ด้วย prefix แทนตำแหน่ง index เพราะ zone_path มาจาก TreeSelect
       // ที่ prefix ค่าตามประเภทไว้แล้ว (zone-/shelf-/level-) กัน id ชนกันข้ามตาราง
@@ -225,11 +235,11 @@ export default function EditProductPage() {
           console.error("Error uploading product image:", uploadErr);
         }
       }
-      alert(imageUploadFailed ? "แก้ไขข้อมูลสินค้าสำเร็จ แต่อัปโหลดรูปสินค้าไม่สำเร็จ" : "แก้ไขข้อมูลสินค้าสำเร็จ");
+      await alertDialog(imageUploadFailed ? "แก้ไขข้อมูลสินค้าสำเร็จ แต่อัปโหลดรูปสินค้าไม่สำเร็จ" : "แก้ไขข้อมูลสินค้าสำเร็จ");
       navigate(`/owner/stock/${product.ID}`);
     } catch (err: any) {
       console.error("Error updating product:", err);
-      alert(err.response?.data?.error || "เกิดข้อผิดพลาดในการแก้ไขข้อมูลสินค้า");
+      await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการแก้ไขข้อมูลสินค้า");
     } finally {
       setSubmitting(false);
     }
@@ -257,23 +267,21 @@ export default function EditProductPage() {
 
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
+      <Breadcrumb
+        items={[
+          { label: "คลังสินค้า", path: "/owner/stock" },
+          { label: "แก้ไขข้อมูล" },
+        ]}
+      />
+
       {/* Header */}
-      <div className="flex items-center gap-4 border-b border-slate-200 pb-4">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
-        >
-          <ChevronLeft size={24} className="text-slate-600" />
-        </button>
-        <div>
-          <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
-            แก้ไขข้อมูลสินค้า
-          </Heading>
-          <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
-            แก้ไขข้อมูลสินค้า: {product.ProductCode}
-          </Heading>
-        </div>
+      <div className="border-b border-slate-200 pb-4">
+        <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
+          แก้ไขข้อมูลสินค้า
+        </Heading>
+        <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
+          แก้ไขข้อมูลสินค้า: {product.ProductCode}
+        </Heading>
       </div>
 
       <Card className="border-l-[5px] border-l-red-800">
@@ -406,7 +414,13 @@ export default function EditProductPage() {
               placeholder="เช่น รุ่นรถที่รองรับ หรือรายละเอียดเพิ่มเติม"
             />
 
-            <SupplierRowsField rows={supplierRows} onChange={setSupplierRows} options={suppliers} disabled={submitting} />
+            <SupplierRowsField
+              rows={supplierRows}
+              onChange={setSupplierRows}
+              options={suppliers}
+              disabled={submitting}
+              onSupplierCreated={addSupplierOption}
+            />
 
             <ImageUploader preview={imagePreview} onChange={handleImageChange} onClear={handleImageClear} />
 

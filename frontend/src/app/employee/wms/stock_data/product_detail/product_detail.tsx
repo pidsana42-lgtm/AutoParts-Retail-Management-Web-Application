@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
-import { ChevronLeft, Download, Printer, X, Loader2 } from "lucide-react";
+import { Download, Printer, X, Loader2 } from "lucide-react";
 
 import Heading from "../../../../../components/elements/heading";
+import Breadcrumb from "../../../../../components/elements/breadcrumb";
 import Button from "../../../../../components/elements/button";
 import VariantCodeBadge from "../../../../../components/elements/variant_code_badge";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../../components/elements/card";
@@ -21,6 +22,10 @@ const BARCODE_MODE_LABEL: Record<BarcodeDisplayMode, string> = {
 
 // ฟอนต์เดียวกับที่ใช้ทั้งเว็บ (ดู --font-sans ใน src/index.css)
 const LABEL_FONT = `"Kanit", "Sarabun", "Inter", sans-serif`;
+
+// เรนเดอร์ป้าย "รูป+ราคา"/"ชื่อ+ราคา+รูป" ที่ความละเอียดสูงกว่าที่แสดงจริงกี่เท่า — ป้องกันภาพเบลอ/แตกเป็นบล็อก
+// ตอนเบราว์เซอร์ขยายรูป raster เล็กๆ ให้เต็มหน้ากระดาษตอนสั่งพิมพ์ (img { max-width: 100% } ในหน้าต่างพิมพ์)
+const PRINT_SCALE = 3;
 
 // ย่อขนาดฟอนต์ให้พอดีความกว้างที่กำหนด ถ้าย่อถึงขนาดต่ำสุดแล้วยังไม่พอ ให้ตัดจบด้วย "…"
 function fitText(
@@ -43,17 +48,6 @@ function fitText(
     truncated = truncated.slice(0, -1);
   }
   return `${truncated}…`;
-}
-
-// วาดสี่เหลี่ยมมุมโค้ง (ใช้เป็นกรอบป้ายราคา)
-function traceRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
 }
 
 export default function ProductDetailPage() {
@@ -157,16 +151,16 @@ export default function ProductDetailPage() {
             barcodeHeight = maxBarcodeHeight;
           }
 
-          canvas.width = canvasWidth;
-          canvas.height = padding + headerHeight + headerGap + barcodeHeight + padding;
+          const canvasHeight = padding + headerHeight + headerGap + barcodeHeight + padding;
+          // เรนเดอร์ที่ความละเอียดสูงกว่าที่แสดงจริง (PRINT_SCALE เท่า) กันภาพเบลอตอนขยายเต็มหน้าพิมพ์ — โค้ดวาดด้านล่าง
+          // ทั้งหมดยังใช้พิกัด/ขนาดแบบ "ตรรกะ" (เช่น padding, canvasWidth) ได้เหมือนเดิม เพราะ ctx.scale ขยายให้เอง
+          canvas.width = canvasWidth * PRINT_SCALE;
+          canvas.height = canvasHeight * PRINT_SCALE;
+          ctx.scale(PRINT_SCALE, PRINT_SCALE);
 
-          // พื้นหลัง + กรอบมุมโค้ง
+          // พื้นหลังขาวล้วน — ไม่ใส่กรอบแล้ว เพราะพิมพ์ออกมาเป็นสติกเกอร์ติดสินค้าจริง ไม่ควรมีกรอบตกแต่งติดมาด้วย
           ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          traceRoundedRect(ctx, 1, 1, canvas.width - 2, canvas.height - 2, 14);
-          ctx.strokeStyle = "#e2e8f0";
-          ctx.lineWidth = 2;
-          ctx.stroke();
+          ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
           const priceText = product?.Price != null ? `฿${product.Price.toLocaleString()}` : "-";
 
@@ -176,7 +170,7 @@ export default function ProductDetailPage() {
             const priceWidth = ctx.measureText(priceText).width;
 
             // ชื่อสินค้า + รหัสสินค้า (มุมซ้ายบน)
-            const nameMaxWidth = canvas.width - padding * 2 - priceWidth - 16;
+            const nameMaxWidth = canvasWidth - padding * 2 - priceWidth - 16;
             const nameText = fitText(ctx, product?.Name || "", nameMaxWidth, 16, 11, 700);
             const skuText = fitText(ctx, product?.ProductCode || "", nameMaxWidth, 12, 9, 500);
 
@@ -192,18 +186,18 @@ export default function ProductDetailPage() {
             ctx.textAlign = "right";
             ctx.fillStyle = "#0f172a";
             ctx.font = `700 22px ${LABEL_FONT}`;
-            ctx.fillText(priceText, canvas.width - padding, padding + 22);
+            ctx.fillText(priceText, canvasWidth - padding, padding + 22);
           } else {
             // ราคาเดี่ยว กึ่งกลางด้านบน (ไม่มีชื่อ/รหัสสินค้า)
             ctx.textAlign = "center";
             ctx.fillStyle = "#0f172a";
             ctx.font = `700 24px ${LABEL_FONT}`;
-            ctx.fillText(priceText, canvas.width / 2, padding + headerHeight / 2 + 8);
+            ctx.fillText(priceText, canvasWidth / 2, padding + headerHeight / 2 + 8);
           }
 
           // รูปบาร์โค้ด (กึ่งกลาง)
           const y = padding + headerHeight + headerGap;
-          const barcodeX = (canvas.width - barcodeWidth) / 2;
+          const barcodeX = (canvasWidth - barcodeWidth) / 2;
           ctx.drawImage(img, barcodeX, y, barcodeWidth, barcodeHeight);
 
           resolve(canvas.toDataURL("image/png"));
@@ -311,24 +305,22 @@ export default function ProductDetailPage() {
 
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
+      <Breadcrumb
+        items={[
+          { label: "คลังสินค้า", path: "/employee/wms/stock-data" },
+          { label: product.Name || "รายละเอียดสินค้า" },
+        ]}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => navigate("/employee/wms/stock-data")}
-            className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
-          >
-            <ChevronLeft size={24} className="text-slate-600" />
-          </button>
-          <div>
-            <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
-              รายละเอียดสินค้า
-            </Heading>
-            <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
-              รหัสสินค้า: {product.ProductCode}
-            </Heading>
-          </div>
+        <div>
+          <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
+            รายละเอียดสินค้า
+          </Heading>
+          <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
+            รหัสสินค้า: {product.ProductCode}
+          </Heading>
         </div>
 
         <span

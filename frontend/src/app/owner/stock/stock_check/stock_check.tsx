@@ -23,7 +23,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from ".
 import { cn } from "../../../../utils/component";
 
 import EditCheckStockScheduleModal from "./EditCheckStockScheduleModal";
-import { buildZoneTree, getRelatedProducts, getScheduleProducts, CHECK_STATUS_BADGE_VARIANT } from "./checkStockTargets";
+import { buildZoneTree, buildCategoryTree, getRelatedProducts, getScheduleProducts, CHECK_STATUS_BADGE_VARIANT } from "./checkStockTargets";
 import { useCheckStockOptions } from "./useCheckStockOptions";
 import { stockCheckService, type CheckStockSchedule } from "../../../../service/http/wms/stock_check_service";
 import Button from "../../../../components/elements/button";
@@ -56,6 +56,7 @@ function StockCheckContent() {
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [zoneFilter, setZoneFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [statusQuickFilter, setStatusQuickFilter] = useState<string>("");
 
   // Pagination
@@ -116,6 +117,9 @@ function StockCheckContent() {
   // ต้นไม้โซน > ตู้ > ชั้นระดับ สำหรับตัวกรอง (แบบเดียวกับ "ตำแหน่งจัดเก็บ" ในหน้าเพิ่ม/แก้ไขสินค้า)
   const zoneTreeOptions = useMemo(() => buildZoneTree(zones), [zones]);
 
+  // ต้นไม้ประเภทหลัก > ประเภทย่อย > ประเภทย่อยย่อย สำหรับตัวกรอง (แบบเดียวกับโซนด้านบน)
+  const categoryTreeOptions = useMemo(() => buildCategoryTree(categories), [categories]);
+
   // Derived Stats
   const stats = useMemo(() => {
     const pending = schedules.filter((s) => s.status === "รอดำเนินการ").length;
@@ -132,6 +136,13 @@ function StockCheckContent() {
     return new Set(list.map((p) => p.ID));
   }, [zoneFilter, products, zones, categories]);
 
+  // สินค้าทั้งหมดที่อยู่ในประเภท/ประเภทย่อยที่เลือกไว้ในตัวกรอง (คำนวณครั้งเดียวเหมือนกับ zoneFilterProductIds ด้านบน)
+  const categoryFilterProductIds = useMemo(() => {
+    if (!categoryFilter) return null;
+    const list = getRelatedProducts("CATEGORY", "", categoryFilter, products, zones, categories);
+    return new Set(list.map((p) => p.ID));
+  }, [categoryFilter, products, zones, categories]);
+
   // Filtered schedules
   const filteredSchedules = useMemo(() => {
     return schedules.filter((sc) => {
@@ -139,9 +150,9 @@ function StockCheckContent() {
 
       if (statusQuickFilter && sc.status !== statusQuickFilter) match = false;
 
-      // ต้องหาสินค้าที่ตารางนี้ครอบคลุมจริง (ไม่ใช่แค่ match ข้อความ target_name) เพื่อให้ค้นหา/กรองโซน
+      // ต้องหาสินค้าที่ตารางนี้ครอบคลุมจริง (ไม่ใช่แค่ match ข้อความ target_name) เพื่อให้ค้นหา/กรองโซน/กรองประเภท
       // ใช้ได้แม้ตารางเป็นแบบ CATEGORY หรือ LOCATION ที่ target_name ไม่ได้เก็บชื่อ/รหัสสินค้าไว้ตรงๆ
-      if (search || zoneFilterProductIds) {
+      if (search || zoneFilterProductIds || categoryFilterProductIds) {
         const scProducts = getScheduleProducts(sc, products, zones, categories);
 
         if (search) {
@@ -158,6 +169,11 @@ function StockCheckContent() {
           const matchesZone = scProducts.some((p) => zoneFilterProductIds.has(p.ID));
           if (!matchesZone) match = false;
         }
+
+        if (match && categoryFilterProductIds) {
+          const matchesCategory = scProducts.some((p) => categoryFilterProductIds.has(p.ID));
+          if (!matchesCategory) match = false;
+        }
       }
 
       if (match && dateFilter) {
@@ -169,13 +185,18 @@ function StockCheckContent() {
       }
 
       return match;
+    })
+    // รายการที่สร้างล่าสุดอยู่บนสุด (เรียงตาม created_at ใหม่ไปเก่า, ใช้ id เป็นตัวตัดสินสำรองถ้าเวลาสร้างชนกัน)
+    .sort((a, b) => {
+      const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      return diff !== 0 ? diff : b.id - a.id;
     });
-  }, [schedules, search, dateFilter, zoneFilterProductIds, statusQuickFilter, products, zones, categories]);
+  }, [schedules, search, dateFilter, zoneFilterProductIds, categoryFilterProductIds, statusQuickFilter, products, zones, categories]);
 
   // กลับไปหน้า 1 ทุกครั้งที่ตัวกรองเปลี่ยน กันกรณีหน้าปัจจุบันเกินจำนวนหน้าที่กรองได้แล้ว
   useEffect(() => {
     setPage(1);
-  }, [search, dateFilter, zoneFilter, statusQuickFilter, itemsPerPage]);
+  }, [search, dateFilter, zoneFilter, categoryFilter, statusQuickFilter, itemsPerPage]);
 
   const totalItems = filteredSchedules.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
@@ -210,10 +231,10 @@ function StockCheckContent() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <Heading level="h1" className="text-3xl font-bold text-slate-800 tracking-tight">
-            จัดการตารางเช็คสต็อก
+            จัดการตารางตรวจสอบสินค้า
           </Heading>
           <Text variant="muted" className="text-sm mt-1">
-            กำหนดวันเวลาตรวจ เลือกรูปแบบการตรวจสอบ แล้วติดตามรายการที่ต้องเช็คสต็อกได้ในที่เดียว
+            กำหนดวันเวลาตรวจ เลือกรูปแบบการตรวจสอบ แล้วติดตามรายการที่ต้องตรวจสอบสินค้าได้ในที่เดียว
           </Text>
         </div>
         <Button
@@ -222,7 +243,7 @@ function StockCheckContent() {
           className="flex items-center gap-2 self-start sm:self-auto"
         >
           <Plus className="h-4 w-4" />
-          สร้างตารางเช็คสต็อกใหม่
+          สร้างตารางตรวจสอบสินค้าใหม่
         </Button>
       </div>
 
@@ -257,6 +278,7 @@ function StockCheckContent() {
             setSearch("");
             setDateFilter("");
             setZoneFilter("");
+            setCategoryFilter("");
             setStatusQuickFilter("รอตรวจสอบ");
           }}
           className="flex cursor-pointer items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-5 py-3 text-sm text-blue-700 transition hover:border-blue-300"
@@ -292,12 +314,22 @@ function StockCheckContent() {
                 onChange={(val) => setZoneFilter(val)}
               />
             </div>
-            {(search || dateFilter || zoneFilter || statusQuickFilter) && (
+            <div className="w-full sm:w-56">
+              <TreeSelect
+                options={[{ label: "ประเภททั้งหมด", value: "" }, ...categoryTreeOptions]}
+                placeholder="เลือกประเภท"
+                searchPlaceholder="ค้นหา..."
+                value={categoryFilter}
+                onChange={(val) => setCategoryFilter(val)}
+              />
+            </div>
+            {(search || dateFilter || zoneFilter || categoryFilter || statusQuickFilter) && (
               <button
                 onClick={() => {
                   setSearch("");
                   setDateFilter("");
                   setZoneFilter("");
+                  setCategoryFilter("");
                   setStatusQuickFilter("");
                 }}
                 className="text-xs text-[#B70011] font-semibold px-2 hover:underline whitespace-nowrap self-center"

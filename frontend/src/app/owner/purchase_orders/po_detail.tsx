@@ -8,7 +8,7 @@ import Card from '../../../components/elements/card';
 import Input from '../../../components/elements/input';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '../../../components/elements/table';
 import Button from '../../../components/elements/button';
-import Modal from '../../../components/elements/modal';
+import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { useToast } from '../../../components/elements/toast';
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
 // Interface
@@ -59,7 +59,7 @@ const getPageSubtitle = (status: string, role: string | null): string => {
         APPROVED: 'ใบสั่งซื้อนี้ได้รับการอนุมัติเรียบร้อยแล้ว',
         RESUBMITTED: 'ใบสั่งซื้อนี้ถูกตีกลับ คุณสามารถแก้ไขรายการและส่งอนุมัติใหม่ได้',
         CANCELLED: 'ใบสั่งซื้อนี้ถูกยกเลิกโดยเจ้าของร้าน',
-        DELETED: 'ใบสั่งซื้อนี้อยู่ในถังขยะ คุณสามารถกู้คืนเพื่อแก้ไขและส่งอนุมัติใหม่ได้',
+        DELETED: 'ใบสั่งซื้อนี้อยู่ในถังขยะและสามารถกู้คืนได้ภายใน 30 วัน ก่อนระบบลบถาวร',
     };
     return subtitles[status] || '';
 };
@@ -71,6 +71,7 @@ function OrderDetail() {
     // ดึง id จาก URL มาใช้งาน (เช่น เอาไป Fetch API ต่อ)
     const { id } = useParams();
     const userRole = localStorage.getItem('role');
+    const isOwner = userRole?.toUpperCase() === 'OWNER';
     const [po, setPo] = useState<POResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -138,7 +139,7 @@ function OrderDetail() {
     if (loading) return <div>กำลังโหลด...</div>;
     if (error || !po) return <div>{error ?? 'ไม่พบใบสั่งซื้อ'}</div>;
 
-    const canApprove = po.status === 'PENDING' && userRole === 'Owner'; // เจ้าของร้านพิจารณา
+    const canApprove = po.status === 'PENDING' && isOwner; // เจ้าของร้านพิจารณา
     const canEditDraft = po.status === 'DRAFT' || po.status === 'RESUBMITTED';  // พนักงานยังแก้ไขร่างได้อยู่
     const canRestore = po.status === 'DELETED';
     const isEditable = canApprove || canEditDraft;
@@ -309,18 +310,26 @@ function OrderDetail() {
         }
     };
 
-    // ส่งอนุมัติ: บันทึกรายการที่แก้ไขก่อน แล้วค่อยเปลี่ยนสถานะเป็น PENDING
+    // Owner อนุมัติทันที ส่วน Employee ส่งเข้า PENDING เพื่อรอ Owner อนุมัติ
     const handleSubmitForApproval = async () => {
         if (!id) return;
         setActiveAction('submit');
         try {
             await savePOChanges();
-            await poService.updatePOStatus(id, 'PENDING');
-            toast({ title: 'ดำเนินการสำเร็จ', message: 'ส่งใบสั่งซื้อเพื่อขออนุมัติเรียบร้อยแล้ว', variant: 'success' });
+            await poService.updatePOStatus(id, isOwner ? 'APPROVED' : 'PENDING');
+            toast({
+                title: 'ดำเนินการสำเร็จ',
+                message: isOwner ? 'อนุมัติใบสั่งซื้อเรียบร้อยแล้ว' : 'ส่งใบสั่งซื้อเพื่อขออนุมัติเรียบร้อยแล้ว',
+                variant: 'success'
+            });
             navigate(`${basePath}/orders`);
         } catch (err: any) {
             console.error("Submit Error:", err.response?.data || err);
-            toast({ title: 'เกิดข้อผิดพลาด', message: 'ส่งอนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', variant: 'error' });
+            toast({
+                title: 'เกิดข้อผิดพลาด',
+                message: isOwner ? 'อนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง' : 'ส่งอนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+                variant: 'error'
+            });
         } finally {
             setActiveAction(null);
         }
@@ -715,8 +724,10 @@ function OrderDetail() {
                         <Button variant='secondary' className='w-40' onClick={handleSaveEdit} disabled={!!activeAction}>
                             {activeAction === 'draft' ? 'กำลังบันทึก...' : 'บันทึกฉบับร่าง'}
                         </Button>
-                        <Button variant='primary' className='w-40' onClick={handleSubmitForApproval} disabled={!!activeAction}>
-                            {activeAction === 'submit' ? 'กำลังส่งอนุมัติ...' : 'ส่งอนุมัติ'}
+                        <Button variant='primary' className={isOwner ? 'w-44' : 'w-40'} onClick={handleSubmitForApproval} disabled={!!activeAction}>
+                            {activeAction === 'submit'
+                                ? (isOwner ? 'กำลังอนุมัติใบสั่งซื้อ...' : 'กำลังส่งอนุมัติ...')
+                                : (isOwner ? 'อนุมัติใบสั่งซื้อ' : 'ส่งอนุมัติ')}
                         </Button>
                     </div>
                 </div>
@@ -731,8 +742,8 @@ function OrderDetail() {
                         <Button variant='secondary' className='w-40' onClick={handleSaveEdit} disabled={!!activeAction}>
                             {activeAction === 'draft' ? 'กำลังบันทึก...' : 'บันทึกฉบับร่าง'}
                         </Button>
-                        <Button variant='primary' className='w-40' onClick={handleApprove} disabled={!!activeAction}>
-                            {activeAction === 'approve' ? 'กำลังดำเนินการ...' : 'อนุมัติสั่งซื้อ'}
+                        <Button variant='primary' className='w-44' onClick={handleApprove} disabled={!!activeAction}>
+                            {activeAction === 'approve' ? 'กำลังอนุมัติใบสั่งซื้อ...' : 'อนุมัติใบสั่งซื้อ'}
                         </Button>
                     </div>
                 </div>
@@ -805,7 +816,7 @@ function OrderDetail() {
                 </div>
             )}
 
-            <Modal
+            <ConfirmDialog
                 isOpen={isRestoreConfirmOpen}
                 onClose={() => setIsRestoreConfirmOpen(false)}
                 onConfirm={handleRestore}
@@ -816,7 +827,7 @@ function OrderDetail() {
                 isSubmitting={activeAction === 'restore'}
             />
 
-            <Modal
+            <ConfirmDialog
                 isOpen={!!removeConfirm}
                 onClose={() => setRemoveConfirm(null)}
                 onConfirm={confirmRemoveItem}
@@ -830,7 +841,7 @@ function OrderDetail() {
                 variant='danger'
             />
 
-            <Modal
+            <ConfirmDialog
                 isOpen={!!duplicatePrompt}
                 onClose={cancelDuplicateAdd}
                 onConfirm={confirmDuplicateAdd}

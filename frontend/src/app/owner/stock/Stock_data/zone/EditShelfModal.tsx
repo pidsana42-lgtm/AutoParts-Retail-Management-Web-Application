@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { Save } from "lucide-react";
 import Input from "../../../../../components/elements/input";
 import Select from "../../../../../components/elements/select";
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Zone, Shelf } from "../../../../../interface/wms/stock_data";
 
@@ -23,6 +25,7 @@ export default function EditShelfModal({
   shelf
 }: EditShelfModalProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const [form, setForm] = useState({
     shelf_name: "",
     zone_id: 0,
@@ -40,6 +43,12 @@ export default function EditShelfModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shelf) return;
+    const confirmed = await confirmDialog(
+      `ยืนยันบันทึกการแก้ไขชั้นวาง/ตู้สินค้า "${form.shelf_name}" หรือไม่?`,
+      { title: "ยืนยันการแก้ไขชั้นวางสินค้า", confirmText: "บันทึกการแก้ไข", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
+
     try {
       await stockDataService.updateShelf(shelf.id, form);
       toast({ variant: "success", message: "แก้ไขชั้นวางสินค้าสำเร็จ" });

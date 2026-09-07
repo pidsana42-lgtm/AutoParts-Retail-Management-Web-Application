@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { posApiService } from "../../../../service/http/pos/pos_service";
 import type { PaymentHistoryItem } from "../../../../interface/pos/payment_interface";
+import type { CustomerDiscountResponse } from "../../../../interface/pos/customer_interface";
 import { useEmployeeOptions } from "../../../../hooks/useEmployeeOptions";
 import { getTodayDateString, getDaysAgoDateString } from "../../../../utils/date";
 import { useUserRole } from "../../../../hooks/useUserRole";
 import { getCurrentUserId } from "../../../../utils/auth";
+import { printCustomerStatementFromBackend } from "../../../../utils/payment_history_print";
 
-export function usePaymentHistory() {
+export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
   const { isOwnerOrAdmin } = useUserRole();
   const [items, setItems] = useState<PaymentHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -16,13 +18,14 @@ export function usePaymentHistory() {
   const { employeeList } = useEmployeeOptions();
 
   // Filter States
-  const [search, setSearch] = useState<string>("");
-  const [typeFilter, setTypeFilter] = useState<string>("");
+  const [search, setSearch] = useState<string>(() => initialSearch);
+  const [typeFilter, setTypeFilter] = useState<string>(() => initialTypeFilter);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [employeeId, setEmployeeId] = useState<string>("");
   const [startDate, setStartDate] = useState<string>(getDaysAgoDateString(30));
   const [endDate, setEndDate] = useState<string>(getTodayDateString());
+  const [isPrintingStatement, setIsPrintingStatement] = useState<boolean>(false);
 
   // Pagination States
   const [page, setPage] = useState<number>(1);
@@ -44,7 +47,7 @@ export function usePaymentHistory() {
         params.employee_id = Number(employeeId);
       }
       const data = await posApiService.getPaymentHistory(params);
-      setItems(data);
+      setItems(data || []);
     } catch (err: any) {
       console.error("Failed to fetch payment history:", err);
       setError("ไม่สามารถโหลดข้อมูลประวัติการชำระเงินได้");
@@ -57,7 +60,7 @@ export function usePaymentHistory() {
     fetchHistory();
   }, [fetchHistory]);
 
-  // ตัวกรอง (Client-side Filter พร้อมตรวจ Employee)
+  // ตัวกรอง (Client-side Filter กรองตาม search, type, status, method, employee, date)
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const q = search.trim().toLowerCase();
@@ -356,8 +359,75 @@ export function usePaymentHistory() {
     }
   };
 
+  // สั่งพิมพ์ใบสรุปประวัติการชำระเงินและยอดค้างชำระ (ดึง PDF ตรงจาก Backend)
+  const handlePrintCustomerStatement = useCallback(
+    async (targetCust?: CustomerDiscountResponse | string) => {
+      setIsPrintingStatement(true);
+      try {
+        let customerObj: any = null;
+        let custNameQuery = "";
+
+        if (targetCust) {
+          custNameQuery = typeof targetCust === "string" ? targetCust : targetCust.customer_name;
+        } else if (search.trim()) {
+          custNameQuery = search.trim();
+        }
+
+        // 1. ค้นหาข้อมูลลูกค้า
+        if (custNameQuery) {
+          try {
+            const results = await posApiService.searchCustomerDiscount(custNameQuery);
+            if (results && results.length > 0) {
+              customerObj = results[0];
+            }
+          } catch (e) {
+            console.warn("Could not fetch customer details:", e);
+          }
+        }
+
+        // 2. ถ้าค้นหาไม่พบ ให้ตรวจดูว่า filteredItems เป็นของลูกค้ารายเดียวหรือไม่
+        if (!customerObj && filteredItems.length > 0) {
+          const firstCustName = filteredItems[0].customer_name;
+          const allSameCustomer = filteredItems.every((it) => it.customer_name === firstCustName);
+          if (allSameCustomer && firstCustName) {
+            try {
+              const results = await posApiService.searchCustomerDiscount(firstCustName);
+              if (results && results.length > 0) {
+                customerObj = results[0];
+              }
+            } catch (e) {
+              console.warn("Could not fetch customer details:", e);
+            }
+          }
+        }
+
+        if (!customerObj || !customerObj.id) {
+          alert("กรุณาระบุหรือค้นหาชื่อลูกค้าที่ต้องการพิมพ์ใบสรุปยอด (Customer Statement)");
+          return;
+        }
+
+        // 3. เรียก API ดึงไฟล์ PDF มาตรฐานจาก Backend (Single Source of Truth) เพื่อสั่งพิมพ์
+        await printCustomerStatementFromBackend(customerObj.id, {
+          customerName: customerObj.customer_name,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          paymentType: typeFilter || undefined,
+          status: statusFilter || undefined,
+          paymentMethod: paymentMethod || undefined,
+          action: "print",
+        });
+      } catch (err) {
+        console.error("Failed to print customer statement from backend:", err);
+        alert("เกิดข้อผิดพลาดในการสร้างเอกสารพิมพ์สรุปยอด");
+      } finally {
+        setIsPrintingStatement(false);
+      }
+    },
+    [filteredItems, search, startDate, endDate, typeFilter, statusFilter, paymentMethod]
+  );
   return {
     items: paginatedItems,
+    filteredItems,
     totalRows,
     totalPages,
     isLoading,
@@ -379,6 +449,7 @@ export function usePaymentHistory() {
     cancelRemark,
     isCancelling,
     isOwnerOrAdmin,
+    isPrintingStatement,
     setSearch,
     setTypeFilter,
     setStatusFilter,
@@ -397,6 +468,7 @@ export function usePaymentHistory() {
     handleApproveCancelReceipt,
     handleRejectCancelReceipt,
     handleCancelReceipt,
+    handlePrintCustomerStatement,
     fetchHistory,
   };
 }

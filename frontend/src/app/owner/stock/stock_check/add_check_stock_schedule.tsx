@@ -1,16 +1,16 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft } from "lucide-react";
 
 import Heading from "../../../../components/elements/heading";
+import Breadcrumb from "../../../../components/elements/breadcrumb";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
 import Input from "../../../../components/elements/input";
 import Select from "../../../../components/elements/select";
 import Button from "../../../../components/elements/button";
 import TreeSelect from "../../../../components/elements/tree_select";
 import { ToastProvider, useToast } from "../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 import SearchableSelect from "./SearchableSelect";
-import ProductQuickView from "./ProductQuickView";
 import CheckDateTimeRangeField, {
   type CheckDateTimeRangeValue,
   validateCheckDateTimeRange,
@@ -19,13 +19,12 @@ import CheckDateTimeRangeField, {
 import { useCheckStockOptions } from "./useCheckStockOptions";
 import { buildZoneTree, buildCategoryTree, getRelatedProducts } from "./checkStockTargets";
 import { stockCheckService, type CheckStockScheduleCreateInput } from "../../../../service/http/wms/stock_check_service";
-import type { StockItem } from "../../../../interface/wms/product";
 
 function AddCheckStockScheduleContent() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { alertDialog } = useAlertDialog();
   const { loading: loadingOptions, employees, zones, categories, products } = useCheckStockOptions();
-  const [quickViewProduct, setQuickViewProduct] = useState<StockItem | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -50,7 +49,7 @@ function AddCheckStockScheduleContent() {
 
     const rangeError = validateCheckDateTimeRange(dateTimeRange);
     if (rangeError) {
-      toast({ variant: "error", message: rangeError });
+      await alertDialog(rangeError);
       return;
     }
 
@@ -64,7 +63,7 @@ function AddCheckStockScheduleContent() {
 
     if (checkType === "LOCATION") {
       if (!selectedZonePath) {
-        toast({ variant: "error", message: "กรุณาเลือกพื้นที่ตรวจสอบ" });
+        await alertDialog("กรุณาเลือกพื้นที่ตรวจสอบ");
         return;
       }
       if (selectedZonePath.startsWith("level-")) payload.shelf_level_id = parseInt(selectedZonePath.replace("level-", ""));
@@ -72,7 +71,7 @@ function AddCheckStockScheduleContent() {
       if (selectedZonePath.startsWith("zone-")) payload.zone_id = parseInt(selectedZonePath.replace("zone-", ""));
     } else if (checkType === "CATEGORY") {
       if (!categoryId) {
-        toast({ variant: "error", message: "กรุณาเลือกหมวดหมู่สินค้า" });
+        await alertDialog("กรุณาเลือกหมวดหมู่สินค้า");
         return;
       }
       if (categoryId.startsWith("subsubcategory-")) payload.sub_sub_category_id = parseInt(categoryId.replace("subsubcategory-", ""));
@@ -80,7 +79,7 @@ function AddCheckStockScheduleContent() {
       else if (categoryId.startsWith("category-")) payload.category_id = parseInt(categoryId.replace("category-", ""));
     } else if (checkType === "PRODUCT") {
       if (!productId) {
-        toast({ variant: "error", message: "กรุณาเลือกสินค้า" });
+        await alertDialog("กรุณาเลือกสินค้า");
         return;
       }
       payload.product_id = parseInt(productId);
@@ -93,7 +92,7 @@ function AddCheckStockScheduleContent() {
       // พาไปหน้ารายละเอียดตารางที่เพิ่งสร้างทันที เพื่อให้เห็น QR Code สำหรับสแกนเช็คสต็อกได้เลย
       navigate(`/owner/stock/stock-check/${res.id}`);
     } catch (err: any) {
-      toast({ variant: "error", message: err.response?.data?.error || "เกิดข้อผิดพลาดในการบันทึก" });
+      await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการบันทึก");
     } finally {
       setSubmitting(false);
     }
@@ -101,23 +100,21 @@ function AddCheckStockScheduleContent() {
 
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
+      <Breadcrumb
+        items={[
+          { label: "ตรวจสอบสินค้า", path: "/owner/stock/stock-check" },
+          { label: "สร้างตารางใหม่" },
+        ]}
+      />
+
       {/* Header */}
-      <div className="flex items-center gap-4 border-b border-slate-200 pb-4">
-        <button
-          type="button"
-          onClick={() => navigate("/owner/stock/stock-check")}
-          className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
-        >
-          <ChevronLeft size={24} className="text-slate-600" />
-        </button>
-        <div>
-          <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
-            สร้างตารางเช็คสต็อกใหม่
-          </Heading>
-          <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
-            กำหนดวันเวลา พื้นที่เป้าหมาย และพนักงานที่รับผิดชอบ
-          </Heading>
-        </div>
+      <div className="border-b border-slate-200 pb-4">
+        <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
+          สร้างตารางเช็คสต็อกใหม่
+        </Heading>
+        <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
+          กำหนดวันเวลา พื้นที่เป้าหมาย และพนักงานที่รับผิดชอบ
+        </Heading>
       </div>
 
       <Card className="border-l-[5px] border-l-red-800">
@@ -217,9 +214,9 @@ function AddCheckStockScheduleContent() {
                   {relatedProducts.slice(0, 10).map((p) => (
                     <div
                       key={p.ID}
-                      onClick={() => setQuickViewProduct(p)}
+                      onClick={() => navigate(`/owner/stock/${p.ID}`, { state: { from: "check_stock" } })}
                       className="flex cursor-pointer items-center gap-2 rounded-sm border border-slate-100 bg-white p-1.5 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-                      title="ดูข้อมูลสินค้า"
+                      title="ดูรายละเอียดสินค้า"
                     >
                       {p.ThumbnailUrl ? (
                         <img src={p.ThumbnailUrl} alt="" className="h-8 w-8 shrink-0 rounded object-cover" />
@@ -252,10 +249,6 @@ function AddCheckStockScheduleContent() {
           </form>
         </CardContent>
       </Card>
-
-      {quickViewProduct && (
-        <ProductQuickView product={quickViewProduct} onClose={() => setQuickViewProduct(null)} />
-      )}
     </div>
   );
 }

@@ -13,11 +13,24 @@ export interface RegisterCustomerRequest {
   id_card_number_customer: string;
   registered_address: string;
   shipping_address: string;
+  id_card_image_path?: string;
+}
+
+export interface UpdateCustomerRequest {
+  customer_name: string;
+  customer_type_id: number;
+  phone_number: string;
+  id_card_number_customer: string;
+  registered_address: string;
+  shipping_address: string;
+  id_card_image_path?: string;
 }
 
 export interface UpdateCustomerDiscountRequest {
   is_discount_enabled: boolean;
   ontop_discount_rate: number;
+  credit_limit?: number;
+  standard_discount_rate?: number;
 }
 
 // ==================== Responses ====================
@@ -26,6 +39,7 @@ export interface CustomerListItem {
   customer_name: string;
   phone_number: string;
   id_card_number_customer: string;
+  id_card_image_path?: string;
   display_address: string;
   customer_type_label: string;
   current_debt_amount: number;

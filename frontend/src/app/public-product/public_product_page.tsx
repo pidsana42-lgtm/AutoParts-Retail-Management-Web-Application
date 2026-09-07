@@ -1,12 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
-import { Barcode, Boxes, Car, CircleDollarSign, MapPin, Package, Tag } from "lucide-react";
+import { useParams, useSearchParams } from "react-router-dom";
+import { Barcode, Boxes, Building2, Car, CircleDollarSign, MapPin, Package, Tag } from "lucide-react";
 import apiClient from "../../service/http/apiClient";
 
 type ProductModel = {
   id: number;
   model_name: string;
   brand_name: string;
+};
+
+// PublicProductSupplier: ผู้จำหน่าย 1 รายที่สินค้านี้รับมาจาก — VariantCode ใช้จับคู่กับพารามิเตอร์ ?variant=
+// ใน URL (มาจาก QR ที่พิมพ์แยกตามบริษัท) เพื่อโชว์ให้ตรงว่าชิ้นที่สแกนนี้มาจากบริษัทไหนเจาะจง
+type PublicProductSupplier = {
+  supplier_id: number;
+  supplier_name: string;
+  quantity: number;
+  company_product_code?: string;
+  variant_code?: string;
 };
 
 type PublicProduct = {
@@ -28,6 +38,7 @@ type PublicProduct = {
   shelf_level_name: string;
   thumbnail_url: string;
   supplier_name: string;
+  suppliers?: PublicProductSupplier[];
   note: string;
 };
 
@@ -56,6 +67,8 @@ const formatMoney = (value: number) =>
 
 export default function PublicProductPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const variantCode = searchParams.get("variant") || "";
   const [product, setProduct] = useState<PublicProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -91,6 +104,16 @@ export default function PublicProductPage() {
       .filter(Boolean)
       .join(", ");
   }, [product]);
+
+  // บริษัทที่นำเข้าสินค้าชิ้นนี้: ถ้า URL มี ?variant= (มาจาก QR ที่พิมพ์แยกตามบริษัท) ให้จับคู่ Supplier
+  // ที่ตรงกับ variant code นั้นเจาะจง ไม่งั้น fallback ไปใช้ supplier_name รวม (คั่นด้วย ", " ถ้ามีหลายเจ้า)
+  const importerName = useMemo(() => {
+    if (variantCode) {
+      const matched = product?.suppliers?.find((s) => s.variant_code === variantCode);
+      if (matched?.supplier_name) return matched.supplier_name;
+    }
+    return product?.supplier_name || "";
+  }, [product, variantCode]);
 
   const imageUrl = resolveImageUrl(product?.thumbnail_url || "");
 
@@ -163,6 +186,9 @@ export default function PublicProductPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <InfoItem icon={<Barcode />} label="Barcode" value={product.barcode || "-"} />
               <InfoItem icon={<Tag />} label="Part No." value={product.part_number || "-"} />
+              {importerName ? (
+                <InfoItem icon={<Building2 />} label="บริษัทที่นำเข้า" value={importerName} />
+              ) : null}
               <InfoItem icon={<Boxes />} label="คงเหลือ" value={`${product.quantity || 0} ${product.unit_name || ""}`} />
               <InfoItem icon={<CircleDollarSign />} label="เกรดสินค้า" value={product.grade_name || "-"} />
               <InfoItem icon={<MapPin />} label="ตำแหน่งจัดเก็บ" value={[product.shelf_name, product.shelf_level_name].filter(Boolean).join(" / ") || "-"} />

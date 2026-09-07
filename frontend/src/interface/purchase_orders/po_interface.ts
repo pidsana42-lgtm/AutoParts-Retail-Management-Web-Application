@@ -82,7 +82,7 @@ export interface CreatePOResponse {
     supplier_name: string;
     po_type_id: number;
     total_amount: number;
-    status: 'DRAFT' | 'PENDING';
+    status: 'DRAFT' | 'PENDING' | 'APPROVED';
     creator_id: number;
     creator_name: string;
     created_at: string;
@@ -137,8 +137,16 @@ export interface GetPOsResponse {
 }
 
 export interface SupplierRejectedSummary {
+    supplier_id: number;
     supplier_name: string;
     amount: number;
+    po_count: number;
+    purchase_orders: Array<{
+        id: number;
+        po_number: string;
+        total_amount: number;
+        updated_at: string;
+    }>;
 }
 
 export interface POSummaryResponse {

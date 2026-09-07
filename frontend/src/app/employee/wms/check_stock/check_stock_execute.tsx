@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronLeft, Loader2, MapPin, Send, QrCode, Download, Printer } from "lucide-react";
+import { Loader2, MapPin, Send, QrCode, Download, Printer, FileDown } from "lucide-react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 import Heading from "../../../../components/elements/heading";
+import Breadcrumb from "../../../../components/elements/breadcrumb";
 import Badge from "../../../../components/elements/badge";
 import Button from "../../../../components/elements/button";
 import Input from "../../../../components/elements/input";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
 import { ToastProvider, useToast } from "../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 import { useAuth } from "../../../../contexts/AuthContexts";
 
 import { useCheckStockOptions } from "../../../owner/stock/stock_check/useCheckStockOptions";
@@ -39,6 +43,7 @@ function EmployeeCheckStockExecuteContent() {
   const urlToken = searchParams.get("token");
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { alertDialog, confirmDialog } = useAlertDialog();
   const { user, role } = useAuth() as any;
   const { products, zones, categories, loading: loadingOptions } = useCheckStockOptions();
 
@@ -46,6 +51,7 @@ function EmployeeCheckStockExecuteContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   // ค่านับได้จริงต่อสินค้า (เก็บเป็น string ไว้เพื่อให้ลบ/พิมพ์ช่องว่างได้ระหว่างพิมพ์)
   const [counts, setCounts] = useState<Record<number, string>>({});
@@ -102,6 +108,238 @@ function EmployeeCheckStockExecuteContent() {
       a.download = `check-stock-qr-${id}.png`;
       a.click();
     }
+  };
+
+  // สร้างมาร์กอัป (style + เนื้อหา) ของเอกสารรายการตรวจนับสต็อก ใช้ร่วมกันทั้งตอนดาวน์โหลดเป็น PDF (แปะลง DOM
+  // ที่ซ่อนไว้แล้วถ่ายภาพด้วย html2canvas) และตอนพิมพ์ (แปะลงหน้าต่างพิมพ์ใหม่แล้วเรียก window.print())
+  const buildChecklistMarkup = (footerLabel: string): string => {
+    if (!schedule) return "";
+
+    const rows = scheduleProducts
+      .map((p, idx) => {
+        const submitted = submittedByProduct.get(p.ID);
+        const location = p.Shelf ? `${p.Shelf}${p.ShelfLevel ? ` (ชั้น ${p.ShelfLevel})` : ""}` : "-";
+        const systemQty = submitted?.old_quantity ?? p.Stock;
+        // มีค่าที่นับ/ส่งไปแล้วก็โชว์เลย ไม่งั้นเว้นช่องว่างไว้ให้เขียนด้วยมือระหว่างเดินนับของจริง
+        const countedVal = submitted?.new_quantity ?? counts[p.ID] ?? "";
+        const noteVal = submitted?.reason ?? notes[p.ID] ?? "";
+        return `
+          <tr>
+            <td class="center muted">${idx + 1}</td>
+            <td class="mono">${p.ProductCode}</td>
+            <td class="strong">${p.Name}</td>
+            <td class="center"><span class="tag">${location}</span></td>
+            <td class="center muted">${systemQty}</td>
+            <td class="center blank">${countedVal}</td>
+            <td class="blank">${noteVal}</td>
+          </tr>`;
+      })
+      .join("");
+
+    const dateStr = new Date(schedule.scheduled_datetime).toLocaleDateString("th-TH", { day: "2-digit", month: "long", year: "numeric" });
+    const generatedAt = new Date().toLocaleString("th-TH", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+    return `
+      <style>
+        .checklist-pdf-doc * { box-sizing: border-box; }
+        .checklist-pdf-doc {
+          font-family: "Sarabun", "Kanit", "Inter", sans-serif;
+          padding: 28px 32px;
+          color: #111827;
+          background: #ffffff;
+        }
+
+        /* หัวเอกสาร — เรียบ ทางการ ขาวดำ */
+        .checklist-pdf-doc .doc-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+          border-bottom: 2px solid #111827;
+          padding-bottom: 12px;
+          margin-bottom: 18px;
+        }
+        .checklist-pdf-doc .doc-title { font-family: "Kanit", sans-serif; font-size: 19px; font-weight: 600; margin: 0; }
+        .checklist-pdf-doc .doc-subtitle { font-size: 12px; color: #4b5563; margin: 4px 0 0; }
+
+        /* กล่องข้อมูลงาน */
+        .checklist-pdf-doc .meta-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+          border: 1px solid #d1d5db;
+          padding: 12px 16px;
+          margin-bottom: 20px;
+        }
+        .checklist-pdf-doc .meta-grid .full { grid-column: 1 / -1; }
+        .checklist-pdf-doc .meta-label { font-size: 10px; color: #6b7280; margin: 0 0 2px; text-transform: uppercase; letter-spacing: 0.03em; }
+        .checklist-pdf-doc .meta-value { font-size: 13px; color: #111827; font-weight: 500; margin: 0; }
+
+        .checklist-pdf-doc table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .checklist-pdf-doc thead th {
+          background: #f3f4f6;
+          color: #111827;
+          font-weight: 600;
+          text-align: left;
+          padding: 9px 10px;
+          font-size: 11px;
+          letter-spacing: 0.02em;
+          border: 1px solid #9ca3af;
+        }
+        .checklist-pdf-doc tbody td { padding: 9px 10px; border: 1px solid #d1d5db; vertical-align: middle; }
+
+        .checklist-pdf-doc .center { text-align: center; }
+        .checklist-pdf-doc .strong { font-weight: 600; }
+        .checklist-pdf-doc .muted { color: #6b7280; }
+        .checklist-pdf-doc .mono { font-family: "Sarabun", monospace; color: #374151; }
+        .checklist-pdf-doc .tag { font-size: 11px; color: #374151; }
+        .checklist-pdf-doc .blank { min-width: 70px; border-bottom: 1px dashed #9ca3af !important; }
+
+        .checklist-pdf-doc .footer { margin-top: 20px; font-size: 10px; color: #9ca3af; text-align: right; }
+
+        @page { size: A4; margin: 14mm 16mm; }
+        @media print {
+          .checklist-pdf-doc { padding: 0; }
+          thead { display: table-header-group; } /* ให้หัวตารางซ้ำทุกหน้าเมื่อรายการยาวเกิน 1 หน้า */
+        }
+      </style>
+      <div class="checklist-pdf-doc">
+        <div class="doc-header">
+          <div>
+            <p class="doc-title">รายการตรวจนับสต็อกสินค้า</p>
+            <p class="doc-subtitle">${schedule.target_name || "-"}</p>
+          </div>
+        </div>
+
+        <div class="meta-grid">
+          <div>
+            <p class="meta-label">วันที่นัดตรวจ</p>
+            <p class="meta-value">${dateStr}</p>
+          </div>
+          <div>
+            <p class="meta-label">ผู้รับผิดชอบ</p>
+            <p class="meta-value">${schedule.user_full_name || "-"}</p>
+          </div>
+          <div>
+            <p class="meta-label">จำนวนรายการ</p>
+            <p class="meta-value">${scheduleProducts.length} รายการ</p>
+          </div>
+          ${schedule.note ? `<div class="full"><p class="meta-label">หมายเหตุ</p><p class="meta-value">${schedule.note}</p></div>` : ""}
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th class="center">#</th>
+              <th>รหัสสินค้า</th>
+              <th>ชื่อสินค้า</th>
+              <th class="center">ตำแหน่งจัดเก็บ</th>
+              <th class="center">จำนวนในระบบ</th>
+              <th class="center">นับได้จริง</th>
+              <th>หมายเหตุ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || `<tr><td colspan="7" class="center muted">ไม่พบรายการสินค้า</td></tr>`}
+          </tbody>
+        </table>
+
+        <div class="footer">${footerLabel} ${generatedAt}</div>
+      </div>
+    `;
+  };
+
+  // ดาวน์โหลดเป็นไฟล์ PDF จริงทันทีในคลิกเดียว (ไม่ต้องเปิดหน้าต่างพิมพ์แล้วเลือก "Save as PDF" เอง) — render
+  // มาร์กอัปเดียวกันลง DOM ที่ซ่อนไว้นอกจอ แล้วถ่ายภาพด้วย html2canvas (เพราะ jsPDF เปล่าๆ ไม่รองรับฟอนต์ไทยในตัว)
+  // ก่อนตัดแปะเป็นหน้า A4 ทีละหน้าใน jsPDF
+  const downloadChecklistPdf = async () => {
+    if (!schedule) return;
+    setGeneratingPdf(true);
+
+    // A4 กว้าง 210mm ที่ 96dpi ~ 794px — ใช้ความกว้างนี้ตอน render กันเลย์เอาต์ผิดสัดส่วนตอนแปะลง PDF จริง
+    const pageWidthPx = 794;
+
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.left = "-10000px";
+    container.style.top = "0";
+    container.style.width = `${pageWidthPx}px`;
+    container.style.background = "#ffffff";
+    container.innerHTML = buildChecklistMarkup("ดาวน์โหลดเมื่อ");
+    document.body.appendChild(container);
+
+    try {
+      // รอให้ฟอนต์ที่ใช้จริงในเอกสารพร้อมก่อนถ่ายภาพ กันตัวอักษรเพี้ยน/ใช้ฟอนต์ default ของเบราว์เซอร์
+      await Promise.all([
+        document.fonts.load('600 19px "Kanit"'),
+        document.fonts.load('500 13px "Sarabun"'),
+        document.fonts.load('400 12px "Sarabun"'),
+      ]).catch(() => {});
+      await document.fonts.ready;
+
+      const canvas = await html2canvas(container, {
+        scale: 2, // ความละเอียดสูงกว่าที่แสดงจริง 2 เท่า กันภาพเบลอตอนขยายเต็มหน้า PDF
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        windowWidth: pageWidthPx,
+      });
+
+      const pdf = new jsPDF({ unit: "mm", format: "a4" });
+      const pageWidthMm = pdf.internal.pageSize.getWidth();
+      const pageHeightMm = pdf.internal.pageSize.getHeight();
+      const imgHeightMm = (canvas.height / canvas.width) * pageWidthMm;
+      const imgData = canvas.toDataURL("image/png");
+
+      // ตัดภาพยาวๆ ทั้งใบเป็นหน้า A4 ทีละหน้า (เผื่อรายการสินค้ายาวเกิน 1 หน้า)
+      let heightLeftMm = imgHeightMm;
+      let positionMm = 0;
+      pdf.addImage(imgData, "PNG", 0, positionMm, pageWidthMm, imgHeightMm);
+      heightLeftMm -= pageHeightMm;
+
+      while (heightLeftMm > 0) {
+        positionMm = heightLeftMm - imgHeightMm;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, positionMm, pageWidthMm, imgHeightMm);
+        heightLeftMm -= pageHeightMm;
+      }
+
+      pdf.save(`check-stock-${schedule.id}.pdf`);
+    } catch (err) {
+      console.error("Failed to generate checklist PDF:", err);
+      await alertDialog("ไม่สามารถสร้างไฟล์ PDF ได้ กรุณาลองใหม่");
+    } finally {
+      document.body.removeChild(container);
+      setGeneratingPdf(false);
+    }
+  };
+
+  // เปิดหน้าต่างพิมพ์ใหม่ด้วยมาร์กอัปเดียวกับที่ใช้สร้าง PDF แล้วเรียก print ของเบราว์เซอร์ — ต่างจากตอนดาวน์โหลด
+  // ตรงที่เป็นเอกสารสด (ไม่ใช่รูปที่ถ่ายไว้) และเป็นคนละ document เลยต้องแปะลิงก์ Google Fonts ใหม่เอง
+  const printChecklist = () => {
+    if (!schedule) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>รายการตรวจนับสต็อก - ${schedule.target_name || "งานเช็คสต็อก"}</title>
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Kanit:wght@500;600;700&display=swap" rel="stylesheet">
+        </head>
+        <body>
+          ${buildChecklistMarkup("พิมพ์เมื่อ")}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    // ปิดแท็บที่เปิดไว้เองอัตโนมัติ ทันทีที่ผู้ใช้กด "พิมพ์" หรือ "ยกเลิก" ใน dialog เสร็จ (ไม่ปล่อยแท็บ about:blank
+    // ค้างไว้เฉยๆ ให้ผู้ใช้งงว่าใช้ทำอะไรต่อไม่ได้) — ใช้ afterprint แทนการปิดทันทีหลังเรียก print() เพราะ dialog
+    // อาจยังไม่ทันเปิดจริงตอนนั้น
+    printWindow.onafterprint = () => printWindow.close();
+    // รอให้ฟอนต์ Google Fonts โหลดเสร็จก่อนเรียก print กันข้อความกระโดดขนาดหลังสั่งพิมพ์ไปแล้ว
+    setTimeout(() => printWindow.print(), 400);
   };
 
   const handlePrintQR = () => {
@@ -171,11 +409,12 @@ function EmployeeCheckStockExecuteContent() {
   const handleSubmit = async () => {
     if (!id || !schedule || !submitterUserId) return;
     if (!allCounted) {
-      toast({ variant: "error", message: "กรุณากรอกจำนวนที่นับได้ให้ครบทุกรายการก่อนส่งตรวจสอบ" });
+      await alertDialog("กรุณากรอกจำนวนที่นับได้ให้ครบทุกรายการก่อนส่งตรวจสอบ");
       return;
     }
-    const confirmed = window.confirm(
-      `ยืนยันส่งผลนับสต็อกทั้ง ${scheduleProducts.length} รายการให้เจ้าของร้านตรวจสอบ? หลังส่งแล้วจะแก้ไขจำนวนไม่ได้จนกว่าเจ้าของร้านจะตีกลับ`
+    const confirmed = await confirmDialog(
+      `ยืนยันส่งผลนับสต็อกทั้ง ${scheduleProducts.length} รายการให้เจ้าของร้านตรวจสอบ? หลังส่งแล้วจะแก้ไขจำนวนไม่ได้จนกว่าเจ้าของร้านจะตีกลับ`,
+      { title: "ยืนยันส่งผลนับสต็อก", confirmText: "ส่งตรวจสอบ" }
     );
     if (!confirmed) return;
 
@@ -208,7 +447,7 @@ function EmployeeCheckStockExecuteContent() {
         navigate("/employee/wms/check-stock");
       }
     } catch (err: any) {
-      toast({ variant: "error", message: err.response?.data?.error || "ไม่สามารถส่งผลนับสต็อกได้ กรุณาลองใหม่" });
+      await alertDialog(err.response?.data?.error || "ไม่สามารถส่งผลนับสต็อกได้ กรุณาลองใหม่");
     } finally {
       setSubmitting(false);
     }
@@ -253,27 +492,27 @@ function EmployeeCheckStockExecuteContent() {
 
   return (
     <div className="min-h-screen space-y-6 bg-gray-50 p-6 pb-28 font-sans">
+      {/* Breadcrumb: ซ่อนไว้ตอนเข้าผ่านการสแกน QR (หน้าเปล่าไม่มี Sidebar/Navbar) เพราะไม่มีที่ให้ย้อนกลับไปจริงๆ */}
+      {!isValidQrToken && (
+        <Breadcrumb
+          items={[
+            { label: "คลังสินค้า", path: "/employee/wms/stock-data" },
+            { label: "เช็คสต็อกสินค้า", path: "/employee/wms/check-stock" },
+            { label: schedule.target_name || "รายละเอียดงาน" },
+          ]}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
-        <div className="flex items-center gap-3">
-          {!isValidQrToken && (
-            <button
-              type="button"
-              onClick={() => navigate("/employee/wms/check-stock")}
-              className="cursor-pointer rounded-full p-2 transition-colors hover:bg-slate-200"
-            >
-              <ChevronLeft size={24} className="text-slate-600" />
-            </button>
-          )}
-          <div>
-            <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
-              {schedule.target_name || "ตรวจนับสต็อก"}
-            </Heading>
-            <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
-              {dateStr} · {startTimeStr}
-              {endTimeStr ? ` - ${endTimeStr}` : ""}
-            </Heading>
-          </div>
+        <div>
+          <Heading level="h2" weight="semibold" className="mb-0 text-gray-800">
+            {schedule.target_name || "ตรวจนับสต็อก"}
+          </Heading>
+          <Heading level="h6" weight="light" className="m-0 mt-1 text-slate-500">
+            {dateStr} · {startTimeStr}
+            {endTimeStr ? ` - ${endTimeStr}` : ""}
+          </Heading>
         </div>
         {getStatusBadge(schedule.status)}
       </div>
@@ -340,8 +579,26 @@ function EmployeeCheckStockExecuteContent() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle className="text-lg">รายการสินค้าที่ต้องนับ</CardTitle>
+          {/* เจ้าของร้านอนุมัติและบันทึกลงสต็อกแล้ว (เสร็จสิ้น) ไม่ต้องโชว์ปุ่มนี้อีก เพราะรายการนับไม่มีความหมายให้พิมพ์ต่อแล้ว */}
+          {scheduleProducts.length > 0 && schedule.status !== "เสร็จสิ้น" && (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                onClick={downloadChecklistPdf}
+                disabled={generatingPdf}
+                variant="outline"
+                className="flex items-center gap-1.5"
+              >
+                {generatingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+                ดาวน์โหลด PDF
+              </Button>
+              <Button onClick={printChecklist} variant="outline" className="flex items-center gap-1.5">
+                <Printer className="h-3.5 w-3.5" />
+                พิมพ์
+              </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {scheduleProducts.length === 0 ? (

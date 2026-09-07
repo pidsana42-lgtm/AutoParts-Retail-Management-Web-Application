@@ -4,10 +4,11 @@ import type {
   CustomerListItem,
   CustomerDetailResponse,
   RegisterCustomerRequest,
+  UpdateCustomerRequest,
   UpdateCustomerDiscountRequest,
 } from "../../../interface/customer/customer_interface";
 import type { CustomerDiscountResponse } from "../../../interface/pos/customer_interface";
-import type { BulkUpdateCustomerDiscountItem } from "../../../interface/storeconfig/customer_credit_interface";
+import type { BulkUpdateCustomerDiscountItem, CustomerCreditAuditLog } from "../../../interface/storeconfig/customer_credit_interface";
 
 export const customerApiService = {
   /** ดึงรายชื่อประเภทลูกค้าสำหรับ Dropdown */
@@ -28,9 +29,21 @@ export const customerApiService = {
     return res.data;
   },
 
-  /** ลงทะเบียนลูกค้าใหม่ */
-  registerCustomer: async (payload: RegisterCustomerRequest): Promise<any> => {
-    const res = await apiClient.post("/customers/register", payload);
+  /** ลงทะเบียนลูกค้าใหม่ (รองรับทั้ง JSON และ FormData ที่แนบไฟล์) */
+  registerCustomer: async (payload: RegisterCustomerRequest | FormData): Promise<any> => {
+    const isFormData = typeof FormData !== "undefined" && payload instanceof FormData;
+    const res = await apiClient.post("/customers/register", payload, {
+      headers: isFormData ? { "Content-Type": "multipart/form-data" } : undefined,
+    });
+    return res.data;
+  },
+
+  /** แก้ไขข้อมูลลูกค้า (รองรับทั้ง JSON และ FormData ที่แนบไฟล์) */
+  updateCustomer: async (id: number, payload: UpdateCustomerRequest | FormData): Promise<any> => {
+    const isFormData = typeof FormData !== "undefined" && payload instanceof FormData;
+    const res = await apiClient.put(`/customers/${id}`, payload, {
+      headers: isFormData ? { "Content-Type": "multipart/form-data" } : undefined,
+    });
     return res.data;
   },
 
@@ -60,4 +73,42 @@ export const customerApiService = {
     });
     return res.data;
   },
+
+  /** ดึงประวัติการแก้ไขสิทธิ์และเครดิตลูกค้า (GET /api/customers/credit/audit-logs) */
+  getCustomerCreditAuditLogs: async (): Promise<CustomerCreditAuditLog[]> => {
+    const res = await apiClient.get<CustomerCreditAuditLog[]>("/customers/credit/audit-logs");
+    return res.data || [];
+  },
+
+  /** บันทึกประวัติการแก้ไขสิทธิ์และเครดิตลูกค้า (POST /api/customers/credit/audit-logs) */
+  createCustomerCreditAuditLog: async (payload: {
+    customer_id?: number;
+    customer_name: string;
+    action: string;
+    details: string;
+  }): Promise<any> => {
+    const res = await apiClient.post("/customers/credit/audit-logs", payload);
+    return res.data;
+  },
+};
+
+/**
+ * คืนค่า Protected URL สำหรับเข้าถึงรูปบัตรประชาชนหรือเอกสารลูกค้า
+ * โดยแนบ Token สำหรับยืนยันสิทธิ์ผ่าน Protected Route ของ Backend
+ */
+export const getCustomerDocumentUrl = (
+  customerId?: number,
+  pathOrUrl?: string
+): string => {
+  if (!customerId && !pathOrUrl) return "";
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
+  const queryToken = token ? `?token=${encodeURIComponent(token)}` : "";
+
+  if (customerId) {
+    return `/api/customers/${customerId}/document${queryToken}`;
+  }
+
+  return `/api/customers/document/view?path=${encodeURIComponent(pathOrUrl || "")}${
+    token ? `&token=${encodeURIComponent(token)}` : ""
+  }`;
 };

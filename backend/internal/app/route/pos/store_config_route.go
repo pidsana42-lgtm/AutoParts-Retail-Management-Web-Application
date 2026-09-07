@@ -36,5 +36,11 @@ func SetupStoreConfigRoutes(r *gin.Engine, db *gorm.DB) {
             middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)), 
             storeConfigCtrl.UpdateStoreConfig,
         )
+
+        // ดูประวัติการแก้ไขการตั้งค่า (Audit Logs)
+        storeConfigGroup.GET("/audit-logs", 
+            middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)), 
+            storeConfigCtrl.GetAuditLogs,
+        )
     }
 }

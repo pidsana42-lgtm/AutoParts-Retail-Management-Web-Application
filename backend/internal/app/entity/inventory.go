@@ -19,4 +19,14 @@ type Inventory struct {
 
 	SupplierID uint `json:"supplier_id"`
 	Supplier *Supplier `gorm:"foreignKey:SupplierID" json:"supplier"`
+
+	// CompanyProductCode: รหัสสินค้าตามที่ Supplier เจ้านี้ใช้เรียกสินค้าชิ้นนี้ (ย้ายมาจาก entity.Product เดิม)
+	// อยู่ที่นี่แทนเพราะสินค้า 1 ชื่อในร้านมาได้จากหลายบริษัท แต่ละเจ้ามีรหัสของตัวเองไม่เหมือนกัน
+	CompanyProductCode string `json:"company_product_code"`
+
+	// Barcode: บาร์โค้ดของสินค้าตามล็อต/คู่ค้า
+	Barcode string `json:"barcode"`
+
+	// QRCode: คิวอาร์โค้ดของสินค้าตามล็อต/คู่ค้า
+	QRCode string `json:"qr_code"`
 }

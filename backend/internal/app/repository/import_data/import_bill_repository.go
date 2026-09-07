@@ -84,10 +84,11 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 
 		// upsertSupplierInventory บันทึก/ปรับยอดในตาราง inventories ต่อ (product, supplier)
 		// เพื่อให้ระบบรู้ว่าสินค้าชิ้นนี้รับมาจากบริษัทไหน และรับจากเจ้านั้นไปกี่ชิ้น
-		upsertSupplierInventory := func(productID, supplierID uint, qty int) error {
+		upsertSupplierInventory := func(productID, supplierID uint, qty int, companyProdCode string) error {
 			if productID == 0 || supplierID == 0 || qty == 0 {
 				return nil
 			}
+			companyProdCode = strings.TrimSpace(companyProdCode)
 			var inv entity.Inventory
 			err := tx.Where("product_id = ? AND supplier_id = ?", productID, supplierID).First(&inv).Error
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -97,6 +98,7 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 					Last_Updated_DateTime: time.Now(),
 					ProductID:             productID,
 					SupplierID:            supplierID,
+					CompanyProductCode:    companyProdCode,
 				}
 				if err := tx.Create(&newInv).Error; err != nil {
 					return err
@@ -113,16 +115,47 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 					prodCode = prod.Product_Code
 				}
 
-				return tx.Model(&entity.Inventory{}).Where("id = ?", newInv.ID).
-					Update("variant_code", lotcode.Build(prodCode, shortName, newInv.ID)).Error
+				code := lotcode.Build(prodCode, shortName)
+				return tx.Model(&entity.Inventory{}).Where("id = ?", newInv.ID).Updates(map[string]interface{}{
+					"variant_code":         code,
+					"barcode":              code,
+					"qr_code":              code,
+					"company_product_code": companyProdCode,
+				}).Error
 			}
 			if err != nil {
 				return err
 			}
-			return tx.Model(&entity.Inventory{}).Where("id = ?", inv.ID).Updates(map[string]interface{}{
+			updates := map[string]interface{}{
 				"inventory_quantity":     inv.Inventory_Quantity + qty,
 				"last_updated_date_time": time.Now(),
-			}).Error
+			}
+			if companyProdCode != "" && inv.CompanyProductCode == "" {
+				updates["company_product_code"] = companyProdCode
+			}
+			if inv.Variant_Code == "" || inv.Barcode == "" || inv.QRCode == "" {
+				var supp entity.Supplier
+				shortName := ""
+				if errSup := tx.First(&supp, supplierID).Error; errSup == nil {
+					shortName = supp.ShortSupplierName
+				}
+				var prod entity.Product
+				prodCode := ""
+				if errProd := tx.Select("product_code").First(&prod, productID).Error; errProd == nil {
+					prodCode = prod.Product_Code
+				}
+				code := lotcode.Build(prodCode, shortName)
+				if inv.Variant_Code == "" {
+					updates["variant_code"] = code
+				}
+				if inv.Barcode == "" {
+					updates["barcode"] = code
+				}
+				if inv.QRCode == "" {
+					updates["qr_code"] = code
+				}
+			}
+			return tx.Model(&entity.Inventory{}).Where("id = ?", inv.ID).Updates(updates).Error
 		}
 
 		// reverseBillStock subtracts the stock that was added by a previous confirm of this bill.
@@ -275,7 +308,7 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				prod = newProd
 
 				// ผูกสินค้าใหม่เข้ากับบริษัทที่นำเข้าบิลนี้ ตั้งแต่ชิ้นแรก
-				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, items[i].OrderQuantity); err != nil {
+				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, items[i].OrderQuantity, items[i].CompanyProductCode); err != nil {
 					return err
 				}
 			} else if err == nil {
@@ -283,7 +316,7 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 					return err
 				}
 				// บวกยอดเข้าบริษัทของบิลนี้ — ทำให้สินค้าชื่อเดียวกันจากต่างบริษัทไล่ยอด/ที่มาแยกกันได้
-				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, items[i].OrderQuantity); err != nil {
+				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, items[i].OrderQuantity, items[i].CompanyProductCode); err != nil {
 					return err
 				}
 				if items[i].PricePerUnit > 0 && items[i].PricePerUnit != prod.Cost_price {

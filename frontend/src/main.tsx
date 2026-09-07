@@ -6,15 +6,18 @@ import './index.css';
 import { AuthProvider } from './contexts/AuthContexts';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ToastProvider } from "./components/elements/toast";
+import { AlertDialogProvider } from "./components/elements/alert_dialog";
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider position="top-center" maxToasts={5}>
-          <NotificationProvider>
-            <App />
-          </NotificationProvider>
+          <AlertDialogProvider>
+            <NotificationProvider>
+              <App />
+            </NotificationProvider>
+          </AlertDialogProvider>
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>

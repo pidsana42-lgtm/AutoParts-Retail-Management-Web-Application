@@ -8,7 +8,7 @@ import Input   from "../../../components/elements/input";
 import Select , { type SelectOption }  from "../../../components/elements/select";
 import Button  from "../../../components/elements/button";
 import { Badge } from "../../../components/elements/badge";
-import Modal from "../../../components/elements/modal";
+import ConfirmDialog from "../../../components/elements/confirm_dialog";
 import { useToast } from "../../../components/elements/toast";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../components/elements/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../components/elements/table";
@@ -120,12 +120,12 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
   }
 
   const confirmationModal = (
-    <Modal
+    <ConfirmDialog
       isOpen={confirmationAction !== null}
       onClose={() => !isActionLoading && setConfirmationAction(null)}
       title={confirmationAction === "delete" ? "ยืนยันการลบใบสั่งซื้อ" : "ยืนยันการอนุมัติใบสั่งซื้อ"}
       description={confirmationAction === "delete"
-        ? "คุณต้องการลบใบสั่งซื้อนี้ใช่หรือไม่? สามารถกู้คืนได้จากถังขยะ"
+        ? "คุณต้องการลบใบสั่งซื้อนี้ใช่หรือไม่? สามารถกู้คืนได้จากถังขยะภายใน 30 วัน ก่อนระบบลบถาวร"
         : "คุณต้องการอนุมัติใบสั่งซื้อนี้ใช่หรือไม่?"}
       onConfirm={() => {
         if (confirmationAction === "approve") void handleApprove();

@@ -632,7 +632,19 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
 
     try {
       const res = await posApiService.settleCustomerBills(payload);
-      alert(`บันทึกชำระเงินสำเร็จ!\nเลขที่ใบเสร็จ: ${res.receipt_number}\nยอดชำระ: ฿${res.total_received.toLocaleString(undefined, { minimumFractionDigits: 2 })} บาท`);
+      
+      // สั่งเปิด PDF ใบเสร็จรับเงิน (ชำระหนี้) ในแท็บใหม่
+      try {
+        const receiptIdentifier = res.receipt_id || res.receipt_number;
+        if (receiptIdentifier) {
+          const blob = await posApiService.printPaymentReceiptPDF(receiptIdentifier);
+          const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+          window.open(blobUrl, "_blank");
+        }
+      } catch (printErr) {
+        console.warn("Failed to auto-open debt receipt PDF:", printErr);
+      }
+
       setIsPaymentModalOpen(false);
       setQrCodeData(null);
 
