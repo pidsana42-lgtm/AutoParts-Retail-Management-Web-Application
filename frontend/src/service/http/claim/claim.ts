@@ -2,6 +2,7 @@ import apiClient from '../apiClient';
 import type { 
   SalesReturn, 
   CustomerClaim, 
+  CustomerClaimItem,
   SupplierClaim 
 } from '../../../interface/claim/claim';
 
@@ -62,7 +63,7 @@ export const deleteCustomerClaim = async (id: number) => {
 };
 
 export const updateClaimItemStatus = async (itemId: number, status: string) => {
-  const response = await apiClient.put(`/claims/customer-claims/items/${itemId}/status`, { status });
+  const response = await apiClient.put<{ data: CustomerClaimItem }>(`/claims/customer-claims/items/${itemId}/status`, { status });
   return response.data?.data ?? null;
 };
 
@@ -148,5 +149,4 @@ export const exportCustomerClaimChecklistPDF = async (status?: string, search?: 
     throw error;
   }
 };
-
 

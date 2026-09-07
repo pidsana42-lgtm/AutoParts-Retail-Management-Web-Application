@@ -717,7 +717,7 @@ Analyze the input invoice/bill carefully. You can intelligently correct typos, g
 Follow these strict extraction guidelines for this layout:
 1. Invoice Metadata:
    - "bill_no": Extract from the bill number field (e.g. "IV-202507/01229").
-   - "due_date": Calculate/reconstruct the date based on "วันที่" and "ระยะเครดิต" (e.g. if purchase date is 29/07/2025 and term is 90 days, due_date is 2025-10-27).
+   - "due_date": Extract the invoice/purchase date shown as "วันที่" on the bill (e.g. if the bill shows "วันที่ : 29/07/2025", due_date is 2025-07-29). Do NOT add the credit term days to this date — just use the date printed on the bill as-is.
    - "credit_term": Extract the term details (e.g. "90 Days" or "90 วัน").
    - "transport_by": Extract from "ขนส่งโดย" if present.
    - "supplier_name": Extract the supplier company name visible in the invoice header/logo (e.g. "บริษัท ไทยออโตพาร์ท จำกัด" or "เจ.เจ. อะไหล่").
