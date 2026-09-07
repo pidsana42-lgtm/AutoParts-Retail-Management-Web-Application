@@ -1,6 +1,7 @@
 package pos
 
 import (
+	"context"
 	posDto "backend/internal/app/dto/pos"
 	"backend/internal/app/entity"
 	posRepository "backend/internal/app/repository/pos"
@@ -10,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	svcNotification "backend/internal/app/service/notification"
 )
 
 type PaymentService interface {
@@ -28,14 +30,17 @@ type PaymentService interface {
 	ApproveCancelPaymentReceipt(repaymentID uint, ownerID uint, remark string) error
 	RejectCancelPaymentReceipt(repaymentID uint, remark string) error
 	CancelPaymentReceipt(repaymentID uint, req posDto.CancelPaymentReceiptRequest) error
+	GenerateDebtRepaymentReceiptPDF(ctx context.Context, identifier string) ([]byte, error)
+	GenerateCustomerStatementPDF(ctx context.Context, customerID uint, startDate, endDate, paymentType, status, paymentMethod string) ([]byte, error)
 }
 
 type paymentService struct {
-	paymentRepo posRepository.PaymentRepository
+	paymentRepo  posRepository.PaymentRepository
+	notification svcNotification.NotificationService
 }
 
-func NewPaymentService(paymentRepo posRepository.PaymentRepository) PaymentService {
-	return &paymentService{paymentRepo: paymentRepo}
+func NewPaymentService(paymentRepo posRepository.PaymentRepository, notification svcNotification.NotificationService) PaymentService {
+	return &paymentService{paymentRepo: paymentRepo, notification: notification}
 }
 
 // -------------------------------------------------------------
@@ -928,7 +933,25 @@ func (s *paymentService) RequestCancelPaymentReceipt(repaymentID uint, userID ui
 	if repayment.Status == "pending_cancel" {
 		return errors.New("รายการนี้ได้ส่งคำขอยกเลิกไปแล้ว อยู่ระหว่างรอเจ้าของร้านอนุมัติ")
 	}
-	return s.paymentRepo.RequestCancelRepayment(repaymentID, userID, reason)
+	if err := s.paymentRepo.RequestCancelRepayment(repaymentID, userID, reason); err != nil {
+		return err
+	}
+
+	// แจ้งเตือนส่งถึง Owner/Manager ทันทีเมื่อพนักงานยื่นคำขอยกเลิกการชำระเงิน
+	if s.notification != nil {
+		title := "มีคำขอยกเลิกการรับชำระเงิน"
+		receiptNo := repayment.ReceiptNumber
+		if receiptNo == "" {
+			receiptNo = fmt.Sprintf("#%d", repayment.ID)
+		}
+		msg := fmt.Sprintf("คำขอยกเลิกใบเสร็จรับเงินเลขที่ %s (เหตุผล: %s)", receiptNo, reason)
+		link := "/owner/transactions/payment-cancellation-history"
+		if err := s.notification.NotifyOwners("warning", title, msg, link, nil); err != nil {
+			fmt.Printf("[Notification] failed to notify owners (repayment %d): %v\n", repaymentID, err)
+		}
+	}
+
+	return nil
 }
 
 // -------------------------------------------------------------
@@ -971,6 +994,8 @@ func (s *paymentService) ApproveCancelPaymentReceipt(repaymentID uint, ownerID u
 		tx.Rollback()
 		return errors.New("รายการนี้ถูกยกเลิกไปแล้ว")
 	}
+
+	targetUserID := repayment.CancelRequestedByID
 
 	now := time.Now()
 	repayment.Status = "cancelled"
@@ -1021,7 +1046,28 @@ func (s *paymentService) ApproveCancelPaymentReceipt(repaymentID uint, ownerID u
 		}
 	}
 
-	return tx.Commit().Error
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+
+	// แจ้งเตือนส่งกลับไปยัง Staff ผู้ส่งคำขอ เมื่อ Owner กดอนุมัติ
+	if s.notification != nil && targetUserID != nil && *targetUserID != 0 && *targetUserID != ownerID {
+		title := "อนุมัติคำขอยกเลิกการรับชำระเงินแล้ว"
+		receiptNo := repayment.ReceiptNumber
+		if receiptNo == "" {
+			receiptNo = fmt.Sprintf("#%d", repayment.ID)
+		}
+		msg := fmt.Sprintf("คำขอยกเลิกใบเสร็จรับเงินเลขที่ %s ได้รับการอนุมัติแล้ว", receiptNo)
+		if remark != "" {
+			msg = fmt.Sprintf("คำขอยกเลิกใบเสร็จรับเงินเลขที่ %s ได้รับการอนุมัติแล้ว (หมายเหตุ: %s)", receiptNo, remark)
+		}
+		link := "/employee/transactions/payment-cancellation-history"
+		if err := s.notification.NotifyUser(*targetUserID, "success", title, msg, link, nil); err != nil {
+			fmt.Printf("[Notification] failed to notify user %d (repayment %d): %v\n", *targetUserID, repaymentID, err)
+		}
+	}
+
+	return nil
 }
 
 // -------------------------------------------------------------
@@ -1035,7 +1081,31 @@ func (s *paymentService) RejectCancelPaymentReceipt(repaymentID uint, remark str
 	if repayment.Status != "pending_cancel" {
 		return errors.New("รายการนี้ไม่ได้อยู่ในสถานะรออนุมัติการยกเลิก")
 	}
-	return s.paymentRepo.RejectCancelRepayment(repaymentID, remark)
+
+	targetUserID := repayment.CancelRequestedByID
+
+	if err := s.paymentRepo.RejectCancelRepayment(repaymentID, remark); err != nil {
+		return err
+	}
+
+	// แจ้งเตือนส่งกลับไปยัง Staff ผู้ส่งคำขอ เมื่อ Owner กดปฏิเสธ
+	if s.notification != nil && targetUserID != nil && *targetUserID != 0 {
+		title := "ปฏิเสธคำขอยกเลิกการรับชำระเงิน"
+		receiptNo := repayment.ReceiptNumber
+		if receiptNo == "" {
+			receiptNo = fmt.Sprintf("#%d", repayment.ID)
+		}
+		msg := fmt.Sprintf("คำขอยกเลิกใบเสร็จรับเงินเลขที่ %s ถูกปฏิเสธ", receiptNo)
+		if remark != "" {
+			msg = fmt.Sprintf("คำขอยกเลิกใบเสร็จรับเงินเลขที่ %s ถูกปฏิเสธ (หมายเหตุ: %s)", receiptNo, remark)
+		}
+		link := "/employee/transactions/payment-cancellation-history"
+		if err := s.notification.NotifyUser(*targetUserID, "error", title, msg, link, nil); err != nil {
+			fmt.Printf("[Notification] failed to notify user %d (repayment %d): %v\n", *targetUserID, repaymentID, err)
+		}
+	}
+
+	return nil
 }
 
 // -------------------------------------------------------------

@@ -2,7 +2,6 @@ package cron
 
 import (
 	"log"
-	"time"
 
 	wmsSvc "backend/internal/app/service/wms"
 
@@ -14,7 +13,7 @@ var checkStockCronInstance *cron.Cron
 // StartCheckStockDueCron รันทุก 1 นาที เพื่อดูว่ามีตารางเช็คสต็อกไหนถึงเวลาเริ่มแล้วบ้าง
 // (เปลี่ยนสถานะ "รอดำเนินการ" -> "กำลังเช็ค" จริงใน DB พร้อมแจ้งเตือนพนักงานที่ได้รับมอบหมาย)
 func StartCheckStockDueCron(service wmsSvc.CheckStockScheduleService) {
-	checkStockCronInstance = cron.New(cron.WithLocation(time.Local))
+	checkStockCronInstance = cron.New(cron.WithLocation(bangkokLocation))
 
 	_, err := checkStockCronInstance.AddFunc("* * * * *", func() {
 		if err := service.ActivateDueSchedules(); err != nil {
@@ -26,5 +25,5 @@ func StartCheckStockDueCron(service wmsSvc.CheckStockScheduleService) {
 	}
 
 	checkStockCronInstance.Start()
-	log.Println("[check-stock-cron] started — checking every minute for check-stock schedules that have reached their start time")
+	log.Println("[check-stock-cron] started — checking every minute using Asia/Bangkok timezone")
 }

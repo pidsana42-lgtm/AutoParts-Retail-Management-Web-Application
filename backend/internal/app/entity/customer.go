@@ -1,6 +1,9 @@
 package entity
 
-import "gorm.io/gorm"
+import (
+	"backend/internal/pkg/crypto"
+	"gorm.io/gorm"
+)
 
 // เพิ่ม ตาราง CustomerType เพื่อเก็บประเภทของลูกค้า เช่น "GENERAL", "PARTNER" และส่วนลดตั้งต้นของกลุ่มลูกค้านั้น ๆ
 type CustomerType struct {
@@ -21,7 +24,7 @@ type Customer struct {
 
 	// Optional
 	PhoneNumber          string `gorm:"type:varchar(20);unique" json:"phone_number"`
-	IdCardNumberCustomer string `gorm:"type:varchar(20);unique" json:"id_card_number_customer"`
+	IdCardNumberCustomer string `gorm:"type:varchar(255);unique" json:"id_card_number_customer"`
 	IdCardImagePath      string `gorm:"type:varchar(255)" json:"id_card_image_path"`
 	RegisteredAddress    string `gorm:"type:varchar(255)" json:"registered_address"` // ที่อยู่ทะเบียนบ้าน
 	ShippingAddress      string `gorm:"type:varchar(255)" json:"shipping_address"`   // ที่อยู่จัดส่ง/ที่ตั้งอู่
@@ -36,4 +39,46 @@ type Customer struct {
 	// เปลี่ยนมาใช้ฟิลด์นี้เก็บ "เปอร์เซ็นต์ส่วนลดที่จะเอาไปบวกเพิ่มให้ทุกชิ้น"
 	// เช่น อู่เครดิตดีมาก ใส่ตรงนี้เป็น 3.00 (%) พอไปดึงของเพื่อนมา มันจะเอาไป +3% อัตโนมัติ
 	OntopDiscountRate float64 `gorm:"type:decimal(5,2);not null;default:0.00" json:"ontop_discount_rate"`
+}
+
+func (c *Customer) BeforeSave(tx *gorm.DB) error {
+	if c.IdCardNumberCustomer != "" && !crypto.IsEncrypted(c.IdCardNumberCustomer) {
+		encrypted, err := crypto.EncryptAES256(c.IdCardNumberCustomer)
+		if err != nil {
+			return err
+		}
+		c.IdCardNumberCustomer = encrypted
+	}
+	return nil
+}
+
+func (c *Customer) AfterSave(tx *gorm.DB) error {
+	if c.IdCardNumberCustomer != "" && crypto.IsEncrypted(c.IdCardNumberCustomer) {
+		decrypted, err := crypto.DecryptAES256(c.IdCardNumberCustomer)
+		if err == nil {
+			c.IdCardNumberCustomer = decrypted
+		}
+	}
+	return nil
+}
+
+func (c *Customer) AfterFind(tx *gorm.DB) error {
+	if c.IdCardNumberCustomer != "" && crypto.IsEncrypted(c.IdCardNumberCustomer) {
+		decrypted, err := crypto.DecryptAES256(c.IdCardNumberCustomer)
+		if err == nil {
+			c.IdCardNumberCustomer = decrypted
+		}
+	}
+	return nil
+}
+
+type CustomerCreditAuditLog struct {
+	gorm.Model
+	CustomerID   *uint  `json:"customer_id"`
+	CustomerName string `gorm:"type:varchar(100);not null" json:"customer_name"`
+	Action       string `gorm:"type:varchar(255);not null" json:"action"`
+	Details      string `gorm:"type:text;not null" json:"details"`
+	ChangedBy    string `gorm:"type:varchar(100);not null" json:"changed_by"`
+	UserID       *uint  `json:"user_id"`
+	User         *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }

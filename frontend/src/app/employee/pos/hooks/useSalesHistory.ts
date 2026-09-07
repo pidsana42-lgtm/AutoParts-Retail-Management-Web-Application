@@ -31,6 +31,7 @@ export const useSalesHistory = () => {
   const [endDate, setEndDate] = useState(getTodayDateString()); // ล็อกไว้ถึงวันนี้
   const [customerType, setCustomerType] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState(searchParams.get("payment_status") || "");
   const [employeeId, setEmployeeId] = useState("");
   const [employeeList, setEmployeeList] = useState<{ label: string; value: string }[]>([]);
   const [page, setPage] = useState(1);
@@ -54,6 +55,7 @@ export const useSalesHistory = () => {
     paidAmount: 0,
     balanceDue: 0,
     unpaidCount: 0,
+    paidCount: 0,
   });
   const [isStatsLoading, setIsStatsLoading] = useState(false);
 
@@ -107,7 +109,13 @@ export const useSalesHistory = () => {
 
       const paidAmount = validItems.reduce((sum, item) => sum + (Number(item.paid_amount) || 0), 0);
       const balanceDue = validItems.reduce((sum, item) => sum + (Number(item.balance_due) || 0), 0);
-      const unpaidCount = validItems.filter((item) => (Number(item.balance_due) || 0) > 0).length;
+      const unpaidCount = validItems.filter(
+        (item) => (Number(item.balance_due) || 0) > 0 || (item.payment_status || "").toLowerCase() === "unpaid" || (item.payment_status || "").toLowerCase() === "partial"
+      ).length;
+      const paidCount = validItems.filter(
+        (item) => ((Number(item.balance_due) || 0) <= 0 && (item.payment_status || "").toLowerCase() === "paid") ||
+                  ((Number(item.balance_due) || 0) <= 0 && (item.payment_status || "").toLowerCase() !== "unpaid" && (item.payment_status || "").toLowerCase() !== "partial" && Number(item.total_amount) > 0)
+      ).length;
 
       setStats({
         totalSales,
@@ -119,6 +127,7 @@ export const useSalesHistory = () => {
         paidAmount,
         balanceDue,
         unpaidCount,
+        paidCount,
       });
     } catch (err) {
       console.error("Failed to fetch overall stats:", err);
@@ -164,6 +173,7 @@ export const useSalesHistory = () => {
       customer_type: customerType || undefined,
       payment_method: paymentMethod || undefined,
       employee_id: employeeId ? Number(employeeId) : undefined,
+      payment_status: paymentStatus || undefined,
       page,
       limit,
     };
@@ -179,7 +189,7 @@ export const useSalesHistory = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [search, startDate, endDate, customerType, paymentMethod, employeeId, page, limit]);
+  }, [search, startDate, endDate, customerType, paymentMethod, employeeId, paymentStatus, page, limit]);
 
   // เพิ่ม: Effect ดึงข้อมูลรายละเอียดออเดอร์เมื่อ selectedOrderId เปลี่ยนแปลง
   useEffect(() => {
@@ -241,10 +251,10 @@ export const useSalesHistory = () => {
     return () => clearTimeout(timer);
   }, [search]); // ดักจับเมื่อ search เปลี่ยนแปลง
 
-  // ดึงข้อมูลใหม่ทุกครั้งที่ page หรือ limit เปลี่ยนแปลง
+  // ดึงข้อมูลใหม่ทุกครั้งที่ page หรือ limit หรือตัวกรองเปลี่ยนแปลง
   useEffect(() => {
     fetchSalesHistory();
-  }, [startDate, endDate, customerType, paymentMethod, employeeId, page, limit]);
+  }, [startDate, endDate, customerType, paymentMethod, employeeId, paymentStatus, page, limit]);
 
   // Handler เมื่อกดปุ่ม "ใช้ตัวกรอง"
   const handleApplyFilter = () => {
@@ -259,6 +269,7 @@ export const useSalesHistory = () => {
     setEndDate(getTodayDateString());
     setCustomerType("");
     setPaymentMethod("");
+    setPaymentStatus("");
     setEmployeeId("");
     setPage(1);
   };
@@ -425,6 +436,7 @@ export const useSalesHistory = () => {
     endDate,
     customerType,
     paymentMethod,
+    paymentStatus,
     employeeId,
     employeeList,
     page,
@@ -435,6 +447,7 @@ export const useSalesHistory = () => {
     setEndDate,
     setCustomerType,
     setPaymentMethod,
+    setPaymentStatus,
     setEmployeeId,
     setPage,
     setLimit,

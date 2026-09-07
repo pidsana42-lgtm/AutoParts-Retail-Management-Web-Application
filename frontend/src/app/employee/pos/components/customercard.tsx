@@ -1,15 +1,19 @@
-import React from "react";
+import React, { useState } from "react";
 import type { CustomerDiscountResponse } from "../../../../interface/pos/customer_interface";
 import { useCustomerFinancials } from "../hooks/useCustomerFinancials";
 import Text from "../../../../components/elements/text";
-import { BadgeCheck } from "lucide-react";
+import { BadgeCheck, Eye, EyeOff } from "lucide-react";
+import { maskPhoneNumber } from "../../../../utils/customerhelpers";
 
 interface CustomerCardProps {
   customer: CustomerDiscountResponse | null;
   address?: string;
+  maskPhone?: boolean;
 }
 
-export function CustomerCard({ customer, address }: CustomerCardProps): React.JSX.Element {
+export function CustomerCard({ customer, address, maskPhone = true }: CustomerCardProps): React.JSX.Element {
+  const [isPhoneRevealed, setIsPhoneRevealed] = useState(false);
+
   // เรียกใช้ Hook ชุดเดียวกันเพื่อแปลง Data ออกมา
   const {
     customerName,
@@ -38,7 +42,21 @@ export function CustomerCard({ customer, address }: CustomerCardProps): React.JS
       <div className="flex justify-between items-start">
         <div className="flex-1 pr-2">
           <Text variant="lead" className="mb-0 leading-tight text-white">{customerName}</Text>
-          <Text variant="xs" className="mb-0 leading-tight text-[#9CA3AF] mt-1">โทร: {phoneNumber}</Text>
+          <div className="flex items-center gap-1.5 mt-1">
+            <Text variant="xs" className="mb-0 leading-tight text-[#9CA3AF]">
+              โทร: {isGuest ? phoneNumber : (isPhoneRevealed || !maskPhone ? phoneNumber : maskPhoneNumber(phoneNumber))}
+            </Text>
+            {!isGuest && maskPhone && (
+              <button
+                type="button"
+                onClick={() => setIsPhoneRevealed(!isPhoneRevealed)}
+                className="text-zinc-400 hover:text-white transition-colors cursor-pointer p-0.5"
+                title={isPhoneRevealed ? "ซ่อนเบอร์โทรศัพท์" : "แสดงเบอร์โทรศัพท์"}
+              >
+                {isPhoneRevealed ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+              </button>
+            )}
+          </div>
           <div className="flex items-start gap-1 mt-1 text-[#9CA3AF]">
             <Text variant="xs" className="mb-0 leading-normal text-[#9CA3AF] break-words text-[11px]" title={address || customer?.shipping_address || customer?.registered_address || "ไม่ได้ระบุที่อยู่"}>
             ที่อยู่: {displayAddress|| "ไม่ได้ระบุที่อยู่"}

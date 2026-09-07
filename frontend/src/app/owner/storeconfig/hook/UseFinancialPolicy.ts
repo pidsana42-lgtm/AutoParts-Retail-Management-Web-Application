@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { posApiService } from "../../../../service/http/pos/pos_service";
 import type {
   FinancialPolicyConfig,
+  FinancialPolicyAuditLog,
   UseFinancialPolicyReturn,
 } from "../../../../interface/storeconfig/financial_policy_interface";
 
@@ -25,6 +26,28 @@ export const useFinancialPolicy = (): UseFinancialPolicyReturn => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showAuditModal, setShowAuditModal] = useState<boolean>(false);
+  const [auditLogs, setAuditLogs] = useState<FinancialPolicyAuditLog[]>([]);
+  const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState<boolean>(false);
+
+  // ดึงประวัติการแก้ไขการตั้งค่าจาก Backend Database
+  const fetchAuditLogs = useCallback(async () => {
+    try {
+      setIsLoadingAuditLogs(true);
+      const data = await posApiService.getStoreConfigAuditLogs();
+      setAuditLogs(data || []);
+    } catch (err) {
+      console.error("Failed to load store config audit logs:", err);
+      setAuditLogs([]);
+    } finally {
+      setIsLoadingAuditLogs(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showAuditModal) {
+      fetchAuditLogs();
+    }
+  }, [showAuditModal, fetchAuditLogs]);
 
   // ดึงข้อมูลตั้งค่าร้านค้าจริงจาก Backend API
   const fetchConfig = useCallback(async () => {
@@ -119,26 +142,7 @@ export const useFinancialPolicy = (): UseFinancialPolicyReturn => {
       }
 
       setInitialConfig(config);
-
-      // บันทึกลง Audit Log ใน localStorage
-      try {
-        const historyKey = "financial_policy_audit_logs";
-        const existingLogs = JSON.parse(localStorage.getItem(historyKey) || "[]");
-        const user = JSON.parse(localStorage.getItem("user") || "{}");
-        const userName = user.first_name || user.username || "เจ้าของร้าน";
-
-        const newLog = {
-          id: Date.now(),
-          action: "แก้ไขการตั้งค่านโยบายการเงินและเครดิต",
-          details: `ส่วนลดสูงสุด: ${config.max_extra_discount_rate}%, วงเงินเครดิต: ฿${config.max_credit.toLocaleString("th-TH")}, ระยะเวลาค้างชำระ: ${config.max_overdue_days} วัน`,
-          changed_by: userName,
-          changed_at: new Date().toISOString(),
-        };
-
-        localStorage.setItem(historyKey, JSON.stringify([newLog, ...existingLogs.slice(0, 49)]));
-      } catch (e) {
-        console.error("Failed to save audit log", e);
-      }
+      fetchAuditLogs(); // อัปเดตประวัติจาก Backend อัตโนมัติ
 
       setSuccessMessage("บันทึกการตั้งค่านโยบายเรียบร้อยแล้ว");
       return true;
@@ -160,6 +164,9 @@ export const useFinancialPolicy = (): UseFinancialPolicyReturn => {
     successMessage,
     showAuditModal,
     setShowAuditModal,
+    auditLogs,
+    isLoadingAuditLogs,
+    fetchAuditLogs,
     handleChange,
     handleReset,
     handleSave,

@@ -16,3 +16,12 @@ type StoreConfig struct {
 	// ระบบความปลอดภัย
 	SupervisedPin string `gorm:"type:varchar(10);not null" json:"supervised_pin" binding:"required"`
 }
+
+type StoreConfigAuditLog struct {
+	gorm.Model
+	Action    string `gorm:"type:varchar(255);not null" json:"action"`
+	Details   string `gorm:"type:text;not null" json:"details"`
+	ChangedBy string `gorm:"type:varchar(100);not null" json:"changed_by"`
+	UserID    *uint  `json:"user_id"`
+	User      *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}

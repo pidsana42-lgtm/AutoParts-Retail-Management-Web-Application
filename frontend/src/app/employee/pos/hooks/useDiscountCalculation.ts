@@ -35,7 +35,15 @@ export function useDiscountCalculation() {
     }
 
     const lineTotal = unitPrice * qty;
-    let allowedMaxRate = maxDiscountRate ?? 2.0;
+    let allowedMaxRate =
+      maxDiscountRate !== undefined && maxDiscountRate !== null && Number(maxDiscountRate) > 0
+        ? Number(maxDiscountRate)
+        : 2.0;
+
+    // สิทธิ์ส่วนลดลูกค้าประจำ (standard_discount_rate)
+    if (customer && customer.is_discount_enabled && Number(customer.standard_discount_rate) > 0) {
+      allowedMaxRate = Math.max(allowedMaxRate, Number(customer.standard_discount_rate));
+    }
 
     // กฎโหมดอู่ซ่อมรถ (+ ontop)
     const isDiscountEnabled = customer ? customer.is_discount_enabled : false;

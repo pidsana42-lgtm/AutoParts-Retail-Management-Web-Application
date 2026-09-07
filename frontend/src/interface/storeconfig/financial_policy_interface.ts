@@ -25,6 +25,9 @@ export interface UseFinancialPolicyReturn {
   successMessage: string | null;
   showAuditModal: boolean;
   setShowAuditModal: (show: boolean) => void;
+  auditLogs: FinancialPolicyAuditLog[];
+  isLoadingAuditLogs: boolean;
+  fetchAuditLogs: () => Promise<void>;
   handleChange: (field: keyof FinancialPolicyConfig, value: any) => void;
   handleReset: () => void;
   handleSave: () => Promise<boolean>;

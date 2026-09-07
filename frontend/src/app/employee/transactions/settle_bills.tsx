@@ -419,7 +419,7 @@ export default function SettleBillsPage(): React.JSX.Element {
                           {isSelected ? (
                             <div className="flex flex-col items-end gap-1">
                               <div className="flex items-center gap-1.5 justify-end w-full">
-                                <div className="relative flex-1 max-w-[140px]">
+                                <div className="relative flex-1 max-w-35">
                                   <span className="absolute left-2.5 top-1.5 text-xs text-gray-400 font-medium">฿</span>
                                   <input
                                     type="text"
@@ -491,7 +491,7 @@ export default function SettleBillsPage(): React.JSX.Element {
           <Card className="bg-[#1C1B1B] text-white p-5 mb-6 border border-zinc-800 shadow-lg relative overflow-hidden">
             <div className="flex justify-between items-center text-xs">
               <Text variant="xs" className="font-light text-white mb-0">ลูกค้า:</Text>
-              <Text variant="xs" className="font-light text-white truncate max-w-[150px] mb-0">
+              <Text variant="xs" className="font-light text-white truncate max-w-37.5 mb-0">
                 {customerName || "—"}
               </Text>
             </div>
@@ -612,7 +612,7 @@ export default function SettleBillsPage(): React.JSX.Element {
 
         {/* ================= PAYMENT MODAL ================= */}
         {isPaymentModalOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-none">
+          <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/60 backdrop-blur-none">
             <div className="bg-[#FCF9F8] w-full max-w-xl rounded-none shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
               
               {/* Header */}
@@ -650,7 +650,7 @@ export default function SettleBillsPage(): React.JSX.Element {
                         return (
                           <div key={`modal-bill-${b.order_id}`} className="pt-1.5 first:pt-0 flex justify-between items-center text-xs">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-normal text-[12px] font-semibold text-[#1C1B1B]">
+                              <span className="text-[12px] font-semibold text-[#1C1B1B]">
                                 {b.order_number}
                               </span>
                               {isPartial ? (
@@ -718,7 +718,7 @@ export default function SettleBillsPage(): React.JSX.Element {
                           />
                           <Text variant="xs" className="text-[#1C1B1B] ml-2 font-medium mb-0">บาท</Text>
                         </div>
-                        <div className="flex items-center justify-between w-full px-4 py-6 border-b-1 border-[#E7BDB8]"></div>
+                        <div className="flex items-center justify-between w-full px-4 py-6 border-b border-[#E7BDB8]"></div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
@@ -802,7 +802,7 @@ export default function SettleBillsPage(): React.JSX.Element {
                             </div>
                           )}
                         </div>
-                        <div className="text-center space-y-0.5 max-w-[220px]">
+                        <div className="text-center space-y-0.5 max-w-55">
                           <Text variant="small" className="font-medium text-[#1C1B1B] leading-tight block mb-0">
                             เจเจ อะไหล่ยนต์
                           </Text>

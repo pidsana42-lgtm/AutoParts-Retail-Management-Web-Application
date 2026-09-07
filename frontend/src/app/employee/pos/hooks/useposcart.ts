@@ -4,7 +4,7 @@ import { posApiService, getDefaultProductDiscount } from "../../../../service/ht
 import { useDiscountCalculation } from "./useDiscountCalculation";
 import type { UsePosCartProps, CartItem, UsePosCartReturn } from "../../../../interface/pos/usePosCart.interface";
 
-export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosCartReturn {
+export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCancelledOrder }: UsePosCartProps): UsePosCartReturn {
   
   const [cart, setCart] = useState<CartItem[]>(() => {
     // cart = เก็บข้อมูลสินค้าที่อยู่ในตะกร้า (POS Cart) ของบิลขายปัจจุบัน (ตัวแปรฝั่งข้อมูล)
@@ -17,10 +17,12 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
   });
   const [searchQuery, setSearchQuery] = useState<string>(""); 
   const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [cancelledOrderSuggestions, setCancelledOrderSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
   const { calculateLineDiscountAmount, validateLineDiscountPolicy } = useDiscountCalculation();
 
   // เก็บ ID ลูกค้า และค่าสิทธิ์ส่วนลดล่าสุดไว้เช็คความเปลี่ยนแปลง ป้องกัน Loop
+  const isInitialMountRef = useRef<boolean>(true);
   const prevCustomerIdRef = useRef<number | undefined>(customer?.id);
   const prevActiveTypeIdRef = useRef<number | undefined>(activeTypeId);
   const prevIsDiscountEnabledRef = useRef<boolean | undefined>(customer?.is_discount_enabled);
@@ -73,11 +75,14 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
   // ตัวดักจับเมื่อพนักงานสั่งสลับกลุ่มสิทธิ์ลูกค้า หรือข้อมูลสิทธิ์ส่วนลดลูกค้าเปลี่ยนแปลง
   useEffect(() => {
     const isCustomerUnchanged =
+      !isInitialMountRef.current &&
       prevCustomerIdRef.current === customer?.id &&
       prevActiveTypeIdRef.current === activeTypeId &&
       prevIsDiscountEnabledRef.current === customer?.is_discount_enabled &&
       prevOntopDiscountRateRef.current === customer?.ontop_discount_rate &&
       prevStandardDiscountRateRef.current === customer?.standard_discount_rate;
+
+    isInitialMountRef.current = false;
 
     if (isCustomerUnchanged) {
       return;
@@ -160,18 +165,55 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
 
   // ─── CORE FUNCTIONS ───
 
-  //ฟังก์ชันแอดสินค้าเข้าตะกร้าผ่านการแสกนบาร์โค้ด หรือพิมพ์เลข SKU
+  //ฟังก์ชันแอดสินค้าเข้าตะกร้าผ่านการแสกนบาร์โค้ด หรือพิมพ์เลข SKU (หรือพิมพ์/สแกนเลขบิลยกเลิกเมื่อเปิดโหมดกู้คืน)
   //หากสินค้าชิ้นนั้นเคยอยู่ในตะกร้าแล้วจะทำการบวกจำนวนเพิ่ม 1 ชิ้น (qty + 1) อัตโนมัติ
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault(); //ป้องกันไม่ให้หน้าเว็บรีเฟรชตอนกด Enter
-    // โซนที่ 2: ดึงข้อมูลดิบ (ยิงไปเอาของจากหลังบ้านมา)
     const cleanedQuery = searchQuery.trim();
     if (!cleanedQuery) return;
+
+    // 1. ถ้าอยู่ในโหมดกู้คืนบิลยกเลิก ตรวจสอบก่อนว่าเป็นเลขบิลยกเลิกหรือไม่
+    if (isRecoverMode) {
+      try {
+        const cancelledMatches = await posApiService.getCancelledOrders(cleanedQuery);
+        const exactOrder = cancelledMatches.find(
+          (o) => o.order_number?.toLowerCase() === cleanedQuery.toLowerCase()
+        ) || (cleanedQuery.toUpperCase().startsWith("INV-") || cleanedQuery.toUpperCase().startsWith("ORD-") ? cancelledMatches[0] : null);
+
+        if (exactOrder && onRecoverCancelledOrder) {
+          await onRecoverCancelledOrder(exactOrder.id);
+          setSearchQuery("");
+          setSuggestions([]);
+          setCancelledOrderSuggestions([]);
+          setShowSuggestions(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("Cancelled order lookup error:", err);
+      }
+    }
 
     try {
       const products = await posApiService.searchProducts(cleanedQuery);
       if (!products || products.length === 0) {
-        alert("ไม่พบข้อมูลสินค้าชิ้นนี้ในระบบ (รองรับการค้นหาจาก บาร์โค้ด, รหัสสินค้า, Part Number และชื่อสินค้า)");
+        // ถ้าอยู่ในโหมดกู้คืนบิลและยังหาของไม่เจอ ให้ลองหาว่าเป็นบิลยกเลิกหรือไม่
+        if (isRecoverMode) {
+          const cancelledMatches = await posApiService.getCancelledOrders(cleanedQuery);
+          if (cancelledMatches && cancelledMatches.length > 0 && onRecoverCancelledOrder) {
+            await onRecoverCancelledOrder(cancelledMatches[0].id);
+            setSearchQuery("");
+            setSuggestions([]);
+            setCancelledOrderSuggestions([]);
+            setShowSuggestions(false);
+            return;
+          }
+        }
+
+        alert(
+          isRecoverMode
+            ? "ไม่พบข้อมูลสินค้าหรือบิลยกเลิกที่ตรงกันในระบบ"
+            : "ไม่พบข้อมูลสินค้าชิ้นนี้ในระบบ (รองรับการค้นหาจาก บาร์โค้ด, รหัสสินค้า, Part Number และชื่อสินค้า)"
+        );
         return;
       }
       // ค้นหาตัวเลือกที่ตรงกับเงื่อนไขที่สุด (ไม่ว่าจะเป็น barcode, product_code, part_number, หรือ product_name)
@@ -238,6 +280,9 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
         ]);
       }
       setSearchQuery("");
+      setSuggestions([]);
+      setCancelledOrderSuggestions([]);
+      setShowSuggestions(false);
     } catch (error) {
       alert("เกิดข้อผิดพลาดในการดึงข้อมูลสินค้าหลังบ้าน");
     }
@@ -249,132 +294,82 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
     const item = newCart[index];
     const maxStock = (item as any).quantity ?? 999; 
 
-    let newQty = item.qty + delta;
-    if (newQty < 1) newQty = 1;
-
-    if (newQty > maxStock) {
-      alert(`ไม่สามารถระบุจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
-      newQty = maxStock;
-    }
-
-    item.qty = newQty;
-    setCart(newCart);
-  };
-
-  const handleSetQuantity = (index: number, inputValue: string | number) => {
-    const newCart = [...cart];
-    const item = newCart[index];
-    const maxStock = (item as any).quantity ?? 999; 
-
-    if (inputValue === "") {
-      item.qty = 0; 
-      setCart(newCart);
+    if (delta > 0 && item.qty + delta > maxStock) {
+      alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
       return;
     }
 
-    let validQty = typeof inputValue === "string" ? parseInt(inputValue, 10) : inputValue;
-    if (isNaN(validQty) || validQty < 0) validQty = 0;
-
-    if (validQty > maxStock) {
-      alert(`ไม่สามารถระบุจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
-      validQty = maxStock;
+    if (item.qty + delta > 0) {
+      item.qty += delta;
+      setCart(newCart);
+    } else {
+      handleRemoveItem(index);
     }
+  };
 
-    item.qty = validQty;
+  //ฟังก์ชันพิมพ์แก้ไขจำนวนสินค้า (QTY) ใน Input Box แบบอิสระ
+  const handleSetQuantity = (index: number, inputValue: string | number) => {
+    const value = typeof inputValue === "string" ? parseInt(inputValue, 10) : inputValue;
+    const newCart = [...cart];
+    const item = newCart[index];
+    const maxStock = (item as any).quantity ?? 999;
+
+    if (isNaN(value) || value <= 0) {
+      item.qty = 1;
+    } else if (value > maxStock) {
+      alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+      item.qty = maxStock;
+    } else {
+      item.qty = value;
+    }
     setCart(newCart);
   };
 
-  //ฟังก์ชันกดปุ่มถังขยะท้ายแถว เพื่อดีดสินค้ารายการนั้นๆ ออกจากบิลขายปัจจุบัน
+  //ฟังก์ชันลบรายการสินค้าแถวนั้นออกจากตารางบิล POS
   const handleRemoveItem = (index: number) => {
     setCart(cart.filter((_, i) => i !== index));
   };
 
-  //ฟังก์ชันปุ่ม "ล้างทั้งหมด" เพื่อล้างตารางสินค้าในบิลร่างปัจจุบันให้เกลี้ยงตะกร้า
+  //ฟังก์ชันล้างข้อมูลในตะกร้าสินค้าทั้งหมด (Clear Cart)
   const handleClearAllCart = (onClearSuccess?: () => void) => {
-    if (window.confirm("คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลทั้งหมด?")) {
-      setCart([]);
-      localStorage.removeItem("pos_cart");
-      if (onClearSuccess) onClearSuccess();
-    }
+    setCart([]);
+    localStorage.removeItem("pos_cart");
+    if (onClearSuccess) onClearSuccess();
   };
 
-  //ฟังก์ชันดักจับปุ่มติ๊กถูก (Checkbox DISC?) ประจำแถวสินค้า 
-  //เพื่อสลับเปิดให้ลดราคา/ปิดราคาเต็ม โดยดึงยอดลดมาตรฐานมาใส่ หรือปรับค่าให้คืนเป็น 0 เสมอ
+  // ─── DISCOUNT HANDLERS ───
+
+  //ฟังก์ชันเปิด/ปิด สิทธิ์การให้ส่วนลดรายชิ้น
   const handleDiscountToggle = (index: number, isChecked: boolean) => {
-    const currentCustomerTypeId = customer?.customer_type?.id || activeTypeId;
-    const currentCustomerTypeName = customer?.customer_type?.type_name || "";
-    const isCompany = currentCustomerTypeId === 3 || currentCustomerTypeName === "WHOLESALE";
-
-    if (isCompany && isChecked) {
-      alert("ลูกค้ากลุ่มบริษัทไม่ได้รับสิทธิ์ส่วนลดใดๆ ทั้งสิ้น");
-      return;
-    }
-
     setCart((prev) =>
       prev.map((item, i) => {
         if (i !== index) return item;
-
-        if (!isChecked) {
-          // ถ้าเอาติ๊กออก ให้ปิดส่วนลดเป็น 0
-          return {
-            ...item,
-            discount_type: "none",
-            discount_value: 0,
-          };
+        if (isChecked) {
+          // ถ้าเปิด ให้ใช้เงื่อนไขตั้งต้นตามสิทธิ์ลูกค้าหรือค่าเพดานส่วนลดของสินค้า
+          const cfg = getDefaultProductDiscount(item as any, customer, activeTypeId);
+          const maxRate = Number(item.max_discount_rate) || 0;
+          const newType = cfg.type !== "none" ? cfg.type : "percentage";
+          const newValue = cfg.value > 0 ? cfg.value : maxRate;
+          return { ...item, discount_type: newType, discount_value: newValue };
         }
-
-        // ถ้าติ๊กกลับเข้ามา ให้คำนวณส่วนลดเริ่มต้นตามสิทธิ์ลูกค้า/ประเภทอู่ซ่อมรถอีกครั้ง
-        const mockProduct = {
-          id: item.product_id,
-          product_code: item.product_code,
-          product_name: item.product_name,
-          part_number: item.part_number,
-          sale_price: item.unit_price,
-          max_discount_rate: item.max_discount_rate,
-          grade_name: item.grade_name,
-          brand_name: item.brand_name,
-          model_name: item.model_name,
-          note: item.note,
-        };
-
-        const discountConfig = getDefaultProductDiscount(
-          mockProduct as any,
-          customer,
-          activeTypeId
-        );
-
-        // ถ้าค่าเริ่มต้นเป็น none (เช่น ลูกค้าทั่วไป ขาจร) ให้เปิดส่วนลดเป็น percentage พร้อมค่าเริ่มต้นตาม max_discount_rate ของสินค้า
-        if (discountConfig.type === "none") {
-          return {
-            ...item,
-            discount_type: "percentage",
-            discount_value: item.max_discount_rate ?? 0,
-          };
-        }
-
-        return {
-          ...item,
-          discount_type: discountConfig.type,
-          discount_value: discountConfig.value,
-        };
+        // ถ้าปิด ให้เซ็ตส่วนลดเป็น 0
+        return { ...item, discount_type: "none", discount_value: 0 };
       })
     );
   };
 
-  //ฟังก์ชันสลับหน่วยของช่องลดราคาประจำแถว (บาท ฿ <-> เปอร์เซ็นต์ %) และล้างค่าเงินเป็น 0 ป้องกันเศษตัวเลขบั๊ก
+  //ฟังก์ชันสลับประเภทส่วนลดรายชิ้น (ลดเป็นบาท vs ลดเป็นเปอร์เซ็นต์)
   const handleDiscountTypeChange = (index: number, type: "amount" | "percentage") => {
     setCart((prev) =>
       prev.map((item, i) => (i === index ? { ...item, discount_type: type, discount_value: 0 } : item))
     );
   };
 
-  //ฟังก์ชันคุมนโยบายเพดานส่วนลดรายชิ้น (Line Discount Validation)
-  //ทำหน้าที่บล็อกไม่ให้กลุ่มบริษัทกรอกลดราคา และคำนวณเพดานราคาสูงสุดของสินค้า + โควตาพิเศษของกลุ่มอู่ซ่อมรถซ้อนกันอย่างรัดกุม
+  //ฟังก์ชันเปลี่ยนตัวเลขมูลค่าส่วนลดรายชิ้น พร้อมระบบ Validate ความปลอดภัย
   const handleDiscountValueChange = (index: number, valueStr: string) => {
-    const rawValue = valueStr === "" ? 0 : parseFloat(valueStr) || 0;
-    if (rawValue < 0) return;
-
+    const rawValue = parseFloat(valueStr) || 0;
     const item = cart[index];
+    if (!item) return;
 
     const policy = validateLineDiscountPolicy({
       rawValue,
@@ -388,9 +383,10 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
 
     if (!policy.isValid) {
       if (policy.errorMsg) alert(policy.errorMsg);
+      const maxRate = Number(item.max_discount_rate) || 0;
       setCart((prev) =>
         prev.map((cartItem, i) =>
-          i === index ? { ...cartItem, discount_value: 0, discount_type: "none" } : cartItem
+          i === index ? { ...cartItem, discount_value: maxRate } : cartItem
         )
       );
       return; 
@@ -401,39 +397,53 @@ export function usePosCart({ customer, activeTypeId }: UsePosCartProps): UsePosC
     );
   };
 
-  // ดึงข้อมูลคำแนะนำสินค้าแบบเรียลไทม์ (Autocomplete)
+  // ดึงข้อมูลคำแนะนำสินค้าและบิลยกเลิกแบบเรียลไทม์ (Autocomplete)
   useEffect(() => {
-    const cleaned = searchQuery.trim().toLowerCase();
+    const cleaned = searchQuery.trim();
     if (!cleaned) {
       setSuggestions([]);
+      setCancelledOrderSuggestions([]);
       setShowSuggestions(false);
       return;
     }
 
-const timer = setTimeout(async () => {
-    try {
-      const res = await posApiService.searchProducts(cleaned);
-      
-      
-      // กรองรายการเพิ่มเติมให้ตรงกับคำค้นหาแบบ Case-Insensitive
-      const filteredResults = (res || []).filter((item: any) =>
-        item.product_name?.toLowerCase().includes(cleaned) ||
-        item.product_code?.toLowerCase().includes(cleaned) ||
-        item.part_number?.toLowerCase().includes(cleaned) ||
-        item.barcode?.toLowerCase().includes(cleaned)
-      );
+    const timer = setTimeout(async () => {
+      try {
+        const cleanedLower = cleaned.toLowerCase();
+        if (isRecoverMode) {
+          const [products, cancelledOrders] = await Promise.all([
+            posApiService.searchProducts(cleaned).catch(() => []),
+            posApiService.getCancelledOrders(cleaned).catch(() => []),
+          ]);
+          const filteredProducts = (products || []).filter((item: any) =>
+            item.product_name?.toLowerCase().includes(cleanedLower) ||
+            item.product_code?.toLowerCase().includes(cleanedLower) ||
+            item.part_number?.toLowerCase().includes(cleanedLower) ||
+            item.barcode?.toLowerCase().includes(cleanedLower)
+          );
+          setSuggestions(filteredProducts);
+          setCancelledOrderSuggestions(cancelledOrders || []);
+        } else {
+          const res = await posApiService.searchProducts(cleaned);
+          const filteredResults = (res || []).filter((item: any) =>
+            item.product_name?.toLowerCase().includes(cleanedLower) ||
+            item.product_code?.toLowerCase().includes(cleanedLower) ||
+            item.part_number?.toLowerCase().includes(cleanedLower) ||
+            item.barcode?.toLowerCase().includes(cleanedLower)
+          );
+          setSuggestions(filteredResults);
+          setCancelledOrderSuggestions([]);
+        }
+        setShowSuggestions(true);
+      } catch (err) {
+        console.error("Failed to fetch suggestions:", err);
+      }
+    }, 200); // 200ms debounce
 
-      setSuggestions(filteredResults);
-      setShowSuggestions(true);
-    } catch (err) {
-      console.error("Failed to fetch suggestions:", err);
-    }
-  }, 200); // 200ms debounce
+    return () => clearTimeout(timer);
+  }, [searchQuery, isRecoverMode]);
 
-  return () => clearTimeout(timer);
-}, [searchQuery]);
-
-const handleSelectProduct = (product: any) => {
+  const handleSelectProduct = (product: any) => {
     const maxStock = product.quantity ?? 0;
     if (maxStock <= 0) {
       alert(`สินค้า ${product.product_name || product.product_code} หมดสต็อก (คงเหลือ 0 ชิ้น) ไม่สามารถเพิ่มลงในบิลได้`);
@@ -488,6 +498,17 @@ const handleSelectProduct = (product: any) => {
 
     setSearchQuery("");
     setSuggestions([]);
+    setCancelledOrderSuggestions([]);
+    setShowSuggestions(false);
+  };
+
+  const handleSelectCancelledOrder = async (order: any) => {
+    if (onRecoverCancelledOrder) {
+      await onRecoverCancelledOrder(order.id);
+    }
+    setSearchQuery("");
+    setSuggestions([]);
+    setCancelledOrderSuggestions([]);
     setShowSuggestions(false);
   };
 
@@ -508,8 +529,11 @@ const handleSelectProduct = (product: any) => {
     handleDiscountValueChange,
     suggestions,
     setSuggestions,
+    cancelledOrderSuggestions,
+    setCancelledOrderSuggestions,
     showSuggestions,
     setShowSuggestions,
     handleSelectProduct,
+    handleSelectCancelledOrder,
   };
 }

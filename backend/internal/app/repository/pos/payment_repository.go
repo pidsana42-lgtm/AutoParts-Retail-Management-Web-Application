@@ -1,6 +1,7 @@
 package pos
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"time"
@@ -24,11 +25,17 @@ type PaymentRepository interface {
 	GeneratePromptPayQR(promptPayNo string, amount float64) (string, error)
 	BeginTransaction() *gorm.DB
 	GetStoreConfig() (*entity.StoreConfig, error)
+	GetCompanySetting(ctx context.Context) (*entity.CompanySetting, error)
 
 	GetUnpaidOrdersByCustomerID(customerID uint) ([]entity.SaleOrder, error)
 	GetUnpaidOrderByOrderNumber(orderNumber string) (*entity.SaleOrder, error)
     CreateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error
     GetRepaymentByID(repaymentID uint) (*entity.PaymentRepayment, error)
+    GetRepaymentsByReceiptNumber(receiptNo string) ([]entity.PaymentRepayment, error)
+    GetPreviousRepaymentsSum(orderID uint, beforeRepaymentID uint) (float64, error)
+    GetCustomerByID(ctx context.Context, customerID uint) (*entity.Customer, error)
+    GetRepaymentsByCustomerAndDate(customerID uint, startDate, endDate string) ([]entity.PaymentRepayment, error)
+    GetDirectPaymentsByCustomerAndDate(customerID uint, startDate, endDate string) ([]entity.Payment, error)
     UpdateRepaymentWithTx(tx *gorm.DB, repayment *entity.PaymentRepayment) error
     GetRepaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.PaymentRepayment, error)
     GetDirectPaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.Payment, error)
@@ -185,6 +192,7 @@ func (r *paymentRepository) GetRepaymentByID(repaymentID uint) (*entity.PaymentR
     var repayment entity.PaymentRepayment
     err := r.db.Preload("Order").
         Preload("Order.Customer").
+        Preload("Order.Customer.CustomerType").
         Preload("PaymentMethod").
         Preload("RecordedBy").
         Preload("CancelRequestedBy").
@@ -324,4 +332,91 @@ func (r *paymentRepository) RejectCancelRepayment(repaymentID uint, remark strin
             "cancel_remark": remark,
             "cancelled_at":  &now,
         }).Error
+}
+
+func (r *paymentRepository) GetCompanySetting(ctx context.Context) (*entity.CompanySetting, error) {
+    var setting entity.CompanySetting
+    err := r.db.WithContext(ctx).First(&setting).Error
+    if err != nil {
+        return nil, err
+    }
+    return &setting, nil
+}
+
+func (r *paymentRepository) GetRepaymentsByReceiptNumber(receiptNo string) ([]entity.PaymentRepayment, error) {
+    var repayments []entity.PaymentRepayment
+    err := r.db.Preload("Order").
+        Preload("Order.Customer").
+        Preload("Order.Customer.CustomerType").
+        Preload("PaymentMethod").
+        Preload("RecordedBy").
+        Preload("CancelledBy").
+        Preload("CancelRequestedBy").
+        Where("receipt_number = ?", receiptNo).
+        Find(&repayments).Error
+    return repayments, err
+}
+
+func (r *paymentRepository) GetPreviousRepaymentsSum(orderID uint, beforeRepaymentID uint) (float64, error) {
+    var total float64
+    err := r.db.Model(&entity.PaymentRepayment{}).
+        Where("order_id = ? AND id < ? AND status = 'completed'", orderID, beforeRepaymentID).
+        Select("COALESCE(SUM(amount_paid), 0)").
+        Scan(&total).Error
+    return total, err
+}
+
+// เพิ่มฟังก์ชัน GetCustomerByID เพื่อดึงข้อมูลลูกค้าพร้อมกับประเภทลูกค้า (CustomerType) โดยใช้ Preload
+func (r *paymentRepository) GetCustomerByID(ctx context.Context, customerID uint) (*entity.Customer, error) {
+    var cust entity.Customer
+    err := r.db.WithContext(ctx).Preload("CustomerType").First(&cust, customerID).Error
+    if err != nil {
+        return nil, err
+    }
+    return &cust, nil
+}
+
+func (r *paymentRepository) GetRepaymentsByCustomerAndDate(customerID uint, startDate, endDate string) ([]entity.PaymentRepayment, error) {
+    var repayments []entity.PaymentRepayment
+    query := r.db.Preload("Order").
+        Preload("Order.Customer").
+        Preload("Order.Customer.CustomerType").
+        Preload("PaymentMethod").
+        Preload("RecordedBy").
+        Joins("JOIN sale_orders ON sale_orders.id = payment_repayments.order_id").
+        Where("sale_orders.customer_id = ?", customerID)
+
+    if startDate != "" && endDate != "" {
+        query = query.Where("payment_repayments.created_at BETWEEN ? AND ?", startDate+" 00:00:00", endDate+" 23:59:59")
+    } else if startDate != "" {
+        query = query.Where("payment_repayments.created_at >= ?", startDate+" 00:00:00")
+    } else if endDate != "" {
+        query = query.Where("payment_repayments.created_at <= ?", endDate+" 23:59:59")
+    }
+
+    err := query.Order("payment_repayments.created_at asc").Find(&repayments).Error
+    return repayments, err
+}
+
+// เพิ่มฟังก์ชัน GetDirectPaymentsByCustomerAndDate เพื่อดึงข้อมูลการชำระเงินโดยตรง (Direct Payments) ของลูกค้าในช่วงวันที่ที่กำหนด
+func (r *paymentRepository) GetDirectPaymentsByCustomerAndDate(customerID uint, startDate, endDate string) ([]entity.Payment, error) {
+    var payments []entity.Payment
+    query := r.db.Preload("Order").
+        Preload("Order.Customer").
+        Preload("Order.Customer.CustomerType").
+        Preload("PaymentMethod").
+        Preload("ReceivedBy").
+        Joins("JOIN sale_orders ON sale_orders.id = payments.order_id").
+        Where("sale_orders.customer_id = ? AND payments.paid_at IS NOT NULL", customerID)
+
+    if startDate != "" && endDate != "" {
+        query = query.Where("payments.paid_at BETWEEN ? AND ?", startDate+" 00:00:00", endDate+" 23:59:59")
+    } else if startDate != "" {
+        query = query.Where("payments.paid_at >= ?", startDate+" 00:00:00")
+    } else if endDate != "" {
+        query = query.Where("payments.paid_at <= ?", endDate+" 23:59:59")
+    }
+
+    err := query.Order("payments.paid_at asc").Find(&payments).Error
+    return payments, err
 }
