@@ -9,6 +9,7 @@ import Select from "../../../../components/elements/select";
 import Button from "../../../../components/elements/button";
 import TreeSelect from "../../../../components/elements/tree_select";
 import { ToastProvider, useToast } from "../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 import SearchableSelect from "./SearchableSelect";
 import CheckDateTimeRangeField, {
   type CheckDateTimeRangeValue,
@@ -22,6 +23,7 @@ import { stockCheckService, type CheckStockScheduleCreateInput } from "../../../
 function AddCheckStockScheduleContent() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { alertDialog } = useAlertDialog();
   const { loading: loadingOptions, employees, zones, categories, products } = useCheckStockOptions();
 
   const [submitting, setSubmitting] = useState(false);
@@ -47,7 +49,7 @@ function AddCheckStockScheduleContent() {
 
     const rangeError = validateCheckDateTimeRange(dateTimeRange);
     if (rangeError) {
-      toast({ variant: "error", message: rangeError });
+      await alertDialog(rangeError);
       return;
     }
 
@@ -61,7 +63,7 @@ function AddCheckStockScheduleContent() {
 
     if (checkType === "LOCATION") {
       if (!selectedZonePath) {
-        toast({ variant: "error", message: "กรุณาเลือกพื้นที่ตรวจสอบ" });
+        await alertDialog("กรุณาเลือกพื้นที่ตรวจสอบ");
         return;
       }
       if (selectedZonePath.startsWith("level-")) payload.shelf_level_id = parseInt(selectedZonePath.replace("level-", ""));
@@ -69,7 +71,7 @@ function AddCheckStockScheduleContent() {
       if (selectedZonePath.startsWith("zone-")) payload.zone_id = parseInt(selectedZonePath.replace("zone-", ""));
     } else if (checkType === "CATEGORY") {
       if (!categoryId) {
-        toast({ variant: "error", message: "กรุณาเลือกหมวดหมู่สินค้า" });
+        await alertDialog("กรุณาเลือกหมวดหมู่สินค้า");
         return;
       }
       if (categoryId.startsWith("subsubcategory-")) payload.sub_sub_category_id = parseInt(categoryId.replace("subsubcategory-", ""));
@@ -77,7 +79,7 @@ function AddCheckStockScheduleContent() {
       else if (categoryId.startsWith("category-")) payload.category_id = parseInt(categoryId.replace("category-", ""));
     } else if (checkType === "PRODUCT") {
       if (!productId) {
-        toast({ variant: "error", message: "กรุณาเลือกสินค้า" });
+        await alertDialog("กรุณาเลือกสินค้า");
         return;
       }
       payload.product_id = parseInt(productId);
@@ -90,7 +92,7 @@ function AddCheckStockScheduleContent() {
       // พาไปหน้ารายละเอียดตารางที่เพิ่งสร้างทันที เพื่อให้เห็น QR Code สำหรับสแกนเช็คสต็อกได้เลย
       navigate(`/owner/stock/stock-check/${res.id}`);
     } catch (err: any) {
-      toast({ variant: "error", message: err.response?.data?.error || "เกิดข้อผิดพลาดในการบันทึก" });
+      await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการบันทึก");
     } finally {
       setSubmitting(false);
     }

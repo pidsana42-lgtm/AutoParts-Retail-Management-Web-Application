@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { Save } from "lucide-react";
 import Input from "../../../../../components/elements/input";
 import Select from "../../../../../components/elements/select";
 import Modal from "../../../../../components/elements/modal";
 import Button from "../../../../../components/elements/button";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import type { Brand, Model } from "../../../../../interface/wms/stock_data";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
@@ -26,6 +28,7 @@ export default function EditBrandRowModal({
   onSuccess
 }: EditBrandRowModalProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   
   const [brandName, setBrandName] = useState("");
   const [modelName, setModelName] = useState("");
@@ -43,16 +46,33 @@ export default function EditBrandRowModal({
     e.preventDefault();
     if (!brand) return;
 
+    // ตรวจข้อมูลที่กรอกให้ครบก่อนถามยืนยัน — ไม่ให้ผู้ใช้กดยืนยันแล้วเพิ่งเจอ error
+    if (!model && brandName.trim() !== brand.brand_name && !brandName.trim()) {
+      toast({ variant: "error", message: "กรุณากรอกชื่อแบรนด์" });
+      return;
+    }
+    if (
+      model &&
+      (modelName.trim() !== model.model_name || selectedBrandId !== model.brand_id) &&
+      !modelName.trim()
+    ) {
+      toast({ variant: "error", message: "กรุณากรอกชื่อรุ่นรถ (หรือหากต้องการลบ ให้ใช้ปุ่มลบด้านนอก)" });
+      return;
+    }
+
+    // ยืนยันก่อนบันทึก (เคสนี้ทั้งแก้ไขและเพิ่มใหม่ได้ในครั้งเดียว)
+    const confirmed = await confirmDialog(
+      "ยืนยันบันทึกข้อมูลนี้หรือไม่?",
+      { title: "ยืนยันการบันทึก", confirmText: "บันทึกข้อมูล", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
+
     try {
       let isUpdated = false;
 
       // 1. Update Brand (Only if we are editing the Brand itself, meaning no model)
       if (!model) {
         if (brandName.trim() !== brand.brand_name) {
-          if (!brandName.trim()) {
-            toast({ variant: "error", message: "กรุณากรอกชื่อแบรนด์" });
-            return;
-          }
           await stockDataService.updateBrand(brand.id, { brand_name: brandName.trim() });
           isUpdated = true;
         }
@@ -62,10 +82,6 @@ export default function EditBrandRowModal({
       if (model) {
         // Editing Model itself
         if (modelName.trim() !== model.model_name || selectedBrandId !== model.brand_id) {
-          if (!modelName.trim()) {
-            toast({ variant: "error", message: "กรุณากรอกชื่อรุ่นรถ (หรือหากต้องการลบ ให้ใช้ปุ่มลบด้านนอก)" });
-            return;
-          }
           await stockDataService.updateModel(model.id, { model_name: modelName.trim(), brand_id: selectedBrandId });
           isUpdated = true;
         }

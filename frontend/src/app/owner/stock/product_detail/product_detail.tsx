@@ -7,7 +7,6 @@ import { Download, Printer, X, Loader2, Building2 } from "lucide-react";
 import Heading from "../../../../components/elements/heading";
 import Breadcrumb from "../../../../components/elements/breadcrumb";
 import Button from "../../../../components/elements/button";
-import VariantCodeBadge from "../../../../components/elements/variant_code_badge";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
 import { getProductById } from "../../../../service/http/wms/product";
 import type { StockItem } from "../../../../interface/wms/product";
@@ -23,6 +22,10 @@ const BARCODE_MODE_LABEL: Record<BarcodeDisplayMode, string> = {
 
 // ฟอนต์เดียวกับที่ใช้ทั้งเว็บ (ดู --font-sans ใน src/index.css)
 const LABEL_FONT = `"Kanit", "Sarabun", "Inter", sans-serif`;
+
+// เรนเดอร์รูปบาร์โค้ดสำหรับดาวน์โหลด/พิมพ์ที่ความละเอียดสูงกว่าที่แสดงจริงกี่เท่า — ป้องกันภาพเบลอ/แตกเป็นบล็อก
+// ตอนเบราว์เซอร์ขยายรูป raster เล็กๆ ให้เต็มหน้ากระดาษตอนสั่งพิมพ์ (img { max-width: 100% } ในหน้าต่างพิมพ์)
+const PRINT_SCALE = 3;
 
 // ย่อขนาดฟอนต์ให้พอดีความกว้างที่กำหนด ถ้าย่อถึงขนาดต่ำสุดแล้วยังไม่พอ ให้ตัดจบด้วย "…"
 function fitText(
@@ -45,17 +48,6 @@ function fitText(
     truncated = truncated.slice(0, -1);
   }
   return `${truncated}…`;
-}
-
-// วาดสี่เหลี่ยมมุมโค้ง (ใช้เป็นกรอบป้ายราคา)
-function traceRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
 }
 
 export default function ProductDetailPage() {
@@ -117,6 +109,14 @@ export default function ProductDetailPage() {
     };
   }, [id]);
 
+  // ตัดตัวเลือก "รหัสกลางของร้าน" ออกแล้ว (ต้องผูกกับบริษัทนำเข้าเสมอ) — พอโหลดสินค้าเสร็จ ให้เลือก Supplier
+  // รายแรกให้อัตโนมัติทันที เพื่อให้ dropdown มีค่าที่ตรงกับตัวเลือกจริงเสมอ ไม่ค้างอยู่ที่ "global" ที่ไม่มีในลิสต์แล้ว
+  useEffect(() => {
+    if (selectedSupplierId !== "global") return;
+    const firstSupplier = product?.Suppliers?.[0];
+    if (firstSupplier) setSelectedSupplierId(firstSupplier.SupplierID);
+  }, [product, selectedSupplierId]);
+
   useEffect(() => {
     if (!cardBarcodeSvgRef.current || !code) return;
     try {
@@ -173,13 +173,15 @@ export default function ProductDetailPage() {
   const getPlainBarcodeDataUrl = (): string => {
     const canvas = document.createElement("canvas");
     try {
+      // เรนเดอร์ที่ความละเอียดสูงกว่าที่แสดงจริง (PRINT_SCALE เท่า) กันภาพเบลอ/แตกตอนขยายเต็มหน้าพิมพ์
+      // (รูปที่ได้เป็น raster ความละเอียดต่ำ พอเบราว์เซอร์ขยายให้เต็มหน้ากระดาษ A4 จะยิ่งเบลอ)
       JsBarcode(canvas, code, {
         format: "CODE128",
         displayValue: true,
-        fontSize: 16,
-        margin: 10,
-        height: 80,
-        width: 2,
+        fontSize: 16 * PRINT_SCALE,
+        margin: 10 * PRINT_SCALE,
+        height: 80 * PRINT_SCALE,
+        width: 2 * PRINT_SCALE,
       });
       return canvas.toDataURL("image/png");
     } catch {
@@ -206,15 +208,16 @@ export default function ProductDetailPage() {
     const barcodeInset = 2; // ขอบรูปบาร์โค้ดแคบกว่า padding ของหัวป้าย เพื่อให้ตัวรูปใหญ่ขึ้นโดยไม่ขยายทั้งป้าย
     const maxBarcodeHeight = 220;
 
+    // รูปบาร์โค้ดย่อยก็ต้องเรนเดอร์ที่ความละเอียดสูงกว่าเท่ากันด้วย ไม่งั้นตอนวาดขยายลงป้ายที่ใหญ่ขึ้นจะเบลออยู่ดี
     const barcodeCanvas = document.createElement("canvas");
     try {
       JsBarcode(barcodeCanvas, code, {
         format: "CODE128",
         displayValue: true,
-        fontSize: 14,
-        margin: 6,
-        height: 70,
-        width: 2,
+        fontSize: 14 * PRINT_SCALE,
+        margin: 6 * PRINT_SCALE,
+        height: 70 * PRINT_SCALE,
+        width: 2 * PRINT_SCALE,
       });
     } catch {
       // fallback
@@ -223,8 +226,8 @@ export default function ProductDetailPage() {
     let barcodeWidth = canvasWidth - barcodeInset * 2;
     let barcodeHeight = (barcodeCanvas.height / (barcodeCanvas.width || 1)) * barcodeWidth;
     if (barcodeHeight > maxBarcodeHeight) {
-      const scale = maxBarcodeHeight / barcodeHeight;
-      barcodeWidth *= scale;
+      const shrink = maxBarcodeHeight / barcodeHeight;
+      barcodeWidth *= shrink;
       barcodeHeight = maxBarcodeHeight;
     }
 
@@ -232,16 +235,16 @@ export default function ProductDetailPage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas is not supported");
 
-    canvas.width = canvasWidth;
-    canvas.height = padding + headerHeight + headerGap + barcodeHeight + padding;
+    const canvasHeight = padding + headerHeight + headerGap + barcodeHeight + padding;
+    // เรนเดอร์ที่ความละเอียดสูงกว่าที่แสดงจริง (PRINT_SCALE เท่า) กันภาพเบลอตอนขยายเต็มหน้าพิมพ์ — โค้ดวาดด้านล่าง
+    // ทั้งหมดยังใช้พิกัด/ขนาดแบบ "ตรรกะ" (เช่น padding, canvasWidth) ได้เหมือนเดิม เพราะ ctx.scale ขยายให้เอง
+    canvas.width = canvasWidth * PRINT_SCALE;
+    canvas.height = canvasHeight * PRINT_SCALE;
+    ctx.scale(PRINT_SCALE, PRINT_SCALE);
 
-    // พื้นหลัง + กรอบมุมโค้ง
+    // พื้นหลังขาวล้วน — ไม่ใส่กรอบแล้ว เพราะพิมพ์ออกมาเป็นสติกเกอร์ติดสินค้าจริง ไม่ควรมีกรอบตกแต่งติดมาด้วย
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    traceRoundedRect(ctx, 1, 1, canvas.width - 2, canvas.height - 2, 14);
-    ctx.strokeStyle = "#e2e8f0";
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
     const priceText = product?.Price != null ? `฿${product.Price.toLocaleString()}` : "-";
 
@@ -251,7 +254,7 @@ export default function ProductDetailPage() {
       const priceWidth = ctx.measureText(priceText).width;
 
       // ชื่อสินค้า + รหัสสินค้า (มุมซ้ายบน)
-      const nameMaxWidth = canvas.width - padding * 2 - priceWidth - 16;
+      const nameMaxWidth = canvasWidth - padding * 2 - priceWidth - 16;
       const nameText = fitText(ctx, product?.Name || "", nameMaxWidth, 16, 11, 700);
       const subInfo = currentSupplier 
         ? `${code} • ${currentSupplier.SupplierName || "ผู้จำหน่าย"}`
@@ -270,18 +273,18 @@ export default function ProductDetailPage() {
       ctx.textAlign = "right";
       ctx.fillStyle = "#0f172a";
       ctx.font = `700 22px ${LABEL_FONT}`;
-      ctx.fillText(priceText, canvas.width - padding, padding + 22);
+      ctx.fillText(priceText, canvasWidth - padding, padding + 22);
     } else {
       // ราคาเดี่ยว กึ่งกลางด้านบน (ไม่มีชื่อ/รหัสสินค้า)
       ctx.textAlign = "center";
       ctx.fillStyle = "#0f172a";
       ctx.font = `700 24px ${LABEL_FONT}`;
-      ctx.fillText(priceText, canvas.width / 2, padding + headerHeight / 2 + 8);
+      ctx.fillText(priceText, canvasWidth / 2, padding + headerHeight / 2 + 8);
     }
 
     // รูปบาร์โค้ด (กึ่งกลาง)
     const y = padding + headerHeight + headerGap;
-    const barcodeX = (canvas.width - barcodeWidth) / 2;
+    const barcodeX = (canvasWidth - barcodeWidth) / 2;
     ctx.drawImage(barcodeCanvas, barcodeX, y, barcodeWidth, barcodeHeight);
 
     return canvas.toDataURL("image/png");
@@ -576,8 +579,7 @@ export default function ProductDetailPage() {
                       }}
                       className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 shadow-sm focus:border-red-500 focus:outline-none"
                     >
-                      <option value="global">รหัสกลางของร้าน ({product.ProductCode})</option>
-                      {product.Suppliers.map((s) => (
+                          {product.Suppliers.map((s) => (
                         <option key={s.SupplierID} value={s.SupplierID}>
                           {s.SupplierName || `Supplier #${s.SupplierID}`} ({s.VariantCode || s.CompanyProductCode || "ไม่มีรหัสล็อต"})
                         </option>
@@ -680,7 +682,6 @@ export default function ProductDetailPage() {
                   }}
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-800 shadow-sm focus:border-red-500 focus:outline-none"
                 >
-                  <option value="global">รหัสกลางของร้าน ({product.ProductCode})</option>
                   {product.Suppliers.map((s) => (
                     <option key={s.SupplierID} value={s.SupplierID}>
                       {s.SupplierName || `Supplier #${s.SupplierID}`} ({s.VariantCode || s.CompanyProductCode || "ไม่มีรหัสล็อต"})

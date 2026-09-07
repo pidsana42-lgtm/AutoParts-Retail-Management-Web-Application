@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { Save } from "lucide-react";
 import Modal from "../../../../components/elements/modal";
 import Input from "../../../../components/elements/input";
 import Select from "../../../../components/elements/select";
@@ -12,6 +13,7 @@ import CheckDateTimeRangeField, {
   combineDateTime,
 } from "./CheckDateTimeRangeField";
 import { useToast } from "../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 import { useCheckStockOptions } from "./useCheckStockOptions";
 import { buildZoneTree, buildCategoryTree, getRelatedProducts } from "./checkStockTargets";
 
@@ -32,6 +34,7 @@ export default function EditCheckStockScheduleModal({
 }: EditCheckStockScheduleModalProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { alertDialog, confirmDialog } = useAlertDialog();
   const { loading: loadingOptions, employees, zones, categories, products } = useCheckStockOptions();
 
   const [submitting, setSubmitting] = useState(false);
@@ -91,7 +94,7 @@ export default function EditCheckStockScheduleModal({
 
     const rangeError = validateCheckDateTimeRange(dateTimeRange);
     if (rangeError) {
-      toast({ variant: "error", message: rangeError });
+      await alertDialog(rangeError);
       return;
     }
     const payload: CheckStockScheduleCreateInput = {
@@ -104,7 +107,7 @@ export default function EditCheckStockScheduleModal({
 
     if (checkType === "LOCATION") {
       if (!selectedZonePath) {
-        toast({ variant: "error", message: "กรุณาเลือกพื้นที่ตรวจสอบ" });
+        await alertDialog("กรุณาเลือกพื้นที่ตรวจสอบ");
         return;
       }
       if (selectedZonePath.startsWith("level-")) {
@@ -118,7 +121,7 @@ export default function EditCheckStockScheduleModal({
       }
     } else if (checkType === "CATEGORY") {
       if (!categoryId) {
-        toast({ variant: "error", message: "กรุณาเลือกหมวดหมู่สินค้า" });
+        await alertDialog("กรุณาเลือกหมวดหมู่สินค้า");
         return;
       }
       if (categoryId.startsWith("subsubcategory-")) {
@@ -130,11 +133,17 @@ export default function EditCheckStockScheduleModal({
       }
     } else if (checkType === "PRODUCT") {
       if (!productId) {
-        toast({ variant: "error", message: "กรุณาเลือกสินค้า" });
+        await alertDialog("กรุณาเลือกสินค้า");
         return;
       }
       payload.product_id = parseInt(productId);
     }
+
+    const confirmed = await confirmDialog(
+      "ยืนยันบันทึกการแก้ไขตารางเช็คสต็อกนี้หรือไม่? วัน-เวลา เป้าหมายการตรวจ และพนักงานที่รับผิดชอบจะถูกอัปเดตตามที่กรอกใหม่",
+      { title: "ยืนยันการแก้ไขตาราง", confirmText: "บันทึกการแก้ไข", variant: "info", icon: Save }
+    );
+    if (!confirmed) return;
 
     try {
       setSubmitting(true);

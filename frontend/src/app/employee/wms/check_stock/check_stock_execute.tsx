@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Loader2, MapPin, Send, QrCode, Download, Printer, FileDown } from "lucide-react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 import Heading from "../../../../components/elements/heading";
 import Breadcrumb from "../../../../components/elements/breadcrumb";
@@ -10,6 +12,7 @@ import Button from "../../../../components/elements/button";
 import Input from "../../../../components/elements/input";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
 import { ToastProvider, useToast } from "../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 import { useAuth } from "../../../../contexts/AuthContexts";
 
 import { useCheckStockOptions } from "../../../owner/stock/stock_check/useCheckStockOptions";
@@ -40,6 +43,7 @@ function EmployeeCheckStockExecuteContent() {
   const urlToken = searchParams.get("token");
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { alertDialog, confirmDialog } = useAlertDialog();
   const { user, role } = useAuth() as any;
   const { products, zones, categories, loading: loadingOptions } = useCheckStockOptions();
 
@@ -47,6 +51,7 @@ function EmployeeCheckStockExecuteContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   // ค่านับได้จริงต่อสินค้า (เก็บเป็น string ไว้เพื่อให้ลบ/พิมพ์ช่องว่างได้ระหว่างพิมพ์)
   const [counts, setCounts] = useState<Record<number, string>>({});
@@ -105,13 +110,10 @@ function EmployeeCheckStockExecuteContent() {
     }
   };
 
-  // สร้างเอกสารรายการสินค้าที่ต้องนับ เปิดหน้าต่างใหม่แล้วเรียก print ของเบราว์เซอร์ให้เลือกเองว่าจะ
-  // "บันทึกเป็น PDF" (ดาวน์โหลด) หรือเลือกเครื่องพิมพ์จริง (พิมพ์กระดาษ) — ไม่ต้องพึ่งไลบรารีสร้าง PDF เพิ่ม
-  // เหมือนที่ QR Code ด้านบนทำอยู่แล้ว ปุ่มดาวน์โหลด/พิมพ์ทั้งคู่จึงเรียกฟังก์ชันนี้ร่วมกัน ต่างกันแค่คำอธิบายปุ่ม
-  const openChecklistPrintWindow = () => {
-    if (!schedule) return;
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
+  // สร้างมาร์กอัป (style + เนื้อหา) ของเอกสารรายการตรวจนับสต็อก ใช้ร่วมกันทั้งตอนดาวน์โหลดเป็น PDF (แปะลง DOM
+  // ที่ซ่อนไว้แล้วถ่ายภาพด้วย html2canvas) และตอนพิมพ์ (แปะลงหน้าต่างพิมพ์ใหม่แล้วเรียก window.print())
+  const buildChecklistMarkup = (footerLabel: string): string => {
+    if (!schedule) return "";
 
     const rows = scheduleProducts
       .map((p, idx) => {
@@ -135,7 +137,188 @@ function EmployeeCheckStockExecuteContent() {
       .join("");
 
     const dateStr = new Date(schedule.scheduled_datetime).toLocaleDateString("th-TH", { day: "2-digit", month: "long", year: "numeric" });
-    const printedAt = new Date().toLocaleString("th-TH", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    const generatedAt = new Date().toLocaleString("th-TH", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+    return `
+      <style>
+        .checklist-pdf-doc * { box-sizing: border-box; }
+        .checklist-pdf-doc {
+          font-family: "Sarabun", "Kanit", "Inter", sans-serif;
+          padding: 28px 32px;
+          color: #111827;
+          background: #ffffff;
+        }
+
+        /* หัวเอกสาร — เรียบ ทางการ ขาวดำ */
+        .checklist-pdf-doc .doc-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+          border-bottom: 2px solid #111827;
+          padding-bottom: 12px;
+          margin-bottom: 18px;
+        }
+        .checklist-pdf-doc .doc-title { font-family: "Kanit", sans-serif; font-size: 19px; font-weight: 600; margin: 0; }
+        .checklist-pdf-doc .doc-subtitle { font-size: 12px; color: #4b5563; margin: 4px 0 0; }
+
+        /* กล่องข้อมูลงาน */
+        .checklist-pdf-doc .meta-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+          border: 1px solid #d1d5db;
+          padding: 12px 16px;
+          margin-bottom: 20px;
+        }
+        .checklist-pdf-doc .meta-grid .full { grid-column: 1 / -1; }
+        .checklist-pdf-doc .meta-label { font-size: 10px; color: #6b7280; margin: 0 0 2px; text-transform: uppercase; letter-spacing: 0.03em; }
+        .checklist-pdf-doc .meta-value { font-size: 13px; color: #111827; font-weight: 500; margin: 0; }
+
+        .checklist-pdf-doc table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .checklist-pdf-doc thead th {
+          background: #f3f4f6;
+          color: #111827;
+          font-weight: 600;
+          text-align: left;
+          padding: 9px 10px;
+          font-size: 11px;
+          letter-spacing: 0.02em;
+          border: 1px solid #9ca3af;
+        }
+        .checklist-pdf-doc tbody td { padding: 9px 10px; border: 1px solid #d1d5db; vertical-align: middle; }
+
+        .checklist-pdf-doc .center { text-align: center; }
+        .checklist-pdf-doc .strong { font-weight: 600; }
+        .checklist-pdf-doc .muted { color: #6b7280; }
+        .checklist-pdf-doc .mono { font-family: "Sarabun", monospace; color: #374151; }
+        .checklist-pdf-doc .tag { font-size: 11px; color: #374151; }
+        .checklist-pdf-doc .blank { min-width: 70px; border-bottom: 1px dashed #9ca3af !important; }
+
+        .checklist-pdf-doc .footer { margin-top: 20px; font-size: 10px; color: #9ca3af; text-align: right; }
+
+        @page { size: A4; margin: 14mm 16mm; }
+        @media print {
+          .checklist-pdf-doc { padding: 0; }
+          thead { display: table-header-group; } /* ให้หัวตารางซ้ำทุกหน้าเมื่อรายการยาวเกิน 1 หน้า */
+        }
+      </style>
+      <div class="checklist-pdf-doc">
+        <div class="doc-header">
+          <div>
+            <p class="doc-title">รายการตรวจนับสต็อกสินค้า</p>
+            <p class="doc-subtitle">${schedule.target_name || "-"}</p>
+          </div>
+        </div>
+
+        <div class="meta-grid">
+          <div>
+            <p class="meta-label">วันที่นัดตรวจ</p>
+            <p class="meta-value">${dateStr}</p>
+          </div>
+          <div>
+            <p class="meta-label">ผู้รับผิดชอบ</p>
+            <p class="meta-value">${schedule.user_full_name || "-"}</p>
+          </div>
+          <div>
+            <p class="meta-label">จำนวนรายการ</p>
+            <p class="meta-value">${scheduleProducts.length} รายการ</p>
+          </div>
+          ${schedule.note ? `<div class="full"><p class="meta-label">หมายเหตุ</p><p class="meta-value">${schedule.note}</p></div>` : ""}
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th class="center">#</th>
+              <th>รหัสสินค้า</th>
+              <th>ชื่อสินค้า</th>
+              <th class="center">ตำแหน่งจัดเก็บ</th>
+              <th class="center">จำนวนในระบบ</th>
+              <th class="center">นับได้จริง</th>
+              <th>หมายเหตุ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || `<tr><td colspan="7" class="center muted">ไม่พบรายการสินค้า</td></tr>`}
+          </tbody>
+        </table>
+
+        <div class="footer">${footerLabel} ${generatedAt}</div>
+      </div>
+    `;
+  };
+
+  // ดาวน์โหลดเป็นไฟล์ PDF จริงทันทีในคลิกเดียว (ไม่ต้องเปิดหน้าต่างพิมพ์แล้วเลือก "Save as PDF" เอง) — render
+  // มาร์กอัปเดียวกันลง DOM ที่ซ่อนไว้นอกจอ แล้วถ่ายภาพด้วย html2canvas (เพราะ jsPDF เปล่าๆ ไม่รองรับฟอนต์ไทยในตัว)
+  // ก่อนตัดแปะเป็นหน้า A4 ทีละหน้าใน jsPDF
+  const downloadChecklistPdf = async () => {
+    if (!schedule) return;
+    setGeneratingPdf(true);
+
+    // A4 กว้าง 210mm ที่ 96dpi ~ 794px — ใช้ความกว้างนี้ตอน render กันเลย์เอาต์ผิดสัดส่วนตอนแปะลง PDF จริง
+    const pageWidthPx = 794;
+
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.left = "-10000px";
+    container.style.top = "0";
+    container.style.width = `${pageWidthPx}px`;
+    container.style.background = "#ffffff";
+    container.innerHTML = buildChecklistMarkup("ดาวน์โหลดเมื่อ");
+    document.body.appendChild(container);
+
+    try {
+      // รอให้ฟอนต์ที่ใช้จริงในเอกสารพร้อมก่อนถ่ายภาพ กันตัวอักษรเพี้ยน/ใช้ฟอนต์ default ของเบราว์เซอร์
+      await Promise.all([
+        document.fonts.load('600 19px "Kanit"'),
+        document.fonts.load('500 13px "Sarabun"'),
+        document.fonts.load('400 12px "Sarabun"'),
+      ]).catch(() => {});
+      await document.fonts.ready;
+
+      const canvas = await html2canvas(container, {
+        scale: 2, // ความละเอียดสูงกว่าที่แสดงจริง 2 เท่า กันภาพเบลอตอนขยายเต็มหน้า PDF
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        windowWidth: pageWidthPx,
+      });
+
+      const pdf = new jsPDF({ unit: "mm", format: "a4" });
+      const pageWidthMm = pdf.internal.pageSize.getWidth();
+      const pageHeightMm = pdf.internal.pageSize.getHeight();
+      const imgHeightMm = (canvas.height / canvas.width) * pageWidthMm;
+      const imgData = canvas.toDataURL("image/png");
+
+      // ตัดภาพยาวๆ ทั้งใบเป็นหน้า A4 ทีละหน้า (เผื่อรายการสินค้ายาวเกิน 1 หน้า)
+      let heightLeftMm = imgHeightMm;
+      let positionMm = 0;
+      pdf.addImage(imgData, "PNG", 0, positionMm, pageWidthMm, imgHeightMm);
+      heightLeftMm -= pageHeightMm;
+
+      while (heightLeftMm > 0) {
+        positionMm = heightLeftMm - imgHeightMm;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, positionMm, pageWidthMm, imgHeightMm);
+        heightLeftMm -= pageHeightMm;
+      }
+
+      pdf.save(`check-stock-${schedule.id}.pdf`);
+    } catch (err) {
+      console.error("Failed to generate checklist PDF:", err);
+      await alertDialog("ไม่สามารถสร้างไฟล์ PDF ได้ กรุณาลองใหม่");
+    } finally {
+      document.body.removeChild(container);
+      setGeneratingPdf(false);
+    }
+  };
+
+  // เปิดหน้าต่างพิมพ์ใหม่ด้วยมาร์กอัปเดียวกับที่ใช้สร้าง PDF แล้วเรียก print ของเบราว์เซอร์ — ต่างจากตอนดาวน์โหลด
+  // ตรงที่เป็นเอกสารสด (ไม่ใช่รูปที่ถ่ายไว้) และเป็นคนละ document เลยต้องแปะลิงก์ Google Fonts ใหม่เอง
+  const printChecklist = () => {
+    if (!schedule) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
 
     printWindow.document.write(`
       <html>
@@ -143,136 +326,18 @@ function EmployeeCheckStockExecuteContent() {
           <title>รายการตรวจนับสต็อก - ${schedule.target_name || "งานเช็คสต็อก"}</title>
           <link rel="preconnect" href="https://fonts.googleapis.com">
           <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Kanit:wght@500;600;700&display=swap" rel="stylesheet">
-          <style>
-            * { box-sizing: border-box; }
-            body {
-              font-family: "Sarabun", "Kanit", "Inter", sans-serif;
-              margin: 0;
-              padding: 28px 32px;
-              color: #111827;
-            }
-
-            /* หัวเอกสาร — เรียบ ทางการ ขาวดำ */
-            .doc-header {
-              display: flex;
-              align-items: flex-start;
-              justify-content: space-between;
-              gap: 16px;
-              border-bottom: 2px solid #111827;
-              padding-bottom: 12px;
-              margin-bottom: 18px;
-            }
-            .doc-title { font-family: "Kanit", sans-serif; font-size: 19px; font-weight: 600; margin: 0; }
-            .doc-subtitle { font-size: 12px; color: #4b5563; margin: 4px 0 0; }
-            .doc-badge {
-              flex-shrink: 0;
-              border: 1px solid #111827;
-              font-size: 11px;
-              font-weight: 600;
-              padding: 4px 12px;
-              white-space: nowrap;
-            }
-
-            /* กล่องข้อมูลงาน */
-            .meta-grid {
-              display: grid;
-              grid-template-columns: repeat(3, 1fr);
-              gap: 10px;
-              border: 1px solid #d1d5db;
-              padding: 12px 16px;
-              margin-bottom: 20px;
-            }
-            .meta-grid .full { grid-column: 1 / -1; }
-            .meta-label { font-size: 10px; color: #6b7280; margin: 0 0 2px; text-transform: uppercase; letter-spacing: 0.03em; }
-            .meta-value { font-size: 13px; color: #111827; font-weight: 500; margin: 0; }
-
-            table { width: 100%; border-collapse: collapse; font-size: 12px; }
-            thead th {
-              background: #f3f4f6;
-              color: #111827;
-              font-weight: 600;
-              text-align: left;
-              padding: 9px 10px;
-              font-size: 11px;
-              letter-spacing: 0.02em;
-              border: 1px solid #9ca3af;
-            }
-            tbody td { padding: 9px 10px; border: 1px solid #d1d5db; vertical-align: middle; }
-
-            .center { text-align: center; }
-            .strong { font-weight: 600; }
-            .muted { color: #6b7280; }
-            .mono { font-family: "Sarabun", monospace; color: #374151; }
-            .tag { font-size: 11px; color: #374151; }
-            .blank { min-width: 70px; border-bottom: 1px dashed #9ca3af !important; }
-
-            /* ลายเซ็นท้ายเอกสาร */
-            .signatures { display: flex; justify-content: flex-end; gap: 48px; margin-top: 48px; }
-            .signature { text-align: center; font-size: 11px; color: #374151; }
-            .signature .line { width: 160px; border-bottom: 1px solid #6b7280; margin-bottom: 6px; height: 28px; }
-
-            .footer { margin-top: 20px; font-size: 10px; color: #9ca3af; text-align: right; }
-
-            @page { size: A4; margin: 14mm 16mm; }
-            @media print {
-              body { padding: 0; }
-              thead { display: table-header-group; } /* ให้หัวตารางซ้ำทุกหน้าเมื่อรายการยาวเกิน 1 หน้า */
-            }
-          </style>
         </head>
         <body>
-          <div class="doc-header">
-            <div>
-              <p class="doc-title">รายการตรวจนับสต็อกสินค้า</p>
-              <p class="doc-subtitle">${schedule.target_name || "-"}</p>
-            </div>
-            <span class="doc-badge">${schedule.status}</span>
-          </div>
-
-          <div class="meta-grid">
-            <div>
-              <p class="meta-label">วันที่นัดตรวจ</p>
-              <p class="meta-value">${dateStr}</p>
-            </div>
-            <div>
-              <p class="meta-label">ผู้รับผิดชอบ</p>
-              <p class="meta-value">${schedule.user_full_name || "-"}</p>
-            </div>
-            <div>
-              <p class="meta-label">จำนวนรายการ</p>
-              <p class="meta-value">${scheduleProducts.length} รายการ</p>
-            </div>
-            ${schedule.note ? `<div class="full"><p class="meta-label">หมายเหตุ</p><p class="meta-value">${schedule.note}</p></div>` : ""}
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th class="center">#</th>
-                <th>รหัสสินค้า</th>
-                <th>ชื่อสินค้า</th>
-                <th class="center">ตำแหน่งจัดเก็บ</th>
-                <th class="center">จำนวนในระบบ</th>
-                <th class="center">นับได้จริง</th>
-                <th>หมายเหตุ</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows || `<tr><td colspan="7" class="center muted">ไม่พบรายการสินค้า</td></tr>`}
-            </tbody>
-          </table>
-
-          <div class="signatures">
-            <div class="signature"><div class="line"></div>ผู้ตรวจนับ</div>
-            <div class="signature"><div class="line"></div>ผู้ตรวจสอบ</div>
-          </div>
-
-          <div class="footer">พิมพ์เมื่อ ${printedAt}</div>
+          ${buildChecklistMarkup("พิมพ์เมื่อ")}
         </body>
       </html>
     `);
     printWindow.document.close();
     printWindow.focus();
+    // ปิดแท็บที่เปิดไว้เองอัตโนมัติ ทันทีที่ผู้ใช้กด "พิมพ์" หรือ "ยกเลิก" ใน dialog เสร็จ (ไม่ปล่อยแท็บ about:blank
+    // ค้างไว้เฉยๆ ให้ผู้ใช้งงว่าใช้ทำอะไรต่อไม่ได้) — ใช้ afterprint แทนการปิดทันทีหลังเรียก print() เพราะ dialog
+    // อาจยังไม่ทันเปิดจริงตอนนั้น
+    printWindow.onafterprint = () => printWindow.close();
     // รอให้ฟอนต์ Google Fonts โหลดเสร็จก่อนเรียก print กันข้อความกระโดดขนาดหลังสั่งพิมพ์ไปแล้ว
     setTimeout(() => printWindow.print(), 400);
   };
@@ -344,11 +409,12 @@ function EmployeeCheckStockExecuteContent() {
   const handleSubmit = async () => {
     if (!id || !schedule || !submitterUserId) return;
     if (!allCounted) {
-      toast({ variant: "error", message: "กรุณากรอกจำนวนที่นับได้ให้ครบทุกรายการก่อนส่งตรวจสอบ" });
+      await alertDialog("กรุณากรอกจำนวนที่นับได้ให้ครบทุกรายการก่อนส่งตรวจสอบ");
       return;
     }
-    const confirmed = window.confirm(
-      `ยืนยันส่งผลนับสต็อกทั้ง ${scheduleProducts.length} รายการให้เจ้าของร้านตรวจสอบ? หลังส่งแล้วจะแก้ไขจำนวนไม่ได้จนกว่าเจ้าของร้านจะตีกลับ`
+    const confirmed = await confirmDialog(
+      `ยืนยันส่งผลนับสต็อกทั้ง ${scheduleProducts.length} รายการให้เจ้าของร้านตรวจสอบ? หลังส่งแล้วจะแก้ไขจำนวนไม่ได้จนกว่าเจ้าของร้านจะตีกลับ`,
+      { title: "ยืนยันส่งผลนับสต็อก", confirmText: "ส่งตรวจสอบ" }
     );
     if (!confirmed) return;
 
@@ -381,7 +447,7 @@ function EmployeeCheckStockExecuteContent() {
         navigate("/employee/wms/check-stock");
       }
     } catch (err: any) {
-      toast({ variant: "error", message: err.response?.data?.error || "ไม่สามารถส่งผลนับสต็อกได้ กรุณาลองใหม่" });
+      await alertDialog(err.response?.data?.error || "ไม่สามารถส่งผลนับสต็อกได้ กรุณาลองใหม่");
     } finally {
       setSubmitting(false);
     }
@@ -517,10 +583,21 @@ function EmployeeCheckStockExecuteContent() {
           <CardTitle className="text-lg">รายการสินค้าที่ต้องนับ</CardTitle>
           {/* เจ้าของร้านอนุมัติและบันทึกลงสต็อกแล้ว (เสร็จสิ้น) ไม่ต้องโชว์ปุ่มนี้อีก เพราะรายการนับไม่มีความหมายให้พิมพ์ต่อแล้ว */}
           {scheduleProducts.length > 0 && schedule.status !== "เสร็จสิ้น" && (
-            <Button onClick={openChecklistPrintWindow} variant="outline" className="flex shrink-0 items-center gap-1.5">
-              <FileDown className="h-3.5 w-3.5" />
-              ดาวน์โหลด/พิมพ์ PDF
-            </Button>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                onClick={downloadChecklistPdf}
+                disabled={generatingPdf}
+                variant="outline"
+                className="flex items-center gap-1.5"
+              >
+                {generatingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+                ดาวน์โหลด PDF
+              </Button>
+              <Button onClick={printChecklist} variant="outline" className="flex items-center gap-1.5">
+                <Printer className="h-3.5 w-3.5" />
+                พิมพ์
+              </Button>
+            </div>
           )}
         </CardHeader>
         <CardContent>

@@ -115,7 +115,7 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 					prodCode = prod.Product_Code
 				}
 
-				code := lotcode.Build(prodCode, shortName, newInv.ID)
+				code := lotcode.Build(prodCode, shortName)
 				return tx.Model(&entity.Inventory{}).Where("id = ?", newInv.ID).Updates(map[string]interface{}{
 					"variant_code":         code,
 					"barcode":              code,
@@ -144,7 +144,7 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				if errProd := tx.Select("product_code").First(&prod, productID).Error; errProd == nil {
 					prodCode = prod.Product_Code
 				}
-				code := lotcode.Build(prodCode, shortName, inv.ID)
+				code := lotcode.Build(prodCode, shortName)
 				if inv.Variant_Code == "" {
 					updates["variant_code"] = code
 				}
