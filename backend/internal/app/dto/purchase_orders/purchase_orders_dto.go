@@ -54,10 +54,20 @@ type POItemResponse struct {
 	OrderType                   string   `json:"order_type"`
 }
 
-// Struct สำหรับเก็บข้อมูลรายบริษัทที่ถูกไม่อนุมัติ
+type RejectedPurchaseOrderSummary struct {
+	ID          uint      `json:"id"`
+	PONumber    string    `json:"po_number"`
+	TotalAmount float64   `json:"total_amount"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// Struct สำหรับเก็บข้อมูล PO ที่ถูกตีกลับ โดยแยกตามบริษัทผู้จัดจำหน่าย
 type SupplierRejectedSummary struct {
-    SupplierName string  `json:"supplier_name"`
-    Amount       float64 `json:"amount"`
+	SupplierID    uint                           `json:"supplier_id"`
+	SupplierName  string                         `json:"supplier_name"`
+	Amount        float64                        `json:"amount"`
+	POCount       int                            `json:"po_count"`
+	PurchaseOrders []RejectedPurchaseOrderSummary `json:"purchase_orders"`
 }
 
 // Struct สำหรับส่งสรุป

@@ -14,8 +14,8 @@ import (
 
 type DashboardService interface {
 	GetSummaryData(ctx context.Context, query dashDto.SummaryQuery) (*dashDto.SummaryResponse, error)
-	GetRecentSales(ctx context.Context, query dashDto.SummaryQuery, limit int) ([]dashDto.RecentSaleDTO, error)
-	GetAgingStock(ctx context.Context) ([]dashDto.AgingStockDTO, error)
+	GetRecentSales(ctx context.Context, query dashDto.SummaryQuery, page, pageSize int) (*dashDto.RecentSalesResponse, error)
+	GetAgingStock(ctx context.Context, thresholdDays int) ([]dashDto.AgingStockDTO, error)
 	GetStockHealth(ctx context.Context) (*dashDto.StockHealthDTO, error)
 	GetIncomeSummary(ctx context.Context, query dashDto.SummaryQuery) (*dashDto.RevenueBreakdownResponse, error)
 	GetTopSellers(ctx context.Context, query dashDto.SummaryQuery, limit int) ([]dashDto.TopSellerDTO, error)
@@ -35,6 +35,9 @@ func NewDashboardService(
 }
 
 func (s *dashboardService) GetSummaryData(ctx context.Context, query dashDto.SummaryQuery) (*dashDto.SummaryResponse, error) {
+	if err := dashDto.ValidateSummaryQuery(query); err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
@@ -140,9 +143,18 @@ var orderStatusLabel = map[enum.OrderStatus]string{
 	enum.OrderClaimed:       "เคลม",
 }
 
-func (s *dashboardService) GetRecentSales(ctx context.Context, query dashDto.SummaryQuery, limit int) ([]dashDto.RecentSaleDTO, error) {
-	if limit <= 0 {
-		limit = 10
+func (s *dashboardService) GetRecentSales(ctx context.Context, query dashDto.SummaryQuery, page, pageSize int) (*dashDto.RecentSalesResponse, error) {
+	if err := dashDto.ValidateSummaryQuery(query); err != nil {
+		return nil, err
+	}
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+	if pageSize > 100 {
+		pageSize = 100
 	}
 
 	now := time.Now()
@@ -162,7 +174,7 @@ func (s *dashboardService) GetRecentSales(ctx context.Context, query dashDto.Sum
 		start, end = today, today.AddDate(0, 0, 1)
 	}
 
-	orders, err := s.dashboardRepository.GetRecentSaleOrders(ctx, start, end, limit)
+	orders, total, err := s.dashboardRepository.GetRecentSaleOrders(ctx, start, end, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +190,12 @@ func (s *dashboardService) GetRecentSales(ctx context.Context, query dashDto.Sum
 			PaymentMethod: resolvePaymentMethodLabel(o),
 		}
 	}
-	return result, nil
+	return &dashDto.RecentSalesResponse{
+		Data:     result,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	}, nil
 }
 
 func resolveOrderStatusLabel(status enum.OrderStatus) string {
@@ -195,8 +212,10 @@ func resolvePaymentMethodLabel(o entity.SaleOrder) string {
 	return string(o.PaymentMethod.MethodName)
 }
 
-func (s *dashboardService) GetAgingStock(ctx context.Context) ([]dashDto.AgingStockDTO, error) {
-	thresholdDays := config.GetEnvInt("AGING_STOCK_THRESHOLD_DAYS", 180)
+func (s *dashboardService) GetAgingStock(ctx context.Context, thresholdDays int) ([]dashDto.AgingStockDTO, error) {
+	if thresholdDays <= 0 {
+		thresholdDays = config.GetEnvInt("AGING_STOCK_THRESHOLD_DAYS", 180)
+	}
 
 	products, err := s.dashboardRepository.GetProductsInStock(ctx)
 	if err != nil {
@@ -293,6 +312,9 @@ func (s *dashboardService) GetIncomeSummary(ctx context.Context, query dashDto.S
 }
 
 func (s *dashboardService) GetTopSellers(ctx context.Context, query dashDto.SummaryQuery, limit int) ([]dashDto.TopSellerDTO, error) {
+	if err := dashDto.ValidateSummaryQuery(query); err != nil {
+		return nil, err
+	}
 	if limit <= 0 {
 		limit = 10
 	}
@@ -317,6 +339,9 @@ func (s *dashboardService) GetTopSellers(ctx context.Context, query dashDto.Summ
 }
 
 func (s *dashboardService) GetDebtAging(ctx context.Context, query dashDto.DebtAgingQuery) (*dashDto.DebtAgingResponse, error) {
+	if err := dashDto.ValidateDebtAgingQuery(query); err != nil {
+		return nil, err
+	}
 	data, total, err := s.dashboardRepository.GetDebtAging(ctx, query)
 	if err != nil {
 		return nil, err
@@ -343,6 +368,17 @@ func resolveDateRange(query dashDto.SummaryQuery, now time.Time) (start, end tim
 	startOfYear := time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, now.Location())
 
 	switch {
+	case query.StartDate != "" && query.EndDate != "":
+		s, errS := time.ParseInLocation("2006-01-02", query.StartDate, now.Location())
+		e, errE := time.ParseInLocation("2006-01-02", query.EndDate, now.Location())
+		if errS == nil && errE == nil {
+			return s, e.AddDate(0, 0, 1), true
+		}
+	case query.StartDate != "":
+		s, errS := time.ParseInLocation("2006-01-02", query.StartDate, now.Location())
+		if errS == nil {
+			return s, s.AddDate(0, 0, 1), true
+		}
 	case query.Weekly != "":
 		return startOfWeek, startOfWeek.AddDate(0, 0, 7), true
 	case query.Monthly != "":
@@ -354,4 +390,5 @@ func resolveDateRange(query dashDto.SummaryQuery, now time.Time) (start, end tim
 	default:
 		return time.Time{}, time.Time{}, false
 	}
+	return time.Time{}, time.Time{}, false
 }

@@ -34,6 +34,7 @@ type PurchaseOrderService interface {
 	GetMonthlyPOCount(ctx context.Context) (int64, error)
 	RestorePO(ctx context.Context, poID uint, userID uint) error
 	SendStaleDraftReminders(ctx context.Context) error
+	PurgeDeletedPOs(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 // purchaseOrderService ตัว Struct หลักที่จะทำงานจริง (Implement Interface ด้านบน)
@@ -78,6 +79,24 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 	}
 	if supplier == nil {
 		return nil, errors.New("supplier not found")
+	}
+
+	// Owner ที่เลือกส่งอนุมัติ ให้สร้างเป็น APPROVED ตั้งแต่ transaction แรก
+	// เพื่อไม่ให้ PO ค้างเป็น PENDING หาก request อนุมัติรอบที่สองล้มเหลว
+	finalStatus := req.Status
+	var approvedBy *uint
+	var approvedAt *time.Time
+	if req.Status == poEnum.StatusPending {
+		creator, err := s.userRepo.FindByID(ctx, creatorID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load PO creator: %w", err)
+		}
+		if creator.Role.RoleName == poEnum.RoleOwner {
+			finalStatus = poEnum.StatusApproved
+			approvedBy = &creatorID
+			now := time.Now()
+			approvedAt = &now
+		}
 	}
 
 	hasPurchase := false
@@ -138,10 +157,12 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 		PO_type_id:   poTypeID,
 		Created_by:   creatorID,
 		LastUpdatedBy: &creatorID,
-		Status:        req.Status,
+		Status:        finalStatus,
 		Notes:         req.Notes,
 		PO_Items:      poItems,
 		Total_amount:  totalAmount,
+		Approved_by:   approvedBy,
+		Approved_at:   approvedAt,
 	}
 
 	if err := s.poRepository.SavePO(ctx, poData); err != nil {
@@ -150,6 +171,17 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 
 	if poData.Status == poEnum.StatusPending {
 		s.notifyOwnersOfPendingApproval(ctx, poData, creatorID)
+	}
+	if poData.Status == poEnum.StatusApproved {
+		var alertIDs []uint
+		for _, item := range poData.PO_Items {
+			if item.AlertID != nil {
+				alertIDs = append(alertIDs, *item.AlertID)
+			}
+		}
+		if len(alertIDs) > 0 {
+			_ = s.stockAlertRepo.ResolveByIDs(alertIDs)
+		}
 	}
 
 	// จองไอเทม PreOrder
@@ -699,7 +731,11 @@ func (s *purchaseOrderService) RestorePO(ctx context.Context, poID uint, userID 
 	return s.poRepository.RestorePOByID(ctx, poID, userID)
 }
 
-// SendStaleDraftReminders แจ้งเตือนผู้สร้าง PO ที่ค้างอยู่ในสถานะ DRAFT/RESUBMITTED โดยไม่มีความเคลื่อนไหวมาแล้วอย่างน้อย 7 วัน
+func (s *purchaseOrderService) PurgeDeletedPOs(ctx context.Context, cutoff time.Time) (int64, error) {
+	return s.poRepository.PurgeDeletedPOs(ctx, cutoff)
+}
+
+// SendStaleDraftReminders แจ้งเตือนผู้ใช้งานทุกคนเมื่อ PO สถานะ DRAFT/RESUBMITTED ไม่มีความเคลื่อนไหวมาแล้วอย่างน้อย 7 วัน
 func (s *purchaseOrderService) SendStaleDraftReminders(ctx context.Context) error {
 	cutoff := time.Now().AddDate(0, 0, -7)
 	pos, err := s.poRepository.FindDuePOReminders(ctx, cutoff)
@@ -722,15 +758,15 @@ func (s *purchaseOrderService) SendStaleDraftReminders(ctx context.Context) erro
 			continue
 		}
 
-		prefix := "/employee"
-		if po.Creator.Role.RoleName == poEnum.RoleOwner {
-			prefix = "/owner"
-		}
-		link := fmt.Sprintf("%s/orders/%d", prefix, po.ID)
-
 		if s.notification != nil {
-			if err := s.notification.NotifyUser(po.Created_by, notifType, title, message, link, nil); err != nil {
-				log.Printf("[po-reminder] failed to notify user %d (PO %s): %v\n", po.Created_by, po.PO_number, err)
+			ownerLink := fmt.Sprintf("/owner/orders/%d", po.ID)
+			if err := s.notification.NotifyOwners(notifType, title, message, ownerLink, nil); err != nil {
+				log.Printf("[po-reminder] failed to notify owners (PO %s): %v\n", po.PO_number, err)
+			}
+
+			employeeLink := fmt.Sprintf("/employee/orders/%d", po.ID)
+			if err := s.notification.NotifyEmployees(notifType, title, message, employeeLink, nil); err != nil {
+				log.Printf("[po-reminder] failed to notify employees (PO %s): %v\n", po.PO_number, err)
 			}
 		}
 
@@ -744,15 +780,15 @@ func (s *purchaseOrderService) SendStaleDraftReminders(ctx context.Context) erro
 
 // companyProductCodeForSupplier: หารหัสสินค้าที่ Supplier เจ้านี้ใช้เรียกสินค้าชิ้นนี้ (จาก Inventory ที่ preload มาแล้ว)
 // CompanyProductCode ย้ายมาอยู่ที่ Inventory แทน Product โดยตรง เพราะสินค้า 1 ชิ้นมาจากหลาย Supplier ได้
-// แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน — คืนค่าว่างถ้าสินค้านี้ยังไม่เคยรับมาจาก Supplier เจ้านี้
+// แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน — คืนค่า CompanyProductCode ของ Supplier เจ้านั้น หรือ fallback เป็น Product_Code ถ้ายังไม่เคยระบุ
 func companyProductCodeForSupplier(product *poEntity.Product, supplierID uint) string {
 	if product == nil {
 		return ""
 	}
 	for _, inv := range product.Inventories {
-		if inv.SupplierID == supplierID {
+		if inv.SupplierID == supplierID && inv.CompanyProductCode != "" {
 			return inv.CompanyProductCode
 		}
 	}
-	return ""
+	return product.Product_Code
 }

@@ -52,19 +52,23 @@ import CustomerCreditControl from './owner/storeconfig/customer_credit_control';
 import StoreConfig from './owner/storeconfig/storeconfig';
 import DeletedPoHistory from './owner/purchase_orders/restore_po';
 import NewReturnPage from './owner/return/new_return';
+import { getDashboardRoleGroup } from '../utils/dashboardAccess';
 
 export default function AppRouter(): React.JSX.Element {
-  const { role } = useAuth() as any;
+  const { role } = useAuth();
 
-  const { isAdminOrOwner, firstMenuPath } = useMemo(() => {
+  const { isAdminOrOwner, isEmployeeOrStaff, firstMenuPath } = useMemo(() => {
     const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
-    const isOwnerOrAdmin = currentRole === "OWNER" || currentRole === "ADMIN";
+    const dashboardRoleGroup = getDashboardRoleGroup(currentRole);
+    const isOwnerOrAdmin = dashboardRoleGroup === 'owner';
+    const isEmployee = dashboardRoleGroup === 'employee';
     
     const userMenus = getMenuByRole(currentRole);
     const firstPath = userMenus && userMenus.length > 0 ? userMenus[0].path : "/login";
 
     return {
       isAdminOrOwner: isOwnerOrAdmin,
+      isEmployeeOrStaff: isEmployee,
       firstMenuPath: firstPath
     };
   }, [role]); 
@@ -229,13 +233,13 @@ export default function AppRouter(): React.JSX.Element {
 
         {/* แดชบอร์ดของฝั่งพนักงาน */}
         <Route path="/employee/dashboard/maindashboard" element={
-          !isAdminOrOwner ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeOrStaff ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
         <Route path="/employee/dashboard/salesdashboard" element={
-          !isAdminOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeOrStaff ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
         <Route path="/employee/dashboard/debtdashboard" element={
-          !isAdminOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeOrStaff ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/employee/orders" element={<PurchaseOrders />} />

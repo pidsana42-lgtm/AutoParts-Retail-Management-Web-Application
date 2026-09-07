@@ -5,8 +5,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/robfig/cron/v3"
 	dashRepo "backend/internal/app/repository/dashboard"
+	"github.com/robfig/cron/v3"
 )
 
 var dashboardCronInstance *cron.Cron
@@ -14,10 +14,10 @@ var dashboardCronInstance *cron.Cron
 // StartDashboardSummaryCron รันทุกวันตอนตี 00:05 เพื่อ finalize ยอดของ "เมื่อวาน"
 // ตั้งเวลา 00:05 ไม่ใช่ 00:00 เผื่อ transaction ท้ายวันที่ commit ช้านิดหน่อยให้เข้าฐานข้อมูลก่อน
 func StartDashboardSummaryCron(repo dashRepo.DashboardRepository) {
-	dashboardCronInstance = cron.New(cron.WithLocation(time.Local))
+	dashboardCronInstance = cron.New(cron.WithLocation(bangkokLocation))
 
 	_, err := dashboardCronInstance.AddFunc("5 0 * * *", func() {
-		yesterday := time.Now().AddDate(0, 0, -1)
+		yesterday := time.Now().In(bangkokLocation).AddDate(0, 0, -1)
 		ctx := context.Background()
 		if err := repo.FinalizeDailySummary(ctx, yesterday); err != nil {
 			log.Printf("[dashboard-cron] finalize %s failed: %v", yesterday.Format("2006-01-02"), err)
@@ -30,5 +30,5 @@ func StartDashboardSummaryCron(repo dashRepo.DashboardRepository) {
 	}
 
 	dashboardCronInstance.Start()
-	log.Println("[dashboard-cron] started — will finalize daily summary at 00:05 every day")
+	log.Println("[dashboard-cron] started — will finalize daily summary at 00:05 Asia/Bangkok every day")
 }
