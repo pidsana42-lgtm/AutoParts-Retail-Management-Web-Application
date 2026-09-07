@@ -243,3 +243,70 @@ func (ctrl *CustomerController) CreateCreditAuditLog(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{"message": "บันทึกประวัติการแก้ไขสำเร็จ"})
 }
+
+// GetCustomerDocument เป็น Protected Route สำหรับเข้าถึงเอกสารบัตรประชาชนของลูกค้าตาม ID
+func (ctrl *CustomerController) GetCustomerDocument(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบ ID ลูกค้าไม่ถูกต้อง"})
+		return
+	}
+
+	customer, err := ctrl.svc.GetCustomerByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลลูกค้า"})
+		return
+	}
+
+	if customer.IdCardImagePath == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ลูกค้ารายนี้ไม่มีเอกสารประจำตัวแนบไว้ในระบบ"})
+		return
+	}
+
+	fileBytes, mimeType, err := storage.GetCustomerDocument(customer.IdCardImagePath)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่สามารถดึงไฟล์เอกสารได้: " + err.Error()})
+		return
+	}
+
+	filename := filepath.Base(customer.IdCardImagePath)
+	if filename == "" || filename == "." || filename == "/" {
+		filename = fmt.Sprintf("customer_doc_%d", customer.ID)
+	}
+
+	// Security Headers ป้องกันไม่ให้แชร์ / แคชใน Proxy สาธารณะ
+	c.Header("Content-Type", mimeType)
+	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
+	c.Header("Cache-Control", "private, no-cache, no-store, must-revalidate")
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+	c.Header("X-Content-Type-Options", "nosniff")
+
+	c.Data(http.StatusOK, mimeType, fileBytes)
+}
+
+// GetCustomerDocumentByPath เป็น Protected Route สำหรับเข้าถึงเอกสารลูกค้าผ่าน Relative Storage Path
+func (ctrl *CustomerController) GetCustomerDocumentByPath(c *gin.Context) {
+	storagePath := c.Query("path")
+	if storagePath == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุพาธของเอกสาร"})
+		return
+	}
+
+	fileBytes, mimeType, err := storage.GetCustomerDocument(storagePath)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่สามารถดึงไฟล์เอกสารได้: " + err.Error()})
+		return
+	}
+
+	filename := filepath.Base(storagePath)
+	c.Header("Content-Type", mimeType)
+	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
+	c.Header("Cache-Control", "private, no-cache, no-store, must-revalidate")
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+	c.Header("X-Content-Type-Options", "nosniff")
+
+	c.Data(http.StatusOK, mimeType, fileBytes)
+}

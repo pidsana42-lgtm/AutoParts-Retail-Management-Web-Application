@@ -36,6 +36,7 @@ import ConfirmModal from "../../../components/elements/confirm_modal";
 
 // Hook & Types
 import { useCustomerRegistration } from "./hook/useCustomerRegustration";
+import { getCustomerDocumentUrl } from "../../../service/http/customer/customer_service";
 
 export default function CustomerRegistration() {
   const {
@@ -658,21 +659,21 @@ export default function CustomerRegistration() {
                       {selectedCustomer.id_card_image_path ? (
                         <div className="space-y-3">
                           <div className="overflow-hidden border border-gray-200 bg-white">
-                            {selectedCustomer.id_card_image_path.toLowerCase().endsWith(".pdf") ? (
+                            {selectedCustomer.id_card_image_path.toLowerCase().includes(".pdf") ? (
                               <div className="p-6 flex flex-col items-center justify-center text-gray-600">
                                 <FileText className="w-12 h-12 text-[#E51C23] mb-2" />
                                 <span className="text-xs font-light">เอกสารแนบในรูปแบบ PDF</span>
                               </div>
                             ) : (
                               <img
-                                src={selectedCustomer.id_card_image_path}
+                                src={getCustomerDocumentUrl(selectedCustomer.id, selectedCustomer.id_card_image_path)}
                                 alt="สำเนาบัตรประชาชน"
                                 className="w-full h-44 object-contain bg-gray-50"
                               />
                             )}
                           </div>
                           <a
-                            href={selectedCustomer.id_card_image_path}
+                            href={getCustomerDocumentUrl(selectedCustomer.id, selectedCustomer.id_card_image_path)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1.5 text-xs text-[#E51C23] hover:underline font-normal cursor-pointer"
@@ -858,7 +859,7 @@ export default function CustomerRegistration() {
                 <div className="flex items-center justify-between p-2.5 bg-[#F6F3F2] border border-gray-200 text-xs text-[#1C1B1B]">
                   <span className="truncate">มีเอกสารเดิมในระบบ</span>
                   <a
-                    href={editFormData.id_card_image_path}
+                    href={getCustomerDocumentUrl(editingCustomer?.id, editFormData.id_card_image_path)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[#E51C23] hover:underline flex items-center gap-1 shrink-0 ml-2"

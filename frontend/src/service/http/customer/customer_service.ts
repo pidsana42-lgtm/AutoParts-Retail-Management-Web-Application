@@ -91,3 +91,24 @@ export const customerApiService = {
     return res.data;
   },
 };
+
+/**
+ * คืนค่า Protected URL สำหรับเข้าถึงรูปบัตรประชาชนหรือเอกสารลูกค้า
+ * โดยแนบ Token สำหรับยืนยันสิทธิ์ผ่าน Protected Route ของ Backend
+ */
+export const getCustomerDocumentUrl = (
+  customerId?: number,
+  pathOrUrl?: string
+): string => {
+  if (!customerId && !pathOrUrl) return "";
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
+  const queryToken = token ? `?token=${encodeURIComponent(token)}` : "";
+
+  if (customerId) {
+    return `/api/customers/${customerId}/document${queryToken}`;
+  }
+
+  return `/api/customers/document/view?path=${encodeURIComponent(pathOrUrl || "")}${
+    token ? `&token=${encodeURIComponent(token)}` : ""
+  }`;
+};
