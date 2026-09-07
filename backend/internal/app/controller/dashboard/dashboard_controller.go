@@ -16,6 +16,25 @@ type DashboardController struct {
 	svc dashSvc.DashboardService
 }
 
+func writeValidationError(c *gin.Context, err error) {
+	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+}
+
+func positiveIntQuery(c *gin.Context, key string, defaultValue, maximum int) (int, error) {
+	raw, exists := c.GetQuery(key)
+	if !exists || raw == "" {
+		return defaultValue, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer", key)
+	}
+	if err := dashDto.ValidatePositiveInt(key, value, maximum); err != nil {
+		return 0, err
+	}
+	return value, nil
+}
+
 func NewDashboardController(svc dashSvc.DashboardService) *DashboardController {
 	return &DashboardController{svc: svc}
 }
@@ -24,6 +43,10 @@ func (ctrl *DashboardController) GetSummaryData(c *gin.Context) {
 	var query dashDto.SummaryQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบ query ไม่ถูกต้อง: " + err.Error()})
+		return
+	}
+	if err := dashDto.ValidateSummaryQuery(query); err != nil {
+		writeValidationError(c, err)
 		return
 	}
 
@@ -42,18 +65,26 @@ func (ctrl *DashboardController) GetRecentSales(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบ query ไม่ถูกต้อง: " + err.Error()})
 		return
 	}
+	if err := dashDto.ValidateSummaryQuery(query); err != nil {
+		writeValidationError(c, err)
+		return
+	}
 
-	pageStr := c.DefaultQuery("page", "1")
-	page, err := strconv.Atoi(pageStr)
-	if err != nil || page <= 0 {
-		page = 1
+	page, err := positiveIntQuery(c, "page", 1, 0)
+	if err != nil {
+		writeValidationError(c, err)
+		return
 	}
 
 	// รองรับ limit เดิมชั่วคราว เพื่อไม่ให้ client รุ่นเก่าพังระหว่าง deploy
-	pageSizeStr := c.DefaultQuery("page_size", c.DefaultQuery("limit", "10"))
-	pageSize, err := strconv.Atoi(pageSizeStr)
-	if err != nil || pageSize <= 0 {
-		pageSize = 10
+	pageSizeKey := "page_size"
+	if _, exists := c.GetQuery(pageSizeKey); !exists {
+		pageSizeKey = "limit"
+	}
+	pageSize, err := positiveIntQuery(c, pageSizeKey, 10, 100)
+	if err != nil {
+		writeValidationError(c, err)
+		return
 	}
 
 	result, err := ctrl.svc.GetRecentSales(c.Request.Context(), query, page, pageSize)
@@ -65,10 +96,10 @@ func (ctrl *DashboardController) GetRecentSales(c *gin.Context) {
 }
 
 func (ctrl *DashboardController) GetAgingStock(c *gin.Context) {
-	daysStr := c.DefaultQuery("days", "180")
-	days, err := strconv.Atoi(daysStr)
-	if err != nil || days <= 0 {
-		days = 180
+	days, err := positiveIntQuery(c, "days", 180, 0)
+	if err != nil {
+		writeValidationError(c, err)
+		return
 	}
 	data, err := ctrl.svc.GetAgingStock(c.Request.Context(), days)
 	if err != nil {
@@ -93,6 +124,10 @@ func (ctrl *DashboardController) GetIncomeSummary(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบ query ไม่ถูกต้อง: " + err.Error()})
 		return
 	}
+	if err := dashDto.ValidateSummaryQuery(query); err != nil {
+		writeValidationError(c, err)
+		return
+	}
 	data, err := ctrl.svc.GetIncomeSummary(c.Request.Context(), query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถโหลดข้อมูลรายได้ได้"})
@@ -107,10 +142,14 @@ func (ctrl *DashboardController) GetTopSellers(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบ query ไม่ถูกต้อง: " + err.Error()})
 		return
 	}
-	limitStr := c.DefaultQuery("limit", "10")
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 {
-		limit = 10
+	if err := dashDto.ValidateSummaryQuery(query); err != nil {
+		writeValidationError(c, err)
+		return
+	}
+	limit, err := positiveIntQuery(c, "limit", 10, 100)
+	if err != nil {
+		writeValidationError(c, err)
+		return
 	}
 	data, err := ctrl.svc.GetTopSellers(c.Request.Context(), query, limit)
 	if err != nil {
@@ -124,6 +163,18 @@ func (ctrl *DashboardController) GetDebtAging(c *gin.Context) {
 	var query dashDto.DebtAgingQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบ query ไม่ถูกต้อง: " + err.Error()})
+		return
+	}
+	if err := dashDto.ValidateDebtAgingQuery(query); err != nil {
+		writeValidationError(c, err)
+		return
+	}
+	if raw, exists := c.GetQuery("page"); exists && raw != "" && query.Page == 0 {
+		writeValidationError(c, fmt.Errorf("page must be greater than zero"))
+		return
+	}
+	if raw, exists := c.GetQuery("page_size"); exists && raw != "" && query.PageSize == 0 {
+		writeValidationError(c, fmt.Errorf("page_size must be greater than zero"))
 		return
 	}
 	result, err := ctrl.svc.GetDebtAging(c.Request.Context(), query)
@@ -140,7 +191,12 @@ func (ctrl *DashboardController) ExportDebtAgingExcel(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบ query ไม่ถูกต้อง"})
 		return
 	}
-	// ดึงข้อมูลทั้งหมด (ไม่ใช้ pagination แต่คงตัวกรองอื่น)
+	if err := dashDto.ValidateDebtAgingQuery(query); err != nil {
+		writeValidationError(c, err)
+		return
+	}
+	// ดึงข้อมูลทั้งหมดเป็นชุดละ 100 รายการ เพื่อใช้ validation และไม่เปิดให้
+	// endpoint ปกติรับ page_size ขนาดใหญ่เกินไป
 	allQuery := dashDto.DebtAgingQuery{
 		StartDate:  query.StartDate,
 		EndDate:    query.EndDate,
@@ -148,19 +204,29 @@ func (ctrl *DashboardController) ExportDebtAgingExcel(c *gin.Context) {
 		MinAgeDays: query.MinAgeDays,
 		MaxAgeDays: query.MaxAgeDays,
 		Page:       1,
-		PageSize:   9999,
+		PageSize:   100,
 	}
 	result, err := ctrl.svc.GetDebtAging(c.Request.Context(), allQuery)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถส่งออกข้อมูลได้"})
 		return
 	}
+	allData := append([]dashDto.DebtAgingItemDTO(nil), result.Data...)
+	for page := 2; int64((page-1)*allQuery.PageSize) < result.Total; page++ {
+		allQuery.Page = page
+		next, nextErr := ctrl.svc.GetDebtAging(c.Request.Context(), allQuery)
+		if nextErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถส่งออกข้อมูลได้"})
+			return
+		}
+		allData = append(allData, next.Data...)
+	}
 
 	var buf bytes.Buffer
 	buf.WriteString("\xEF\xBB\xBF") // UTF-8 BOM for Excel
 	w := csv.NewWriter(&buf)
 	_ = w.Write([]string{"รหัสลูกค้า", "ชื่อลูกค้า", "ยอดหนี้ทั้งหมด", "วันที่ซื้อล่าสุด", "อายุหนี้ (วัน)", "สถานะ"})
-	for _, item := range result.Data {
+	for _, item := range allData {
 		_ = w.Write([]string{
 			item.CustomerCode,
 			item.CustomerName,

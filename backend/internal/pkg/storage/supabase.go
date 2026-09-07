@@ -3,9 +3,12 @@ package storage
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -14,11 +17,20 @@ const claimEvidenceBucket = "G03-Capstone"
 const productImageBucket = "G03-Capstone"
 const companyLogoBucket = "G03-Capstone"
 
-// UploadToSupabase uploads raw bytes to a Supabase Storage bucket and returns the public URL.
-func UploadToSupabase(bucket, filename, mimeType string, data []byte) (string, error) {
-	_ = godotenv.Overload(".env", "../.env", "backend/.env")
+var supabaseHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
-	supabaseURL := os.Getenv("SUPABASE_URL")
+func loadStorageEnv() {
+	// Keep explicitly supplied environment variables (for deployments/tests)
+	// and only fill missing values from local development files.
+	for _, envFile := range []string{".env", "../.env", "backend/.env"} {
+		_ = godotenv.Load(envFile)
+	}
+}
+
+func uploadToSupabase(bucket, objectPath, mimeType string, data []byte) (string, error) {
+	loadStorageEnv()
+
+	supabaseURL := strings.TrimRight(os.Getenv("SUPABASE_URL"), "/")
 	serviceKey := os.Getenv("SUPABASE_SECRET_KEY")
 	if serviceKey == "" {
 		serviceKey = os.Getenv("SUPABASE_KEY")
@@ -26,26 +38,44 @@ func UploadToSupabase(bucket, filename, mimeType string, data []byte) (string, e
 	if serviceKey == "" {
 		serviceKey = os.Getenv("api_key")
 	}
+	if supabaseURL == "" || serviceKey == "" {
+		return "", fmt.Errorf("ยังไม่ได้ตั้งค่า SUPABASE_URL หรือ SUPABASE_SECRET_KEY")
+	}
 
-	if supabaseURL != "" && serviceKey != "" {
-		uploadURL := fmt.Sprintf("%s/storage/v1/object/%s/%s", supabaseURL, bucket, filename)
+	objectPath = strings.TrimLeft(objectPath, "/")
+	uploadURL := fmt.Sprintf("%s/storage/v1/object/%s/%s", supabaseURL, bucket, objectPath)
+	req, err := http.NewRequest(http.MethodPost, uploadURL, bytes.NewReader(data))
+	if err != nil {
+		return "", fmt.Errorf("สร้างคำขออัปโหลด Supabase ไม่สำเร็จ: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+serviceKey)
+	req.Header.Set("apikey", serviceKey)
+	req.Header.Set("Content-Type", mimeType)
+	req.Header.Set("x-upsert", "true")
 
-		req, err := http.NewRequest(http.MethodPost, uploadURL, bytes.NewReader(data))
-		if err == nil {
-			req.Header.Set("Authorization", "Bearer "+serviceKey)
-			req.Header.Set("apikey", serviceKey)
-			req.Header.Set("Content-Type", mimeType)
-			req.Header.Set("x-upsert", "true")
+	resp, err := supabaseHTTPClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("เชื่อมต่อ Supabase Storage ไม่สำเร็จ: %w", err)
+	}
+	defer resp.Body.Close()
 
-			resp, err := http.DefaultClient.Do(req)
-			if err == nil {
-				defer resp.Body.Close()
-				if resp.StatusCode < 400 {
-					publicURL := fmt.Sprintf("%s/storage/v1/object/public/%s/%s", supabaseURL, bucket, filename)
-					return publicURL, nil
-				}
-			}
+	if resp.StatusCode >= http.StatusBadRequest {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		detail := strings.TrimSpace(string(body))
+		if detail == "" {
+			detail = resp.Status
 		}
+		return "", fmt.Errorf("Supabase Storage ปฏิเสธการอัปโหลด (%d): %s", resp.StatusCode, detail)
+	}
+
+	publicURL := fmt.Sprintf("%s/storage/v1/object/public/%s/%s", supabaseURL, bucket, objectPath)
+	return publicURL, nil
+}
+
+// UploadToSupabase uploads raw bytes to a Supabase Storage bucket and returns the public URL.
+func UploadToSupabase(bucket, filename, mimeType string, data []byte) (string, error) {
+	if publicURL, err := uploadToSupabase(bucket, filename, mimeType, data); err == nil {
+		return publicURL, nil
 	}
 
 	// Fallback to local storage in ./uploads
@@ -74,6 +104,5 @@ func UploadProductImage(filename, mimeType string, data []byte) (string, error) 
 
 // UploadCompanyLogo stores company logo images under the shared Supabase bucket.
 func UploadCompanyLogo(filename, mimeType string, data []byte) (string, error) {
-	return UploadToSupabase(companyLogoBucket, filename, mimeType, data)
+	return uploadToSupabase(companyLogoBucket, "company-logos/"+filename, mimeType, data)
 }
-

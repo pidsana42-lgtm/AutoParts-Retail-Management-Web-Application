@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { TrendingUp, TrendingDown, Banknote, Users, Loader2, Eye, Trophy, Filter as FilterIcon } from 'lucide-react';
 // Components
@@ -14,9 +14,10 @@ import { useRevenueBreakdown } from './hooks/useRevenueBreakdown';
 import { useTopSellers, TOP_SELLER_PRESETS } from './hooks/useTopSellers';
 // Service & Interface
 import { dashboardService } from '../../../service/http/dashboard/dashboard_service';
-import type { DashboardSummaryItem, SummaryQuery, StockHealthStats, TopSellerItem } from '../../../interface/dashboard/dashboard_interface';
+import type { DashboardSummaryItem, SummaryQuery, StockHealthStats } from '../../../interface/dashboard/dashboard_interface';
 // Utils
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
+import { getDashboardRoleGroup } from '../../../utils/dashboardAccess';
 import { formatDateThai, getTodayDateString } from '../../../utils/formatdate';
 import { exportTopSellerPdf } from '../../../utils/print';
 
@@ -37,13 +38,15 @@ const PageFilter = [
 const fmt = (n: number) =>
   n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const pad = (value: number) => String(value).padStart(2, '0');
+const dateStr = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 
 const SaleDashboard: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const basePath = usePathBasePrefix();
   const userRole = localStorage.getItem('role');
-  const isOwner = userRole === 'Owner';
+  const isOwner = getDashboardRoleGroup(userRole) === 'owner';
 
   // Basic State
   const [isLoading, setIsLoading] = useState(false);
@@ -96,10 +99,7 @@ const SaleDashboard: React.FC = () => {
     toggleTopFilterOpen,
   } = useTopSellers(query, 10);
 
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const dateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-  const buildPrevQuery = (): SummaryQuery | null => {
+  const buildPrevQuery = useCallback((): SummaryQuery | null => {
     if (startDate && endDate) {
       const s = new Date(startDate);
       const e = new Date(endDate);
@@ -144,7 +144,7 @@ const SaleDashboard: React.FC = () => {
       }
       default: return null;
     }
-  };
+  }, [endDate, selectedFilter, startDate]);
 
   const getTrendLabel = () => {
     if (startDate && endDate) {
@@ -185,7 +185,7 @@ const SaleDashboard: React.FC = () => {
       }
     };
     fetchTrend();
-  }, [aggr, query]);
+  }, [aggr, buildPrevQuery]);
 
   useEffect(() => {
     const fetchSummary = async () => {
