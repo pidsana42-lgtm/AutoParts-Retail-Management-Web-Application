@@ -1,12 +1,15 @@
 package customer_test
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	customerDto "backend/internal/app/dto/customer"
 	"backend/internal/app/entity"
 	customerRepo "backend/internal/app/repository/customer"
 	customerService "backend/internal/app/service/customer"
+	"backend/internal/pkg/storage"
 
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -214,4 +217,25 @@ func TestUpdateCustomer_DuplicateConflictWithOther(t *testing.T) {
 	}, 1)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "หมายเลขโทรศัพท์นี้เคยลงทะเบียน")
+}
+
+func TestCustomerDocumentPrivateStorage(t *testing.T) {
+	t.Cleanup(func() {
+		_ = os.RemoveAll("./private_storage")
+	})
+
+	testData := []byte("%PDF-1.4 test secure document content")
+	filename := "test_secure_doc.pdf"
+	mimeType := "application/pdf"
+
+	storagePath, err := storage.UploadCustomerDocument(filename, mimeType, testData)
+	require.NoError(t, err)
+	assert.Contains(t, storagePath, "customer_documents/test_secure_doc.pdf")
+	// ตรวจสอบว่าต้องไม่ขึ้นต้นด้วย http (ไม่มีการเปิดเผย public URL)
+	assert.False(t, strings.HasPrefix(storagePath, "http://") || strings.HasPrefix(storagePath, "https://"))
+
+	retrievedData, detectedMime, err := storage.GetCustomerDocument(storagePath)
+	require.NoError(t, err)
+	assert.Equal(t, testData, retrievedData)
+	assert.Equal(t, "application/pdf", detectedMime)
 }

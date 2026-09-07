@@ -20,19 +20,25 @@ func jwtSecret() []byte {
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var tokenString string
 		auth := c.GetHeader("Authorization")
-		if auth == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
-			return
+		if auth != "" {
+			// รูปแบบต้องเป็น "Bearer <token>"
+			parts := strings.SplitN(auth, " ", 2)
+			if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+				tokenString = parts[1]
+			}
 		}
 
-		// รูปแบบต้องเป็น "Bearer <token>"
-		parts := strings.SplitN(auth, " ", 2)
-		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header"})
+		// ถ้าไม่มีใน Header ลองอ่านจาก query parameter ?token= (สำหรับ <img> tag หรือเปิดดูใน tab ใหม่)
+		if tokenString == "" {
+			tokenString = c.Query("token")
+		}
+
+		if tokenString == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header or token"})
 			return
 		}
-		tokenString := parts[1]
 
 		claims := jwt.MapClaims{}
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {

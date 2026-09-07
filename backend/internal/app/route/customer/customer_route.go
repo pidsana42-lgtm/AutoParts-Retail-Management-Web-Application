@@ -29,5 +29,9 @@ func SetupCustomerRoutes(r *gin.Engine, db *gorm.DB) {
 		customerGroup.PUT("/:id/discount", customerCtrl.UpdateCustomerDiscount)
 		customerGroup.GET("/credit/audit-logs", customerCtrl.GetCreditAuditLogs)
 		customerGroup.POST("/credit/audit-logs", customerCtrl.CreateCreditAuditLog)
+
+		// Protected Route ป้องกันรูปบัตรประชาชนรั่วไหล (ต้องมี Token และสิทธิ์ Owner, Employee หรือ Admin)
+		customerGroup.GET("/document/view", customerCtrl.GetCustomerDocumentByPath)
+		customerGroup.GET("/:id/document", customerCtrl.GetCustomerDocument)
 	}
 }
