@@ -110,9 +110,38 @@ export function printCustomerStatement(params: CustomerStatementPrintParams) {
 }
 
 /**
- * สั่งพิมพ์ไฟล์ PDF Blob ผ่าน hidden iframe สำรองกรณีเบราว์เซอร์บล็อก popup
+ * สั่งพิมพ์ไฟล์ PDF Blob โดยอัตโนมัติในหน้าเดิมทันที (ไม่เปิดแท็บใหม่ และไม่สลับหน้า)
+ * ส่งตรงเข้า Native Print Dialog ของเบราว์เซอร์
+ * รองรับการทำงานข้ามเบราว์เซอร์ ทั้ง Chrome, Edge, Firefox, Safari
  */
-function autoPrintPdfBlobViaIframe(blobUrl: string, finalName: string) {
+export function autoPrintPdfBlob(blob: Blob, fileName?: string) {
+  const finalName = fileName ? (fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`) : 'receipt.pdf';
+  const blobUrl = window.URL.createObjectURL(
+    blob instanceof Blob ? blob : new Blob([blob], { type: 'application/pdf' })
+  );
+
+  let hasPrinted = false;
+
+  const fallbackOpen = () => {
+    if (hasPrinted) return;
+    hasPrinted = true;
+    try {
+      const printWin = window.open(blobUrl, '_blank');
+      if (printWin) {
+        printWin.focus();
+        setTimeout(() => {
+          try {
+            printWin.print();
+          } catch (_) {}
+        }, 500);
+      } else {
+        downloadPdfBlob(blob, finalName);
+      }
+    } catch {
+      downloadPdfBlob(blob, finalName);
+    }
+  };
+
   const iframe = document.createElement('iframe');
   iframe.title = finalName;
   iframe.style.position = 'fixed';
@@ -125,105 +154,45 @@ function autoPrintPdfBlobViaIframe(blobUrl: string, finalName: string) {
   iframe.style.border = 'none';
   iframe.style.zIndex = '-9999';
 
-  let hasPrinted = false;
   const triggerPrint = () => {
     if (hasPrinted) return;
     try {
-      if (iframe.contentWindow) {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-        hasPrinted = true;
+      if (!iframe.contentWindow) {
+        fallbackOpen();
+        return;
       }
-    } catch (_) {}
-    setTimeout(() => {
-      try {
-        if (iframe.parentNode) {
-          document.body.removeChild(iframe);
-        }
-        window.URL.revokeObjectURL(blobUrl);
-      } catch (_) {}
-    }, 60000);
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      hasPrinted = true;
+      setTimeout(() => {
+        try {
+          if (iframe.parentNode) {
+            document.body.removeChild(iframe);
+          }
+          window.URL.revokeObjectURL(blobUrl);
+        } catch (_) {}
+      }, 60000);
+    } catch (err) {
+      console.warn('Iframe print error, falling back to window.open:', err);
+      fallbackOpen();
+    }
   };
 
-  iframe.onload = () => setTimeout(triggerPrint, 400);
+  // ลงทะเบียน onload ก่อน set src
+  iframe.onload = () => {
+    setTimeout(triggerPrint, 400);
+  };
+
   iframe.src = blobUrl;
   document.body.appendChild(iframe);
+
+  // สำคัญมาก: Chrome มักจะไม่ยิง onload event สำหรับ PDF Blob ใน iframe
+  // จึงต้องมี Fallback Timer เพื่อ trigger การพิมพ์อัตโนมัติแน่นอน 100%
   setTimeout(() => {
-    if (!hasPrinted) triggerPrint();
+    if (!hasPrinted) {
+      triggerPrint();
+    }
   }, 1000);
-}
-
-/**
- * สั่งพิมพ์ไฟล์ PDF Blob โดยเปิดแท็บใหม่แสดงตัวอย่าง (Preview) และเรียกหน้าต่างเครื่องพิมพ์ทันที (เหมือนหน้า WMS)
- * รองรับการทำงานข้ามเบราว์เซอร์ ทั้ง Chrome, Edge, Firefox, Safari
- */
-export function autoPrintPdfBlob(blob: Blob, fileName?: string) {
-  const finalName = fileName ? (fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`) : 'receipt.pdf';
-  const blobUrl = window.URL.createObjectURL(
-    blob instanceof Blob ? blob : new Blob([blob], { type: 'application/pdf' })
-  );
-
-  // เปิดแท็บใหม่ขึ้นมาแสดงตัวอย่างก่อนพิมพ์ เหมือน WMS
-  const printWin = window.open('', '_blank');
-
-  // หากเบราว์เซอร์บล็อกป็อปอัป ให้ใช้ iframe สำรองเพื่อสั่งพิมพ์ทันที
-  if (!printWin) {
-    autoPrintPdfBlobViaIframe(blobUrl, finalName);
-    return;
-  }
-
-  printWin.document.title = finalName;
-  printWin.document.write(`<!DOCTYPE html>
-<html lang="th">
-<head>
-  <meta charset="UTF-8">
-  <title>${finalName}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #525659; }
-    iframe { width: 100%; height: 100%; border: none; display: block; }
-  </style>
-</head>
-<body>
-  <iframe id="pdfPreviewFrame" src="${blobUrl}" title="${finalName}"></iframe>
-  <script>
-    let hasTriggered = false;
-    function triggerPrint() {
-      if (hasTriggered) return;
-      hasTriggered = true;
-      try {
-        const frame = document.getElementById('pdfPreviewFrame');
-        if (frame && frame.contentWindow) {
-          frame.contentWindow.focus();
-          frame.contentWindow.print();
-        } else {
-          window.focus();
-          window.print();
-        }
-      } catch (err) {
-        try {
-          window.focus();
-          window.print();
-        } catch (_) {}
-      }
-    }
-
-    const frame = document.getElementById('pdfPreviewFrame');
-    if (frame) {
-      frame.onload = function() {
-        setTimeout(triggerPrint, 400);
-      };
-    }
-    setTimeout(function() {
-      if (!hasTriggered) triggerPrint();
-    }, 1000);
-  </script>
-</body>
-</html>`);
-  printWin.document.close();
-  printWin.focus();
-
-  setTimeout(() => window.URL.revokeObjectURL(blobUrl), 120000);
 }
 
 /**
