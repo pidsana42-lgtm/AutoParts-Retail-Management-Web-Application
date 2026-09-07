@@ -55,6 +55,9 @@ uploads/
 *.xlsx
 *.xls
 
+# Logs
+*.log
+
 # System Files
 # Service Account & Keys
 model/service_account.json
