@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { posApiService } from "../../../../service/http/pos/pos_service";
 import { getCurrentUserId } from "../../../../utils/auth";
+import { useToast } from "../../../../components/elements/toast";
+import { printRepaymentReceiptFromBackend } from "../../../../utils/payment_history_print";
 import type {
   UnpaidBillItem,
   SettleCustomerSuggestion,
@@ -27,6 +29,7 @@ const loadSavedSession = (): SettleBillsSavedSession => {
 };
 
 export const useSettleBills = (initialCustomerId: number | null = null) => {
+  const { toast } = useToast();
   // --- Search & Filter States (โหลดค่าเดิมจาก localStorage ถ้ามี) ---
   const [searchQuery, setSearchQuery] = useState<string>(() => loadSavedSession().searchQuery ?? "");
   const [customerId, setCustomerId] = useState<number | null>(
@@ -587,63 +590,75 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
 
   // ยืนยันการชำระเงินและตัดยอดหนี้
   const handleFinalConfirm = async (receivedById?: number) => {
-  if (!customerId || selectedBillIds.length === 0) return;
-  if (totalPayAmount <= 0) {
-    alert("ยอดชำระรวมต้องมากกว่า 0 บาท");
-    return;
-  }
-
-  if (paymentMethodId === 1 && receivedAmount < totalPayAmount) {
-    alert(`จำนวนเงินที่รับมาไม่ครบ (รับมา ฿${receivedAmount.toLocaleString()} / ยอดชำระ ฿${totalPayAmount.toLocaleString()})`);
-    return;
-  }
-
-  const selectedBills = bills.filter((b) => selectedBillIds.includes(b.order_id));
-  
-  const allocations = [];
-  for (const b of selectedBills) {
-    const payAmt = getBillPayAmount(b);
-    if (payAmt <= 0) {
-      alert(`ยอดชำระของบิล ${b.order_number} ต้องมากกว่า 0 บาท`);
+    if (!customerId || selectedBillIds.length === 0) return;
+    if (totalPayAmount <= 0) {
+      toast({ variant: "warning", message: "ยอดชำระรวมต้องมากกว่า 0 บาท" });
       return;
     }
-    if (payAmt > b.balance_due) {
-      alert(`ยอดชำระของบิล ${b.order_number} (฿${payAmt.toFixed(2)}) เกินยอดหนี้คงค้าง (฿${b.balance_due.toFixed(2)})`);
+
+    if (paymentMethodId === 1 && receivedAmount < totalPayAmount) {
+      toast({
+        variant: "warning",
+        message: `จำนวนเงินที่รับมาไม่ครบ (รับมา ฿${receivedAmount.toLocaleString()} / ยอดชำระ ฿${totalPayAmount.toLocaleString()})`,
+      });
       return;
     }
-    allocations.push({
-      order_id: b.order_id,
-      pay_amount: payAmt,
-    });
-  }
 
-  // ใช้ ID ที่ส่งเข้ามา หรือ fallback ไปดึง ID ของ User ที่ล็อกอินจริง
-  const activeStaffId = receivedById || getCurrentUserId();
+    const selectedBills = bills.filter((b) => selectedBillIds.includes(b.order_id));
+    
+    const allocations = [];
+    for (const b of selectedBills) {
+      const payAmt = getBillPayAmount(b);
+      if (payAmt <= 0) {
+        toast({ variant: "warning", message: `ยอดชำระของบิล ${b.order_number} ต้องมากกว่า 0 บาท` });
+        return;
+      }
+      if (payAmt > b.balance_due) {
+        toast({
+          variant: "warning",
+          message: `ยอดชำระของบิล ${b.order_number} (฿${payAmt.toFixed(2)}) เกินยอดหนี้คงค้าง (฿${b.balance_due.toFixed(2)})`,
+        });
+        return;
+      }
+      allocations.push({
+        order_id: b.order_id,
+        pay_amount: payAmt,
+      });
+    }
 
-  setIsSubmitting(true);
-  const payload = {
-    customer_id: customerId,
-    received_by_id: activeStaffId, 
-    payment_method_id: paymentMethodId,
-    total_received: paymentMethodId === 1 ? (receivedAmount || totalPayAmount) : totalPayAmount,
-    transaction_ref: paymentMethodId === 2 ? qrCodeData?.refNo : undefined,
-    allocations: allocations,
-  };
+    // ใช้ ID ที่ส่งเข้ามา หรือ fallback ไปดึง ID ของ User ที่ล็อกอินจริง
+    const activeStaffId = receivedById || getCurrentUserId();
+
+    setIsSubmitting(true);
+    const payload = {
+      customer_id: customerId,
+      received_by_id: activeStaffId, 
+      payment_method_id: paymentMethodId,
+      total_received: paymentMethodId === 1 ? (receivedAmount || totalPayAmount) : totalPayAmount,
+      transaction_ref: paymentMethodId === 2 ? qrCodeData?.refNo : undefined,
+      allocations: allocations,
+    };
 
     try {
       const res = await posApiService.settleCustomerBills(payload);
       
-      // สั่งเปิด PDF ใบเสร็จรับเงิน (ชำระหนี้) ในแท็บใหม่
+      // สั่งพิมพ์ PDF ใบเสร็จรับเงิน (ชำระหนี้) อัตโนมัติเหมือน POS
       try {
         const receiptIdentifier = res.receipt_id || res.receipt_number;
         if (receiptIdentifier) {
-          const blob = await posApiService.printPaymentReceiptPDF(receiptIdentifier);
-          const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
-          window.open(blobUrl, "_blank");
+          await printRepaymentReceiptFromBackend(receiptIdentifier, {
+            receiptNumber: res.receipt_number,
+            action: "print",
+          });
         }
       } catch (printErr) {
-        console.warn("Failed to auto-open debt receipt PDF:", printErr);
+        console.error("Failed to auto-print debt receipt PDF from backend:", printErr);
       }
+
+      toast({
+        variant: "success",
+        message: "ยืนยันการรับชำระหนี้และออกใบเสร็จสำเร็จ!",
+      });
 
       setIsPaymentModalOpen(false);
       setQrCodeData(null);
@@ -658,7 +673,10 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
       }
     } catch (err: any) {
       console.error("Failed to settle customer bills:", err);
-      alert(err?.response?.data?.error || "ไม่สามารถทำรายการชำระเงินได้");
+      toast({
+        variant: "error",
+        message: err?.response?.data?.error || "ไม่สามารถทำรายการชำระเงินได้",
+      });
     } finally {
       setIsSubmitting(false);
     }

@@ -743,10 +743,9 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     setIsConfirming(true);
 
     const printReceiptAuto = async (orderIdToPrint: number | string) => {
+      const orderNum = currentOrderNumberRef.current || posSession.currentOrderNumber || orderIdToPrint;
+      const docTitle = activePaymentMethodId === 3 ? "ใบส่งของชั่วคราว" : "ใบเสร็จรับเงิน";
       try {
-        const orderNum = currentOrderNumberRef.current || posSession.currentOrderNumber || orderIdToPrint;
-        const docTitle = activePaymentMethodId === 3 ? "ใบส่งของชั่วคราว" : "ใบเสร็จรับเงิน";
-
         // เรียก API ดึงไฟล์ PDF มาตรฐานจาก Backend (Single Source of Truth) เพื่อสั่งพิมพ์
         await printPosReceiptFromBackend(orderIdToPrint, {
           orderNumber: String(orderNum),
@@ -755,6 +754,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         });
       } catch (err) {
         console.error("Error auto-printing POS receipt from backend:", err);
+        toast({
+          variant: "warning",
+          message: `บันทึกการขายสำเร็จ (${orderNum}) แต่เบราว์เซอร์ไม่สามารถเปิดหน้าต่างพิมพ์อัตโนมัติได้`,
+        });
       }
     };
 
