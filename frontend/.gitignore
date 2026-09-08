@@ -29,5 +29,11 @@ dist-ssr
 *.gemini
 
 # Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/e2e/playwright-report/
+
+# Playwright
 test-results/
 playwright-report/
