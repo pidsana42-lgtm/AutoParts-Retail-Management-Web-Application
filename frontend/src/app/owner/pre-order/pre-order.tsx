@@ -41,6 +41,13 @@ function getPageNumbers(current: number, total: number): (number | '...')[] {
   return pages;
 }
 
+// เบอร์โทรศัพท์ไทย: format เป็น 08X-XXXXXXX ระหว่างพิมพ์ (ตัดเหลือ 10 หลัก)
+function formatPhoneNumber(val: string): string {
+  const raw = val.replace(/\D/g, '').slice(0, 10);
+  if (raw.length <= 3) return raw;
+  return `${raw.slice(0, 3)}-${raw.slice(3)}`;
+}
+
 export default function PreOrderManager() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -83,6 +90,7 @@ export default function PreOrderManager() {
   const [formCustomerFirstName, setFormCustomerFirstName] = useState<string>('');
   const [formCustomerLastName, setFormCustomerLastName] = useState<string>('');
   const [formCustomerPhone, setFormCustomerPhone] = useState<string>('');
+  const [phoneError, setPhoneError] = useState<string>('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [formStatus, setFormStatus] = useState<string>('PENDING');
   const [formItems, setFormItems] = useState<PreOrderItem[]>([]);
@@ -346,8 +354,9 @@ export default function PreOrderManager() {
         const nameParts = foundName.split(' ');
         setFormCustomerFirstName(nameParts[0] || '');
         setFormCustomerLastName(nameParts.slice(1).join(' '));
-        setFormCustomerPhone(foundPhone);
-        
+        setFormCustomerPhone(formatPhoneNumber(foundPhone));
+        setPhoneError('');
+
         setFormStatus(data.status);
         setFormItems(data.pre_order_items || []);
         setView('form');
@@ -423,6 +432,14 @@ export default function PreOrderManager() {
       toast({ variant: 'warning', message: 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ' });
       return;
     }
+    const rawPhone = formCustomerPhone.replace(/\D/g, '');
+    if (rawPhone.length > 0 && rawPhone.length !== 10) {
+      const msg = 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 10 หลัก (08X-XXXXXXX)';
+      setPhoneError(msg);
+      toast({ variant: 'warning', message: msg });
+      return;
+    }
+    setPhoneError('');
 
     setSaving(true);
     try {
@@ -917,7 +934,8 @@ export default function PreOrderManager() {
                                   setFormCustomerFirstName(parts[0] || '');
                                   setFormCustomerLastName(parts.slice(1).join(' '));
                                   setFormCustomerId(c.id);
-                                  setFormCustomerPhone(phone);
+                                  setFormCustomerPhone(formatPhoneNumber(phone));
+                                  setPhoneError('');
                                   setShowCustomerDropdown(false);
                                 }}
                               >
@@ -952,11 +970,21 @@ export default function PreOrderManager() {
                     </label>
                     <input
                       type="tel"
+                      inputMode="numeric"
                       value={formCustomerPhone}
-                      onChange={(e) => setFormCustomerPhone(e.target.value)}
-                      placeholder="08X-XXX-XXXX"
-                      className="h-10 w-full bg-white border border-gray-300 rounded-none px-3 text-sm text-[#1C1B1B] focus:border-[#e51c23] outline-none transition-colors"
+                      onChange={(e) => {
+                        setFormCustomerPhone(formatPhoneNumber(e.target.value));
+                        setPhoneError('');
+                      }}
+                      placeholder="08X-XXXXXXX"
+                      maxLength={11}
+                      className={`h-10 w-full bg-white border rounded-none px-3 text-sm text-[#1C1B1B] outline-none transition-colors ${
+                        phoneError ? 'border-[#e51c23] focus:border-[#e51c23]' : 'border-gray-300 focus:border-[#e51c23]'
+                      }`}
                     />
+                    {phoneError && (
+                      <span className="text-xs text-[#e51c23] font-medium">{phoneError}</span>
+                    )}
                   </div>
                 </div>
               </Card>

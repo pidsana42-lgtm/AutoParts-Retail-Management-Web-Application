@@ -21,16 +21,17 @@ import (
 // -----------------------------------------------------------------------------
 
 type mockPreOrderRepo struct {
-	createPreOrderFn    func(*entity.PreOrder) error
-	createItemFn        func(*entity.PreOrderItem) error
-	getPreOrderByIDFn   func(id uint) (*entity.PreOrder, error)
-	listPreOrdersFn     func() ([]entity.PreOrder, error)
-	updatePreOrderFn    func(*entity.PreOrder) error
-	deletePreOrderFn    func(id uint) error
-	getLineUserIDFn     func(customerID uint) (string, error)
-	listByStatusFn      func(ctx context.Context, status string) ([]entity.PreOrder, error)
-	updateItemsStatusFn func(ctx context.Context, ids []uint, status string) error
-	getLinkedPOsFn      func(ctx context.Context, itemIDs []uint) (map[uint]entity.PO, error)
+	createPreOrderFn       func(*entity.PreOrder) error
+	createItemFn           func(*entity.PreOrderItem) error
+	getPreOrderByIDFn      func(id uint) (*entity.PreOrder, error)
+	listPreOrdersFn        func() ([]entity.PreOrder, error)
+	updatePreOrderFn       func(*entity.PreOrder) error
+	deletePreOrderFn       func(id uint) error
+	getLineUserIDFn        func(customerID uint) (string, error)
+	listByStatusFn         func(ctx context.Context, status string) ([]entity.PreOrder, error)
+	updateItemsStatusFn    func(ctx context.Context, ids []uint, status string) error
+	getLinkedPOsFn         func(ctx context.Context, itemIDs []uint) (map[uint]entity.PO, error)
+	findOrCreateCustomerFn func(name, phone string) (uint, error)
 
 	called map[string]int
 }
@@ -55,6 +56,14 @@ func (m *mockPreOrderRepo) CreatePreOrder(po *entity.PreOrder) error {
 	}
 	po.ID = 1
 	return nil
+}
+
+func (m *mockPreOrderRepo) FindOrCreateCustomerByName(name, phone string) (uint, error) {
+	m.track("FindOrCreateCustomerByName")
+	if m.findOrCreateCustomerFn != nil {
+		return m.findOrCreateCustomerFn(name, phone)
+	}
+	return 1, nil
 }
 
 func (m *mockPreOrderRepo) CreatePreOrderItem(item *entity.PreOrderItem) error {
