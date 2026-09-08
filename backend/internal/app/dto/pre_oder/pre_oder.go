@@ -7,8 +7,12 @@ import (
 )
 
 type CreatePreOrderDTO struct {
-	PreOrderType  string                  `json:"pre_order_type" binding:"required"`
-	CustomerID    uint                    `json:"customer_id" binding:"required"`
+	PreOrderType string `json:"pre_order_type" binding:"required"`
+	// CustomerID: ไม่ใส่ binding:"required" เพราะ 0 คือค่าที่ถูกต้องเมื่อลูกค้าเป็นคนใหม่ที่ยังไม่มีในระบบ
+	// (ดูชื่อ/เบอร์จาก CustomerName/CustomerPhone แล้วไปสร้าง/ค้นหาลูกค้าให้ที่ service แทน)
+	CustomerID    uint                    `json:"customer_id"`
+	CustomerName  string                  `json:"customer_name"`
+	CustomerPhone string                  `json:"customer_phone"`
 	DepositAmount float64                 `json:"deposit_amount"`
 	Status        string                  `json:"status" binding:"required"`
 	OrderDate     time.Time               `json:"order_date" binding:"required"`
@@ -19,6 +23,8 @@ type CreatePreOrderDTO struct {
 type UpdatePreOrderDTO struct {
 	PreOrderType  *string                  `json:"pre_order_type,omitempty"`
 	CustomerID    *uint                    `json:"customer_id,omitempty"`
+	CustomerName  *string                  `json:"customer_name,omitempty"`
+	CustomerPhone *string                  `json:"customer_phone,omitempty"`
 	DepositAmount *float64                 `json:"deposit_amount,omitempty"`
 	Status        *string                  `json:"status,omitempty"`
 	OrderDate     *time.Time               `json:"order_date,omitempty"`
