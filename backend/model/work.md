@@ -379,40 +379,26 @@ pm2 start mcp_server.py --name "mcp-server" --interpreter python3
 ### B. สถาปัตยกรรม Docker Compose (`docker-compose.yml`)
 ระบบถูกจัดให้อยู่ใน Container เพื่อให้บิวด์และดูแลรักษาง่ายในคำสั่งเดียว:
 1. **`postgres` (PostgreSQL 15):** จัดเก็บข้อมูลระบบทั้งหมด โดยผูกข้อมูลไว้กับ Docker Volume `postgres_data` (ข้อมูลไม่สูญหายเมื่อรีสตาร์ต)
-2. **`backend` (Go Gin API):** รันบนพอร์ต `8080` โดยเชื่อมต่อไปยังฐานข้อมูล `postgres` อัตโนมัติ พร้อมผูก Volume สำหรับเก็บรูปภาพ (`uploads`), บาร์โค้ด (`barcode`), และคิวอาร์โค้ด (`QRCode`)
-3. **`frontend` (React + Nginx):** บิวด์ไฟล์ static และรัน Nginx บนพอร์ต `80` ทำหน้าที่เป็นทั้ง Web Server แจกจ่ายหน้าเว็บ และ Reverse Proxy ส่งต่อคำขอ API ไปยัง Go Backend
-4. *(หมายเหตุ: บริการ AI on-local `ai-service` ถูกคอมเมนต์ปิดไว้ชั่วคราวเพื่อประหยัด RAM บน VPS 4GB)*
+2. **`ai-service` (Python FastAPI):** บริการ OCR สแกนบิลและ AI Agent บนพอร์ต `8000` (รันในโหมด TF-IDF ประหยัด RAM ไม่โหลดโมเดลหนัก 5GB ลงเครื่อง)
+3. **`backend` (Go Gin API):** รันบนพอร์ต `8080` เชื่อมต่อไปยังฐานข้อมูล `postgres` และ `ai-service` อัตโนมัติ พร้อมผูก Volume สำหรับรูปภาพ (`uploads`), บาร์โค้ด (`barcode`), และคิวอาร์โค้ด (`QRCode`)
+4. **`frontend` (React + Nginx):** บิวด์ไฟล์ static และรัน Nginx รองรับทั้ง HTTP (Redirect สู่ HTTPS) และ HTTPS (พอร์ต `443`) พร้อม SSL Certificate
 
 ---
 
-### C. ขั้นตอนการนำระบบขึ้นเซิร์ฟเวอร์ครั้งแรก (Initial Deployment)
-
-#### 1. บนเครื่อง Mac (ผู้พัฒนา):
-Push โค้ดและไฟล์ตั้งค่า Docker ขึ้น GitHub:
+### C. การติดตั้ง SSL Certificate ให้เว็บเป็น HTTPS ปลอดภัย (มีรูปแม่กุญแจ 🔒)
+รันคำสั่งบนเครื่องเซิร์ฟเวอร์ (ครั้งเดียว):
 ```bash
-git checkout -b deploy-docker
-git add .
-git commit -m "Add Docker deployment setup"
-git push -u origin deploy-docker
-```
+# 1. หยุด frontend ชั่วคราวเพื่อให้พอร์ต 80 ว่างสำหรับออกใบรับรอง
+docker compose stop frontend
 
-#### 2. บนเครื่องเซิร์ฟเวอร์ (Alibaba Cloud VM ผ่าน SSH):
-```bash
-# 1. เข้าสู่โฟลเดอร์โปรเจกต์
-cd /var/www/AutoParts-Retail-Management-Web-Application
+# 2. ติดตั้ง Certbot และขอใบรับรองฟรีสำหรับทั้ง 3 โดเมน
+sudo apt update && sudo apt install -y certbot
+sudo certbot certonly --standalone -d jjautopart-pakchong.com -d www.jjautopart-pakchong.com -d api.jjautopart-pakchong.com --agree-tos --register-unsafely-without-email --non-interactive
 
-# 2. ปิด service เดิมที่อาจจะรันค้างอยู่ (ป้องกันพอร์ตชนกัน)
-sudo systemctl stop nginx 2>/dev/null || true
-pm2 stop all 2>/dev/null || true
-
-# 3. ดึงโค้ด Branch ที่มี Docker
-git fetch origin
-git checkout deploy-docker
-git pull origin deploy-docker
-
-# 4. สั่งรันทั้งระบบด้วย Docker Compose
+# 3. สั่งรันระบบทั้งหมดกลับขึ้นมาพร้อม HTTPS
 docker compose up -d --build
 ```
+*(ใบรับรองจะถูกเก็บไว้ที่ `/etc/letsencrypt` และแชร์เข้าสู่คอนเทนเนอร์ Nginx อัตโนมัติ)*
 
 ---
 
