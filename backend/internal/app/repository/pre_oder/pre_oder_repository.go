@@ -76,15 +76,17 @@ func (r *preOrderRepository) FindOrCreateCustomerByName(name, phone string) (uin
 		CreditLimit:    0,
 	}
 
+	// IdCardNumberCustomer ก็มี unique constraint เหมือนกัน และช่องทางนี้ไม่เคยเก็บเลขบัตรประชาชน
+	// เลย Omit ทิ้งเสมอ (ให้เป็น NULL) กันชนกับลูกค้าคนอื่นที่สร้างแบบเดียวกันไว้ก่อนหน้า
+	omitFields := []string{"IdCardNumberCustomer"}
 	if phone != "" {
 		newCustomer.PhoneNumber = phone
-		if err := r.db.Create(&newCustomer).Error; err != nil {
-			return 0, err
-		}
 	} else {
-		if err := r.db.Omit("PhoneNumber").Create(&newCustomer).Error; err != nil {
-			return 0, err
-		}
+		omitFields = append(omitFields, "PhoneNumber")
+	}
+
+	if err := r.db.Omit(omitFields...).Create(&newCustomer).Error; err != nil {
+		return 0, err
 	}
 
 	return newCustomer.ID, nil
