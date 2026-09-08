@@ -386,19 +386,34 @@ pm2 start mcp_server.py --name "mcp-server" --interpreter python3
 ---
 
 ### C. การติดตั้ง SSL Certificate ให้เว็บเป็น HTTPS ปลอดภัย (มีรูปแม่กุญแจ 🔒)
-รันคำสั่งบนเครื่องเซิร์ฟเวอร์ (ครั้งเดียว):
+
+มีสคริปต์อัตโนมัติ `get-ssl.sh` เตรียมไว้ที่รูทของโปรเจกต์ ซึ่งจะจัดการขอใบรับรองฟรีสำหรับทั้ง 3 โดเมน (`jjautopart-pakchong.com`, `www.jjautopart-pakchong.com`, `api.jjautopart-pakchong.com`) และสตาร์ตรักษาความปลอดภัย HTTPS พร้อมบริการ Python FastAPI ให้อัตโนมัติ:
+
+#### วิธีที่ 1: รันผ่านสคริปต์อัตโนมัติ (แนะนำ สะดวกและเร็วที่สุด):
 ```bash
-# 1. หยุด frontend ชั่วคราวเพื่อให้พอร์ต 80 ว่างสำหรับออกใบรับรอง
+git pull origin deploy-docker
+bash get-ssl.sh
+```
+
+#### วิธีที่ 2: รันคำสั่งด้วยตนเองผ่าน Docker Certbot:
+```bash
+# 1. หยุด frontend ชั่วคราวเพื่อให้พอร์ต 80 ว่าง
 docker compose stop frontend
 
-# 2. ติดตั้ง Certbot และขอใบรับรองฟรีสำหรับทั้ง 3 โดเมน
-sudo apt update && sudo apt install -y certbot
-sudo certbot certonly --standalone -d jjautopart-pakchong.com -d www.jjautopart-pakchong.com -d api.jjautopart-pakchong.com --agree-tos --register-unsafely-without-email --non-interactive
+# 2. ขอใบรับรอง SSL ผ่าน Docker Certbot (ป้องกันปัญหาไลบรารี Python ชนกันบนเครื่องแม่)
+docker run --rm -p 80:80 \
+  -v /etc/letsencrypt:/etc/letsencrypt \
+  -v /var/lib/letsencrypt:/var/lib/letsencrypt \
+  certbot/certbot certonly --standalone \
+  -d jjautopart-pakchong.com \
+  -d www.jjautopart-pakchong.com \
+  -d api.jjautopart-pakchong.com \
+  --agree-tos --register-unsafely-without-email --non-interactive
 
-# 3. สั่งรันระบบทั้งหมดกลับขึ้นมาพร้อม HTTPS
+# 3. สั่งรันระบบทั้งหมดกลับขึ้นมาพร้อม HTTPS และ Python FastAPI
 docker compose up -d --build
 ```
-*(ใบรับรองจะถูกเก็บไว้ที่ `/etc/letsencrypt` และแชร์เข้าสู่คอนเทนเนอร์ Nginx อัตโนมัติ)*
+*(ใบรับรองจะถูกเก็บไว้ที่ `/etc/letsencrypt` บนเซิร์ฟเวอร์ และแชร์เข้าสู่คอนเทนเนอร์ Nginx อัตโนมัติ)*
 
 ---
 
