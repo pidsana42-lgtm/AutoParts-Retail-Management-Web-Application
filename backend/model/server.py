@@ -63,7 +63,7 @@ print("==================================================================")
 MOCK_MODE = os.getenv("MOCK_LLM", "false").lower() == "true"
 # Retrieve API key (check GOOGLE_STUDIO first, and strip any leading/trailing spaces)
 GEMINI_API_KEY = (os.getenv("GOOGLE_STUDIO") or os.getenv("GEMINI_API_KEY") or "").strip()
-raw_model = (os.getenv("GEMINI_MODEL") or "gemini-2.5-flash").strip()
+raw_model = (os.getenv("GEMINI_MODEL") or "gemini-3.8-flash").strip()
 if "/" in raw_model:
     raw_model = raw_model.split("/")[-1]
 GEMINI_MODEL = raw_model
@@ -667,8 +667,10 @@ async def perform_ocr(img, image_name_for_mock="image.jpg"):
         print("Mock Mode active. Returning mock data.")
         return extract_mock_data(image_name_for_mock)
     try:
-        # Step 1: OpenTyphoon OCR to extract text in Markdown/Natural Text
-        extracted_markdown = extract_text_via_typhoon(img, image_name_for_mock)
+        # Step 1: OpenTyphoon OCR to extract text in Markdown/Natural Text (Mode 1 only)
+        extracted_markdown = None
+        if OCR_MODE == "1":
+            extracted_markdown = extract_text_via_typhoon(img, image_name_for_mock)
         
         # We will build base64 for image_url if we need to fall back to visual model
         import io
@@ -841,18 +843,79 @@ Extract every line item. Use null for missing fields. Do not include any thinkin
                 except Exception as l_err:
                     print(f"Lightning AI Cloud API fallback failed: {l_err}")
 
-        else:
-            print("=== Executing [MODE 2]: Lightning AI Cloud 100% ===")
-            if LIGHTNING_API_KEY:
-                print(f"Performing direct vision OCR via Lightning AI Cloud API ({GEMINI_MODEL})...")
+        # Direct Google Gemini (Primary & Fast Cloud Model)
+        if generated_text is None and GEMINI_API_KEY:
+            import asyncio
+            genai.configure(api_key=GEMINI_API_KEY)
+            preferred_model = GEMINI_MODEL if GEMINI_MODEL.startswith("models/") else f"models/{GEMINI_MODEL}"
+            candidate_models = [preferred_model]
+            for fallback_m in ["models/gemini-3.8-flash", "models/gemini-2.5-flash", "models/gemini-flash-latest"]:
+                if fallback_m not in candidate_models:
+                    candidate_models.append(fallback_m)
+            
+            for m_name in candidate_models:
                 try:
-                    headers = {
-                        "Authorization": f"Bearer {LIGHTNING_API_KEY}",
-                        "Content-Type": "application/json"
-                    }
-                    payload = {
-                        "model": GEMINI_MODEL,
-                        "messages": [
+                    print(f"Calling Google Gemini API directly ({m_name})...")
+                    gemini_model = genai.GenerativeModel(m_name)
+                    gemini_res = await asyncio.to_thread(gemini_model.generate_content, [prompt, img])
+                    if gemini_res and gemini_res.text and is_valid_structured_json(gemini_res.text):
+                        generated_text = gemini_res.text
+                        print(f"Google Gemini API ({m_name}) structuring completed successfully!")
+                        break
+                except Exception as gemini_err:
+                    print(f"Google Gemini API ({m_name}) failed: {gemini_err}")
+
+        # Fallback to Lightning AI if Mode 2 / Gemini fails
+        if generated_text is None and LIGHTNING_API_KEY:
+            print(f"Performing direct vision OCR via Lightning AI Cloud API ({GEMINI_MODEL})...")
+            try:
+                headers = {
+                    "Authorization": f"Bearer {LIGHTNING_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": GEMINI_MODEL,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                { "type": "text", "text": prompt_vision },
+                                { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
+                            ]
+                        }
+                    ]
+                }
+                resp = requests.post(
+                    url="https://lightning.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=60
+                )
+                resp.raise_for_status()
+                cloud_text = resp.json()['choices'][0]['message']['content']
+                if is_valid_structured_json(cloud_text):
+                    generated_text = cloud_text
+                    print(f"Lightning AI Cloud API ({GEMINI_MODEL}) inference completed successfully!")
+            except Exception as lightning_err:
+                print(f"Lightning AI Cloud API failed: {lightning_err}")
+
+        # Fallback to local model if cloud models fail
+        if generated_text is None:
+            print("Fallback: Executing local GGUF model...")
+            try:
+                llm = get_local_llm()
+                import asyncio
+                if extracted_markdown:
+                    response = await asyncio.to_thread(
+                        llm.create_chat_completion,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.1,
+                        max_tokens=8192
+                    )
+                else:
+                    response = await asyncio.to_thread(
+                        llm.create_chat_completion,
+                        messages=[
                             {
                                 "role": "user",
                                 "content": [
@@ -860,59 +923,19 @@ Extract every line item. Use null for missing fields. Do not include any thinkin
                                     { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
                                 ]
                             }
-                        ]
-                    }
-                    resp = requests.post(
-                        url="https://lightning.ai/api/v1/chat/completions",
-                        headers=headers,
-                        json=payload,
-                        timeout=60
+                        ],
+                        temperature=0.1,
+                        max_tokens=8192
                     )
-                    resp.raise_for_status()
-                    cloud_text = resp.json()['choices'][0]['message']['content']
-                    if is_valid_structured_json(cloud_text):
-                        generated_text = cloud_text
-                        print(f"Lightning AI Cloud API ({GEMINI_MODEL}) inference completed successfully!")
-                except Exception as lightning_err:
-                    print(f"Lightning AI Cloud API failed: {lightning_err}")
+                local_vision_text = response['choices'][0]['message']['content']
+                if is_valid_structured_json(local_vision_text):
+                    generated_text = local_vision_text
+                    print("Local GGUF fallback completed successfully!")
+            except Exception as local_err:
+                print(f"Local model fallback failed: {local_err}")
 
-            # Fallback to local model if Mode 2 Lightning AI fails
-            if generated_text is None:
-                print("Mode 2 Fallback: Executing local GGUF model...")
-                try:
-                    llm = get_local_llm()
-                    import asyncio
-                    # If Typhoon already extracted text, use text-only to avoid multimodal crash
-                    if extracted_markdown:
-                        print("Mode 2 Fallback: Using text-only GGUF (Typhoon text available)...")
-                        response = await asyncio.to_thread(
-                            llm.create_chat_completion,
-                            messages=[{"role": "user", "content": prompt}],
-                            temperature=0.1,
-                            max_tokens=8192
-                        )
-                    else:
-                        print("Mode 2 Fallback: Using multimodal GGUF (no Typhoon text)...")
-                        response = await asyncio.to_thread(
-                            llm.create_chat_completion,
-                            messages=[
-                                {
-                                    "role": "user",
-                                    "content": [
-                                        { "type": "text", "text": prompt_vision },
-                                        { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{img_b64}" } }
-                                    ]
-                                }
-                            ],
-                            temperature=0.1,
-                            max_tokens=8192
-                        )
-                    local_vision_text = response['choices'][0]['message']['content']
-                    if is_valid_structured_json(local_vision_text):
-                        generated_text = local_vision_text
-                        print("Local GGUF fallback completed successfully!")
-                except Exception as local_err:
-                    print(f"Local model fallback failed: {local_err}")
+        if not generated_text:
+            raise ValueError("No OCR model was able to produce structured text output.")
 
         print(f"Raw model output (first 500 chars): {generated_text[:500]}")
         
