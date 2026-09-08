@@ -435,6 +435,7 @@ docker compose up -d --build
 > * **Zero Data Loss:** ข้อมูลใน Database (PostgreSQL) และรูปภาพบิล/อะไหล่ที่อัปโหลดไว้จะไม่สูญหาย 100% เพราะถูกเก็บแยกไว้ใน Docker Volume
 > * **Auto-Migrate:** หากมีการเพิ่มโมเดลหรือคอลัมน์ใหม่ใน Go Backend ระบบจะ Migrate ฐานข้อมูลให้อัตโนมัติทันที
 > * **Fast Build:** Docker จะใช้ Cache บิวด์ใหม่เฉพาะส่วนของไฟล์ที่มีการแก้ไขเท่านั้น
+> * **Pre-built Frontend:** หากมีการแก้โค้ด Frontend ให้รันบิวด์บนเครื่องก่อน (`cd frontend && npx vite build`) แล้ว commit โฟลเดอร์ `dist` ขึ้นมา เซิร์ฟเวอร์จะใช้เวลาบิวด์ Nginx เพียงแค่ 2 วินาที ไม่ต้องลง Node.js หรือเสียเวลารัน npm install บนเซิร์ฟเวอร์ใหม่อีกเลย
 
 ---
 
