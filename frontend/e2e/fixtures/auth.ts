@@ -1,5 +1,5 @@
 ﻿import { test as base, type Page } from '@playwright/test';
-import { LoginPage } from '../pages/login.page';
+import { LoginPage } from '../auth/login.page';
 
 // Credentials อ่านจาก env หรือใช้ค่า default สำหรับ dev
 const OWNER_USER = process.env.E2E_OWNER_USER ?? 'admin';
@@ -11,12 +11,12 @@ type AuthFixtures = {
 };
 
 export const test = base.extend<AuthFixtures>({
-  loginPage: async ({ page }, use) => {
-    await use(new LoginPage(page));
+  loginPage: async ({ page }, runFixture) => {
+    await runFixture(new LoginPage(page));
   },
 
   /** หน้าที่ login ด้วย owner แล้วเรียบร้อย */
-  authenticatedPage: async ({ page }, use, testInfo) => {
+  authenticatedPage: async ({ page }, runFixture) => {
     const loginPage = new LoginPage(page);
     await loginPage.goto();
 
@@ -30,13 +30,11 @@ export const test = base.extend<AuthFixtures>({
 
     if (dialog) {
       const message = dialog.message();
-      // บาง flow ระบบ redirect ไป /login เองหลัง 401 ก่อน dialog จะถูกปิด ทำให้ dismiss ล้มเหลวได้ — ไม่ใช่สาระสำคัญ ข้ามได้
       await dialog.dismiss().catch(() => {});
-      testInfo.skip(true, `Login ล้มเหลวด้วย credential ที่กำหนด (E2E_OWNER_USER/E2E_OWNER_PASS) — ${message}`);
-      return;
+      throw new Error(`Login ล้มเหลวด้วย credential ที่กำหนด (E2E_OWNER_USER/E2E_OWNER_PASS) — ${message}`);
     }
 
-    await use(page);
+    await runFixture(page);
   },
 });
 
