@@ -3,6 +3,7 @@ import { poService } from '../../../../service/http/purchase_orders/po_service';
 import type { LocalPOItem, ProductSearchResponse } from '../../../../interface/purchase_orders/po_interface';
 import { generateLocalId } from '../../../../utils/generateId';
 import { useToast } from '../../../../components/elements/toast';
+import { isValidPrice, isValidQuantity } from '../validation';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -26,6 +27,16 @@ export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoIt
         existingQty: number;
         unit: string;
     } | null>(null);
+    useEffect(() => {
+        latestRequestId.current++;
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
+        setSearchInput('');
+        setSearchResults([]);
+        setSelectedProduct(null);
+        setDuplicatePrompt(null);
+        setAddQuantity('');
+        setIsSearching(false);
+    }, [supplierId]);
     // รีเซ็ตไฮไลต์กลับไปที่รายการแรกทุกครั้งที่ผลการค้นหาเปลี่ยน
     useEffect(() => {
         setHighlightedIndex(searchResults.length > 0 ? 0 : -1);
@@ -132,20 +143,32 @@ export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoIt
 
     // 3. ฟังก์ชันเพิ่มสินค้าลงใบสั่งซื้อ
     const handleAddItem = () => {
+        if (!isValidQuantity(Number(supplierId))) {
+            toast({ title: 'เกิดข้อผิดพลาด', message: 'กรุณาเลือกผู้จัดจำหน่าย', variant: 'error' });
+            return false;
+        }
         if (!selectedProduct || !selectedProduct.id) {
             toast({ title: 'เกิดข้อผิดพลาด', message: 'กรุณาเลือกสินค้าจากรายการค้นหาก่อนเพิ่มลงบิล', variant: 'error' });
             return;
         }
-        if (!addQuantity || addQuantity <= 0) {
+        if (!isValidQuantity(Number(addQuantity))) {
             toast({ title: 'เกิดข้อผิดพลาด', message: 'กรุณาระบุจำนวนสินค้าให้ถูกต้อง', variant: 'error' });
             return;
         }
         const qty = Number(addQuantity);
+        if (!isValidPrice(selectedProduct.price) || !Number.isFinite(qty * selectedProduct.price)) {
+            toast({ title: 'เกิดข้อผิดพลาด', message: 'ราคาสินค้าไม่ถูกต้อง กรุณาตรวจสอบราคาก่อนเพิ่มลงใบสั่งซื้อ', variant: 'error' });
+            return false;
+        }
         // เช็คว่ามีสินค้านี้ในตะกร้าแล้วหรือยัง (เฉพาะแถวประเภท "สั่งซื้อ" ไม่ปนกับพรีออเดอร์)
         const existing = poItems.find(
             row => row.product_id === selectedProduct.id && row.order_type === 'สั่งซื้อ'
         );
         if (existing) {
+            if (!isValidQuantity(existing.quantity + qty) || !Number.isFinite((existing.quantity + qty) * existing.unit_price)) {
+                toast({ title: 'เกิดข้อผิดพลาด', message: 'จำนวนหรือยอดรวมสูงเกินกว่าที่ระบบรองรับ', variant: 'error' });
+                return false;
+            }
             // มีอยู่แล้ว -> รอให้ผู้ใช้ยืนยันผ่าน Modal ก่อน (ดู duplicatePrompt / confirmDuplicateAdd)
             setDuplicatePrompt({ product: selectedProduct, addQty: qty, existingQty: existing.quantity, unit: existing.unit });
             return false;
@@ -175,12 +198,13 @@ export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoIt
         }
         // ยกเลิก debounce/การค้นหาจากการพิมพ์ที่อาจค้างอยู่ ไม่ให้ทับผลลัพธ์การสแกน
         if (debounceTimer.current) clearTimeout(debounceTimer.current);
-        latestRequestId.current++;
+        const requestId = ++latestRequestId.current;
         setSearchInput(code);
         setSearchResults([]);
         setIsSearching(true);
         try {
             const results = await poService.searchProduct(code, supplierId);
+            if (requestId !== latestRequestId.current) return;
             if (results && results.length > 0) {
                 // หาโค้ดที่ตรงเป๊ะก่อน ถ้าไม่เจอค่อยใช้ตัวแรกของผลลัพธ์
                 const product = results.find((p) => p.barcode === code || p.code === code) || results[0];
@@ -192,7 +216,7 @@ export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoIt
         } catch (error) {
             console.error("สแกนบาร์โค้ดล้มเหลว:", error);
         } finally {
-            setIsSearching(false);
+            if (requestId === latestRequestId.current) setIsSearching(false);
         }
     }, [supplierId]);
 
