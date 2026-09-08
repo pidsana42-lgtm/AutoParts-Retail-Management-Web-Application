@@ -3,6 +3,8 @@ package pre_oder
 import (
 	"backend/internal/app/entity"
 	"context"
+	"strings"
+
 	"gorm.io/gorm"
 )
 
@@ -18,6 +20,8 @@ type PreOrderRepository interface {
 	ListByStatus(ctx context.Context, status string) ([]entity.PreOrder, error)
 	UpdateItemsStatusByIDs(ctx context.Context, ids []uint, status string) error
 	GetLinkedPOsByItemIDs(ctx context.Context, itemIDs []uint) (map[uint]entity.PO, error)
+	// FindOrCreateCustomerByName: ใช้ตอนสร้างใบสั่งจองล่วงหน้าให้ลูกค้าที่ยังไม่มีในระบบ (พิมพ์ชื่อเอง ไม่ได้เลือกจาก dropdown)
+	FindOrCreateCustomerByName(name, phone string) (uint, error)
 }
 
 // 2. สร้าง Struct สำหรับ Implement Interface
@@ -42,6 +46,50 @@ func (r *preOrderRepository) GetLineUserIDByCustomerID(customerID uint) (string,
 // 4. Implement Method: สร้างข้อมูล Pre-Order ใหม่
 func (r *preOrderRepository) CreatePreOrder(preOrder *entity.PreOrder) error {
 	return r.db.Create(preOrder).Error
+}
+
+// FindOrCreateCustomerByName: หาลูกค้าเดิมจากเบอร์โทร/ชื่อก่อน ถ้าไม่เจอค่อยสร้างลูกค้าใหม่ให้
+// (เบอร์โทรว่างได้ — ใช้ Omit เพื่อบันทึกเป็น NULL แทนสตริงว่าง กันชนกับ unique constraint ของ phone_number)
+func (r *preOrderRepository) FindOrCreateCustomerByName(name, phone string) (uint, error) {
+	name = strings.TrimSpace(name)
+	phone = strings.TrimSpace(phone)
+
+	var existing entity.Customer
+	if phone != "" {
+		if err := r.db.Where("phone_number = ?", phone).First(&existing).Error; err == nil {
+			return existing.ID, nil
+		}
+	}
+	if err := r.db.Where("LOWER(TRIM(customer_name)) = LOWER(TRIM(?))", name).First(&existing).Error; err == nil {
+		return existing.ID, nil
+	}
+
+	var generalType entity.CustomerType
+	var typeID uint
+	if err := r.db.Where("type_name = ?", "GENERAL").First(&generalType).Error; err == nil {
+		typeID = generalType.ID
+	}
+
+	newCustomer := entity.Customer{
+		CustomerName:   name,
+		CustomerTypeID: typeID,
+		CreditLimit:    0,
+	}
+
+	// IdCardNumberCustomer ก็มี unique constraint เหมือนกัน และช่องทางนี้ไม่เคยเก็บเลขบัตรประชาชน
+	// เลย Omit ทิ้งเสมอ (ให้เป็น NULL) กันชนกับลูกค้าคนอื่นที่สร้างแบบเดียวกันไว้ก่อนหน้า
+	omitFields := []string{"IdCardNumberCustomer"}
+	if phone != "" {
+		newCustomer.PhoneNumber = phone
+	} else {
+		omitFields = append(omitFields, "PhoneNumber")
+	}
+
+	if err := r.db.Omit(omitFields...).Create(&newCustomer).Error; err != nil {
+		return 0, err
+	}
+
+	return newCustomer.ID, nil
 }
 
 func (r *preOrderRepository) CreatePreOrderItem(item *entity.PreOrderItem) error {

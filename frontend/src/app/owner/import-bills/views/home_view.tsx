@@ -208,7 +208,7 @@ export default function HomeView({
             {(
               [
                 { key: 'ALL',            label: `ทั้งหมด ${bills.length}`,  activeClass: 'bg-[#1C1B1B] text-white' },
-                ...(!isEmployee ? [{ key: 'PENDING_REVIEW', label: 'รอเจ้าของอนุมัติ', activeClass: 'bg-[#e51c23] text-white', count: pendingCount }] : []),
+                { key: 'PENDING_REVIEW', label: 'รอเจ้าของอนุมัติ', activeClass: 'bg-[#e51c23] text-white', count: pendingCount },
                 { key: 'APPROVED',       label: 'อนุมัติแล้ว',               activeClass: 'bg-[#1C1B1B] text-white' },
                 { key: 'DRAFT',          label: 'แบบร่าง',                   activeClass: 'bg-[#1C1B1B] text-white' },
               ] as { key: string; label: string; activeClass: string; count?: number }[]
