@@ -361,3 +361,102 @@ pm2 start mcp_server.py --name "mcp-server" --interpreter python3
 5. ทดสอบผ่าน LINE Chat หรือ `/api/oa/simulate`
 
 > **สรุป:** MCP เป็น upgrade ที่ทำได้และเหมาะมากกับ project นี้ โดยเฉพาะส่วน AI Agent ที่ปัจจุบัน generate SQL ดิบ — เปลี่ยนเป็น MCP tool calling จะ **ปลอดภัยกว่า แม่นยำกว่า และ maintain ง่ายกว่า** มาก
+
+---
+
+## 7. คู่มือการ Deploy ด้วย Docker และการผูกโดเมน (Docker Production Deployment)
+
+### A. ข้อมูลโครงสร้างพื้นฐาน (Infrastructure Overview)
+* **โดเมนหลัก (Frontend):** `jjautopart-pakchong.com` และ `www.jjautopart-pakchong.com` (จัดการผ่าน Hostinger DNS)
+* **ซับโดเมน API (Backend):** `api.jjautopart-pakchong.com`
+* **คลาวด์เซิร์ฟเวอร์ (Cloud VPS):** Alibaba Cloud ECS (Singapore)
+  * **Public IP:** `8.219.93.236`
+  * **OS & Specs:** Ubuntu, 2 vCPU, 4GB RAM
+  * **พอร์ตที่เปิดใน Security Group:** `80` (HTTP), `443` (HTTPS), `22` (SSH)
+
+---
+
+### B. สถาปัตยกรรม Docker Compose (`docker-compose.yml`)
+ระบบถูกจัดให้อยู่ใน Container เพื่อให้บิวด์และดูแลรักษาง่ายในคำสั่งเดียว:
+1. **`postgres` (PostgreSQL 15):** จัดเก็บข้อมูลระบบทั้งหมด โดยผูกข้อมูลไว้กับ Docker Volume `postgres_data` (ข้อมูลไม่สูญหายเมื่อรีสตาร์ต)
+2. **`backend` (Go Gin API):** รันบนพอร์ต `8080` โดยเชื่อมต่อไปยังฐานข้อมูล `postgres` อัตโนมัติ พร้อมผูก Volume สำหรับเก็บรูปภาพ (`uploads`), บาร์โค้ด (`barcode`), และคิวอาร์โค้ด (`QRCode`)
+3. **`frontend` (React + Nginx):** บิวด์ไฟล์ static และรัน Nginx บนพอร์ต `80` ทำหน้าที่เป็นทั้ง Web Server แจกจ่ายหน้าเว็บ และ Reverse Proxy ส่งต่อคำขอ API ไปยัง Go Backend
+4. *(หมายเหตุ: บริการ AI on-local `ai-service` ถูกคอมเมนต์ปิดไว้ชั่วคราวเพื่อประหยัด RAM บน VPS 4GB)*
+
+---
+
+### C. ขั้นตอนการนำระบบขึ้นเซิร์ฟเวอร์ครั้งแรก (Initial Deployment)
+
+#### 1. บนเครื่อง Mac (ผู้พัฒนา):
+Push โค้ดและไฟล์ตั้งค่า Docker ขึ้น GitHub:
+```bash
+git checkout -b deploy-docker
+git add .
+git commit -m "Add Docker deployment setup"
+git push -u origin deploy-docker
+```
+
+#### 2. บนเครื่องเซิร์ฟเวอร์ (Alibaba Cloud VM ผ่าน SSH):
+```bash
+# 1. เข้าสู่โฟลเดอร์โปรเจกต์
+cd /var/www/AutoParts-Retail-Management-Web-Application
+
+# 2. ปิด service เดิมที่อาจจะรันค้างอยู่ (ป้องกันพอร์ตชนกัน)
+sudo systemctl stop nginx 2>/dev/null || true
+pm2 stop all 2>/dev/null || true
+
+# 3. ดึงโค้ด Branch ที่มี Docker
+git fetch origin
+git checkout deploy-docker
+git pull origin deploy-docker
+
+# 4. สั่งรันทั้งระบบด้วย Docker Compose
+docker compose up -d --build
+```
+
+---
+
+### D. ขั้นตอนการอัปเดตเมื่อเพื่อนแก้โค้ดเสร็จ (Update & Redeploy Workflow)
+
+เมื่อเพื่อนร่วมทีมทำการแก้โค้ดเสร็จแล้ว และทำการ Merge รวมโค้ดเข้าสู่ Branch หลักบน GitHub เรียบร้อยแล้ว การนำโค้ดใหม่ขึ้นเซิร์ฟเวอร์มีขั้นตอนเพียง **3 ขั้นตอนสั้นๆ**:
+
+```bash
+# 1. เข้าสู่โฟลเดอร์โปรเจกต์บนเซิร์ฟเวอร์
+cd /var/www/AutoParts-Retail-Management-Web-Application
+
+# 2. ดึงโค้ดล่าสุดที่เพื่อนแก้ลงมา
+git pull
+
+# 3. สั่งให้ Docker บิวด์ใหม่เฉพาะส่วนที่เปลี่ยนแปลง และเริ่มทำงานใหม่อัตโนมัติ
+docker compose up -d --build
+```
+
+> **จุดเด่นของการใช้ Docker ในขั้นตอนนี้:**
+> * **Zero Data Loss:** ข้อมูลใน Database (PostgreSQL) และรูปภาพบิล/อะไหล่ที่อัปโหลดไว้จะไม่สูญหาย 100% เพราะถูกเก็บแยกไว้ใน Docker Volume
+> * **Auto-Migrate:** หากมีการเพิ่มโมเดลหรือคอลัมน์ใหม่ใน Go Backend ระบบจะ Migrate ฐานข้อมูลให้อัตโนมัติทันที
+> * **Fast Build:** Docker จะใช้ Cache บิวด์ใหม่เฉพาะส่วนของไฟล์ที่มีการแก้ไขเท่านั้น
+
+---
+
+### E. คำสั่งที่มีประโยชน์ในการตรวจสอบและดูแลระบบ (Useful Docker Commands)
+
+```bash
+# ตรวจสอบสถานะว่าคอนเทนเนอร์ไหนรันอยู่บ้าง
+docker compose ps
+
+# ดู Log การทำงานของ Backend (ดู Error หรือการเชื่อมต่อ)
+docker compose logs -f backend
+
+# ดู Log การทำงานของ Frontend (Nginx)
+docker compose logs -f frontend
+
+# ตรวจสอบการใช้งาน RAM และ CPU ของแต่ละคอนเทนเนอร์
+docker stats
+
+# สั่ง Restart ทุกบริการ
+docker compose restart
+
+# สำรองข้อมูลฐานข้อมูล (Backup Database) ออกมาเป็นไฟล์ .sql
+docker exec -t autoparts-postgres pg_dump -U postgres Autopartsdb > backup_$(date +%Y%m%d).sql
+```
+
