@@ -86,6 +86,13 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 		}
 	}
 
+	isCredit := (order.PaymentMethodID != nil && *order.PaymentMethodID == 3) || strings.Contains(paymentMethodStr, "เชื่อ")
+	dueDate := order.DueDate
+	if dueDate == nil && isCredit {
+		fallback := order.CreatedAt.AddDate(0, 0, 30)
+		dueDate = &fallback
+	}
+
 	// พนักงานขาย
 	salesStaff := "พนักงานขาย"
 	if order.CreatedBy != nil && order.CreatedBy.FirstName != "" {
@@ -206,12 +213,15 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 
 	// 5. ข้อมูลบริษัท (ซ้าย) และ ข้อมูลเอกสาร (ขวา)
 	companyRowHeight := 25.0
+	if isCredit && dueDate != nil {
+		companyRowHeight += 5.0
+	}
 	if isCancelled {
-		companyRowHeight = 30.0
+		companyRowHeight += 5.0
 	}
 	m.Row(companyRowHeight, func() {
 		// ฝั่งซ้าย: ข้อมูลบริษัท
-		m.Col(8, func() {
+		m.Col(7, func() {
 			m.Text(companyName, props.Text{Size: 12, Style: consts.Bold})
 			m.Text(companyAddress, props.Text{Size: 11, Top: 5})
 			m.Text(fmt.Sprintf("โทร. %s", companyPhone), props.Text{Size: 11, Top: 10})
@@ -219,13 +229,18 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 			m.Text(fmt.Sprintf("เลขประจำตัวผู้เสียภาษี %s", companyTaxID), props.Text{Size: 11, Top: 20})
 		})
 		// ฝั่งขวา: หั่นย่อยเป็น 2 คอลัมน์ (Label สีแดง กับ Value)
-		m.Col(1, func() {
+		m.Col(2, func() {
 			m.Text("เลขที่", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Color: HexToColor("#E51C23")})
 			m.Text("วันที่", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 5, Color: HexToColor("#E51C23")})
 			m.Text("พนักงาน", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 10, Color: HexToColor("#E51C23")})
 			m.Text("ชำระโดย", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 15, Color: HexToColor("#E51C23")})
+			currentTop := 20.0
+			if isCredit && dueDate != nil {
+				m.Text("กำหนดชำระ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: currentTop, Color: HexToColor("#E51C23")})
+				currentTop += 5.0
+			}
 			if isCancelled {
-				m.Text("สถานะ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 20, Color: HexToColor("#E51C23")})
+				m.Text("สถานะ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: currentTop, Color: HexToColor("#E51C23")})
 			}
 		})
 		m.Col(3, func() {
@@ -233,8 +248,13 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 			m.Text(orderDate, props.Text{Size: 11, Align: consts.Left, Top: 5})
 			m.Text(salesStaff, props.Text{Size: 11, Align: consts.Left, Top: 10})
 			m.Text(paymentMethodStr, props.Text{Size: 11, Align: consts.Left, Top: 15})
+			currentTop := 20.0
+			if isCredit && dueDate != nil {
+				m.Text(FormatThaiDate(*dueDate), props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: currentTop, Color: HexToColor("#E51C23")})
+				currentTop += 5.0
+			}
 			if isCancelled {
-				m.Text("ยกเลิกแล้ว (CANCELLED)", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 20, Color: HexToColor("#E51C23")})
+				m.Text("ยกเลิกแล้ว (CANCELLED)", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: currentTop, Color: HexToColor("#E51C23")})
 			}
 		})
 	})
@@ -356,6 +376,8 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 	summaryHeight := 28.0
 	if isCash {
 		summaryHeight = 36.0
+	} else if isCredit && dueDate != nil {
+		summaryHeight = 34.0
 	}
 
 	m.Row(summaryHeight, func() {
@@ -374,10 +396,20 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 				Size: 9.5,
 				Top:  12.5,
 			})
+			thaiTextTop := 18.0
+			if isCredit && dueDate != nil {
+				m.Text(fmt.Sprintf("3. รายการนี้เป็นการขายเชื่อ กำหนดชำระเงินภายในวันที่ %s", FormatThaiDate(*dueDate)), props.Text{
+					Size:  9.5,
+					Style: consts.Bold,
+					Top:   16.5,
+					Color: HexToColor("#E51C23"),
+				})
+				thaiTextTop = 21.5
+			}
 			m.Text(fmt.Sprintf("จำนวนเงินทั้งสิ้น (ตัวอักษร): %s", thaiText), props.Text{
 				Size:  9.5,
 				Style: consts.Bold,
-				Top:   18.0,
+				Top:   thaiTextTop,
 			})
 		})
 
