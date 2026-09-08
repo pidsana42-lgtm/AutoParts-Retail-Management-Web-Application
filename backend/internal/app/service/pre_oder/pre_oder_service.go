@@ -2,6 +2,7 @@ package pre_order
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +11,6 @@ import (
 	"os"
 	"strings"
 	"time"
-	"context"
 
 	preOrderDTO "backend/internal/app/dto/pre_oder"
 	"backend/internal/app/entity"
@@ -36,6 +36,19 @@ func NewPreOrderService(repo preOrderRepo.PreOrderRepository) PreOrderService {
 }
 
 func (s *preOrderService) CreatePreOrder(input preOrderDTO.CreatePreOrderDTO) (preOrderDTO.PreOrderResponseDTO, error) {
+	// ลูกค้าใหม่ที่พิมพ์ชื่อเองแต่ไม่ได้เลือกจาก dropdown (customer_id = 0) → หา/สร้างลูกค้าให้ก่อน
+	if input.CustomerID == 0 {
+		name := strings.TrimSpace(input.CustomerName)
+		if name == "" {
+			return preOrderDTO.PreOrderResponseDTO{}, fmt.Errorf("กรุณาระบุชื่อลูกค้า")
+		}
+		customerID, err := s.repo.FindOrCreateCustomerByName(name, input.CustomerPhone)
+		if err != nil {
+			return preOrderDTO.PreOrderResponseDTO{}, fmt.Errorf("ไม่สามารถสร้างข้อมูลลูกค้าใหม่ได้: %w", err)
+		}
+		input.CustomerID = customerID
+	}
+
 	poEntity := input.ToEntity()
 	err := s.repo.CreatePreOrder(&poEntity)
 	if err != nil {
@@ -73,7 +86,7 @@ func sendLineNotification(lineUserID string, preOrder *entity.PreOrder) {
 	sb.WriteString(fmt.Sprintf("🔔 *มีใบสั่งจองสินค้าล่วงหน้าใหม่ (Pre-Order)*\n\n"))
 	sb.WriteString(fmt.Sprintf("เลขที่ใบจอง: PRE-%05d\n", preOrder.ID))
 	sb.WriteString(fmt.Sprintf("วันที่จอง: %s\n", preOrder.OrderDate.Format("02/01/2006 15:04")))
-	
+
 	typeStr := "หน้าร้าน"
 	if preOrder.PreOrderType == "LINE" {
 		typeStr = "LINE OA"
@@ -81,11 +94,11 @@ func sendLineNotification(lineUserID string, preOrder *entity.PreOrder) {
 		typeStr = "โทรศัพท์"
 	}
 	sb.WriteString(fmt.Sprintf("ช่องทางการจอง: %s\n", typeStr))
-	
+
 	if preOrder.Customer != nil {
 		sb.WriteString(fmt.Sprintf("ชื่อลูกค้า: %s\nเบอร์โทรศัพท์: %s\n", preOrder.Customer.CustomerName, preOrder.Customer.PhoneNumber))
 	}
-	
+
 	sb.WriteString("\n📋 รายการอะไหล่ที่จอง:\n")
 	var total float64 = 0
 	for idx, item := range preOrder.PreOrderItems {
@@ -97,12 +110,12 @@ func sendLineNotification(lineUserID string, preOrder *entity.PreOrder) {
 		total += itemTotal
 		sb.WriteString(fmt.Sprintf("%d. %s x%d (฿%.2f)\n", idx+1, pName, item.Quantity, item.UnitPrice))
 	}
-	
+
 	sb.WriteString(fmt.Sprintf("\n💰 ยอดรวม: ฿%.2f\n", total))
 	sb.WriteString(fmt.Sprintf("💵 มัดจำแล้ว: ฿%.2f\n", preOrder.DepositAmount))
 	sb.WriteString(fmt.Sprintf("💳 คงค้างตอนรับของ: ฿%.2f\n", total-preOrder.DepositAmount))
 	sb.WriteString(fmt.Sprintf("สถานะ: %s\n\n", "กำลังจัดหาอะไหล่"))
-	
+
 	sb.WriteString("*ทางร้านได้รับยอดจองแล้วและกำลังดำเนินการสั่งอะไหล่ด่วนให้ทันทีค่ะ เมื่อของถึงร้านจะส่งไลน์แจ้งอีกครั้งนะคะ ขอบคุณค่ะ 🙏*")
 
 	text := sb.String()
@@ -245,6 +258,27 @@ func (s *preOrderService) UpdatePreOrder(id uint, input preOrderDTO.UpdatePreOrd
 	if err != nil {
 		return preOrderDTO.PreOrderResponseDTO{}, err
 	}
+
+	// เปลี่ยนชื่อลูกค้าเป็นคนใหม่ที่พิมพ์เองระหว่างแก้ไข (customer_id ถูก reset เป็น 0 ฝั่ง frontend) → หา/สร้างลูกค้าให้ก่อน
+	if input.CustomerID != nil && *input.CustomerID == 0 {
+		name := ""
+		if input.CustomerName != nil {
+			name = strings.TrimSpace(*input.CustomerName)
+		}
+		if name == "" {
+			return preOrderDTO.PreOrderResponseDTO{}, fmt.Errorf("กรุณาระบุชื่อลูกค้า")
+		}
+		phone := ""
+		if input.CustomerPhone != nil {
+			phone = *input.CustomerPhone
+		}
+		customerID, errFind := s.repo.FindOrCreateCustomerByName(name, phone)
+		if errFind != nil {
+			return preOrderDTO.PreOrderResponseDTO{}, fmt.Errorf("ไม่สามารถสร้างข้อมูลลูกค้าใหม่ได้: %w", errFind)
+		}
+		input.CustomerID = &customerID
+	}
+
 	updated := input.ToEntity(*existing)
 	err = s.repo.UpdatePreOrder(&updated)
 	if err != nil {
@@ -262,7 +296,7 @@ func (s *preOrderService) ListPreOrdersForPOSelection(ctx context.Context) ([]pr
 	if err != nil {
 		return nil, err
 	}
-	
+
 	res := make([]preOrderDTO.PreOrderForPODTO, len(entities))
 	for i := range entities {
 		res[i] = preOrderDTO.ToPreOrderForPODTO(&entities[i]) // เปลี่ยนมาใช้ To ตัวใหม่

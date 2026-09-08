@@ -372,6 +372,14 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 					}
 				}
 			}
+		} else {
+			// GORM's struct-based Updates(bill) above skips zero-value fields (like IsVerified: false),
+			// so a bill_no reused from a previously-approved bill would otherwise keep the stale
+			// is_verified=true. Force it back to pending explicitly whenever auto-approval doesn't apply.
+			if err := tx.Model(&entity.Bill{}).Where("id = ?", bill.ID).Update("is_verified", false).Error; err != nil {
+				return err
+			}
+			bill.IsVerified = false
 		}
 
 		if job != nil {
@@ -397,6 +405,12 @@ func (r *billRepository) UpdateBill(id uint, bill *entity.Bill, items []entity.B
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		bill.ID = id
 		if err := tx.Model(bill).Updates(bill).Error; err != nil {
+			return err
+		}
+		// GORM's struct-based Updates(bill) above skips zero-value fields, so bill.IsVerified == false
+		// would silently leave a stale is_verified=true from a prior approval untouched. Force it
+		// explicitly so re-editing a bill (e.g. by an employee after a price change) resets approval.
+		if err := tx.Model(&entity.Bill{}).Where("id = ?", id).Update("is_verified", bill.IsVerified).Error; err != nil {
 			return err
 		}
 		if err := tx.Where("bill_id = ?", id).Delete(&entity.BillItem{}).Error; err != nil {

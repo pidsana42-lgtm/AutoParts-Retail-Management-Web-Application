@@ -41,6 +41,13 @@ function getPageNumbers(current: number, total: number): (number | '...')[] {
   return pages;
 }
 
+// เบอร์โทรศัพท์ไทย: format เป็น 08X-XXXXXXX ระหว่างพิมพ์ (ตัดเหลือ 10 หลัก)
+function formatPhoneNumber(val: string): string {
+  const raw = val.replace(/\D/g, '').slice(0, 10);
+  if (raw.length <= 3) return raw;
+  return `${raw.slice(0, 3)}-${raw.slice(3)}`;
+}
+
 export default function PreOrderManager() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -76,11 +83,14 @@ export default function PreOrderManager() {
 
   // Form state
   const [editingId, setEditingId] = useState<number | null>(null);
+  // เปิดจากการคลิกแถว = ดูอย่างเดียว (view), เปิดจากไอคอนแก้ไข = แก้ไขได้เลย (edit)
+  const [formMode, setFormMode] = useState<'view' | 'edit'>('edit');
   const [formType, setFormType] = useState<string>('WALK_IN');
   const [formCustomerId, setFormCustomerId] = useState<number>(0);
   const [formCustomerFirstName, setFormCustomerFirstName] = useState<string>('');
   const [formCustomerLastName, setFormCustomerLastName] = useState<string>('');
   const [formCustomerPhone, setFormCustomerPhone] = useState<string>('');
+  const [phoneError, setPhoneError] = useState<string>('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [formStatus, setFormStatus] = useState<string>('PENDING');
   const [formItems, setFormItems] = useState<PreOrderItem[]>([]);
@@ -165,6 +175,7 @@ export default function PreOrderManager() {
 
   const handleCreateNew = () => {
     setEditingId(null);
+    setFormMode('edit');
     setFormType('WALK_IN');
     setFormCustomerId(0);
     setFormCustomerFirstName('');
@@ -317,13 +328,14 @@ export default function PreOrderManager() {
     setShowQuickSearch(false);
   };
 
-  const handleEdit = async (id: number, updateUrl = true) => {
+  const handleEdit = async (id: number, updateUrl = true, mode: 'view' | 'edit' = 'edit') => {
     setLoading(true);
     setErrorMsg(null);
     try {
       const data = await getPreOrderById(id);
       if (data) {
         setEditingId(id);
+        setFormMode(mode);
         setFormType(data.pre_order_type);
         setFormCustomerId(data.customer_id);
         
@@ -342,12 +354,13 @@ export default function PreOrderManager() {
         const nameParts = foundName.split(' ');
         setFormCustomerFirstName(nameParts[0] || '');
         setFormCustomerLastName(nameParts.slice(1).join(' '));
-        setFormCustomerPhone(foundPhone);
-        
+        setFormCustomerPhone(formatPhoneNumber(foundPhone));
+        setPhoneError('');
+
         setFormStatus(data.status);
         setFormItems(data.pre_order_items || []);
         setView('form');
-        if (updateUrl) navigate(`${basePath}?edit=${id}`);
+        if (updateUrl) navigate(`${basePath}?edit=${id}${mode === 'view' ? '&mode=view' : ''}`);
       }
     } catch (err: any) {
       console.error('Error fetching pre-order detail:', err);
@@ -364,13 +377,16 @@ export default function PreOrderManager() {
     const editId = Number(params.get('edit'));
 
     if (Number.isInteger(editId) && editId > 0) {
+      const modeParam = params.get('mode') === 'view' ? 'view' : 'edit';
       setView('form');
-      if (editingId !== editId) void handleEdit(editId, false);
+      if (editingId !== editId) void handleEdit(editId, false, modeParam);
+      else setFormMode(modeParam);
       return;
     }
 
     if (params.get('view') === 'new') {
       setView('form');
+      setFormMode('edit');
       return;
     }
 
@@ -407,6 +423,7 @@ export default function PreOrderManager() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingId !== null && formMode === 'view') return;
     if (!formCustomerFirstName.trim() && !formCustomerId) {
       toast({ variant: 'warning', message: 'กรุณาระบุชื่อลูกค้า' });
       return;
@@ -415,6 +432,14 @@ export default function PreOrderManager() {
       toast({ variant: 'warning', message: 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ' });
       return;
     }
+    const rawPhone = formCustomerPhone.replace(/\D/g, '');
+    if (rawPhone.length > 0 && rawPhone.length !== 10) {
+      const msg = 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 10 หลัก (08X-XXXXXXX)';
+      setPhoneError(msg);
+      toast({ variant: 'warning', message: msg });
+      return;
+    }
+    setPhoneError('');
 
     setSaving(true);
     try {
@@ -623,7 +648,7 @@ export default function PreOrderManager() {
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              handleEdit(po.id!);
+              handleEdit(po.id!, true, 'edit');
             }} 
             className="p-1.5 hover:bg-gray-100 rounded-none text-[#5F5E5E] hover:text-[#1C1B1B] transition-colors cursor-pointer"
             title="แก้ไข"
@@ -645,6 +670,8 @@ export default function PreOrderManager() {
       )
     }
   ];
+
+  const isReadOnly = editingId !== null && formMode === 'view';
 
   return (
     <div className="p-8 w-full font-sans">
@@ -724,7 +751,7 @@ export default function PreOrderManager() {
                   data={paginatedOrders}
                   rowKey={(row) => row.id!}
                   isLoading={loading}
-                  onRowClick={(po) => handleEdit(po.id!)}
+                  onRowClick={(po) => handleEdit(po.id!, true, 'view')}
                   className="border-0"
                 />
 
@@ -825,7 +852,7 @@ export default function PreOrderManager() {
             </button>
             <ChevronRight size={14} className="text-gray-400" />
             <span className="text-[#1C1B1B] font-bold">
-              {editingId ? 'แก้ไขใบสั่งจองสินค้า' : 'สร้างใบสั่งจองสินค้าล่วงหน้า'}
+              {isReadOnly ? 'ดูรายละเอียดใบสั่งจองสินค้า' : editingId ? 'แก้ไขใบสั่งจองสินค้า' : 'สร้างใบสั่งจองสินค้าล่วงหน้า'}
             </span>
           </nav>
 
@@ -833,9 +860,19 @@ export default function PreOrderManager() {
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div>
               <Heading level="h2" className="mb-0 font-extrabold text-[#1C1B1B]">
-                {editingId ? 'แก้ไขใบสั่งจองสินค้าล่วงหน้า' : 'สร้างใบสั่งจองสินค้าล่วงหน้า'}
+                {isReadOnly ? 'รายละเอียดใบสั่งจองสินค้าล่วงหน้า' : editingId ? 'แก้ไขใบสั่งจองสินค้าล่วงหน้า' : 'สร้างใบสั่งจองสินค้าล่วงหน้า'}
               </Heading>
             </div>
+            {isReadOnly && (
+              <button
+                type="button"
+                onClick={() => { setFormMode('edit'); navigate(`${basePath}?edit=${editingId}`, { replace: true }); }}
+                className="flex items-center gap-2 bg-[#1C1B1B] hover:bg-black text-white px-4 py-2.5 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer"
+              >
+                <Edit size={16} />
+                แก้ไขใบสั่งจอง
+              </button>
+            )}
           </div>
 
           {errorMsg && (
@@ -846,8 +883,8 @@ export default function PreOrderManager() {
           )}
 
           {/* 2. Main Layout (1 Column Full Width) */}
-          <div className="space-y-6">
-            
+          <fieldset disabled={isReadOnly} className="space-y-6 border-0 p-0 m-0 min-w-0">
+
               {/* ข้อมูลการสั่งจอง */}
               <Card title="ข้อมูลผู้สั่งจอง">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start relative">
@@ -897,7 +934,8 @@ export default function PreOrderManager() {
                                   setFormCustomerFirstName(parts[0] || '');
                                   setFormCustomerLastName(parts.slice(1).join(' '));
                                   setFormCustomerId(c.id);
-                                  setFormCustomerPhone(phone);
+                                  setFormCustomerPhone(formatPhoneNumber(phone));
+                                  setPhoneError('');
                                   setShowCustomerDropdown(false);
                                 }}
                               >
@@ -932,11 +970,21 @@ export default function PreOrderManager() {
                     </label>
                     <input
                       type="tel"
+                      inputMode="numeric"
                       value={formCustomerPhone}
-                      onChange={(e) => setFormCustomerPhone(e.target.value)}
-                      placeholder="08X-XXX-XXXX"
-                      className="h-10 w-full bg-white border border-gray-300 rounded-none px-3 text-sm text-[#1C1B1B] focus:border-[#e51c23] outline-none transition-colors"
+                      onChange={(e) => {
+                        setFormCustomerPhone(formatPhoneNumber(e.target.value));
+                        setPhoneError('');
+                      }}
+                      placeholder="08X-XXXXXXX"
+                      maxLength={11}
+                      className={`h-10 w-full bg-white border rounded-none px-3 text-sm text-[#1C1B1B] outline-none transition-colors ${
+                        phoneError ? 'border-[#e51c23] focus:border-[#e51c23]' : 'border-gray-300 focus:border-[#e51c23]'
+                      }`}
                     />
+                    {phoneError && (
+                      <span className="text-xs text-[#e51c23] font-medium">{phoneError}</span>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -1178,32 +1226,35 @@ export default function PreOrderManager() {
               </div>
             </Card>
 
-            {/* Bottom Summary and Actions (Without Price) */}
-            <div className="border-t border-gray-100 p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#fafafa] rounded-none mt-6 gap-4">
-              <div className="text-sm text-[#5F5E5E] space-y-1 text-left">
-                <p>
-                  จำนวนรายการทั้งหมด :{' '}
-                  <span className="text-[#1C1B1B] font-bold">{formItems.length} รายการ</span>
-                </p>
-                <p>
-                  จำนวนชิ้นรวม :{' '}
-                  <span className="text-[#1C1B1B] font-bold">
-                    {formItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)} ชิ้น
-                  </span>
-                </p>
-              </div>
-              <div className="flex items-center gap-3 self-end sm:self-auto">
-                <button
-                  type="button"
-                  onClick={() => { setView('list'); setEditingId(null); navigate(basePath); }}
-                  disabled={saving}
-                  className="bg-white border border-gray-300 text-[#1C1B1B] hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50 h-[42px]"
-                >
-                  ยกเลิก
-                </button>
-                <Button 
-                  type="submit" 
-                  variant="primary" 
+          </fieldset>
+
+          {/* Bottom Summary and Actions (Without Price) */}
+          <div className="border-t border-gray-100 p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#fafafa] rounded-none mt-6 gap-4">
+            <div className="text-sm text-[#5F5E5E] space-y-1 text-left">
+              <p>
+                จำนวนรายการทั้งหมด :{' '}
+                <span className="text-[#1C1B1B] font-bold">{formItems.length} รายการ</span>
+              </p>
+              <p>
+                จำนวนชิ้นรวม :{' '}
+                <span className="text-[#1C1B1B] font-bold">
+                  {formItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)} ชิ้น
+                </span>
+              </p>
+            </div>
+            <div className="flex items-center gap-3 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => { setView('list'); setEditingId(null); navigate(basePath); }}
+                disabled={saving}
+                className="bg-white border border-gray-300 text-[#1C1B1B] hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50 h-[42px]"
+              >
+                {isReadOnly ? 'ปิด' : 'ยกเลิก'}
+              </button>
+              {!isReadOnly && (
+                <Button
+                  type="submit"
+                  variant="primary"
                   disabled={saving}
                   className="gap-2 text-xs font-bold shadow-xs px-6 py-3 rounded-none h-[42px] bg-[#e51c23] hover:bg-[#c9181f] text-white"
                 >
@@ -1219,9 +1270,8 @@ export default function PreOrderManager() {
                     </>
                   )}
                 </Button>
-              </div>
+              )}
             </div>
-
           </div>
         </form>
       )}

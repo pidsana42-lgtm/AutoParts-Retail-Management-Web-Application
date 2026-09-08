@@ -1976,19 +1976,26 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
         await confirmBillImport(formData.db_job_id || 0, payload);
       }
 
+      const pendingOwnerReview = isEmployee && !isDraft && priceMismatchedItems.length > 0;
+
       toast({
         variant: 'success',
         title: isDraft
           ? 'บันทึกแบบร่างสำเร็จ'
           : editingBillId
             ? 'แก้ไขบิลสำเร็จ'
-            : 'นำเข้าบิลสำเร็จ',
+            : pendingOwnerReview
+              ? 'ส่งบิลให้เจ้าของร้านตรวจสอบแล้ว'
+              : 'นำเข้าบิลสำเร็จ',
         message: isDraft
           ? `บิล ${formData.bill_no || ''} ถูกบันทึกเป็นแบบร่างแล้ว`
           : editingBillId
             ? `แก้ไขข้อมูลบิล ${formData.bill_no || ''} เรียบร้อยแล้ว`
-            : `บิล ${formData.bill_no || ''} ถูกบันทึกเข้าระบบเรียบร้อยแล้ว`,
+            : pendingOwnerReview
+              ? `บิล ${formData.bill_no || ''} ถูกบันทึกเข้าระบบแล้ว รอเจ้าของร้านตรวจสอบและอนุมัติราคาทุนใหม่ก่อนจึงจะมีผล`
+              : `บิล ${formData.bill_no || ''} ถูกบันทึกเข้าระบบเรียบร้อยแล้ว`,
       });
+      setPriceMismatchedItems([]);
       await fetchBills();
       setCurrentView('home');
       setFormData(null);

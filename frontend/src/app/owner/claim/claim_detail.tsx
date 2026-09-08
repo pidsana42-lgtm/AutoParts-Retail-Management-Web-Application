@@ -8,7 +8,7 @@ import { useAuth } from '../../../contexts/AuthContexts';
 import Heading from '../../../components/elements/heading';
 import Badge from '../../../components/elements/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
-import { getCustomerClaimById, updateClaimItemStatus, updateCustomerClaim, searchCustomerCreditByPhone, generateCustomerClaimPDF } from '../../../service/http/claim/claim';
+import { getCustomerClaimById, updateClaimItemStatus, searchCustomerCreditByPhone, generateCustomerClaimPDF } from '../../../service/http/claim/claim';
 import apiClient from '../../../service/http/apiClient';
 import type { CustomerDiscountResponse } from '../../../interface/pos/customer_interface';
 import type { CustomerClaim, CustomerClaimItem } from '../../../interface/claim/claim';
@@ -29,8 +29,9 @@ export default function ClaimDetailPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { role } = useAuth() as any;
-  const isManager = role?.toUpperCase() === 'OWNER' || role?.toUpperCase() === 'ADMIN';
+  const { role } = useAuth();
+  const normalizedRole = role?.trim().toUpperCase();
+  const isManager = normalizedRole === 'OWNER' || normalizedRole === 'ADMIN';
 
   const [claim, setClaim] = useState<CustomerClaim | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,6 +40,8 @@ export default function ClaimDetailPage(): React.JSX.Element {
 
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingStatus, setSavingStatus] = useState(false);
+  const mutationInProgress = useRef(false);
   const [editItems, setEditItems] = useState<EditableItem[]>([]);
   const [activeItemIdx, setActiveItemIdx] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +90,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
   }, [claim, isManager, searchParams]);
 
   const startEditing = () => {
+    if (!isManager || mutationInProgress.current) return;
     setEditItems(claim?.items ? claim.items.map(i => ({ ...i })) : []);
     setIsEditing(true);
   };
@@ -107,11 +111,13 @@ export default function ClaimDetailPage(): React.JSX.Element {
   };
 
   const handlePhotoClick = (idx: number) => {
+    if (mutationInProgress.current) return;
     setActiveItemIdx(idx);
     fileInputRef.current?.click();
   };
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (mutationInProgress.current) return;
     const file = e.target.files?.[0];
     if (!file || activeItemIdx === null) return;
     if (file.size > 5 * 1024 * 1024) {
@@ -133,69 +139,106 @@ export default function ClaimDetailPage(): React.JSX.Element {
   };
 
   const handleSave = async () => {
-    if (!claim?.id) return;
+    if (!claim?.id || !isManager || mutationInProgress.current) return;
+    if (editItems.some(item => !item.id || !Number.isInteger(item.qty) || item.qty < 1)) {
+      toast({ variant: 'error', message: 'กรุณาระบุจำนวนสินค้าเป็นจำนวนเต็มตั้งแต่ 1 ชิ้นขึ้นไป' });
+      return;
+    }
+    mutationInProgress.current = true;
     try {
       setSaving(true);
+      // Save only edited fields. Approval and the parent status are owned by
+      // the status endpoint, so editing details cannot replay an old decision.
+      for (const item of editItems) {
+        const original = claim.items?.find(existing => existing.id === item.id);
+        const claimType = item.claim_type || claim.claim_type || 'INSTANT';
+        const changed = !original || item.qty !== original.qty || item.reason !== original.reason ||
+          (item.evidence_url || '') !== (original.evidence_url || '') ||
+          claimType !== (original.claim_type || claim.claim_type || 'INSTANT') || item.newFile;
+        if (!changed) continue;
 
-      const savedItems = await Promise.all(
-        editItems.map(async item => {
-          if (!item.id) return item;
-          let evidenceUrl = item.evidence_url || '';
-          if (item.newFile) {
-            try {
-              const fd = new FormData();
-              fd.append('file', item.newFile);
-              const res = await apiClient.post('/claims/evidence/upload', fd, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-              });
-              evidenceUrl = res.data?.url ?? evidenceUrl;
-            } catch (err) {
-              console.error('Failed to upload evidence:', err);
-              toast({ variant: 'warning', message: 'อัปโหลดรูปหลักฐานไม่สำเร็จ' });
-            }
-          }
-
-          // Update item data
-          await apiClient.put(`/claims/customer-claims/items/${item.id}`, {
-            qty: item.qty,
-            reason: item.reason,
-            evidence_url: evidenceUrl,
-            claim_type: item.claim_type || 'INSTANT',
+        let evidenceUrl = item.evidence_url || '';
+        if (item.newFile) {
+          const fd = new FormData();
+          fd.append('file', item.newFile);
+          const res = await apiClient.post('/claims/evidence/upload', fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
           });
+          if (!res.data?.url) throw new Error('Evidence upload returned no URL');
+          evidenceUrl = res.data.url;
+        }
 
-          // Update item status if set
-          if (item.status) {
-            try {
-              await updateClaimItemStatus(item.id, item.status);
-            } catch (err) {
-              console.error('Failed to update item status:', err);
-              toast({ variant: 'warning', message: 'อัปเดตสถานะสินค้าบางรายการไม่สำเร็จ' });
-            }
-          }
+        await apiClient.put(`/claims/customer-claims/items/${item.id}`, {
+          qty: item.qty,
+          reason: item.reason,
+          evidence_url: evidenceUrl,
+          claim_type: claimType,
+        });
+      }
 
-          const { newFile, newPreview, ...rest } = item;
-          return { ...rest, evidence_url: evidenceUrl } as CustomerClaimItem;
-        })
-      );
-
-      // Determine overall claim status
-      const allApproved = savedItems.length > 0 && savedItems.every(i => (i.status ?? '').toUpperCase() === 'APPROVED');
-      const allRejected = savedItems.length > 0 && savedItems.every(i => (i.status ?? '').toUpperCase() === 'REJECTED');
-      const nextClaimStatus = allApproved ? 'APPROVED' : allRejected ? 'REJECTED' : (claim.status || 'PENDING');
-
-      await updateCustomerClaim(claim.id, {
-        ...claim,
-        status: nextClaimStatus,
-      } as any);
-
-      setClaim(prev => prev ? { ...prev, status: nextClaimStatus, items: savedItems as CustomerClaimItem[] } : prev);
+      const refreshed = await getCustomerClaimById(claim.id);
+      if (!refreshed) throw new Error('Claim reload returned no data');
+      setClaim(refreshed);
       cancelEditing();
       toast({ variant: 'success', message: 'บันทึกข้อมูลใบเคลมเรียบร้อยแล้ว' });
     } catch (err) {
       console.error('Failed to save claim:', err);
-      toast({ variant: 'error', message: 'เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่' });
+      // Some earlier item writes may have succeeded. Keep the draft for retry,
+      // but refresh the saved record rather than presenting the draft as saved.
+      try {
+        const refreshed = await getCustomerClaimById(claim.id);
+        if (refreshed) setClaim(refreshed);
+      } catch (reloadError) {
+        console.error('Failed to reload claim after save error:', reloadError);
+      }
+      toast({ variant: 'error', message: 'บันทึกข้อมูลไม่ครบหรือโหลดผลล่าสุดไม่สำเร็จ กรุณาตรวจสอบและลองใหม่' });
     } finally {
       setSaving(false);
+      mutationInProgress.current = false;
+    }
+  };
+
+  const handleStatusChange = async (item: CustomerClaimItem, status: 'APPROVED' | 'REJECTED') => {
+    if (!isManager || !claim?.id || !item.id || isEditing || mutationInProgress.current) return;
+    const itemId = item.id;
+    mutationInProgress.current = true;
+    setSavingStatus(true);
+    let statusSaved = false;
+    try {
+      const updated = await updateClaimItemStatus(itemId, status);
+      if (!updated || updated.id !== item.id || updated.status?.trim().toUpperCase() !== status) {
+        throw new Error('Status update returned an unexpected result');
+      }
+      statusSaved = true;
+      // Use the saved item from the API even if the following refresh fails.
+      setClaim(prev => prev ? {
+        ...prev,
+        items: prev.items?.map(existing => existing.id === updated.id ? { ...existing, status: updated.status } : existing),
+      } : prev);
+      const refreshed = await getCustomerClaimById(claim.id);
+      if (!refreshed) throw new Error('Claim reload returned no data');
+      setClaim(refreshed);
+      toast({ variant: 'success', message: status === 'APPROVED' ? 'อนุมัติรายการเคลมเรียบร้อยแล้ว' : 'ปฏิเสธรายการเคลมเรียบร้อยแล้ว' });
+    } catch (err) {
+      console.error('Failed to update claim item status:', err);
+      if (!statusSaved) {
+        // A connection error can happen after the server committed the change.
+        try {
+          const refreshed = await getCustomerClaimById(claim.id);
+          if (refreshed) setClaim(refreshed);
+        } catch (reloadError) {
+          console.error('Failed to reload claim after status error:', reloadError);
+        }
+      }
+      toast({
+        variant: statusSaved ? 'warning' : 'error',
+        message: statusSaved
+          ? 'บันทึกสถานะแล้ว แต่โหลดข้อมูลล่าสุดไม่สำเร็จ กรุณารีเฟรชหน้า'
+          : 'ไม่สามารถยืนยันผลการเปลี่ยนสถานะได้ กรุณาตรวจสอบรายการและลองใหม่',
+      });
+    } finally {
+      setSavingStatus(false);
+      mutationInProgress.current = false;
     }
   };
 
@@ -301,9 +344,10 @@ export default function ClaimDetailPage(): React.JSX.Element {
             <button
               type="button"
               onClick={startEditing}
-              className="bg-[#e51c23] hover:bg-[#c9181f] text-white flex items-center gap-2 shadow-sm font-bold h-10 px-4 rounded-none text-sm shrink-0 cursor-pointer transition-colors"
+              disabled={savingStatus}
+              className="bg-[#e51c23] hover:bg-[#c9181f] disabled:opacity-50 text-white flex items-center gap-2 shadow-sm font-bold h-10 px-4 rounded-none text-sm shrink-0 cursor-pointer transition-colors"
             >
-              <SquarePen size={16} /> แก้ไขข้อมูลและการอนุมัติ
+              <SquarePen size={16} /> แก้ไขข้อมูล
             </button>
           </div>
         )}
@@ -417,13 +461,12 @@ export default function ClaimDetailPage(): React.JSX.Element {
                     <TableHead className="text-center w-24">จำนวน</TableHead>
                     <TableHead className="min-w-[220px]">หมายเหตุ / สาเหตุการเคลม</TableHead>
                     <TableHead className="text-center w-28">ภาพหลักฐาน</TableHead>
-                    <TableHead className="text-center w-36 pr-5">สถานะ / จัดการ</TableHead>
+                    <TableHead className="text-center w-40 pr-5">สถานะ / จัดการ</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="text-gray-700">
                   {displayItems.map((item: EditableItem, idx: number) => {
-                    const itemStatus = (item.status ?? 'Pending');
-                    const itemStatusUp = itemStatus.toUpperCase();
+                    const itemStatusUp = (item.status || 'PENDING').trim().toUpperCase();
                     const itemEvidenceUrl = item.newPreview || item.evidence_url || (item as any).evidenceUrl || (item as any).image_url || (item as any).imageUrl || (item as any).evidence || '';
                     const itemClaimType = item.claim_type || claim.claim_type || 'INSTANT';
 
@@ -435,6 +478,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
                         <TableCell className="text-center">
                           {isEditing ? (
                             <select
+                              disabled={saving}
                               value={item.claim_type || itemClaimType || 'INSTANT'}
                               onChange={e => handleItemChange(idx, 'claim_type', e.target.value)}
                               className="border border-gray-300 px-2 py-1 text-xs font-bold text-[#1C1B1B] bg-white focus:outline-none focus:border-[#e51c23] rounded-none cursor-pointer"
@@ -461,6 +505,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
                           {isEditing ? (
                             <input
                               type="number"
+                              disabled={saving}
                               min={1}
                               value={item.qty}
                               onChange={e => handleItemChange(idx, 'qty', Number(e.target.value))}
@@ -474,6 +519,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
                           {isEditing ? (
                             <input
                               type="text"
+                              disabled={saving}
                               value={item.reason ?? ''}
                               onChange={e => handleItemChange(idx, 'reason', e.target.value)}
                               placeholder="ระบุหมายเหตุ / สาเหตุการเคลม..."
@@ -496,6 +542,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
                                 />
                                 <button
                                   type="button"
+                                  disabled={saving}
                                   onClick={() => handleRemovePhoto(idx)}
                                   className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#e51c23] text-white flex items-center justify-center rounded-full cursor-pointer hover:bg-[#c9181f]"
                                   title="ลบรูปภาพ"
@@ -506,6 +553,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
                             ) : (
                               <button
                                 type="button"
+                                disabled={saving}
                                 onClick={() => handlePhotoClick(idx)}
                                 className="px-2 py-1.5 border border-dashed border-gray-300 text-gray-500 hover:border-[#e51c23] hover:text-[#e51c23] flex items-center gap-1.5 text-xs font-semibold mx-auto cursor-pointer transition-colors"
                               >
@@ -532,21 +580,23 @@ export default function ClaimDetailPage(): React.JSX.Element {
                           )}
                         </TableCell>
                         <TableCell className="text-center pr-5">
-                          {isEditing ? (
+                          {isManager && !isEditing && !!item.id && itemStatusUp === 'PENDING' ? (
                             <select
-                              value={item.status || itemStatus || 'Pending'}
-                              onChange={e => handleItemChange(idx, 'status', e.target.value)}
-                              className={`border px-2 py-1 text-xs font-bold focus:outline-none rounded-none cursor-pointer ${
-                                (item.status || itemStatus || '').toUpperCase() === 'APPROVED'
-                                  ? 'border-[#259b24]/30 bg-[#259b24]/10 text-[#259b24]'
-                                  : (item.status || itemStatus || '').toUpperCase() === 'REJECTED'
-                                  ? 'border-red-200 bg-red-50 text-[#e51c23]'
-                                  : 'border-gray-300 bg-white text-[#1C1B1B]'
-                              }`}
+                              aria-label={`สถานะ ${item.product_name || `#${item.product_id}`}`}
+                              value="PENDING"
+                              onChange={e => {
+                                const status = e.target.value;
+                                if (status === 'APPROVED' || status === 'REJECTED') {
+                                  void handleStatusChange(item, status);
+                                }
+                              }}
+                              disabled={savingStatus}
+                              aria-busy={savingStatus}
+                              className="w-full min-w-32 border border-gray-300 bg-white px-2 py-1.5 text-xs font-bold text-gray-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600"
                             >
-                              <option value="Approved">อนุมัติแล้ว</option>
-                              <option value="Rejected">ปฏิเสธ</option>
-                              <option value="Pending">รอดำเนินการ</option>
+                              <option value="PENDING" disabled>รอดำเนินการ</option>
+                              <option value="APPROVED">อนุมัติ</option>
+                              <option value="REJECTED">ปฏิเสธ</option>
                             </select>
                           ) : itemStatusUp === 'APPROVED' ? (
                             <Badge variant="success" size="sm">อนุมัติแล้ว</Badge>
