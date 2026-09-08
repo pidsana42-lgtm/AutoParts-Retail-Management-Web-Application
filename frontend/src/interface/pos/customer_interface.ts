@@ -26,6 +26,9 @@ export interface CustomerDiscountResponse {
   registered_address?: string;
   display_address?: string;
   address?: string;
+  max_unpaid_days?: number;
+  has_unpaid_order?: boolean;
+  is_overdue?: boolean;
 }
 
 // ข้อมูลลูกค้าที่ผ่านการคำนวณและแปลง Format พร้อมใช้บน UI (จาก Custom Hook)

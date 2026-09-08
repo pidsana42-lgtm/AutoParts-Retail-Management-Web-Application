@@ -23,6 +23,7 @@ type mockCustomerDiscountRepo struct {
 	getCreditCustomerByIDFn func(id uint) (*entity.Customer, error)
 	getCreditCustomersFn    func() ([]entity.Customer, error)
 	updateCustomerFn        func(customer *entity.Customer) error
+	getCustomersDebtAgingFn func() (map[uint]posRepo.CustomerDebtAging, error)
 
 	calls map[string]int
 }
@@ -65,6 +66,14 @@ func (m *mockCustomerDiscountRepo) UpdateCustomer(customer *entity.Customer) err
 		return m.updateCustomerFn(customer)
 	}
 	return nil
+}
+
+func (m *mockCustomerDiscountRepo) GetCustomersDebtAging() (map[uint]posRepo.CustomerDebtAging, error) {
+	m.track("GetCustomersDebtAging")
+	if m.getCustomersDebtAgingFn != nil {
+		return m.getCustomersDebtAgingFn()
+	}
+	return make(map[uint]posRepo.CustomerDebtAging), nil
 }
 
 var _ posRepo.CustomerDiscountRepository = (*mockCustomerDiscountRepo)(nil)
@@ -188,4 +197,49 @@ func TestBulkUpdateCustomerDiscounts_CustomerNotFound(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
 	assert.Equal(t, 0, repo.calls["UpdateCustomer"])
+}
+
+func TestGetCustomerDiscount_WithDebtAging(t *testing.T) {
+	repo := newMockCustomerDiscountRepo()
+	service := posService.NewCustomerDiscountService(repo)
+
+	dummyCustomers := []entity.Customer{
+		{
+			Model:             gorm.Model{ID: 1},
+			CustomerName:      "ลูกค้าค้างชำระนาน",
+			CurrentDebtAmount: 15000.0,
+		},
+		{
+			Model:             gorm.Model{ID: 2},
+			CustomerName:      "ลูกค้าไม่มีหนี้",
+			CurrentDebtAmount: 0.0,
+		},
+	}
+
+	repo.searchCustomersFn = func(query string) ([]entity.Customer, error) {
+		return dummyCustomers, nil
+	}
+	repo.getCustomersDebtAgingFn = func() (map[uint]posRepo.CustomerDebtAging, error) {
+		return map[uint]posRepo.CustomerDebtAging{
+			1: {
+				CustomerID:     1,
+				MaxUnpaidDays:  105,
+				HasUnpaidOrder: true,
+				IsOverdue:      true,
+			},
+		}, nil
+	}
+
+	res, err := service.GetCustomerDiscount("")
+
+	require.NoError(t, err)
+	require.Len(t, res, 2)
+	// ลูกค้าที่ 1 มีหนี้ค้างและอายุหนี้ 105 วัน (เกินกำหนด)
+	assert.Equal(t, 105, res[0].MaxUnpaidDays)
+	assert.True(t, res[0].HasUnpaidOrder)
+	assert.True(t, res[0].IsOverdue)
+	// ลูกค้าที่ 2 ไม่มียอดหนี้
+	assert.Equal(t, 0, res[1].MaxUnpaidDays)
+	assert.False(t, res[1].HasUnpaidOrder)
+	assert.False(t, res[1].IsOverdue)
 }
