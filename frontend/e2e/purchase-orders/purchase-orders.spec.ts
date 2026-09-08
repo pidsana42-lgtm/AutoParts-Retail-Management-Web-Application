@@ -1,6 +1,6 @@
-import { test, expect } from './fixtures/auth';
-import { PurchaseOrdersPage } from './pages/purchase-orders.page';
-import { CreatePoPage } from './pages/create-po.page';
+import { test, expect } from '../fixtures/auth';
+import { PurchaseOrdersPage } from './purchase-orders.page';
+import { CreatePoPage } from './create-po.page';
 
 test.describe('รายการใบสั่งซื้อ (PO List)', () => {
   let poPage: PurchaseOrdersPage;

@@ -1,6 +1,6 @@
 import { type Page } from '@playwright/test';
-import { test, expect } from './fixtures/auth';
-import { DashboardPage } from './pages/dashboard.page';
+import { test, expect } from '../fixtures/auth';
+import { DashboardPage } from './dashboard.page';
 
 const summaryItem = {
   summary_date: '2026-09-08',
