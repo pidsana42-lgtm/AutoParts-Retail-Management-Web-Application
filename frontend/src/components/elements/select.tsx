@@ -147,7 +147,7 @@ export default function Select({
             aria-expanded={isOpen}
             aria-invalid={!!error}
             onKeyDown={handleKeyDown}
-            className={cn(disabled && "pointer-events-none opacity-60", className)}
+            className={cn("outline-none focus:outline-none", disabled && "pointer-events-none opacity-60", className)}
           >
             {renderTrigger({
               isOpen,
@@ -189,8 +189,8 @@ export default function Select({
             <svg
               className={cn(
                 "pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 transition-transform",
-                // ✅ arrow สีแดง
-                "text-[#B70011]",
+                // ✅ arrow สีแดง (หรือสีเทาเมื่อ disabled)
+                disabled ? "text-slate-300" : "text-[#B70011]",
                 isOpen && "rotate-180"
               )}
               viewBox="0 0 20 20"

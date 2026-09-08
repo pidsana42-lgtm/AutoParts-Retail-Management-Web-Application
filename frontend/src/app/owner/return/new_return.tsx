@@ -338,8 +338,8 @@ const NewReturnPage: React.FC = () => {
                       <CardTitle className="text-xl text-black">ข้อมูลใบเสร็จ</CardTitle>
                       <p className="mt-1 text-base text-gray-600">รายละเอียดสำหรับการคืนสินค้า</p>
                     </div>
-                    <Badge variant="outline" size="lg" className="absolute right-6 top-6 border-gray-200 bg-gray-100 text-sm text-gray-700">
-                      <span className="mr-2 h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                    <Badge variant="outline" size="lg" className="absolute right-6 top-6 w-auto px-3 py-1.5 border-gray-200 bg-gray-100 text-sm text-gray-700">
+                      <span className="mr-2 h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0 aspect-square inline-block" />
                       ดำเนินการได้
                     </Badge>
                   </CardHeader>

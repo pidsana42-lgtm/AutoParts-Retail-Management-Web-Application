@@ -572,3 +572,27 @@ func TestListCustomerClaims_MapsEachEntity(t *testing.T) {
 		t.Errorf("unexpected list mapping: %+v", got)
 	}
 }
+
+func TestUpdateCustomerClaimItem_CompletedCannotBeEdited(t *testing.T) {
+	repo := newMockClaimRepo()
+	repo.getItemFn = func(id uint) (*entity.CustomerClaimItem, error) {
+		return &entity.CustomerClaimItem{
+			Model:      gorm.Model{ID: 10},
+			Resolution: "COMPLETED",
+			Status:     "APPROVED",
+		}, nil
+	}
+
+	svc := newService(repo, &mockSORepo{}, nil)
+	_, err := svc.UpdateCustomerClaimItem(10, claimDTO.UpdateCustomerClaimItemDTO{
+		Resolution: "WAITING_SEND",
+	})
+	if err == nil {
+		t.Fatal("expected error when updating completed item, got nil")
+	}
+
+	_, errStatus := svc.UpdateCustomerClaimItemStatus(10, "REJECTED")
+	if errStatus == nil {
+		t.Fatal("expected error when updating status of completed item, got nil")
+	}
+}
