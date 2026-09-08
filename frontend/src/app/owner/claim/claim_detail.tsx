@@ -276,7 +276,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
 
   if (loading) {
     return (
-      <div className="p-8 flex justify-center items-center min-h-[300px]">
+      <div className="p-8 flex justify-center items-center min-h-75">
         <Loader2 size={28} className="text-[#e51c23] animate-spin" />
         <span className="ml-3 text-sm text-[#5F5E5E] font-medium">กำลังโหลดข้อมูล...</span>
       </div>
@@ -459,7 +459,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
                     <TableHead className="pl-5">สินค้า</TableHead>
                     <TableHead className="text-center w-32">ประเภทเคลม</TableHead>
                     <TableHead className="text-center w-24">จำนวน</TableHead>
-                    <TableHead className="min-w-[220px]">หมายเหตุ / สาเหตุการเคลม</TableHead>
+                    <TableHead className="min-w-55">หมายเหตุ / สาเหตุการเคลม</TableHead>
                     <TableHead className="text-center w-28">ภาพหลักฐาน</TableHead>
                     <TableHead className="text-center w-40 pr-5">สถานะ / จัดการ</TableHead>
                   </TableRow>

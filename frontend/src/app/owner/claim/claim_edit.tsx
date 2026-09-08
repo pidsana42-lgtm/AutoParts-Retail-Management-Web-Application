@@ -163,7 +163,7 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
 
   if (loading) {
     return (
-      <div className="p-8 flex justify-center items-center min-h-[300px]">
+      <div className="p-8 flex justify-center items-center min-h-75">
         <Loader2 size={28} className="text-[#e51c23] animate-spin" />
         <span className="ml-3 text-sm text-[#5F5E5E] font-medium">กำลังโหลดข้อมูล...</span>
       </div>
@@ -244,7 +244,7 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
                   <TableHead className="pl-5">สินค้า</TableHead>
                   <TableHead className="text-center w-36">ประเภทเคลม</TableHead>
                   <TableHead className="text-center w-24">จำนวน</TableHead>
-                  <TableHead className="min-w-[220px]">หมายเหตุ / สาเหตุการเคลม</TableHead>
+                  <TableHead className="min-w-55">หมายเหตุ / สาเหตุการเคลม</TableHead>
                   <TableHead className="text-center w-28">รูปภาพหลักฐาน</TableHead>
                   {canApprove && <TableHead className="text-center pr-5 w-36">สถานะ</TableHead>}
                 </TableRow>

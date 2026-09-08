@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, ClockAlert, CirclePlus, Search, ReceiptText, Loader2, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Eye, CircleCheck, Banknote } from 'lucide-react';
+import { FileText, ClockAlert, CirclePlus, Search, ReceiptText, Loader2, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, 
+  Eye, CircleCheck, Banknote, HandCoins } from 'lucide-react';
 // Components
 import Heading from '../../../components/elements/heading';
 import { Card } from '../../../components/elements/card';
@@ -330,7 +331,7 @@ const ReturnsPage: React.FC = () => {
                 : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
             }`}
           >
-            <ClockAlert size={16} /> รายการคืนเงินค้างในระบบ
+            <HandCoins size={16} /> รายการคืนเงินค้างในระบบ
             <span
               className={`px-2 py-0.5 text-sm rounded-full ${
                 activeTab === 'refunding'

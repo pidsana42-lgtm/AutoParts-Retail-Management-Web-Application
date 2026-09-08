@@ -2,6 +2,7 @@ package claim
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -194,6 +195,9 @@ func (s *customerClaimService) UpdateCustomerClaimItem(id uint, input claimDTO.U
 	if err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
+	if existing.Resolution == "COMPLETED" || strings.Contains(existing.Resolution, "ส่งมอบ") || strings.Contains(existing.Resolution, "สำเร็จ") {
+		return claimDTO.CustomerClaimItemResponseDTO{}, errors.New("รายการเคลมนี้ถูกส่งมอบลูกค้าแล้ว ไม่สามารถแก้ไขได้อีก")
+	}
 	if input.Qty > 0 {
 		existing.Qty = uint(input.Qty)
 	}
@@ -223,6 +227,9 @@ func (s *customerClaimService) UpdateCustomerClaimItemStatus(id uint, status str
 	existing, err := s.repo.GetCustomerClaimItemByID(id)
 	if err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
+	}
+	if existing.Resolution == "COMPLETED" || strings.Contains(existing.Resolution, "ส่งมอบ") || strings.Contains(existing.Resolution, "สำเร็จ") {
+		return claimDTO.CustomerClaimItemResponseDTO{}, errors.New("รายการเคลมนี้ถูกส่งมอบลูกค้าแล้ว ไม่สามารถแก้ไขได้อีก")
 	}
 	existing.Status = status
 	if err := s.repo.UpdateCustomerClaimItem(existing); err != nil {
