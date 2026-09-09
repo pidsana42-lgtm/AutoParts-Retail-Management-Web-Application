@@ -6,7 +6,7 @@ import Button from '../../../components/elements/button';
 import Card from '../../../components/elements/card';
 import Badge from '../../../components/elements/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
-import { getCustomerClaimById, updateCustomerClaim, updateClaimItemStatus } from '../../../service/http/claim/claim';
+import { getCustomerClaimById, updateClaimItemStatus } from '../../../service/http/claim/claim';
 import type { CustomerClaim } from '../../../interface/claim/claim';
 import { useToast } from '../../../components/elements/toast';
 
@@ -54,30 +54,26 @@ export default function ClaimApprovePage(): React.JSX.Element {
   };
 
   const handleApproveAndPrint = async () => {
-    if (!claim?.id) return;
+    if (!claim?.id || saving || !claim.items?.length) return;
     try {
       setSaving(true);
 
-      // Update each item status
-      await Promise.all(
-        (claim.items ?? []).map(item => {
-          const itemId = item.id ?? 0;
-          const status = approvedItems[itemId] ? 'APPROVED' : 'REJECTED';
-          return updateClaimItemStatus(itemId, status);
-        })
-      );
-
-      // Update claim header status to APPROVED
-      await updateCustomerClaim(claim.id, {
-        ...claim,
-        status: 'APPROVED',
-      } as any);
+      // The item endpoint derives the parent status. Serialize these writes
+      // so parent-status synchronization cannot race between item requests.
+      for (const item of claim.items) {
+        if (!item.id) throw new Error('Missing claim item ID');
+        const status = approvedItems[item.id] ? 'APPROVED' : 'REJECTED';
+        const updated = await updateClaimItemStatus(item.id, status);
+        if (!updated || updated.id !== item.id || updated.status?.trim().toUpperCase() !== status) {
+          throw new Error('Status update returned an unexpected result');
+        }
+      }
 
       // Print
       window.print();
 
       // Navigate back to detail
-      toast({ variant: 'success', message: 'อนุมัติใบเคลมเรียบร้อยแล้ว' });
+      toast({ variant: 'success', message: 'บันทึกผลการพิจารณาใบเคลมเรียบร้อยแล้ว' });
       navigate(`/owner/claims/detail/${claim.id}`);
     } catch (err) {
       console.error('Failed to approve claim:', err);
@@ -128,7 +124,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
           leftIcon={<Printer className="h-5 w-5" />}
           size="md"
           onClick={handleApproveAndPrint}
-          disabled={saving}
+          disabled={saving || !claim.items?.length}
         >
           {saving ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
           {saving ? 'กำลังบันทึก...' : 'อนุมัติและปริ้นใบเคลม'}
@@ -209,6 +205,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
                       <button
                         type="button"
                         onClick={() => toggleItem(itemId)}
+                        disabled={saving}
                         className={`w-8 h-8 rounded-none flex items-center justify-center transition-colors cursor-pointer ${
                           isApproved
                             ? 'bg-[#e51c23] text-white hover:bg-[#c9181f]'

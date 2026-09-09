@@ -63,7 +63,9 @@ interface ImportBillSavedSession {
   formData: ScannedBillData | null;
   editingBillId: number | null;
   poReference: string;
-  batchResults: ScannedBillData[];
+  // Keep empty slots aligned with files when a scan fails.
+  batchResults: (ScannedBillData | null)[];
+  isMergedBatch?: boolean;
   activeBatchIndex: number;
   excelPreview: ExcelImportPreview | null;
   excelMapping: ColumnMapping | null;
@@ -156,7 +158,7 @@ const loadImportBillSession = (key: string): ImportBillSavedSession | null => {
     const parsed = JSON.parse(saved) as ImportBillSavedSession;
     return {
       ...parsed,
-      batchResults: Array.isArray(parsed.batchResults) ? parsed.batchResults.filter(Boolean) : [],
+      batchResults: Array.isArray(parsed.batchResults) ? parsed.batchResults.map(bill => bill || null) : [],
       originalPOItems: Array.isArray(parsed.originalPOItems) ? parsed.originalPOItems : [],
     };
   } catch (error) {
@@ -203,6 +205,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   }, [location.pathname]);
 
   const setCurrentView = (view: ViewState) => {
+    if (view === 'home') setIsMergedBatch(false);
     if (view === 'home') clearSavedImportSession();
     setCurrentViewInternal(view);
     let targetPath = basePath;
@@ -250,14 +253,16 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   // Batch Mode States
   const [batchImages, setBatchImages] = useState<File[]>([]);
   const [batchPreviewUrls, setBatchPreviewUrls] = useState<string[]>([]);
-  const [batchResults, setBatchResults] = useState<ScannedBillData[]>(() => restoredSession?.batchResults ?? []);
+  const [batchResults, setBatchResults] = useState<(ScannedBillData | null)[]>(() => restoredSession?.batchResults ?? []);
+  const [isMergedBatch, setIsMergedBatch] = useState(() => restoredSession?.isMergedBatch ?? false);
+  const batchSaveInProgress = useRef(false);
   const [activeBatchIndex, setActiveBatchIndex] = useState<number>(() => restoredSession?.activeBatchIndex ?? 0);
   const [batchProgress, setBatchProgress] = useState<{ [key: string]: 'pending' | 'scanning' | 'success' | 'failed' }>({});
   const [batchErrorMsg, setBatchErrorMsg] = useState<string | null>(null);
 
   // Synchronized Refs for Batch State Isolation
   const activeBatchIndexRef = useRef<number>(0);
-  const batchResultsRef = useRef<ScannedBillData[]>([]);
+  const batchResultsRef = useRef<(ScannedBillData | null)[]>([]);
   const formDataRef = useRef<ScannedBillData | null>(null);
 
   // Mobile Upload Session
@@ -315,7 +320,8 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
       formData,
       editingBillId,
       poReference,
-      batchResults: completedBatchResults,
+      batchResults,
+      isMergedBatch,
       activeBatchIndex,
       excelPreview,
       excelMapping,
@@ -335,6 +341,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
     editingBillId,
     poReference,
     batchResults,
+    isMergedBatch,
     activeBatchIndex,
     excelPreview,
     excelMapping,
@@ -592,11 +599,13 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   }, [fileSessionReady, currentView, importSessionKey, billImage, batchImages, activeBatchIndex]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (scanning || saving) return;
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     setErrorMsg(null);
     setBatchErrorMsg(null);
+    setIsMergedBatch(false);
 
     if (files.length === 1) {
       const singleFile = files[0];
@@ -674,7 +683,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
 
   // Poll for mobile-uploaded images when in scan view
   useEffect(() => {
-    if (currentView !== 'scan') return;
+    if (currentView !== 'scan' || isMergedBatch || saving) return;
     const intervalId = setInterval(async () => {
       try {
         const resp = await apiClient.get(`/mobile/images?session=${mobileSessionId}`);
@@ -685,9 +694,10 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
       }
     }, 2000);
     return () => clearInterval(intervalId);
-  }, [currentView, mobileSessionId, handleLoadMobileFiles]);
+  }, [currentView, mobileSessionId, handleLoadMobileFiles, isMergedBatch, saving]);
 
   const handleOcrProcess = async () => {
+    if (scanning || saving || isMergedBatch) return;
     if (batchImages.length > 0) {
       await processBatchImages();
       return;
@@ -816,11 +826,13 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
 
     setScanning(true);
     setBatchErrorMsg(null);
-    const results: ScannedBillData[] = new Array(batchImages.length);
+    // Retry only failed scans, preserving already reviewed/edited results.
+    const results = batchImages.map((_, index) => batchResultsRef.current[index] ?? null);
     const progressMap = { ...batchProgress };
 
     for (let i = 0; i < batchImages.length; i++) {
       const file = batchImages[i];
+      if (results[i]) continue;
       progressMap[file.name] = 'scanning';
       setBatchProgress({ ...progressMap });
 
@@ -947,6 +959,8 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
         console.error(`Error scanning file ${file.name}:`, err);
         progressMap[file.name] = 'failed';
       }
+      setBatchResults([...results]);
+      batchResultsRef.current = [...results];
       setBatchProgress({ ...progressMap });
     }
 
@@ -954,7 +968,18 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   };
 
   const handleSelectBatchItem = (index: number) => {
-    if (index < 0) return;
+    if (index < 0 || scanning || saving) return;
+
+    // A merged bill has one editable form but can still preview every source page.
+    if (isMergedBatch) {
+      setActiveBatchIndex(index);
+      activeBatchIndexRef.current = index;
+      if (batchImages[index]) {
+        setBillImage(batchImages[index]);
+        setPreviewUrl(batchPreviewUrls[index] || URL.createObjectURL(batchImages[index]));
+      }
+      return;
+    }
 
     // Flush active formData to ref before switching
     if (formDataRef.current && activeBatchIndexRef.current < batchResultsRef.current.length) {
@@ -985,16 +1010,21 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   };
 
   const handleMergeBatchResultsToSingleBill = () => {
-    if (batchResults.length === 0) return;
+    if (scanning || saving || isMergedBatch || batchResults.length < 2) return;
+    if (batchResults.some(bill => !bill) || batchResults.length !== batchImages.length) {
+      setErrorMsg('กรุณาสแกนทุกไฟล์ให้สำเร็จก่อนรวมเป็นบิลเดียว');
+      return;
+    }
 
-    const firstBill = batchResults[0];
+    const billsToMerge = batchResults.filter((bill): bill is ScannedBillData => bill !== null);
+    const firstBill = billsToMerge[0];
     let combinedItems: BillItemDTO[] = [];
     let totalSubtotal = 0;
     let totalVat = 0;
     let totalGrand = 0;
     let totalDiscount = 0;
 
-    batchResults.forEach((bill) => {
+    billsToMerge.forEach((bill) => {
       totalSubtotal += Number(bill.subtotal) || 0;
       totalVat += Number(bill.vat_amount) || 0;
       totalGrand += Number(bill.grand_total) || 0;
@@ -1019,6 +1049,16 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
     };
 
     setFormData(mergedBill);
+    formDataRef.current = mergedBill;
+    // Save through the single-bill path; keep source images for preview/recovery.
+    setBatchResults([]);
+    batchResultsRef.current = [];
+    setIsMergedBatch(true);
+    setActiveBatchIndex(0);
+    activeBatchIndexRef.current = 0;
+    setBillImage(batchImages[0]);
+    setPreviewUrl(batchPreviewUrls[0] || null);
+    setErrorMsg(null);
   };
 
   const handlePrevBatchItem = () => {
@@ -1682,7 +1722,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
         [],
         ['── ข้อมูลบิล ────────────────────────────────'],
         ['วันที่รับสินค้า (Receive Date)',   fmtDate(formData.receive_date)],
-        ['ครบกำหนดชำระ (Due Date)',          fmtDate(formData.due_date)],
+        ['วันที่ในบิล (Bill Date)',          fmtDate(formData.due_date)],
         ['เครดิต (Credit Term)',              formData.credit_term || '-'],
         ['ขนส่งโดย (Transport By)',          formData.transport_by || '-'],
         ['สถานะ (Payment Status)',            formData.payment_status || '-'],
@@ -1861,7 +1901,11 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
     setValidationWarnings([]);
     const draftState = isDraftMode;
     setIsDraftMode(false);
-    await handleSaveBill(draftState, true, true);
+    if (batchResults.length > 0 && !isMergedBatch) {
+      await handleSaveAllBatchBills(draftState, true, true);
+    } else {
+      await handleSaveBill(draftState, true, true);
+    }
   };
 
   const handleDismissValidation = () => {
@@ -1870,7 +1914,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   };
 
   const handleSaveBill = async (isDraft = false, skipCheck = false, skipPriceCheck = false) => {
-    if (!formData) return;
+    if (!formData || scanning || saving) return;
 
     if (!skipPriceCheck && !isDraft) {
       const mismatches = getPriceMismatchedItems(formData);
@@ -1996,11 +2040,17 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
               : `บิล ${formData.bill_no || ''} ถูกบันทึกเข้าระบบเรียบร้อยแล้ว`,
       });
       setPriceMismatchedItems([]);
-      await fetchBills();
+      // บิลอาจสร้างซัพพลายเออร์ใหม่อัตโนมัติตอน confirm (FindOrCreateSupplierByName ฝั่ง backend)
+      // ต้องดึงรายชื่อซัพพลายเออร์ใหม่ด้วย ไม่งั้นตารางจะโชว์ "ซัพพลายเออร์ ID: X" แทนชื่อจริง
+      await Promise.all([fetchBills(), fetchSuppliersAndProducts()]);
       setCurrentView('home');
       setFormData(null);
       setEditingBillId(null);
       setPreviewUrl(null);
+      setBatchImages([]);
+      setBatchPreviewUrls([]);
+      setBatchResults([]);
+      batchResultsRef.current = [];
     } catch (err: any) {
       console.error('Error saving bill:', err);
       setErrorMsg(err.message || 'เกิดข้อผิดพลาดในการบันทึกบิลเข้าสู่ระบบ');
@@ -2010,11 +2060,16 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   };
 
   const handleSaveAllBatchBills = async (isDraft = false, skipCheck = false, _skipPriceCheck = false) => {
-    if (batchResults.length === 0) return;
+    if (batchSaveInProgress.current || saving || scanning || isMergedBatch) return;
+    const readyBills = batchResults.flatMap((bill, index) => bill ? [{ bill, index }] : []);
+    if (readyBills.length === 0) {
+      setErrorMsg('ยังไม่มีบิลที่สแกนสำเร็จ กรุณาลองสแกนอีกครั้ง');
+      return;
+    }
 
     if (isDraft && !skipCheck) {
       setIsDraftMode(true);
-      setValidationWarnings([`คุณยืนยันจะบันทึกข้อมูลแบบกลุ่มทั้งหมด (${batchResults.length} บิล) เป็นแบบร่างใช่หรือไม่?`]);
+      setValidationWarnings([`คุณยืนยันจะบันทึกข้อมูลแบบกลุ่มทั้งหมด (${readyBills.length} บิล) เป็นแบบร่างใช่หรือไม่?`]);
       setSaving(false);
       return;
     }
@@ -2022,7 +2077,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
     if (!skipCheck && !isDraft) {
       setIsDraftMode(false);
       const allWarnings: string[] = [];
-      batchResults.forEach((bill, idx) => {
+      readyBills.forEach(({ bill, index: idx }) => {
         const unmapped = bill.items.filter(item => !item.product_id);
         if (unmapped.length > 0) {
           allWarnings.push(`บิลไฟล์ที่ ${idx + 1} (${bill.filename || bill.bill_no}): มีสินค้า ${unmapped.length} รายการยังไม่ได้เทียบรหัสสินค้า`);
@@ -2037,10 +2092,12 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
     }
 
     setSaving(true);
+    batchSaveInProgress.current = true;
     setErrorMsg(null);
 
     let successCount = 0;
-    for (const bill of batchResults) {
+    const savedIndices = new Set<number>();
+    for (const { bill, index } of readyBills) {
       try {
         const formatToRFC3339 = (dateStr?: string | null): string => {
           if (!dateStr || !dateStr.trim()) {
@@ -2095,23 +2152,50 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
 
         await confirmBillImport(bill.db_job_id || 0, payload);
         successCount++;
+        savedIndices.add(index);
       } catch (err) {
         console.error(`Error saving batch bill ${bill.bill_no}:`, err);
       }
     }
 
+    // Remove only confirmed writes. Unscanned files and failed saves stay aligned
+    // with their form data, so retry cannot resend the successful bills.
+    const remainingIndices = Array.from({ length: Math.max(batchImages.length, batchResults.length) }, (_, index) => index)
+      .filter(index => !savedIndices.has(index));
+    const remainingResults = remainingIndices.map(index => batchResults[index] ?? null);
+    const remainingImages = remainingIndices.flatMap(index => batchImages[index] ? [batchImages[index]] : []);
+    const remainingUrls = remainingIndices.map(index => batchPreviewUrls[index] || '');
+    const allSucceeded = remainingIndices.length === 0;
+    setBatchResults(remainingResults);
+    batchResultsRef.current = remainingResults;
+    setBatchImages(remainingImages);
+    batchImagesRef.current = remainingImages;
+    setBatchPreviewUrls(remainingUrls);
+    batchPreviewUrlsRef.current = remainingUrls;
+    setValidationWarnings([]);
+    setIsDraftMode(false);
+    const previousIndex = remainingIndices.indexOf(activeBatchIndex);
+    const nextIndex = previousIndex >= 0 && remainingResults[previousIndex]
+      ? previousIndex : Math.max(0, remainingResults.findIndex(Boolean));
+    setActiveBatchIndex(nextIndex);
+    activeBatchIndexRef.current = nextIndex;
+    setFormData(remainingResults[nextIndex] ?? null);
+    formDataRef.current = remainingResults[nextIndex] ?? null;
+    setBillImage(remainingImages[nextIndex] ?? null);
+    setPreviewUrl(remainingUrls[nextIndex] || null);
     setSaving(false);
-    await fetchBills();
-    const allSucceeded = successCount === batchResults.length;
+    batchSaveInProgress.current = false;
+    await Promise.all([fetchBills(), fetchSuppliersAndProducts()]);
     toast({
       variant: allSucceeded ? 'success' : successCount > 0 ? 'warning' : 'error',
       title: allSucceeded ? 'นำเข้าบิลแบบกลุ่มสำเร็จ' : 'นำเข้าบิลแบบกลุ่มเสร็จสิ้น',
-      message: `บันทึกสำเร็จ ${successCount} จาก ${batchResults.length} บิล`,
+      message: `บันทึกสำเร็จ ${successCount} จาก ${readyBills.length} บิล${allSucceeded ? '' : ' เก็บรายการที่ยังไม่สำเร็จไว้ให้ลองใหม่แล้ว'}`,
     });
-    setCurrentView('home');
-    setFormData(null);
-    setBatchResults([]);
-    setBatchImages([]);
+    if (allSucceeded) {
+      setCurrentView('home');
+    } else {
+      setErrorMsg('ยังมีรายการที่ไม่สำเร็จ ข้อมูลและไฟล์ยังอยู่ กรุณาตรวจสอบแล้วลองสแกนหรือบันทึกอีกครั้ง');
+    }
   };
 
   const getSupplierName = (supplierId: number) => {
@@ -2170,6 +2254,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
           batchImages={batchImages}
           batchProgress={batchProgress}
           batchResults={batchResults}
+          isMergedBatch={isMergedBatch}
           activeBatchIndex={activeBatchIndex}
           handleSelectBatchItem={handleSelectBatchItem}
           handlePrevBatchItem={handlePrevBatchItem}
