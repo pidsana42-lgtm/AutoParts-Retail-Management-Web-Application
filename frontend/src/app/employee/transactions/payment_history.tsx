@@ -595,7 +595,7 @@ export default function PaymentHistoryPage() {
                               type="button"
                               disabled={printingReceiptId === (item.receipt_id || item.receipt_number)}
                               className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100 disabled:opacity-40"
-                              title="พิมพ์/ดาวน์โหลดใบเสร็จของบิลนี้"
+                              title="พิมพ์ใบเสร็จรับเงินของบิลนี้"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handlePrintReceipt(item);

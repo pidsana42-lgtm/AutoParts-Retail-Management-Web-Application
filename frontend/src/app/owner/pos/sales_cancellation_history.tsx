@@ -34,7 +34,7 @@ import { SalesCancellationStatusBadge } from "../../../components/elements/statu
 import { useOwnerSalesCancellationHistory } from "./hooks/useOwnerSalesCancellationHistory";
 import { useSalesHistory } from "../../employee/pos/hooks/useSalesHistory";
 import { posApiService } from "../../../service/http/pos/pos_service";
-import { downloadPdfBlob } from "../../../utils/payment_history_print";
+import { autoPrintPdfBlob } from "../../../utils/payment_history_print";
 import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
 
 const OwnerSalesCancellationHistory: React.FC = () => {
@@ -101,7 +101,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
       const blob = await posApiService.printOrderReceipt(orderId);
       const rawNum = orderNumber || `INV-${orderId}`;
       const fileName = String(rawNum).endsWith(".pdf") ? `${rawNum}` : `${rawNum}.pdf`;
-      downloadPdfBlob(blob, fileName);
+      autoPrintPdfBlob(blob, fileName);
     } catch (err) {
       console.error("Failed to print receipt:", err);
       alert("ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง");
@@ -447,7 +447,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                           <button
                             type="button"
                             disabled={printingOrderId === item.id}
-                            title="พิมพ์/ดาวน์โหลดใบเสร็จที่ยกเลิก (Void Receipt)"
+                            title="พิมพ์ใบเสร็จที่ยกเลิก (Void Receipt)"
                             onClick={(e) => {
                               e.stopPropagation();
                               handlePrintReceipt(item.id, item.order_number);
@@ -873,17 +873,6 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                               )}
                             </div>
                           </Card>
-
-                          {/* <Button
-                            type="button"
-                            variant="outline-cancel"
-                            onClick={() => handlePrintReceipt(orderDetail.id, orderDetail.order_number)}
-                            disabled={printingOrderId === orderDetail.id}
-                            className="w-full text-xs h-10 font-normal rounded-none flex items-center justify-center gap-2 cursor-pointer shadow-sm border border-gray-300 hover:bg-gray-50"
-                          >
-                            <Printer className={cn("w-4 h-4 text-[#E51C23]", printingOrderId === orderDetail.id && "animate-pulse")} />
-                            <span>พิมพ์ใบเสร็จที่ยกเลิก (เอกสารหลักฐาน)</span>
-                          </Button> */}
 
                           <Button
                             type="button"

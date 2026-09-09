@@ -35,7 +35,7 @@ import { useSalesHistory } from "./hooks/useSalesHistory";
 import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
 import { useUserRole } from "../../../hooks/useUserRole";
 import { posApiService } from "../../../service/http/pos/pos_service";
-import { downloadPdfBlob } from "../../../utils/payment_history_print";
+import { autoPrintPdfBlob } from "../../../utils/payment_history_print";
 
 const SalesCancellationHistory: React.FC = () => {
     const navigate = useNavigate();
@@ -101,7 +101,7 @@ const SalesCancellationHistory: React.FC = () => {
             const blob = await posApiService.printOrderReceipt(orderId);
             const rawNum = orderNumber || `INV-${orderId}`;
             const fileName = String(rawNum).endsWith(".pdf") ? `${rawNum}` : `${rawNum}.pdf`;
-            downloadPdfBlob(blob, fileName);
+            autoPrintPdfBlob(blob, fileName);
         } catch (err) {
             console.error("Failed to print receipt:", err);
             alert("ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง");
@@ -799,6 +799,27 @@ const SalesCancellationHistory: React.FC = () => {
                     </CardContent>
                   </Card>
 
+                  {/* ปุ่มพิมพ์ใบเสร็จที่ยกเลิก (Void Receipt) */}
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() =>
+                      handlePrintReceipt(
+                        orderDetail.id || orderDetail.order_number,
+                        orderDetail.order_number
+                      )
+                    }
+                    disabled={printingOrderId !== null}
+                    className="w-full text-xs h-10 font-normal flex items-center justify-center gap-1.5 shadow-sm bg-[#1C1B1B] hover:bg-zinc-800 text-white cursor-pointer rounded-none"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>
+                      {printingOrderId !== null
+                        ? "กำลังเตรียมพิมพ์..."
+                        : "พิมพ์ใบเสร็จที่ยกเลิก (Void Receipt)"}
+                    </span>
+                  </Button>
+
                   {/* Dynamic Cancel Form / Status Section */}
                   {(() => {
                     if (!orderDetail) return null;
@@ -973,17 +994,6 @@ const SalesCancellationHistory: React.FC = () => {
                               )}
                             </div>
                           </Card>
-
-                          {/* <Button
-                            type="button"
-                            variant="outline-cancel"
-                            onClick={() => handlePrintReceipt(orderDetail.id, orderDetail.order_number)}
-                            disabled={printingOrderId === orderDetail.id}
-                            className="w-full text-xs h-10 font-normal rounded-none flex items-center justify-center gap-2 cursor-pointer shadow-sm border border-gray-300 hover:bg-gray-50"
-                          >
-                            <Printer className={cn("w-4 h-4 text-[#E51C23]", printingOrderId === orderDetail.id && "animate-pulse")} />
-                            <span>พิมพ์ใบเสร็จที่ยกเลิก (เอกสารหลักฐาน)</span>
-                          </Button> */}
 
                           <Button
                             type="button"
