@@ -801,8 +801,9 @@ export default function SettleBillsPage(): React.JSX.Element {
                 {paymentMethodId === 2 && (
                   <div className="bg-white p-6 border border-[#E7BDB8]/50">
                     <div className="grid grid-cols-2 gap-4">
-                      {/* กรอบรูป QR Code จริง */}
+                      {/* ฝั่งซ้าย (ปรับสไตล์ให้เหมือนตัวอย่างที่สมดุล) */}
                       <div className="flex flex-col items-center justify-between h-full">
+                        {/* กรอบรูป QR Code */}
                         <div className="relative w-52 h-52 flex items-center justify-center">
                           {isLoadingQR ? (
                             <div className="flex flex-col items-center justify-center space-y-2">
@@ -829,52 +830,48 @@ export default function SettleBillsPage(): React.JSX.Element {
                             </div>
                           )}
                         </div>
-                        <div className="text-center space-y-1 w-full max-w-55">
-                          <Text variant="small" className="font-medium text-[#1C1B1B] leading-tight block mb-0">
-                            {qrCodeData?.promptPayName || "เจเจ อะไหล่ยนต์"}
-                          </Text>
-                          <Text variant="xs" className="font-normal text-[#6B7280] leading-tight block mb-0">
-                            พร้อมเพย์ชำระยอดหนี้
-                          </Text>
+
+                        {/* ข้อความใต้ QR Code (ปรับโครงสร้างและสไตล์ให้เหมือนตัวอย่าง) */}
+                        <div className="flex-1 flex flex-col items-center justify-end text-center space-y-2.5 w-full max-w-[220px] pt-3">
+                          {/* ชื่อพร้อมเพย์ / ร้านค้า */}
+                          <div className="space-y-1">
+                            <Text variant="xs" className="font-medium text-[#1C1B1B] truncate block">
+                              {qrCodeData?.promptPayName || "เจเจ อะไหล่ยนต์"}
+                            </Text>
+                            <Text variant="xs" className="text-[#6B7280] leading-tight block">
+                              พร้อมเพย์ชำระยอดหนี้
+                            </Text>
+                          </div>
 
                           {/* ข้อมูลบัญชีธนาคารประกอบ */}
                           {qrCodeData?.bankAccountNumber && (
-                            <div className="mt-2 pt-1.5 border-t border-dashed border-gray-200 text-left bg-slate-50 p-2 border border-slate-200/60">
-                              <div className="text-[11px] font-medium text-slate-700 truncate">
+                            <div className="w-full pt-2.5 border-t border-gray-100 space-y-1">
+                              <Text variant="xs" className="font-medium text-[#1C1B1B] truncate block">
                                 {qrCodeData.bankName || "บัญชีธนาคาร"}
-                              </div>
-                              <div className="flex items-center justify-between gap-1 text-[11px] font-mono text-slate-900 mt-0.5">
-                                <span className="tracking-wide font-semibold">{qrCodeData.bankAccountNumber}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (qrCodeData?.bankAccountNumber) {
-                                      navigator.clipboard.writeText(qrCodeData.bankAccountNumber.replace(/-/g, ""));
-                                      alert("คัดลอกเลขที่บัญชีแล้ว");
-                                    }
-                                  }}
-                                  className="text-[10px] text-red-600 hover:underline shrink-0 font-sans cursor-pointer"
-                                >
-                                  คัดลอก
-                                </button>
-                              </div>
+                              </Text>
+                                <Text variant="xs" className="text-[#6B7280] truncate block">
+                                  {qrCodeData.bankAccountNumber}
+                                </Text>
                               {qrCodeData.bankAccountName && (
-                                <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                                  ชื่อ: {qrCodeData.bankAccountName}
-                                </div>
+                                <Text variant="xs" className="text-[#6B7280] truncate block">
+                                  {qrCodeData.bankAccountName}
+                                </Text>
                               )}
                             </div>
                           )}
 
+                          {/* Ref No. ด้านล่างสุด */}
                           {qrCodeData?.refNo && (
-                            <span className="text-[10px] text-gray-400 font-mono block truncate mt-1">
-                              Ref: {qrCodeData.refNo}
-                            </span>
+                            <div className="pt-2.5 w-full border-t border-dashed border-gray-100">
+                              <Text variant="xs" className="font-light text-gray-400 block truncate">
+                                Ref: {qrCodeData.refNo}
+                              </Text>
+                            </div>
                           )}
                         </div>
                       </div>
 
-                      {/* รายละเอียดฝั่งขวา */}
+                      {/* ฝั่งขวา (คงโครงสร้างเดิมที่ถูกต้องไว้) */}
                       <div className="flex flex-col justify-between h-full">
                         {/* 1. กล่องยอดชำระสุทธิ (ขอบล่างตรงกับกรอบ QR Code) */}
                         <div className="h-52 flex flex-col justify-end pb-5">
