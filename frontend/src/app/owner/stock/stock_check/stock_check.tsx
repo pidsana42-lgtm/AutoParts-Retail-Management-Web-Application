@@ -13,6 +13,7 @@ import {
   ChevronsRight,
 } from "lucide-react";
 import { ToastProvider, useToast } from "../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 import Heading from "../../../../components/elements/heading";
 import Text from "../../../../components/elements/text";
 import { Card } from "../../../../components/elements/card";
@@ -47,6 +48,7 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
 function StockCheckContent() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
 
   const [loading, setLoading] = useState(true);
   const [schedules, setSchedules] = useState<CheckStockSchedule[]>([]);
@@ -95,7 +97,10 @@ function StockCheckContent() {
   };
 
   const handleDelete = async (sc: CheckStockSchedule) => {
-    const confirmed = window.confirm(`ต้องการลบตารางเช็คสต็อกวันที่ ${new Date(sc.scheduled_datetime).toLocaleDateString("th-TH")} ใช่หรือไม่?`);
+    const confirmed = await confirmDialog(
+      `ต้องการลบตารางเช็คสต็อกวันที่ ${new Date(sc.scheduled_datetime).toLocaleDateString("th-TH")} ใช่หรือไม่? ผลการนับที่บันทึกไว้ในตารางนี้จะถูกลบไปด้วย และกู้คืนไม่ได้`,
+      { title: "ลบตารางเช็คสต็อก", confirmText: "ลบตาราง", variant: "danger", icon: Trash2 }
+    );
     if (!confirmed) return;
 
     try {
@@ -128,6 +133,16 @@ function StockCheckContent() {
     const completed = schedules.filter((s) => s.status === "เสร็จสิ้น").length;
     return { pending, checking, awaitingReview, completed, total: schedules.length };
   }, [schedules]);
+
+  // กดการ์ดสรุปสถานะไหนก็กรองตามสถานะนั้นได้เลย (สถานะว่าง = ล้างตัวกรองสถานะ กลับไปดูทั้งหมด) — เคลียร์ตัวกรองอื่น
+  // (ค้นหา/วันที่/โซน/ประเภท) ไปด้วยเสมอ กันกรณีตัวกรองเหล่านั้นค้างอยู่แล้วบังรายการที่ตัวเลขบนการ์ดสัญญาไว้
+  const selectStatusFilter = (status: string) => {
+    setSearch("");
+    setDateFilter("");
+    setZoneFilter("");
+    setCategoryFilter("");
+    setStatusQuickFilter(status);
+  };
 
   // สินค้าทั้งหมดที่อยู่ในโซน/ตู้/ชั้นระดับที่เลือกไว้ในตัวกรอง (คำนวณครั้งเดียว ไม่ใช่วนต่อแถวตาราง)
   const zoneFilterProductIds = useMemo(() => {
@@ -247,40 +262,68 @@ function StockCheckContent() {
         </Button>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards — กดได้เลย ทำหน้าที่เป็นตัวกรองสถานะด่วนไปในตัว (แบบเดียวกับหน้าการเคลื่อนไหวของคลังสินค้า) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Card className="flex h-24 flex-col justify-center border-l-[5px] border-l-slate-400 p-5">
+        <button
+          type="button"
+          onClick={() => selectStatusFilter("")}
+          className={cn(
+            "flex h-24 cursor-pointer flex-col justify-center rounded-none border-l-[5px] border-l-black p-5 text-left shadow-sm transition-colors",
+            statusQuickFilter === "" ? "bg-slate-100" : "bg-white hover:bg-gray-50"
+          )}
+        >
+          <p className="text-sm font-medium text-[#6B7280]">ตารางตรวจสอบทั้งหมด</p>
+          <p className="mt-1 text-2xl font-bold text-gray-900">{stats.total}</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => selectStatusFilter("รอดำเนินการ")}
+          className={cn(
+            "flex h-24 cursor-pointer flex-col justify-center rounded-none border-l-[5px] border-l-slate-400 p-5 text-left shadow-sm transition-colors",
+            statusQuickFilter === "รอดำเนินการ" ? "bg-slate-50" : "bg-white hover:bg-gray-50"
+          )}
+        >
           <p className="text-sm font-medium text-[#6B7280]">รอดำเนินการ</p>
           <p className="mt-1 text-2xl font-bold text-gray-900">{stats.pending}</p>
-        </Card>
-        <Card className="flex h-24 flex-col justify-center border-l-[5px] border-l-red-600 p-5">
+        </button>
+        <button
+          type="button"
+          onClick={() => selectStatusFilter("กำลังเช็ค")}
+          className={cn(
+            "flex h-24 cursor-pointer flex-col justify-center rounded-none border-l-[5px] border-l-red-600 p-5 text-left shadow-sm transition-colors",
+            statusQuickFilter === "กำลังเช็ค" ? "bg-red-50" : "bg-white hover:bg-gray-50"
+          )}
+        >
           <p className="text-sm font-medium text-[#6B7280]">กำลังเช็ค</p>
           <p className="mt-1 text-2xl font-bold text-gray-900">{stats.checking}</p>
-        </Card>
-        <Card className="flex h-24 flex-col justify-center border-l-[5px] border-l-blue-500 p-5">
+        </button>
+        <button
+          type="button"
+          onClick={() => selectStatusFilter("รอตรวจสอบ")}
+          className={cn(
+            "flex h-24 cursor-pointer flex-col justify-center rounded-none border-l-[5px] border-l-blue-500 p-5 text-left shadow-sm transition-colors",
+            statusQuickFilter === "รอตรวจสอบ" ? "bg-blue-50" : "bg-white hover:bg-gray-50"
+          )}
+        >
           <p className="text-sm font-medium text-[#6B7280]">รอตรวจสอบ (พนักงานส่งแล้ว)</p>
           <p className="mt-1 text-2xl font-bold text-gray-900">{stats.awaitingReview}</p>
-        </Card>
-        <Card className="flex h-24 flex-col justify-center border-l-[5px] border-l-emerald-500 p-5">
+        </button>
+        <button
+          type="button"
+          onClick={() => selectStatusFilter("เสร็จสิ้น")}
+          className={cn(
+            "flex h-24 cursor-pointer flex-col justify-center rounded-none border-l-[5px] border-l-emerald-500 p-5 text-left shadow-sm transition-colors",
+            statusQuickFilter === "เสร็จสิ้น" ? "bg-emerald-50" : "bg-white hover:bg-gray-50"
+          )}
+        >
           <p className="text-sm font-medium text-[#6B7280]">เสร็จสิ้น (วันนี้)</p>
           <p className="mt-1 text-2xl font-bold text-gray-900">{stats.completed}</p>
-        </Card>
-        <Card className="flex h-24 flex-col justify-center border-l-[5px] border-l-black p-5">
-          <p className="text-sm font-medium text-[#6B7280]">ตารางเช็คทั้งหมด</p>
-          <p className="mt-1 text-2xl font-bold text-gray-900">{stats.total}</p>
-        </Card>
+        </button>
       </div>
 
-      {stats.awaitingReview > 0 && (
+      {stats.awaitingReview > 0 && statusQuickFilter !== "รอตรวจสอบ" && (
         <div
-          onClick={() => {
-            // เคลียร์ตัวกรองอื่นด้วย กันกรณีค้นหา/กรองโซนค้างอยู่แล้วบังรายการที่ต้องการเห็น
-            setSearch("");
-            setDateFilter("");
-            setZoneFilter("");
-            setCategoryFilter("");
-            setStatusQuickFilter("รอตรวจสอบ");
-          }}
+          onClick={() => selectStatusFilter("รอตรวจสอบ")}
           className="flex cursor-pointer items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-5 py-3 text-sm text-blue-700 transition hover:border-blue-300"
         >
           <span>

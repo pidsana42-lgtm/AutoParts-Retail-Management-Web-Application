@@ -203,9 +203,7 @@ const NewReturnPage: React.FC = () => {
         variant: "error",
         duration: 4000,
       });
-      setTimeout(() => {
-        navigate(`${basePath}/returns`);
-      }, 4000);
+      // Keep the entered return on screen so the user can correct or retry it.
     } finally {
       setIsSending(false);
     }

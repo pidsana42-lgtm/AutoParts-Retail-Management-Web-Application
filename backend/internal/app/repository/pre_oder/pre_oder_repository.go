@@ -138,7 +138,12 @@ func (r *preOrderRepository) UpdatePreOrder(preOrder *entity.PreOrder) error {
 			return err
 		}
 		// 2. บันทึก parent และบันทึกไอเทมใหม่
-		return tx.Session(&gorm.Session{FullSaveAssociations: true}).Save(preOrder).Error
+		// Omit("Customer", "Supplier"): preOrder ที่ส่งเข้ามาถูกสร้างจาก GetPreOrderByID() ซึ่ง Preload
+		// เอาไว้เต็มๆ (รวมถึง PreOrderItems.Product.Inventories.Supplier) ถ้าใช้ FullSaveAssociations
+		// เฉยๆ GORM จะ cascade เขียนทับ/สร้างซ้ำ Customer, Supplier (และข้อมูลที่ preload มาแบบเก่า)
+		// กลับเข้าตารางของมันเองด้วย ทั้งที่เราต้องการแค่แก้ field ของ PreOrder เองกับ PreOrderItems เท่านั้น
+		// (สาเหตุของ 500 ตอนแก้ไขพรีออเดอร์: ค่า preload เก่าไปชนกับ unique constraint ตอน cascade save)
+		return tx.Omit("Customer", "Supplier").Save(preOrder).Error
 	})
 }
 

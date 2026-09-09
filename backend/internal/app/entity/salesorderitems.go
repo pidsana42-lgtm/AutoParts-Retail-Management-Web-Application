@@ -37,6 +37,11 @@ type SaleOrderItem struct {
 	Note string `gorm:"type:varchar(255)" json:"note"`
 
 	// เพิ่ม 2 ฟิลด์ใหม่นี้เข้าไปท้าย Struct เพื่อรองรับการกระจายเงินเฉลี่ยท้ายบิล
-    AllocatedBillDiscount float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"allocated_bill_discount"`
-    NetSubtotal           float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"net_subtotal"`
+	AllocatedBillDiscount float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"allocated_bill_discount"`
+	NetSubtotal           float64 `gorm:"type:decimal(15,2);not null;default:0.00" json:"net_subtotal"`
+
+	// SupplierID: มีค่าเฉพาะตอนที่บาร์โค้ด/รหัสล็อตที่แสกน-พิมพ์ค้นหาตรงกับ Inventory ของ Supplier เจาะจงเท่านั้น
+	// (nil = ไม่ทราบว่าขายจากล็อตของเจ้าไหน เช่น ค้นด้วยชื่อ/รหัสสินค้ากลางทั่วไป) ใช้หักคงเหลือต่อบริษัทให้ตรงเจ้าจริง
+	SupplierID *uint     `json:"supplier_id,omitempty"`
+	Supplier   *Supplier `gorm:"foreignKey:SupplierID" json:"supplier,omitempty"`
 }

@@ -13,7 +13,6 @@ type Product struct {
 	Product_Code    string    `json:"product_code"`
 	Part_Number     string    `json:"part_number"`
 	Product_Name    string    `json:"product_name"`
-	Barcode         string    `json:"barcode"`
 	Quantity        int       `json:"quantity"`
 	Limit_Quantity  int       `json:"limit_quantity"`
 	Sale_price      float64   `json:"sale_price"`
@@ -55,9 +54,6 @@ type Product struct {
 
 func (p *Product) BeforeCreate(tx *gorm.DB) error {
 	if p.Product_Code != "" {
-		if p.Barcode == "" {
-			p.Barcode = p.Product_Code
-		}
 		return nil
 	}
 
@@ -136,11 +132,6 @@ func (p *Product) BeforeCreate(tx *gorm.DB) error {
 
 	// 5. Combine into final product code
 	p.Product_Code = fmt.Sprintf("%s%s%s-%05d", catPrefix, subPrefix, subSubPrefix, runningNumber)
-
-	// 6. Fallback barcode to product code if empty
-	if p.Barcode == "" {
-		p.Barcode = p.Product_Code
-	}
 
 	return nil
 }
