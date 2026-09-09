@@ -2,11 +2,13 @@ package claim
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	claimDTO "backend/internal/app/dto/claim"
+	"backend/internal/app/entity"
 	claimRepo "backend/internal/app/repository/claim"
 	svcNotification "backend/internal/app/service/notification"
 )
@@ -43,8 +45,10 @@ func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomer
 	claimEntity.CreatedBy = createdBy
 
 	// ตั้ง ClaimNo = CLM-{order_number}
+	var originalOrder *entity.SaleOrder
 	if order, err := s.soRepo.GetSaleOrderByID(input.OriginalOrderID); err == nil {
 		claimEntity.ClaimNo = "CLM-" + order.OrderNumber
+		originalOrder = order
 	} else {
 		claimEntity.ClaimNo = fmt.Sprintf("CLM-%d", input.OriginalOrderID)
 	}
@@ -83,6 +87,10 @@ func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomer
 		); err != nil {
 			fmt.Printf("[Notification] failed to notify owners (claim %d): %v\n", claimEntity.ID, err)
 		}
+	}
+
+	if originalOrder != nil {
+		claimEntity.OriginalOrder = originalOrder
 	}
 
 	return claimDTO.ToCustomerClaimResponseDTO(&claimEntity), nil
@@ -194,6 +202,9 @@ func (s *customerClaimService) UpdateCustomerClaimItem(id uint, input claimDTO.U
 	if err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
+	if existing.Resolution == "COMPLETED" || strings.Contains(existing.Resolution, "ส่งมอบ") || strings.Contains(existing.Resolution, "สำเร็จ") {
+		return claimDTO.CustomerClaimItemResponseDTO{}, errors.New("รายการเคลมนี้ถูกส่งมอบลูกค้าแล้ว ไม่สามารถแก้ไขได้อีก")
+	}
 	if input.Qty > 0 {
 		existing.Qty = uint(input.Qty)
 	}
@@ -223,6 +234,9 @@ func (s *customerClaimService) UpdateCustomerClaimItemStatus(id uint, status str
 	existing, err := s.repo.GetCustomerClaimItemByID(id)
 	if err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
+	}
+	if existing.Resolution == "COMPLETED" || strings.Contains(existing.Resolution, "ส่งมอบ") || strings.Contains(existing.Resolution, "สำเร็จ") {
+		return claimDTO.CustomerClaimItemResponseDTO{}, errors.New("รายการเคลมนี้ถูกส่งมอบลูกค้าแล้ว ไม่สามารถแก้ไขได้อีก")
 	}
 	existing.Status = status
 	if err := s.repo.UpdateCustomerClaimItem(existing); err != nil {

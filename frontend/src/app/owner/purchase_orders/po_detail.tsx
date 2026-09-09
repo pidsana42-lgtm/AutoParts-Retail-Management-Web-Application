@@ -1,3 +1,4 @@
+import { isValidQuantity, validatePurchaseOrder } from './validation';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useParams } from 'react-router-dom';
 import { Building2, ChevronRight, ClipboardClock, FileText, User, Trash2, Minus, Plus, Search, ChevronDown, MessageSquareWarning } from 'lucide-react';
@@ -87,6 +88,14 @@ function OrderDetail() {
     const [removeConfirm, setRemoveConfirm] = useState<{ key: number | string; reason: 'manual' | 'zero-qty' } | null>(null);
     // เก็บค่าที่ผู้ใช้กำลังพิมพ์อยู่ (ระหว่างลบเลขเดิมทิ้งแล้วยังพิมพ์ไม่เสร็จ) แยกจาก items จริง
     const [qtyDrafts, setQtyDrafts] = useState<Record<string | number, string>>({});
+    const [showValidation, setShowValidation] = useState(false);
+    const validationErrors = validatePurchaseOrder(po?.supplier_id ?? '', items, qtyDrafts);
+    const validateForm = () => {
+        setShowValidation(true);
+        if (validationErrors.length === 0) return true;
+        toast({ title: 'กรุณาตรวจสอบข้อมูลใบสั่งซื้อ', message: validationErrors[0], variant: 'warning' });
+        return false;
+    };
     // เก็บ id ของรายการที่ "มีอยู่แล้วจริงใน DB" ตอนโหลดหน้ามาครั้งแรก
     // ใช้แยกว่ารายการไหนเป็นของเดิม (ต้องส่ง id ตอนบันทึก) กับรายการที่เพิ่งเพิ่มระหว่างแก้ไข (ไม่ส่ง id ให้ backend สร้างเอง)
     const [initialItemIds, setInitialItemIds] = useState<Set<number>>(new Set());
@@ -149,9 +158,10 @@ function OrderDetail() {
     const totalAmount = items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_price || 0)), 0);
 
     const handleApprove = async () => {
-        if (!id) return;
+        if (!id || activeAction || removeConfirm || !validateForm()) return;
         setActiveAction('approve');
         try {
+            await savePOChanges();
             await poService.updatePOStatus(id, 'APPROVED');
             toast({ title: 'ดำเนินการสำเร็จ', message: 'อนุมัติใบสั่งซื้อสำเร็จ', variant: 'success' });
             navigate(`${basePath}/orders`);
@@ -228,26 +238,12 @@ function OrderDetail() {
         const raw = qtyDrafts[key];
         if (raw === undefined) return; // ไม่ได้แก้ไขอะไร ไม่ต้องทำอะไรต่อ
         const trimmed = raw.trim();
-        // พิมพ์ไม่เสร็จ/ลบจนว่างแล้วไม่พิมพ์ต่อ -> เอาค่าตัวเลขเดิมกลับไปเลย ไม่ต้องเตือน
-        if (trimmed === '' || isNaN(Number(trimmed))) {
-            setQtyDrafts(prev => {
-                const next = { ...prev };
-                delete next[key];
-                return next;
-            });
+        // เก็บค่าที่ไม่ถูกต้องไว้ให้แก้ไข และป้องกันการบันทึกค่าเดิมแทน
+        if (!isValidQuantity(Number(trimmed))) {
+            setShowValidation(true);
             return;
         }
         const value = Number(trimmed);
-        if (value <= 0) {
-            setRemoveConfirm({ key, reason: 'zero-qty' });
-            // ไม่ว่าจะยืนยันหรือยกเลิก ก็เคลียร์ draft ทิ้ง (ถ้าไม่ลบ ตัวเลขจะกลับไปเป็นค่าเดิมของ item)
-            setQtyDrafts(prev => {
-                const next = { ...prev };
-                delete next[key];
-                return next;
-            });
-            return;
-        }
         handleItemChange(key, 'quantity', value);
         setQtyDrafts(prev => {
             const next = { ...prev };
@@ -278,7 +274,7 @@ function OrderDetail() {
                 return {
                     id: isExistingItem ? Number(item.id) : undefined,
                     product_id: Number(item.product_id),
-                    quantity: Number(item.quantity),
+                    quantity: Number(qtyDrafts[item.id] ?? item.quantity),
                     unit_price: Number(item.unit_price),
                     pre_order_item_id: item.pre_order_item_id ? Number(item.pre_order_item_id) : undefined,
                     alert_id: item.alert_id ? Number(item.alert_id) : undefined
@@ -292,12 +288,13 @@ function OrderDetail() {
         }));
         setPo(prev => prev ? { ...prev, ...updated, po_items: formattedUpdatedItems } : prev);
         setItems(formattedUpdatedItems);
+        setQtyDrafts({});
         setInitialItemIds(new Set(formattedUpdatedItems.map((item: LocalPOItem) => item.id)));
     };
 
     // บันทึกฉบับร่าง (ไม่เปลี่ยนสถานะ)
     const handleSaveEdit = async () => {
-        if (!id) return;
+        if (!id || activeAction || removeConfirm || !validateForm()) return;
         setActiveAction('draft');
         try {
             await savePOChanges();
@@ -312,7 +309,7 @@ function OrderDetail() {
 
     // Owner อนุมัติทันที ส่วน Employee ส่งเข้า PENDING เพื่อรอ Owner อนุมัติ
     const handleSubmitForApproval = async () => {
-        if (!id) return;
+        if (!id || activeAction || removeConfirm || !validateForm()) return;
         setActiveAction('submit');
         try {
             await savePOChanges();
@@ -337,6 +334,14 @@ function OrderDetail() {
 
     return (
         <div className='p-8 space-y-6 bg-white min-h-screen relative pb-28'>
+            {showValidation && validationErrors.length > 0 && (
+                <div role="alert" className="border border-red-300 bg-red-50 p-4 text-sm text-red-700">
+                    <p className="font-medium">กรุณาตรวจสอบข้อมูลใบสั่งซื้อ</p>
+                    <ul className="list-disc pl-5 mt-2">
+                        {validationErrors.map(message => <li key={message}>{message}</li>)}
+                    </ul>
+                </div>
+            )}
             { /* Header */ }
             <div className='flex items-center justify-between'>
                 <div className='flex-col space-y-2'>
@@ -569,6 +574,7 @@ function OrderDetail() {
                             <input
                                 type='number'
                                 min={1}
+                                step={1}
                                 placeholder='จำนวน'
                                 value={addQuantity}
                                 onChange={(e) => setAddQuantity(e.target.value === '' ? '' : Number(e.target.value))}

@@ -48,6 +48,7 @@ type CustomerClaimResponseDTO struct {
 	ID              uint                           `json:"id"`
 	ClaimNo         string                         `json:"claim_no"`
 	OriginalOrderID uint                           `json:"original_order_id"`
+	OrderNumber     string                         `json:"order_number"`
 	CustomerName    string                         `json:"customer_name"`
 	CustomerPhone   string                         `json:"customer_phone"`
 	ClaimType       string                         `json:"claim_type"`
@@ -186,10 +187,21 @@ func ToCustomerClaimResponseDTO(m *entity.CustomerClaim) CustomerClaimResponseDT
 		}
 	}
 
+	orderNumber := ""
+	if m.OriginalOrder != nil && m.OriginalOrder.OrderNumber != "" {
+		orderNumber = m.OriginalOrder.OrderNumber
+	} else if strings.HasPrefix(m.ClaimNo, "CLM-") {
+		candidate := strings.TrimPrefix(m.ClaimNo, "CLM-")
+		if candidate != "" && !strings.HasPrefix(candidate, "TEST") {
+			orderNumber = candidate
+		}
+	}
+
 	return CustomerClaimResponseDTO{
 		ID:              m.ID,
 		ClaimNo:         m.ClaimNo,
 		OriginalOrderID: m.OriginalOrderID,
+		OrderNumber:     orderNumber,
 		CustomerName:    customerName,
 		CustomerPhone:   m.CustomerPhone,
 		ClaimType:       m.ClaimType,
