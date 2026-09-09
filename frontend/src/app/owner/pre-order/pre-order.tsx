@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import apiClient from '../../../service/http/apiClient';
 import { 
   Plus, Search, Edit, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Save,
   FileText, BookOpen, Building2, X,
-  Loader2, AlertCircle, ImageIcon, Package
+  Loader2, AlertCircle, ImageIcon, Package, ClockAlert
 } from 'lucide-react';
 import {
   getPreOrders, getPreOrderById, createPreOrder,
@@ -12,10 +12,12 @@ import {
 } from '../../../service/http/pre-order/pre-order';
 import type{ PreOrder, PreOrderItem } from '../../../interface/pre-order/pre-order';
 import Heading from '../../../components/elements/heading';
-import Card from '../../../components/elements/card';
+import Card, { CardHeader, CardTitle, CardContent } from '../../../components/elements/card';
 import Select from '../../../components/elements/select';
 import Button from '../../../components/elements/button';
 import ConfirmDialog from '../../../components/elements/confirm_dialog';
+import { Badge } from '../../../components/elements/badge';
+import Input from '../../../components/elements/input';
 import { useToast } from '../../../components/elements/toast';
 import GenericTable, { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import type { Product } from '../../../interface/import';
@@ -529,35 +531,40 @@ export default function PreOrderManager() {
     };
   };
 
-  const filteredOrders = preOrders.filter(po => {
+  const matchesSearchQuery = (po: PreOrder) => {
     const cust = getCustomerInfo(po);
     const q = searchQuery.toLowerCase();
-    const matchesSearch = (
-      cust.name.toLowerCase().includes(q) || 
-      cust.phone.includes(q) || 
+    return (
+      cust.name.toLowerCase().includes(q) ||
+      cust.phone.includes(q) ||
       String(po.id).includes(q) ||
       `PRE-${String(po.id).padStart(5, '0')}`.toLowerCase().includes(q) ||
       (po.po_number && po.po_number.toLowerCase().includes(q))
     );
+  };
 
-    if (!matchesSearch) return false;
-
-    if (!statusFilter) return true;
-    if (statusFilter === 'PO_PENDING') {
+  const matchesStatusFilter = (po: PreOrder, status: string) => {
+    if (!status) return true;
+    if (status === 'PO_PENDING') {
       return (
-        po.status === 'PO_PENDING' || 
-        po.status === 'PENDING' || 
-        po.po_status === 'PENDING' || 
-        po.po_status === 'DRAFT' || 
+        po.status === 'PO_PENDING' ||
+        po.status === 'PENDING' ||
+        po.po_status === 'PENDING' ||
+        po.po_status === 'DRAFT' ||
         !po.po_status
       );
     }
-    if (statusFilter === 'ORDERED') {
+    if (status === 'ORDERED') {
       return po.status === 'ORDERED' || po.po_status === 'APPROVED';
     }
+    return po.status === status;
+  };
 
-    return po.status === statusFilter;
-  });
+  const filteredOrders = preOrders.filter(po => matchesSearchQuery(po) && matchesStatusFilter(po, statusFilter));
+
+  const allCount = preOrders.filter(matchesSearchQuery).length;
+  const pendingApprovalCount = preOrders.filter(po => matchesSearchQuery(po) && matchesStatusFilter(po, 'PO_PENDING')).length;
+  const awaitingStockCount = preOrders.filter(po => matchesSearchQuery(po) && matchesStatusFilter(po, 'ORDERED')).length;
 
   const totalItems = filteredOrders.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
@@ -620,24 +627,18 @@ export default function PreOrderManager() {
       render: (po: PreOrder) => {
         if (po.status === 'COMPLETED') {
           return (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-[#259b24]/10 text-[#259b24] border border-[#259b24]/30">
-              ส่งมอบแล้ว
-            </span>
+            <Badge variant="success" size="auto">ส่งมอบแล้ว</Badge>
           );
         }
         if (po.status === 'CANCELLED') {
           return (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-red-50 text-[#e51c23] border border-red-200">
-              ยกเลิก
-            </span>
+            <Badge variant="error" size="auto">ยกเลิก</Badge>
           );
         }
         if (po.status === 'ORDERED' || po.po_status === 'APPROVED') {
           return (
             <div className="flex flex-col items-start gap-0.5">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                รอสินค้า
-              </span>
+              <Badge variant="info" size="auto">รอสินค้า</Badge>
               {po.po_number && (
                 <span className="text-[10px] text-[#5F5E5E] font-mono font-semibold">
                   PO: {po.po_number}
@@ -648,9 +649,7 @@ export default function PreOrderManager() {
         }
         return (
           <div className="flex flex-col items-start gap-0.5">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-              รออนุมัติสั่งซื้อ
-            </span>
+            <Badge variant="warning" size="auto">รออนุมัติสั่งซื้อ</Badge>
             {po.po_number && (
               <span className="text-[10px] text-[#5F5E5E] font-mono font-semibold">
                 PO: {po.po_number}
@@ -719,39 +718,49 @@ export default function PreOrderManager() {
 
           {/* Table Container Card */}
           <Card className="overflow-hidden border border-gray-200 shadow-xs" noPadding>
-            {/* Header Toolbar: Search on Left, Filter Tabs on Right */}
+            {/* Header Toolbar: Search */}
             <div className="p-4 bg-gray-50/80 border-b border-gray-200 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
-              <div className="relative flex-1 min-w-[240px]">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
+              <div className="relative flex-1 min-w-60">
+                <Input
                   type="text"
                   placeholder="ค้นหาชื่อลูกค้า, เบอร์โทร, เลขใบจอง หรือเลข PO..."
                   value={searchQuery}
                   onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                  className="w-full bg-white border border-gray-300 rounded-none pl-9 pr-3 py-2 text-xs font-medium text-[#1C1B1B] focus:border-[#e51c23] outline-none"
+                  leftIcon={<Search size={16} className="text-gray-400" />}
+                  className="text-xs h-10 w-full"
                 />
               </div>
+            </div>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto">
-                {[
-                  { label: 'ทั้งหมด', value: '' },
-                  { label: 'รออนุมัติสั่งซื้อ', value: 'PO_PENDING' },
-                  { label: 'รอสินค้า', value: 'ORDERED' }
-                ].map((st) => (
-                  <button
-                    key={st.value}
-                    type="button"
-                    onClick={() => { setStatusFilter(st.value); setCurrentPage(1); }}
-                    className={`px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer rounded-none border ${
+            {/* Filter Tabs (แบบเดียวกับหน้าคืนสินค้า) */}
+            <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-3 pt-2 shadow-xs overflow-x-auto">
+              {[
+                { label: 'ทั้งหมด', value: '', icon: FileText, count: allCount },
+                { label: 'รออนุมัติสั่งซื้อ', value: 'PO_PENDING', icon: ClockAlert, count: pendingApprovalCount },
+                { label: 'รอสินค้า', value: 'ORDERED', icon: Package, count: awaitingStockCount },
+              ].map((st) => (
+                <button
+                  key={st.value}
+                  type="button"
+                  onClick={() => { setStatusFilter(st.value); setCurrentPage(1); }}
+                  className={`flex items-center gap-2 px-5 py-3 text-sm font-normal border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                    statusFilter === st.value
+                      ? 'border-[#e51c23] text-[#e51c23]'
+                      : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
+                  }`}
+                >
+                  <st.icon size={16} /> {st.label}
+                  <span
+                    className={`px-2 py-0.5 text-sm rounded-full ${
                       statusFilter === st.value
-                        ? 'bg-[#1C1B1B] text-white border-[#1C1B1B] shadow-xs'
-                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
+                        ? 'bg-red-600 text-white font-normal'
+                        : 'bg-gray-100 text-gray-600'
                     }`}
                   >
-                    {st.label}
-                  </button>
-                ))}
-              </div>
+                    {st.count}
+                  </span>
+                </button>
+              ))}
             </div>
 
             {/* Table Content */}
@@ -865,13 +874,12 @@ export default function PreOrderManager() {
         <form onSubmit={handleSubmit} className="w-full animate-in fade-in duration-300 space-y-6">
           {/* Breadcrumbs Navigation */}
           <nav className="flex items-center gap-2 text-xs text-gray-500 mb-4">
-            <button 
-              type="button" 
-              onClick={() => { setView('list'); setEditingId(null); navigate(basePath); }}
-              className="hover:text-[#e51c23] transition-colors cursor-pointer font-bold"
+            <Link
+              to={basePath}
+              className="hover:text-[#e51c23] transition-colors font-bold"
             >
               ระบบจัดการสั่งจองสินค้า
-            </button>
+            </Link>
             <ChevronRight size={14} className="text-gray-400" />
             <span className="text-[#1C1B1B] font-bold">
               {isReadOnly ? 'ดูรายละเอียดใบสั่งจองสินค้า' : editingId ? 'แก้ไขใบสั่งจองสินค้า' : 'สร้างใบสั่งจองสินค้าล่วงหน้า'}
@@ -908,7 +916,11 @@ export default function PreOrderManager() {
           <fieldset disabled={isReadOnly} className="space-y-6 border-0 p-0 m-0 min-w-0">
 
               {/* ข้อมูลการสั่งจอง */}
-              <Card title="ข้อมูลผู้สั่งจอง">
+              <Card className="border-l-[5px] border-l-red-600">
+                <CardHeader className="items-center justify-start gap-4">
+                  <CardTitle className="text-lg">ข้อมูลผู้สั่งจอง</CardTitle>
+                </CardHeader>
+                <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start relative">
                   <Select
                     label="ช่องทางการจอง"
@@ -1009,10 +1021,15 @@ export default function PreOrderManager() {
                     )}
                   </div>
                 </div>
+                </CardContent>
               </Card>
 
             {/* Card: รายการสินค้า */}
-            <Card title="รายการสินค้าสั่งจอง">
+            <Card className="border-l-[5px] border-l-black">
+              <CardHeader className="items-center justify-start gap-4">
+                <CardTitle className="text-lg">รายการสินค้าสั่งจอง</CardTitle>
+              </CardHeader>
+              <CardContent>
               <div className="pb-4 flex flex-col sm:flex-row items-start sm:items-end gap-3 justify-between">
                 {/* Unified Search Input (Stock + Catalog) */}
                 <div className="relative w-full max-w-lg">
@@ -1130,7 +1147,7 @@ export default function PreOrderManager() {
                       <TableHead className="py-3 px-2 text-center w-14 font-bold text-[#5F5E5E]">ลำดับ</TableHead>
                       <TableHead className="py-3 px-2 text-center w-16 font-bold text-[#5F5E5E]">รูปภาพ</TableHead>
                       <TableHead className="py-3 px-3 font-bold text-left text-[#5F5E5E] min-w-[260px]">ชื่อสินค้า <span className="text-[#e51c23]">*</span></TableHead>
-                      <TableHead className="py-3 px-3 font-bold text-left text-[#5F5E5E] w-48">รหัสสินค้า</TableHead>
+                      <TableHead className="py-3 px-3 font-bold text-left text-[#5F5E5E] w-48">รหัสสินค้า <span className="font-normal text-gray-400">(ไม่บังคับ)</span></TableHead>
                       <TableHead className="py-3 px-3 font-bold text-center text-[#5F5E5E] w-28">จำนวน</TableHead>
                       {!isReadOnly && (
                         <TableHead className="py-3 px-3 font-bold text-center text-[#5F5E5E] w-14 pr-4">ลบ</TableHead>
@@ -1202,14 +1219,14 @@ export default function PreOrderManager() {
                               </div>
                             </TableCell>
 
-                            {/* รหัสสินค้า (Editable Input) */}
+                            {/* รหัสสินค้า (Editable Input, ไม่บังคับ) */}
                             <TableCell className="py-2.5 px-3 align-top">
                               <div className="flex flex-col gap-1.5">
                                 <input
                                   type="text"
                                   value={item.product_code || ''}
                                   onChange={(e) => handleItemChange(idx, 'product_code', e.target.value)}
-                                  placeholder="รหัสสินค้า..."
+                                  placeholder="-"
                                   className="w-full h-9 bg-white border border-gray-300 focus:border-[#e51c23] rounded-none px-3 text-xs font-mono font-bold text-[#1C1B1B] outline-none shadow-2xs"
                                 />
                               </div>
@@ -1250,6 +1267,7 @@ export default function PreOrderManager() {
                   </TableBody>
                 </Table>
               </div>
+              </CardContent>
             </Card>
 
           </fieldset>
@@ -1464,28 +1482,71 @@ export default function PreOrderManager() {
         </div>
       )}
 
-      <ConfirmDialog
-        isOpen={deleteTargetId !== null}
-        onClose={() => !isDeleting && setDeleteTargetId(null)}
-        onConfirm={handleConfirmDelete}
-        title="ยืนยันการลบใบสั่งจอง"
-        description="คุณต้องการลบรายการสั่งจองนี้ใช่หรือไม่? การลบไม่สามารถย้อนกลับได้"
-        confirmText="ยืนยันการลบ"
-        cancelText="ยกเลิก"
-        variant="danger"
-        isSubmitting={isDeleting}
-      />
+      {(() => {
+        const deleteTarget = deleteTargetId !== null ? preOrders.find(po => po.id === deleteTargetId) : null;
+        const deleteCustomer = deleteTarget ? getCustomerInfo(deleteTarget) : null;
+        return (
+          <ConfirmDialog
+            isOpen={deleteTargetId !== null}
+            onClose={() => !isDeleting && setDeleteTargetId(null)}
+            onConfirm={handleConfirmDelete}
+            title="ยืนยันการลบใบสั่งจอง"
+            description={(
+              <div className="space-y-3 text-sm text-slate-700 text-left">
+                <p className="text-center text-slate-600">คุณต้องการลบรายการสั่งจองนี้ใช่หรือไม่? การลบไม่สามารถย้อนกลับได้</p>
+                {deleteTarget && (
+                  <div className="bg-[#f6f3f2] p-3 space-y-2 mt-2">
+                    <div className="flex justify-between gap-4 text-xs">
+                      <span className="text-slate-500">ลูกค้า</span>
+                      <span className="font-semibold text-slate-900">{deleteCustomer?.name || '-'}</span>
+                    </div>
+                    <div className="flex justify-between gap-4 text-xs">
+                      <span className="text-slate-500">จำนวนรายการ</span>
+                      <span className="font-medium text-slate-900">{deleteTarget.pre_order_items?.length || 0} รายการ</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            confirmText="ยืนยันการลบ"
+            cancelText="ยกเลิก"
+            variant="danger"
+            isSubmitting={isDeleting}
+          />
+        );
+      })()}
 
-      <ConfirmDialog
-        isOpen={removeItemIndex !== null}
-        onClose={() => setRemoveItemIndex(null)}
-        onConfirm={handleConfirmRemoveItem}
-        title="ลบรายการสินค้านี้"
-        description="คุณต้องการลบสินค้ารายการนี้ออกจากใบสั่งจองใช่หรือไม่?"
-        confirmText="ยืนยันการลบ"
-        cancelText="ยกเลิก"
-        variant="danger"
-      />
+      {(() => {
+        const removeTarget = removeItemIndex !== null ? formItems[removeItemIndex] : null;
+        return (
+          <ConfirmDialog
+            isOpen={removeItemIndex !== null}
+            onClose={() => setRemoveItemIndex(null)}
+            onConfirm={handleConfirmRemoveItem}
+            title="ลบรายการสินค้านี้"
+            description={(
+              <div className="space-y-3 text-sm text-slate-700 text-left">
+                <p className="text-center text-slate-600">คุณต้องการลบสินค้ารายการนี้ออกจากใบสั่งจองใช่หรือไม่?</p>
+                {removeTarget && (
+                  <div className="bg-[#f6f3f2] p-3 space-y-2 mt-2">
+                    <div className="flex justify-between gap-4 text-xs">
+                      <span className="text-slate-500">สินค้า</span>
+                      <span className="font-semibold text-slate-900 truncate max-w-48">{removeTarget.product_name || '-'}</span>
+                    </div>
+                    <div className="flex justify-between gap-4 text-xs">
+                      <span className="text-slate-500">จำนวน</span>
+                      <span className="font-medium text-slate-900">{removeTarget.quantity}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            confirmText="ยืนยันการลบ"
+            cancelText="ยกเลิก"
+            variant="danger"
+          />
+        );
+      })()}
     </div>
   );
 }

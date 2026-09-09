@@ -39,6 +39,7 @@ import PriceUpdateModal from './components/price_update_modal';
 import type { PriceMismatchItem } from './components/price_update_modal';
 import { guessColumnMapping, normalizeDateValue, REQUIRED_MAPPING_FIELDS } from '../../../utils/excelImport';
 import { ToastProvider, useToast } from '../../../components/elements/toast';
+import ConfirmDialog from '../../../components/elements/confirm_dialog';
 
 const isPlaceholder = (val: any): boolean => {
   if (!val) return true;
@@ -175,6 +176,9 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   const basePath = isEmployee ? '/employee/import' : '/owner/import-bills';
   const importSessionKey = getImportBillSessionKey(isEmployee);
   const [restoredSession] = useState<ImportBillSavedSession | null>(() => loadImportBillSession(importSessionKey));
+  const [deleteBillTargetId, setDeleteBillTargetId] = useState<number | null>(null);
+  const [isDeletingBill, setIsDeletingBill] = useState(false);
+  const [removeRowIndex, setRemoveRowIndex] = useState<number | null>(null);
 
   const clearSavedImportSession = useCallback(() => {
     try {
@@ -1198,9 +1202,14 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   };
 
   const handleRemoveRow = (idx: number) => {
-    if (!formData) return;
+    setRemoveRowIndex(idx);
+  };
+
+  const handleConfirmRemoveRow = () => {
+    if (!formData || removeRowIndex === null) return;
+    const idx = removeRowIndex;
     const updatedItems = formData.items.filter((_, i) => i !== idx);
-    
+
     let newSubtotal = 0;
     updatedItems.forEach(item => {
       newSubtotal += (Number(item.order_quantity || 0) * Number(item.price_per_unit || 0)) - Number(item.discount_amount || 0);
@@ -1209,7 +1218,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
     const vatAmount = Number(formData.vat_amount) || 0;
     const discTotal = Number(formData.discount_total) || 0;
     const newTotal = Math.round((newSubtotal - discTotal + vatAmount) * 100) / 100;
-    
+
     const updated = {
       ...formData,
       items: updatedItems,
@@ -1219,6 +1228,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
     };
     setFormData(updated);
     updateBatchResultForActiveIndex(updated);
+    setRemoveRowIndex(null);
   };
 
   const updateFormState = (updates: Partial<ScannedBillData>) => {
@@ -1245,17 +1255,22 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
     updateBatchResultForActiveIndex(updated);
   };
 
-  const handleDeleteBill = async (id: number) => {
-    if (!window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบบิลนี้ออกจากระบบ? การลบจะไม่สามารถกู้คืนข้อมูลกลับมาได้')) {
-      return;
-    }
-    
+  const handleDeleteBill = (id: number) => {
+    setDeleteBillTargetId(id);
+  };
+
+  const handleConfirmDeleteBill = async () => {
+    if (deleteBillTargetId === null) return;
+    setIsDeletingBill(true);
     try {
-      await deleteBill(id);
+      await deleteBill(deleteBillTargetId);
       await fetchBills();
+      setDeleteBillTargetId(null);
     } catch (err: any) {
       console.error('Error deleting bill:', err);
       alert('ล้มเหลวในการลบบิล: ' + (err.message || err));
+    } finally {
+      setIsDeletingBill(false);
     }
   };
 
@@ -2392,6 +2407,69 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
           }
         }}
       />
+
+      {(() => {
+        const deleteTarget = deleteBillTargetId !== null ? bills.find(b => b.id === deleteBillTargetId) : null;
+        return (
+          <ConfirmDialog
+            isOpen={deleteBillTargetId !== null}
+            onClose={() => !isDeletingBill && setDeleteBillTargetId(null)}
+            onConfirm={handleConfirmDeleteBill}
+            title="ยืนยันการลบบิล"
+            description={(
+              <div className="space-y-3 text-sm text-slate-700 text-left">
+                <p className="text-center text-slate-600">คุณต้องการลบบิลนี้ออกจากระบบใช่หรือไม่? การลบจะไม่สามารถกู้คืนข้อมูลกลับมาได้</p>
+                {deleteTarget && (
+                  <div className="bg-[#f6f3f2] p-3 space-y-2 mt-2">
+                    <div className="flex justify-between gap-4 text-xs">
+                      <span className="text-slate-500">เลขที่บิล</span>
+                      <span className="font-semibold text-slate-900">{deleteTarget.bill_no || '-'}</span>
+                    </div>
+                    <div className="flex justify-between gap-4 text-xs">
+                      <span className="text-slate-500">ยอดรวมสุทธิ</span>
+                      <span className="font-semibold text-[#e51c23]">
+                        ฿{deleteTarget.total_amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            confirmText="ยืนยันการลบ"
+            cancelText="ยกเลิก"
+            variant="danger"
+            isSubmitting={isDeletingBill}
+          />
+        );
+      })()}
+
+      {(() => {
+        const removeTarget = removeRowIndex !== null ? formData?.items[removeRowIndex] : null;
+        return (
+          <ConfirmDialog
+            isOpen={removeRowIndex !== null}
+            onClose={() => setRemoveRowIndex(null)}
+            onConfirm={handleConfirmRemoveRow}
+            title="ลบรายการสินค้านี้"
+            description={(
+              <div className="space-y-3 text-sm text-slate-700 text-left">
+                <p className="text-center text-slate-600">คุณต้องการลบสินค้ารายการนี้ออกจากบิลใช่หรือไม่?</p>
+                {removeTarget && (
+                  <div className="bg-[#f6f3f2] p-3 space-y-2 mt-2">
+                    <div className="flex justify-between gap-4 text-xs">
+                      <span className="text-slate-500">สินค้า</span>
+                      <span className="font-semibold text-slate-900 truncate max-w-48">{removeTarget.company_product_name || '-'}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            confirmText="ยืนยันการลบ"
+            cancelText="ยกเลิก"
+            variant="danger"
+          />
+        );
+      })()}
     </>
   );
 }
