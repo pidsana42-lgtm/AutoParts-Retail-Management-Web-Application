@@ -40,6 +40,7 @@ type CustomerClaimItemResponseDTO struct {
 	ReturnItemID    *uint   `json:"return_item_id"`
 	ProductID       uint    `json:"product_id"`
 	ProductName     string  `json:"product_name"`
+	ProductCode     string  `json:"product_code,omitempty"`
 	Qty             float64 `json:"qty"`
 	UnitPrice       float64 `json:"unit_price"`
 	Reason          string  `json:"reason"`
@@ -74,8 +75,10 @@ func (d *CreateCustomerClaimItemDTO) ToEntity() entity.CustomerClaimItem {
 func ToCustomerClaimItemResponseDTO(m *entity.CustomerClaimItem) CustomerClaimItemResponseDTO {
 	returnedItemID := m.ReturnedItemID
 	var productName string
+	var productCode string
 	if m.Product != nil {
 		productName = m.Product.Product_Name
+		productCode = m.Product.Product_Code
 	}
 	status := m.Status
 	if status == "" {
@@ -91,6 +94,7 @@ func ToCustomerClaimItemResponseDTO(m *entity.CustomerClaimItem) CustomerClaimIt
 		ReturnItemID:    returnedItemID,
 		ProductID:       m.ProductID,
 		ProductName:     productName,
+		ProductCode:     productCode,
 		Qty:             float64(m.Qty),
 		UnitPrice:       0,
 		Reason:          m.Reason,

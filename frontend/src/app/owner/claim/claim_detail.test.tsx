@@ -234,4 +234,13 @@ describe('Claim detail item decisions', () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it('displays the reference order number correctly', async () => {
+    mocks.getClaim.mockResolvedValue({
+      ...claim,
+      order_number: 'INV2609080001',
+    });
+    await openPage();
+    expect(screen.getByText('INV2609080001')).toBeInTheDocument();
+  });
 });

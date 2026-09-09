@@ -246,6 +246,9 @@ func TestCreateCustomerClaim_ClaimNoFromSaleOrder(t *testing.T) {
 	if got.ClaimNo != "CLM-SO2026-0042" {
 		t.Errorf("response should carry ClaimNo, got %q", got.ClaimNo)
 	}
+	if got.OrderNumber != "SO2026-0042" {
+		t.Errorf("response should carry OrderNumber, got %q", got.OrderNumber)
+	}
 	if len(notifier.records) != 1 || notifier.records[0].typ != "CUSTOMER_CLAIM_CREATED" || notifier.records[0].userID != 0 {
 		t.Errorf("owners should be notified exactly once about creation, got %+v", notifier.records)
 	}

@@ -4,6 +4,10 @@ import {
   ChevronRight, Save, Loader2, Package, Camera, X,
 } from 'lucide-react';
 import Heading from '../../../components/elements/heading';
+import Button from '../../../components/elements/button';
+import Badge from '../../../components/elements/badge';
+import Input from '../../../components/elements/input';
+import Select from '../../../components/elements/select';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import { getCustomerClaimById, updateCustomerClaim } from '../../../service/http/claim/claim';
 import apiClient from '../../../service/http/apiClient';
@@ -18,6 +22,24 @@ interface EditableItem extends CustomerClaimItem {
   newFile?: File | null;
   newPreview?: string | null;
 }
+
+const parseNote = (note: string | undefined, key: string): string => {
+  if (!note) return '-';
+  const match = note.match(new RegExp(`${key}:\\s*([^|]+)`));
+  return match ? match[1].trim() : '-';
+};
+
+const CLAIM_TYPE_OPTIONS = [
+  { value: 'INSTANT', label: 'เปลี่ยนทันที' },
+  { value: 'SUPPLIER_PENDING', label: 'ส่งบริษัท' },
+  { value: 'CREDIT_ACCOUNT', label: 'ลงบัญชีเชื่อ' },
+];
+
+const ITEM_STATUS_OPTIONS = [
+  { value: 'Approved', label: 'อนุมัติ' },
+  { value: 'Pending', label: 'รอดำเนินการ' },
+  { value: 'Rejected', label: 'ปฏิเสธ' },
+];
 
 export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
@@ -163,8 +185,8 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
 
   if (loading) {
     return (
-      <div className="p-8 flex justify-center items-center min-h-75">
-        <Loader2 size={28} className="text-[#e51c23] animate-spin" />
+      <div className="p-8 flex justify-center items-center min-h-screen bg-white">
+        <Loader2 size={28} className="text-[#d61c24] animate-spin" />
         <span className="ml-3 text-sm text-[#5F5E5E] font-medium">กำลังโหลดข้อมูล...</span>
       </div>
     );
@@ -172,8 +194,8 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
 
   if (!claim) {
     return (
-      <div className="p-8 text-center">
-        <p className="text-[#5F5E5E] font-bold">ไม่พบข้อมูลใบเคลม</p>
+      <div className="p-8 text-center min-h-screen bg-white py-24">
+        <p className="text-[#5F5E5E] font-semibold">ไม่พบข้อมูลใบเคลม</p>
       </div>
     );
   }
@@ -181,9 +203,13 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
   const claimNo = claim.claim_no ?? `CLM-${claim.id}`;
   const statusKey = (claim.status ?? '').toUpperCase();
   const canEdit = canApprove || statusKey === 'PENDING';
+  const customerName = claim.customer_name && claim.customer_name !== '-'
+    ? claim.customer_name
+    : parseNote(claim.notes || claim.note, 'ลูกค้า');
+  const customerPhone = (claim as any).customer_phone || parseNote(claim.notes || claim.note, 'โทร');
 
   return (
-    <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300">
+    <div className="p-8 space-y-6 bg-white min-h-screen font-sans text-slate-800 animate-in fade-in duration-300">
       <input
         ref={fileInputRef}
         type="file"
@@ -195,58 +221,86 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
 
         {/* Header */}
         <div className="pb-5 border-b border-gray-100">
-          <nav className="flex items-center text-sm text-gray-500 gap-2 font-light mb-1">
-            <Link to={backPath} className="hover:text-gray-900 transition-colors cursor-pointer">
+          <nav className="flex items-center text-sm text-gray-500 gap-2 font-light mb-2">
+            <Link to={backPath} className="hover:text-black transition-colors cursor-pointer">
               จัดการเคลมสินค้า
             </Link>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-            <Link to={`${backPath}/detail/${claim.id}`} className="hover:text-gray-900 transition-colors cursor-pointer">
-              รายละเอียดใบเคลม ({claimNo})
+            <ChevronRight size={16} className="text-gray-400" />
+            <Link to={`${backPath}/detail/${claim.id}`} className="hover:text-black transition-colors cursor-pointer">
+              รายละเอียดใบเคลมสินค้า
             </Link>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-            <span className="text-black font-normal">แก้ไขใบเคลม</span>
+            <ChevronRight size={16} className="text-gray-400" />
+            <span className="text-black font-normal">แก้ไขใบเคลมสินค้า</span>
           </nav>
-          <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">แก้ไขใบเคลมสินค้า</Heading>
-          <p className="text-sm text-[#5F5E5E] mt-0.5 font-mono">{claimNo}</p>
+          <div className="flex items-center gap-3">
+            <Heading level="h1" className="mb-0 font-bold text-[#1C1B1B]">แก้ไขใบเคลมสินค้า</Heading>
+            <span className="text-base font-semibold text-[#d61c24] font-mono">{claimNo}</span>
+          </div>
         </div>
 
         {/* ข้อมูลหัวใบเคลม */}
         <div className="bg-white border border-gray-200">
-          <div className="bg-gray-100 px-5 py-3 border-b border-gray-200">
-            <p className="text-xs font-bold text-[#5F5E5E] uppercase tracking-wider">ข้อมูลใบเคลม</p>
+          <div className="bg-[#F6F3F2] px-5 py-3 border-b border-gray-200 flex items-center justify-between">
+            <span className="text-sm font-semibold text-[#5F5E5E] uppercase tracking-wider">ข้อมูลใบเคลม</span>
+            <span className="text-sm text-gray-500 font-normal">{claimNo}</span>
           </div>
-          <div className="p-5 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+          <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
             <div>
-              <p className="text-xs text-[#5F5E5E] font-bold mb-1">เลขที่ใบเคลม</p>
-              <p className="font-bold text-[#e51c23] font-mono">{claimNo}</p>
+              <p className="text-xs text-[#5F5E5E] font-medium mb-1">เลขที่ใบเคลม</p>
+              <p className="font-semibold text-[#d61c24] font-mono text-base">{claimNo}</p>
             </div>
             <div>
-              <p className="text-xs text-[#5F5E5E] font-bold mb-1">ลูกค้า</p>
-              <p className="font-bold text-[#1C1B1B]">{(claim as any).customer_name || '-'}</p>
+              <p className="text-xs text-[#5F5E5E] font-medium mb-1">ลูกค้า</p>
+              <p className="font-semibold text-[#1C1B1B]">{customerName || '-'}</p>
             </div>
             <div>
-              <p className="text-xs text-[#5F5E5E] font-bold mb-1">สถานะ</p>
-              <p className="font-bold text-[#1C1B1B]">{statusKey === 'PENDING' ? 'รอดำเนินการ' : statusKey === 'APPROVED' ? 'อนุมัติแล้ว' : 'ปฏิเสธ'}</p>
+              <p className="text-xs text-[#5F5E5E] font-medium mb-1">เบอร์โทรศัพท์</p>
+              <p className="font-semibold text-[#1C1B1B]">{customerPhone || '-'}</p>
             </div>
+            <div>
+              <p className="text-xs text-[#5F5E5E] font-medium mb-1">สถานะใบเคลม</p>
+              <div>
+                {statusKey === 'APPROVED' ? (
+                  <Badge variant="success" size="sm">อนุมัติแล้ว</Badge>
+                ) : statusKey === 'REJECTED' ? (
+                  <Badge variant="error" size="sm">ปฏิเสธ</Badge>
+                ) : (
+                  <Badge variant="warning" size="sm">รอดำเนินการ</Badge>
+                )}
+              </div>
+            </div>
+          </div>
+          {/* Notes field */}
+          <div className="px-5 pb-5 pt-1 border-t border-gray-100">
+            <label className="block text-xs font-medium text-[#5F5E5E] mb-1.5">
+              หมายเหตุเพิ่มเติม (Notes)
+            </label>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="ระบุหมายเหตุเพิ่มเติมสำหรับใบเคลมนี้..."
+              className="w-full bg-[#f6f3f2] p-3 text-sm text-black border-none focus:outline-none focus:ring-1 focus:ring-red-600 rounded-none resize-none placeholder:text-gray-400"
+            />
           </div>
         </div>
 
         {/* รายการสินค้า */}
-        <div className="bg-white border border-gray-200">
-          <div className="bg-gray-100 px-5 py-3 border-b border-gray-200 flex items-center justify-between">
-            <p className="text-xs font-bold text-[#5F5E5E] uppercase tracking-wider">รายการสินค้าที่เคลม</p>
-            <span className="text-xs font-bold text-[#1C1B1B]">{items.length} รายการ</span>
+        <div className="bg-white border border-gray-200 overflow-x-auto">
+          <div className="bg-white px-5 py-3 border-b border-gray-200 flex items-center justify-between">
+            <span className="text-xs font-semibold text-[#5F5E5E] uppercase tracking-wider">รายการสินค้าที่เคลม</span>
+            <span className="text-xs font-medium text-gray-600 bg-white px-2.5 py-0.5 border border-gray-200">{items.length} รายการ</span>
           </div>
           {items.length > 0 ? (
-            <Table>
-              <TableHeader className="bg-gray-50 text-[#5F5E5E]">
-                <TableRow>
-                  <TableHead className="pl-5">สินค้า</TableHead>
-                  <TableHead className="text-center w-36">ประเภทเคลม</TableHead>
-                  <TableHead className="text-center w-24">จำนวน</TableHead>
-                  <TableHead className="min-w-55">หมายเหตุ / สาเหตุการเคลม</TableHead>
-                  <TableHead className="text-center w-28">รูปภาพหลักฐาน</TableHead>
-                  {canApprove && <TableHead className="text-center pr-5 w-36">สถานะ</TableHead>}
+            <Table className="min-w-220">
+              <TableHeader className="bg-[#F6F3F2] text-[#797878] text-sm font-semibold">
+                <TableRow className="border-b border-gray-200">
+                  <TableHead className="pl-6 py-3 uppercase tracking-widest">สินค้า</TableHead>
+                  <TableHead className="text-center w-40 py-3 uppercase tracking-widest">ประเภทเคลม</TableHead>
+                  <TableHead className="text-center w-28 py-3 uppercase tracking-widest">จำนวน</TableHead>
+                  <TableHead className="min-w-50 py-3 uppercase tracking-widest">สาเหตุ / อาการเสีย</TableHead>
+                  <TableHead className="text-center w-32 py-3 uppercase tracking-widest">รูปภาพหลักฐาน</TableHead>
+                  {canApprove && <TableHead className="text-center pr-6 w-40 py-3 uppercase tracking-widest">สถานะพิจารณา</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -257,83 +311,86 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
                   const itemStatusUp = itemStatus.toUpperCase();
 
                   return (
-                    <TableRow key={idx} className="hover:bg-gray-50/50">
-                      <TableCell className="pl-5 font-semibold text-[#1C1B1B] text-sm">
-                        {item.product_name || `#${item.product_id}`}
+                    <TableRow key={idx} className="hover:bg-gray-50/70 border-t border-gray-100">
+                      <TableCell className="pl-6 py-3.5 align-middle">
+                        <p className="font-medium text-[#1C1B1B] text-sm">
+                          {item.product_name || `#${item.product_id}`}
+                        </p>
+                        {item.product_code && (
+                          <p className="text-xs text-gray-400 mt-0.5">{item.product_code}</p>
+                        )}
                       </TableCell>
 
                       {/* ประเภทเคลม */}
-                      <TableCell className="text-center">
+                      <TableCell className="py-3.5 align-middle">
                         {canEdit ? (
-                          <select
-                            value={item.claim_type || itemClaimType || 'INSTANT'}
+                          <Select
+                            value={item.claim_type || itemClaimType}
+                            options={CLAIM_TYPE_OPTIONS}
                             onChange={e => handleItemChange(idx, 'claim_type', e.target.value)}
-                            className="border border-gray-300 px-2 py-1.5 text-xs font-bold text-[#1C1B1B] bg-white focus:outline-none focus:border-[#e51c23] rounded-none cursor-pointer"
-                          >
-                            <option value="INSTANT">เปลี่ยนทันที</option>
-                            <option value="SUPPLIER_PENDING">ส่งบริษัท</option>
-                            <option value="CREDIT_ACCOUNT">ลงบัญชีเชื่อ</option>
-                          </select>
-                        ) : itemClaimType === 'SUPPLIER_PENDING' ? (
-                          <span className="px-2 py-0.5 text-[10px] font-bold text-[#1C1B1B] bg-gray-100 border border-gray-300 rounded-none inline-block">
-                            ส่งบริษัท
-                          </span>
-                        ) : itemClaimType === 'CREDIT_ACCOUNT' ? (
-                          <span className="px-2 py-0.5 text-[10px] font-bold text-gray-800 bg-gray-200 border border-gray-300 rounded-none inline-block">
-                            ลงบัญชีเชื่อ
-                          </span>
+                            className="h-9 text-sm"
+                          />
                         ) : (
-                          <span className="px-2 py-0.5 text-[10px] font-bold text-[#e51c23] bg-red-50 border border-red-200 rounded-none inline-block">
-                            เปลี่ยนทันที
-                          </span>
+                          <div className="text-center">
+                            {itemClaimType === 'SUPPLIER_PENDING' ? (
+                              <Badge variant="neutral" size="md">ส่งบริษัท</Badge>
+                            ) : itemClaimType === 'CREDIT_ACCOUNT' ? (
+                              <Badge variant="info" size="md">ลงบัญชีเชื่อ</Badge>
+                            ) : (
+                              <Badge variant="primary" size="md">เปลี่ยนทันที</Badge>
+                            )}
+                          </div>
                         )}
                       </TableCell>
 
                       {/* จำนวน */}
-                      <TableCell className="text-center">
+                      <TableCell className="text-center py-3.5 align-middle">
                         {canEdit ? (
-                          <input
-                            type="number"
-                            min={1}
-                            value={item.qty}
-                            onChange={e => handleItemChange(idx, 'qty', Number(e.target.value))}
-                            className="w-16 text-center border border-gray-300 px-2 py-1 text-sm font-bold focus:outline-none focus:border-[#e51c23]"
-                          />
+                          <div className="flex items-center justify-center">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={item.qty}
+                              onChange={e => handleItemChange(idx, 'qty', Math.max(1, Number(e.target.value) || 1))}
+                              className="h-9 text-xs text-center w-20"
+                            />
+                          </div>
                         ) : (
-                          <span className="font-bold text-[#e51c23]">{item.qty}</span>
+                          <span className="font-medium text-[#1C1B1B] text-sm">{item.qty} ชิ้น</span>
                         )}
                       </TableCell>
 
                       {/* สาเหตุการเคลม */}
-                      <TableCell>
+                      <TableCell className="py-3.5 align-middle">
                         {canEdit ? (
-                          <input
+                          <Input
                             type="text"
-                            value={item.reason}
+                            value={item.reason || ''}
                             onChange={e => handleItemChange(idx, 'reason', e.target.value)}
-                            placeholder="ระบุหมายเหตุ / สาเหตุการเคลม..."
-                            className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:border-[#e51c23]"
+                            placeholder="ระบุสาเหตุ / อาการเสียที่พบ..."
+                            className="h-9 text-xs"
                           />
                         ) : (
-                          <span className="text-sm text-[#1C1B1B] font-medium">{item.reason || '-'}</span>
+                          <span className="text-sm text-[#1C1B1B]">{item.reason || '-'}</span>
                         )}
                       </TableCell>
 
                       {/* รูปภาพหลักฐาน */}
-                      <TableCell className="text-center">
+                      <TableCell className="text-center py-3.5 align-middle">
                         {displayImg ? (
                           <div className="relative inline-block">
                             <img
                               src={displayImg}
                               alt="หลักฐาน"
-                              className="w-12 h-12 object-cover border border-gray-200 rounded-none cursor-pointer"
+                              className="w-12 h-12 object-cover border border-gray-200 rounded-none cursor-pointer hover:opacity-90 transition-opacity"
                               onClick={() => canEdit && handlePhotoClick(idx)}
+                              title="คลิกเพื่อเปลี่ยนรูปภาพ"
                             />
                             {canEdit && (
                               <button
                                 type="button"
                                 onClick={() => handleRemovePhoto(idx)}
-                                className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#e51c23] text-white flex items-center justify-center rounded-full cursor-pointer hover:bg-[#c9181f]"
+                                className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#d61c24] text-white flex items-center justify-center rounded-full cursor-pointer hover:bg-[#b0141b] transition-colors"
                                 title="ลบรูปภาพ"
                               >
                                 <X size={10} />
@@ -344,9 +401,9 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
                           <button
                             type="button"
                             onClick={() => handlePhotoClick(idx)}
-                            className="px-3 py-1.5 border border-dashed border-gray-300 text-gray-500 hover:border-[#e51c23] hover:text-[#e51c23] flex items-center gap-1.5 text-xs font-semibold mx-auto cursor-pointer transition-colors"
+                            className="px-2.5 py-1.5 border border-dashed border-gray-300 text-gray-500 hover:border-[#d61c24] hover:text-[#d61c24] bg-white flex items-center gap-1 text-xs mx-auto cursor-pointer transition-colors"
                           >
-                            <Camera size={14} /> เพิ่มรูปภาพ
+                            <Camera size={13} /> แนบรูป
                           </button>
                         ) : (
                           <span className="text-xs text-gray-400">ไม่มีรูปภาพ</span>
@@ -355,29 +412,20 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
 
                       {/* สถานะ / การอนุมัติ */}
                       {canApprove && (
-                        <TableCell className="text-center pr-5">
+                        <TableCell className="text-center pr-6 py-3.5 align-middle">
                           {canEdit ? (
-                            <select
+                            <Select
                               value={item.status || 'Pending'}
+                              options={ITEM_STATUS_OPTIONS}
                               onChange={e => handleItemChange(idx, 'status', e.target.value)}
-                              className={`border px-2 py-1.5 text-xs font-bold focus:outline-none rounded-none cursor-pointer ${
-                                itemStatusUp === 'APPROVED'
-                                  ? 'border-[#259b24]/30 bg-[#259b24]/10 text-[#259b24]'
-                                  : itemStatusUp === 'REJECTED'
-                                  ? 'border-red-200 bg-red-50 text-[#e51c23]'
-                                  : 'border-amber-300 bg-amber-50 text-amber-800'
-                              }`}
-                            >
-                              <option value="Approved">อนุมัติ</option>
-                              <option value="Pending">รอดำเนินการ</option>
-                              <option value="Rejected">ปฏิเสธ</option>
-                            </select>
+                              className="h-9 text-xs"
+                            />
                           ) : itemStatusUp === 'APPROVED' ? (
-                            <span className="text-xs font-bold text-[#259b24]">อนุมัติแล้ว</span>
+                            <Badge variant="success" size="sm">อนุมัติแล้ว</Badge>
                           ) : itemStatusUp === 'REJECTED' ? (
-                            <span className="text-xs font-bold text-[#e51c23]">ปฏิเสธ</span>
+                            <Badge variant="error" size="sm">ปฏิเสธ</Badge>
                           ) : (
-                            <span className="text-xs font-bold text-amber-600">รอดำเนินการ</span>
+                            <Badge variant="warning" size="sm">รอดำเนินการ</Badge>
                           )}
                         </TableCell>
                       )}
@@ -387,9 +435,9 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
               </TableBody>
             </Table>
           ) : (
-            <div className="p-8 text-center text-[#5F5E5E]">
-              <Package size={28} className="mx-auto mb-2 text-gray-300" />
-              <p className="text-sm">ไม่มีรายการสินค้า</p>
+            <div className="p-12 text-center text-[#5F5E5E]">
+              <Package size={32} className="mx-auto mb-2 text-gray-300" />
+              <p className="text-sm">ไม่มีรายการสินค้าในใบเคลมนี้</p>
             </div>
           )}
         </div>
@@ -397,24 +445,27 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
         {/* ปุ่มบันทึกการแก้ไขด้านล่าง */}
         {canEdit ? (
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
-            <button
+            <Button
               type="button"
+              variant="outline-cancel"
+              size="md"
               onClick={() => navigate(`${backPath}/detail/${claim.id}`)}
-              className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold transition-colors cursor-pointer rounded-none"
             >
               ยกเลิก
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
+              variant="primary"
+              size="md"
               disabled={saving}
-              className="flex items-center gap-2 px-7 py-2.5 bg-[#e51c23] hover:bg-[#c9181f] disabled:opacity-60 text-white text-sm font-bold shadow-sm transition-colors cursor-pointer rounded-none"
+              isLoading={saving}
+              leftIcon={<Save size={16} />}
             >
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-              {saving ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
-            </button>
+              บันทึกการแก้ไข
+            </Button>
           </div>
         ) : (
-          <div className="bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 font-medium">
+          <div className="bg-amber-50 border border-amber-200 px-5 py-3.5 text-sm text-amber-800 font-medium">
             ใบเคลมนี้ดำเนินการเสร็จสิ้นแล้ว ไม่สามารถแก้ไขได้
           </div>
         )}
@@ -423,3 +474,4 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
     </div>
   );
 }
+
