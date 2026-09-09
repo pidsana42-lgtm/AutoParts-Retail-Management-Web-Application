@@ -14,14 +14,20 @@ type GenerateSettleQRRequest struct {
 }
 
 type GenerateQRResponse struct {
-	Status          string    `json:"status"`
-	PaymentID       uint      `json:"payment_id,omitempty"`
-	OrderID         uint      `json:"order_id,omitempty"`
-	Amount          float64   `json:"amount"`
-	QRCode          string    `json:"qr_code"`
-	ReferenceNumber string    `json:"reference_number"`
-	TransactionRef  *string   `json:"transaction_ref,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
+	Status            string    `json:"status"`
+	PaymentID         uint      `json:"payment_id,omitempty"`
+	OrderID           uint      `json:"order_id,omitempty"`
+	Amount            float64   `json:"amount"`
+	QRCode            string    `json:"qr_code"`
+	ReferenceNumber   string    `json:"reference_number"`
+	TransactionRef    *string   `json:"transaction_ref,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	PromptPayType     string    `json:"promptpay_type,omitempty"`
+	PromptPayName     string    `json:"promptpay_name,omitempty"`
+	PromptPayNumber   string    `json:"promptpay_number,omitempty"`
+	BankName          string    `json:"bank_name,omitempty"`
+	BankAccountNumber string    `json:"bank_account_number,omitempty"`
+	BankAccountName   string    `json:"bank_account_name,omitempty"`
 }
 
 type ConfirmPaymentRequest struct {

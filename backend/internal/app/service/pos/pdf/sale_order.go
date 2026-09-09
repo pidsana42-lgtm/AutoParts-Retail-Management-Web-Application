@@ -45,6 +45,15 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 		}
 	}
 
+	bankName := ""
+	bankAccountNo := ""
+	bankAccountName := ""
+	if companyData != nil {
+		bankName = companyData.BankName
+		bankAccountNo = companyData.BankAccountNumber
+		bankAccountName = companyData.BankAccountName
+	}
+
 	// 2. กำหนดหัวข้อเอกสาร (Document Title)
 	isCancelled := strings.EqualFold(string(order.Status), "cancelled")
 	docTitle := customTitle
@@ -379,6 +388,9 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 	} else if isCredit && dueDate != nil {
 		summaryHeight = 34.0
 	}
+	if bankAccountNo != "" && bankName != "" {
+		summaryHeight += 5.0
+	}
 
 	m.Row(summaryHeight, func() {
 		// หมายเหตุ + คำอ่าน (ซ้าย)
@@ -405,6 +417,19 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 					Color: HexToColor("#E51C23"),
 				})
 				thaiTextTop = 21.5
+			}
+			if bankAccountNo != "" && bankName != "" {
+				bankLabel := fmt.Sprintf("บัญชีโอนเงิน: %s เลขที่ %s", bankName, bankAccountNo)
+				if bankAccountName != "" {
+					bankLabel += fmt.Sprintf(" (%s)", bankAccountName)
+				}
+				m.Text(bankLabel, props.Text{
+					Size:  9.5,
+					Style: consts.Bold,
+					Top:   thaiTextTop,
+					Color: HexToColor("#1F2937"),
+				})
+				thaiTextTop += 5.0
 			}
 			m.Text(fmt.Sprintf("จำนวนเงินทั้งสิ้น (ตัวอักษร): %s", thaiText), props.Text{
 				Size:  9.5,

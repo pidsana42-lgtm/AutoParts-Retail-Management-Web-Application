@@ -52,3 +52,25 @@ func TestAES256EncryptDecrypt(t *testing.T) {
 		t.Fatalf("Expected empty, got %s", decEmpty)
 	}
 }
+
+func TestMaskSensitiveNumber(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"0812345678", "******5678"},
+		{"1234", "1234"},
+		{"123", "123"},
+		{"", ""},
+		{"0105565012345", "*********2345"},
+		{"123-4-56789-0", "*********89-0"},
+	}
+
+	for _, tc := range tests {
+		actual := MaskSensitiveNumber(tc.input)
+		if actual != tc.expected {
+			t.Errorf("MaskSensitiveNumber(%q) = %q; expected %q", tc.input, actual, tc.expected)
+		}
+	}
+}
+
