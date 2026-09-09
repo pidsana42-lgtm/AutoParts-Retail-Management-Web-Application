@@ -159,6 +159,12 @@ export interface POSummaryResponse {
     rejected_by_supplier?: SupplierRejectedSummary[]; 
 }
 
+export interface POMonthlyCountResponse {
+    total_count: number;
+    last_month_count: number;
+    change_percent: number;
+}
+
 // -----------------------------------------
 // UPDATE PURCHASE ORDER (ส่วนการแก้ไขใบสั่งซื้อใหม่)
 // -----------------------------------------
