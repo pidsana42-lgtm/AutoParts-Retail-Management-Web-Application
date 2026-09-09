@@ -1,3 +1,4 @@
+import { isValidQuantity, validatePurchaseOrder } from './validation';
 // React Libraries
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
@@ -56,6 +57,14 @@ const CreatePurchaseOrders: React.FC = () => {
     const [isEstimateLoading, setIsEstimateLoading] = useState(false);
     // เก็บค่าที่ผู้ใช้กำลังพิมพ์อยู่ (ระหว่างลบเลขเดิมทิ้งแล้วยังพิมพ์ไม่เสร็จ) แยกจาก items จริง
     const [qtyDrafts, setQtyDrafts] = useState<Record<string | number, string>>({});
+    const [showValidation, setShowValidation] = useState(false);
+    const validationErrors = validatePurchaseOrder(listsSupplier, item, qtyDrafts);
+    const validateForm = () => {
+        setShowValidation(true);
+        if (validationErrors.length === 0) return true;
+        toast({ title: 'กรุณาตรวจสอบข้อมูลใบสั่งซื้อ', message: validationErrors[0], variant: 'warning' });
+        return false;
+    };
     // เก็บ supplier ที่รอยืนยันเปลี่ยน (ถ้ามีของในตะกร้าอยู่แล้ว)
     const [pendingSupplierId, setPendingSupplierId] = useState<string | null>(null);
     // เก็บ key ของรายการที่รอยืนยันลบเนื่องจากจำนวนเหลือ 0
@@ -144,6 +153,7 @@ const CreatePurchaseOrders: React.FC = () => {
 
     // Function เตือนก่อนว่ามีของในใบสั่งซื้ออยู่ ถ้าเปลี่ยนบริษัทจะดึง Stock Alert ชุดใหม่มาทับตะกร้าเดิม
     const handleSupplierChange = (newSupplierId: string) => {
+        if (newSupplierId === listsSupplier) return;
         if (item.length > 0) {
             setPendingSupplierId(newSupplierId);
             return;
@@ -153,6 +163,8 @@ const CreatePurchaseOrders: React.FC = () => {
 
     const confirmSupplierChange = () => {
         if (pendingSupplierId !== null) setlistsSupplier(pendingSupplierId);
+        setItem([]);
+        setQtyDrafts({});
         setPendingSupplierId(null);
     };
 
@@ -220,22 +232,14 @@ const CreatePurchaseOrders: React.FC = () => {
     // ฟังก์ชัน: บันทึกร่าง / ส่งอนุมัติ
     const handleSavePO = async (submitStatus: 'DRAFT' | 'PENDING') => {
         if (isSaving) return;
-        if (item.length === 0) {
-            toast({ title: 'เกิดข้อผิดพลาด', message: 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ', variant: 'warning' });
-            return;
-        }
-
-        if (!listsSupplier || listsSupplier === 'all' || listsSupplier === 'others') {
-            toast({ title: 'เกิดข้อผิดพลาด', message: 'กรุณาเลือกผู้จัดจำหน่าย (Supplier)', variant: 'warning' });
-            return;
-        }
+        if (removeConfirm || !validateForm()) return;
 
         setIsSaving(true);
         try {
             // เตรียมข้อมูลรายการสินค้า
             const poItemsPayload = item.map((p) => ({
                 product_id: p.product_id,
-                quantity: p.quantity,
+                quantity: Number(qtyDrafts[p.id] ?? p.quantity),
                 unit_price: p.unit_price,
                 alert_id: p.alert_id,
                 pre_order_item_id: p.pre_order_item_id,
@@ -294,16 +298,10 @@ const CreatePurchaseOrders: React.FC = () => {
         if (raw === undefined) return; // ไม่ได้แก้ไขอะไร
 
         const trimmed = raw.trim();
-        if (trimmed === '' || isNaN(Number(trimmed)) || Number(trimmed) < 1) {
-            // พิมพ์ไม่เสร็จ/ใส่ 0 -> คืนค่าตัวเลขเดิม ไม่ต้อง commit
-            setQtyDrafts(prev => {
-                const next = { ...prev };
-                delete next[key];
-                return next;
-            });
+        if (!isValidQuantity(Number(trimmed))) {
+            setShowValidation(true);
             return;
         }
-
         handleUpdateItem(id, 'quantity', trimmed);
         setQtyDrafts(prev => {
             const next = { ...prev };
@@ -313,7 +311,15 @@ const CreatePurchaseOrders: React.FC = () => {
     };    
 
     return (
-        <div className='p-8 space-y-6 bg-gray-50 min-h-screen'>
+        <div className='p-8 space-y-6 bg-white min-h-screen'>
+            {showValidation && validationErrors.length > 0 && (
+                <div role="alert" className="border border-red-300 bg-red-50 p-4 text-sm text-red-700">
+                    <p className="font-medium">กรุณาตรวจสอบข้อมูลใบสั่งซื้อ</p>
+                    <ul className="list-disc pl-5 mt-2">
+                        {validationErrors.map(message => <li key={message}>{message}</li>)}
+                    </ul>
+                </div>
+            )}
             { /* Header */ }
             <div className='flex items-center justify-between'>
                 <div className='flex-col space-y-2'>
@@ -514,6 +520,7 @@ const CreatePurchaseOrders: React.FC = () => {
                             ref={quantityInputRef}
                             type='number'
                             min={1}
+                            step={1}
                             value={addQuantity}
                             onChange={(e) => {
                                 const val = e.target.value;

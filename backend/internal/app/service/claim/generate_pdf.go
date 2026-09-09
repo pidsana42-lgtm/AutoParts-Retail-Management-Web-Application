@@ -31,8 +31,8 @@ func (s *customerClaimService) GenerateCustomerClaimPDF(ctx context.Context, cla
 	// 2. ตั้งค่าหน้ากระดาษและฟอนต์ภาษาไทย
 	m := pdf.NewMaroto(consts.Portrait, consts.A4)
 	m.SetPageMargins(10, 15, 10)
-	m.AddUTF8Font("THSarabun", consts.Normal, "assets/fonts/THSarabunNew.ttf")
-	m.AddUTF8Font("THSarabun", consts.Bold, "assets/fonts/THSarabunNew Bold.ttf")
+	m.AddUTF8Font("THSarabun", consts.Normal, resolveFontPath("assets/fonts/THSarabunNew.ttf"))
+	m.AddUTF8Font("THSarabun", consts.Bold, resolveFontPath("assets/fonts/THSarabunNew Bold.ttf"))
 	m.SetDefaultFontFamily("THSarabun")
 
 	claimDateStr := claim.ClaimDate.Format("02/01/2006 15:04")
@@ -40,12 +40,23 @@ func (s *customerClaimService) GenerateCustomerClaimPDF(ctx context.Context, cla
 		claimDateStr = time.Now().Format("02/01/2006 15:04")
 	}
 
+	var logoFilePath, logoBase64 string
+	var logoExt consts.Extension
+	if companyData != nil && companyData.LogoURL != "" {
+		logoFilePath, logoBase64, logoExt, _ = loadEvidenceImage(companyData.LogoURL)
+	}
+
 	// 3. ส่วนหัวเอกสาร
 	m.RegisterHeader(func() {
 		m.Row(24, func() {
 			m.Col(3, func() {
-				if companyData != nil && companyData.LogoURL != "" {
-					_ = m.FileImage(companyData.LogoURL, props.Rect{
+				if logoFilePath != "" {
+					_ = m.FileImage(logoFilePath, props.Rect{
+						Percent: 350,
+						Center:  false,
+					})
+				} else if logoBase64 != "" {
+					_ = m.Base64Image(logoBase64, logoExt, props.Rect{
 						Percent: 350,
 						Center:  false,
 					})
@@ -327,8 +338,8 @@ func (s *customerClaimService) GenerateCustomerClaimChecklistPDF(ctx context.Con
 
 	m := pdf.NewMaroto(consts.Portrait, consts.A4)
 	m.SetPageMargins(10, 15, 10)
-	m.AddUTF8Font("THSarabun", consts.Normal, "assets/fonts/THSarabunNew.ttf")
-	m.AddUTF8Font("THSarabun", consts.Bold, "assets/fonts/THSarabunNew Bold.ttf")
+	m.AddUTF8Font("THSarabun", consts.Normal, resolveFontPath("assets/fonts/THSarabunNew.ttf"))
+	m.AddUTF8Font("THSarabun", consts.Bold, resolveFontPath("assets/fonts/THSarabunNew Bold.ttf"))
 	m.SetDefaultFontFamily("THSarabun")
 
 	nowStr := time.Now().Format("02/01/2006 15:04")
@@ -421,12 +432,23 @@ func (s *customerClaimService) GenerateCustomerClaimChecklistPDF(ctx context.Con
 		}
 	}
 
+	var logoFilePath, logoBase64 string
+	var logoExt consts.Extension
+	if companyData != nil && companyData.LogoURL != "" {
+		logoFilePath, logoBase64, logoExt, _ = loadEvidenceImage(companyData.LogoURL)
+	}
+
 	// Header
 	m.RegisterHeader(func() {
 		m.Row(22, func() {
 			m.Col(3, func() {
-				if companyData != nil && companyData.LogoURL != "" {
-					_ = m.FileImage(companyData.LogoURL, props.Rect{
+				if logoFilePath != "" {
+					_ = m.FileImage(logoFilePath, props.Rect{
+						Percent: 320,
+						Center:  false,
+					})
+				} else if logoBase64 != "" {
+					_ = m.Base64Image(logoBase64, logoExt, props.Rect{
 						Percent: 320,
 						Center:  false,
 					})
@@ -603,18 +625,25 @@ func loadEvidenceImage(urlOrPath string) (filePath string, base64Data string, ex
 	}
 
 	ext = consts.Jpg
-	if strings.HasSuffix(strings.ToLower(urlOrPath), ".png") {
+	cleanLower := strings.ToLower(urlOrPath)
+	if idx := strings.Index(cleanLower, "?"); idx != -1 {
+		cleanLower = cleanLower[:idx]
+	}
+	if strings.HasSuffix(cleanLower, ".png") {
 		ext = consts.Png
 	}
 
 	// 1. Remote HTTP/HTTPS URL
 	if strings.HasPrefix(urlOrPath, "http://") || strings.HasPrefix(urlOrPath, "https://") {
-		client := http.Client{Timeout: 3 * time.Second}
+		client := http.Client{Timeout: 5 * time.Second}
 		resp, err := client.Get(urlOrPath)
 		if err != nil {
 			return "", "", ext, err
 		}
 		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return "", "", ext, fmt.Errorf("http status %d", resp.StatusCode)
+		}
 		data, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return "", "", ext, err
@@ -624,14 +653,16 @@ func loadEvidenceImage(urlOrPath string) (filePath string, base64Data string, ex
 
 	// 2. Local File path
 	cleanPath := strings.TrimPrefix(urlOrPath, "/")
-	if _, err := os.Stat(cleanPath); err == nil {
-		return cleanPath, "", ext, nil
+	candidates := []string{
+		cleanPath,
+		"backend/" + cleanPath,
+		"uploads/" + cleanPath,
+		"backend/uploads/" + cleanPath,
 	}
-	if _, err := os.Stat("backend/" + cleanPath); err == nil {
-		return "backend/" + cleanPath, "", ext, nil
-	}
-	if _, err := os.Stat("uploads/" + cleanPath); err == nil {
-		return "uploads/" + cleanPath, "", ext, nil
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && !info.IsDir() {
+			return c, "", ext, nil
+		}
 	}
 
 	return "", "", ext, fmt.Errorf("file not found: %s", urlOrPath)
@@ -661,4 +692,23 @@ func sanitizeTextForPDF(s string) string {
 	}
 	return b.String()
 }
+
+func resolveFontPath(fontRelPath string) string {
+	candidates := []string{
+		fontRelPath,
+		"backend/" + fontRelPath,
+		"../" + fontRelPath,
+		"../../" + fontRelPath,
+		"../../../" + fontRelPath,
+		"../../../../" + fontRelPath,
+		"../../../../backend/" + fontRelPath,
+	}
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && !info.IsDir() {
+			return c
+		}
+	}
+	return fontRelPath
+}
+
 

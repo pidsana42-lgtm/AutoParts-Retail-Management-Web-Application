@@ -147,7 +147,7 @@ export default function Select({
             aria-expanded={isOpen}
             aria-invalid={!!error}
             onKeyDown={handleKeyDown}
-            className={cn(disabled && "pointer-events-none opacity-60", className)}
+            className={cn("outline-none focus:outline-none", disabled && "pointer-events-none opacity-60", className)}
           >
             {renderTrigger({
               isOpen,
@@ -175,7 +175,7 @@ export default function Select({
                 "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
                 isPlaceholder ? "text-slate-400" : "text-slate-800",
                 error
-                  ? "!border-red-500 focus:border-red-500 ring-1 ring-red-500"
+                  ? "border-red-500! focus:border-red-500 ring-1 ring-red-500"
                   // ✅ focus สีแดง
                   : "border-slate-300 focus:border-[#B70011] focus:ring-red-600",
                 isOpen && "border-[#B70011] ring-1 ring-red-200",
@@ -189,8 +189,8 @@ export default function Select({
             <svg
               className={cn(
                 "pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 transition-transform",
-                // ✅ arrow สีแดง
-                "text-[#B70011]",
+                // ✅ arrow สีแดง (หรือสีเทาเมื่อ disabled)
+                disabled ? "text-slate-300" : "text-[#B70011]",
                 isOpen && "rotate-180"
               )}
               viewBox="0 0 20 20"
