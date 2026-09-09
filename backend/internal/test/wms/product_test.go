@@ -21,7 +21,6 @@ type mockProductRepo struct {
 	createProductFn           func(*entity.Product) error
 	getProductByIDFn          func(uint) (*entity.Product, error)
 	updateProductFn           func(*entity.Product) error
-	updateBarcodeFn           func(uint, string) error
 	deleteProductFn           func(uint) error
 	createProductImageFn      func(*entity.ProductImage) error
 	listProductsFn            func() ([]entity.Product, error)
@@ -67,14 +66,6 @@ func (m *mockProductRepo) UpdateProduct(product *entity.Product) error {
 	m.track("UpdateProduct")
 	if m.updateProductFn != nil {
 		return m.updateProductFn(product)
-	}
-	return nil
-}
-
-func (m *mockProductRepo) UpdateBarcode(id uint, barcode string) error {
-	m.track("UpdateBarcode")
-	if m.updateBarcodeFn != nil {
-		return m.updateBarcodeFn(id, barcode)
 	}
 	return nil
 }
@@ -221,7 +212,7 @@ func validProductRequest() *wmsDTO.ProductRequestDTO {
 }
 
 // productWithSupplier: entity.Product ที่มี Inventory + Supplier ผูกอยู่ 1 เจ้า ไว้ใช้เป็นค่าตอบกลับของ
-// GetProductByID ตอนทดสอบ flow ที่ต้องประกอบบาร์โค้ดอัตโนมัติ (applyAutoBarcode อ่าน Inventories[0].Supplier)
+// GetProductByID ในหลายเทสต์ที่ต้องอ่าน Inventories[0].Supplier ต่อ (เช่น ReceiveStock)
 func productWithSupplier(id uint, supplierShortName string) *entity.Product {
 	return &entity.Product{
 		Model:        gorm.Model{ID: id},
@@ -242,7 +233,7 @@ func productWithSupplier(id uint, supplierShortName string) *entity.Product {
 // CreateProduct
 // ---------------------------------------------------------------------------
 
-func TestCreateProduct_Success_AppliesAutoBarcode(t *testing.T) {
+func TestCreateProduct_Success(t *testing.T) {
 	repo := newMockProductRepo()
 
 	var createdProduct entity.Product
@@ -257,14 +248,6 @@ func TestCreateProduct_Success_AppliesAutoBarcode(t *testing.T) {
 	repo.replaceProductSuppliersFn = func(productID uint, inventories []entity.Inventory) error {
 		repliedProductID = productID
 		repliedInventories = inventories
-		return nil
-	}
-
-	var barcodeID uint
-	var barcodeValue string
-	repo.updateBarcodeFn = func(id uint, barcode string) error {
-		barcodeID = id
-		barcodeValue = barcode
 		return nil
 	}
 
@@ -288,47 +271,12 @@ func TestCreateProduct_Success_AppliesAutoBarcode(t *testing.T) {
 		t.Errorf("expected inventories built from suppliers input, got %+v", repliedInventories)
 	}
 
-	// บาร์โค้ดอัตโนมัติ: รหัสสินค้า-เลขอะไหล่-ชื่อย่อบริษัท
-	wantBarcode := "OIL-001-PN-1-TAP"
-	if barcodeID != 10 || barcodeValue != wantBarcode {
-		t.Errorf("expected auto barcode %q applied to product 10, got id=%d barcode=%q", wantBarcode, barcodeID, barcodeValue)
-	}
-
 	// ผลลัพธ์ที่คืนกลับมาจากการ fetch ซ้ำผ่าน GetProductByID (mock คืน mock ล่าสุด)
 	if result.Product_Code != "OIL-001" {
 		t.Errorf("expected product_code OIL-001 in response, got %s", result.Product_Code)
 	}
 	if repo.called["CreateProduct"] != 1 {
 		t.Errorf("expected CreateProduct called exactly once, got %d", repo.called["CreateProduct"])
-	}
-}
-
-func TestCreateProduct_ManualBarcode_SkipsAutoBarcode(t *testing.T) {
-	repo := newMockProductRepo()
-	repo.createProductFn = func(p *entity.Product) error {
-		p.ID = 20
-		return nil
-	}
-	repo.getProductByIDFn = func(id uint) (*entity.Product, error) {
-		return productWithSupplier(id, "TAP"), nil
-	}
-
-	updateBarcodeCalled := false
-	repo.updateBarcodeFn = func(uint, string) error {
-		updateBarcodeCalled = true
-		return nil
-	}
-
-	req := validProductRequest()
-	req.Barcode = "MANUAL-BARCODE-123"
-
-	svc := wmsService.NewProductService(repo)
-	if _, err := svc.CreateProduct(req); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if updateBarcodeCalled {
-		t.Error("expected UpdateBarcode NOT to be called when caller provides a barcode manually")
 	}
 }
 
@@ -367,8 +315,8 @@ func TestCreateProduct_RepoCreateError_PropagatesAndSkipsFollowUpCalls(t *testin
 	}
 }
 
-func TestCreateProduct_NoSupplierLinked_AutoBarcodeFallsBackToProductCodeOnly(t *testing.T) {
-	// ไม่มี Supplier เลย -> applyAutoBarcode หาชื่อย่อบริษัทไม่เจอ ต้อง "เงียบ" ไม่ error และไม่เรียก UpdateBarcode
+func TestCreateProduct_NoSupplierLinked_Success(t *testing.T) {
+	// สร้างสินค้าได้ปกติแม้ไม่มี Supplier ผูกมาด้วยเลย (Suppliers เป็น nil) — ต้องไม่ error
 	repo := newMockProductRepo()
 	repo.createProductFn = func(p *entity.Product) error {
 		p.ID = 30
@@ -383,21 +331,17 @@ func TestCreateProduct_NoSupplierLinked_AutoBarcodeFallsBackToProductCodeOnly(t 
 			// Inventories ว่างเปล่า
 		}, nil
 	}
-	updateBarcodeCalled := false
-	repo.updateBarcodeFn = func(uint, string) error {
-		updateBarcodeCalled = true
-		return nil
-	}
 
 	req := validProductRequest()
 	req.Suppliers = nil
 
 	svc := wmsService.NewProductService(repo)
-	if _, err := svc.CreateProduct(req); err != nil {
+	result, err := svc.CreateProduct(req)
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if updateBarcodeCalled {
-		t.Error("expected UpdateBarcode not to be called when the product has no linked supplier")
+	if result.Product_Code != "OIL-001" {
+		t.Errorf("expected product_code OIL-001 in response, got %s", result.Product_Code)
 	}
 }
 
@@ -417,12 +361,6 @@ func TestUpdateProduct_Success(t *testing.T) {
 		return productWithSupplier(id, "TAP"), nil
 	}
 
-	var barcodeValue string
-	repo.updateBarcodeFn = func(_ uint, barcode string) error {
-		barcodeValue = barcode
-		return nil
-	}
-
 	svc := wmsService.NewProductService(repo)
 	err := svc.UpdateProduct(42, validProductRequest())
 	if err != nil {
@@ -431,8 +369,8 @@ func TestUpdateProduct_Success(t *testing.T) {
 	if updatedProduct.ID != 42 {
 		t.Errorf("expected updated entity ID 42, got %d", updatedProduct.ID)
 	}
-	if barcodeValue != "OIL-001-PN-1-TAP" {
-		t.Errorf("expected auto barcode recomputed, got %q", barcodeValue)
+	if updatedProduct.Product_Name != "Synthetic Oil" {
+		t.Errorf("expected repo.UpdateProduct to receive mapped entity, got %+v", updatedProduct)
 	}
 }
 

@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { CheckCircle2, Loader2, FileImage, ExternalLink, ChevronRight } from 'lucide-react';
+import { CheckCircle2, FileImage, ExternalLink, ChevronRight, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Heading from '../../../../components/elements/heading';
+import Button from '../../../../components/elements/button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
 import type { SavedBill, Supplier, Product } from '../../../../interface/import';
 import { resolveImageUrl } from '../../../../service/http/import/import_service';
-import BillSummaryFooterBar from '../components/BillSummaryFooterBar';
 
 interface ApproveViewProps {
   bill: SavedBill;
@@ -23,6 +23,7 @@ export default function ApproveView({
   bill,
   products,
   onApprove,
+  onReject,
   onBack,
   formatDate,
   getSupplierName,
@@ -30,11 +31,23 @@ export default function ApproveView({
 }: ApproveViewProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState<boolean>(false);
+  const [rejecting, setRejecting] = useState<boolean>(false);
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
 
   const handleApprove = async () => {
     setLoading(true);
     try { await onApprove(bill.id); } finally { setLoading(false); }
+  };
+
+  const handleReject = () => {
+    setIsRejectModalOpen(true);
+  };
+
+  const handleConfirmReject = async () => {
+    setIsRejectModalOpen(false);
+    setRejecting(true);
+    try { await onReject(bill.id); } finally { setRejecting(false); }
   };
 
   const imageUrl = resolveImageUrl(bill.bill_image?.image_url || bill.evidence_file_url);
@@ -116,7 +129,7 @@ export default function ApproveView({
                 <p className="font-medium text-[#1C1B1B]">{formatDate(bill.created_at)}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-400 mb-0.5">ครบกำหนดชำระ</p>
+                <p className="text-xs text-gray-400 mb-0.5">วันที่ในบิล</p>
                 <p className="font-medium text-[#1C1B1B]">{formatDate(bill.due_date)}</p>
               </div>
               <div>
@@ -218,36 +231,66 @@ export default function ApproveView({
             </div>
           </div>
 
-          {/* Summary & Submit Footer Bar */}
-          <BillSummaryFooterBar
-            totalItems={(bill.bill_items || []).length}
-            subtotal={bill.subtotal || totalNetAmount}
-            totalAmount={bill.total_amount || totalNetAmount}
-            onCancel={onBack}
-            disabled={!!loading}
-          >
-            {bill.is_verified ? (
+          {/* Button Actions — เหมือน pattern ของหน้าใบสั่งซื้อ (po_detail.tsx) */}
+          {bill.is_verified ? (
+            <div className="sticky bottom-0 z-20 bg-gray-50 py-4 border-t border-gray-200 flex justify-end">
               <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
                 <CheckCircle2 size={16} /> บิลนี้ได้รับการอนุมัติแล้ว
               </span>
-            ) : !isEmployee ? (
-              <button
-                type="button"
-                onClick={handleApprove}
-                disabled={!!loading}
-                className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
+            </div>
+          ) : !isEmployee ? (
+            <div className="sticky bottom-0 z-20 bg-gray-50 py-4 border-t border-gray-200 flex justify-between">
+              <Button
+                variant="outline"
+                className="w-48"
+                leftIcon={<XCircle size={16} />}
+                isLoading={rejecting}
+                disabled={loading || rejecting}
+                onClick={handleReject}
               >
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                <span>อนุมัติบิล</span>
-              </button>
-            ) : (
+                {rejecting ? 'กำลังดำเนินการ...' : 'ปฏิเสธ / ส่งกลับแก้ไข'}
+              </Button>
+              <Button
+                variant="primary"
+                className="w-40"
+                leftIcon={<CheckCircle2 size={16} />}
+                isLoading={loading}
+                disabled={loading || rejecting}
+                onClick={handleApprove}
+              >
+                {loading ? 'กำลังอนุมัติ...' : 'อนุมัติบิล'}
+              </Button>
+            </div>
+          ) : (
+            <div className="sticky bottom-0 z-20 bg-gray-50 py-4 border-t border-gray-200 flex justify-end">
               <span className="text-xs font-bold text-amber-600 flex items-center gap-1">
                 รอเจ้าของร้านอนุมัติ
               </span>
-            )}
-          </BillSummaryFooterBar>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Reject Confirm Modal — เหมือน pattern ของหน้าใบสั่งซื้อ (po_detail.tsx) */}
+      {isRejectModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setIsRejectModalOpen(false)} />
+          <div className="relative bg-white rounded-sm shadow-xl w-full max-w-md mx-4 p-6 space-y-5">
+            <Heading level="h4" weight="semibold" className="text-black">ปฏิเสธบิลนี้</Heading>
+            <p className="text-sm text-gray-600">
+              บิลจะถูกส่งกลับไปเป็นแบบร่าง (Draft) พนักงานจะต้องแก้ไขรายการและส่งเข้ามาให้ตรวจสอบใหม่อีกครั้ง ยืนยันหรือไม่?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" className="w-28" onClick={() => setIsRejectModalOpen(false)}>
+                ยกเลิก
+              </Button>
+              <Button variant="primary" className="w-36" onClick={handleConfirmReject}>
+                ยืนยัน
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

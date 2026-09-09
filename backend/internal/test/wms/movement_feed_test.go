@@ -24,12 +24,13 @@ type mockMovementFeedRepo struct {
 	listRecentProductsFn     func() ([]entity.Product, error)
 	listStockInMovementsFn   func() ([]entity.StockMovement, error)
 	listCheckSchedulesFn     func() ([]entity.CheckStockSchedule, error)
-	listStockAdjustmentsFn   func() ([]entity.CheckStock, error)
+	listStockAdjustmentsFn   func() ([]entity.StockMovement, error)
 	listLowStockProductsFn   func() ([]entity.Product, error)
-	listSaleOutItemsFn       func() ([]entity.SaleOrderItem, error)
+	listSaleOutItemsFn       func() ([]entity.StockMovement, error)
 	listReturnMovementsFn    func() ([]entity.StockMovement, error)
 	listCustomerClaimItemsFn func() ([]entity.CustomerClaimItem, error)
 	listPreOrderItemsFn      func() ([]entity.PreOrderItem, error)
+	getSalesReturnIDsFn      func([]string) (map[string]uint, error)
 }
 
 func (m *mockMovementFeedRepo) ListRecentProducts() ([]entity.Product, error) {
@@ -53,7 +54,7 @@ func (m *mockMovementFeedRepo) ListCheckSchedules() ([]entity.CheckStockSchedule
 	return nil, nil
 }
 
-func (m *mockMovementFeedRepo) ListStockAdjustments() ([]entity.CheckStock, error) {
+func (m *mockMovementFeedRepo) ListStockAdjustments() ([]entity.StockMovement, error) {
 	if m.listStockAdjustmentsFn != nil {
 		return m.listStockAdjustmentsFn()
 	}
@@ -67,7 +68,7 @@ func (m *mockMovementFeedRepo) ListLowStockProducts() ([]entity.Product, error) 
 	return nil, nil
 }
 
-func (m *mockMovementFeedRepo) ListSaleOutItems() ([]entity.SaleOrderItem, error) {
+func (m *mockMovementFeedRepo) ListSaleOutItems() ([]entity.StockMovement, error) {
 	if m.listSaleOutItemsFn != nil {
 		return m.listSaleOutItemsFn()
 	}
@@ -93,6 +94,13 @@ func (m *mockMovementFeedRepo) ListPreOrderItems() ([]entity.PreOrderItem, error
 		return m.listPreOrderItemsFn()
 	}
 	return nil, nil
+}
+
+func (m *mockMovementFeedRepo) GetSalesReturnIDsByReturnNumbers(returnNumbers []string) (map[string]uint, error) {
+	if m.getSalesReturnIDsFn != nil {
+		return m.getSalesReturnIDsFn(returnNumbers)
+	}
+	return map[string]uint{}, nil
 }
 
 var _ wmsRepo.MovementFeedRepository = (*mockMovementFeedRepo)(nil)
@@ -159,13 +167,13 @@ func TestList_PropagatesErrorFromAnySource(t *testing.T) {
 			r.listCheckSchedulesFn = func() ([]entity.CheckStockSchedule, error) { return nil, wantErr }
 		}},
 		{"ListStockAdjustments", func(r *mockMovementFeedRepo) {
-			r.listStockAdjustmentsFn = func() ([]entity.CheckStock, error) { return nil, wantErr }
+			r.listStockAdjustmentsFn = func() ([]entity.StockMovement, error) { return nil, wantErr }
 		}},
 		{"ListLowStockProducts", func(r *mockMovementFeedRepo) {
 			r.listLowStockProductsFn = func() ([]entity.Product, error) { return nil, wantErr }
 		}},
 		{"ListSaleOutItems", func(r *mockMovementFeedRepo) {
-			r.listSaleOutItemsFn = func() ([]entity.SaleOrderItem, error) { return nil, wantErr }
+			r.listSaleOutItemsFn = func() ([]entity.StockMovement, error) { return nil, wantErr }
 		}},
 		{"ListReturnMovements", func(r *mockMovementFeedRepo) {
 			r.listReturnMovementsFn = func() ([]entity.StockMovement, error) { return nil, wantErr }
@@ -231,6 +239,12 @@ func TestList_ProductAddedItem_MapsFields(t *testing.T) {
 	if item.Quantity == nil || *item.Quantity != 15 {
 		t.Errorf("expected quantity 15, got %v", item.Quantity)
 	}
+	if item.LinkPath != "/owner/stock/1" {
+		t.Errorf("expected link path to product detail /owner/stock/1, got %q", item.LinkPath)
+	}
+	if item.LinkState["from"] != "movement" {
+		t.Errorf("expected link state from=movement so the product page's breadcrumb points back here, got %v", item.LinkState)
+	}
 }
 
 func TestList_StockInItem_IncludesSupplierNameInDetail(t *testing.T) {
@@ -241,6 +255,7 @@ func TestList_StockInItem_IncludesSupplierNameInDetail(t *testing.T) {
 				Movement_Type:     "IN",
 				Quantity:          5,
 				Movement_DateTime: time.Now(),
+				ProductID:         7,
 				Product:           &entity.Product{Product_Name: "Brake Pad", Product_Code: "P-2"},
 				Supplier:          &entity.Supplier{SupplierName: "ABC Co."},
 			}}, nil
@@ -258,44 +273,47 @@ func TestList_StockInItem_IncludesSupplierNameInDetail(t *testing.T) {
 	if item.Detail != "รับจาก ABC Co." {
 		t.Errorf("expected detail to mention supplier, got %q", item.Detail)
 	}
+	if item.LinkPath != "/owner/stock/7" {
+		t.Errorf("expected link path to product detail /owner/stock/7, got %q", item.LinkPath)
+	}
 }
 
-func TestList_StockAdjustedItem_ShowsExcessOrShortageInThai(t *testing.T) {
-	tests := []struct {
-		name       string
-		diff       int
-		wantSubstr string
-	}{
-		{"excess counted more than system", 5, "เกิน"},
-		{"shortage counted less than system", -5, "ขาด"},
+// stockAdjustedFeedItem อ่านจาก stock_movements ตรงๆ แล้ว (ไม่ใช่ check_stocks) — ข้อความ "เดิม X → นับได้ Y
+// (เกิน/ขาด N)" ถูกฝังไว้ใน Note ตั้งแต่ตอนเขียนแถวที่ ApproveSchedule แล้ว (ทดสอบแยกที่
+// internal/test/wms/check_stock_schedule_repo_test.go) ที่นี่แค่ทดสอบว่า mapper เอา Note มาต่อชื่อผู้ตรวจนับให้ถูก
+func TestList_StockAdjustedItem_UsesNoteAsDetailAndAppendsCounter(t *testing.T) {
+	productID := uint(9)
+	repo := &mockMovementFeedRepo{
+		listStockAdjustmentsFn: func() ([]entity.StockMovement, error) {
+			return []entity.StockMovement{{
+				Model:             gorm.Model{ID: 1},
+				Movement_Type:     "ADJUST",
+				Quantity:          5,
+				Movement_DateTime: time.Now(),
+				Note:              "เดิม 10 → นับได้ 15 (เกิน 5)",
+				ProductID:         productID,
+				Product:           &entity.Product{Product_Name: "Turbo"},
+				User:              &entity.User{FirstName: "สมชาย", LastName: "ใจดี"},
+			}}, nil
+		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockMovementFeedRepo{
-				listStockAdjustmentsFn: func() ([]entity.CheckStock, error) {
-					return []entity.CheckStock{{
-						Model:               gorm.Model{ID: 1},
-						Old_Quantity:        10,
-						New_Quantity:        10 + tt.diff,
-						Diff_Quantity:       tt.diff,
-						Adjustment_DateTime: time.Now(),
-						Product:             &entity.Product{Product_Name: "Turbo"},
-					}}, nil
-				},
-			}
-			svc := wmsService.NewMovementFeedService(repo)
-			items, err := svc.List()
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			item := mustFindByType(t, items, wmsDTO.MovementFeedStockAdjusted)
-			if !strings.Contains(item.Detail, tt.wantSubstr) {
-				t.Errorf("expected detail to contain %q, got %q", tt.wantSubstr, item.Detail)
-			}
-			if item.Quantity != nil {
-				t.Errorf("expected stock-adjusted items not to set Quantity directly, got %v", item.Quantity)
-			}
-		})
+	svc := wmsService.NewMovementFeedService(repo)
+	items, err := svc.List()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	item := mustFindByType(t, items, wmsDTO.MovementFeedStockAdjusted)
+	if !strings.Contains(item.Detail, "เกิน 5") {
+		t.Errorf("expected detail to carry the note text through, got %q", item.Detail)
+	}
+	if !strings.Contains(item.Detail, "ผู้ตรวจนับ") {
+		t.Errorf("expected detail to append the counter's name, got %q", item.Detail)
+	}
+	if item.LinkPath != "/owner/stock/9" {
+		t.Errorf("expected link path to product detail /owner/stock/9, got %q", item.LinkPath)
+	}
+	if item.Quantity != nil {
+		t.Errorf("expected stock-adjusted items not to set Quantity directly, got %v", item.Quantity)
 	}
 }
 
@@ -311,16 +329,18 @@ func TestList_SaleOutItem_TitleReflectsOrderStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.status, func(t *testing.T) {
 			repo := &mockMovementFeedRepo{
-				listSaleOutItemsFn: func() ([]entity.SaleOrderItem, error) {
-					return []entity.SaleOrderItem{{
-						Model:       gorm.Model{ID: 1},
-						OrderNumber: "SO-1",
-						ProductID:   1,
-						ProductName: "Turbocharger",
-						Qty:         2,
-						Order: entity.SaleOrder{
-							Status:    enum.OrderStatus(tt.status),
-							OrderDate: time.Now(),
+				listSaleOutItemsFn: func() ([]entity.StockMovement, error) {
+					return []entity.StockMovement{{
+						Model:             gorm.Model{ID: 1},
+						Movement_Type:     "OUT",
+						Quantity:          2,
+						Movement_DateTime: time.Now(),
+						ProductID:         1,
+						Product:           &entity.Product{Product_Name: "Turbocharger"},
+						SaleOrder: &entity.SaleOrder{
+							Model:       gorm.Model{ID: 42},
+							OrderNumber: "SO-1",
+							Status:      enum.OrderStatus(tt.status),
 						},
 					}}, nil
 				},
@@ -337,6 +357,11 @@ func TestList_SaleOutItem_TitleReflectsOrderStatus(t *testing.T) {
 			if item.Quantity == nil || *item.Quantity != -2 {
 				t.Errorf("expected quantity -2 (outflow), got %v", item.Quantity)
 			}
+			// RefID (item.ID=1) เป็น id รายการสินค้าในออเดอร์ ใช้ลิงก์ไปหน้ารายละเอียดออเดอร์ไม่ได้ — LinkPath ต้องอิง
+			// OrderID (42) ของออเดอร์จริงแทน ไม่ใช่ RefID (บั๊กเดิมที่เคยพลาดจุดนี้)
+			if item.LinkPath != "/owner/stock/stock-movement/orders/42" {
+				t.Errorf("expected link path to use the order id (42), not the line item id, got %q", item.LinkPath)
+			}
 		})
 	}
 }
@@ -348,9 +373,13 @@ func TestList_ReturnItem_MapsFromStockMovement(t *testing.T) {
 				Model:             gorm.Model{ID: 1},
 				Quantity:          3,
 				Movement_DateTime: time.Now(),
+				ProductID:         3,
 				Note:              "Return RET-001",
 				Product:           &entity.Product{Product_Name: "Gasket Set"},
 			}}, nil
+		},
+		getSalesReturnIDsFn: func(returnNumbers []string) (map[string]uint, error) {
+			return map[string]uint{"RET-001": 55}, nil
 		},
 	}
 	svc := wmsService.NewMovementFeedService(repo)
@@ -362,6 +391,43 @@ func TestList_ReturnItem_MapsFromStockMovement(t *testing.T) {
 	if item.ProductName != "Gasket Set" || item.Detail != "Return RET-001" {
 		t.Errorf("unexpected return item: %+v", item)
 	}
+	// RefID (item.ID=1) เป็น id แถว stock_movements คนละตารางกับ sales_returns — LinkPath ต้องอิง id ใบคืนจริง
+	// (55) ที่ย้อนกลับมาจากเลขที่ใบคืนใน Note ไม่ใช่ RefID (บั๊กเดิมที่เคยพลาดจุดนี้)
+	if item.LinkPath != "/owner/returns/detail/55" {
+		t.Errorf("expected link path to use the resolved sales_return id (55), got %q", item.LinkPath)
+	}
+	if item.LinkState["from"] != "movement" {
+		t.Errorf("expected link state from=movement, got %v", item.LinkState)
+	}
+}
+
+// TestList_ReturnItem_FallsBackToProductLinkWhenReturnNumberNotResolved: ถ้าย้อนหา id ใบคืนจริงจากเลขที่ใบคืนไม่เจอ
+// (เช่น ใบคืนถูกลบไปแล้ว หรือรูปแบบ Note ไม่ตรง) ต้องลิงก์ไปหน้ารายละเอียดสินค้าแทน ยังดีกว่ากดไม่ได้เลย
+func TestList_ReturnItem_FallsBackToProductLinkWhenReturnNumberNotResolved(t *testing.T) {
+	repo := &mockMovementFeedRepo{
+		listReturnMovementsFn: func() ([]entity.StockMovement, error) {
+			return []entity.StockMovement{{
+				Model:             gorm.Model{ID: 1},
+				Quantity:          3,
+				Movement_DateTime: time.Now(),
+				ProductID:         8,
+				Note:              "Return RET-404",
+				Product:           &entity.Product{Product_Name: "Wiper Blade"},
+			}}, nil
+		},
+		getSalesReturnIDsFn: func(returnNumbers []string) (map[string]uint, error) {
+			return map[string]uint{}, nil // ไม่เจอ RET-404 เลย
+		},
+	}
+	svc := wmsService.NewMovementFeedService(repo)
+	items, err := svc.List()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	item := mustFindByType(t, items, wmsDTO.MovementFeedSalesReturn)
+	if item.LinkPath != "/owner/stock/8" {
+		t.Errorf("expected fallback link path to product detail /owner/stock/8, got %q", item.LinkPath)
+	}
 }
 
 func TestList_CustomerClaimItem_UsesClaimDateNotRowCreatedAt(t *testing.T) {
@@ -371,11 +437,12 @@ func TestList_CustomerClaimItem_UsesClaimDateNotRowCreatedAt(t *testing.T) {
 	repo := &mockMovementFeedRepo{
 		listCustomerClaimItemsFn: func() ([]entity.CustomerClaimItem, error) {
 			return []entity.CustomerClaimItem{{
-				Model:     gorm.Model{ID: 1, CreatedAt: rowCreatedAt},
-				ProductID: 1,
-				Qty:       1,
-				Reason:    "สินค้าชำรุด",
-				Product:   &entity.Product{Product_Name: "LED Light"},
+				Model:           gorm.Model{ID: 1, CreatedAt: rowCreatedAt},
+				CustomerClaimID: 77,
+				ProductID:       1,
+				Qty:             1,
+				Reason:          "สินค้าชำรุด",
+				Product:         &entity.Product{Product_Name: "LED Light"},
 				CustomerClaim: &entity.CustomerClaim{
 					ClaimNo:   "CLM-001",
 					ClaimDate: claimDate,
@@ -395,6 +462,14 @@ func TestList_CustomerClaimItem_UsesClaimDateNotRowCreatedAt(t *testing.T) {
 	if !strings.Contains(item.Detail, "CLM-001") || !strings.Contains(item.Detail, "สินค้าชำรุด") {
 		t.Errorf("expected detail to mention claim number and reason, got %q", item.Detail)
 	}
+	// RefID (item.ID=1) เป็น id รายการสินค้าในใบเคลม ใช้ลิงก์ไปหน้ารายละเอียดใบเคลมไม่ได้ — LinkPath ต้องอิง
+	// CustomerClaimID (77) ของใบเคลมจริงแทน ไม่ใช่ RefID (บั๊กเดิมที่เคยพลาดจุดนี้)
+	if item.LinkPath != "/owner/claims/detail/77" {
+		t.Errorf("expected link path to use the claim id (77), not the line item id, got %q", item.LinkPath)
+	}
+	if item.LinkState["from"] != "movement" {
+		t.Errorf("expected link state from=movement, got %v", item.LinkState)
+	}
 }
 
 func TestList_PreOrderItem_FallsBackToSupplierSnapshotWhenPreOrderMissing(t *testing.T) {
@@ -403,6 +478,7 @@ func TestList_PreOrderItem_FallsBackToSupplierSnapshotWhenPreOrderMissing(t *tes
 		listPreOrderItemsFn: func() ([]entity.PreOrderItem, error) {
 			return []entity.PreOrderItem{{
 				Model:               gorm.Model{ID: 1, CreatedAt: rowCreatedAt},
+				PreOrderID:          21,
 				ProductNameSnapshot: "Custom Bumper",
 				ProductCodeSnapshot: "CUSTOM-1",
 				SupplierName:        "Snapshot Supplier",
@@ -423,6 +499,12 @@ func TestList_PreOrderItem_FallsBackToSupplierSnapshotWhenPreOrderMissing(t *tes
 	if !item.OccurredAt.Equal(rowCreatedAt) {
 		t.Errorf("expected fallback to row CreatedAt when PreOrder is nil, got %v", item.OccurredAt)
 	}
+	// RefID (item.ID=1) เป็น id รายการสินค้าในใบสั่งจอง ใช้ลิงก์ไปหน้ารายละเอียดใบสั่งจองไม่ได้ — LinkPath ต้องอิง
+	// PreOrderID (21) ของใบสั่งจองจริงแทน ไม่ใช่ RefID (บั๊กเดิมที่เคยพลาดจุดนี้) แม้ตอน PreOrder preload ไม่เจอก็ตาม
+	// (PreOrderID เป็นคอลัมน์ FK อยู่บนแถวเองอยู่แล้ว ไม่ต้องพึ่ง relation ที่ preload มา)
+	if item.LinkPath != "/owner/stock/stock-movement/pre-orders/21" {
+		t.Errorf("expected link path to use the pre-order id (21), not the line item id, got %q", item.LinkPath)
+	}
 }
 
 func TestList_CheckFlaggedItem_UnknownCheckTypeFallsBackToRawValue(t *testing.T) {
@@ -442,5 +524,11 @@ func TestList_CheckFlaggedItem_UnknownCheckTypeFallsBackToRawValue(t *testing.T)
 	item := mustFindByType(t, items, wmsDTO.MovementFeedCheckFlagged)
 	if !strings.Contains(item.Title, "SOME_NEW_TYPE") {
 		t.Errorf("expected unknown check type to fall back to raw value in title, got %q", item.Title)
+	}
+	if item.LinkPath != "/owner/stock/stock-check/1" {
+		t.Errorf("expected link path to check-stock schedule detail /owner/stock/stock-check/1, got %q", item.LinkPath)
+	}
+	if item.LinkState["from"] != "movement" {
+		t.Errorf("expected link state from=movement, got %v", item.LinkState)
 	}
 }

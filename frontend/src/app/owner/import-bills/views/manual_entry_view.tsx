@@ -189,7 +189,7 @@ export default function ManualEntryView({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-2">วันที่ครบกำหนดในบิล</label>
+              <label className="block text-xs font-bold text-gray-700 mb-2">วันที่ในบิล</label>
               <input 
                 type="date" 
                 value={formData.due_date} 

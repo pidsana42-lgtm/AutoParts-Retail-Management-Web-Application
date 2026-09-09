@@ -72,20 +72,22 @@ type CreateReturnItemInputDTO struct {
 }
 
 type CreateReturnDTO struct {
-	ReturnNumber     string                     `json:"return_number,omitempty"`
-	OriginalOrderID  uint                       `json:"original_order_id" binding:"required"`
-	ReturnDate       *time.Time                 `json:"return_date,omitempty"`
-	Reason           string                     `json:"reason" binding:"required"`
-	RefundAmount     float64                    `json:"refund_amount"`
-	RefundMethod     string                     `json:"refund_method" binding:"required"`
-	RequestedAt      *time.Time                 `json:"requested_at,omitempty"`
-	ApprovedAt       *time.Time                 `json:"approved_at,omitempty"`
-	Note             string                     `json:"note,omitempty"`
-	CreatedBy        uint                       `json:"created_by,omitempty"`
-	ApprovedBy       *uint                      `json:"approved_by,omitempty"`
-	Status           string                     `json:"status,omitempty"`
-	SalesReturnItems []CreateReturnItemInputDTO `json:"sales_return_items,omitempty"`
-	Items            []CreateReturnItemInputDTO `json:"items,omitempty"`
+	ReturnNumber    string     `json:"return_number,omitempty"`
+	OriginalOrderID uint       `json:"original_order_id" binding:"required"`
+	ReturnDate      *time.Time `json:"return_date,omitempty"`
+	Reason          string     `json:"reason" binding:"required"`
+	RefundAmount    float64    `json:"refund_amount"`
+	RefundMethod    string     `json:"refund_method" binding:"required"`
+	RequestedAt     *time.Time `json:"requested_at,omitempty"`
+	ApprovedAt      *time.Time `json:"approved_at,omitempty"`
+	Note            string     `json:"note,omitempty"`
+	CreatedBy       uint       `json:"created_by,omitempty"`
+	ApprovedBy      *uint      `json:"approved_by,omitempty"`
+	Status          string     `json:"status,omitempty"`
+	// binding:"dive" จำเป็นต่อการให้ go-playground/validator ลงไป validate field ใน struct ของแต่ละ
+	// element จริงๆ — ไม่งั้น required/min ที่ CreateReturnItemInputDTO จะถูกข้ามไปเงียบๆ ทั้งอาเรย์
+	SalesReturnItems []CreateReturnItemInputDTO `json:"sales_return_items,omitempty" binding:"omitempty,dive"`
+	Items            []CreateReturnItemInputDTO `json:"items,omitempty" binding:"omitempty,dive"`
 }
 
 type UpdateReturnDTO struct {

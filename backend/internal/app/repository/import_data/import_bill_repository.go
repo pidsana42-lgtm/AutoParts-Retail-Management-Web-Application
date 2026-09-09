@@ -184,7 +184,32 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 					return err
 				}
 			}
-			return nil
+			// ลบ stock_movements ที่เคยบันทึกไว้ตอน confirm ครั้งก่อนของบิลนี้ทั้งหมด — จะสร้างใหม่ให้ตรงกับ
+			// รายการปัจจุบันในลูปด้านล่าง ไม่งั้นจะเหลือ "สลิป" ของยอดที่เพิ่งถูกย้อนกลับไปค้างอยู่ในประวัติ
+			return tx.Unscoped().Where("bill_id = ?", billID).Delete(&entity.StockMovement{}).Error
+		}
+
+		// recordBillStockIn บันทึกแถว stock_movements (movement_type = IN, ผูก BillID) ทุกครั้งที่บิลนี้ทำให้
+		// สต็อกสินค้าเพิ่มขึ้นจริง เพื่อให้การรับสินค้าเข้าเพิ่มจากบิลซื้อปรากฏในฟีด "การเคลื่อนไหวของสินค้า" เหมือนช่องทาง
+		// รับเข้าอื่นๆ ของ WMS — ก่อนหน้านี้เส้นทางนี้ปรับ quantity ตรงๆ โดยไม่ทิ้งร่องรอยไว้เลย
+		recordBillStockIn := func(productID uint, supplierID uint, qty int, note string) error {
+			if productID == 0 || qty <= 0 {
+				return nil
+			}
+			var userID *uint
+			if bill.VerifiedBy > 0 {
+				userID = &bill.VerifiedBy
+			}
+			return tx.Create(&entity.StockMovement{
+				Movement_Type:     "IN",
+				Quantity:          qty,
+				Movement_DateTime: time.Now(),
+				Note:              note,
+				ProductID:         productID,
+				SupplierID:        &supplierID,
+				UserID:            userID,
+				BillID:            &bill.ID,
+			}).Error
 		}
 
 		var existingBill entity.Bill
@@ -288,7 +313,6 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 					Product_Name:     prodName,
 					Product_Code:     "",
 					Part_Number:      items[i].CompanyProductCode,
-					Barcode:          "",
 					Cost_price:       items[i].PricePerUnit,
 					Sale_price:       items[i].PricePerUnit * 1.25,
 					Is_Active:        true,
@@ -317,6 +341,12 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				}
 				// บวกยอดเข้าบริษัทของบิลนี้ — ทำให้สินค้าชื่อเดียวกันจากต่างบริษัทไล่ยอด/ที่มาแยกกันได้
 				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, items[i].OrderQuantity, items[i].CompanyProductCode); err != nil {
+					return err
+				}
+				// สินค้าที่มีอยู่แล้วรับเข้าเพิ่ม -> บันทึกลงฟีดการเคลื่อนไหว (สินค้าใหม่ไม่ต้องซ้ำ เพราะมี PRODUCT_ADDED
+				// ที่โชว์จำนวนเริ่มต้นให้อยู่แล้วตอนสร้างแถวสินค้าด้านบน)
+				billNote := fmt.Sprintf("รับเข้าจากบิลซื้อ %s", bill.BillNo)
+				if err := recordBillStockIn(prod.ID, bill.SupplierID, items[i].OrderQuantity, billNote); err != nil {
 					return err
 				}
 				if items[i].PricePerUnit > 0 && items[i].PricePerUnit != prod.Cost_price {
@@ -355,6 +385,8 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				}
 			}
 		}
+
+		bill.PriceChangeDetected = len(changedItems) > 0
 
 		isOwner := strings.EqualFold(role, string(enum.RoleOwner)) || strings.EqualFold(role, string(enum.RoleAdmin)) || strings.EqualFold(role, "Owner") || strings.EqualFold(role, "Admin")
 		autoApprove := isOwner || len(changedItems) == 0
@@ -525,7 +557,6 @@ func (r *billRepository) UpdateImportProduct(id uint, product *entity.Product, m
 		"product_code":   product.Product_Code,
 		"part_number":    product.Part_Number,
 		"product_name":   product.Product_Name,
-		"barcode":        product.Barcode,
 		"quantity":       product.Quantity,
 		"limit_quantity": product.Limit_Quantity,
 		"cost_price":     product.Cost_price,

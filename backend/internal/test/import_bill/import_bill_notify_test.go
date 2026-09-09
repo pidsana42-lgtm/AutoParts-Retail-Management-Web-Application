@@ -85,7 +85,7 @@ func TestConfirmBillImport_NotifiesOwnersWhenPendingApproval(t *testing.T) {
 	require.Equal(t, "IMPORT_BILL_PENDING_APPROVAL", spy.notifyOwnersCalls[0])
 }
 
-func TestConfirmBillImport_DoesNotNotifyWhenAutoApproved(t *testing.T) {
+func TestConfirmBillImport_NotifiesOwnersWhenOwnImportChangesPrice(t *testing.T) {
 	db := setupImportBillTestDB(t)
 	repo := billRepo.NewImportBillRepository(db)
 	product, supplier := seedProductForImport(t, db, 100)
@@ -93,12 +93,14 @@ func TestConfirmBillImport_DoesNotNotifyWhenAutoApproved(t *testing.T) {
 	spy := &spyNotificationService{}
 	svc := billService.NewImportBillService(repo, spy)
 
-	// เจ้าของร้านนำเข้าเอง -> auto-approve ไม่ต้องแจ้งเตือน
+	// เจ้าของร้านนำเข้าเอง แล้วเจอราคาทุนต่างจากระบบ -> auto-approve ราคาทุนใหม่ทันที
+	// แต่ยังต้องแจ้งเตือน (ให้เจ้าของร้านรู้ว่ามีการเปลี่ยนราคาทุนเกิดขึ้น) ด้วยประเภทที่ต่างจากกรณีรออนุมัติ
 	input := newConfirmBillImportInput("BILL-NOTIFY-OWNER", supplier.ID, product.ID, 150)
 	_, err := svc.ConfirmBillImport(0, input, "Owner")
 	require.NoError(t, err)
 
-	require.Empty(t, spy.notifyOwnersCalls, "เจ้าของร้านนำเข้าเองไม่ต้องแจ้งเตือนตัวเอง")
+	require.Len(t, spy.notifyOwnersCalls, 1)
+	require.Equal(t, "IMPORT_BILL_PRICE_CHANGED", spy.notifyOwnersCalls[0])
 }
 
 func TestConfirmBillImport_DoesNotNotifyWhenNoPriceMismatch(t *testing.T) {

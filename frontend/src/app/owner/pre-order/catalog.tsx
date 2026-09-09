@@ -9,10 +9,12 @@ import {
   Smartphone
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Heading from '../../../components/elements/heading';
 import Button from '../../../components/elements/button';
+import Input from '../../../components/elements/input';
 import Modal from '../../../components/elements/modal';
+import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import apiClient from '../../../service/http/apiClient';
 import { getCatalogs, createCatalog, updateCatalog, deleteCatalog, extractCatalogFromImage } from '../../../service/http/catalog/catalog_service';
@@ -48,6 +50,14 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   
   // Detail View & PDF
   const [activeCatalog, setActiveCatalog] = useState<Catalog | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [removeItemIndex, setRemoveItemIndex] = useState<number | null>(null);
+  const handleConfirmRemoveItem = () => {
+    if (removeItemIndex === null) return;
+    setNewItems(prev => prev.filter((_, i) => i !== removeItemIndex));
+    setRemoveItemIndex(null);
+  };
   const [showPdfViewer, setShowPdfViewer] = useState<boolean>(false);
 
   // Split-Screen Interactive Preview Controls (Zoom & Rotate like import-bills)
@@ -364,16 +374,24 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
     else setCurrentViewInternal('manual');
   };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบแคตตาล็อกนี้?')) return;
+  const handleDelete = (id: number) => {
+    setDeleteTargetId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteTargetId === null) return;
+    setIsDeleting(true);
     try {
-      await deleteCatalog(id);
-      setCatalogs(prev => prev.filter(c => c.id !== id));
-      if (activeCatalog?.id === id) {
+      await deleteCatalog(deleteTargetId);
+      setCatalogs(prev => prev.filter(c => c.id !== deleteTargetId));
+      if (activeCatalog?.id === deleteTargetId) {
         setCurrentView('home');
       }
+      setDeleteTargetId(null);
     } catch (err) {
       alert('ไม่สามารถลบแคตตาล็อกได้');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -694,14 +712,14 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         {/* Filter Bar & Toolbar */}
         <div className="bg-white border border-gray-200 p-4 mb-6 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
           {/* ฝั่งซ้าย: ค้นหา */}
-          <div className="relative flex-1 min-w-[240px]">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
+          <div className="relative flex-1 min-w-60">
+            <Input
               type="text"
               placeholder="ค้นหารหัสอะไหล่ ชื่อเล่ม หรือรุ่นรถยนต์..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-gray-300 rounded-none pl-9 pr-4 py-2 text-xs text-[#1C1B1B] placeholder-gray-400 focus:border-[#e51c23] outline-none"
+              leftIcon={<Search size={16} className="text-gray-400" />}
+              className="text-xs h-10 w-full"
             />
           </div>
 
@@ -959,6 +977,39 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
             ))}
           </div>
         )}
+
+        {(() => {
+          const deleteTarget = deleteTargetId !== null ? catalogs.find(c => c.id === deleteTargetId) : null;
+          return (
+            <ConfirmDialog
+              isOpen={deleteTargetId !== null}
+              onClose={() => !isDeleting && setDeleteTargetId(null)}
+              onConfirm={handleConfirmDelete}
+              title="ยืนยันการลบแคตตาล็อก"
+              description={(
+                <div className="space-y-3 text-sm text-slate-700 text-left">
+                  <p className="text-center text-slate-600">คุณต้องการลบแคตตาล็อกนี้ใช่หรือไม่? การลบไม่สามารถย้อนกลับได้</p>
+                  {deleteTarget && (
+                    <div className="bg-[#f6f3f2] p-3 space-y-2 mt-2">
+                      <div className="flex justify-between gap-4 text-xs">
+                        <span className="text-slate-500">ชื่อแคตตาล็อก</span>
+                        <span className="font-semibold text-slate-900 truncate max-w-48">{deleteTarget.catalog_name || '-'}</span>
+                      </div>
+                      <div className="flex justify-between gap-4 text-xs">
+                        <span className="text-slate-500">รหัสแคตตาล็อก</span>
+                        <span className="font-mono font-semibold text-slate-900">{deleteTarget.catalog_code || '-'}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              confirmText="ยืนยันการลบ"
+              cancelText="ยกเลิก"
+              variant="danger"
+              isSubmitting={isDeleting}
+            />
+          );
+        })()}
       </div>
     );
   }
@@ -999,9 +1050,9 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div className="space-y-1">
             <nav className="flex items-center gap-2 text-xs text-gray-500">
-              <button type="button" onClick={() => setCurrentView('home')} className="hover:text-[#e51c23] font-bold cursor-pointer">
+              <Link to={catalogPath} className="hover:text-[#e51c23] font-bold">
                 นำเข้าแคตตาล็อก
-              </button>
+              </Link>
               <ChevronRight size={14} className="text-gray-400" />
               <span className="text-[#1C1B1B] font-bold">สแกนหน้าแคตตาล็อก</span>
             </nav>
@@ -1353,7 +1404,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                           <TableCell className="py-1 px-1 text-center">
                             <button
                               type="button"
-                              onClick={() => setNewItems(prev => prev.filter((_, i) => i !== idx))}
+                              onClick={() => setRemoveItemIndex(idx)}
                               className="text-gray-400 hover:text-red-600 p-1"
                             >
                               <Trash2 size={14} />
@@ -1397,6 +1448,34 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
             </Button>
           </div>
         </div>
+
+        {(() => {
+          const removeTarget = removeItemIndex !== null ? newItems[removeItemIndex] : null;
+          return (
+            <ConfirmDialog
+              isOpen={removeItemIndex !== null}
+              onClose={() => setRemoveItemIndex(null)}
+              onConfirm={handleConfirmRemoveItem}
+              title="ลบรายการสินค้านี้"
+              description={(
+                <div className="space-y-3 text-sm text-slate-700 text-left">
+                  <p className="text-center text-slate-600">คุณต้องการลบสินค้ารายการนี้ออกใช่หรือไม่?</p>
+                  {removeTarget && (removeTarget.part_name || removeTarget.part_number) && (
+                    <div className="bg-[#f6f3f2] p-3 space-y-2 mt-2">
+                      <div className="flex justify-between gap-4 text-xs">
+                        <span className="text-slate-500">สินค้า</span>
+                        <span className="font-semibold text-slate-900 truncate max-w-48">{removeTarget.part_name || removeTarget.part_number}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              confirmText="ยืนยันการลบ"
+              cancelText="ยกเลิก"
+              variant="danger"
+            />
+          );
+        })()}
       </div>
     );
   }
@@ -1433,9 +1512,9 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div className="space-y-1">
             <nav className="flex items-center gap-2 text-xs text-gray-500">
-              <button type="button" onClick={() => setCurrentView('home')} className="hover:text-[#e51c23] font-bold cursor-pointer">
+              <Link to={catalogPath} className="hover:text-[#e51c23] font-bold">
                 นำเข้าแคตตาล็อก
-              </button>
+              </Link>
               <ChevronRight size={14} className="text-gray-400" />
               <span className="text-[#1C1B1B] font-bold">
                 {editingCatalogId ? 'แก้ไขเล่มแคตตาล็อก' : 'กรอกข้อมูลแคตตาล็อกด้วยตนเอง'}
@@ -1693,7 +1772,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                       <TableCell className="py-2 px-2 text-center">
                         <button
                           type="button"
-                          onClick={() => setNewItems(prev => prev.filter((_, i) => i !== idx))}
+                          onClick={() => setRemoveItemIndex(idx)}
                           className="text-gray-400 hover:text-red-600 p-1"
                         >
                           <Trash2 size={15} />
@@ -1735,6 +1814,34 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
             </div>
           </div>
         </div>
+
+        {(() => {
+          const removeTarget = removeItemIndex !== null ? newItems[removeItemIndex] : null;
+          return (
+            <ConfirmDialog
+              isOpen={removeItemIndex !== null}
+              onClose={() => setRemoveItemIndex(null)}
+              onConfirm={handleConfirmRemoveItem}
+              title="ลบรายการสินค้านี้"
+              description={(
+                <div className="space-y-3 text-sm text-slate-700 text-left">
+                  <p className="text-center text-slate-600">คุณต้องการลบสินค้ารายการนี้ออกใช่หรือไม่?</p>
+                  {removeTarget && (removeTarget.part_name || removeTarget.part_number) && (
+                    <div className="bg-[#f6f3f2] p-3 space-y-2 mt-2">
+                      <div className="flex justify-between gap-4 text-xs">
+                        <span className="text-slate-500">สินค้า</span>
+                        <span className="font-semibold text-slate-900 truncate max-w-48">{removeTarget.part_name || removeTarget.part_number}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              confirmText="ยืนยันการลบ"
+              cancelText="ยกเลิก"
+              variant="danger"
+            />
+          );
+        })()}
       </div>
     );
   }
@@ -1747,13 +1854,12 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
       <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300 font-sans">
         {/* Breadcrumb Navigation */}
         <nav className="flex items-center gap-2 text-xs text-gray-500 mb-4">
-          <button 
-            type="button" 
-            onClick={() => setCurrentView('home')} 
-            className="hover:text-[#e51c23] transition-colors cursor-pointer font-bold"
+          <Link
+            to={catalogPath}
+            className="hover:text-[#e51c23] transition-colors font-bold"
           >
             นำเข้าแคตตาล็อก
-          </button>
+          </Link>
           <ChevronRight size={14} className="text-gray-400" />
           <span className="text-[#1C1B1B] font-bold">{activeCatalog.catalog_code}</span>
         </nav>

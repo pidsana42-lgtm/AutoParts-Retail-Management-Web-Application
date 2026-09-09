@@ -73,8 +73,12 @@ export default function EditSubCategoryModal({
     }
   };
 
-  const handleDeleteSubSub = async (id: number) => {
-    if (!confirm("คุณแน่ใจว่าต้องการลบประเภทย่อยย่อยนี้?")) return;
+  const handleDeleteSubSub = async (id: number, name: string) => {
+    const confirmed = await confirmDialog(
+      `ต้องการลบประเภทย่อยย่อย "${name}" ใช่หรือไม่?`,
+      { title: "ลบประเภทย่อยย่อย", confirmText: "ลบ", variant: "danger", icon: Trash2 }
+    );
+    if (!confirmed) return;
     try {
       await stockDataService.deleteSubSubCategory(id);
       toast({ variant: "success", message: "ลบประเภทย่อยย่อยสำเร็จ" });
@@ -197,7 +201,7 @@ export default function EditSubCategoryModal({
               </div>
               <button
                 type="button"
-                onClick={() => handleDeleteSubSub(ss.id)}
+                onClick={() => handleDeleteSubSub(ss.id, ss.sub_sub_category_name)}
                 className="text-slate-400 hover:text-red-600 transition-colors p-1 self-start mt-5"
                 title="ลบประเภทย่อยย่อย"
               >

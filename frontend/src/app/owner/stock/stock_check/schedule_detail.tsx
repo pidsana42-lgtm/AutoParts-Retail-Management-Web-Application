@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Loader2, MapPin, Package, ClipboardCheck, Download, Printer, QrCode } from "lucide-react";
+import { Loader2, MapPin, Package, ClipboardCheck, Download, Printer, QrCode, Undo2 } from "lucide-react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 
 import Heading from "../../../../components/elements/heading";
@@ -9,6 +9,8 @@ import Badge from "../../../../components/elements/badge";
 import Button from "../../../../components/elements/button";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/elements/card";
 import { ToastProvider, useToast } from "../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
+import Modal from "../../../../components/elements/modal";
 import { useCheckStockOptions } from "./useCheckStockOptions";
 import { getScheduleProducts, CHECK_STATUS_BADGE_VARIANT } from "./checkStockTargets";
 import {
@@ -44,6 +46,7 @@ function ScheduleDetailContent() {
   const location = useLocation();
   const cameFromMovement = (location.state as { from?: string } | null)?.from === "movement";
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const { products, zones, categories } = useCheckStockOptions();
 
   const [schedule, setSchedule] = useState<CheckStockSchedule | null>(null);
@@ -51,6 +54,9 @@ function ScheduleDetailContent() {
   const [error, setError] = useState<string | null>(null);
   const [reviewRecords, setReviewRecords] = useState<CheckStockRecord[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
+  // ตีกลับต้องขอเหตุผลด้วย จึงใช้ modal ของตัวเองที่มีช่องกรอก แทน confirmDialog ที่กดได้แค่ยืนยัน/ยกเลิก
+  const [isRejectOpen, setIsRejectOpen] = useState(false);
+  const [rejectNote, setRejectNote] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -152,8 +158,9 @@ function ScheduleDetailContent() {
 
   const handleApprove = async () => {
     if (!id) return;
-    const confirmed = window.confirm(
-      "ยืนยันอนุมัติผลนับสต็อกนี้? ระบบจะบันทึกจำนวนที่นับได้เป็นสต็อกจริงของสินค้าทันที"
+    const confirmed = await confirmDialog(
+      "ยืนยันอนุมัติผลนับสต็อกนี้หรือไม่? ระบบจะบันทึกจำนวนที่นับได้เป็นสต็อกจริงของสินค้าทันที",
+      { title: "อนุมัติผลนับสต็อก", confirmText: "อนุมัติและบันทึก", variant: "success", icon: ClipboardCheck }
     );
     if (!confirmed) return;
 
@@ -169,15 +176,18 @@ function ScheduleDetailContent() {
     }
   };
 
+  const openRejectModal = () => {
+    setRejectNote("");
+    setIsRejectOpen(true);
+  };
+
   const handleReject = async () => {
     if (!id) return;
-    const note = window.prompt("ระบุเหตุผลที่ตีกลับให้พนักงานนับใหม่ (ไม่บังคับ):", "") || "";
-    const confirmed = window.confirm("ยืนยันตีกลับให้พนักงานนับสต็อกใหม่? ผลนับที่ส่งมาแล้วจะถูกลบทิ้ง");
-    if (!confirmed) return;
 
     try {
       setActionLoading(true);
-      await stockCheckService.rejectSchedule(Number(id), note);
+      await stockCheckService.rejectSchedule(Number(id), rejectNote.trim());
+      setIsRejectOpen(false);
       toast({ variant: "success", message: "ตีกลับให้พนักงานนับสต็อกใหม่แล้ว" });
       navigate("/owner/stock/stock-check");
     } catch (err: any) {
@@ -376,7 +386,7 @@ function ScheduleDetailContent() {
               <Button onClick={handleApprove} disabled={actionLoading} variant="primary" className="flex-1">
                 อนุมัติและบันทึกลงสต็อก
               </Button>
-              <Button onClick={handleReject} disabled={actionLoading} variant="outline" className="flex-1">
+              <Button onClick={openRejectModal} disabled={actionLoading} variant="outline" className="flex-1">
                 ตีกลับให้นับใหม่
               </Button>
             </div>
@@ -465,6 +475,46 @@ function ScheduleDetailContent() {
           </Card>
         </div>
       </div>
+
+      {/* ตีกลับให้นับใหม่ — ต้องกดยืนยันก่อน และกรอกเหตุผลให้พนักงานได้ (ไม่บังคับ) */}
+      <Modal
+        isOpen={isRejectOpen}
+        onClose={() => setIsRejectOpen(false)}
+        size="sm"
+        title="ตีกลับให้พนักงานนับใหม่"
+        description="ผลนับที่พนักงานส่งมาแล้วจะถูกลบทิ้ง และตารางนี้จะกลับไปให้นับใหม่อีกครั้ง"
+        footer={
+          <>
+            <Button type="button" variant="tertiary" onClick={() => setIsRejectOpen(false)} disabled={actionLoading}>
+              ยกเลิก
+            </Button>
+            <Button type="button" variant="primary" onClick={handleReject} disabled={actionLoading}>
+              {actionLoading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  กำลังตีกลับ...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Undo2 className="h-4 w-4" />
+                  ยืนยันตีกลับ
+                </span>
+              )}
+            </Button>
+          </>
+        }
+      >
+        <label className="mb-1.5 block text-sm font-medium text-slate-700">
+          เหตุผลที่ตีกลับ <span className="font-normal text-slate-400">(ไม่บังคับ)</span>
+        </label>
+        <textarea
+          value={rejectNote}
+          onChange={(e) => setRejectNote(e.target.value)}
+          rows={4}
+          placeholder="เช่น จำนวนที่นับได้ต่างจากระบบมากเกินไป ขอให้นับซ้ำอีกครั้ง"
+          className="w-full resize-none border-none bg-[#f6f3f2] px-3 py-2 text-sm text-black placeholder:text-gray-400 focus:outline-none focus:ring-1 ring-red-600"
+        />
+      </Modal>
     </div>
   );
 }
