@@ -24,9 +24,12 @@ import type { CascaderOption } from "../../../../components/elements/cascader";
 // นำเข้า API service สำหรับดึงข้อมูลสินค้า
 import { getProductsList, getSuppliersList } from "../../../../service/http/wms/product";
 import { stockDataService } from "../../../../service/http/wms/stock_data_service";
+import { dashboardService } from "../../../../service/http/dashboard/dashboard_service";
 
 import type { StockItem } from "../../../../interface/wms/product";
+import type { StockAlertItem } from "../../../../interface/dashboard/dashboard_interface";
 import { cn } from "../../../../utils/component";
+import StockAlertPOModal from "../../../owner/dashboard/components/StockAlertPOModal";
 
 // คอนฟิก Badge ตามเกรดสินค้า
 const GRADE_BADGE: Record<string, string> = {
@@ -59,11 +62,15 @@ function StatCard({
   label,
   value,
   tone,
+  hint,
+  onClick,
 }: {
   icon: typeof ClipboardList;
   label: string;
   value: string;
   tone: "green" | "red" | "dark";
+  hint?: string;
+  onClick?: () => void;
 }) {
   const toneClasses: Record<typeof tone, string> = {
     green: "bg-green-600 text-white",
@@ -71,15 +78,28 @@ function StatCard({
     dark: "bg-slate-900 text-white",
   };
 
-  return (
-    <div className={["rounded-none border border-slate-200 px-5 py-4 shadow-sm", toneClasses[tone]].join(" ")}>
+  const content = (
+    <>
       <div className="flex items-start justify-between">
         <span className="text-xs font-medium uppercase tracking-wide opacity-80">{label}</span>
         <Icon className="h-5 w-5 opacity-90" />
       </div>
       <p className="mt-3 text-2xl font-bold">{value}</p>
-    </div>
+      {hint && <p className="mt-1 text-xs opacity-80">{hint}</p>}
+    </>
   );
+
+  const className = [
+    "w-full rounded-none border border-slate-200 px-5 py-4 text-left shadow-sm",
+    toneClasses[tone],
+    onClick ? "cursor-pointer transition hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500" : "",
+  ].join(" ");
+
+  if (onClick) {
+    return <button type="button" onClick={onClick} className={className}>{content}</button>;
+  }
+
+  return <div className={className}>{content}</div>;
 }
 
 function StockLevelBar({ stock, minStock }: { stock: number; minStock: number }) {
@@ -110,6 +130,8 @@ function StockLevelBar({ stock, minStock }: { stock: number; minStock: number })
 export default function StockPage() {
   const navigate = useNavigate();
   const [stockData, setStockData] = useState<StockItem[]>([]);
+  const [stockAlerts, setStockAlerts] = useState<StockAlertItem[]>([]);
+  const [stockAlertModalOpen, setStockAlertModalOpen] = useState(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -186,6 +208,17 @@ export default function StockPage() {
         { label: "บริษัททั้งหมด", value: "" },
         ...sups.map((s) => ({ label: s.name, value: s.name })),
       ]);
+
+      try {
+        const alertResponse = await dashboardService.getStockAlerts();
+        const unresolvedAlerts = (alertResponse.data ?? [])
+          .filter((alert) => alert.is_resolved === "false")
+          .sort((first, second) => Number(Boolean(first.has_po)) - Number(Boolean(second.has_po)));
+        setStockAlerts(unresolvedAlerts);
+      } catch (alertError) {
+        console.error("Failed to load stock alerts:", alertError);
+        setStockAlerts([]);
+      }
     } catch (err) {
       console.error("Failed to load products from API:", err);
       setError("ไม่สามารถดึงข้อมูลสินค้าจากระบบคลังได้");
@@ -261,8 +294,6 @@ export default function StockPage() {
 
   // คำนวณ Summary การ์ดด้านบนจาก Database จริง
   const totalSkus = stockData.length;
-  const lowStockCount = stockData.filter((item) => item.Stock <= item.MinStock).length;
-
   // คำนวณมูลค่าสินทรัพย์รวมในคลัง (Stock * Price)
   const totalAssetValue = useMemo(() => {
     const total = stockData.reduce((acc, item) => acc + (item.Stock * (item.Price || 0)), 0);
@@ -276,6 +307,7 @@ export default function StockPage() {
   if (error) return <div className="p-6 text-red-600 text-center font-medium">{error}</div>;
 
   return (
+    <>
     <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -296,7 +328,14 @@ export default function StockPage() {
       {/* Stat cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard icon={ClipboardList} label="Total SKUs" value={totalSkus.toLocaleString()} tone="green" />
-        <StatCard icon={TriangleAlert} label="Low Stock Alert" value={String(lowStockCount)} tone="red" />
+        <StatCard
+          icon={TriangleAlert}
+          label="Low Stock Alert"
+          value={String(stockAlerts.length)}
+          tone="red"
+          hint={stockAlerts.length > 0 ? "คลิกเพื่อเลือกสินค้าไปสร้างใบสั่งซื้อ" : "ไม่มีรายการที่ต้องสั่งซื้อ"}
+          onClick={stockAlerts.length > 0 ? () => setStockAlertModalOpen(true) : undefined}
+        />
         <StatCard icon={Landmark} label="Total Asset Value" value={totalAssetValue} tone="dark" />
       </div>
 
@@ -503,5 +542,12 @@ export default function StockPage() {
         )}
       </Card>
     </div>
+    <StockAlertPOModal
+      isOpen={stockAlertModalOpen}
+      onClose={() => setStockAlertModalOpen(false)}
+      stockAlerts={stockAlerts}
+      basePath="/employee"
+    />
+    </>
   );
 }

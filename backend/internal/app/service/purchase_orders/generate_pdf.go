@@ -1,11 +1,20 @@
 package purchaseorders
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	"image/png"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/johnfercher/maroto/pkg/color"
 	"github.com/johnfercher/maroto/pkg/consts"
@@ -13,7 +22,7 @@ import (
 	"github.com/johnfercher/maroto/pkg/props"
 )
 
-func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, includeCode bool) ([]byte, error) {
+func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, includeCode bool, printedBy uint) ([]byte, error) {
 	// 1. ดึงข้อมูลจริงจาก Database
 	poData, err := s.poRepository.GetPOForPDF(ctx, poID)
 	if err != nil {
@@ -24,6 +33,17 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 	if err != nil {
 		return nil, fmt.Errorf("could not get company data: %v", err)
 	}
+	printer, err := s.userRepo.FindByID(ctx, printedBy)
+	if err != nil {
+		return nil, fmt.Errorf("could not get printing user: %v", err)
+	}
+	printerName := strings.TrimSpace(printer.FirstName + " " + printer.LastName)
+	if printerName == "" {
+		printerName = strings.TrimSpace(printer.Username)
+	}
+	if printerName == "" {
+		printerName = "-"
+	}
 
 	// 2. ตั้งค่าหน้ากระดาษและฟอนต์
 	m := pdf.NewMaroto(consts.Portrait, consts.A4)
@@ -32,8 +52,8 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 	m.AddUTF8Font("THSarabun", consts.Bold, "assets/fonts/THSarabunNew Bold.ttf")
 	m.SetDefaultFontFamily("THSarabun")
 
-	poDate := poData.CreatedAt.Format("02/01/2006")
-	logoPath := resolvePOLogoPath(companyData.LogoURL)
+	printDate := time.Now().In(time.FixedZone("Asia/Bangkok", 7*60*60)).Format("02/01/2006")
+	logoPath, logoBase64, logoExtension, _ := loadPOLogo(ctx, companyData.LogoURL)
 
 	// 3. ส่วนหัวเอกสาร (ลดขนาด Row ลงให้ดูกระชับ)
 	m.RegisterHeader(func() {
@@ -43,6 +63,11 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 					_ = m.FileImage(logoPath, props.Rect{
 						Percent: 400,
 						Center:  false, // ให้โลโก้ชิดซ้าย
+					})
+				} else if logoBase64 != "" {
+					_ = m.Base64Image(logoBase64, logoExtension, props.Rect{
+						Percent: 400,
+						Center:  false,
 					})
 				}
 			})
@@ -78,8 +103,8 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 		})
 		m.Col(3, func() {
 			m.Text(poData.PO_number, props.Text{Size: 11, Align: consts.Left})
-			m.Text(poDate, props.Text{Size: 11, Align: consts.Left, Top: 5})
-			m.Text(poData.Creator.FirstName+" "+poData.Creator.LastName, props.Text{Size: 11, Align: consts.Left, Top: 10})
+			m.Text(printDate, props.Text{Size: 11, Align: consts.Left, Top: 5})
+			m.Text(printerName, props.Text{Size: 11, Align: consts.Left, Top: 10})
 		})
 
 	})
@@ -106,17 +131,21 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 	m.Row(8, func() {
 		m.Col(1, func() { m.Text("ลำดับ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Center}) })
 		m.Col(1, func() { m.Text("ประเภท", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left}) })
-		var colName uint = 5
 		if includeCode {
 			m.Col(2, func() {
-				m.Text("รหัสสินค้า", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left})
+				m.Text("รหัสสินค้า", props.Text{Size: 9, Style: consts.Bold, Align: consts.Left})
 			})
-			colName = 3
 		}
-		m.Col(colName, func() {
+		m.Col(2, func() {
+			m.Text("Part No.", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left})
+		})
+		productNameCol := uint(4)
+		if includeCode {
+			productNameCol = 2
+		}
+		m.Col(productNameCol, func() {
 			m.Text("ชื่อสินค้า", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left})
 		})
-		m.Col(1, func() {})
 		m.Col(2, func() {
 			m.Text("จำนวนต่อหน่วย  ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Right})
 		})
@@ -128,33 +157,34 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 
 	// วนลูปข้อมูลสินค้า (Content)
 	for i, item := range poData.PO_Items {
-		// Supply_product_code_snapshot ถูกบันทึกไว้ตอนสร้างรายการ PO นี้อยู่แล้ว (CompanyProductCode จาก Inventory ของ Supplier เจ้าที่สั่งซื้อ ณ ตอนนั้น)
-		productCode := item.Supply_product_code_snapshot
-		if productCode == "" {
-			if item.Product != nil && item.Product.Product_Code != "" {
-				productCode = item.Product.Product_Code
-			} else {
-				productCode = "-"
-			}
+		// Supply_product_code_snapshot คือรหัสที่ Supplier ของ PO นี้ใช้ ณ วันที่สร้าง PO
+		// ห้าม fallback ไป Product_Code เพราะเป็นรหัสภายในร้านและไม่ผูกกับ Supplier
+		supplierProductCode := strings.TrimSpace(item.Supply_product_code_snapshot)
+		if supplierProductCode == "" {
+			supplierProductCode = "-"
+		}
+
+		partNumber := "-"
+		if item.Product != nil && strings.TrimSpace(item.Product.Part_Number) != "" {
+			partNumber = strings.TrimSpace(item.Product.Part_Number)
 		}
 		poType := "สั่งซื้อ"
 		if item.PreOrderItemID != nil {
 			poType = "พรีออเดอร์"
 		}
 
-		var colName uint = 5
-		if includeCode {
-			colName = 3
-		}
-
 		m.Row(7, func() {
 			m.Col(1, func() { m.Text(fmt.Sprintf("%d", i+1), props.Text{Size: 11, Align: consts.Center}) })
 			m.Col(1, func() { m.Text(poType, props.Text{Size: 11, Align: consts.Left}) })
 			if includeCode {
-				m.Col(2, func() { m.Text(productCode, props.Text{Size: 11, Align: consts.Left}) })
+				m.Col(2, func() { m.Text(supplierProductCode, props.Text{Size: 10, Align: consts.Left}) })
 			}
-			m.Col(colName, func() { m.Text(item.Product_name_snapshot, props.Text{Size: 11}) })
-			m.Col(1, func() {})
+			m.Col(2, func() { m.Text(partNumber, props.Text{Size: 10, Align: consts.Left}) })
+			productNameCol := uint(4)
+			if includeCode {
+				productNameCol = 2
+			}
+			m.Col(productNameCol, func() { m.Text(item.Product_name_snapshot, props.Text{Size: 11}) })
 			m.Col(2, func() { m.Text(fmt.Sprintf("%d  ", int(item.Quantity)), props.Text{Size: 11, Align: consts.Right}) })
 			m.Col(2, func() { m.Text(fmt.Sprintf("%s  ", item.Unit), props.Text{Size: 11, Align: consts.Right}) })
 		})
@@ -184,6 +214,87 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 }
 
 // --------------------------------------------------------
+
+const maxPOLogoBytes = 5 * 1024 * 1024
+
+// loadPOLogo prepares both local and remote company logos for Maroto. Remote
+// images (such as Supabase public URLs) must be downloaded before PDF rendering.
+func loadPOLogo(ctx context.Context, logoURL string) (filePath string, base64Data string, extension consts.Extension, err error) {
+	logoURL = strings.TrimSpace(logoURL)
+	if logoURL == "" {
+		return "", "", consts.Png, nil
+	}
+
+	if !strings.HasPrefix(logoURL, "http://") && !strings.HasPrefix(logoURL, "https://") {
+		filePath = resolvePOLogoPath(logoURL)
+		if filePath == "" {
+			return "", "", consts.Png, fmt.Errorf("logo file not found: %s", logoURL)
+		}
+
+		data, readErr := os.ReadFile(filePath)
+		if readErr != nil {
+			return "", "", consts.Png, readErr
+		}
+		prepared, ext, converted, prepareErr := preparePOLogoImage(data)
+		if prepareErr != nil {
+			return "", "", consts.Png, prepareErr
+		}
+		if converted {
+			return "", base64.StdEncoding.EncodeToString(prepared), ext, nil
+		}
+		return filePath, "", ext, nil
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, logoURL, nil)
+	if err != nil {
+		return "", "", consts.Png, err
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", consts.Png, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", consts.Png, fmt.Errorf("logo request returned HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxPOLogoBytes+1))
+	if err != nil {
+		return "", "", consts.Png, err
+	}
+	if len(data) > maxPOLogoBytes {
+		return "", "", consts.Png, fmt.Errorf("logo exceeds %d bytes", maxPOLogoBytes)
+	}
+
+	prepared, ext, _, err := preparePOLogoImage(data)
+	if err != nil {
+		return "", "", consts.Png, err
+	}
+	return "", base64.StdEncoding.EncodeToString(prepared), ext, nil
+}
+
+// Maroto supports JPEG and PNG. GIF logos are converted to PNG using the first frame.
+func preparePOLogoImage(data []byte) (prepared []byte, extension consts.Extension, converted bool, err error) {
+	switch http.DetectContentType(data) {
+	case "image/png":
+		return data, consts.Png, false, nil
+	case "image/jpeg":
+		return data, consts.Jpg, false, nil
+	case "image/gif":
+		img, _, decodeErr := image.Decode(bytes.NewReader(data))
+		if decodeErr != nil {
+			return nil, consts.Png, false, decodeErr
+		}
+		var convertedImage bytes.Buffer
+		if encodeErr := png.Encode(&convertedImage, img); encodeErr != nil {
+			return nil, consts.Png, false, encodeErr
+		}
+		return convertedImage.Bytes(), consts.Png, true, nil
+	default:
+		return nil, consts.Png, false, fmt.Errorf("unsupported logo image format")
+	}
+}
 
 func resolvePOLogoPath(logoURL string) string {
 	logoPath := strings.TrimSpace(logoURL)
