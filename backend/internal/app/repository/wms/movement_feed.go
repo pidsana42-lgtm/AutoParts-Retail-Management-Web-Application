@@ -16,13 +16,17 @@ type MovementFeedRepository interface {
 	ListRecentProducts() ([]entity.Product, error)            // สินค้าถูกเพิ่มเข้าระบบใหม่
 	ListStockInMovements() ([]entity.StockMovement, error)    // สินค้าถูกนำเข้า/รับเพิ่ม
 	ListCheckSchedules() ([]entity.CheckStockSchedule, error) // สินค้าถูกแจ้งเช็คสต็อก
-	ListStockAdjustments() ([]entity.CheckStock, error)       // สต็อกถูกปรับหลังอนุมัติผลเช็คสต็อก
+	ListStockAdjustments() ([]entity.StockMovement, error)    // สต็อกถูกปรับหลังอนุมัติผลเช็คสต็อก (movement_type = ADJUST)
 	ListLowStockProducts() ([]entity.Product, error)          // สินค้าใกล้หมด
 
-	ListSaleOutItems() ([]entity.SaleOrderItem, error)         // สินค้าถูกขายออกผ่าน POS (เฉพาะออเดอร์ที่ completed)
-	ListReturnMovements() ([]entity.StockMovement, error)      // ลูกค้าคืนสินค้า
+	ListSaleOutItems() ([]entity.StockMovement, error)           // สินค้าถูกขายออกผ่าน POS (movement_type = OUT)
+	ListReturnMovements() ([]entity.StockMovement, error)        // ลูกค้าคืนสินค้า
 	ListCustomerClaimItems() ([]entity.CustomerClaimItem, error) // ลูกค้าแจ้งเคลมสินค้า
-	ListPreOrderItems() ([]entity.PreOrderItem, error)         // สร้างพรีออเดอร์สั่งจองกับบริษัท
+	ListPreOrderItems() ([]entity.PreOrderItem, error)           // สร้างพรีออเดอร์สั่งจองกับบริษัท
+
+	// GetSalesReturnIDsByReturnNumbers: หา id ใบคืนสินค้าจริงจากเลขที่ใบคืน (stock_movements ไม่มีคอลัมน์ผูกกับ
+	// sales_returns โดยตรง ต้องย้อนกลับจากเลขที่ที่ฝังไว้ใน Note แทน)
+	GetSalesReturnIDsByReturnNumbers(returnNumbers []string) (map[string]uint, error)
 }
 
 type movementFeedRepository struct {
@@ -62,14 +66,15 @@ func (r *movementFeedRepository) ListCheckSchedules() ([]entity.CheckStockSchedu
 	return list, err
 }
 
-// ปรับสต็อก = เฉพาะแถวที่นับได้ไม่ตรงกับระบบจริง (diff_quantity != 0) เท่านั้น — ถ้านับตรงเป๊ะไม่ถือว่าเป็น "การเคลื่อนไหว"
-func (r *movementFeedRepository) ListStockAdjustments() ([]entity.CheckStock, error) {
-	var list []entity.CheckStock
+// ปรับสต็อก: ทีม WMS เขียนแถว stock_movements (movement_type = ADJUST) ไว้ให้อยู่แล้วตอนอนุมัติผลเช็คสต็อก
+// (เฉพาะแถวที่นับได้ไม่ตรงกับระบบจริงเท่านั้น — นับตรงเป๊ะไม่ถูกเขียนแถวมาตั้งแต่ต้น) จึงอ่านจากตรงนี้ได้เลย
+func (r *movementFeedRepository) ListStockAdjustments() ([]entity.StockMovement, error) {
+	var list []entity.StockMovement
 	err := r.db.
 		Preload("Product").
 		Preload("User").
-		Where("diff_quantity != 0").
-		Order("adjustment_date_time desc").
+		Where("movement_type = ?", "ADJUST").
+		Order("movement_date_time desc").
 		Limit(movementFeedLimit).
 		Find(&list).Error
 	return list, err
@@ -87,17 +92,17 @@ func (r *movementFeedRepository) ListLowStockProducts() ([]entity.Product, error
 	return list, err
 }
 
-// ขายออก (POS) = ทุกสถานะรวมถึง cancelled ด้วย — โชว์ทุกออเดอร์ที่เคยเกิดขึ้นไว้ในหมวด POS เดียวกันหมด
-// (แม้ภายหลังจะถูกยกเลิกและสต็อกถูกคืนกลับแล้ว ก็ยังโชว์ไว้เป็นประวัติ พร้อมป้ายสถานะ "ยกเลิกแล้ว" กำกับ ไม่ซ่อนออกไปเฉยๆ)
-func (r *movementFeedRepository) ListSaleOutItems() ([]entity.SaleOrderItem, error) {
-	var list []entity.SaleOrderItem
+// ขายออก (POS): ทีม POS เขียนแถว stock_movements (movement_type = OUT) ไว้ให้อยู่แล้วตอนสร้าง/แก้ไขออเดอร์
+// จึงอ่านจากตรงนี้ได้เลย — Preload("SaleOrder") ไว้เพื่อดูสถานะ "ล่าสุด" ของออเดอร์ (แม้ภายหลังจะถูกยกเลิก แถวนี้ก็ยัง
+// อยู่ ไม่ถูกลบ แค่สถานะออเดอร์ที่ผูกไว้เปลี่ยนไป ป้ายในฟีดจะปรับตามสถานะจริงให้เองที่ mapper)
+func (r *movementFeedRepository) ListSaleOutItems() ([]entity.StockMovement, error) {
+	var list []entity.StockMovement
 	err := r.db.
-		Select("sale_order_items.*").
-		Joins("JOIN sale_orders ON sale_orders.id = sale_order_items.order_id").
-		Preload("Order").
-		Preload("Order.CreatedBy").
 		Preload("Product").
-		Order("sale_orders.order_date desc").
+		Preload("User").
+		Preload("SaleOrder").
+		Where("movement_type = ?", "OUT").
+		Order("movement_date_time desc").
 		Limit(movementFeedLimit).
 		Find(&list).Error
 	return list, err
@@ -114,6 +119,31 @@ func (r *movementFeedRepository) ListReturnMovements() ([]entity.StockMovement, 
 		Limit(movementFeedLimit).
 		Find(&list).Error
 	return list, err
+}
+
+// GetSalesReturnIDsByReturnNumbers: หา id ใบคืนสินค้าจริงจากเลขที่ใบคืน (return_number) — ใช้ตอนต้องลิงก์จากฟีด
+// การเคลื่อนไหว (ที่รู้แค่เลขที่ใบคืนจาก Note ของ stock_movements) ไปหน้ารายละเอียดใบคืนสินค้าจริง
+func (r *movementFeedRepository) GetSalesReturnIDsByReturnNumbers(returnNumbers []string) (map[string]uint, error) {
+	result := make(map[string]uint)
+	if len(returnNumbers) == 0 {
+		return result, nil
+	}
+	type row struct {
+		ID           uint
+		ReturnNumber string
+	}
+	var rows []row
+	err := r.db.Table("sales_returns").
+		Select("id, return_number").
+		Where("return_number IN ?", returnNumbers).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, rr := range rows {
+		result[rr.ReturnNumber] = rr.ID
+	}
+	return result, nil
 }
 
 // เคลมสินค้า: เรียงตามวันที่แจ้งเคลมของใบเคลม (ตาราง item เองไม่มีวันที่ของตัวเอง)

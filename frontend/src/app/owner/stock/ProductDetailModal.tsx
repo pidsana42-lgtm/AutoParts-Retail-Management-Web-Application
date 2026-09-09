@@ -23,7 +23,7 @@ export default function ProductDetailModal({ isOpen, onClose, product }: Product
 
   const code = currentSupplier
     ? (currentSupplier.VariantCode || currentSupplier.Barcode || currentSupplier.CompanyProductCode || product?.ProductCode || "")
-    : (product?.Barcode || product?.ProductCode || "");
+    : (product?.ProductCode || "");
 
   useEffect(() => {
     if (!barcodeSvgRef.current || !code) return;

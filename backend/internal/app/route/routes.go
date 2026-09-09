@@ -67,7 +67,7 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	wms.SetupStockMovementRoutes(r, db)
 	wms.SetupMovementFeedRoutes(r, db)
 	wms.SetupSupplierRoutes(r, db)
-	wms.SetupStockAlertRoutes(r, db)
+	wms.SetupStockAlertRoutes(r, db, notificationService)
 	wms.SetupCategoryRoutes(r, db)
 	wms.SetupSubCategoryRoutes(r, db)
 	wms.SetupUnitRoutes(r, db)

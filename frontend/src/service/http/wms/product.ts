@@ -18,7 +18,6 @@ const mapProductItem = (item: any): StockItem => ({
   ProductCode: item.product_code || "",
   Name: item.product_name || "",
   PartNo: item.part_number || "",
-  Barcode: item.barcode || "",
   Models: item.models || [],
   Category: item.category_name || "",
   SubCategory: item.sub_category_name || "",

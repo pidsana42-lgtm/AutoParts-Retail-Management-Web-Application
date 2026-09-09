@@ -56,7 +56,6 @@ export default function EditProductPage() {
     product_code: "",
     part_number: "",
     product_name: "",
-    barcode: "",
     quantity: 0,
     limit_quantity: 0,
     sale_price: 0,
@@ -144,7 +143,6 @@ export default function EditProductPage() {
       product_code: product.ProductCode || "",
       part_number: product.PartNo || "",
       product_name: product.Name || "",
-      barcode: product.Barcode || "",
       quantity: product.Stock || 0,
       limit_quantity: product.MinStock || 0,
       sale_price: product.Price || 0,
@@ -310,12 +308,6 @@ export default function EditProductPage() {
                 value={formData.part_number}
                 onChange={(e) => setFormData({ ...formData, part_number: e.target.value })}
                 placeholder="เช่น PT-TURBO-01"
-              />
-              <Input
-                label="บาร์โค้ด"
-                value={formData.barcode}
-                onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-                placeholder="เช่น 8850000000001"
               />
               <Input
                 label="ราคาทุน (Cost Price)"

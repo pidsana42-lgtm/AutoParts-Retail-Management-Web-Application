@@ -2,10 +2,11 @@
 
 import React from "react";
 import { useLocation, useSearchParams, useNavigate } from "react-router-dom";
-import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, ScanBarcode} from "lucide-react";
+import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, ScanBarcode, Building2} from "lucide-react";
 import Button from "../../../components/elements/button";
 import { usePosPayment } from "./hooks/usepospayment";
-import { usePosCart } from "./hooks/useposcart";
+import { usePosCart, findMatchedSupplier } from "./hooks/useposcart";
+import type { POSProductSupplierInfo } from "../../../interface/pos/product_interface";
 import { useDiscountCalculation } from "./hooks/useDiscountCalculation";
 import { CustomerCard } from "./components/customercard";
 import Text from "../../../components/elements/text";
@@ -321,59 +322,80 @@ export default function PosPage(): React.JSX.Element {
                             </Text>
                           </div>
                         )}
-                        {cartHook.suggestions.map((product) => {
-                          const isOutOfStock = (product.quantity ?? 0) <= 0;
-                          return (
-                            <div
-                              key={`prod-${product.id}`}
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                if (!isOutOfStock) {
-                                  cartHook.handleSelectProduct(product);
-                                }
-                              }}
-                              onClick={() => {
-                                if (!isOutOfStock) {
-                                  cartHook.handleSelectProduct(product);
-                                }
-                              }}
-                              className={`p-3 flex justify-between items-center transition-colors text-left ${
-                                isOutOfStock
-                                  ? "opacity-50 bg-[#F9FAFB] cursor-not-allowed select-none"
-                                  : "hover:bg-gray-50 cursor-pointer"
-                              }`}
-                            >
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-2">
-                                  <Text variant="small" className={`mb-0 leading-tight ${isOutOfStock ? "text-[#9CA3AF] font-light" : "text-[#1C1B1B]"}`}>
-                                    {product.product_name}
-                                  </Text>
-                                  {isOutOfStock ? (
-                                    <Badge variant="neutral" size="auto" className="bg-[#FEE2E2] text-[#E51C23] border-none text-[10px] py-0.5 px-1.5 rounded-none font-normal">
-                                      สินค้าหมด
-                                    </Badge>
-                                  ) : (
-                                    product.barcode && (
-                                      <Text variant="xs" className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded-none">
-                                        บาร์โค้ด: {product.barcode}
+                        {cartHook.suggestions.flatMap((product) => {
+                          // ค้นด้วยรหัสที่ตรงกับบริษัทไหนเจาะจง (เช่นแสกนบาร์โค้ด) -> โชว์แถวเดียวของเจ้านั้น
+                          // ค้นแบบทั่วไปไม่เจาะจงบริษัท (เช่นชื่อ/รหัสสินค้ากลาง) -> แยกโชว์เป็นคนละแถวต่อบริษัทที่เกี่ยวข้อง
+                          // ทั้งหมด เพราะเป็นสินค้าตัวเดียวกันแต่คนละล็อต กดเลือกแถวไหนก็ผูกการขายกับบริษัทนั้นไปเลย
+                          // (product.suppliers ว่างเปล่า เช่นสินค้าที่ยังไม่เคยผูก Supliper ไหนเลย ให้เหลือแถวเดียวเฉยๆ)
+                          const matchedSupplier = findMatchedSupplier(product, cartHook.searchQuery);
+                          const supplierRows: (POSProductSupplierInfo | undefined)[] = matchedSupplier
+                            ? [matchedSupplier]
+                            : product.suppliers && product.suppliers.length > 0
+                              ? product.suppliers
+                              : [undefined];
+
+                          return supplierRows.map((supplier, sIdx) => {
+                            // แต่ละแถวคือคนละบริษัท (ถ้ารู้) จึงต้องอิงคงเหลือของบริษัทนั้นเอง ไม่ใช่ยอดรวมทั้งร้าน
+                            const rowStock = supplier ? supplier.quantity : product.quantity ?? 0;
+                            const isOutOfStock = rowStock <= 0;
+                            const code = supplier ? supplier.barcode || supplier.variant_code || supplier.company_product_code : undefined;
+                            return (
+                              <div
+                                key={`prod-${product.id}-${supplier?.supplier_id ?? "na"}-${sIdx}`}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  if (!isOutOfStock) {
+                                    cartHook.handleSelectProduct(product, supplier);
+                                  }
+                                }}
+                                onClick={() => {
+                                  if (!isOutOfStock) {
+                                    cartHook.handleSelectProduct(product, supplier);
+                                  }
+                                }}
+                                className={`p-3 flex justify-between items-center transition-colors text-left ${
+                                  isOutOfStock
+                                    ? "opacity-50 bg-[#F9FAFB] cursor-not-allowed select-none"
+                                    : "hover:bg-gray-50 cursor-pointer"
+                                }`}
+                              >
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-2">
+                                    <Text variant="small" className={`mb-0 leading-tight ${isOutOfStock ? "text-[#9CA3AF] font-light" : "text-[#1C1B1B]"}`}>
+                                      {product.product_name}
+                                    </Text>
+                                    {isOutOfStock && (
+                                      <Badge variant="neutral" size="auto" className="bg-[#FEE2E2] text-[#E51C23] border-none text-[10px] py-0.5 px-1.5 rounded-none font-normal">
+                                        สินค้าหมด
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {!isOutOfStock && code && (
+                                    <div className="mt-1">
+                                      <Text
+                                        variant="xs"
+                                        title={supplier?.supplier_name}
+                                        className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded-none inline-block"
+                                      >
+                                        {code}
                                       </Text>
-                                    )
+                                    </div>
                                   )}
+                                  <Text variant="xs" className=" font-light text-[#6B7280] mb-0.5 mt-1 leading-tight">
+                                    SKU: {product.product_code} | PN: {product.part_number || "-"}
+                                  </Text>
                                 </div>
-                                <Text variant="xs" className=" font-light text-[#6B7280] mb-0.5 mt-1 leading-tight">
-                                  SKU: {product.product_code} | PN: {product.part_number || "-"}
-                                </Text>
+                                <div className="text-right flex flex-col shrink-0 pl-4">
+                                  <Text variant="xs" className={isOutOfStock ? "text-gray-400 font-light" : "text-[#E51C23]"}>
+                                    ฿{(product.sale_price || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                  </Text>
+                                  <Text variant="xs" className={`text-[10px] ${isOutOfStock ? "text-[#E51C23] font-light" : "text-gray-600 font-light"}`}>
+                                    {isOutOfStock ? "คงเหลือ 0 (หมด)" : `คงเหลือ: ${rowStock}`}
+                                  </Text>
+                                </div>
                               </div>
-                              <div className="text-right flex flex-col shrink-0 pl-4">
-                                <Text variant="xs" className={isOutOfStock ? "text-gray-400 font-light" : "text-[#E51C23]"}>
-                                  ฿{(product.sale_price || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                                </Text>
-                                <Text variant="xs" className={`text-[10px] ${isOutOfStock ? "text-[#E51C23] font-light" : "text-gray-600 font-light"}`}>
-                                  {isOutOfStock ? "คงเหลือ 0 (หมด)" : `คงเหลือ: ${product.quantity}`}
-                                </Text>
-                              </div>
-                            </div>
-                          );
+                            );
+                          });
                         })}
                       </div>
                     )}
@@ -555,7 +577,19 @@ export default function PosPage(): React.JSX.Element {
                         <td className="py-4 px-4 text-xs text-[#1C1B1B]">{item.product_code || "—"}</td>
                         {/* column2 Product Name */}
                         <td className="py-4 px-4">
-                          <Text variant="body" className="text-[#1C1B1B] mb-0 ">{item.product_name}</Text>
+                          <div className="flex items-center gap-1.5">
+                            <Text variant="body" className="text-[#1C1B1B] mb-0 ">{item.product_name}</Text>
+                            {/* สินค้า 1 ชิ้นมาจากได้หลายบริษัท — ต้องรู้ว่าแถวนี้ตัดสต็อกจากบริษัทไหน (เจาะจงจากบาร์โค้ด/รหัสล็อตที่แสกน-เลือก) */}
+                            {item.supplier_name && (
+                              <span
+                                title={`ตัดสต็อกจากบริษัท: ${item.supplier_name}`}
+                                className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700"
+                              >
+                                <Building2 size={10} />
+                                {item.supplier_name}
+                              </span>
+                            )}
+                          </div>
                           <Text variant="small" className="text-[11px] text-[#6B7280] mt-0.5 mb-0">PN: {item.part_number || "—"}</Text>
                           {(item.brand_name || item.grade_name || item.model_name) && (
                             <Text variant="small" className="text-[11px] text-[#6B7280] mt-1 inline-block py-0.5 rounded-sm mb-0">

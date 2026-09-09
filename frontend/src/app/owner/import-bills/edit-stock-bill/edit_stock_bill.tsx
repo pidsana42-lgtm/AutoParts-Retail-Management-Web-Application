@@ -71,7 +71,6 @@ export default function EditStockBillPage() {
     product_code: '',
     part_number: '',
     product_name: '',
-    barcode: '',
     quantity: 0,
     limit_quantity: 5,
     sale_price: 0,
@@ -125,9 +124,8 @@ export default function EditStockBillPage() {
         const nameMatch = item.Name?.toLowerCase().includes(q);
         const codeMatch = item.ProductCode?.toLowerCase().includes(q);
         const partMatch = item.PartNo?.toLowerCase().includes(q);
-        const barMatch = item.Barcode?.toLowerCase().includes(q);
         const companyMatch = mismatch?.companyName?.toLowerCase().includes(q);
-        return nameMatch || codeMatch || partMatch || barMatch || companyMatch;
+        return nameMatch || codeMatch || partMatch || companyMatch;
       }
 
       return true;
@@ -163,7 +161,6 @@ export default function EditStockBillPage() {
       product_code: product.ProductCode || '',
       part_number: product.PartNo || '',
       product_name: product.Name || '',
-      barcode: product.Barcode || '',
       quantity: product.Stock || 0,
       limit_quantity: product.MinStock || 5,
       cost_price: costToSet,
@@ -261,7 +258,6 @@ export default function EditStockBillPage() {
         product_code: formData.product_code,
         part_number: formData.part_number,
         product_name: formData.product_name,
-        barcode: formData.barcode,
         quantity: Number(formData.quantity),
         limit_quantity: Number(formData.limit_quantity),
         cost_price: Number(formData.cost_price),
@@ -482,12 +478,6 @@ export default function EditStockBillPage() {
                     value={formData.part_number}
                     onChange={(e) => setFormData({ ...formData, part_number: e.target.value })}
                     placeholder="เช่น PT-TURBO-01"
-                  />
-                  <Input
-                    label="บาร์โค้ด"
-                    value={formData.barcode}
-                    onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-                    placeholder="เช่น 8850000000001"
                   />
                 </div>
 

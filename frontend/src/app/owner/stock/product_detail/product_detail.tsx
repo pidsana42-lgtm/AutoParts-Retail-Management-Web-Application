@@ -79,7 +79,7 @@ export default function ProductDetailPage() {
 
   const code = currentSupplier
     ? (currentSupplier.VariantCode || currentSupplier.Barcode || currentSupplier.CompanyProductCode || product?.ProductCode || "")
-    : (product?.Barcode || product?.ProductCode || "");
+    : (product?.ProductCode || "");
 
   const qrPayload = currentSupplier
     ? `${window.location.origin}/product/${product?.ID || id}?variant=${currentSupplier.VariantCode || ""}`
