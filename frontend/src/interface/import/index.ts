@@ -47,7 +47,6 @@ export interface Product {
   cost_price?: number;
   sale_price?: number;
   retail_price?: number;
-  barcode?: string;
   image?: string;
   thumbnail_url?: string;
   image_url?: string;

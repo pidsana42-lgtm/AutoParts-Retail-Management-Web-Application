@@ -241,7 +241,7 @@ export default function PreOrderManager() {
       p.category_name?.toLowerCase().includes(q) ||
       (p as any).part_number?.toLowerCase().includes(q) ||
       (p as any).company_product_code?.toLowerCase().includes(q) ||
-      p.barcode?.toLowerCase().includes(q)
+      p.suppliers?.some(s => s.variant_code?.toLowerCase().includes(q))
     ).slice(0, 15);
     
     matchedProducts.forEach(p => {

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Trash2, SquarePen, Eye } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 import type { Brand, Model } from "../../../../../interface/wms/stock_data";
 
 // Extracted Modals
@@ -28,6 +29,7 @@ export default function BrandTab({
   addSignal,
 }: BrandTabProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
 
   // Modals visibility state
   const [addOpen, setAddOpen] = useState(false);
@@ -55,8 +57,12 @@ export default function BrandTab({
     setCurrentPage(1);
   }, [search, brandFilter]);
 
-  const handleDeleteBrand = async (id: number) => {
-    if (!confirm("คุณแน่ใจว่าต้องการลบแบรนด์รถนี้?")) return;
+  const handleDeleteBrand = async (id: number, name: string) => {
+    const confirmed = await confirmDialog(
+      `ต้องการลบแบรนด์รถ "${name}" ใช่หรือไม่? รุ่นรถทั้งหมดในแบรนด์นี้จะถูกลบไปด้วย`,
+      { title: "ลบแบรนด์รถ", confirmText: "ลบ", variant: "danger", icon: Trash2 }
+    );
+    if (!confirmed) return;
     try {
       await stockDataService.deleteBrand(id);
       reloadBrands();
@@ -66,8 +72,12 @@ export default function BrandTab({
     }
   };
 
-  const handleDeleteModel = async (modelId: number) => {
-    if (!confirm("คุณแน่ใจว่าต้องการลบรุ่นรถนี้?")) return;
+  const handleDeleteModel = async (modelId: number, name: string) => {
+    const confirmed = await confirmDialog(
+      `ต้องการลบรุ่นรถ "${name}" ใช่หรือไม่?`,
+      { title: "ลบรุ่นรถ", confirmText: "ลบ", variant: "danger", icon: Trash2 }
+    );
+    if (!confirmed) return;
     try {
       await stockDataService.deleteModel(modelId);
       reloadBrands();
@@ -216,7 +226,7 @@ export default function BrandTab({
                             <SquarePen className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => handleDeleteModel(row.model!.id)}
+                            onClick={() => handleDeleteModel(row.model!.id, row.model!.model_name)}
                             className="hover:text-red-600 transition-colors"
                             title="ลบรุ่นรถ"
                           >
@@ -241,7 +251,7 @@ export default function BrandTab({
                               <SquarePen className="h-4 w-4" />
                             </button>
                             <button
-                              onClick={() => handleDeleteBrand(row.brand.id)}
+                              onClick={() => handleDeleteBrand(row.brand.id, row.brand.brand_name)}
                               className="hover:text-red-600 transition-colors"
                               title="ลบแบรนด์รถ"
                             >

@@ -39,6 +39,10 @@ const getItemReason = (reason: string | undefined, productName: string, index: n
 const ReturnDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  // ที่มาของการเข้าหน้านี้ (ถ้ามี) — ใช้ปรับเกล็ดขนมปังให้ตรงกับหน้าที่กดเข้ามาจริงๆ เช่นจากหน้า
+  // "การเคลื่อนไหวของคลังสินค้า" แทน "จัดการคืนสินค้า" ตามปกติ
+  const cameFromMovement = (location.state as { from?: string } | null)?.from === 'movement';
   const basePath = usePathBasePrefix();
   const userRole = (localStorage.getItem('role') || '').toUpperCase();
   const isManager = userRole === 'OWNER' || userRole === 'ADMIN';
@@ -154,8 +158,11 @@ const ReturnDetailPage: React.FC = () => {
         <div className="flex items-center gap-4">
           <div className="flex-col space-y-2">
             <nav className="flex items-center text-sm text-gray-500 gap-2 font-light">
-              <Link to={`${basePath}/returns`} className="hover:text-black transition-colors">
-                จัดการคืนสินค้า
+              <Link
+                to={cameFromMovement ? '/owner/stock/stock-movement' : `${basePath}/returns`}
+                className="hover:text-black transition-colors"
+              >
+                {cameFromMovement ? 'การเคลื่อนไหวของคลังสินค้า' : 'จัดการคืนสินค้า'}
               </Link>
               <ChevronRight size={16} className="text-gray-400" />
               <span className="text-black font-normal">รายละเอียดใบคืนสินค้า</span>

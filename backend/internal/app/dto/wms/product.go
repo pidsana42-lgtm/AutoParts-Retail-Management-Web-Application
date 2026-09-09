@@ -11,7 +11,6 @@ type ProductRequestDTO struct {
 	Product_Code   string  `json:"product_code"` // Not required anymore because we can auto-generate it!
 	Part_Number    string  `json:"part_number"`
 	Product_Name   string  `json:"product_name" binding:"required"`
-	Barcode        string  `json:"barcode"`
 	Quantity       int     `json:"quantity" binding:"min=0"`
 	Limit_Quantity int     `json:"limit_quantity" binding:"min=0"`
 	Sale_price     float64 `json:"sale_price" binding:"required,gt=0"`
@@ -56,7 +55,6 @@ func (r *ProductRequestDTO) ToEntity() entity.Product {
 		Product_Code:     r.Product_Code,
 		Part_Number:      r.Part_Number,
 		Product_Name:     r.Product_Name,
-		Barcode:          r.Barcode,
 		Quantity:         r.Quantity,
 		Limit_Quantity:   r.Limit_Quantity,
 		Sale_price:       r.Sale_price,
@@ -81,7 +79,6 @@ type ProductListResponseDTO struct {
 	// CompanyProductCode ของสินค้าทั้งชิ้นเป็นค่าเดียวไม่ได้อีกแล้ว เพราะ 1 สินค้ามาได้จากหลาย Supplier
 	// แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน — ดูได้ที่ Suppliers[].CompanyProductCode แทน (แยกตามเจ้า)
 	Product_Name    string  `json:"product_name"`
-	Barcode         string  `json:"barcode"`
 	Quantity        int     `json:"quantity"`
 	Limit_Quantity  int     `json:"limit_quantity"`
 	Sale_price      float64 `json:"sale_price"`
@@ -134,7 +131,6 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 	d.Product_Code = p.Product_Code
 	d.Part_Number = p.Part_Number
 	d.Product_Name = p.Product_Name
-	d.Barcode = p.Barcode
 	d.Quantity = p.Quantity
 	d.Limit_Quantity = p.Limit_Quantity
 	d.Sale_price = p.Sale_price

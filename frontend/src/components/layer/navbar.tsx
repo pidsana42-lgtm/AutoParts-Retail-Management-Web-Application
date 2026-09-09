@@ -105,7 +105,7 @@ export default function Navbar(): React.JSX.Element {
     if (t === 'error' || t.includes('reject')) {
       return <XCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />;
     }
-    if (t === 'warning' || t.includes('warn') || t.includes('cancel') || t.includes('request')) {
+    if (t === 'warning' || t.includes('warn') || t.includes('cancel') || t.includes('request') || t.includes('stock')) {
       return <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5 shrink-0" />;
     }
     return <Info className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />;

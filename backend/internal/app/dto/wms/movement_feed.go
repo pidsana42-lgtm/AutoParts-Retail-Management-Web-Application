@@ -6,15 +6,15 @@ import "time"
 // เริ่มจากฝั่ง WMS ก่อน (ตามที่ตกลงกับเจ้าของร้าน) ต่อมาผสานฝั่งการขาย/คืน-เคลม/พรีออเดอร์เข้ามาด้วย
 // (อ่านข้อมูลอย่างเดียวจากตารางของทีมนั้นๆ ไม่ยุ่งกับ business logic เดิม) เป็นประเภทใหม่โดยไม่ต้องแก้โครงสร้าง MovementFeedItem นี้เลย
 const (
-	MovementFeedProductAdded  = "PRODUCT_ADDED"   // สินค้าถูกเพิ่มเข้าระบบใหม่
-	MovementFeedStockIn       = "STOCK_IN"        // สินค้าถูกนำเข้า/รับเพิ่มจากบริษัท
-	MovementFeedCheckFlagged  = "CHECK_FLAGGED"   // สินค้าถูกแจ้งเช็คสต็อก
-	MovementFeedStockAdjusted = "STOCK_ADJUSTED"  // สต็อกถูกปรับหลังอนุมัติผลเช็คสต็อก (นับได้ไม่ตรงกับระบบ)
-	MovementFeedLowStock      = "LOW_STOCK"       // สินค้าใกล้หมด (คงเหลือต่ำกว่าจุดสั่งซื้อ)
-	MovementFeedSaleOut       = "SALE_OUT"        // สินค้าถูกขายออกผ่าน POS (ออเดอร์สถานะ completed เท่านั้น)
-	MovementFeedSalesReturn   = "SALES_RETURN"    // ลูกค้าคืนสินค้า (อ่านจาก stock_movements ที่ movement_type = RETURN)
-	MovementFeedCustomerClaim = "CUSTOMER_CLAIM"  // ลูกค้าแจ้งเคลมสินค้า
-	MovementFeedPreOrder      = "PRE_ORDER"       // สร้างพรีออเดอร์สั่งจองสินค้ากับบริษัท
+	MovementFeedProductAdded  = "PRODUCT_ADDED"  // สินค้าถูกเพิ่มเข้าระบบใหม่
+	MovementFeedStockIn       = "STOCK_IN"       // สินค้าถูกนำเข้า/รับเพิ่มจากบริษัท
+	MovementFeedCheckFlagged  = "CHECK_FLAGGED"  // สินค้าถูกแจ้งเช็คสต็อก
+	MovementFeedStockAdjusted = "STOCK_ADJUSTED" // สต็อกถูกปรับหลังอนุมัติผลเช็คสต็อก (นับได้ไม่ตรงกับระบบ)
+	MovementFeedLowStock      = "LOW_STOCK"      // สินค้าใกล้หมด (คงเหลือต่ำกว่าจุดสั่งซื้อ)
+	MovementFeedSaleOut       = "SALE_OUT"       // สินค้าถูกขายออกผ่าน POS (ออเดอร์สถานะ completed เท่านั้น)
+	MovementFeedSalesReturn   = "SALES_RETURN"   // ลูกค้าคืนสินค้า (อ่านจาก stock_movements ที่ movement_type = RETURN)
+	MovementFeedCustomerClaim = "CUSTOMER_CLAIM" // ลูกค้าแจ้งเคลมสินค้า
+	MovementFeedPreOrder      = "PRE_ORDER"      // สร้างพรีออเดอร์สั่งจองสินค้ากับบริษัท
 )
 
 type MovementFeedItem struct {
@@ -29,6 +29,14 @@ type MovementFeedItem struct {
 
 	ActorName    string `json:"actor_name,omitempty"`
 	SupplierName string `json:"supplier_name,omitempty"`
+
+	// LinkPath: URL หน้ารายละเอียดของเหตุการณ์นี้ — backend เป็นผู้คำนวณให้ตรงเพราะรู้ความสัมพันธ์ของข้อมูล
+	// ต้นทางอยู่แล้ว (เช่น SALE_OUT รู้ id ออเดอร์จริง ไม่ใช่แค่ id รายการสินค้าในออเดอร์ที่ RefID ชี้ถึง) ฝั่งหน้าเว็บ
+	// แค่ navigate ไปตรงนี้เฉยๆ ไม่ต้องรู้จัก route ของแต่ละโดเมนเอง — ว่างเปล่า = ไม่มีหน้ารายละเอียดให้กด
+	LinkPath string `json:"link_path,omitempty"`
+	// LinkState: ข้อมูลเสริมที่ต้องส่งไปพร้อม navigate() (เช่น {"from":"movement"} ให้หน้าปลายทางปรับเกล็ดขนมปัง
+	// กลับมาที่ฟีดนี้แทนเมนูปกติของมัน) — ไม่ใช่ทุกหน้าที่ต้องใช้ ว่างได้
+	LinkState map[string]string `json:"link_state,omitempty"`
 
 	Title  string `json:"title"`
 	Detail string `json:"detail,omitempty"`

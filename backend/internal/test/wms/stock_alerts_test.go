@@ -13,12 +13,15 @@ import (
 )
 
 type mockStockAlertRepo struct {
-	createFn       func(*entity.StockAlert) error
-	getByIDFn      func(uint) (*entity.StockAlert, error)
-	listFn         func(string) ([]entity.StockAlert, error)
-	updateFn       func(*entity.StockAlert) error
-	resolveByIDsFn func([]uint) error
-	called         map[string]int
+	createFn                        func(*entity.StockAlert) error
+	getByIDFn                       func(uint) (*entity.StockAlert, error)
+	listFn                          func(string) ([]entity.StockAlert, error)
+	updateFn                        func(*entity.StockAlert) error
+	resolveByIDsFn                  func([]uint) error
+	getActivePOAlertMapFn           func([]uint) (map[uint]wmsRepo.ActivePOInfo, error)
+	listLowStockProductsFn          func() ([]entity.Product, error)
+	listUnresolvedAlertProductIDsFn func() (map[uint]bool, error)
+	called                          map[string]int
 }
 
 func newMockStockAlertRepo() *mockStockAlertRepo {
@@ -60,6 +63,27 @@ func (m *mockStockAlertRepo) ResolveByIDs(ids []uint) error {
 		return m.resolveByIDsFn(ids)
 	}
 	return nil
+}
+func (m *mockStockAlertRepo) GetActivePOAlertMap(alertIDs []uint) (map[uint]wmsRepo.ActivePOInfo, error) {
+	m.track("GetActivePOAlertMap")
+	if m.getActivePOAlertMapFn != nil {
+		return m.getActivePOAlertMapFn(alertIDs)
+	}
+	return map[uint]wmsRepo.ActivePOInfo{}, nil
+}
+func (m *mockStockAlertRepo) ListLowStockProducts() ([]entity.Product, error) {
+	m.track("ListLowStockProducts")
+	if m.listLowStockProductsFn != nil {
+		return m.listLowStockProductsFn()
+	}
+	return nil, nil
+}
+func (m *mockStockAlertRepo) ListUnresolvedAlertProductIDs() (map[uint]bool, error) {
+	m.track("ListUnresolvedAlertProductIDs")
+	if m.listUnresolvedAlertProductIDsFn != nil {
+		return m.listUnresolvedAlertProductIDsFn()
+	}
+	return map[uint]bool{}, nil
 }
 
 var _ wmsRepo.StockAlertRepository = (*mockStockAlertRepo)(nil)
@@ -194,6 +218,90 @@ func TestStockAlertUpdateResolved_UpdatesIsResolvedField(t *testing.T) {
 	if got.Is_Resolved != "true" {
 		t.Errorf("expected Is_Resolved updated to true, got %q", got.Is_Resolved)
 	}
+}
+
+func TestCheckAndCreateAlerts_CreatesOnlyForProductsWithoutAnExistingUnresolvedAlert(t *testing.T) {
+	repo := newMockStockAlertRepo()
+	repo.listLowStockProductsFn = func() ([]entity.Product, error) {
+		return []entity.Product{
+			{Model: gorm.Model{ID: 1}, Product_Name: "ผ้าเบรก", Quantity: 2, Limit_Quantity: 5},
+			{Model: gorm.Model{ID: 2}, Product_Name: "หัวเทียน", Quantity: 0, Limit_Quantity: 3},
+			{Model: gorm.Model{ID: 3}, Product_Name: "กรองน้ำมัน", Quantity: 1, Limit_Quantity: 4}, // มี alert ค้างอยู่แล้ว
+		}, nil
+	}
+	repo.listUnresolvedAlertProductIDsFn = func() (map[uint]bool, error) {
+		return map[uint]bool{3: true}, nil
+	}
+	var createdAlerts []entity.StockAlert
+	repo.createFn = func(sa *entity.StockAlert) error {
+		sa.ID = uint(len(createdAlerts) + 1)
+		createdAlerts = append(createdAlerts, *sa)
+		return nil
+	}
+	svc := wmsService.NewStockAlertService(repo)
+
+	result, err := svc.CheckAndCreateAlerts()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected 2 new alerts (product 3 already has one), got %d", len(result))
+	}
+	if len(createdAlerts) != 2 {
+		t.Fatalf("expected repo.Create called exactly twice, got %d", len(createdAlerts))
+	}
+
+	if result[0].ProductID == nil || *result[0].ProductID != 1 || result[0].Alert_type != "LOW_STOCK" || result[0].ProductName != "ผ้าเบรก" {
+		t.Errorf("expected first alert to be LOW_STOCK for product 1, got %+v", result[0])
+	}
+	if result[1].ProductID == nil || *result[1].ProductID != 2 || result[1].Alert_type != "OUT_OF_STOCK" {
+		t.Errorf("expected second alert to be OUT_OF_STOCK for product 2 (quantity 0), got %+v", result[1])
+	}
+	if createdAlerts[0].Is_Resolved != "false" {
+		t.Errorf("expected newly created alerts to default to unresolved, got %q", createdAlerts[0].Is_Resolved)
+	}
+}
+
+func TestCheckAndCreateAlerts_NoLowStockProducts_ReturnsEmptyWithoutTouchingUnresolvedLookup(t *testing.T) {
+	repo := newMockStockAlertRepo()
+	repo.listLowStockProductsFn = func() ([]entity.Product, error) { return nil, nil }
+	svc := wmsService.NewStockAlertService(repo)
+
+	result, err := svc.CheckAndCreateAlerts()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected no alerts created, got %d", len(result))
+	}
+	if repo.called["ListUnresolvedAlertProductIDs"] != 0 {
+		t.Errorf("expected the unresolved-alert lookup to be skipped when there are no low-stock products")
+	}
+}
+
+func TestCheckAndCreateAlerts_PropagatesLookupErrors(t *testing.T) {
+	wantErr := errors.New("db unavailable")
+
+	t.Run("ListLowStockProducts fails", func(t *testing.T) {
+		repo := newMockStockAlertRepo()
+		repo.listLowStockProductsFn = func() ([]entity.Product, error) { return nil, wantErr }
+		svc := wmsService.NewStockAlertService(repo)
+		if _, err := svc.CheckAndCreateAlerts(); !errors.Is(err, wantErr) {
+			t.Fatalf("expected error %v, got %v", wantErr, err)
+		}
+	})
+
+	t.Run("ListUnresolvedAlertProductIDs fails", func(t *testing.T) {
+		repo := newMockStockAlertRepo()
+		repo.listLowStockProductsFn = func() ([]entity.Product, error) {
+			return []entity.Product{{Model: gorm.Model{ID: 1}, Quantity: 1, Limit_Quantity: 5}}, nil
+		}
+		repo.listUnresolvedAlertProductIDsFn = func() (map[uint]bool, error) { return nil, wantErr }
+		svc := wmsService.NewStockAlertService(repo)
+		if _, err := svc.CheckAndCreateAlerts(); !errors.Is(err, wantErr) {
+			t.Fatalf("expected error %v, got %v", wantErr, err)
+		}
+	})
 }
 
 func TestStockAlertUpdateResolved_NotFound_ReturnsRepoError(t *testing.T) {

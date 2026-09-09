@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Trash2, SquarePen, Loader2, Eye } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Category, SubCategory, SubSubCategory } from "../../../../../interface/wms/stock_data";
@@ -28,6 +29,7 @@ export default function CategoryTab({
   addSignal,
 }: CategoryTabProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
   const [subSubCategories, setSubSubCategories] = useState<SubSubCategory[]>([]);
   const [loading, setLoading] = useState(false);
@@ -94,8 +96,12 @@ export default function CategoryTab({
     }
   };
 
-  const handleDeleteCategory = async (id: number) => {
-    if (!confirm("คุณแน่ใจว่าต้องการลบประเภทหลักนี้?")) return;
+  const handleDeleteCategory = async (id: number, name: string) => {
+    const confirmed = await confirmDialog(
+      `ต้องการลบประเภทสินค้า "${name}" ใช่หรือไม่? ประเภทย่อยและประเภทย่อยย่อยทั้งหมดข้างในจะถูกลบไปด้วย`,
+      { title: "ลบประเภทสินค้า", confirmText: "ลบ", variant: "danger", icon: Trash2 }
+    );
+    if (!confirmed) return;
     try {
       await stockDataService.deleteCategory(id);
       toast({ variant: "success", message: "ลบประเภทสินค้าสำเร็จ" });
@@ -105,8 +111,12 @@ export default function CategoryTab({
     }
   };
 
-  const handleDeleteSubCategory = async (id: number) => {
-    if (!confirm("คุณแน่ใจว่าต้องการลบประเภทย่อยนี้?")) return;
+  const handleDeleteSubCategory = async (id: number, name: string) => {
+    const confirmed = await confirmDialog(
+      `ต้องการลบประเภทย่อย "${name}" ใช่หรือไม่? ประเภทย่อยย่อยทั้งหมดข้างในจะถูกลบไปด้วย`,
+      { title: "ลบประเภทย่อย", confirmText: "ลบ", variant: "danger", icon: Trash2 }
+    );
+    if (!confirmed) return;
     try {
       await stockDataService.deleteSubCategory(id);
       toast({ variant: "success", message: "ลบประเภทย่อยสำเร็จ" });
@@ -116,8 +126,12 @@ export default function CategoryTab({
     }
   };
 
-  const handleDeleteSubSubCategory = async (id: number) => {
-    if (!confirm("คุณแน่ใจว่าต้องการลบประเภทย่อยย่อยนี้?")) return;
+  const handleDeleteSubSubCategory = async (id: number, name: string) => {
+    const confirmed = await confirmDialog(
+      `ต้องการลบประเภทย่อยย่อย "${name}" ใช่หรือไม่?`,
+      { title: "ลบประเภทย่อยย่อย", confirmText: "ลบ", variant: "danger", icon: Trash2 }
+    );
+    if (!confirmed) return;
     try {
       await stockDataService.deleteSubSubCategory(id);
       toast({ variant: "success", message: "ลบประเภทย่อยย่อยสำเร็จ" });
@@ -293,9 +307,11 @@ export default function CategoryTab({
                       </button>
                       <button
                         onClick={() => {
-                            if (row.subSubCategory) handleDeleteSubSubCategory(row.subSubCategory.id);
-                            else if (row.subCategory) handleDeleteSubCategory(row.subCategory.id);
-                            else handleDeleteCategory(row.category.id);
+                            if (row.subSubCategory)
+                              handleDeleteSubSubCategory(row.subSubCategory.id, row.subSubCategory.sub_sub_category_name);
+                            else if (row.subCategory)
+                              handleDeleteSubCategory(row.subCategory.id, row.subCategory.sub_category_name);
+                            else handleDeleteCategory(row.category.id, row.category.category_name);
                         }}
                         className="hover:text-red-600 transition-colors"
                         title="ลบ"

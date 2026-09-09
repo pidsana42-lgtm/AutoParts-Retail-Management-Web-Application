@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Trash2, SquarePen, Eye } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Zone, Shelf, ShelfLevel } from "../../../../../interface/wms/stock_data";
@@ -30,6 +31,7 @@ export default function ZoneTab({
   addSignal,
 }: ZoneTabProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
 
   // Modals visibility state
   const [addOpen, setAddOpen] = useState(false);
@@ -57,8 +59,12 @@ export default function ZoneTab({
     setCurrentPage(1);
   }, [search, zoneFilter]);
 
-  const handleDeleteZone = async (id: number) => {
-    if (!confirm("คุณแน่ใจว่าต้องการลบโซนนี้? (ชั้นวางทั้งหมดในโซนนี้จะถูกลบด้วย)")) return;
+  const handleDeleteZone = async (id: number, name: string) => {
+    const confirmed = await confirmDialog(
+      `ต้องการลบโซน "${name}" ใช่หรือไม่? ตู้วางสินค้าและชั้นระดับทั้งหมดในโซนนี้จะถูกลบไปด้วย`,
+      { title: "ลบโซนสินค้า", confirmText: "ลบ", variant: "danger", icon: Trash2 }
+    );
+    if (!confirmed) return;
     try {
       await stockDataService.deleteZone(id);
       toast({ variant: "success", message: "ลบโซนสำเร็จ" });
@@ -68,8 +74,12 @@ export default function ZoneTab({
     }
   };
 
-  const handleDeleteShelf = async (id: number) => {
-    if (!confirm("คุณแน่ใจว่าต้องการลบตู้วางสินค้านี้?")) return;
+  const handleDeleteShelf = async (id: number, name: string) => {
+    const confirmed = await confirmDialog(
+      `ต้องการลบตู้วางสินค้า "${name}" ใช่หรือไม่? ชั้นระดับทั้งหมดในตู้นี้จะถูกลบไปด้วย`,
+      { title: "ลบตู้วางสินค้า", confirmText: "ลบ", variant: "danger", icon: Trash2 }
+    );
+    if (!confirmed) return;
     try {
       await stockDataService.deleteShelf(id);
       toast({ variant: "success", message: "ลบตู้วางสินค้าสำเร็จ" });
@@ -79,8 +89,12 @@ export default function ZoneTab({
     }
   };
 
-  const handleDeleteLevel = async (id: number) => {
-    if (!confirm("คุณแน่ใจว่าต้องการลบชั้นระดับนี้?")) return;
+  const handleDeleteLevel = async (id: number, name: string) => {
+    const confirmed = await confirmDialog(
+      `ต้องการลบชั้นระดับ "${name}" ใช่หรือไม่?`,
+      { title: "ลบชั้นระดับ", confirmText: "ลบ", variant: "danger", icon: Trash2 }
+    );
+    if (!confirmed) return;
     try {
       await stockDataService.deleteShelfLevel(id);
       toast({ variant: "success", message: "ลบชั้นระดับสำเร็จ" });
@@ -259,7 +273,7 @@ export default function ZoneTab({
                               <SquarePen className="h-4 w-4" />
                             </button>
                             <button
-                              onClick={() => handleDeleteLevel(lvl.id)}
+                              onClick={() => handleDeleteLevel(lvl.id, lvl.level_name)}
                               className="hover:text-red-600 transition-colors"
                               title="ลบชั้นระดับ"
                             >
@@ -287,7 +301,7 @@ export default function ZoneTab({
                               <SquarePen className="h-4 w-4" />
                             </button>
                             <button
-                              onClick={() => handleDeleteShelf(row.shelf!.id)}
+                              onClick={() => handleDeleteShelf(row.shelf!.id, row.shelf!.shelf_name)}
                               className="hover:text-red-600 transition-colors"
                               title="ลบตู้วางสินค้า"
                             >
@@ -312,7 +326,7 @@ export default function ZoneTab({
                                 <SquarePen className="h-4 w-4" />
                               </button>
                               <button
-                                onClick={() => handleDeleteZone(row.zone.id)}
+                                onClick={() => handleDeleteZone(row.zone.id, row.zone.zone_name)}
                                 className="hover:text-red-600 transition-colors"
                                 title="ลบโซนหลัก"
                               >
