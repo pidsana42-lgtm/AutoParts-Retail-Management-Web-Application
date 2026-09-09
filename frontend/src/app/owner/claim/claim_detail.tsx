@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import {
   ChevronRight,
   Calendar, Hash, User, Package, Loader2, SquarePen, Printer, Save, Camera, X,
@@ -29,10 +29,6 @@ const parseNote = (note: string | undefined, key: string): string => {
 export default function ClaimDetailPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
-  const location = useLocation();
-  // ที่มาของการเข้าหน้านี้ (ถ้ามี) — ใช้ปรับเกล็ดขนมปังให้ตรงกับหน้าที่กดเข้ามาจริงๆ เช่นจากหน้า
-  // "การเคลื่อนไหวของคลังสินค้า" แทน "จัดการเคลมสินค้า" ตามปกติ
-  const cameFromMovement = (location.state as { from?: string } | null)?.from === 'movement';
   const [searchParams, setSearchParams] = useSearchParams();
   const { role } = useAuth();
   const normalizedRole = role?.trim().toUpperCase();
@@ -321,9 +317,6 @@ export default function ClaimDetailPage(): React.JSX.Element {
   const displayItems = isEditing ? editItems : (claim.items ?? []);
   const totalQty = displayItems.reduce((acc, i) => acc + (i.qty || 0), 0);
   const basePath = window.location.pathname.startsWith('/employee') ? '/employee/claims' : '/owner/claims';
-  const breadcrumbRoot = cameFromMovement
-    ? { label: 'การเคลื่อนไหวของคลังสินค้า', path: '/owner/stock/stock-movement' }
-    : { label: 'จัดการเคลมสินค้า', path: basePath };
 
   return (
     <div className="p-8 space-y-6 bg-white min-h-screen font-sans text-slate-800 animate-in fade-in duration-300">

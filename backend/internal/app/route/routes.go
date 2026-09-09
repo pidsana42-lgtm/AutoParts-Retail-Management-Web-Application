@@ -20,6 +20,9 @@ import (
 )
 
 func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
+	// The stock monitor's post-write middleware must precede all business routes.
+	notificationService := notification.SetupNotificationRoutes(r, db)
+	wms.SetupStockAlertRoutes(r, db, notificationService)
 	// LINE OA routes
 	oa.SetupOARoutes(r, db)
 
@@ -28,9 +31,6 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 
 	// dashboard routes
 	dashboard.SetupDashboardRoutes(r, db)
-
-	// notification routes (กระดิ่งแจ้งเตือน) — ต้อง setup ก่อน wms เพราะ check-stock ต้องใช้ service ตัวนี้ยิงแจ้งเตือน
-	notificationService := notification.SetupNotificationRoutes(r, db)
 
 	// company setting routes
 	company_setting.SetupCompanySettingRoutes(r, db)
@@ -67,7 +67,6 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 	wms.SetupStockMovementRoutes(r, db)
 	wms.SetupMovementFeedRoutes(r, db)
 	wms.SetupSupplierRoutes(r, db)
-	wms.SetupStockAlertRoutes(r, db, notificationService)
 	wms.SetupCategoryRoutes(r, db)
 	wms.SetupSubCategoryRoutes(r, db)
 	wms.SetupUnitRoutes(r, db)

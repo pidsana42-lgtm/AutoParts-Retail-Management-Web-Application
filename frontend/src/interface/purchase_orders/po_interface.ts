@@ -93,7 +93,7 @@ export interface CreatePOResponse {
 export interface PreorderItem {
     id: number;
     pre_order_id?: number;
-    product_id: number;
+    product_id: number | null;
     product_name: string;
     product_code: string;
     quantity: number;
@@ -221,7 +221,7 @@ interface ProductRaw {
 
 export interface PreOrderItemRaw {
   id: number;
-  product_id: number;
+  product_id: number | null;
   product?: ProductRaw;
   product_code?: string;
   product_name?: string;

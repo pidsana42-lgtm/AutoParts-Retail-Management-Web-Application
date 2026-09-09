@@ -32,6 +32,10 @@ func (ctrl *PurchaseOrderController) CreatePO(c *gin.Context) {
 		return
 	}
 
+	if err := req.ValidatePrices(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	// ตรวจสอบ ID ของ User ที่สั่งสร้างใบสั่งซื้อจาก JWT Token
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -299,6 +303,10 @@ func (ctrl *PurchaseOrderController) UpdatePO(c *gin.Context) {
 		return
 	}
 
+	if err := req.ValidatePrices(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	// ตรวจสอบ ID ของผู้ทำรายการจาก Token (เหมือนตอน CreatePO)
 	userID, exists := c.Get("user_id")
 	if !exists {

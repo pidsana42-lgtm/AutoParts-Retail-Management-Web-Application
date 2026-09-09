@@ -120,7 +120,7 @@ export default function StockAlertPOModal({ isOpen, onClose, stockAlerts, basePa
             <h2 id='stock-alert-po-title' className='text-lg font-bold text-slate-800'>เลือกสินค้าเพื่อสร้างใบสั่งซื้อ</h2>
             <p className='mt-1 text-sm text-slate-500'>สินค้าถูกจัดกลุ่มตามซัพพลายเออร์ เลือกรายการที่ต้องการสั่งซื้อจากแต่ละซัพพลายเออร์</p>
           </div>
-          <button type='button' onClick={onClose} className='shrink-0 text-gray-400 hover:text-gray-600'>
+          <button type='button' aria-label='ปิด' onClick={onClose} className='shrink-0 text-gray-400 hover:text-gray-600'>
             <X size={20} />
           </button>
         </div>

@@ -85,7 +85,12 @@ func (m *mockUser) FindByID(_ context.Context, id uint) (*entity.User, error) { 
 
 type mockPreorder struct {
 	preorder.PreOrderRepository
+	get    func(uint) (*entity.PreOrderItem, error)
 	update func([]uint, string) error
+}
+
+func (m *mockPreorder) GetPreOrderItemByID(_ context.Context, id uint) (*entity.PreOrderItem, error) {
+	return m.get(id)
 }
 
 func (m *mockPreorder) UpdateItemsStatusByIDs(_ context.Context, ids []uint, status string) error {
@@ -206,8 +211,8 @@ func TestCreatePO_Success(t *testing.T) {
 				if got.Status != enum.StatusApproved || saved.Approved_by == nil || *saved.Approved_by != 9 || saved.Approved_at == nil || saved.Approved_at.Before(before) || saved.Approved_at.After(time.Now()) {
 					t.Errorf("approval metadata: %+v", saved)
 				}
-				if !reflect.DeepEqual(resolved, []uint{10, 11}) {
-					t.Errorf("resolved = %v", resolved)
+				if len(resolved) != 0 {
+					t.Errorf("PO approval must not resolve stock alerts before restocking: %v", resolved)
 				}
 			} else if got.Status != tc.status || saved.Approved_by != nil || saved.Approved_at != nil || len(resolved) != 0 {
 				t.Errorf("unexpected approval: %+v", saved)
@@ -480,9 +485,6 @@ func TestUpdatePOStatus(t *testing.T) {
 					if target == enum.StatusCancelled || target == enum.StatusResubmitted {
 						wantReleases = 1
 					}
-					if target == enum.StatusApproved {
-						wantResolves = 1
-					}
 					if releases != wantReleases || resolves != wantResolves {
 						t.Fatalf("releases = %d, resolves = %d", releases, resolves)
 					}
@@ -535,6 +537,9 @@ func TestUpdatePO_Errors(t *testing.T) {
 				t.Fatal(err)
 			}
 			wantUpdates, wantSyncs, wantReloads := 1, 0, 0
+			if strings.HasPrefix(stage, "product") {
+				wantUpdates = 0
+			}
 			if stage == "sync" || stage == "final update" || stage == "reload" {
 				wantSyncs = 1
 			}
@@ -552,7 +557,7 @@ func TestUpdatePO_Errors(t *testing.T) {
 }
 
 func TestUpdatePO_OmittedItemsPreserveExistingOrder(t *testing.T) {
-	items := []entity.POItems{{ProductID: 3, Quantity: 2, UnitPrice: 10, SubTotal: 20}}
+	items := []entity.POItems{{ProductID: ptr(uint(3)), Quantity: 2, UnitPrice: 10, SubTotal: 20}}
 	po := &entity.PO{Model: gorm.Model{ID: 42}, Status: enum.StatusDraft, SupplierID: 7, PO_type_id: 1, Total_amount: 20, PO_Items: items}
 	r := &mockPORepo{get: func(uint) (*entity.PO, error) { return po, nil }, update: func(*entity.PO) error { return nil }, reload: func(uint) (*entity.PO, error) { return po, nil }}
 	got, err := newService(r).UpdatePO(context.Background(), 42, &dto.UpdatePurchaseOrderRequest{Notes: ptr("changed")}, 9)
@@ -565,7 +570,7 @@ func TestUpdatePO_OmittedItemsPreserveExistingOrder(t *testing.T) {
 }
 
 func TestGetPOByID_AndList(t *testing.T) {
-	po := entity.PO{Model: gorm.Model{ID: 42}, PO_number: "PO-42", SupplierID: 7, Supplier: entity.Supplier{Model: gorm.Model{ID: 7}, SupplierName: "Supplier"}, Creator: entity.User{Model: gorm.Model{ID: 9}, FirstName: "Test", LastName: "User"}, Total_amount: 25, PO_Items: []entity.POItems{{ProductID: 1, Product_name_snapshot: "Filter", Quantity: 2, UnitPrice: 12.5, SubTotal: 25, Notes: ptr("note"), PreOrderItemID: ptr(uint(20))}}}
+	po := entity.PO{Model: gorm.Model{ID: 42}, PO_number: "PO-42", SupplierID: 7, Supplier: entity.Supplier{Model: gorm.Model{ID: 7}, SupplierName: "Supplier"}, Creator: entity.User{Model: gorm.Model{ID: 9}, FirstName: "Test", LastName: "User"}, Total_amount: 25, PO_Items: []entity.POItems{{ProductID: ptr(uint(1)), Product_name_snapshot: "Filter", Quantity: 2, UnitPrice: 12.5, SubTotal: 25, Notes: ptr("note"), PreOrderItemID: ptr(uint(20))}}}
 	r := &mockPORepo{reload: func(id uint) (*entity.PO, error) {
 		if id != 42 {
 			t.Fatal(id)

@@ -70,6 +70,7 @@ func setupImportBillTestDB(t *testing.T) *gorm.DB {
 		&entity.Unit{},
 		&entity.Product{},
 		&entity.Inventory{},
+		&entity.StockMovement{},
 	)
 	require.NoError(t, err)
 

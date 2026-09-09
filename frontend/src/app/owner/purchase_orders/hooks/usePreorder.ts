@@ -37,7 +37,7 @@ export const usePreorders = (items: LocalPOItem[], setItems: Dispatch<SetStateAc
 
     // 2. ส่วนจัดการ State (State Management)
     const handleAddPreorderToPO = useCallback((selectedPreorder: PreorderItem) => {
-        const isDuplicate = items.some(existingItem => existingItem.product_id === selectedPreorder.product_id);
+        const isDuplicate = items.some(existingItem => existingItem.pre_order_item_id === selectedPreorder.id);
         
         if (isDuplicate) {
             alert(`มีรายการ "${selectedPreorder.product_name}" อยู่ในใบสั่งซื้อแล้ว`);
@@ -48,7 +48,7 @@ export const usePreorders = (items: LocalPOItem[], setItems: Dispatch<SetStateAc
         
         const newItem: LocalPOItem = {
             id: generateLocalId(), 
-            product_id: selectedPreorder.product_id,
+            product_id: selectedPreorder.product_id ?? 0,
             product_name_snapshot: selectedPreorder.product_name,
             product_name_code_snapshot: selectedPreorder.product_code || "-",
             quantity: selectedPreorder.quantity,

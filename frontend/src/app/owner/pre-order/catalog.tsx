@@ -726,7 +726,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
           {/* ฝั่งขวา: ดรอปดาวน์บริษัททั้งหมด + แท็บรายการ */}
           <div className="flex items-center gap-3 flex-wrap justify-end">
             {/* ดรอปดาวน์บริษัทซัพพลายเออร์ */}
-            <div className="relative min-w-[210px]">
+            <div className="relative min-w-52.5">
               <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               <select
                 value={selectedSupplier}
@@ -788,7 +788,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                   className="bg-white border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all flex flex-col justify-between group overflow-hidden"
                 >
                   <div>
-                    <div className="h-40 bg-gradient-to-br from-gray-900 to-gray-800 relative overflow-hidden flex items-center justify-center p-4">
+                    <div className="h-40 bg-linear-to-br from-gray-900 to-gray-800 relative overflow-hidden flex items-center justify-center p-4">
                       {cat.cover_image ? (
                         <img 
                           src={cat.cover_image} 
@@ -796,7 +796,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                           className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-300" 
                         />
                       ) : null}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+                      <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/40 to-transparent" />
                       
                       <div className="absolute top-3 left-3 flex items-center gap-1.5 flex-wrap">
                         {cat.category && (
@@ -847,7 +847,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                     <div className="p-4 space-y-3 text-xs">
                       {/* Highlighted Supplier Box */}
                       <div className="bg-gray-50 border border-gray-200 p-2 flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-gray-700 truncate max-w-[200px]" title={cat.supplier_name || 'ซัพพลายเออร์'}>
+                        <div className="flex items-center gap-1.5 text-gray-700 truncate max-w-50" title={cat.supplier_name || 'ซัพพลายเออร์'}>
                           <Building2 size={14} className="text-[#e51c23] shrink-0" />
                           <span className="font-extrabold text-[#1C1B1B] truncate">{cat.supplier_name || suppliers.find(s => s.id === cat.supplier_id)?.supplier_name || 'ไม่ระบุซัพพลายเออร์'}</span>
                         </div>
@@ -856,13 +856,13 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                         </span>
                       </div>
 
-                      <p className="text-gray-600 line-clamp-2 min-h-[32px] leading-relaxed">
+                      <p className="text-gray-600 line-clamp-2 min-h-8 leading-relaxed">
                         {cat.description || 'ไม่มีคำอธิบายเพิ่มเติม'}
                       </p>
 
                       {cat.catalog_items && cat.catalog_items.length > 0 && (
                         <div className="space-y-1.5 pt-2 border-t border-gray-100">
-                          <span className="text-[11px] text-gray-500 font-extrabold block uppercase flex items-center justify-between">
+                          <span className="text-[11px] text-gray-500 font-extrabold uppercase flex items-center justify-between">
                             <span>สินค้าที่แกะมาในเล่ม:</span>
                             <span className="text-gray-400 font-normal">{cat.catalog_items.length} รายการ</span>
                           </span>
@@ -909,7 +909,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                 className="bg-white border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all flex flex-col justify-between group overflow-hidden"
               >
                 <div>
-                  <div className="h-40 bg-gradient-to-br from-gray-900 to-gray-800 relative overflow-hidden flex items-center justify-center p-4">
+                  <div className="h-40 bg-linear-to-br from-gray-900 to-gray-800 relative overflow-hidden flex items-center justify-center p-4">
                     {item.image || item.cover_image ? (
                       <img 
                         src={item.image || item.cover_image} 
@@ -917,7 +917,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                         className="w-full h-full object-contain opacity-90 group-hover:scale-105 transition-transform duration-300" 
                       />
                     ) : null}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+                    <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/30 to-transparent" />
                     
                     <div className="absolute top-3 left-3 flex items-center gap-1.5 max-w-[85%]">
                       <span className="bg-[#e51c23] text-white text-[10px] font-black px-2 py-0.5 uppercase tracking-wider shrink-0">
@@ -940,7 +940,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
 
                   <div className="p-4 space-y-3 text-xs">
                     <div className="bg-gray-50 border border-gray-200 p-2 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-gray-700 truncate max-w-[190px]" title={item.supplier_name || 'ซัพพลายเออร์'}>
+                      <div className="flex items-center gap-1.5 text-gray-700 truncate max-w-47.5" title={item.supplier_name || 'ซัพพลายเออร์'}>
                         <Building2 size={13} className="text-[#e51c23] shrink-0" />
                         <span className="font-extrabold text-[#1C1B1B] truncate">{item.supplier_name || 'ซัพพลายเออร์'}</span>
                       </div>
@@ -949,12 +949,12 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                       </span>
                     </div>
 
-                    <p className="text-gray-600 line-clamp-2 min-h-[32px] leading-relaxed">
+                    <p className="text-gray-600 line-clamp-2 min-h-8 leading-relaxed">
                       {item.remark || 'อะไหล่แท้มาตรฐาน OEM คุณภาพสูง รองรับการใช้งานระยะยาว'}
                     </p>
 
                     <div className="space-y-1 pt-1 border-t border-gray-100">
-                      <span className="text-[10px] text-gray-500 font-extrabold block uppercase flex items-center gap-1">
+                      <span className="text-[10px] text-gray-500 font-extrabold uppercase flex items-center gap-1">
                         รุ่นรถยนต์ที่รองรับ
                       </span>
                       <div className="bg-gray-50 border border-gray-200 p-1.5 text-[11px] text-gray-800 font-medium truncate">
@@ -1592,7 +1592,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block font-bold text-gray-700 flex items-center gap-1.5">
+                  <label className="font-bold text-gray-700 flex items-center gap-1.5">
                     <ImageIcon size={15} className="text-[#e51c23]" /> รูปภาพหน้าปกแคตตาล็อก (ไม่บังคับ)
                   </label>
                   {previewImage && (

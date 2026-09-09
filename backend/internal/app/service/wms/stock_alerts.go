@@ -4,6 +4,7 @@ import (
 	wmsDto "backend/internal/app/dto/wms"
 	"backend/internal/app/entity"
 	wmsRepo "backend/internal/app/repository/wms"
+	"sync"
 )
 
 type StockAlertService interface {
@@ -11,13 +12,14 @@ type StockAlertService interface {
 	GetByID(id uint) (*wmsDto.StockAlertResponseDTO, error)
 	List(isResolved string) ([]wmsDto.StockAlertResponseDTO, error)
 	UpdateResolved(id uint, req *wmsDto.StockAlertUpdateDTO) error
-	// CheckAndCreateAlerts: หาสินค้าที่คงเหลือ <= จุดสั่งซื้อที่ตั้งไว้ แล้วสร้าง StockAlert ให้อัตโนมัติเฉพาะตัวที่ยัง
-	// ไม่เคยมี alert ค้างอยู่ (กันสร้างซ้ำทุกรอบที่ cron รัน) — คืนเฉพาะ alert ที่สร้างใหม่รอบนี้ ให้ cron เอาไปยิงแจ้งเตือนต่อ
+	// Reconcile current stock with active alerts. Returns new threshold crossings
+	// and escalations to OUT_OF_STOCK for notification; recovered alerts are closed.
 	CheckAndCreateAlerts() ([]wmsDto.StockAlertResponseDTO, error)
 }
 
 type stockAlertService struct {
-	repo wmsRepo.StockAlertRepository
+	repo    wmsRepo.StockAlertRepository
+	checkMu sync.Mutex
 }
 
 func NewStockAlertService(repo wmsRepo.StockAlertRepository) StockAlertService {
@@ -90,20 +92,58 @@ func (s *stockAlertService) List(isResolved string) ([]wmsDto.StockAlertResponse
 }
 
 func (s *stockAlertService) CheckAndCreateAlerts() ([]wmsDto.StockAlertResponseDTO, error) {
+	// The cron, login refresh and completed stock writes share this service.
+	s.checkMu.Lock()
+	defer s.checkMu.Unlock()
 	products, err := s.repo.ListLowStockProducts()
 	if err != nil {
 		return nil, err
 	}
-	if len(products) == 0 {
-		return nil, nil
-	}
-
-	alreadyAlerted, err := s.repo.ListUnresolvedAlertProductIDs()
+	active, err := s.repo.List("false")
 	if err != nil {
 		return nil, err
 	}
-
+	low := make(map[uint]entity.Product, len(products))
+	for _, p := range products {
+		low[p.ID] = p
+	}
+	alreadyAlerted := make(map[uint]bool)
 	var created []wmsDto.StockAlertResponseDTO
+	for _, alert := range active {
+		if alert.ProductID == nil {
+			continue
+		}
+		p, stillLow := low[*alert.ProductID]
+		if !stillLow || alreadyAlerted[*alert.ProductID] {
+			// Restocked above the threshold, threshold disabled, product deleted,
+			// or a legacy duplicate. A future threshold crossing can notify again.
+			alert.Is_Resolved = "true"
+			alert.Product = nil
+			if err := s.repo.Update(&alert); err != nil {
+				return created, err
+			}
+			continue
+		}
+		alreadyAlerted[p.ID] = true
+		alertType := "LOW_STOCK"
+		if p.Quantity <= 0 {
+			alertType = "OUT_OF_STOCK"
+		}
+		escalated := alertType == "OUT_OF_STOCK" && alert.Alert_type != alertType
+		if alert.Quantity_At_Alert != p.Quantity || alert.Limit_Quantity != p.Limit_Quantity || alert.Alert_type != alertType {
+			alert.Quantity_At_Alert, alert.Limit_Quantity, alert.Alert_type = p.Quantity, p.Limit_Quantity, alertType
+			alert.Product = nil // Never save stale preloaded product associations.
+			if err := s.repo.Update(&alert); err != nil {
+				return created, err
+			}
+		}
+		if escalated {
+			product := p
+			alert.Product = &product
+			created = append(created, *toStockAlertResponse(&alert))
+		}
+	}
+
 	for _, p := range products {
 		if alreadyAlerted[p.ID] {
 			continue

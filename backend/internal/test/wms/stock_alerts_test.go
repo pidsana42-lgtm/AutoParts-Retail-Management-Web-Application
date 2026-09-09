@@ -229,8 +229,9 @@ func TestCheckAndCreateAlerts_CreatesOnlyForProductsWithoutAnExistingUnresolvedA
 			{Model: gorm.Model{ID: 3}, Product_Name: "กรองน้ำมัน", Quantity: 1, Limit_Quantity: 4}, // มี alert ค้างอยู่แล้ว
 		}, nil
 	}
-	repo.listUnresolvedAlertProductIDsFn = func() (map[uint]bool, error) {
-		return map[uint]bool{3: true}, nil
+	repo.listFn = func(string) ([]entity.StockAlert, error) {
+		id := uint(3)
+		return []entity.StockAlert{{ProductID: &id, Alert_type: "LOW_STOCK", Quantity_At_Alert: 1, Limit_Quantity: 4}}, nil
 	}
 	var createdAlerts []entity.StockAlert
 	repo.createFn = func(sa *entity.StockAlert) error {
@@ -291,12 +292,12 @@ func TestCheckAndCreateAlerts_PropagatesLookupErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("ListUnresolvedAlertProductIDs fails", func(t *testing.T) {
+	t.Run("List active alerts fails", func(t *testing.T) {
 		repo := newMockStockAlertRepo()
 		repo.listLowStockProductsFn = func() ([]entity.Product, error) {
 			return []entity.Product{{Model: gorm.Model{ID: 1}, Quantity: 1, Limit_Quantity: 5}}, nil
 		}
-		repo.listUnresolvedAlertProductIDsFn = func() (map[uint]bool, error) { return nil, wantErr }
+		repo.listFn = func(string) ([]entity.StockAlert, error) { return nil, wantErr }
 		svc := wmsService.NewStockAlertService(repo)
 		if _, err := svc.CheckAndCreateAlerts(); !errors.Is(err, wantErr) {
 			t.Fatalf("expected error %v, got %v", wantErr, err)
