@@ -8,6 +8,7 @@ import (
 	"time"
 
 	claimDTO "backend/internal/app/dto/claim"
+	"backend/internal/app/entity"
 	claimRepo "backend/internal/app/repository/claim"
 	svcNotification "backend/internal/app/service/notification"
 )
@@ -44,8 +45,10 @@ func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomer
 	claimEntity.CreatedBy = createdBy
 
 	// ตั้ง ClaimNo = CLM-{order_number}
+	var originalOrder *entity.SaleOrder
 	if order, err := s.soRepo.GetSaleOrderByID(input.OriginalOrderID); err == nil {
 		claimEntity.ClaimNo = "CLM-" + order.OrderNumber
+		originalOrder = order
 	} else {
 		claimEntity.ClaimNo = fmt.Sprintf("CLM-%d", input.OriginalOrderID)
 	}
@@ -84,6 +87,10 @@ func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomer
 		); err != nil {
 			fmt.Printf("[Notification] failed to notify owners (claim %d): %v\n", claimEntity.ID, err)
 		}
+	}
+
+	if originalOrder != nil {
+		claimEntity.OriginalOrder = originalOrder
 	}
 
 	return claimDTO.ToCustomerClaimResponseDTO(&claimEntity), nil

@@ -77,6 +77,7 @@ const ReturnsPage: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [approveTarget, setApproveTarget] = useState<ReturnListItem | null>(null);
   const [processingRefundId, setProcessingRefundId] = useState<number | null>(null);
   const [refundTarget, setRefundTarget] = useState<ReturnListItem | null>(null);
 
@@ -392,7 +393,7 @@ const ReturnsPage: React.FC = () => {
                           title="อนุมัติรายการคืนสินค้า"
                           aria-label="อนุมัติรายการคืนสินค้า"
                           disabled={approvingId !== null}
-                          onClick={() => handleApprove(item.id)}
+                          onClick={() => setApproveTarget(item)}
                           className='text-emerald-600 cursor-pointer hover:text-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed'
                         >
                           {approvingId === item.id ? <Loader2 size={16} className='animate-spin' /> : <CircleCheck size={16} />}
@@ -448,6 +449,51 @@ const ReturnsPage: React.FC = () => {
           );
         })()}
       </div>
+      <ConfirmDialog
+        isOpen={approveTarget !== null}
+        onClose={() => approvingId === null && setApproveTarget(null)}
+        title="ยืนยันการอนุมัติการคืนสินค้า"
+        description={(
+          <div className="space-y-3 text-sm text-slate-700 text-left">
+            <p className="text-center text-slate-600">คุณต้องการอนุมัติคำขอคืนสินค้านี้ใช่หรือไม่?</p>
+            {approveTarget && (
+              <div className="bg-[#f6f3f2] p-3 space-y-2 mt-2">
+                <div className="flex justify-between gap-4 text-xs">
+                  <span className="text-slate-500">เลขที่ใบคืน</span>
+                  <span className="font-semibold text-slate-900">{approveTarget.return_number || '-'}</span>
+                </div>
+                <div className="flex justify-between gap-4 text-xs">
+                  <span className="text-slate-500">ยอดเงินคืน</span>
+                  <span className="font-semibold text-[#e51c23]">
+                    ฿ {approveTarget.refund_amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4 text-xs">
+                  <span className="text-slate-500">ช่องทางคืนเงิน</span>
+                  <span className="font-medium text-slate-900">{approveTarget.refund_method || '-'}</span>
+                </div>
+                {approveTarget.reason && (
+                  <div className="flex justify-between gap-4 text-xs">
+                    <span className="text-slate-500">เหตุผล</span>
+                    <span className="font-medium text-slate-900 truncate max-w-48">{approveTarget.reason}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        onConfirm={async () => {
+          if (!approveTarget) return;
+          const id = approveTarget.id;
+          setApproveTarget(null);
+          await handleApprove(id);
+        }}
+        confirmText="ยืนยันอนุมัติ"
+        cancelText="ยกเลิก"
+        variant="success"
+        icon={CircleCheck}
+        isSubmitting={approvingId !== null}
+      />
       <ConfirmDialog
         isOpen={refundTarget !== null}
         onClose={() => processingRefundId === null && setRefundTarget(null)}

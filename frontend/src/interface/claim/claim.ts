@@ -30,6 +30,7 @@ export interface CustomerClaimItem {
   returned_item_id?: number;
   product_id: number;
   product_name?: string;
+  product_code?: string;
   qty: number;
   unit_price?: number;
   reason: string;
@@ -45,6 +46,7 @@ export interface CustomerClaimItem {
 export interface CustomerClaim {
   id?: number;
   claim_no?: string;
+  order_number?: string;
   claim_date: string;
   original_order_id: number;
   customer_name?: string;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Plus, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, FileText, Loader2, Camera, X, Printer, SquarePen, Truck, CirclePlus, Check, ReceiptText, PenLine } from 'lucide-react';
+import { Search, Plus, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, FileText, Loader2, Camera, X, Printer, Truck, CirclePlus, Check, ReceiptText, PenLine } from 'lucide-react';
 import ClaimTrackingTab from './claim_tracking_tab';
 import Heading from '../../../components/elements/heading';
 import Card, { CardHeader, CardTitle, CardContent } from '../../../components/elements/card';
@@ -714,7 +714,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
             type="button"
             onClick={handleDownloadChecklistPDF}
             disabled={downloadingChecklist}
-            className="flex items-center justify-center gap-2 px-4 h-10 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-sm font-semibold cursor-pointer transition-colors rounded-none shrink-0 disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-4 h-10 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-sm font-normal cursor-pointer transition-colors rounded-none shrink-0 disabled:opacity-50"
             title="ดาวน์โหลดหรือพิมพ์เอกสารใบเช็คลิสต์เคลม PDF"
           >
             {downloadingChecklist ? (
@@ -775,16 +775,16 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
             <>
               {/* 5. Table */}
               <Table>
-                <TableHeader className='bg-[#F6F3F2] text-[#797878]'>
+                <TableHeader className='bg-[#F6F3F2] text-[#797878] text-sm font-normal'>
                   <TableRow>
-                    <TableHead className="pl-6 w-48 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">เลขที่ใบเคลม / วันที่</TableHead>
-                    <TableHead className="w-44 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">ลูกค้า</TableHead>
-                    <TableHead className="text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">สินค้า</TableHead>
-                    <TableHead className="w-32 text-[10px] text-center font-bold text-gray-500 uppercase tracking-widest py-3">ประเภทเคลม</TableHead>
-                    <TableHead className="text-center w-20 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">จำนวน</TableHead>
-                    <TableHead className="w-52 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">สาเหตุ</TableHead>
-                    <TableHead className="text-center w-32 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">สถานะ</TableHead>
-                    <TableHead className="text-center pr-6 w-28 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">จัดการ</TableHead>
+                    <TableHead className="pl-6 w-48 text-gray-500 uppercase tracking-widest py-3">เลขที่ใบเคลม / วันที่</TableHead>
+                    <TableHead className="w-44 text-gray-500 uppercase tracking-widest py-3">ลูกค้า</TableHead>
+                    <TableHead className="text-gray-500 uppercase tracking-widest py-3">สินค้า</TableHead>
+                    <TableHead className="w-32 text-center text-gray-500 uppercase tracking-widest py-3">ประเภทเคลม</TableHead>
+                    <TableHead className="text-center w-20 text-gray-500 uppercase tracking-widest py-3">จำนวน</TableHead>
+                    <TableHead className="w-52 text-gray-500 uppercase tracking-widest py-3">สาเหตุ</TableHead>
+                    <TableHead className="text-center w-32 text-gray-500 uppercase tracking-widest py-3">สถานะ</TableHead>
+                    <TableHead className="text-center pr-6 w-28 text-gray-500 uppercase tracking-widest py-3">จัดการ</TableHead>
                   </TableRow>
                 </TableHeader>
 
@@ -1064,7 +1064,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
         {/* 1. Header */}
         <div className="flex items-center justify-between">
           <div className="flex-col space-y-2">
-            <nav className="flex items-center text-sm text-gray-500 gap-2 font-light">
+            <nav className="flex items-center text-sm text-gray-500 gap-2 font-normal">
               <button
                 type="button"
                 onClick={() => { navigate(basePath); resetClaimForm(); }}
