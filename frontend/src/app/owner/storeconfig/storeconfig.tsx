@@ -15,6 +15,7 @@ import Input from "../../../components/elements/input";
 import Select, { type SelectOption } from "../../../components/elements/select";
 import Button from "../../../components/elements/button";
 import ImageUploader from "../../../components/elements/image_uploader";
+import { useToast } from "../../../components/elements/toast";
 import type { CompanySettingReq } from "../../../interface/companysetting/company";
 import { companyService, resolveAssetUrl } from "../../../service/http/companysetting/company_service";
 
@@ -40,6 +41,7 @@ const BANK_OPTIONS: SelectOption[] = [
 ];
 
 const StoreConfig: React.FC = () => {
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     company_name: "",
     tax_id_number: "",
@@ -153,7 +155,11 @@ const StoreConfig: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Failed to reveal payment setting:", err);
-      alert(err.response?.data?.error || "ไม่สามารถดึงข้อมูลหมายเลขฉบับเต็มได้");
+      toast({
+        variant: "error",
+        title: "เกิดข้อผิดพลาด",
+        message: err.response?.data?.error || "ไม่สามารถดึงข้อมูลหมายเลขฉบับเต็มได้",
+      });
     } finally {
       setIsRevealingPromptPay(false);
     }
@@ -179,7 +185,11 @@ const StoreConfig: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Failed to reveal bank account setting:", err);
-      alert(err.response?.data?.error || "ไม่สามารถดึงข้อมูลเลขบัญชีฉบับเต็มได้");
+      toast({
+        variant: "error",
+        title: "เกิดข้อผิดพลาด",
+        message: err.response?.data?.error || "ไม่สามารถดึงข้อมูลเลขบัญชีฉบับเต็มได้",
+      });
     } finally {
       setIsRevealingBankAccount(false);
     }
@@ -198,7 +208,11 @@ const StoreConfig: React.FC = () => {
           finalLogoUrl = uploadRes.logo_url || uploadRes.url || "";
         } catch (uploadErr: any) {
           console.error("Failed to upload company logo:", uploadErr);
-          alert(uploadErr.message || "อัปโหลดโลโก้ร้านไม่สำเร็จ");
+          toast({
+            variant: "error",
+            title: "เกิดข้อผิดพลาด",
+            message: uploadErr.message || "อัปโหลดโลโก้ร้านไม่สำเร็จ",
+          });
           setIsSaving(false);
           return;
         }
@@ -255,11 +269,19 @@ const StoreConfig: React.FC = () => {
         }
       }
 
-      alert("บันทึกข้อมูลร้านสำเร็จ");
+      toast({
+        variant: "success",
+        title: "สำเร็จ",
+        message: "บันทึกข้อมูลร้านสำเร็จ",
+      });
     } catch (err: any) {
       console.error("Failed to save company setting:", err);
       const errMsg = err.response?.data?.error || err.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล";
-      alert(errMsg);
+      toast({
+        variant: "error",
+        title: "เกิดข้อผิดพลาด",
+        message: errMsg,
+      });
     } finally {
       setIsSaving(false);
     }
