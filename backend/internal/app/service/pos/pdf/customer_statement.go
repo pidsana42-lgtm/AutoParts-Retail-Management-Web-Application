@@ -64,8 +64,8 @@ func GenerateCustomerStatementPDF(
 	// 5. ตั้งค่าหน้ากระดาษและฟอนต์
 	m := pdf.NewMaroto(consts.Portrait, consts.A4)
 	m.SetPageMargins(10, 15, 10)
-	m.AddUTF8Font("THSarabun", consts.Normal, "assets/fonts/THSarabunNew.ttf")
-	m.AddUTF8Font("THSarabun", consts.Bold, "assets/fonts/THSarabunNew Bold.ttf")
+	m.AddUTF8Font("THSarabun", consts.Normal, ResolveFontPath("assets/fonts/THSarabunNew.ttf"))
+	m.AddUTF8Font("THSarabun", consts.Bold, ResolveFontPath("assets/fonts/THSarabunNew Bold.ttf"))
 	m.SetDefaultFontFamily("THSarabun")
 
 	// วันที่พิมพ์เอกสาร
@@ -107,13 +107,20 @@ func GenerateCustomerStatementPDF(
 	// -------------------------------------------------------------
 	docTitle := "ใบสรุปยอดบัญชี\n(Customer Statement)"
 
+	logoPath, logoBase64, logoExtension, _ := LoadLogo(nil, logoURL)
+
 	m.RegisterHeader(func() {
 		m.Row(25, func() {
 			m.Col(3, func() {
-				if logoURL != "" {
-					_ = m.FileImage(logoURL, props.Rect{
+				if logoPath != "" {
+					_ = m.FileImage(logoPath, props.Rect{
 						Percent: 400,
 						Center:  false, // ให้โลโก้ชิดซ้าย
+					})
+				} else if logoBase64 != "" {
+					_ = m.Base64Image(logoBase64, logoExtension, props.Rect{
+						Percent: 400,
+						Center:  false,
 					})
 				}
 			})

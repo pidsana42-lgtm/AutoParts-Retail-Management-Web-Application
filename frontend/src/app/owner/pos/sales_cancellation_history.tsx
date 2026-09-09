@@ -874,7 +874,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                             </div>
                           </Card>
 
-                          <Button
+                          {/* <Button
                             type="button"
                             variant="outline-cancel"
                             onClick={() => handlePrintReceipt(orderDetail.id, orderDetail.order_number)}
@@ -883,7 +883,7 @@ const OwnerSalesCancellationHistory: React.FC = () => {
                           >
                             <Printer className={cn("w-4 h-4 text-[#E51C23]", printingOrderId === orderDetail.id && "animate-pulse")} />
                             <span>พิมพ์ใบเสร็จที่ยกเลิก (เอกสารหลักฐาน)</span>
-                          </Button>
+                          </Button> */}
 
                           <Button
                             type="button"
