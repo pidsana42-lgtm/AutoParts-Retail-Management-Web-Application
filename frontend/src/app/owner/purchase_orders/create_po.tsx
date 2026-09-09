@@ -170,12 +170,12 @@ const CreatePurchaseOrders: React.FC = () => {
 
     // 3. ฟังก์ชันสำหรับรับรายการพรีออเดอร์ที่ถูกกด "เพิ่ม" มาแปลงใส่ลงตารางใบสั่งซื้อ (item)
     const handleAddPreorderToPO = (selectedPreorder: PreorderItem) => {
-        // ใช้ราคาที่ตกลงกันไว้ตอนสร้างพรีออเดอร์ (ไม่ใช่ 0) แล้วให้แก้ไขได้ทีหลังในตาราง
+        // พรีออเดอร์ที่ยังไม่ทราบราคาสามารถใช้ราคาประมาณการ 0 ได้
         const unitCost = Number(selectedPreorder.unit_price || 0);
         
         const newItem: LocalPOItem = {
             id: generateLocalId(), 
-            product_id: selectedPreorder.product_id,
+            product_id: selectedPreorder.product_id ?? 0,
             product_name_snapshot: selectedPreorder.product_name,
             product_name_code_snapshot: selectedPreorder.product_code || "-",
             quantity: selectedPreorder.quantity,

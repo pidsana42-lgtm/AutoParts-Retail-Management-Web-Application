@@ -13,6 +13,7 @@ type PreOrderRepository interface {
 	CreatePreOrder(preOrder *entity.PreOrder) error
 	CreatePreOrderItem(item *entity.PreOrderItem) error
 	GetPreOrderByID(id uint) (*entity.PreOrder, error)
+	GetPreOrderItemByID(ctx context.Context, id uint) (*entity.PreOrderItem, error)
 	ListPreOrders() ([]entity.PreOrder, error)
 	UpdatePreOrder(preOrder *entity.PreOrder) error
 	DeletePreOrder(id uint) error
@@ -32,6 +33,15 @@ type preOrderRepository struct {
 // 3. ฟังก์ชันสำหรับสร้าง Repository Instance
 func NewPreOrderRepository(db *gorm.DB) PreOrderRepository {
 	return &preOrderRepository{db: db}
+}
+
+func (r *preOrderRepository) GetPreOrderItemByID(ctx context.Context, id uint) (*entity.PreOrderItem, error) {
+	var item entity.PreOrderItem
+	err := r.db.WithContext(ctx).Preload("PreOrder").First(&item, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
 }
 
 func (r *preOrderRepository) GetLineUserIDByCustomerID(customerID uint) (string, error) {

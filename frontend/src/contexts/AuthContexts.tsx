@@ -20,6 +20,7 @@ type AuthContextType = {
   role: string | null; 
   isAuthenticated: boolean;
   isLoading: boolean;
+  loginSequence: number;
   login: (credentials: LoginRequest) => Promise<User>;
   logout: () => void;
   setUser: (user: User | null) => void;
@@ -35,6 +36,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [role, setRole] = useState<string | null>(null); 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  // Only actual logins increment this; restoring a session on refresh does not.
+  const [loginSequence, setLoginSequence] = useState(0);
 
   // --------------------------
   // ตรวจประวัติคนเคยล็อกอิน (ตอนเปิด/รีเฟรชหน้าเว็บ)
@@ -70,6 +73,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setToken(urlToken);
         setRole(urlRole);
         setIsAuthenticated(true);
+        setLoginSequence((value) => value + 1);
 
         // Remove parameters from URL
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -132,6 +136,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setToken(data.token);
     setRole(data.role); 
     setIsAuthenticated(true);
+    setLoginSequence((value) => value + 1);
 
     return userObj as any;
   };
@@ -167,6 +172,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         role, //  ส่งค่า role กระจายออกไปให้หน้าอื่น ๆ หยิบไปเช็กต่อได้
         isAuthenticated,
         isLoading,
+        loginSequence,
         login,
         logout,
         setUser,

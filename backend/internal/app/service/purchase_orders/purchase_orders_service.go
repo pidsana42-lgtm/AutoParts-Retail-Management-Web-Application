@@ -73,6 +73,9 @@ func NewPOService(
 }
 
 func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePurchaseOrderRequest, creatorID uint) (*poDto.PurchaseOrderResponse, error) {
+	if err := req.ValidatePrices(); err != nil {
+		return nil, err
+	}
 	supplier, err := s.supplierRepo.GetSupplierByID(ctx, req.SupplierID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find supplier: %w", err)
@@ -106,19 +109,9 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 	var poItems []poEntity.POItems
 
 	for _, item := range req.POItems {
-		product, err := s.productRepo.GetProductByID(ctx, item.ProductID)
+		product, err := s.resolveProductSnapshot(ctx, item.ProductID, item.PreOrderItemID, req.SupplierID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to find product ID %d: %w", item.ProductID, err)
-		}
-		if product == nil {
-			return nil, fmt.Errorf("product ID %d not found", item.ProductID)
-		}
-
-		productName := product.Product_Name
-		productCode := companyProductCodeForSupplier(product, req.SupplierID)
-		var unitName string
-		if product.Unit != nil {
-			unitName = product.Unit.Unit_Name
+			return nil, err
 		}
 
 		if item.PreOrderItemID != nil {
@@ -131,11 +124,11 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 		totalAmount += subTotal
 
 		poItem := poEntity.POItems{
-			ProductID:                    item.ProductID,
-			Product_name_snapshot:        productName,
-			Supply_product_code_snapshot: productCode,
+			ProductID:                    product.id,
+			Product_name_snapshot:        product.name,
+			Supply_product_code_snapshot: product.code,
 			Quantity:                     float64(item.Quantity),
-			Unit:                         unitName,
+			Unit:                         product.unit,
 			UnitPrice:                    item.UnitPrice,
 			SubTotal:                     subTotal,
 			Notes:                        item.Notes,
@@ -172,17 +165,8 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 	if poData.Status == poEnum.StatusPending {
 		s.notifyOwnersOfPendingApproval(ctx, poData, creatorID)
 	}
-	if poData.Status == poEnum.StatusApproved {
-		var alertIDs []uint
-		for _, item := range poData.PO_Items {
-			if item.AlertID != nil {
-				alertIDs = append(alertIDs, *item.AlertID)
-			}
-		}
-		if len(alertIDs) > 0 {
-			_ = s.stockAlertRepo.ResolveByIDs(alertIDs)
-		}
-	}
+	// Approval does not replenish stock. Keep linked alerts visible (with HasPO)
+	// until the stock monitor observes quantity above the reorder threshold.
 
 	// จองไอเทม PreOrder
 	var preOrderItemIDs []uint
@@ -213,7 +197,7 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 		}
 		poItemResponses = append(poItemResponses, poDto.POItemResponse{
 			ID:                        item.ID,
-			ProductID:                 item.ProductID,
+			ProductID:                 poProductID(item.ProductID),
 			ProductNameSnapshot:       item.Product_name_snapshot,
 			SupplyProductCodeSnapshot: item.Supply_product_code_snapshot,
 			Quantity:                  int(item.Quantity),
@@ -273,7 +257,7 @@ func (s *purchaseOrderService) GetPOByID(ctx context.Context, id uint) (*poDto.P
 
 		itemResponses = append(itemResponses, poDto.POItemResponse{
 			ID:                        item.ID,
-			ProductID:                 item.ProductID,
+			ProductID:                 poProductID(item.ProductID),
 			ProductNameSnapshot:       item.Product_name_snapshot,
 			SupplyProductCodeSnapshot: item.Supply_product_code_snapshot,
 			Quantity:                  int(item.Quantity),
@@ -352,16 +336,7 @@ func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, stat
 		now := time.Now()
 		po.Approved_at = &now
 
-		// Resolve stock alerts ที่ผูกกับ PO นี้ทั้งหมด
-		var alertIDs []uint
-		for _, item := range po.PO_Items {
-			if item.AlertID != nil {
-				alertIDs = append(alertIDs, *item.AlertID)
-			}
-		}
-		if len(alertIDs) > 0 {
-			_ = s.stockAlertRepo.ResolveByIDs(alertIDs)
-		}
+		// Receiving stock, not approving this PO, resolves its stock alerts.
 	}
 
 	if err := s.poRepository.UpdatePO(ctx, po); err != nil {
@@ -412,7 +387,7 @@ func (s *purchaseOrderService) ListPOs(ctx context.Context, query poDto.ListPOQu
 		for _, item := range p.PO_Items {
 			itemResponses = append(itemResponses, poDto.POItemResponse{
 				ID:                        item.ID,
-				ProductID:                 item.ProductID,
+				ProductID:                 poProductID(item.ProductID),
 				ProductNameSnapshot:       item.Product_name_snapshot,
 				SupplyProductCodeSnapshot: item.Supply_product_code_snapshot,
 				Quantity:                  int(item.Quantity),
@@ -543,6 +518,9 @@ func (s *purchaseOrderService) SearchProducts(ctx context.Context, query poDto.P
 
 // Update
 func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto.UpdatePurchaseOrderRequest, updatedBy uint) (*poEntity.PO, error) {
+	if err := req.ValidatePrices(); err != nil {
+		return nil, err
+	}
 	po, err := s.poRepository.GetPOByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -553,6 +531,20 @@ func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto
 
 	if po.Status != "DRAFT" && po.Status != "PENDING" && po.Status != "RESUBMITTED" {
 		return nil, ErrPOCannotUpdate
+	}
+	// Resolve every item before writing header changes, including manual preorder
+	// references. Invalid references must not partially update the PO.
+	supplierID := po.SupplierID
+	if req.SupplierID != nil {
+		supplierID = *req.SupplierID
+	}
+	snapshots := make([]poProductSnapshot, len(req.Items))
+	for i, item := range req.Items {
+		snapshot, err := s.resolveProductSnapshot(ctx, item.ProductID, item.PreOrderItemID, supplierID)
+		if err != nil {
+			return nil, err
+		}
+		snapshots[i] = snapshot
 	}
 
 	if req.SupplierID != nil {
@@ -610,24 +602,16 @@ func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto
 			}
 		}
 
-		for _, it := range req.Items {
-			product, err := s.productRepo.GetProductByID(ctx, it.ProductID)
-			if err != nil || product == nil {
-				return nil, fmt.Errorf("failed to find product ID %d", it.ProductID)
-			}
-
-			var unitName string
-			if product.Unit != nil {
-				unitName = product.Unit.Unit_Name
-			}
+		for i, it := range req.Items {
+			product := snapshots[i]
 
 			subTotal := float64(it.Quantity) * it.UnitPrice
 			item := poEntity.POItems{
-				ProductID:                    it.ProductID,
-				Product_name_snapshot:        product.Product_Name,
-				Supply_product_code_snapshot: companyProductCodeForSupplier(product, po.SupplierID),
+				ProductID:                    product.id,
+				Product_name_snapshot:        product.name,
+				Supply_product_code_snapshot: product.code,
 				Quantity:                     float64(it.Quantity),
-				Unit:                         unitName,
+				Unit:                         product.unit,
 				UnitPrice:                    it.UnitPrice,
 				SubTotal:                     subTotal,
 			}

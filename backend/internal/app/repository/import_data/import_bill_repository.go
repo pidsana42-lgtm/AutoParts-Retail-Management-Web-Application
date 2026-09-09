@@ -310,6 +310,7 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				}
 
 				newProd := entity.Product{
+					Import_DateTime:  bill.ReceiveDate,
 					Product_Name:     prodName,
 					Product_Code:     "",
 					Part_Number:      items[i].CompanyProductCode,

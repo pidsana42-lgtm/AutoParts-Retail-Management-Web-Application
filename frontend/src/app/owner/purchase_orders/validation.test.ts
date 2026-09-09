@@ -36,6 +36,21 @@ describe('purchase order validation', () => {
     it('identifies the invalid row', () => {
         expect(validatePurchaseOrder(7, [item, { ...item, id: 11, product_id: 0 }])[0]).toContain('รายการที่ 2');
     });
+    it('accepts a zero-price Turbocharger preorder, alone or mixed with normal purchases', () => {
+        const preorder: LocalPOItem = { ...item, id: 11, product_name_snapshot: 'Turbocharger', order_type: 'พรีออเดอร์', pre_order_item_id: 8, unit_price: 0, sub_total: 0 };
+        expect(validatePurchaseOrder(7, [preorder])).toEqual([]);
+        expect(validatePurchaseOrder(7, [item, preorder])).toEqual([]);
+    });
+    it('accepts a named preorder without a WMS product or product code', () => {
+        expect(validatePurchaseOrder(7, [{ ...item, product_id: 0, product_name_snapshot: 'ekdmlkdmskl', product_name_code_snapshot: '', order_type: 'พรีออเดอร์', pre_order_item_id: 8, unit_price: 0 }])).toEqual([]);
+    });
+    it('still rejects missing WMS products for ordinary purchases', () => {
+        expect(validatePurchaseOrder(7, [{ ...item, product_id: 0 }])[0]).toContain('สินค้าไม่ถูกต้อง');
+    });
+    it.each([-1, NaN, Infinity, -Infinity])('rejects invalid preorder price %s', unit_price => {
+        expect(validatePurchaseOrder(7, [{ ...item, order_type: 'พรีออเดอร์', pre_order_item_id: 8, unit_price }])[0]).toContain('ราคาต่อหน่วย');
+    });
+    it.each([undefined, 0])('does not allow a zero price using only a preorder label (link %s)', pre_order_item_id => {
+        expect(validatePurchaseOrder(7, [{ ...item, order_type: 'พรีออเดอร์', pre_order_item_id, unit_price: 0 }])[0]).toContain('ราคาต่อหน่วย');
+    });
 });
-
-

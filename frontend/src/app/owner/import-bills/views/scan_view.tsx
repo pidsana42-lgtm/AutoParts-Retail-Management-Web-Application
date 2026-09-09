@@ -242,12 +242,12 @@ export default function ScanView({
       {(() => {
         const hideImagePane = !!formData && !previewUrl && batchImages.length === 0;
         return (
-      <div id="split-pane-container" className="flex flex-col lg:flex-row gap-0 w-full min-h-[750px] relative">
+      <div id="split-pane-container" className="flex flex-col lg:flex-row gap-0 w-full min-h-187.5 relative">
         {/* Left: Document Preview & File Selection */}
         {!hideImagePane && (
         <div 
           style={{ width: typeof window !== 'undefined' && window.innerWidth >= 1024 ? `${leftWidth}%` : '100%' }}
-          className="bg-[#e2e2e2] rounded-none p-6 flex flex-col gap-4 min-h-[750px]"
+          className="bg-[#e2e2e2] rounded-none p-6 flex flex-col gap-4 min-h-187.5"
         >
           {/* Top Bar: Zoom/Rotate and Change Image Button */}
           {previewUrl && (
@@ -268,7 +268,7 @@ export default function ScanView({
             <div className="w-full flex-1 flex flex-col items-center justify-center p-0">
               {/* Batch items tabs list */}
               {batchImages.length > 0 && (
-                <div className="w-full bg-white rounded-none border border-gray-200 p-3 mb-4 max-h-[160px] overflow-y-auto">
+                <div className="w-full bg-white rounded-none border border-gray-200 p-3 mb-4 max-h-40 overflow-y-auto">
                   <h4 className="text-sm font-bold text-[#5F5E5E] mb-2 uppercase tracking-wider">รายการสแกนบิลแบบกลุ่ม ({batchImages.length} ไฟล์)</h4>
                   <div className="flex flex-col gap-1">
                     {batchImages.map((file, idx) => {
@@ -286,7 +286,7 @@ export default function ScanView({
                               : 'border-gray-200 hover:border-gray-300 text-gray-700 bg-gray-50'
                           }`}
                         >
-                          <span className="truncate max-w-[220px] font-medium">{file.name}</span>
+                          <span className="truncate max-w-55 font-medium">{file.name}</span>
                           <span className={`text-sm px-1.5 py-0.5 rounded-none font-bold uppercase ${
                             status === 'success' 
                               ? 'bg-[#259b24]/10 text-[#259b24] border border-[#259b24]/30' 
@@ -312,19 +312,19 @@ export default function ScanView({
                     <button 
                       type="button"
                       onClick={handlePrevBatchItem} 
-                      className="absolute left-0 lg:left-[-15px] z-10 p-2.5 rounded-none bg-white/95 hover:bg-white text-[#1C1B1B] shadow-md border border-gray-150 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                      className="absolute left-0 lg:-left-37.5 z-10 p-2.5 rounded-none bg-white/95 hover:bg-white text-[#1C1B1B] shadow-md border border-gray-150 hover:scale-105 active:scale-95 transition-all cursor-pointer"
                       title="รูปภาพก่อนหน้า"
                     >
-                      <ChevronLeft size={18} className="stroke-[3]" />
+                      <ChevronLeft size={18} className="stroke-3" />
                     </button>
 
                     <button 
                       type="button"
                       onClick={handleNextBatchItem} 
-                      className="absolute right-0 lg:right-[-15px] z-10 p-2.5 rounded-none bg-white/95 hover:bg-white text-[#1C1B1B] shadow-md border border-gray-150 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                      className="absolute right-0 lg:-right-3.75 z-10 p-2.5 rounded-none bg-white/95 hover:bg-white text-[#1C1B1B] shadow-md border border-gray-150 hover:scale-105 active:scale-95 transition-all cursor-pointer"
                       title="รูปภาพถัดไป"
                     >
-                      <ChevronRight size={18} className="stroke-[3]" />
+                      <ChevronRight size={18} className="stroke-3" />
                     </button>
                   </>
                 )}
@@ -441,7 +441,7 @@ export default function ScanView({
               ? (hideImagePane ? '100%' : `${100 - leftWidth}%`)
               : '100%' 
           }}
-          className="bg-white rounded-none shadow-sm border border-gray-100 flex flex-col min-h-[700px]"
+          className="bg-white rounded-none shadow-sm border border-gray-100 flex flex-col min-h-175"
         >
           {!formData ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-gray-400">
@@ -555,17 +555,17 @@ export default function ScanView({
               </div>
 
               {/* Items Table */}
-              <div className="flex-1 overflow-y-auto max-h-[380px]">
-                <Table className="min-w-[1250px] text-left text-sm border-collapse">
+              <div className="flex-1 overflow-y-auto max-h-95">
+                <Table className="min-w-312.5 text-left text-sm border-collapse">
                   <TableHeader className="bg-gray-100 text-[#5F5E5E] border-b border-gray-200 text-xs uppercase tracking-wider">
                     <TableRow>
-                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[150px]">รหัสสินค้าคู่ค้า</TableHead>
-                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[260px]">ชื่อสินค้าตามบิล</TableHead>
-                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[280px]">จับคู่สินค้าในร้าน</TableHead>
-                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-[220px]">หมวดหมู่สินค้า</TableHead>
-                      <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">จำนวน</TableHead>
-                      <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[110px]">ราคา/หน่วย</TableHead>
-                      <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-[120px]">ยอดรวม</TableHead>
+                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-37.5">รหัสสินค้าคู่ค้า</TableHead>
+                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-65">ชื่อสินค้าตามบิล</TableHead>
+                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-70">จับคู่สินค้าในร้าน</TableHead>
+                      <TableHead className="py-3.5 px-4 font-bold text-left text-[#5F5E5E] min-w-55">หมวดหมู่สินค้า</TableHead>
+                      <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-30">จำนวน</TableHead>
+                      <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-28">ราคา/หน่วย</TableHead>
+                      <TableHead className="py-3.5 px-4 font-bold text-right text-[#5F5E5E] min-w-30">ยอดรวม</TableHead>
                       <TableHead className="py-3.5 px-4 font-bold text-center text-[#5F5E5E] w-12">ลบ</TableHead>
                     </TableRow>
                   </TableHeader>

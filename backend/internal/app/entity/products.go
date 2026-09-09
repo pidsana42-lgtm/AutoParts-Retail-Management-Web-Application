@@ -53,6 +53,14 @@ type Product struct {
 }
 
 func (p *Product) BeforeCreate(tx *gorm.DB) error {
+	// New products must have a usable aging date, including manual stock entry.
+	// Import flows can supply the actual receipt date before this hook runs.
+	if p.Import_DateTime.IsZero() {
+		p.Import_DateTime = p.CreatedAt
+		if p.Import_DateTime.IsZero() {
+			p.Import_DateTime = time.Now()
+		}
+	}
 	if p.Product_Code != "" {
 		return nil
 	}

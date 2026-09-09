@@ -31,7 +31,7 @@ func PurchaseOrdersItems(db *gorm.DB) error {
 
         item := entity.POItems{
             POID:                         po.ID,
-            ProductID:                    product.ID,
+            ProductID:                    &product.ID,
             Product_name_snapshot:        product.Product_Name,
             Supply_product_code_snapshot: companyProductCode,
             Quantity:                     quantity,

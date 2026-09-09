@@ -7,6 +7,7 @@ export interface AppNotification {
   title: string;
   message?: string;
   type?: 'info' | 'success' | 'warning' | 'error';
+  eventType?: string;
   isRead: boolean;
   link?: string;
   createdAt: Date;
@@ -26,10 +27,41 @@ interface NotificationContextProps {
 
 const NotificationContext = createContext<NotificationContextProps | undefined>(undefined);
 
+function notificationSeverity(eventType?: string): AppNotification['type'] {
+  const type = eventType?.toLowerCase();
+  if (type === 'low_stock' || type === 'out_of_stock') return 'warning';
+  if (type === 'success' || type === 'warning' || type === 'error') return type;
+  return 'info';
+}
+
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
-  const { role, user } = useAuth();
+  const { role, user, loginSequence } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const localIdRef = useRef(0);
+  const loginReminderRef = useRef<{ sequence: number; request: ReturnType<typeof notificationService.refreshStockAlerts> } | null>(null);
+
+  useEffect(() => {
+    if (!role) { setNotifications([]); return; }
+    if (!loginSequence) return;
+    const basePath = ['OWNER', 'ADMIN'].includes(role.toUpperCase()) ? '/owner' : '/employee';
+    // Reuse the request during StrictMode's effect replay, but attach a live
+    // subscriber each time. A new login always starts a new reminder check.
+    if (loginReminderRef.current?.sequence !== loginSequence) {
+      loginReminderRef.current = { sequence: loginSequence, request: notificationService.refreshStockAlerts() };
+    }
+    let active = true;
+    loginReminderRef.current.request.then((alerts) => {
+      if (!active || alerts.length === 0) return;
+      const id = `local-stock-login-${loginSequence}`;
+      setNotifications((prev) => [{
+        id, title: `มีสินค้าถึงจุดแจ้งเตือนสต็อก ${alerts.length} รายการ`,
+        message: 'กดเพื่อเลือกสินค้าและสร้างใบสั่งซื้อ', type: 'warning',
+        eventType: 'LOW_STOCK', link: `${basePath}/dashboard?stock-alerts=1`,
+        isRead: false, createdAt: new Date(), persisted: false,
+      }, ...prev.filter((n) => n.id !== id)]);
+    }).catch((err) => console.error('Failed to check stock on login:', err));
+    return () => { active = false; };
+  }, [role, loginSequence]);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -94,7 +126,8 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
           id: String(r.id),
           title: r.title,
           message: r.message,
-          type: (r.type?.toLowerCase() as AppNotification['type']) || 'info',
+          type: notificationSeverity(r.type),
+          eventType: r.type,
           isRead: r.is_read,
           link: r.link,
           createdAt: new Date(r.created_at),
@@ -167,7 +200,8 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
                 id: String(data.id),
                 title: data.title,
                 message: data.message,
-                type: data.type,
+                type: notificationSeverity(data.type),
+                eventType: data.type,
                 link: data.link,
                 isRead: false,
                 createdAt: new Date(),

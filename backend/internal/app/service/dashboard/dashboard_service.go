@@ -237,15 +237,23 @@ func (s *dashboardService) GetAgingStock(ctx context.Context, thresholdDays int)
 	var candidates []agingItem
 	for _, p := range products {
 		var lastSold *time.Time
-		var daysAging int
+		// Legacy/imported products may have no import date. Never subtract Go's
+		// zero time: time.Duration saturates and produces an apparent 106751 days.
+		basis := p.Import_DateTime
+		if basis.IsZero() {
+			basis = p.CreatedAt
+		}
 
-		if ls, ok := lastSoldMap[p.ID]; ok {
+		if ls, ok := lastSoldMap[p.ID]; ok && !ls.IsZero() {
 			t := ls
 			lastSold = &t
-			daysAging = int(now.Sub(ls).Hours() / 24)
-		} else {
-			daysAging = int(now.Sub(p.Import_DateTime).Hours() / 24)
+			basis = ls
 		}
+		// Unknown or future dates cannot establish that stock is old.
+		if basis.IsZero() || basis.After(now) {
+			continue
+		}
+		daysAging := int(now.Sub(basis).Hours() / 24)
 
 		if daysAging > thresholdDays {
 			candidates = append(candidates, agingItem{product: p, lastSold: lastSold, daysAging: daysAging})

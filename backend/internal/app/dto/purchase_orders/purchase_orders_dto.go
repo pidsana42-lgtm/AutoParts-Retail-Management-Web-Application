@@ -6,10 +6,10 @@ import (
 )
 
 type POItemDTO struct {
-	ProductID      uint    `json:"product_id" binding:"required"`
-	Quantity       int     `json:"quantity" binding:"required,gt=0"`   // จำนวนต้องมากกว่า 0
-	UnitPrice      float64 `json:"unit_price" binding:"required,gt=0"` // ราคาต่อหน่วยต้องมากกว่า 0
-	Notes          *string `json:"notes"`                              // ใช้ * เพื่อให้เป็น Optional (ส่งมาเป็น null หรือไม่ส่งก็ได้)
+	ProductID      uint    `json:"product_id"`                       // optional only when linked to a preorder item
+	Quantity       int     `json:"quantity" binding:"required,gt=0"` // จำนวนต้องมากกว่า 0
+	UnitPrice      float64 `json:"unit_price" binding:"gte=0"`       // zero estimates allowed only for linked preorders; see ValidatePrices
+	Notes          *string `json:"notes"`                            // ใช้ * เพื่อให้เป็น Optional (ส่งมาเป็น null หรือไม่ส่งก็ได้)
 	AlertID        *uint   `json:"alert_id"`
 	PreOrderItemID *uint   `json:"pre_order_item_id"`
 }
@@ -18,7 +18,7 @@ type CreatePurchaseOrderRequest struct {
 	SupplierID uint            `json:"supplier_id" binding:"required"`
 	Notes      *string         `json:"notes" binding:"required"`
 	Status     poEnum.POStatus `json:"status" binding:"required,oneof=DRAFT PENDING"`
-	POItems    []POItemDTO     `json:"po_items" binding:"required,gt=0"`
+	POItems    []POItemDTO     `json:"po_items" binding:"required,gt=0,dive"`
 }
 
 type PurchaseOrderResponse struct {
