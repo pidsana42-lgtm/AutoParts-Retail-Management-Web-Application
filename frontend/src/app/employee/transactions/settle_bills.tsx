@@ -29,6 +29,7 @@ import {
 } from "../../../components/elements/table";
 import { useSettleBills } from "./hooks/useSettleBills";
 import { usePosSessionMeta } from "../pos/hooks/usePosSessionMeta";
+import ConfirmModal from "../../../components/elements/confirm_modal";
 
 export default function SettleBillsPage(): React.JSX.Element {
   const { formatDate: currentDateStr, formatTime, currentStaff } = usePosSessionMeta()
@@ -611,31 +612,57 @@ export default function SettleBillsPage(): React.JSX.Element {
         </Button>
 
         {/* ================= PAYMENT MODAL ================= */}
-        {isPaymentModalOpen && (
-          <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/60 backdrop-blur-none">
-            <div className="bg-[#FCF9F8] w-full max-w-xl rounded-none shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
-              
-              {/* Header */}
-              <div className="bg-[#1C1B1B] px-6 py-4 flex justify-between items-center">
-                <Text variant="lead" className="text-white mb-0 font-medium">
-                  รับชำระหนี้ ({paymentMethodId === 1 ? "เงินสด" : "QR CODE"}) 
-                </Text>
-                <button type="button" onClick={handleCloseModal} className="text-[#9CA3AF] hover:text-white text-xl cursor-pointer">
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Body */}
-              <div className="p-6 space-y-4">
+        <ConfirmModal
+          isOpen={isPaymentModalOpen}
+          onClose={handleCloseModal}
+          title={
+            <Text variant="lead" className="text-white mb-0 font-medium">
+              รับชำระหนี้ ({paymentMethodId === 1 ? "เงินสด" : "QR CODE"}) 
+            </Text>
+          }
+          className="max-w-xl bg-[#FCF9F8]"
+          footer={
+            <div className="flex w-full gap-4">
+              <Button
+                type="button"
+                variant="tertiary"
+                size="md"
+                disabled={isSubmitting}
+                onClick={handleCloseModal}
+                className="px-20 py-3 font-normal text-sm rounded-none bg-[#E5E2E1] hover:bg-[#E7E5E4] cursor-pointer"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                disabled={isSubmitting || totalPayAmount <= 0 || (paymentMethodId === 1 && receivedAmount < totalPayAmount)}
+                isLoading={isSubmitting}
+                onClick={() => handleFinalConfirm()}
+                leftIcon={<Printer className="w-4 h-4" />}
+                className="flex-1 py-3 bg-[#E51C23] hover:bg-red-700 text-white font-normal text-sm rounded-none cursor-pointer disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                ยืนยันและออกใบเสร็จ (RE)
+              </Button>
+            </div>
+          }
+        >
+          {/* Body */}
+          <div className="space-y-4">
                 <div className="border-l-3 border-[#5D3F3C] bg-[#F6F3F2] p-3 my-2 space-y-2">
                   <div className="flex justify-between items-start text-xs">
                     <div>
                       <Text variant="xs" className="text-[#6B7280] mb-0.5">ลูกค้า / อู่:</Text>
-                      <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">{customerName || "ลูกค้าขาจร"}</Text>
+                      <Text variant="xs" className="text-[#1C1B1B] font-medium">
+                        {customerName || "ลูกค้าขาจร"}
+                      </Text>
                     </div>
                     <div className="text-right mr-2">
                       <Text variant="xs" className="text-[#6B7280] mb-0.5">รายการบิลที่เลือก:</Text>
-                      <Text variant="xs" className="text-[#E51C23] font-normal mb-0">{selectedBillIds.length} บิล</Text>
+                      <Text variant="xs" className="text-[#E51C23] font-normal mb-0">
+                        {selectedBillIds.length} บิล
+                      </Text>
                     </div>
                   </div>
 
@@ -775,8 +802,8 @@ export default function SettleBillsPage(): React.JSX.Element {
                   <div className="bg-white p-6 border border-[#E7BDB8]/50">
                     <div className="grid grid-cols-2 gap-4">
                       {/* กรอบรูป QR Code จริง */}
-                      <div className="flex flex-col items-center justify-center space-y-3">
-                        <div className="relative w-52 h-52 p-2 flex items-center justify-center">
+                      <div className="flex flex-col items-center justify-between h-full">
+                        <div className="relative w-52 h-52 flex items-center justify-center">
                           {isLoadingQR ? (
                             <div className="flex flex-col items-center justify-center space-y-2">
                               <Loader2 size={36} className="animate-spin text-[#E51C23]" />
@@ -802,15 +829,45 @@ export default function SettleBillsPage(): React.JSX.Element {
                             </div>
                           )}
                         </div>
-                        <div className="text-center space-y-0.5 max-w-55">
+                        <div className="text-center space-y-1 w-full max-w-55">
                           <Text variant="small" className="font-medium text-[#1C1B1B] leading-tight block mb-0">
-                            เจเจ อะไหล่ยนต์
+                            {qrCodeData?.promptPayName || "เจเจ อะไหล่ยนต์"}
                           </Text>
                           <Text variant="xs" className="font-normal text-[#6B7280] leading-tight block mb-0">
                             พร้อมเพย์ชำระยอดหนี้
                           </Text>
+
+                          {/* ข้อมูลบัญชีธนาคารประกอบ */}
+                          {qrCodeData?.bankAccountNumber && (
+                            <div className="mt-2 pt-1.5 border-t border-dashed border-gray-200 text-left bg-slate-50 p-2 border border-slate-200/60">
+                              <div className="text-[11px] font-medium text-slate-700 truncate">
+                                {qrCodeData.bankName || "บัญชีธนาคาร"}
+                              </div>
+                              <div className="flex items-center justify-between gap-1 text-[11px] font-mono text-slate-900 mt-0.5">
+                                <span className="tracking-wide font-semibold">{qrCodeData.bankAccountNumber}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (qrCodeData?.bankAccountNumber) {
+                                      navigator.clipboard.writeText(qrCodeData.bankAccountNumber.replace(/-/g, ""));
+                                      alert("คัดลอกเลขที่บัญชีแล้ว");
+                                    }
+                                  }}
+                                  className="text-[10px] text-red-600 hover:underline shrink-0 font-sans cursor-pointer"
+                                >
+                                  คัดลอก
+                                </button>
+                              </div>
+                              {qrCodeData.bankAccountName && (
+                                <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                                  ชื่อ: {qrCodeData.bankAccountName}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {qrCodeData?.refNo && (
-                            <span className="text-[10px] text-gray-400 font-mono block truncate">
+                            <span className="text-[10px] text-gray-400 font-mono block truncate mt-1">
                               Ref: {qrCodeData.refNo}
                             </span>
                           )}
@@ -818,8 +875,9 @@ export default function SettleBillsPage(): React.JSX.Element {
                       </div>
 
                       {/* รายละเอียดฝั่งขวา */}
-                      <div className="flex flex-col justify-between">
-                        <div className="h-full flex flex-col justify-between">
+                      <div className="flex flex-col justify-between h-full">
+                        {/* 1. กล่องยอดชำระสุทธิ (ขอบล่างตรงกับกรอบ QR Code) */}
+                        <div className="h-52 flex flex-col justify-end pb-5">
                           <div className="border-l-3 border-[#E51C23] p-4 bg-[#F0EDEC]">
                             <Text variant="xs" className="text-[#5F5E5E] mb-0">ยอดชำระสุทธิงวดนี้</Text>
                             <div className="flex justify-between items-baseline mt-2">
@@ -829,8 +887,11 @@ export default function SettleBillsPage(): React.JSX.Element {
                               <Text variant="xs" className="text-[#1C1B1B] mb-0">บาท</Text>
                             </div>
                           </div>
+                        </div>
 
-                          <div className="pt-3 space-y-2">
+                        {/* 2. เส้นคั่น + รายละเอียด */}
+                        <div className="flex-1 flex flex-col justify-end pt-3">
+                          <div className="space-y-2 w-full">
                             <div className="border-b border-[#E7BDB8]"></div>
                             <div>
                               <div className="flex justify-between items-center">
@@ -853,36 +914,7 @@ export default function SettleBillsPage(): React.JSX.Element {
                   </div>
                 )}
               </div>
-
-              {/* Footer */}
-              <div className="flex p-6 gap-4">
-                <Button
-                  type="button"
-                  variant="tertiary"
-                  size="md"
-                  disabled={isSubmitting}
-                  onClick={handleCloseModal}
-                  className="px-20 py-3 font-normal text-sm rounded-none bg-[#E5E2E1] hover:bg-[#E7E5E4] cursor-pointer"
-                >
-                  ยกเลิก
-                </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="md"
-                  disabled={isSubmitting || totalPayAmount <= 0 || (paymentMethodId === 1 && receivedAmount < totalPayAmount)}
-                  isLoading={isSubmitting}
-                  onClick={() => handleFinalConfirm()}
-                  leftIcon={<Printer className="w-4 h-4" />}
-                  className="flex-1 py-3 bg-[#E51C23] hover:bg-red-700 text-white font-normal text-sm rounded-none cursor-pointer disabled:bg-gray-300 disabled:cursor-not-allowed"
-                >
-                  ยืนยันและออกใบเสร็จ (RE)
-                </Button>
-              </div>
-
-            </div>
-          </div>
-        )}
+        </ConfirmModal>
       </div>
     </div>
   );

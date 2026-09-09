@@ -119,3 +119,18 @@ func DecryptAES256(ciphertext string) (string, error) {
 
 	return string(plainBytes), nil
 }
+
+// MaskSensitiveNumber masks sensitive numbers, keeping only the last 4 digits visible
+// and replacing preceding characters with asterisks (e.g. "0812345678" -> "******5678").
+func MaskSensitiveNumber(number string) string {
+	clean := strings.TrimSpace(number)
+	if len(clean) == 0 {
+		return ""
+	}
+	visibleLen := 4
+	if len(clean) <= visibleLen {
+		return clean
+	}
+	maskLen := len(clean) - visibleLen
+	return strings.Repeat("*", maskLen) + clean[maskLen:]
+}
