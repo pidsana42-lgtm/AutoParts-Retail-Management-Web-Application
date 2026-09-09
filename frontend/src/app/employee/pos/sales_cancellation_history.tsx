@@ -441,7 +441,7 @@ const SalesCancellationHistory: React.FC = () => {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            <button
+                            {/* <button
                               type="button"
                               disabled={printingOrderId === item.id}
                               title="พิมพ์/ดาวน์โหลดใบเสร็จที่ยกเลิก (Void Receipt)"
@@ -452,7 +452,7 @@ const SalesCancellationHistory: React.FC = () => {
                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
                             >
                               <Printer className={cn("w-4 h-4", printingOrderId === item.id && "animate-pulse")} />
-                            </button>
+                            </button> */}
                             {(item.status || "").toUpperCase() === "CANCELLED" && (
                               <button
                                 type="button"
@@ -974,7 +974,7 @@ const SalesCancellationHistory: React.FC = () => {
                             </div>
                           </Card>
 
-                          <Button
+                          {/* <Button
                             type="button"
                             variant="outline-cancel"
                             onClick={() => handlePrintReceipt(orderDetail.id, orderDetail.order_number)}
@@ -983,7 +983,7 @@ const SalesCancellationHistory: React.FC = () => {
                           >
                             <Printer className={cn("w-4 h-4 text-[#E51C23]", printingOrderId === orderDetail.id && "animate-pulse")} />
                             <span>พิมพ์ใบเสร็จที่ยกเลิก (เอกสารหลักฐาน)</span>
-                          </Button>
+                          </Button> */}
 
                           <Button
                             type="button"

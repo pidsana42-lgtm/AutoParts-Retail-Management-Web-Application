@@ -91,25 +91,13 @@ export default function OrderDetailPanel({
                       </span>
                     </Text>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="solid-red"
-                      onClick={() => handlePrintReceipt(orderDetail.id || orderDetail.order_number, orderDetail.order_number)}
-                      disabled={printingOrderId !== null}
-                      className="text-xs h-8 px-3 font-normal rounded-none flex items-center gap-1.5"
-                    >
-                      <Printer size={14} />
-                      {printingOrderId !== null ? "กำลังดาวน์โหลด..." : "พิมพ์ใบเสร็จ/ใบส่งของ"}
-                    </Button>
-                    <button
-                      type="button"
-                      onClick={() => onClose()}
-                      className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onClose()}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
                 {/* Scrollable Body Content */}
@@ -295,6 +283,7 @@ export default function OrderDetailPanel({
                         </Text>
                       </div>
 
+
                       {/* แถววิธีชำระเงิน */}
                       <div className="pt-2 flex justify-end items-center gap-2">
                         <Badge
@@ -307,6 +296,29 @@ export default function OrderDetailPanel({
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* ปุ่มพิมพ์ใบเสร็จ/ใบส่งของ (PDF) */}
+                  {/* <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() =>
+                      handlePrintReceipt(
+                        orderDetail.id || orderDetail.order_number,
+                        orderDetail.order_number
+                      )
+                    }
+                    disabled={printingOrderId !== null}
+                    className="w-full text-xs h-10 font-normal flex items-center justify-center gap-1.5 shadow-sm bg-[#1C1B1B] hover:bg-zinc-800 text-white cursor-pointer rounded-none"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>
+                      {printingOrderId !== null
+                        ? "กำลังดาวน์โหลด..."
+                        : (orderDetail.status || "").toUpperCase() === "CANCELLED"
+                        ? "พิมพ์ใบเสร็จที่ยกเลิก (Void Receipt)"
+                        : "พิมพ์ใบเสร็จ/ใบส่งของ (PDF)"}
+                    </span>
+                  </Button> */}
 
                   {/* ==================== ส่วนจัดการการขอยกเลิก (DYNAMIC UI) ==================== */}
                   {(() => {
@@ -496,7 +508,7 @@ export default function OrderDetailPanel({
                             </div>
                           </Card>
 
-                          <Button
+                          {/* <Button
                             type="button"
                             variant="outline-cancel"
                             onClick={() => handlePrintReceipt(orderDetail.id, orderDetail.order_number)}
@@ -505,7 +517,7 @@ export default function OrderDetailPanel({
                           >
                             <Printer className={cn("w-4 h-4 text-[#E51C23]", printingOrderId === orderDetail.id && "animate-pulse")} />
                             <span>พิมพ์ใบเสร็จที่ยกเลิก (เอกสารหลักฐาน)</span>
-                          </Button>
+                          </Button> */}
 
                           <Button
                             type="button"

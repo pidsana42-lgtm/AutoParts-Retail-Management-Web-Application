@@ -500,7 +500,7 @@ func (ctrl *paymentController) GenerateDebtReceiptPDF(c *gin.Context) {
 func (ctrl *paymentController) GenerateCustomerStatementPDF(c *gin.Context) {
 	customerIDParam := c.Param("id")
 	customerID, err := strconv.ParseUint(customerIDParam, 10, 32)
-	if err != nil || customerID == 0 {
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสลูกค้าไม่ถูกต้อง"})
 		return
 	}
@@ -513,6 +513,7 @@ func (ctrl *paymentController) GenerateCustomerStatementPDF(c *gin.Context) {
 	}
 	status := c.Query("status")
 	paymentMethod := c.Query("payment_method")
+	customerName := c.Query("customer_name")
 
 	pdfBytes, err := ctrl.paymentService.GenerateCustomerStatementPDF(
 		c.Request.Context(),
@@ -522,6 +523,7 @@ func (ctrl *paymentController) GenerateCustomerStatementPDF(c *gin.Context) {
 		paymentType,
 		status,
 		paymentMethod,
+		customerName,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate customer statement PDF: " + err.Error()})
@@ -530,6 +532,9 @@ func (ctrl *paymentController) GenerateCustomerStatementPDF(c *gin.Context) {
 
 	currentDateStr := time.Now().Format("20060102")
 	fileName := fmt.Sprintf("STM-%d-%s.pdf", customerID, currentDateStr)
+	if customerID == 0 {
+		fileName = fmt.Sprintf("STM-General-%s.pdf", currentDateStr)
+	}
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", fileName))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
