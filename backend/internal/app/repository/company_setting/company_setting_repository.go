@@ -4,6 +4,8 @@ import (
 	"backend/internal/app/entity"
 	"context"
 	"errors"
+	"strings"
+
 	"gorm.io/gorm"
 )
 
@@ -62,6 +64,22 @@ func (r *companySettingRepository) UpdateCompanySetting(ctx context.Context, set
 	existing.PhoneNumber = setting.PhoneNumber
 	existing.Email = setting.Email
 	existing.LogoURL = setting.LogoURL
+
+	if setting.PromptPayType != "" {
+		existing.PromptPayType = setting.PromptPayType
+	}
+	if setting.PromptPayName != "" {
+		existing.PromptPayName = setting.PromptPayName
+	}
+	if setting.PromptPayNumber != "" && !strings.Contains(setting.PromptPayNumber, "*") {
+		existing.PromptPayNumber = setting.PromptPayNumber
+	}
+
+	existing.BankName = setting.BankName
+	existing.BankAccountName = setting.BankAccountName
+	if setting.BankAccountNumber != "" && !strings.Contains(setting.BankAccountNumber, "*") {
+		existing.BankAccountNumber = setting.BankAccountNumber
+	}
 
 	if err := r.db.WithContext(ctx).Save(&existing).Error; err != nil {
 		return nil, err
