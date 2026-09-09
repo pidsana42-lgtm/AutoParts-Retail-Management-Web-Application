@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Trash2, SquarePen } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Grade } from "../../../../../interface/wms/stock_data";
@@ -20,6 +21,7 @@ interface GradeTabProps {
 
 export default function GradeTab({ search, grades, loadData, addSignal }: GradeTabProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
 
   // Modals visibility state
   const [addOpen, setAddOpen] = useState(false);
@@ -40,8 +42,12 @@ export default function GradeTab({ search, grades, loadData, addSignal }: GradeT
     setCurrentPage(1);
   }, [search]);
 
-  const handleDeleteGrade = async (id: number) => {
-    if (!confirm("คุณแน่ใจว่าต้องการลบเกรดสินค้านี้?")) return;
+  const handleDeleteGrade = async (id: number, name: string) => {
+    const confirmed = await confirmDialog(
+      `ต้องการลบเกรดสินค้า "${name}" ใช่หรือไม่?`,
+      { title: "ลบเกรดสินค้า", confirmText: "ลบ", variant: "danger", icon: Trash2 }
+    );
+    if (!confirmed) return;
     try {
       await stockDataService.deleteGrade(id);
       toast({ variant: "success", message: "ลบเกรดสินค้าสำเร็จ" });
@@ -99,7 +105,7 @@ export default function GradeTab({ search, grades, loadData, addSignal }: GradeT
                         <SquarePen className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => handleDeleteGrade(grade.id)}
+                        onClick={() => handleDeleteGrade(grade.id, grade.grade_name)}
                         className="hover:text-red-600 transition-colors"
                       >
                         <Trash2 className="h-4 w-4" />

@@ -132,4 +132,14 @@ func TestUpdatePOSOrder_Success_RevertsOldStockAndDeductsNewStock(t *testing.T) 
 
 	// Verify new product stock was DEDUCTED (20 - 1 = 19)
 	assert.Equal(t, 19, f.productRepo.products[102].Quantity)
+
+	// stock_movements ของออเดอร์นี้ต้องเหลือแค่ชุดใหม่ที่ตรงกับรายการที่แก้ไขแล้ว (product 102) ไม่ใช่ของเดิม (product 101)
+	var movements []entity.StockMovement
+	require.NoError(t, f.db.Where("sale_order_id = ?", updatedOrder.ID).Find(&movements).Error)
+	require.Len(t, movements, 1)
+	assert.Equal(t, "OUT", movements[0].Movement_Type)
+	assert.Equal(t, uint(102), movements[0].ProductID)
+	assert.Equal(t, 1, movements[0].Quantity)
+	require.NotNil(t, movements[0].UserID)
+	assert.Equal(t, uint(2), *movements[0].UserID)
 }

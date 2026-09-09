@@ -348,6 +348,12 @@ func (m *mockPOSProductRepo) GetProductByID(id uint) (*entity.Product, error) {
 	return nil, errors.New("record not found")
 }
 
+// GetProductByIDWithTx: mock ไม่ได้ผูกกับ transaction จริงเหมือน implementation ตัวจริง — แต่ยังอ่านจาก m.products
+// ซึ่งเป็น map เดียวกันที่ UpdateProductWithTx อัปเดต Quantity สดๆ ไว้ให้แล้ว จึงยังเห็นค่าล่าสุดถูกต้องเหมือนอ่านผ่าน tx จริง
+func (m *mockPOSProductRepo) GetProductByIDWithTx(tx *gorm.DB, id uint) (*entity.Product, error) {
+	return m.GetProductByID(id)
+}
+
 func (m *mockPOSProductRepo) UpdateProductWithTx(tx *gorm.DB, product *entity.Product) error {
 	if p, ok := m.products[product.ID]; ok {
 		p.Quantity = product.Quantity
@@ -365,7 +371,8 @@ type testFixture struct {
 
 func newTestFixture(t *testing.T) *testFixture {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
+		Logger:                                   logger.Default.LogMode(logger.Silent),
+		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	require.NoError(t, err)
 
@@ -380,6 +387,7 @@ func newTestFixture(t *testing.T) *testFixture {
 		&entity.SaleOrderItem{},
 		&entity.Payment{},
 		&entity.User{},
+		&entity.StockMovement{}, // ตอนนี้ CreatePOSOrder/UpdatePOSOrder เขียนลง stock_movements ด้วย (movement_type = OUT)
 	)
 	require.NoError(t, err)
 
@@ -406,4 +414,3 @@ func newTestFixture(t *testing.T) *testFixture {
 		service:     service,
 	}
 }
-

@@ -3,6 +3,28 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { posApiService, getDefaultProductDiscount } from "../../../../service/http/pos/pos_service";
 import { useDiscountCalculation } from "./useDiscountCalculation";
 import type { UsePosCartProps, CartItem, UsePosCartReturn } from "../../../../interface/pos/usePosCart.interface";
+import type { POSProductResponse, POSProductSupplierInfo } from "../../../../interface/pos/product_interface";
+
+// findMatchedSupplier: ถ้าคำค้นหา/บาร์โค้ดที่พิมพ์-แสกนตรงกับรหัสของ Supplier เจ้าใดเจาะจง (บาร์โค้ด/รหัสล็อต/
+// รหัสบริษัท) ให้คืนข้อมูลเจ้านั้น เพื่อผูกการขายชิ้นนี้กับบริษัทนั้น (โชว์ในตารางบิล + หักคงเหลือต่อบริษัทให้ตรงเจ้าจริง)
+// (คืน undefined ถ้าค้นด้วยชื่อ/รหัสสินค้ากลางทั่วไป ไม่ได้เจาะจงบริษัทไหน)
+export function findMatchedSupplier(product: POSProductResponse, query: string): POSProductSupplierInfo | undefined {
+  const q = query.trim().toLowerCase();
+  if (!q) return undefined;
+  return product.suppliers?.find(
+    (s) =>
+      (s.barcode && s.barcode.toLowerCase() === q) ||
+      (s.variant_code && s.variant_code.toLowerCase() === q) ||
+      (s.company_product_code && s.company_product_code.toLowerCase() === q)
+  );
+}
+
+// totalQtyInCartForProduct: รวมจำนวนของสินค้าตัวนี้จาก "ทุกแถว" ในตะกร้า — สินค้าตัวเดียวกันอาจแยกอยู่หลายแถว
+// ถ้าซื้อมาจากคนละบริษัท (ดู excludeIndex กันแถวตัวเองไปนับซ้ำตอนเช็ค qty ของแถวนั้นเอง) ใช้เทียบกับสต็อกรวมจริง
+// เพื่อไม่ให้เพิ่มจำนวนรวมกันเกินยอดคงเหลือของสินค้าทั้งชิ้น แม้จะกระจายอยู่คนละแถวก็ตาม
+function totalQtyInCartForProduct(cart: CartItem[], productId: number, excludeIndex?: number): number {
+  return cart.reduce((sum, it, i) => (it.product_id === productId && i !== excludeIndex ? sum + it.qty : sum), 0);
+}
 
 export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCancelledOrder }: UsePosCartProps): UsePosCartReturn {
   
@@ -216,43 +238,59 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
         );
         return;
       }
-      // ค้นหาตัวเลือกที่ตรงกับเงื่อนไขที่สุด (ไม่ว่าจะเป็น barcode, product_code, part_number, หรือ product_name)
+      // ค้นหาตัวเลือกที่ตรงกับเงื่อนไขที่สุด (ไม่ว่าจะเป็น barcode, product_code, part_number, product_name
+      // หรือบาร์โค้ด/รหัสล็อตของบริษัทใดบริษัทหนึ่งที่สินค้านี้รับมาจาก — สินค้า 1 ชิ้นมาได้จากหลายบริษัท
+      // แต่ละเจ้ามีรหัสของตัวเอง ไม่ใช่แค่เจ้าแรกที่ p.barcode สรุปมาให้)
       const product = products.find(
         (p) =>
           p.barcode?.toLowerCase() === cleanedQuery.toLowerCase() ||
           p.product_code?.toLowerCase() === cleanedQuery.toLowerCase() ||
           p.part_number?.toLowerCase() === cleanedQuery.toLowerCase() ||
-          p.product_name?.toLowerCase() === cleanedQuery.toLowerCase()
+          p.product_name?.toLowerCase() === cleanedQuery.toLowerCase() ||
+          findMatchedSupplier(p, cleanedQuery) !== undefined
       ) || products[0];
+      // ถ้าที่พิมพ์/แสกนตรงกับบาร์โค้ด-รหัสล็อตของบริษัทไหนเจาะจง ให้ผูกการขายชิ้นนี้กับบริษัทนั้นไปด้วย
+      const matchedSupplier = findMatchedSupplier(product, cleanedQuery);
       // โซนที่ 3 & 4: คำนวณและเช็คความปลอดภัย (มีของซ้ำไหม/สิทธิ์ส่วนลดได้เท่าไหร่/สต็อกเหลือไหม)
-      const maxStock = product.quantity ?? 0;
+      // รู้บริษัทแน่ชัดแล้ว -> เพดานคือคงเหลือของบริษัทนั้นเอง ไม่ใช่ยอดรวมทั้งร้าน (แต่ละบริษัทมีสต็อกเป็นก้อนแยกกัน)
+      const maxStock = matchedSupplier ? matchedSupplier.quantity : (product.quantity ?? 0);
       if (maxStock <= 0) {
-        alert(`สินค้า ${product.product_name || product.product_code} หมดสต็อก (คงเหลือ 0 ชิ้น) ไม่สามารถเพิ่มลงในบิลได้`);
+        const supplierNote = matchedSupplier ? ` จากบริษัท ${matchedSupplier.supplier_name}` : "";
+        alert(`สินค้า ${product.product_name || product.product_code}${supplierNote} หมดสต็อก (คงเหลือ 0 ชิ้น) ไม่สามารถเพิ่มลงในบิลได้`);
         return;
       }
 
       const discountConfig = getDefaultProductDiscount(product, customer, activeTypeId);
-      const existingIndex = cart.findIndex((item) => item.product_id === product.id);
-      
+
+      // รวมเข้าแถวเดิมได้ก็ต่อเมื่อเป็นสินค้าตัวเดียวกัน "และ" มาจากบริษัทเดียวกัน (หรือไม่ทราบบริษัทเหมือนกันทั้งคู่)
+      // เพราะแต่ละบริษัทต้องแยกหักสต็อกคนละก้อน จะปนรวมเป็นแถวเดียวกันไม่ได้ ไม่งั้นจะไม่รู้ว่าที่เพิ่มมาใหม่เป็นของเจ้าไหน
+      const existingIndex = cart.findIndex(
+        (item) => item.product_id === product.id && item.supplier_id === matchedSupplier?.supplier_id
+      );
+
+      // รู้บริษัทแล้ว: เช็คแค่แถวของตัวเอง (คงเหลือของบริษัทนั้นเป็นก้อนแยกเฉพาะ ไม่ปนกับบริษัทอื่น)
+      // ไม่รู้บริษัท (ค้นทั่วไป): ต้องรวมกับแถวอื่นของสินค้าเดียวกันด้วย กันไม่ให้รวมกันเกินยอดรวมทั้งร้าน
+      const currentRowQty = existingIndex > -1 ? cart[existingIndex].qty : 0;
+      const qtyToCompare = matchedSupplier ? currentRowQty : totalQtyInCartForProduct(cart, product.id);
+      if (qtyToCompare + 1 > maxStock) {
+        alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+        return;
+      }
+
       // โซนที่ 5: สั่งเซ็ตค่ากลับลง State (ปิดงาน)
       if (existingIndex > -1) {
-        // เคส 1: สินค้าเดิมมีอยู่แล้ว ทำการบวกจำนวนชิ้นเพิ่มขึ้น 1
+        // เคส 1: สินค้าเดิมมีอยู่แล้ว (บริษัทเดียวกัน) ทำการบวกจำนวนชิ้นเพิ่มขึ้น 1
         const newCart = [...cart];
         const item = newCart[existingIndex];
-
-        if (item.qty + 1 > maxStock) {
-          alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
-          return;
-        }
 
         newCart[existingIndex] = {
           ...item,
           qty: item.qty + 1,
-          model_name: product.model_name, 
-          brand_name: product.brand_name, 
-          grade_name: product.grade_name, 
-          unit_price: product.sale_price, 
-          quantity: product.quantity,     
+          model_name: product.model_name,
+          brand_name: product.brand_name,
+          grade_name: product.grade_name,
+          unit_price: product.sale_price,
+          quantity: maxStock,
           note: product.note,
         };
 
@@ -271,9 +309,11 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
             brand_name: product.brand_name,
             grade_name: product.grade_name,
             unit_price: product.sale_price,
-            quantity: product.quantity,
+            quantity: maxStock,
             note: product.note,
             max_discount_rate: product.max_discount_rate,
+            supplier_id: matchedSupplier?.supplier_id,
+            supplier_name: matchedSupplier?.supplier_name,
             discount_type: discountConfig.type,
             discount_value: discountConfig.value,
           },
@@ -292,11 +332,16 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
   const updateQty = (index: number, delta: number) => {
     const newCart = [...cart];
     const item = newCart[index];
-    const maxStock = (item as any).quantity ?? 999; 
+    const maxStock = (item as any).quantity ?? 999;
 
-    if (delta > 0 && item.qty + delta > maxStock) {
-      alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
-      return;
+    if (delta > 0) {
+      // รู้บริษัทของแถวนี้แน่ชัดแล้ว (item.quantity คือคงเหลือของบริษัทนั้นเองอยู่แล้ว) เช็คแค่แถวตัวเองพอ
+      // ไม่รู้บริษัท (แถวจากการค้นทั่วไป) ต้องรวมกับแถวอื่นของสินค้าเดียวกันด้วย กันไม่ให้รวมกันเกินยอดรวมทั้งร้าน
+      const otherRowsQty = item.supplier_id !== undefined ? 0 : totalQtyInCartForProduct(cart, item.product_id, index);
+      if (otherRowsQty + item.qty + delta > maxStock) {
+        alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+        return;
+      }
     }
 
     if (item.qty + delta > 0) {
@@ -313,12 +358,16 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
     const newCart = [...cart];
     const item = newCart[index];
     const maxStock = (item as any).quantity ?? 999;
+    // รู้บริษัทของแถวนี้แน่ชัดแล้ว (item.quantity คือคงเหลือของบริษัทนั้นเอง) ไม่ต้องหักลบกับแถวอื่น
+    // ไม่รู้บริษัท: เพดานที่แถวนี้ใส่ได้จริง = สต็อกรวม - ที่แถวอื่นของสินค้าเดียวกันกินไปแล้ว
+    const otherRowsQty = item.supplier_id !== undefined ? 0 : totalQtyInCartForProduct(cart, item.product_id, index);
+    const maxForThisRow = Math.max(0, maxStock - otherRowsQty);
 
     if (isNaN(value) || value <= 0) {
       item.qty = 1;
-    } else if (value > maxStock) {
+    } else if (value > maxForThisRow) {
       alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
-      item.qty = maxStock;
+      item.qty = maxForThisRow;
     } else {
       item.qty = value;
     }
@@ -409,29 +458,19 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
 
     const timer = setTimeout(async () => {
       try {
-        const cleanedLower = cleaned.toLowerCase();
+        // ค้นหา/กรองจริงทำที่ backend หมดแล้ว (ครอบคลุมชื่อ/รหัสสินค้า/Part No. และบาร์โค้ด-รหัสล็อต-รหัสบริษัท
+        // ของ Supplier ทุกเจ้าที่สินค้ารับมาจาก) — ห้ามมากรองซ้ำฝั่งนี้ด้วยแค่ item.barcode (ค่าที่ backend สรุปมา
+        // ให้ตัวเดียวจากเจ้าแรกที่มีเท่านั้น) เพราะจะตัดผลลัพธ์ที่ตรงกับบาร์โค้ดของเจ้าอื่นทิ้งไปอย่างผิด ๆ
         if (isRecoverMode) {
           const [products, cancelledOrders] = await Promise.all([
             posApiService.searchProducts(cleaned).catch(() => []),
             posApiService.getCancelledOrders(cleaned).catch(() => []),
           ]);
-          const filteredProducts = (products || []).filter((item: any) =>
-            item.product_name?.toLowerCase().includes(cleanedLower) ||
-            item.product_code?.toLowerCase().includes(cleanedLower) ||
-            item.part_number?.toLowerCase().includes(cleanedLower) ||
-            item.barcode?.toLowerCase().includes(cleanedLower)
-          );
-          setSuggestions(filteredProducts);
+          setSuggestions(products || []);
           setCancelledOrderSuggestions(cancelledOrders || []);
         } else {
           const res = await posApiService.searchProducts(cleaned);
-          const filteredResults = (res || []).filter((item: any) =>
-            item.product_name?.toLowerCase().includes(cleanedLower) ||
-            item.product_code?.toLowerCase().includes(cleanedLower) ||
-            item.part_number?.toLowerCase().includes(cleanedLower) ||
-            item.barcode?.toLowerCase().includes(cleanedLower)
-          );
-          setSuggestions(filteredResults);
+          setSuggestions(res || []);
           setCancelledOrderSuggestions([]);
         }
         setShowSuggestions(true);
@@ -443,24 +482,36 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
     return () => clearTimeout(timer);
   }, [searchQuery, isRecoverMode]);
 
-  const handleSelectProduct = (product: any) => {
-    const maxStock = product.quantity ?? 0;
+  // supplierOverride: ใช้ตอนกล่องแนะนำแยกแสดงเป็นคนละแถวต่อบริษัท แล้วผู้ใช้กดเลือกแถวของบริษัทใดบริษัทหนึ่งเจาะจง
+  // เอง (ไม่ได้อาศัยการเทียบข้อความค้นหา) — ถ้าไม่ส่งมาก็ fallback ไปเทียบกับคำค้นหาแบบเดิม (เผื่อเรียกจากที่อื่น)
+  const handleSelectProduct = (product: any, supplierOverride?: POSProductSupplierInfo) => {
+    const matchedSupplier = supplierOverride ?? findMatchedSupplier(product, searchQuery);
+    // รู้บริษัทแน่ชัดแล้ว -> เพดานคือคงเหลือของบริษัทนั้นเอง ไม่ใช่ยอดรวมทั้งร้าน (แต่ละบริษัทมีสต็อกเป็นก้อนแยกกัน)
+    const maxStock = matchedSupplier ? matchedSupplier.quantity : (product.quantity ?? 0);
     if (maxStock <= 0) {
-      alert(`สินค้า ${product.product_name || product.product_code} หมดสต็อก (คงเหลือ 0 ชิ้น) ไม่สามารถเพิ่มลงในบิลได้`);
+      const supplierNote = matchedSupplier ? ` จากบริษัท ${matchedSupplier.supplier_name}` : "";
+      alert(`สินค้า ${product.product_name || product.product_code}${supplierNote} หมดสต็อก (คงเหลือ 0 ชิ้น) ไม่สามารถเพิ่มลงในบิลได้`);
       return;
     }
 
     const discountConfig = getDefaultProductDiscount(product, customer, activeTypeId);
-    const existingIndex = cart.findIndex((item) => item.product_id === product.id);
+
+    // รวมเข้าแถวเดิมได้ก็ต่อเมื่อเป็นสินค้าตัวเดียวกัน "และ" มาจากบริษัทเดียวกัน (หรือไม่ทราบบริษัทเหมือนกันทั้งคู่)
+    const existingIndex = cart.findIndex(
+      (item) => item.product_id === product.id && item.supplier_id === matchedSupplier?.supplier_id
+    );
+
+    // รู้บริษัทแล้ว: เช็คแค่แถวของตัวเอง ไม่รู้บริษัท: รวมกับแถวอื่นของสินค้าเดียวกันด้วย กันเกินยอดรวมทั้งร้าน
+    const currentRowQty = existingIndex > -1 ? cart[existingIndex].qty : 0;
+    const qtyToCompare = matchedSupplier ? currentRowQty : totalQtyInCartForProduct(cart, product.id);
+    if (qtyToCompare + 1 > maxStock) {
+      alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+      return;
+    }
 
     if (existingIndex > -1) {
       const newCart = [...cart];
       const item = newCart[existingIndex];
-
-      if (item.qty + 1 > maxStock) {
-        alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
-        return;
-      }
 
       newCart[existingIndex] = {
         ...item,
@@ -469,7 +520,7 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
         brand_name: product.brand_name,
         grade_name: product.grade_name,
         unit_price: product.sale_price,
-        quantity: product.quantity,
+        quantity: maxStock,
         note: product.note,
       };
 
@@ -487,9 +538,11 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
           brand_name: product.brand_name,
           grade_name: product.grade_name,
           unit_price: product.sale_price,
-          quantity: product.quantity,
+          quantity: maxStock,
           note: product.note || "",
           max_discount_rate: product.max_discount_rate,
+          supplier_id: matchedSupplier?.supplier_id,
+          supplier_name: matchedSupplier?.supplier_name,
           discount_type: discountConfig.type,
           discount_value: discountConfig.value,
         },

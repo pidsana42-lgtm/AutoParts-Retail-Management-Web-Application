@@ -4,7 +4,6 @@ type UpdateImportProductDTO struct {
 	ProductCode   string  `json:"product_code"`
 	PartNumber    string  `json:"part_number"`
 	ProductName   string  `json:"product_name"`
-	Barcode       string  `json:"barcode"`
 	Quantity      int     `json:"quantity"`
 	LimitQuantity int     `json:"limit_quantity"`
 	CostPrice     float64 `json:"cost_price"`

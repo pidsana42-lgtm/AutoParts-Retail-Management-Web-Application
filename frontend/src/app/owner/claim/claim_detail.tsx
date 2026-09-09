@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
 import {
   ChevronRight,
   Calendar, Hash, User, Package, Loader2, SquarePen, Printer, Save, Camera, X,
@@ -28,6 +28,10 @@ const parseNote = (note: string | undefined, key: string): string => {
 export default function ClaimDetailPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const location = useLocation();
+  // ที่มาของการเข้าหน้านี้ (ถ้ามี) — ใช้ปรับเกล็ดขนมปังให้ตรงกับหน้าที่กดเข้ามาจริงๆ เช่นจากหน้า
+  // "การเคลื่อนไหวของคลังสินค้า" แทน "จัดการเคลมสินค้า" ตามปกติ
+  const cameFromMovement = (location.state as { from?: string } | null)?.from === 'movement';
   const [searchParams, setSearchParams] = useSearchParams();
   const { role } = useAuth() as any;
   const isManager = role?.toUpperCase() === 'OWNER' || role?.toUpperCase() === 'ADMIN';
@@ -253,6 +257,9 @@ export default function ClaimDetailPage(): React.JSX.Element {
   const displayItems = isEditing ? editItems : (claim.items ?? []);
   const totalQty = displayItems.reduce((acc, i) => acc + (i.qty || 0), 0);
   const basePath = window.location.pathname.startsWith('/employee') ? '/employee/claims' : '/owner/claims';
+  const breadcrumbRoot = cameFromMovement
+    ? { label: 'การเคลื่อนไหวของคลังสินค้า', path: '/owner/stock/stock-movement' }
+    : { label: 'จัดการเคลมสินค้า', path: basePath };
 
   return (
     <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300 font-sans text-slate-800">
@@ -269,8 +276,8 @@ export default function ClaimDetailPage(): React.JSX.Element {
       <div className="flex items-center justify-between mb-6">
         <div>
           <nav className="flex items-center text-xs text-gray-400 gap-1.5 font-medium mb-2">
-            <Link to={basePath} className="hover:text-[#e51c23] transition-colors cursor-pointer">
-              จัดการเคลมสินค้า
+            <Link to={breadcrumbRoot.path} className="hover:text-[#e51c23] transition-colors cursor-pointer">
+              {breadcrumbRoot.label}
             </Link>
             <ChevronRight className="w-3 h-3 text-gray-300" />
             <span className="text-gray-600">รายละเอียดใบเคลม</span>

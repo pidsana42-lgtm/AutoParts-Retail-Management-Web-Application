@@ -17,6 +17,17 @@ var checkTypeFeedLabel = map[string]string{
 	"PRODUCT":  "ตรวจสินค้ารายชิ้น",
 }
 
+// movementOriginState: ส่งแนบไปกับ navigate() ตอน LinkPath ชี้ไปหน้าที่ "ใช้ร่วมกับเมนูอื่นด้วย" (เช่นรายละเอียด
+// สินค้า/ตารางเช็คสต็อก/ใบเคลม/ใบคืนสินค้า) เพื่อให้หน้านั้นปรับเกล็ดขนมปังกลับมาที่ฟีดนี้แทนเมนูปกติของมัน
+// หน้าที่สร้างมาเฉพาะสำหรับฟีดนี้โดยเฉพาะ (เช่น รายละเอียดออเดอร์/ใบสั่งจองใต้ stock-movement) ไม่ต้องใช้ตัวนี้
+var movementOriginState = map[string]string{"from": "movement"}
+
+// productDetailLinkPath: URL หน้ารายละเอียดสินค้าของ productID ที่ระบุ — ใช้ซ้ำในหลาย mapper (สินค้าถูกเพิ่มใหม่/
+// รับเข้าเพิ่ม/ปรับสต็อก/ใกล้หมด และเป็น fallback ของ mapper อื่นที่หา id เอกสารหลักไม่เจอด้วย)
+func productDetailLinkPath(productID uint) string {
+	return fmt.Sprintf("/owner/stock/%d", productID)
+}
+
 type MovementFeedService interface {
 	// List: รวมเหตุการณ์จากทุกแหล่งข้อมูล WMS มาเรียงเป็นไทม์ไลน์เดียว (ใหม่สุดก่อน) ให้หน้า "การเคลื่อนไหวของสินค้า" ใช้
 	List() ([]wmsDto.MovementFeedItem, error)
@@ -85,8 +96,24 @@ func (s *movementFeedService) List() ([]wmsDto.MovementFeedItem, error) {
 	if err != nil {
 		return nil, err
 	}
+	// stock_movements ไม่มีคอลัมน์ผูกกับ sales_returns ตรงๆ ต้องย้อนกลับจากเลขที่ใบคืนที่ฝังไว้ใน Note แทน
+	// ("Return <return_number>") — ดึง id จริงมาแบบ batch ครั้งเดียวกันยิง query ซ้ำทีละแถว
+	returnNumberSet := make(map[string]struct{}, len(returns))
 	for _, rm := range returns {
-		items = append(items, returnFeedItem(rm))
+		if num := extractReturnNumber(rm.Note); num != "" {
+			returnNumberSet[num] = struct{}{}
+		}
+	}
+	returnNumbers := make([]string, 0, len(returnNumberSet))
+	for num := range returnNumberSet {
+		returnNumbers = append(returnNumbers, num)
+	}
+	returnIDByNumber, err := s.repo.GetSalesReturnIDsByReturnNumbers(returnNumbers)
+	if err != nil {
+		return nil, err
+	}
+	for _, rm := range returns {
+		items = append(items, returnFeedItem(rm, returnIDByNumber))
 	}
 
 	claimItems, err := s.repo.ListCustomerClaimItems()
@@ -123,6 +150,8 @@ func productAddedFeedItem(p entity.Product) wmsDto.MovementFeedItem {
 		ProductCode: p.Product_Code,
 		ProductName: p.Product_Name,
 		Quantity:    &qty,
+		LinkPath:    productDetailLinkPath(p.ID),
+		LinkState:   movementOriginState,
 		Title:       fmt.Sprintf("เพิ่มสินค้าใหม่เข้าระบบ: %s", p.Product_Name),
 		Detail:      fmt.Sprintf("จำนวนเริ่มต้น %d ชิ้น", p.Quantity),
 	}
@@ -159,6 +188,8 @@ func stockInFeedItem(m entity.StockMovement) wmsDto.MovementFeedItem {
 		Quantity:     &qty,
 		ActorName:    actor,
 		SupplierName: supplier,
+		LinkPath:     productDetailLinkPath(productID),
+		LinkState:    movementOriginState,
 		Title:        fmt.Sprintf("รับสินค้าเข้าเพิ่ม: %s", name),
 		Detail:       detail,
 	}
@@ -187,6 +218,8 @@ func checkFlaggedFeedItem(sc entity.CheckStockSchedule) wmsDto.MovementFeedItem 
 		OccurredAt: sc.CreatedAt,
 		RefID:      sc.ID,
 		ActorName:  actor,
+		LinkPath:   fmt.Sprintf("/owner/stock/stock-check/%d", sc.ID),
+		LinkState:  movementOriginState,
 		Title:      title,
 		Detail:     detail,
 	}
@@ -194,37 +227,32 @@ func checkFlaggedFeedItem(sc entity.CheckStockSchedule) wmsDto.MovementFeedItem 
 
 // stockAdjustedFeedItem: สต็อกถูกปรับหลังเจ้าของร้านอนุมัติผลนับสต็อก (นับได้ไม่ตรงกับที่ระบบมี)
 // ต่างจาก checkFlaggedFeedItem ตรงที่อันนี้คือ "ผลลัพธ์หลังนับเสร็จ" (สต็อกเปลี่ยนจริง) ไม่ใช่แค่ "สั่งให้ไปนับ"
-func stockAdjustedFeedItem(cs entity.CheckStock) wmsDto.MovementFeedItem {
-	diff := cs.Diff_Quantity
+// stockAdjustedFeedItem: อ่านจาก stock_movements (movement_type = ADJUST) ที่ทีม WMS เขียนไว้ให้ตอนอนุมัติผลเช็คสต็อก
+// — ข้อความ "เดิม X → นับได้ Y" ถูกฝังไว้ใน Note ตั้งแต่ตอนเขียนแถวแล้ว (ดู ApproveSchedule) mapper แค่แต่งเติมชื่อผู้ตรวจนับต่อท้าย
+func stockAdjustedFeedItem(m entity.StockMovement) wmsDto.MovementFeedItem {
+	productID := m.ProductID
 	name, code := "", ""
-	if cs.Product != nil {
-		name = cs.Product.Product_Name
-		code = cs.Product.Product_Code
+	if m.Product != nil {
+		name = m.Product.Product_Name
+		code = m.Product.Product_Code
 	}
-	actor := userDisplayName(cs.User)
-
-	sign := "เกิน"
-	if diff < 0 {
-		sign = "ขาด"
-		diff = -diff
-	}
-	detail := fmt.Sprintf("เดิม %d → นับได้ %d (%s %d)", cs.Old_Quantity, cs.New_Quantity, sign, diff)
-	if cs.Reason != "" {
-		detail = fmt.Sprintf("%s — เหตุผล: %s", detail, cs.Reason)
-	}
+	actor := userDisplayName(m.User)
+	detail := m.Note
 	if actor != "" {
 		detail = fmt.Sprintf("%s (ผู้ตรวจนับ: %s)", detail, actor)
 	}
 
 	return wmsDto.MovementFeedItem{
 		Type:        wmsDto.MovementFeedStockAdjusted,
-		OccurredAt:  cs.Adjustment_DateTime,
-		RefID:       cs.ID,
-		ProductID:   cs.ProductID,
+		OccurredAt:  m.Movement_DateTime,
+		RefID:       m.ID,
+		ProductID:   &productID,
 		ProductCode: code,
 		ProductName: name,
 		// ไม่ใส่ Quantity ตรงๆ (จะกลายเป็นค่าติดลบดูสับสนในหน้าฟีด) — รายละเอียดเดิม/ใหม่/ผลต่างอธิบายไว้ครบใน Detail แล้ว
 		ActorName: actor,
+		LinkPath:  productDetailLinkPath(productID),
+		LinkState: movementOriginState,
 		Title:     fmt.Sprintf("ปรับปรุงสต็อกจากผลเช็คสต็อก: %s", name),
 		Detail:    detail,
 	}
@@ -245,6 +273,8 @@ func lowStockFeedItem(p entity.Product) wmsDto.MovementFeedItem {
 		ProductCode: p.Product_Code,
 		ProductName: p.Product_Name,
 		Quantity:    &qty,
+		LinkPath:    productDetailLinkPath(p.ID),
+		LinkState:   movementOriginState,
 		Title:       fmt.Sprintf("สินค้าใกล้หมด: %s", p.Product_Name),
 		Detail:      fmt.Sprintf("คงเหลือ %d %s ต่ำกว่าจุดสั่งซื้อที่ตั้งไว้ (%d %s)", p.Quantity, unit, p.Limit_Quantity, unit),
 	}
@@ -262,43 +292,63 @@ var saleOrderStatusFeedTitle = map[string]string{
 	"claimed":        "เคลมแล้ว",
 }
 
-// saleOutFeedItem: สินค้าถูกขายออกผ่าน POS — สต็อกถูกตัดจริงตั้งแต่ตอนสร้างออเดอร์ไม่ว่าจะจบที่สถานะไหน (ดูเหตุผลใน repository)
-func saleOutFeedItem(item entity.SaleOrderItem) wmsDto.MovementFeedItem {
-	qty := -item.Qty // ขายออก = ลดสต็อก แสดงเป็นค่าติดลบให้เห็นทิศทางตรงข้ามกับรับเข้าชัดเจน
-	productID := item.ProductID
-	name := item.ProductName
-	code := ""
-	if item.Product.ID != 0 {
-		code = item.Product.Product_Code
-		if name == "" {
-			name = item.Product.Product_Name
-		}
+// saleOutFeedItem: อ่านจาก stock_movements (movement_type = OUT) ที่ทีม POS เขียนไว้ให้ตอนสร้าง/แก้ไขออเดอร์ —
+// สต็อกถูกตัดจริงตั้งแต่ตอนสร้างออเดอร์ไม่ว่าจะจบที่สถานะไหน แถวนี้ไม่ถูกลบตอนยกเลิก จึงยังโชว์เป็นประวัติได้ (ดู
+// SaleOrder ที่ Preload มาเพื่ออ่านสถานะ "ล่าสุด" ของออเดอร์เสมอ ไม่ใช่สถานะ ณ ตอนขาย)
+func saleOutFeedItem(m entity.StockMovement) wmsDto.MovementFeedItem {
+	qty := -m.Quantity // ขายออก = ลดสต็อก แสดงเป็นค่าติดลบให้เห็นทิศทางตรงข้ามกับรับเข้าชัดเจน
+	productID := m.ProductID
+	name, code := "", ""
+	if m.Product != nil {
+		name = m.Product.Product_Name
+		code = m.Product.Product_Code
 	}
-	actor := userDisplayName(item.Order.CreatedBy)
-	detail := fmt.Sprintf("ออเดอร์ %s", item.OrderNumber)
+	actor := userDisplayName(m.User)
+
+	orderNumber, status := "", ""
+	orderID := uint(0)
+	if m.SaleOrder != nil {
+		orderNumber = m.SaleOrder.OrderNumber
+		status = string(m.SaleOrder.Status)
+		orderID = m.SaleOrder.ID
+	}
+
+	detail := fmt.Sprintf("ออเดอร์ %s", orderNumber)
 	if actor != "" {
 		detail = fmt.Sprintf("%s — แคชเชียร์: %s", detail, actor)
 	}
-	titlePrefix := saleOrderStatusFeedTitle[string(item.Order.Status)]
+	titlePrefix := saleOrderStatusFeedTitle[status]
 	if titlePrefix == "" {
 		titlePrefix = "ขายออก" // เผื่อ enum เพิ่มสถานะใหม่ในอนาคตที่ยังไม่ได้ผูกป้ายไว้
 	}
 	return wmsDto.MovementFeedItem{
 		Type:        wmsDto.MovementFeedSaleOut,
-		OccurredAt:  item.Order.OrderDate,
-		RefID:       item.ID,
+		OccurredAt:  m.Movement_DateTime,
+		RefID:       m.ID,
 		ProductID:   &productID,
 		ProductCode: code,
 		ProductName: name,
 		Quantity:    &qty,
 		ActorName:   actor,
-		Title:       fmt.Sprintf("%s: %s", titlePrefix, name),
-		Detail:      detail,
+		// หน้ารายละเอียดออเดอร์นี้สร้างมาเฉพาะสำหรับฟีดนี้โดยเฉพาะ (มีเกล็ดขนมปังของตัวเองแล้ว) ไม่ต้องใช้ movementOriginState
+		LinkPath: fmt.Sprintf("/owner/stock/stock-movement/orders/%d", orderID),
+		Title:    fmt.Sprintf("%s: %s", titlePrefix, name),
+		Detail:   detail,
 	}
 }
 
+// extractReturnNumber: ถอดเลขที่ใบคืนสินค้ากลับจาก Note ของแถว stock_movements ที่ทีมคืนสินค้าฝังไว้ตอนอนุมัติ
+// คำขอคืน ("Return RTN-2026-0001" -> "RTN-2026-0001") — คืนค่าว่างถ้ารูปแบบไม่ตรง
+func extractReturnNumber(note string) string {
+	const prefix = "Return "
+	if !strings.HasPrefix(note, prefix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(note, prefix))
+}
+
 // returnFeedItem: ลูกค้าคืนสินค้า (จากแถว stock_movements ที่ movement_type = RETURN — ทีมคืนสินค้าเขียนไว้ให้ตอนอนุมัติคำขอคืนแล้ว)
-func returnFeedItem(m entity.StockMovement) wmsDto.MovementFeedItem {
+func returnFeedItem(m entity.StockMovement, returnIDByNumber map[string]uint) wmsDto.MovementFeedItem {
 	qty := m.Quantity
 	productID := m.ProductID
 	name, code := "", ""
@@ -307,6 +357,14 @@ func returnFeedItem(m entity.StockMovement) wmsDto.MovementFeedItem {
 		code = m.Product.Product_Code
 	}
 	actor := userDisplayName(m.User)
+	// หา id ใบคืนสินค้าจริงจากเลขที่ใบคืนที่ฝังไว้ใน Note — ถ้าหาไม่เจอ (เช่นรูปแบบ Note ไม่ตรง) ให้ลิงก์ไปหน้า
+	// รายละเอียดสินค้าแทน ยังดีกว่ากดไม่ได้เลย
+	linkPath := productDetailLinkPath(productID)
+	if num := extractReturnNumber(m.Note); num != "" {
+		if id, ok := returnIDByNumber[num]; ok {
+			linkPath = fmt.Sprintf("/owner/returns/detail/%d", id)
+		}
+	}
 	return wmsDto.MovementFeedItem{
 		Type:        wmsDto.MovementFeedSalesReturn,
 		OccurredAt:  m.Movement_DateTime,
@@ -316,6 +374,8 @@ func returnFeedItem(m entity.StockMovement) wmsDto.MovementFeedItem {
 		ProductName: name,
 		Quantity:    &qty,
 		ActorName:   actor,
+		LinkPath:    linkPath,
+		LinkState:   movementOriginState,
 		Title:       fmt.Sprintf("รับคืนสินค้าจากลูกค้า: %s", name),
 		Detail:      m.Note,
 	}
@@ -353,6 +413,8 @@ func customerClaimFeedItem(item entity.CustomerClaimItem) wmsDto.MovementFeedIte
 		ProductName: name,
 		Quantity:    &qty,
 		ActorName:   actor,
+		LinkPath:    fmt.Sprintf("/owner/claims/detail/%d", item.CustomerClaimID),
+		LinkState:   movementOriginState,
 		Title:       fmt.Sprintf("แจ้งเคลมสินค้า: %s", name),
 		Detail:      detail,
 	}
@@ -384,8 +446,10 @@ func preOrderFeedItem(item entity.PreOrderItem) wmsDto.MovementFeedItem {
 		ProductName:  name,
 		Quantity:     &qty,
 		SupplierName: supplier,
-		Title:        fmt.Sprintf("สร้างพรีออเดอร์: %s", name),
-		Detail:       detail,
+		// หน้ารายละเอียดใบสั่งจองนี้สร้างมาเฉพาะสำหรับฟีดนี้โดยเฉพาะ (มีเกล็ดขนมปังของตัวเองแล้ว) ไม่ต้องใช้ movementOriginState
+		LinkPath: fmt.Sprintf("/owner/stock/stock-movement/pre-orders/%d", item.PreOrderID),
+		Title:    fmt.Sprintf("สร้างพรีออเดอร์: %s", name),
+		Detail:   detail,
 	}
 }
 
