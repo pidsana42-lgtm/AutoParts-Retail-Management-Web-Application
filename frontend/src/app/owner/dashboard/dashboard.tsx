@@ -37,6 +37,7 @@ const PageFilter = [
 ];
 
 const PAGE_SIZE = 10;
+const STOCK_ALERT_PAGE_SIZE = 5;
 const DASHBOARD_POLL_INTERVAL_MS = 15_000;
 
 const fmt = (n: number) =>
@@ -79,6 +80,7 @@ const MainDashboard: React.FC = () => {
   // State ส่วน Stock Alert Card (แผงขวา)
   const [stockAlerts, setStockAlerts] = useState<StockAlertItem[]>([]);
   const [stockAlertLoading, setStockAlertLoading] = useState(false);
+  const [stockAlertPage, setStockAlertPage] = useState(1);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [revenueTrend, setRevenueTrend] = useState<number | null>(null);
   const [orderTrend, setOrderTrend] = useState<number | null>(null);
@@ -318,7 +320,11 @@ const MainDashboard: React.FC = () => {
       try {
         const res = await dashboardService.getStockAlerts();
         const unresolved = (res.data ?? []).filter(a => a.is_resolved === 'false');
-        if (!cancelled) setStockAlerts(unresolved);
+        if (!cancelled) {
+          setStockAlerts(unresolved);
+          const lastPage = Math.max(1, Math.ceil(unresolved.length / STOCK_ALERT_PAGE_SIZE));
+          setStockAlertPage((currentPage) => Math.min(currentPage, lastPage));
+        }
       } catch {
         if (!cancelled && showLoading) setStockAlerts([]);
       } finally {
@@ -381,6 +387,19 @@ const MainDashboard: React.FC = () => {
   }, [buildQuery, recentSalePage]);
 
   const recentSaleTotalPages = Math.max(1, Math.ceil(recentSaleTotal / PAGE_SIZE));
+  const stockAlertTotalPages = Math.max(1, Math.ceil(stockAlerts.length / STOCK_ALERT_PAGE_SIZE));
+  const visibleStockAlerts = stockAlerts.slice(
+    (stockAlertPage - 1) * STOCK_ALERT_PAGE_SIZE,
+    stockAlertPage * STOCK_ALERT_PAGE_SIZE,
+  );
+
+  const openStockAlertProduct = (productID: number | null) => {
+    if (!productID) return;
+    const productPath = basePath === '/employee'
+      ? `${basePath}/wms/stock-data/${productID}`
+      : `${basePath}/stock/${productID}`;
+    navigate(productPath, { state: { from: 'dashboard' } });
+  };
 
   const handleFilterClick = (value: string) => {
     setSelectedFilter(value);
@@ -859,13 +878,20 @@ const MainDashboard: React.FC = () => {
                   <div>ไม่มีสินค้าใกล้หมดสต๊อก</div>
                 </div>
             ) : (
-              stockAlerts.map((item) => {
+              visibleStockAlerts.map((item) => {
                 const hasPO = Boolean(item.has_po);
                 return (
-                  <div
+                  <button
+                    type='button'
                     key={item.id}
+                    onClick={() => openStockAlertProduct(item.product_id)}
+                    disabled={!item.product_id}
+                    title={item.product_id ? `ดูรายละเอียด ${item.product_name ?? 'สินค้า'}` : 'ไม่พบรหัสสินค้า'}
                     className={cn(
-                      'rounded-sm px-4 py-3 flex items-center justify-between',
+                      'w-full rounded-sm px-4 py-3 flex items-center justify-between text-left transition',
+                      item.product_id
+                        ? 'cursor-pointer hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500'
+                        : 'cursor-not-allowed opacity-70',
                       hasPO
                         ? 'bg-amber-50 border-l-4 border-amber-400'
                         : 'bg-red-50 border-l-4 border-red-500'
@@ -889,9 +915,38 @@ const MainDashboard: React.FC = () => {
                       <Heading level='p' className='m-0 text-gray-500 text-xs'>เหลืออีก</Heading>
                       <Heading level='h3' className={cn('m-0', hasPO ? 'text-amber-500' : 'text-red-600')}>{item.quantity_at_alert}</Heading>
                     </div>
-                  </div>
+                  </button>
                 );
               })
+            )}
+
+            {stockAlertTotalPages > 1 && (
+              <div className='px-2 py-2 flex items-center justify-between border-t border-gray-100 text-xs text-gray-500'>
+                <span>
+                  แสดง {(stockAlertPage - 1) * STOCK_ALERT_PAGE_SIZE + 1}–{Math.min(stockAlertPage * STOCK_ALERT_PAGE_SIZE, stockAlerts.length)} จาก {stockAlerts.length}
+                </span>
+                <div className='flex items-center gap-1'>
+                  <button
+                    type='button'
+                    aria-label='หน้าก่อนหน้า'
+                    disabled={stockAlertPage === 1}
+                    onClick={() => setStockAlertPage((page) => Math.max(1, page - 1))}
+                    className='p-1.5 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer'
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <span className='min-w-14 text-center'>หน้า {stockAlertPage}/{stockAlertTotalPages}</span>
+                  <button
+                    type='button'
+                    aria-label='หน้าถัดไป'
+                    disabled={stockAlertPage === stockAlertTotalPages}
+                    onClick={() => setStockAlertPage((page) => Math.min(stockAlertTotalPages, page + 1))}
+                    className='p-1.5 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer'
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
             )}
 
             {stockAlerts.length > 0 && (
