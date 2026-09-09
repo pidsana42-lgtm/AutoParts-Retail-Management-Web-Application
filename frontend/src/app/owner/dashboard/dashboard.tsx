@@ -319,7 +319,9 @@ const MainDashboard: React.FC = () => {
       if (showLoading) setStockAlertLoading(true);
       try {
         const res = await dashboardService.getStockAlerts();
-        const unresolved = (res.data ?? []).filter(a => a.is_resolved === 'false');
+        const unresolved = (res.data ?? [])
+          .filter((alert) => alert.is_resolved === 'false')
+          .sort((first, second) => Number(Boolean(first.has_po)) - Number(Boolean(second.has_po)));
         if (!cancelled) {
           setStockAlerts(unresolved);
           const lastPage = Math.max(1, Math.ceil(unresolved.length / STOCK_ALERT_PAGE_SIZE));
