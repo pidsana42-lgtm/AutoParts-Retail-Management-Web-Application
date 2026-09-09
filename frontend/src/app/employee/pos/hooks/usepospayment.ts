@@ -516,7 +516,9 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         unit_price: item.unit_price,
         discount_type: item.discount_type,
         discount_value: item.discount_value,
-        allocated_bill_discount: allocatedBillDiscount, 
+        // ถ้าตอนสแกน/ค้นหาตรงกับบาร์โค้ดของบริษัทไหนเจาะจงไว้ ส่งต่อไปให้ backend หักคงเหลือต่อบริษัทให้ตรงเจ้าจริง
+        supplier_id: item.supplier_id,
+        allocated_bill_discount: allocatedBillDiscount,
         net_subtotal: Math.round((subtotalAfterLineDiscount - allocatedBillDiscount) * 100) / 100,
       };
     });

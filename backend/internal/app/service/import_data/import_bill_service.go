@@ -402,7 +402,6 @@ func (s *importBillService) UpdateProduct(id uint, input importDataDTO.UpdateImp
 		Product_Code:   input.ProductCode,
 		Part_Number:    input.PartNumber,
 		Product_Name:   input.ProductName,
-		Barcode:        input.Barcode,
 		Quantity:       input.Quantity,
 		Limit_Quantity: input.LimitQuantity,
 		Cost_price:     input.CostPrice,

@@ -32,7 +32,6 @@ export default function AddProductPage() {
     product_code: "",
     part_number: "",
     product_name: "",
-    barcode: "",
     quantity: 0,
     limit_quantity: 0,
     sale_price: 0,
@@ -105,7 +104,6 @@ export default function AddProductPage() {
       const payload = {
         ...formData,
         product_code: "",
-        barcode: "",
         quantity: Number(formData.quantity),
         limit_quantity: Number(formData.limit_quantity),
         sale_price: Number(formData.sale_price),

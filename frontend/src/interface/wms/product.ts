@@ -3,7 +3,6 @@ export interface StockItem {
   ProductCode: string;
   Name: string;
   PartNo: string;
-  Barcode: string;
   Models?: { id: number; model_name: string; brand_name: string }[];
   Category: string; // ดึงมาจากฟิลด์ Category หลังบ้าน
   SubCategory?: string;

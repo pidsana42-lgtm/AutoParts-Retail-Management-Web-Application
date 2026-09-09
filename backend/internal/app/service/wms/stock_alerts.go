@@ -1,8 +1,8 @@
 package wms
 
 import (
-	"backend/internal/app/entity"
 	wmsDto "backend/internal/app/dto/wms"
+	"backend/internal/app/entity"
 	wmsRepo "backend/internal/app/repository/wms"
 )
 
@@ -11,6 +11,9 @@ type StockAlertService interface {
 	GetByID(id uint) (*wmsDto.StockAlertResponseDTO, error)
 	List(isResolved string) ([]wmsDto.StockAlertResponseDTO, error)
 	UpdateResolved(id uint, req *wmsDto.StockAlertUpdateDTO) error
+	// CheckAndCreateAlerts: หาสินค้าที่คงเหลือ <= จุดสั่งซื้อที่ตั้งไว้ แล้วสร้าง StockAlert ให้อัตโนมัติเฉพาะตัวที่ยัง
+	// ไม่เคยมี alert ค้างอยู่ (กันสร้างซ้ำทุกรอบที่ cron รัน) — คืนเฉพาะ alert ที่สร้างใหม่รอบนี้ ให้ cron เอาไปยิงแจ้งเตือนต่อ
+	CheckAndCreateAlerts() ([]wmsDto.StockAlertResponseDTO, error)
 }
 
 type stockAlertService struct {
@@ -84,6 +87,49 @@ func (s *stockAlertService) List(isResolved string) ([]wmsDto.StockAlertResponse
 		result[i] = *resp
 	}
 	return result, nil
+}
+
+func (s *stockAlertService) CheckAndCreateAlerts() ([]wmsDto.StockAlertResponseDTO, error) {
+	products, err := s.repo.ListLowStockProducts()
+	if err != nil {
+		return nil, err
+	}
+	if len(products) == 0 {
+		return nil, nil
+	}
+
+	alreadyAlerted, err := s.repo.ListUnresolvedAlertProductIDs()
+	if err != nil {
+		return nil, err
+	}
+
+	var created []wmsDto.StockAlertResponseDTO
+	for _, p := range products {
+		if alreadyAlerted[p.ID] {
+			continue
+		}
+
+		alertType := "LOW_STOCK"
+		if p.Quantity <= 0 {
+			alertType = "OUT_OF_STOCK"
+		}
+
+		sa := entity.StockAlert{
+			Alert_type:        alertType,
+			Quantity_At_Alert: p.Quantity,
+			Limit_Quantity:    p.Limit_Quantity,
+			Is_Resolved:       "false",
+			ProductID:         &p.ID,
+		}
+		if err := s.repo.Create(&sa); err != nil {
+			return created, err
+		}
+
+		product := p
+		sa.Product = &product
+		created = append(created, *toStockAlertResponse(&sa))
+	}
+	return created, nil
 }
 
 func (s *stockAlertService) UpdateResolved(id uint, req *wmsDto.StockAlertUpdateDTO) error {

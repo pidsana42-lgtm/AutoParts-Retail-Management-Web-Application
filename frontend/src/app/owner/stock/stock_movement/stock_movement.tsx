@@ -17,7 +17,6 @@ import {
   ChevronsRight,
   PackageSearch,
   CalendarClock,
-  History,
   type LucideIcon,
 } from "lucide-react";
 
@@ -26,7 +25,7 @@ import Text from "../../../../components/elements/text";
 import { Card } from "../../../../components/elements/card";
 import Badge from "../../../../components/elements/badge";
 import Input from "../../../../components/elements/input";
-import Button from "../../../../components/elements/button";
+import DateRangePicker from "../../../../components/elements/date_range_picker";
 import { ToastProvider, useToast } from "../../../../components/elements/toast";
 import { cn } from "../../../../utils/component";
 import {
@@ -63,6 +62,40 @@ const TYPE_ORDER: MovementFeedType[] = [
   "STOCK_ADJUSTED",
   "LOW_STOCK",
 ];
+
+// พรีเซ็ตช่วงเวลาด่วน (แบบเดียวกับแถบตัวกรองในหน้าแดชบอร์ด) — ใช้ควบคู่กับ DateRangePicker สำหรับเลือกช่วงเอง
+const PERIOD_PRESETS: { label: string; value: string }[] = [
+  { label: "สัปดาห์นี้", value: "weekly" },
+  { label: "เดือนนี้", value: "monthly" },
+  { label: "ไตรมาสนี้", value: "quarterly" },
+  { label: "ปีนี้", value: "yearly" },
+];
+
+// คำนวณช่วงวันที่ของพรีเซ็ตฝั่งหน้าเว็บเองตรงๆ (ต่างจากหน้าแดชบอร์ดที่ส่งเป็น query ให้ backend คำนวณ) เพราะฟีดนี้โหลด
+// ข้อมูลมาไว้ในเครื่องทั้งหมดแล้ว กรองในนี้ได้เลยไม่ต้องยิง request ใหม่ — สัปดาห์เริ่มวันจันทร์ตามธรรมเนียมไทย
+function getPeriodRange(period: string): { start: Date; end: Date } | null {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  switch (period) {
+    case "weekly": {
+      const daysSinceMonday = (now.getDay() + 6) % 7;
+      const start = new Date(startOfToday);
+      start.setDate(start.getDate() - daysSinceMonday);
+      return { start, end: now };
+    }
+    case "monthly":
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
+    case "quarterly": {
+      const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+      return { start: new Date(now.getFullYear(), quarterStartMonth, 1), end: now };
+    }
+    case "yearly":
+      return { start: new Date(now.getFullYear(), 0, 1), end: now };
+    default:
+      return null;
+  }
+}
 
 const TYPE_META: Record<
   MovementFeedType,
@@ -142,11 +175,12 @@ function StockMovementContent() {
 
   // Filters
   const [search, setSearch] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState<MovementFeedType | "">("");
-  // ค่าเริ่มต้นโชว์แค่ 7 วันล่าสุด (โหลดเร็ว/ดูง่าย) — กด "ตรวจสอบการเคลื่อนไหวที่เกิน 7 วัน" เพื่อดูย้อนหลังทั้งหมด
-  // หรือเลือกวันที่จาก dateFilter ตรงๆ ก็ข้ามข้อจำกัด 7 วันนี้ไปเลยทันที ไม่ต้องกดปุ่มก่อน
-  const [showAllHistory, setShowAllHistory] = useState(false);
+  // ตัวกรองช่วงเวลา — พรีเซ็ตด่วน (selectedPeriod) กับช่วงวันที่กำหนดเอง (startDate/endDate) แยกกันคนละอันเสมอ
+  // เลือกอย่างใดอย่างหนึ่งแล้วอีกอันจะถูกล้างทันที (ดู handlePeriodClick/handleStartDateChange/handleEndDateChange)
+  const [selectedPeriod, setSelectedPeriod] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -179,17 +213,28 @@ function StockMovementContent() {
   }, [items]);
 
   const filtered = useMemo(() => {
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-
     return items.filter((item) => {
       if (typeFilter && item.type !== typeFilter) return false;
 
-      // แบ่งเป็น 2 มุมมองที่ไม่ทับกัน: ค่าเริ่มต้นโชว์แค่ "ใน 7 วันล่าสุด", กดปุ่มแล้วโชว์แค่ "เกิน 7 วัน" (ไม่เอาของที่เพิ่งเห็นไปแล้วมาซ้ำ)
-      // ยกเว้นเลือกวันที่เจาะจงเองจาก dateFilter ตรงๆ ถือว่าตั้งใจค้นหาวันนั้นแบบข้ามเงื่อนไข 7 วันไปเลย
-      if (!dateFilter) {
-        const occurredAt = new Date(item.occurred_at).getTime();
-        const isOlderThan7Days = occurredAt < sevenDaysAgo;
-        if (showAllHistory ? !isOlderThan7Days : isOlderThan7Days) return false;
+      if (startDate || endDate) {
+        // ช่วงวันที่กำหนดเองมาก่อนพรีเซ็ตเสมอ (เลือกสองอย่างพร้อมกันไม่ได้อยู่แล้ว แต่กันไว้ให้ชัดเจน)
+        const occurredAt = new Date(item.occurred_at);
+        if (startDate) {
+          const s = new Date(startDate);
+          s.setHours(0, 0, 0, 0);
+          if (occurredAt < s) return false;
+        }
+        if (endDate) {
+          const e = new Date(endDate);
+          e.setHours(23, 59, 59, 999);
+          if (occurredAt > e) return false;
+        }
+      } else if (selectedPeriod) {
+        const range = getPeriodRange(selectedPeriod);
+        if (range) {
+          const occurredAt = new Date(item.occurred_at);
+          if (occurredAt < range.start || occurredAt > range.end) return false;
+        }
       }
 
       if (search) {
@@ -202,21 +247,32 @@ function StockMovementContent() {
         if (!matches) return false;
       }
 
-      if (dateFilter) {
-        // เทียบวันที่ตามเวลาท้องถิ่น ห้ามใช้ toISOString() เพราะแปลงเป็น UTC ก่อน จะเพี้ยนไปวันก่อนหน้าได้
-        const d = new Date(item.occurred_at);
-        const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        if (localDate !== dateFilter) return false;
-      }
-
       return true;
     });
-  }, [items, typeFilter, search, dateFilter, showAllHistory]);
+  }, [items, typeFilter, search, startDate, endDate, selectedPeriod]);
 
   // กลับไปหน้า 1 ทุกครั้งที่ตัวกรองเปลี่ยน กันกรณีหน้าปัจจุบันเกินจำนวนหน้าที่กรองได้แล้ว
   useEffect(() => {
     setPage(1);
-  }, [search, dateFilter, typeFilter, showAllHistory, itemsPerPage]);
+  }, [search, startDate, endDate, selectedPeriod, typeFilter, itemsPerPage]);
+
+  // กดพรีเซ็ตช่วงเวลา -> ล้างช่วงวันที่กำหนดเองทิ้ง (สองอย่างนี้แทนกัน เลือกได้ทีละอย่าง)
+  const handlePeriodClick = (value: string) => {
+    setSelectedPeriod(value);
+    setStartDate("");
+    setEndDate("");
+  };
+
+  // เลือกช่วงวันที่กำหนดเอง -> ล้างพรีเซ็ตทิ้ง
+  const handleStartDateChange = (d: string) => {
+    setStartDate(d);
+    setSelectedPeriod("");
+  };
+
+  const handleEndDateChange = (d: string) => {
+    setEndDate(d);
+    setSelectedPeriod("");
+  };
 
   const totalItems = filtered.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
@@ -225,14 +281,12 @@ function StockMovementContent() {
     [filtered, page, itemsPerPage]
   );
 
+  // backend คำนวณ link_path ให้เสร็จแล้วสำหรับทุกเหตุการณ์ที่มีหน้ารายละเอียดให้กด (รู้ id เอกสารหลักจริงอยู่แล้ว
+  // ไม่ใช่แค่ ref_id ที่บางเหตุการณ์เป็นแค่ id รายการย่อย) ฝั่งนี้แค่ navigate ไปตรงๆ ไม่ต้องรู้จัก route ของแต่ละ
+  // โดเมนเองอีกต่อไป — ไม่มี link_path แปลว่าเหตุการณ์นั้นไม่มีหน้ารายละเอียดให้ดู (เช่นยังไม่รองรับ หรือหา id ไม่เจอ)
   const goToRef = (item: MovementFeedItem) => {
-    if (item.type === "CHECK_FLAGGED") {
-      // ส่ง state บอกที่มาไปด้วย เพื่อให้หน้ารายละเอียดตารางเช็คสต็อกปรับเกล็ดขนมปังกลับมาที่หน้านี้แทน "ตรวจสอบสินค้า"
-      navigate(`/owner/stock/stock-check/${item.ref_id}`, { state: { from: "movement" } });
-    } else if (item.product_id) {
-      // ส่ง state บอกที่มาไปด้วย เพื่อให้หน้ารายละเอียดสินค้าปรับเกล็ดขนมปังกลับมาที่หน้านี้แทน "คลังสินค้า"
-      navigate(`/owner/stock/${item.product_id}`, { state: { from: "movement" } });
-    }
+    if (!item.link_path) return;
+    navigate(item.link_path, item.link_state ? { state: item.link_state } : undefined);
   };
 
   const formatDateTime = (iso: string) => {
@@ -269,59 +323,44 @@ function StockMovementContent() {
         </Text>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <Card className="flex h-24 flex-col justify-center border-l-[5px] border-l-slate-800 p-5">
-          <p className="text-sm font-medium text-[#6B7280]">ทั้งหมด</p>
-          <p className="mt-1 text-2xl font-bold text-gray-900">{counts.ALL}</p>
-        </Card>
-        {TYPE_ORDER.map((t) => {
-          const meta = TYPE_META[t];
-          return (
-            <Card key={t} className={cn("flex h-24 flex-col justify-center border-l-[5px] p-5", meta.border)}>
-              <p className="text-sm font-medium text-[#6B7280]">{meta.label}</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900">{counts[t] || 0}</p>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Type filter chips */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* การ์ดสรุป + ตัวกรอง รวมเป็นชุดเดียว — กดการ์ดไหนก็กรองตามหมวดนั้นได้เลย ไม่ต้องมีแถบตัวกรองแยกที่โชว์ตัวเลขซ้ำอีกชุด */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <button
+          type="button"
           onClick={() => setTypeFilter("")}
           className={cn(
-            "cursor-pointer rounded-sm border px-3 py-2 text-xs font-semibold transition-colors",
-            typeFilter === ""
-              ? "border-[#B70011]/30 bg-white text-[#B70011] shadow-sm"
-              : "border-transparent bg-[#F6F3F2] text-slate-600 hover:text-slate-900"
+            "flex h-24 cursor-pointer flex-col justify-center rounded-none border-l-[5px] border-l-slate-800 p-5 text-left shadow-sm transition-colors",
+            typeFilter === "" ? "bg-slate-100" : "bg-white hover:bg-gray-50"
           )}
         >
-          ทั้งหมด ({counts.ALL})
+          <p className="text-sm font-medium text-[#6B7280]">ทั้งหมด</p>
+          <p className="mt-1 text-2xl font-bold text-gray-900">{counts.ALL}</p>
         </button>
         {TYPE_ORDER.map((t) => {
           const meta = TYPE_META[t];
-          const Icon = meta.icon;
           const isActive = typeFilter === t;
+          // สีพื้นตอนเลือกอยู่ ดึงมาจากสีจุด (dot) ของหมวดนั้นตรงๆ (แค่เปลี่ยนความเข้มจาก 500/600 เป็น 50)
+          // ไม่ต้องเพิ่มฟิลด์สีใหม่ซ้ำซ้อนกับที่มีอยู่แล้วใน TYPE_META
+          const activeBg = meta.dot.replace(/-(500|600)$/, "-50");
           return (
             <button
+              type="button"
               key={t}
               onClick={() => setTypeFilter(t)}
               className={cn(
-                "flex cursor-pointer items-center gap-1.5 rounded-sm border px-3 py-2 text-xs font-semibold transition-colors",
-                isActive
-                  ? "border-[#B70011]/30 bg-white text-[#B70011] shadow-sm"
-                  : "border-transparent bg-[#F6F3F2] text-slate-600 hover:text-slate-900"
+                "flex h-24 cursor-pointer flex-col justify-center rounded-none border-l-[5px] p-5 text-left shadow-sm transition-colors",
+                meta.border,
+                isActive ? activeBg : "bg-white hover:bg-gray-50"
               )}
             >
-              <Icon className="h-3.5 w-3.5" />
-              {meta.label} ({counts[t] || 0})
+              <p className="text-sm font-medium text-[#6B7280]">{meta.label}</p>
+              <p className="mt-1 text-2xl font-bold text-gray-900">{counts[t] || 0}</p>
             </button>
           );
         })}
       </div>
 
-      {/* Filters bar — รวมปุ่มสลับดู "7 วันล่าสุด" / "เกิน 7 วัน" ไว้ในแถบเดียวกับช่องค้นหา */}
+      {/* Filters bar */}
       <Card noPadding>
         <div className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center">
           <div className="flex-1 min-w-0">
@@ -332,35 +371,38 @@ function StockMovementContent() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-            <div className="w-full sm:w-48">
-              <Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full lg:w-auto">
+            <div className="bg-[#F6F3F2] flex items-center p-1">
+              {PERIOD_PRESETS.map((preset) => (
+                <button
+                  key={preset.value}
+                  type="button"
+                  onClick={() => handlePeriodClick(preset.value)}
+                  className={cn(
+                    "w-20 py-2.5 text-sm transition-colors cursor-pointer",
+                    selectedPeriod === preset.value
+                      ? "bg-white text-[#B70011] shadow-sm font-medium"
+                      : "text-gray-500 hover:text-[#B70011]"
+                  )}
+                >
+                  {preset.label}
+                </button>
+              ))}
+              <DateRangePicker
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={handleStartDateChange}
+                onEndDateChange={handleEndDateChange}
+              />
             </div>
-            {/* ค่าเริ่มต้นโชว์แค่ 7 วันล่าสุด กดปุ่มนี้เพื่อสลับไปดูเฉพาะที่เกิน 7 วันแทน (ไม่ทับซ้อนกัน) */}
-            <Button
-              type="button"
-              variant={showAllHistory ? "solid-red" : "outline"}
-              size="sm"
-              onClick={() => {
-                if (showAllHistory) {
-                  setShowAllHistory(false);
-                  setDateFilter("");
-                } else {
-                  setShowAllHistory(true);
-                }
-              }}
-              className="w-full whitespace-nowrap sm:w-auto"
-            >
-              <History className="h-3.5 w-3.5" />
-              {showAllHistory ? "กลับไปดู 7 วันล่าสุด" : "ตรวจสอบการเคลื่อนไหวที่เกิน 7 วัน"}
-            </Button>
-            {(search || dateFilter || typeFilter || showAllHistory) && (
+            {(search || startDate || endDate || typeFilter || selectedPeriod) && (
               <button
                 onClick={() => {
                   setSearch("");
-                  setDateFilter("");
+                  setStartDate("");
+                  setEndDate("");
                   setTypeFilter("");
-                  setShowAllHistory(false);
+                  setSelectedPeriod("");
                 }}
                 className="text-xs text-[#B70011] font-semibold px-2 hover:underline whitespace-nowrap self-center"
               >
@@ -383,7 +425,7 @@ function StockMovementContent() {
             {pagedItems.map((item, idx) => {
               const meta = TYPE_META[item.type];
               const Icon = meta.icon;
-              const clickable = item.type === "CHECK_FLAGGED" || !!item.product_id;
+              const clickable = !!item.link_path;
               return (
                 <div
                   key={`${item.type}-${item.ref_id}-${idx}`}
