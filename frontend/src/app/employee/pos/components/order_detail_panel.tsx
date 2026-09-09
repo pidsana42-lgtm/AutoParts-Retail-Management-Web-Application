@@ -585,7 +585,7 @@ export default function OrderDetailPanel({
                             className="w-full p-2.5 text-xs font-light bg-[#F6F3F2] border border-[#E51C23] rounded-none focus:outline-none text-[#1C1B1B] placeholder-[#6B7280] resize-none"
                           />
 
-                          <div className="flex gap-3 pt-1">
+                          <div className={cn("flex gap-3 pt-1", variant === "page" && "justify-end")}>
                             {/*  ปุ่มไดนามิก: ถ้าเป็น Owner จะอนุมัติทันที / ถ้าเป็น Employee จะส่งคำขอ */}
                             <Button
                               type="button"
@@ -596,7 +596,10 @@ export default function OrderDetailPanel({
                                   : handleRequestCancel
                               }
                               disabled={isCancelling}
-                              className="flex-1 text-sm h-11 font-normal"
+                              className={cn(
+                                "font-normal",
+                                variant === "page" ? "text-xs h-9 px-4" : "flex-1 text-sm h-11"
+                              )}
                             >
                               {isCancelling
                                 ? "กำลังดำเนินการ..."
@@ -609,7 +612,10 @@ export default function OrderDetailPanel({
                               type="button"
                               variant="outline-cancel"
                               onClick={() => onClose()}
-                              className="text-sm px-6 h-11 border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal"
+                              className={cn(
+                                "border border-gray-200 text-[#5F5E5E] hover:bg-[#F6F3F2] font-normal",
+                                variant === "page" ? "text-xs h-9 px-4" : "text-sm px-6 h-11"
+                              )}
                             >
                               ยกเลิก
                             </Button>
