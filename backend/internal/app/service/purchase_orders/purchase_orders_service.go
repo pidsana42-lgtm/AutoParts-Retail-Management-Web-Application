@@ -1,21 +1,21 @@
 package purchaseorders
 
 import (
-	poDto 		"backend/internal/app/dto/purchase_orders"
-	poEnum 		"backend/internal/app/enum"
-	poRepo 		"backend/internal/app/repository/purchase_orders"
-	poEntity 	"backend/internal/app/entity"
+	poDto "backend/internal/app/dto/purchase_orders"
+	poEntity "backend/internal/app/entity"
+	poEnum "backend/internal/app/enum"
 	preOrderRepo "backend/internal/app/repository/pre_oder"
-	wmsRepo 	"backend/internal/app/repository/wms"
+	poRepo "backend/internal/app/repository/purchase_orders"
+	wmsRepo "backend/internal/app/repository/wms"
 	svcNotification "backend/internal/app/service/notification"
-	"gorm.io/gorm"
-	"strings"
 	"context"
 	"errors"
-	"log"
-	"time"
 	"fmt"
+	"gorm.io/gorm"
+	"log"
 	"math"
+	"strings"
+	"time"
 )
 
 // PurchaseOrderService คือพิมพ์เขียวบอกว่า Service นี้ทำอะไรได้บ้าง (ให้ Controller เรียกใช้)
@@ -26,12 +26,12 @@ type PurchaseOrderService interface {
 	ListPOs(ctx context.Context, query poDto.ListPOQuery) (*poDto.ListPOResponse, error)
 	GetAvailableYears(ctx context.Context) ([]int, error)
 	GetPOSummary(ctx context.Context, role string) (*poDto.POSummaryResponse, error)
-	GeneratePOPDF(ctx context.Context, id uint, includeCode bool) ([]byte, error)
+	GeneratePOPDF(ctx context.Context, id uint, includeCode bool, printedBy uint) ([]byte, error)
 	Delete(ctx context.Context, id uint) error
 	SearchProducts(ctx context.Context, query poDto.ProductSearchQuery) ([]poDto.ProductSearchResponse, error)
 	UpdatePO(ctx context.Context, id uint, req *poDto.UpdatePurchaseOrderRequest, updatedBy uint) (*poEntity.PO, error)
 	GetSupplierDeliveryEstimate(ctx context.Context, supplierID int) (*poDto.POAnalyticsResponse, error)
-	GetMonthlyPOCount(ctx context.Context) (int64, error)
+	GetMonthlyPOCount(ctx context.Context) (*poDto.POMonthlyCountResponse, error)
 	RestorePO(ctx context.Context, poID uint, userID uint) error
 	SendStaleDraftReminders(ctx context.Context) error
 	PurgeDeletedPOs(ctx context.Context, cutoff time.Time) (int64, error)
@@ -39,25 +39,25 @@ type PurchaseOrderService interface {
 
 // purchaseOrderService ตัว Struct หลักที่จะทำงานจริง (Implement Interface ด้านบน)
 type purchaseOrderService struct {
-	poRepository    poRepo.PurchaseOrderRepository
-	productRepo     poRepo.ProductRepository
-	inventoryRepo   poRepo.InventoryRepository
-	supplierRepo    poRepo.SupplierRepository
-	userRepo        poRepo.UserRepository
-	preOrderRepo    preOrderRepo.PreOrderRepository
-	stockAlertRepo  wmsRepo.StockAlertRepository
-	notification    svcNotification.NotificationService
+	poRepository   poRepo.PurchaseOrderRepository
+	productRepo    poRepo.ProductRepository
+	inventoryRepo  poRepo.InventoryRepository
+	supplierRepo   poRepo.SupplierRepository
+	userRepo       poRepo.UserRepository
+	preOrderRepo   preOrderRepo.PreOrderRepository
+	stockAlertRepo wmsRepo.StockAlertRepository
+	notification   svcNotification.NotificationService
 }
 
 // NewPurchaseOrderService ฟังก์ชัน Constructor สำหรับทำ DI
 func NewPOService(
-	poRepo          poRepo.PurchaseOrderRepository,
-	productRepo     poRepo.ProductRepository,
-	inventoryRepo   poRepo.InventoryRepository,
-	supplierRepo    poRepo.SupplierRepository,
-	preOrderRepo    preOrderRepo.PreOrderRepository,
-	userRepo        poRepo.UserRepository,
-	stockAlertRepo  wmsRepo.StockAlertRepository,
+	poRepo poRepo.PurchaseOrderRepository,
+	productRepo poRepo.ProductRepository,
+	inventoryRepo poRepo.InventoryRepository,
+	supplierRepo poRepo.SupplierRepository,
+	preOrderRepo preOrderRepo.PreOrderRepository,
+	userRepo poRepo.UserRepository,
+	stockAlertRepo wmsRepo.StockAlertRepository,
 	notificationService svcNotification.NotificationService,
 ) PurchaseOrderService {
 	return &purchaseOrderService{
@@ -100,7 +100,7 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 	}
 
 	hasPurchase := false
-    hasPreOrder := false
+	hasPreOrder := false
 
 	var totalAmount float64 = 0
 	var poItems []poEntity.POItems
@@ -121,11 +121,11 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 			unitName = product.Unit.Unit_Name
 		}
 
-        if item.PreOrderItemID != nil {
-            hasPreOrder = true
-        } else {
-            hasPurchase = true
-        }
+		if item.PreOrderItemID != nil {
+			hasPreOrder = true
+		} else {
+			hasPurchase = true
+		}
 
 		subTotal := float64(item.Quantity) * item.UnitPrice
 		totalAmount += subTotal
@@ -144,18 +144,18 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 		}
 		poItems = append(poItems, poItem)
 	}
-	
+
 	var poTypeID uint = 1 // Default เป็น สั่งซื้อปกติ
-    if hasPurchase && hasPreOrder {
-        poTypeID = 3 // ผสม
-    } else if hasPreOrder && !hasPurchase {
-        poTypeID = 2 // พรีออเดอร์
-    }
+	if hasPurchase && hasPreOrder {
+		poTypeID = 3 // ผสม
+	} else if hasPreOrder && !hasPurchase {
+		poTypeID = 2 // พรีออเดอร์
+	}
 
 	poData := &poEntity.PO{
 		SupplierID:    req.SupplierID,
-		PO_type_id:   poTypeID,
-		Created_by:   creatorID,
+		PO_type_id:    poTypeID,
+		Created_by:    creatorID,
 		LastUpdatedBy: &creatorID,
 		Status:        finalStatus,
 		Notes:         req.Notes,
@@ -202,7 +202,7 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 	}
 
 	var poItemResponses []poDto.POItemResponse
-	for _, item := range poData.PO_Items {   // items ยังวนจาก poData เหมือนเดิม ไม่เปลี่ยน
+	for _, item := range poData.PO_Items { // items ยังวนจาก poData เหมือนเดิม ไม่เปลี่ยน
 		var notesStr string
 		if item.Notes != nil {
 			notesStr = *item.Notes
@@ -261,7 +261,7 @@ func (s *purchaseOrderService) GetPOByID(ctx context.Context, id uint) (*poDto.P
 
 	var itemResponses []poDto.POItemResponse
 	for _, item := range po.PO_Items {
-		var itemNotesStr string  // ← เปลี่ยนชื่อกันสับสนกับของ PO
+		var itemNotesStr string // ← เปลี่ยนชื่อกันสับสนกับของ PO
 		if item.Notes != nil {
 			itemNotesStr = *item.Notes
 		}
@@ -280,7 +280,7 @@ func (s *purchaseOrderService) GetPOByID(ctx context.Context, id uint) (*poDto.P
 			Unit:                      item.Unit,
 			UnitPrice:                 item.UnitPrice,
 			SubTotal:                  item.SubTotal,
-			Notes:                     itemNotesStr,  // ← ใช้ตัวที่ rename แล้ว
+			Notes:                     itemNotesStr, // ← ใช้ตัวที่ rename แล้ว
 			AlertID:                   item.AlertID,
 			PreOrderItemID:            item.PreOrderItemID,
 			OrderType:                 orderType,
@@ -298,19 +298,19 @@ func (s *purchaseOrderService) GetPOByID(ctx context.Context, id uint) (*poDto.P
 	}
 
 	return &poDto.PurchaseOrderResponse{
-		ID:              po.ID,
-		PONumber:        po.PO_number,
-		SupplierID:      po.SupplierID,
-		SupplierName:    supplierName,
-		POTypeID:        po.PO_type_id,
-		TotalAmount: po.Total_amount,
-		Status:      poEnum.POStatus(po.Status),
-		Notes:       po.Notes,
-		CreatorID:   po.Created_by,
-		CreatorName:     creatorName,
-		CreatedAt:       po.CreatedAt,
-		UpdatedAt:       po.UpdatedAt,
-		POItems:         itemResponses,
+		ID:           po.ID,
+		PONumber:     po.PO_number,
+		SupplierID:   po.SupplierID,
+		SupplierName: supplierName,
+		POTypeID:     po.PO_type_id,
+		TotalAmount:  po.Total_amount,
+		Status:       poEnum.POStatus(po.Status),
+		Notes:        po.Notes,
+		CreatorID:    po.Created_by,
+		CreatorName:  creatorName,
+		CreatedAt:    po.CreatedAt,
+		UpdatedAt:    po.UpdatedAt,
+		POItems:      itemResponses,
 	}, nil
 }
 
@@ -401,14 +401,14 @@ func (s *purchaseOrderService) notifyOwnersOfPendingApproval(ctx context.Context
 }
 
 func (s *purchaseOrderService) ListPOs(ctx context.Context, query poDto.ListPOQuery) (*poDto.ListPOResponse, error) {
-    po, total, err := s.poRepository.FindAll(ctx, query)
-    if err != nil {
-        return nil, err
-    }
+	po, total, err := s.poRepository.FindAll(ctx, query)
+	if err != nil {
+		return nil, err
+	}
 
-    var data []poDto.PurchaseOrderResponse
-    for _, p := range po {
-        var itemResponses []poDto.POItemResponse
+	var data []poDto.PurchaseOrderResponse
+	for _, p := range po {
+		var itemResponses []poDto.POItemResponse
 		for _, item := range p.PO_Items {
 			itemResponses = append(itemResponses, poDto.POItemResponse{
 				ID:                        item.ID,
@@ -456,12 +456,12 @@ func (s *purchaseOrderService) ListPOs(ctx context.Context, query poDto.ListPOQu
 		}
 
 		data = append(data, res)
-    }
+	}
 
-    return &poDto.ListPOResponse{
-        Data:  data,
-        Total: total,
-    }, nil
+	return &poDto.ListPOResponse{
+		Data:  data,
+		Total: total,
+	}, nil
 }
 
 func (s *purchaseOrderService) GetAvailableYears(ctx context.Context) ([]int, error) {
@@ -487,12 +487,12 @@ func (s *purchaseOrderService) GetPOSummary(ctx context.Context, role string) (*
 	return s.poRepository.GetPOSummary(ctx)
 }
 
-func (s *purchaseOrderService) GetMonthlyPOCount(ctx context.Context) (int64, error) {
+func (s *purchaseOrderService) GetMonthlyPOCount(ctx context.Context) (*poDto.POMonthlyCountResponse, error) {
 	return s.poRepository.GetMonthlyPOCount(ctx)
 }
 
 var (
-	ErrPONotFound    = errors.New("purchase order not found")
+	ErrPONotFound     = errors.New("purchase order not found")
 	ErrPOCannotDelete = errors.New("approved PO cannot be deleted")
 	ErrPOCannotUpdate = errors.New("approved PO cannot be updated")
 )
@@ -501,7 +501,7 @@ var (
 func (s *purchaseOrderService) Delete(ctx context.Context, id uint) error {
 	// 1. ดึงข้อมูล
 	po, err := s.poRepository.GetPOByID(ctx, id)
-	
+
 	// ดัก Error ถ้า Repo ส่ง gorm.ErrRecordNotFound มา ให้แปลงเป็น ErrPONotFound
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return ErrPONotFound
@@ -513,7 +513,7 @@ func (s *purchaseOrderService) Delete(ctx context.Context, id uint) error {
 
 	// 2. Business rule
 	if po.Status == poEnum.StatusApproved {
-		return ErrPOCannotDelete // ใช้ตัวแปร Error 
+		return ErrPOCannotDelete // ใช้ตัวแปร Error
 	}
 
 	// 3. delete ดึง ID เตรียมไว้ก่อนลบ
@@ -541,7 +541,7 @@ func (s *purchaseOrderService) SearchProducts(ctx context.Context, query poDto.P
 	return s.inventoryRepo.SearchProducts(ctx, query.SupplierID, query.Keyword)
 }
 
-// Update 
+// Update
 func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto.UpdatePurchaseOrderRequest, updatedBy uint) (*poEntity.PO, error) {
 	po, err := s.poRepository.GetPOByID(ctx, id)
 	if err != nil {
@@ -629,14 +629,14 @@ func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto
 				Quantity:                     float64(it.Quantity),
 				Unit:                         unitName,
 				UnitPrice:                    it.UnitPrice,
-				SubTotal:                     subTotal, 
+				SubTotal:                     subTotal,
 			}
-			
+
 			// เอา ID เดิมใส่กลับถ้ามี
 			if it.ID != nil {
 				item.ID = *it.ID
 			}
-			
+
 			// จัดการ PreOrder / Purchase Type
 			item.PreOrderItemID = it.PreOrderItemID
 			item.AlertID = it.AlertID
@@ -646,7 +646,7 @@ func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto
 			} else {
 				hasPurchase = true
 			}
-			
+
 			items = append(items, item)
 			total += subTotal // รวมยอดเงินของทั้งบิล
 		}
@@ -655,7 +655,7 @@ func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto
 			return nil, err
 		}
 
-		// อัปเดตสถานะใน Database ทีเดียวหลังจาก Sync เสร็จ 
+		// อัปเดตสถานะใน Database ทีเดียวหลังจาก Sync เสร็จ
 		if len(removedPreOrderIDs) > 0 {
 			_ = s.preOrderRepo.UpdateItemsStatusByIDs(ctx, removedPreOrderIDs, "PENDING")
 		}
