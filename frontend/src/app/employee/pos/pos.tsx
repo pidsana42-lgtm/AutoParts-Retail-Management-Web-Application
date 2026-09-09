@@ -16,6 +16,7 @@ import Input from "../../../components/elements/input";
 import { usePosSessionMeta } from "./hooks/usePosSessionMeta";
 import {useCustomerFinancials} from "./hooks/useCustomerFinancials";
 import Heading from "../../../components/elements/heading";
+import ConfirmModal from "../../../components/elements/confirm_modal";
 
 export default function PosPage(): React.JSX.Element {
   // ─── STATE & HOOK SETUP ───
@@ -912,26 +913,61 @@ export default function PosPage(): React.JSX.Element {
         </Button>
 
         {/* ================= PAYMENT MODAL ================= */}
-        {paymentData.isPaymentModalOpen && (
-          <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/60 backdrop-blur-none">
-            <div className="bg-[#FCF9F8] w-full max-w-xl rounded-none shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+        <ConfirmModal
+          isOpen={paymentData.isPaymentModalOpen}
+          onClose={() => paymentData.closePaymentModal()}
+          title={
+            <Text variant="lead" className="text-white mb-0 font-medium">
+              ชำระเงิน ({paymentData.paymentMethodId === 1 ? "เงินสด" : paymentData.paymentMethodId === 2 ? "QR CODE" : "เงินเชื่อ"})
+            </Text>
+          }
+          className="max-w-xl bg-[#FCF9F8]"
+          footer={
+            <div className="flex w-full gap-4">
+              <button 
+                type="button" 
+                disabled={paymentData.isConfirming || paymentData.isSubmitting}
+                onClick={() => paymentData.setIsPaymentModalOpen(false)} 
+                className="px-20 py-3 bg-[#E5E2E1] font-normal text-sm rounded-none hover:bg-[#E7E5E4] transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                ยกเลิก
+              </button>
               
-              {/* Header */}
-              <div className="bg-[#1C1B1B] px-6 py-4 flex justify-between items-center">
-                <Text variant="lead" className="text-white mb-0 font-medium">ชำระเงิน ({paymentData.paymentMethodId === 1 ? "เงินสด" : paymentData.paymentMethodId === 2 ? "QR CODE" : "เงินเชื่อ"})</Text>
-                <button onClick={() => paymentData.closePaymentModal()} className="text-[#9CA3AF] hover:text-white text-xl">✕</button>
-              </div>
-
-              {/* 2. Body */}
-              <div className="p-6 space-y-4">
+              <button 
+                type="button" 
+                disabled={paymentData.isConfirming} 
+                onClick={async () => {
+                  // ทุกช่องทางชำระเงินจะมาจบการขายที่ฟังก์ชันนี้เท่านั้น
+                  await paymentData.handleFinalConfirmAndPrint();
+                }} 
+                className="flex-1 py-3 bg-[#E51C23] text-white font-normal text-sm hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-400 cursor-pointer"
+              >
+                {paymentData.isConfirming ? (
+                  <span>กำลังทำรายการ...</span>
+                ) : (
+                  <>
+                    <Printer className="w-4 h-4" />
+                    ยืนยันและพิมพ์ใบเสร็จ
+                  </>
+                )}
+              </button>
+            </div>
+          }
+        >
+          {/* 2. Body */}
+          <div className="space-y-4">
                 <div className="flex justify-between items-start border-l-3 border-[#5D3F3C] bg-[#F6F3F2] pl-4 py-3 my-4">
                   <div className="text-xs">
                     <p className="text-[#1C1B1B] mb-0.5">ลูกค้า:</p>
-                    <p className="text-[#1C1B1B] font-medium text-sm">{paymentData.customer?.customer_name || "ลูกค้าขาจร"}</p>
+                    <Text variant="xs" className="text-[#1C1B1B] font-medium">
+                      {paymentData.customer?.customer_name || "ลูกค้าขาจร"}
+                    </Text>
                   </div>
                   <div className="text-right text-xs mr-2">
                     <p className="text-[#1C1B1B] mb-0.5">ประเภท:</p>
-                    <p className="text-[#E51C23] ">{paymentData.customer?.customer_type?.type_label || "ทั่วไป"}</p>
+                    <Text variant="xs" className="text-[#E51C23]">
+                      {paymentData.customer?.customer_type?.type_label || "ทั่วไป"}
+                    </Text>
                   </div>
                 </div>
 
@@ -1051,11 +1087,11 @@ export default function PosPage(): React.JSX.Element {
                   <div className="grid grid-cols-2 gap-4">
 
                     {/* ฝั่งซ้าย */}
-                    <div className="flex flex-col items-center justify-center space-y-3">
+                    <div className="flex flex-col items-center justify-between h-full">
                       {/* กรอบรูป QR Code */}
-                      <div className="relative w-52 h-52 p-2 flex items-center justify-center">
+                      <div className="relative w-52 h-52 flex items-center justify-center">
                         {paymentData.isLoadingQR ? (
-                          <div className="flex flex-col items-center text-gray-400">
+                          <div className="flex flex-col items-center justify-center text-gray-400 h-full">
                             <span className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#E51C23] mb-2"></span>
                             <Text variant="xs" className="text-xs">กำลังสร้าง QR Code...</Text>
                           </div>
@@ -1088,49 +1124,77 @@ export default function PosPage(): React.JSX.Element {
                       </div>
 
                       {/* ข้อความใต้ QR Code */}
-                      <div className="text-center space-y-0.5 max-w-55">
-                        <Text variant="small" className="font-medium text-[#1C1B1B] leading-tight block mb-0">เจเจ อะไหล่ยนต์</Text>
-                        <Text variant="xs" className="font-normal text-[#6B7280] leading-tight block mb-0">ชื่อบัญชี เจเจ อะไหล่ยนต์</Text>
+                      <div className="flex-1 flex flex-col items-center justify-end text-center space-y-2.5 w-full max-w-[220px] pt-3">
+                        {/* ชื่อพร้อมเพย์ / ร้านค้า */}
+                        <div className="space-y-1">
+                          <Text variant="xs" className="font-medium text-[#1C1B1B] truncate block">
+                            {paymentData.qrCodeData?.promptPayName || "เจเจ อะไหล่ยนต์"}
+                          </Text>
+                          <Text variant="xs" className="text-[#6B7280] leading-tight block">
+                            พร้อมเพย์รับชำระเงิน
+                          </Text>
+                        </div>
+
+                        {/* ข้อมูลบัญชีธนาคารประกอบ */}
+                        {paymentData.qrCodeData?.bankAccountNumber && (
+                          <div className="w-full pt-2.5 border-t border-gray-100 space-y-1">
+                            <Text variant="xs" className="font-medium text-[#1C1B1B] truncate block">
+                              {paymentData.qrCodeData.bankName || "บัญชีธนาคาร"}
+                            </Text>
+                            <Text variant="xs" className="text-[#6B7280] truncate block">
+                              {paymentData.qrCodeData.bankAccountNumber}
+                            </Text>
+                            {paymentData.qrCodeData.bankAccountName && (
+                              <Text variant="xs" className="text-[#6B7280] truncate block">
+                                {paymentData.qrCodeData.bankAccountName}
+                              </Text>
+                            )}
+                          </div>
+                        )}
+
                         {/* Ref No. ด้านล่างสุด */}
                         {paymentData.qrCodeData?.refNo && (
-                          <span className="text-[10px] text-gray-400 font-mono block truncate">Ref No: {paymentData.qrCodeData.refNo}</span>
+                          <div className="pt-2.5 w-full border-t border-dashed border-gray-100">
+                            <Text variant="xs" className="font-light text-gray-400 block truncate">
+                              Ref: {paymentData.qrCodeData.refNo}
+                            </Text>
+                          </div>
                         )}
                       </div>
                     </div>
 
                     {/* ---------------- ฝั่งขวา ---------------- */}
-                    <div className="flex flex-col justify-between">
-                    
-                      <div className="h-48 flex flex-col justify-end">
-                        
-                        {/* 1. กล่องยอดชำระสุทธิ */}
+                    <div className="flex flex-col justify-between h-full">
+                      {/* 1. กล่องยอดชำระสุทธิ (ขอบล่างตรงกับกรอบ QR Code) */}
+                      <div className="h-52 flex flex-col justify-end pb-5">
                         <div className="border-l-3 border-[#E51C23] p-4 bg-[#F0EDEC]">
-                          <Text variant="xs" className="text-[#5F5E5E]">ยอดชำระสุทธิ</Text>
+                          <Text variant="xs" className="text-[#5F5E5E] mb-0">ยอดชำระสุทธิ</Text>
                           <div className="flex justify-between items-baseline mt-2">
                             <Text variant="fourxl">{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-                            <Text variant="xs" className="text-[#1C1B1B]">บาท</Text>
+                            <Text variant="xs" className="text-[#1C1B1B] mb-0">บาท</Text>
                           </div>
                         </div>
+                      </div>
 
-                        {/* 2. เส้นคั่น + รายละเอียด  */}
-                        <div className="pt-3 space-y-2">
+                      {/* 2. เส้นคั่น + รายละเอียด  */}
+                      <div className="flex-1 flex flex-col justify-end pt-3">
+                        <div className="space-y-2 w-full">
                           <div className="border-b border-[#E7BDB8]"></div>
                           <div>
-                          <div className="flex justify-between items-center">
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">วันที่</Text>
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{formatDate}</Text>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">เวลา</Text>
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{formatTime}</Text>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">ผู้ดำเนินการ</Text>
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{currentStaff}</Text>
+                            <div className="flex justify-between items-center">
+                              <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">วันที่</Text>
+                              <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">{formatDate}</Text>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">เวลา</Text>
+                              <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">{formatTime}</Text>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">ผู้ดำเนินการ</Text>
+                              <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">{currentStaff}</Text>
+                            </div>
                           </div>
                         </div>
-                        </div>
-
                       </div>
                     </div>
                   </div>
@@ -1196,40 +1260,7 @@ export default function PosPage(): React.JSX.Element {
                   </div>
                 )}
               </div>
-
-              {/* 4. Footer */}
-              <div className="flex p-6 gap-4">
-                <button 
-                  type="button" 
-                  disabled={paymentData.isConfirming || paymentData.isSubmitting}
-                  onClick={() => paymentData.setIsPaymentModalOpen(false)} 
-                  className="px-20 py-3 bg-[#E5E2E1] font-normal text-sm rounded-none hover:bg-[#E7E5E4] transition-colors disabled:opacity-50"
-                >
-                  ยกเลิก
-                </button>
-                
-                <button 
-                  type="button" 
-                  disabled={paymentData.isConfirming} 
-                  onClick={async () => {
-                    // ทุกช่องทางชำระเงินจะมาจบการขายที่ฟังก์ชันนี้เท่านั้น
-                    await paymentData.handleFinalConfirmAndPrint();
-                  }} 
-                  className="flex-1 py-3 bg-[#E51C23] text-white font-normal text-sm hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-400"
-                >
-                  {paymentData.isConfirming ? (
-                    <span>กำลังทำรายการ...</span>
-                  ) : (
-                    <>
-                      <Printer className="w-4 h-4" />
-                      ยืนยันและพิมพ์ใบเสร็จ
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        </ConfirmModal>
       </div>
     </div>
   );

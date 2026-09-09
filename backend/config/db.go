@@ -203,8 +203,6 @@ func SetupDatabase() {
 	// Siri
 	seed.BillImage(db)
 	seed.Bill(db)
-	seed.SaleOrder(db)
-	seed.SaleOrderItems(db)
 
 	// Company Setting
 	seed.CompanySetting(db)

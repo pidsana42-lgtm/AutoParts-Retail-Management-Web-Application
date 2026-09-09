@@ -17,6 +17,7 @@ import {
   ChevronsRight,
   ShieldCheck,
   Pencil,
+  AlertTriangle,
 } from "lucide-react";
  
 // Design System Components
@@ -297,6 +298,7 @@ export default function CustomerCreditControl() {
                     options={[
                       { label: "ทั้งหมด", value: "ALL" },
                       { label: "มียอดหนี้ค้างชำระ", value: "WITH_DEBT" },
+                      { label: "ค้างชำระเกินกำหนด (Overdue)", value: "OVERDUE" },
                       { label: "ใกล้เต็มวงเงิน (≥80%)", value: "NEAR_LIMIT" },
                       { label: "เกินวงเงินเครดิต", value: "OVER_LIMIT" },
                       { label: "ไม่มีหนี้ค้าง", value: "NO_DEBT" },
@@ -344,18 +346,19 @@ export default function CustomerCreditControl() {
               <TableHeader className="bg-[#F6F3F2] border-b border-gray-200 text-[11px] text-[#6B7280] uppercase tracking-wider">
                 <TableRow>
                   <TableHead className="py-3 px-4 w-[24%]">ชื่อลูกค้า / ติดต่อ</TableHead>
-                  <TableHead className="py-3 px-4 text-center w-[12%]">ประเภทลูกค้า</TableHead>
-                  <TableHead className="py-3 px-4 w-[24%]">ยอดหนี้ / วงเงินเครดิต</TableHead>
-                  <TableHead className="py-3 px-4 text-center w-[14%]">ส่วนลด On-Top (%)</TableHead>
-                  <TableHead className="py-3 px-4 text-center w-[14%]">สิทธิ์ส่วนลดพิเศษ</TableHead>
-                  <TableHead className="py-3 px-4 text-center w-[12%]">จัดการ</TableHead>
+                  <TableHead className="py-3 px-4 text-center w-[11%]">ประเภทลูกค้า</TableHead>
+                  <TableHead className="py-3 px-4 w-[22%]">ยอดหนี้ / วงเงินเครดิต</TableHead>
+                  <TableHead className="py-3 px-4 w-[12%]">สถานะเครดิต</TableHead>
+                  <TableHead className="py-3 px-4 text-center w-[11%]">ส่วนลด On-Top (%)</TableHead>
+                  <TableHead className="py-3 px-4 text-center w-[11%]">สิทธิ์ส่วนลดพิเศษ</TableHead>
+                  <TableHead className="py-3 px-4 text-center w-[10%]">จัดการ</TableHead>
                 </TableRow>
               </TableHeader>
 
               <TableBody className="divide-y divide-gray-100">
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-16 text-center">
+                    <TableCell colSpan={7} className="py-16 text-center">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <RefreshCw size={24} className="animate-spin text-[#E51C23]" />
                         <Text variant="small" className="text-gray-500 mb-0 font-light">
@@ -366,7 +369,7 @@ export default function CustomerCreditControl() {
                   </TableRow>
                 ) : paginatedCustomers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-16 text-center">
+                    <TableCell colSpan={7} className="py-16 text-center">
                       <div className="flex flex-col items-center justify-center gap-2 text-slate-400">
                         <Users size={32} className="stroke-[1.5] text-slate-300" />
                         <Text variant="small" className="text-gray-400 mb-0 font-light">
@@ -448,6 +451,27 @@ export default function CustomerCreditControl() {
                               )}
                             </div>
                           </div>
+                        </TableCell>
+
+                        {/* Credit Status / Debt Aging */}
+                        <TableCell className="py-3.5 px-4">
+                          {c.current_debt_amount <= 0 || (!c.has_unpaid_order && (c.max_unpaid_days || 0) === 0) ? (
+                            <span className="text-xs text-[#5F5E5E] font-light">
+                              ไม่มีประวัติการค้าง
+                            </span>
+                          ) : c.is_overdue ? (
+                            <div className="flex items-center gap-2 text-xs text-[#E51C23] font-normal">
+                              <AlertTriangle size={16} className="text-[#E51C23] shrink-0" />
+                              <div className="leading-tight">
+                                <div>ค้างชำระนานสุด</div>
+                                <div>{c.max_unpaid_days} วัน</div>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-[#5F5E5E] font-normal">
+                              ค้างชำระนานสุด {c.max_unpaid_days} วัน
+                            </span>
+                          )}
                         </TableCell>
 
                         {/* On-Top Discount Rate */}
@@ -852,6 +876,16 @@ export default function CustomerCreditControl() {
                       </Text>
                       <Text variant="xs" className="text-[#6B7280] mb-0">
                         ประเภท: {drawerCustomer.customer_type_label || drawerCustomer.customer_type?.type_label || "-"}
+                      </Text>
+                      <Text variant="xs" className="text-[#6B7280] mb-0">
+                        สถานะเครดิต:{" "}
+                        {drawerCustomer.current_debt_amount <= 0 || (!drawerCustomer.has_unpaid_order && (drawerCustomer.max_unpaid_days || 0) === 0) ? (
+                          <span className="text-[#5F5E5E] font-normal">ไม่มีประวัติการค้าง</span>
+                        ) : drawerCustomer.is_overdue ? (
+                          <span className="text-[#E51C23] font-medium">⚠️ ค้างชำระนานสุด {drawerCustomer.max_unpaid_days} วัน (เกินกำหนด)</span>
+                        ) : (
+                          <span className="text-[#1C1B1B] font-normal">ค้างชำระนานสุด {drawerCustomer.max_unpaid_days} วัน</span>
+                        )}
                       </Text>
                       <Text variant="xs" className="text-[#6B7280] mb-0">
                         ที่อยู่: {drawerCustomer.display_address || "-"}
