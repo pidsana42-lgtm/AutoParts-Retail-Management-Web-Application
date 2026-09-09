@@ -29,7 +29,7 @@ type PurchaseOrderRepository interface {
 	GetPOWithRelations(ctx context.Context, id uint) (*poEntity.PO, error)
 	UpdatePO(ctx context.Context, po *poEntity.PO) error
 	GetSupplierDeliveryHistory(ctx context.Context, supplierID int) ([]POHistory, error)
-	GetMonthlyPOCount(ctx context.Context) (int64, error)
+	GetMonthlyPOCount(ctx context.Context) (*poDto.POMonthlyCountResponse, error)
 	GetCompanySetting(ctx context.Context) (*poEntity.CompanySetting, error)
 	UpdateStatus(ctx context.Context, id uint, status poEnum.POStatus, updatedByUserID uint) error
 	RestorePOByID(ctx context.Context, id uint, updatedByUserID uint) error
@@ -243,7 +243,7 @@ func (r *purchaseOrderRepository) GetPOSummary(ctx context.Context) (*poDto.POSu
 				SupplierName:   po.SupplierName,
 				PurchaseOrders: make([]poDto.RejectedPurchaseOrderSummary, 0),
 			})
-	}
+		}
 
 		supplier := &summary.RejectedBySupplier[index]
 		supplier.Amount += po.TotalAmount
@@ -463,17 +463,30 @@ func (r *purchaseOrderRepository) GetSupplierDeliveryHistory(ctx context.Context
 }
 
 // GetMonthlyPOCount นับจำนวนใบสั่งซื้อที่อนุมัติแล้วของเดือนนี้ — เปิดให้ทุก role เรียกได้
-func (r *purchaseOrderRepository) GetMonthlyPOCount(ctx context.Context) (int64, error) {
+func (r *purchaseOrderRepository) GetMonthlyPOCount(ctx context.Context) (*poDto.POMonthlyCountResponse, error) {
 	now := time.Now()
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	startOfLastMonth := startOfMonth.AddDate(0, -1, 0)
 
-	var count int64
+	result := &poDto.POMonthlyCountResponse{}
 	if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).
 		Where("UPPER(status) = ? AND approved_at >= ?", "APPROVED", startOfMonth).
-		Count(&count).Error; err != nil {
-		return 0, fmt.Errorf("count monthly po: %w", err)
+		Count(&result.TotalCount).Error; err != nil {
+		return nil, fmt.Errorf("count monthly po: %w", err)
 	}
-	return count, nil
+	if err := r.db.WithContext(ctx).Model(&poEntity.PO{}).
+		Where("UPPER(status) = ? AND approved_at >= ? AND approved_at < ?", "APPROVED", startOfLastMonth, startOfMonth).
+		Count(&result.LastMonthCount).Error; err != nil {
+		return nil, fmt.Errorf("count last month po: %w", err)
+	}
+
+	if result.LastMonthCount > 0 {
+		result.ChangePercent = (float64(result.TotalCount-result.LastMonthCount) / float64(result.LastMonthCount)) * 100
+	} else if result.TotalCount > 0 {
+		result.ChangePercent = 100
+	}
+
+	return result, nil
 }
 
 func (r *purchaseOrderRepository) GetCompanySetting(ctx context.Context) (*poEntity.CompanySetting, error) {
