@@ -356,6 +356,8 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 			}
 		}
 
+		bill.PriceChangeDetected = len(changedItems) > 0
+
 		isOwner := strings.EqualFold(role, string(enum.RoleOwner)) || strings.EqualFold(role, string(enum.RoleAdmin)) || strings.EqualFold(role, "Owner") || strings.EqualFold(role, "Admin")
 		autoApprove := isOwner || len(changedItems) == 0
 		if autoApprove {

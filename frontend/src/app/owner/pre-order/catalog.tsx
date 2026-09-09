@@ -13,6 +13,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Heading from '../../../components/elements/heading';
 import Button from '../../../components/elements/button';
 import Modal from '../../../components/elements/modal';
+import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import apiClient from '../../../service/http/apiClient';
 import { getCatalogs, createCatalog, updateCatalog, deleteCatalog, extractCatalogFromImage } from '../../../service/http/catalog/catalog_service';
@@ -48,6 +49,14 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   
   // Detail View & PDF
   const [activeCatalog, setActiveCatalog] = useState<Catalog | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [removeItemIndex, setRemoveItemIndex] = useState<number | null>(null);
+  const handleConfirmRemoveItem = () => {
+    if (removeItemIndex === null) return;
+    setNewItems(prev => prev.filter((_, i) => i !== removeItemIndex));
+    setRemoveItemIndex(null);
+  };
   const [showPdfViewer, setShowPdfViewer] = useState<boolean>(false);
 
   // Split-Screen Interactive Preview Controls (Zoom & Rotate like import-bills)
@@ -364,16 +373,24 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
     else setCurrentViewInternal('manual');
   };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบแคตตาล็อกนี้?')) return;
+  const handleDelete = (id: number) => {
+    setDeleteTargetId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteTargetId === null) return;
+    setIsDeleting(true);
     try {
-      await deleteCatalog(id);
-      setCatalogs(prev => prev.filter(c => c.id !== id));
-      if (activeCatalog?.id === id) {
+      await deleteCatalog(deleteTargetId);
+      setCatalogs(prev => prev.filter(c => c.id !== deleteTargetId));
+      if (activeCatalog?.id === deleteTargetId) {
         setCurrentView('home');
       }
+      setDeleteTargetId(null);
     } catch (err) {
       alert('ไม่สามารถลบแคตตาล็อกได้');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -959,6 +976,18 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
             ))}
           </div>
         )}
+
+        <ConfirmDialog
+          isOpen={deleteTargetId !== null}
+          onClose={() => !isDeleting && setDeleteTargetId(null)}
+          onConfirm={handleConfirmDelete}
+          title="ยืนยันการลบแคตตาล็อก"
+          description="คุณต้องการลบแคตตาล็อกนี้ใช่หรือไม่? การลบไม่สามารถย้อนกลับได้"
+          confirmText="ยืนยันการลบ"
+          cancelText="ยกเลิก"
+          variant="danger"
+          isSubmitting={isDeleting}
+        />
       </div>
     );
   }
@@ -1353,7 +1382,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                           <TableCell className="py-1 px-1 text-center">
                             <button
                               type="button"
-                              onClick={() => setNewItems(prev => prev.filter((_, i) => i !== idx))}
+                              onClick={() => setRemoveItemIndex(idx)}
                               className="text-gray-400 hover:text-red-600 p-1"
                             >
                               <Trash2 size={14} />
@@ -1397,6 +1426,17 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
             </Button>
           </div>
         </div>
+
+        <ConfirmDialog
+          isOpen={removeItemIndex !== null}
+          onClose={() => setRemoveItemIndex(null)}
+          onConfirm={handleConfirmRemoveItem}
+          title="ลบรายการสินค้านี้"
+          description="คุณต้องการลบสินค้ารายการนี้ออกใช่หรือไม่?"
+          confirmText="ยืนยันการลบ"
+          cancelText="ยกเลิก"
+          variant="danger"
+        />
       </div>
     );
   }
@@ -1693,7 +1733,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                       <TableCell className="py-2 px-2 text-center">
                         <button
                           type="button"
-                          onClick={() => setNewItems(prev => prev.filter((_, i) => i !== idx))}
+                          onClick={() => setRemoveItemIndex(idx)}
                           className="text-gray-400 hover:text-red-600 p-1"
                         >
                           <Trash2 size={15} />
@@ -1735,6 +1775,17 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
             </div>
           </div>
         </div>
+
+        <ConfirmDialog
+          isOpen={removeItemIndex !== null}
+          onClose={() => setRemoveItemIndex(null)}
+          onConfirm={handleConfirmRemoveItem}
+          title="ลบรายการสินค้านี้"
+          description="คุณต้องการลบสินค้ารายการนี้ออกใช่หรือไม่?"
+          confirmText="ยืนยันการลบ"
+          cancelText="ยกเลิก"
+          variant="danger"
+        />
       </div>
     );
   }

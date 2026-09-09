@@ -170,16 +170,30 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 		return importDataDTO.ConfirmBillImportResponseDTO{}, err
 	}
 
-	// บิลยังไม่ถูกอนุมัติอัตโนมัติ (ราคาทุนไม่ตรงกับระบบและผู้ส่งไม่ใช่เจ้าของ) → แจ้งเตือนเจ้าของร้านให้เข้ามาตรวจสอบ
-	if !bill.IsVerified && s.notification != nil {
-		if errNotify := s.notification.NotifyOwners(
-			"IMPORT_BILL_PENDING_APPROVAL",
-			"มีบิลนำเข้าสินค้ารออนุมัติ",
-			fmt.Sprintf("บิลเลขที่ %s ถูกนำเข้าโดยพนักงาน พบราคาทุนไม่ตรงกับระบบ กรุณาตรวจสอบและอนุมัติ", bill.BillNo),
-			"/owner/import-bills",
-			nil,
-		); errNotify != nil {
-			log.Printf("[Notification] failed to notify owners (bill %d): %v\n", bill.ID, errNotify)
+	// แจ้งเตือนเจ้าของร้านทุกครั้งที่บิลนำเข้ามีราคาทุนสินค้าต่างจากระบบ ไม่ว่าใครจะเป็นคนนำเข้า
+	if s.notification != nil {
+		if !bill.IsVerified {
+			// ผู้ส่งไม่ใช่เจ้าของและราคาทุนไม่ตรงกับระบบ → รอเจ้าของร้านเข้ามาตรวจสอบ/อนุมัติ
+			if errNotify := s.notification.NotifyOwners(
+				"IMPORT_BILL_PENDING_APPROVAL",
+				"มีบิลนำเข้าสินค้ารออนุมัติ",
+				fmt.Sprintf("บิลเลขที่ %s ถูกนำเข้าโดยพนักงาน พบราคาทุนไม่ตรงกับระบบ กรุณาตรวจสอบและอนุมัติ", bill.BillNo),
+				"/owner/import-bills",
+				nil,
+			); errNotify != nil {
+				log.Printf("[Notification] failed to notify owners (bill %d): %v\n", bill.ID, errNotify)
+			}
+		} else if bill.PriceChangeDetected {
+			// เจ้าของร้าน (หรือ Admin) นำเข้าเอง ราคาทุนถูกอัปเดตอัตโนมัติไปแล้ว แต่ยังแจ้งเตือนไว้เผื่อสังเกตความผิดปกติ
+			if errNotify := s.notification.NotifyOwners(
+				"IMPORT_BILL_PRICE_CHANGED",
+				"ราคาทุนสินค้าเปลี่ยนจากบิลนำเข้า",
+				fmt.Sprintf("บิลเลขที่ %s มีราคาทุนสินค้าบางรายการต่างจากระบบ และถูกอัปเดตราคาทุนใหม่ให้อัตโนมัติแล้ว", bill.BillNo),
+				"/owner/import-bills",
+				nil,
+			); errNotify != nil {
+				log.Printf("[Notification] failed to notify owners (bill %d): %v\n", bill.ID, errNotify)
+			}
 		}
 	}
 
@@ -213,6 +227,30 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 			}
 			defer resp.Body.Close()
 			log.Printf("[WMS] FastAPI product codes generation response status: %d\n", resp.StatusCode)
+		}(productIDs)
+
+		// Refresh embeddings right away so products imported just now are matchable on the
+		// very next OCR scan, instead of waiting for match_bill_products() to embed them lazily.
+		go func(ids []uint) {
+			payload := map[string]interface{}{
+				"product_ids": ids,
+			}
+			jsonPayload, errPayload := json.Marshal(payload)
+			if errPayload != nil {
+				log.Printf("[WMS] Error marshaling product IDs payload for embedding refresh: %v\n", errPayload)
+				return
+			}
+			client := http.Client{
+				Timeout: 60 * time.Second,
+			}
+			fastAPIURL := "http://127.0.0.1:8000/api/products/refresh-embeddings"
+			resp, errReq := client.Post(fastAPIURL, "application/json", bytes.NewBuffer(jsonPayload))
+			if errReq != nil {
+				log.Printf("[WMS] Error calling FastAPI to refresh product embeddings: %v\n", errReq)
+				return
+			}
+			defer resp.Body.Close()
+			log.Printf("[WMS] FastAPI embedding refresh response status: %d\n", resp.StatusCode)
 		}(productIDs)
 	}
 

@@ -15,6 +15,7 @@ import Heading from '../../../components/elements/heading';
 import Card from '../../../components/elements/card';
 import Select from '../../../components/elements/select';
 import Button from '../../../components/elements/button';
+import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { useToast } from '../../../components/elements/toast';
 import GenericTable, { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import type { Product } from '../../../interface/import';
@@ -70,6 +71,9 @@ export default function PreOrderManager() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [removeItemIndex, setRemoveItemIndex] = useState<number | null>(null);
   
   // Catalog Picker Modal
   const [showCatalogModal, setShowCatalogModal] = useState(false);
@@ -394,20 +398,34 @@ export default function PreOrderManager() {
     setEditingId(null);
   }, [location.search]);
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบรายการสั่งจองนี้?')) return;
+  const handleDelete = (id: number) => {
+    setDeleteTargetId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteTargetId === null) return;
+    setIsDeleting(true);
     try {
-      await deletePreOrder(id);
-      setPreOrders(prev => prev.filter(po => po.id !== id));
+      await deletePreOrder(deleteTargetId);
+      setPreOrders(prev => prev.filter(po => po.id !== deleteTargetId));
       toast({ variant: 'success', message: 'ลบรายการสั่งจองเรียบร้อยแล้ว' });
+      setDeleteTargetId(null);
     } catch (err) {
       console.error('Error deleting pre-order:', err);
       toast({ variant: 'error', message: 'ล้มเหลวในการลบรายการสั่งจอง' });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const handleRemoveItem = (index: number) => {
-    setFormItems(prev => prev.filter((_, idx) => idx !== index));
+    setRemoveItemIndex(index);
+  };
+
+  const handleConfirmRemoveItem = () => {
+    if (removeItemIndex === null) return;
+    setFormItems(prev => prev.filter((_, idx) => idx !== removeItemIndex));
+    setRemoveItemIndex(null);
   };
 
   const handleItemChange = (index: number, field: keyof PreOrderItem, value: any) => {
@@ -450,9 +468,13 @@ export default function PreOrderManager() {
         customer_name: fullName,
         customer_phone: formCustomerPhone,
         status: formStatus,
-        deposit_amount: 0,
-        supplier_id: 1, // Default supplier id
-        order_date: new Date().toISOString(), // Fixed 400 Bad Request (OrderDate is required)
+        // These fields are not editable here. Omit them on update so the
+        // server preserves the original deposit, supplier and booking date.
+        ...(editingId ? {} : {
+          deposit_amount: 0,
+          supplier_id: 1,
+          order_date: new Date().toISOString(),
+        }),
         pre_order_items: formItems.map(item => ({
           product_id: Number(item.product_id) || 0,
           quantity: Number(item.quantity) || 1,
@@ -1110,13 +1132,15 @@ export default function PreOrderManager() {
                       <TableHead className="py-3 px-3 font-bold text-left text-[#5F5E5E] min-w-[260px]">ชื่อสินค้า <span className="text-[#e51c23]">*</span></TableHead>
                       <TableHead className="py-3 px-3 font-bold text-left text-[#5F5E5E] w-48">รหัสสินค้า</TableHead>
                       <TableHead className="py-3 px-3 font-bold text-center text-[#5F5E5E] w-28">จำนวน</TableHead>
-                      <TableHead className="py-3 px-3 font-bold text-center text-[#5F5E5E] w-14 pr-4">ลบ</TableHead>
+                      {!isReadOnly && (
+                        <TableHead className="py-3 px-3 font-bold text-center text-[#5F5E5E] w-14 pr-4">ลบ</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody className="divide-y divide-gray-100">
                     {formItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="py-12 text-center text-gray-500 bg-gray-50/50">
+                        <TableCell colSpan={isReadOnly ? 5 : 6} className="py-12 text-center text-gray-500 bg-gray-50/50">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <AlertCircle size={36} className="text-gray-400" />
                             <p className="text-xs text-[#5F5E5E]">พิมพ์ค้นหาสินค้าด้านบน หรือกดปุ่ม <strong>"+ เพิ่มรายการเอง"</strong> เพื่อกรอกข้อมูลสินค้า</p>
@@ -1204,19 +1228,21 @@ export default function PreOrderManager() {
                               </div>
                             </TableCell>
 
-                            {/* ลบ */}
-                            <TableCell className="py-2.5 px-3 text-center pr-4 align-top">
-                              <div className="flex flex-col items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveItem(idx)}
-                                  className="h-9 w-9 text-gray-400 hover:text-[#e51c23] hover:bg-red-50 p-1.5 rounded transition-colors cursor-pointer inline-flex items-center justify-center"
-                                  title="ลบรายการนี้"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                            </TableCell>
+                            {/* ลบ — ซ่อนไปเลยตอนโหมดดูอย่างเดียว แทนที่จะโชว์ปุ่มค้างๆ กดไม่ได้ */}
+                            {!isReadOnly && (
+                              <TableCell className="py-2.5 px-3 text-center pr-4 align-top">
+                                <div className="flex flex-col items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveItem(idx)}
+                                    className="h-9 w-9 text-gray-400 hover:text-[#e51c23] hover:bg-red-50 p-1.5 rounded transition-colors cursor-pointer inline-flex items-center justify-center"
+                                    title="ลบรายการนี้"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              </TableCell>
+                            )}
                           </TableRow>
                         );
                       })
@@ -1437,6 +1463,29 @@ export default function PreOrderManager() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={deleteTargetId !== null}
+        onClose={() => !isDeleting && setDeleteTargetId(null)}
+        onConfirm={handleConfirmDelete}
+        title="ยืนยันการลบใบสั่งจอง"
+        description="คุณต้องการลบรายการสั่งจองนี้ใช่หรือไม่? การลบไม่สามารถย้อนกลับได้"
+        confirmText="ยืนยันการลบ"
+        cancelText="ยกเลิก"
+        variant="danger"
+        isSubmitting={isDeleting}
+      />
+
+      <ConfirmDialog
+        isOpen={removeItemIndex !== null}
+        onClose={() => setRemoveItemIndex(null)}
+        onConfirm={handleConfirmRemoveItem}
+        title="ลบรายการสินค้านี้"
+        description="คุณต้องการลบสินค้ารายการนี้ออกจากใบสั่งจองใช่หรือไม่?"
+        confirmText="ยืนยันการลบ"
+        cancelText="ยกเลิก"
+        variant="danger"
+      />
     </div>
   );
 }

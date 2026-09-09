@@ -119,23 +119,6 @@ export default function POView({
             )}
           </div>
 
-          {/* PO Number Quick Selection Badges */}
-          {poList.length > 0 && (
-            <div className="mt-3 flex items-center gap-2 flex-wrap text-xs">
-              <span className="text-gray-500 font-medium">เลขที่ PO ในระบบ:</span>
-              {poList.slice(0, 5).map(po => (
-                <button
-                  key={po.id}
-                  type="button"
-                  onClick={() => setPoSearchQuery(po.po_number || '')}
-                  className="bg-gray-100 hover:bg-[#e51c23] hover:text-white text-gray-700 px-2.5 py-1 font-mono text-[11px] font-bold rounded-none transition-colors border border-gray-200 cursor-pointer"
-                >
-                  {po.po_number}
-                </button>
-              ))}
-            </div>
-          )}
-
           {/* Status filters */}
           <div className="mt-5 pt-4 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <span className="text-xs text-gray-500 font-bold">กรองตามสถานะใบสั่งซื้อ</span>
