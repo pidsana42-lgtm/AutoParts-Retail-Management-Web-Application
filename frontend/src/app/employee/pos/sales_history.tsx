@@ -525,7 +525,7 @@ export default function TransactionHistoryPage() {
                               type="button"
                               disabled={printingOrderId === item.id}
                               className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
-                              title="พิมพ์/ดาวน์โหลดใบเสร็จ"
+                              title="พิมพ์ใบเสร็จ/ใบส่งของ"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handlePrintReceipt(item.id, item.order_number);
