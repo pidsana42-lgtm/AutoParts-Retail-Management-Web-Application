@@ -340,8 +340,8 @@ export default function ClaimDetailPage(): React.JSX.Element {
       <div className="flex items-center justify-between mb-6">
         <div>
           <nav className="flex items-center text-sm text-gray-500 gap-2 font-light mb-2">
-            <Link to={basePath} className="hover:text-black transition-colors">
-              จัดการเคลมสินค้า
+            <Link to={breadcrumbRoot.path} className="hover:text-black transition-colors">
+              {breadcrumbRoot.label}
             </Link>
             <ChevronRight size={16} className="text-gray-400" />
             {isEditing ? (
