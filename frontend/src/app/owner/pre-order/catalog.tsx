@@ -167,9 +167,12 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
           if (newUrls.length > 0) {
             const url = newUrls[newUrls.length - 1];
             newUrls.forEach(u => loadedMobileUrlsRef.current.add(u));
+            const isStandardWebPort = window.location.protocol === 'https:' || window.location.port === '' || window.location.port === '80' || window.location.port === '443';
             const fullUrl = url.startsWith('http')
               ? url
-              : `${window.location.protocol}//${window.location.hostname}:8080${url.startsWith('/') ? '' : '/'}${url}`;
+              : isStandardWebPort && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+                ? `${window.location.protocol}//${window.location.hostname}${url.startsWith('/') ? '' : '/'}${url}`
+                : `${window.location.protocol}//${window.location.hostname}:8080${url.startsWith('/') ? '' : '/'}${url}`;
             const response = await fetch(fullUrl);
             const blob = await response.blob();
             const fileName = `mobile_catalog_${url.split('/').pop() || 'image.jpg'}`;

@@ -125,9 +125,17 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       let wsUrl = import.meta.env.VITE_WS_URL;
       if (!wsUrl) {
         if (typeof window !== 'undefined') {
-          const { hostname, protocol } = window.location;
+          const { hostname, protocol, port } = window.location;
           const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
-          wsUrl = `${wsProtocol}//${hostname}:8080/ws`;
+          if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+            if (protocol === 'https:' || port === '' || port === '80' || port === '443') {
+              wsUrl = `${wsProtocol}//${hostname}/ws`;
+            } else {
+              wsUrl = `${wsProtocol}//${hostname}:8080/ws`;
+            }
+          } else {
+            wsUrl = `${wsProtocol}//${hostname}:8080/ws`;
+          }
         } else {
           wsUrl = 'ws://localhost:8080/ws';
         }
