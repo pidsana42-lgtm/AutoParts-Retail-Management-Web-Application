@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Trash2, SquarePen, Eye } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Supplier } from "../../../../../interface/wms/stock_data";
@@ -21,6 +22,7 @@ interface SupplierTabProps {
 
 export default function SupplierTab({ search, suppliers, loadData, addSignal }: SupplierTabProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
 
   // Modals visibility state
   const [addOpen, setAddOpen] = useState(false);
@@ -43,8 +45,12 @@ export default function SupplierTab({ search, suppliers, loadData, addSignal }: 
     setCurrentPage(1);
   }, [search]);
 
-  const handleDeleteSupplier = async (id: number) => {
-    if (!confirm("คุณแน่ใจว่าต้องการลบบริษัทสั่งซื้อนี้?")) return;
+  const handleDeleteSupplier = async (id: number, name: string) => {
+    const confirmed = await confirmDialog(
+      `ต้องการลบบริษัทสั่งซื้อ "${name}" ใช่หรือไม่?`,
+      { title: "ลบบริษัทสั่งซื้อ", confirmText: "ลบ", variant: "danger", icon: Trash2 }
+    );
+    if (!confirmed) return;
     try {
       await stockDataService.deleteSupplier(id);
       toast({ variant: "success", message: "ลบบริษัทสั่งซื้อสำเร็จ" });
@@ -127,7 +133,7 @@ export default function SupplierTab({ search, suppliers, loadData, addSignal }: 
                         <SquarePen className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => handleDeleteSupplier(sup.id)}
+                        onClick={() => handleDeleteSupplier(sup.id, sup.supplier_name)}
                         className="hover:text-red-600 transition-colors"
                       >
                         <Trash2 className="h-4 w-4" />

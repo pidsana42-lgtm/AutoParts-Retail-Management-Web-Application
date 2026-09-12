@@ -1,6 +1,7 @@
 // usePosCart.interface.ts
 import type { SaleOrderItemRequest } from "./pos_interface";
 import type { CustomerDiscountResponse } from "./customer_interface";
+import type { POSProductSupplierInfo } from "./product_interface";
 
 // สำหรับ Props ที่ส่งเข้ามาใน Hook
 export interface UsePosCartProps {
@@ -10,9 +11,11 @@ export interface UsePosCartProps {
   onRecoverCancelledOrder?: (orderId: number) => Promise<boolean>;
 }
 
-// สำหรับโครงสร้างสินค้าที่อยู่ในตะกร้า 
+// สำหรับโครงสร้างสินค้าที่อยู่ในตะกร้า
 export interface CartItem extends SaleOrderItemRequest {
-  quantity: number; 
+  quantity: number;
+  // supplier_name: ชื่อบริษัทที่ผูกไว้กับ supplier_id (เก็บไว้แสดงผลในตารางบิลเฉยๆ ไม่ได้ส่งขึ้น backend)
+  supplier_name?: string;
 }
 
 // สำหรับผลลัพธ์ที่ Hook นี้จะส่งออกไป
@@ -37,6 +40,6 @@ export interface UsePosCartReturn {
   setCancelledOrderSuggestions: React.Dispatch<React.SetStateAction<any[]>>;
   showSuggestions: boolean;
   setShowSuggestions: React.Dispatch<React.SetStateAction<boolean>>;
-  handleSelectProduct: (product: any) => void;
+  handleSelectProduct: (product: any, supplierOverride?: POSProductSupplierInfo) => void;
   handleSelectCancelledOrder: (order: any) => Promise<void>;
 }

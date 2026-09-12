@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import apiClient from '../apiClient';
-import { dashboardService } from './dashboard_service';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
+import apiClient from '../../../../src/service/http/apiClient';
+import { dashboardService } from '../../../../src/service/http/dashboard/dashboard_service';
 
-vi.mock('../apiClient', () => ({
+vi.mock('../../../../src/service/http/apiClient', () => ({
   default: {
     get: vi.fn(),
   },
@@ -58,3 +58,5 @@ describe('dashboardService', () => {
     expect(response.data.data).toHaveLength(2);
   });
 });
+
+

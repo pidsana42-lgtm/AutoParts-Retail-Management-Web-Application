@@ -284,6 +284,34 @@ func (s *checkStockScheduleService) ApproveSchedule(id uint) error {
 				Update("quantity", rec.New_Quantity).Error; err != nil {
 				return err
 			}
+
+			// บันทึกลง stock_movements (movement_type = "ADJUST") เฉพาะแถวที่นับได้ไม่ตรงกับระบบจริง เพื่อให้หน้า
+			// "การเคลื่อนไหวของสินค้า" อ่านประวัติปรับสต็อกจากตารางนี้ได้โดยตรง แทนที่จะอ่านสด ๆ จาก check_stocks เหมือนเดิม
+			// — นับตรงเป๊ะ (diff = 0) ไม่ถือเป็น "การเคลื่อนไหว" เหมือนที่ฟีดเดิมกรองทิ้งอยู่แล้ว
+			if rec.Diff_Quantity != 0 {
+				sign := "เกิน"
+				diffAbs := rec.Diff_Quantity
+				if diffAbs < 0 {
+					sign = "ขาด"
+					diffAbs = -diffAbs
+				}
+				detail := fmt.Sprintf("เดิม %d → นับได้ %d (%s %d)", rec.Old_Quantity, rec.New_Quantity, sign, diffAbs)
+				if rec.Reason != "" {
+					detail = fmt.Sprintf("%s — เหตุผล: %s", detail, rec.Reason)
+				}
+				movement := entity.StockMovement{
+					Movement_Type:     "ADJUST",
+					Quantity:          rec.Diff_Quantity,
+					Movement_DateTime: rec.Adjustment_DateTime,
+					Note:              detail,
+					ProductID:         *rec.ProductID,
+					SupplierID:        rec.SupplierID,
+					UserID:            rec.UserID,
+				}
+				if err := tx.Session(&gorm.Session{}).Create(&movement).Error; err != nil {
+					return err
+				}
+			}
 		}
 		return tx.Model(&entity.CheckStockSchedule{}).Where("id = ?", id).Update("status", "เสร็จสิ้น").Error
 	}); err != nil {

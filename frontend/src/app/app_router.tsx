@@ -11,6 +11,8 @@ import { getMenuByRole } from '../config/menu';
 import { useAuth } from '../contexts/AuthContexts'; 
 import Stock from './owner/stock/stock';
 import StockMovement from './owner/stock/stock_movement/stock_movement';
+import StockMovementOrderDetail from './owner/stock/stock_movement/order_detail';
+import StockMovementPreOrderDetail from './owner/stock/stock_movement/pre_order_detail';
 import Stockdata from './owner/stock/Stock_data/stock_data';
 import StockCheck from './owner/stock/stock_check/stock_check';
 import AddCheckStockSchedulePage from './owner/stock/stock_check/add_check_stock_schedule';
@@ -135,6 +137,14 @@ export default function AppRouter(): React.JSX.Element {
 
         <Route path="/owner/stock/stock-movement" element={
           isAdminOrOwner ? <StockMovement /> : <Navigate to={firstMenuPath} replace />
+        } />
+
+        <Route path="/owner/stock/stock-movement/orders/:orderId" element={
+          isAdminOrOwner ? <StockMovementOrderDetail /> : <Navigate to={firstMenuPath} replace />
+        } />
+
+        <Route path="/owner/stock/stock-movement/pre-orders/:id" element={
+          isAdminOrOwner ? <StockMovementPreOrderDetail /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/owner/stock/stock-check" element={

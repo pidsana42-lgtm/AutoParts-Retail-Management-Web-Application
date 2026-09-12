@@ -193,7 +193,7 @@ Analyze the following extracted markdown text from an invoice/bill carefully. Yo
 Follow these strict extraction guidelines for this layout:
 1. Invoice Metadata:
    - "bill_no": Extract from the bill number field (e.g. "IV-202507/01229").
-   - "due_date": Extract the invoice/purchase date shown as "วันที่" on the bill (e.g. if the bill shows "วันที่ : 29/07/2025", due_date is 2025-07-29). Do NOT add the credit term days to this date — just use the date printed on the bill as-is.
+   - "due_date": Extract the invoice/purchase date shown as "วันที่" on the bill (e.g. if the bill shows "วันที่ : 29/07/2025", due_date is 2025-07-29). Do NOT use the separate "วันครบกำหนดชำระเงิน"/"DUE DATE" field even if the bill has one, and do NOT add the credit term days to the invoice date — always use the "วันที่" (invoice date) as-is.
    - "credit_term": Extract the term details (e.g. "90 Days" or "90 วัน").
    - "transport_by": Extract from "ขนส่งโดย" if present.
    - "subtotal", "vat_amount", & "grand_total": Extract the corresponding financial summaries at the bottom.
@@ -296,7 +296,7 @@ Analyze the provided invoice image carefully. You can intelligently correct typo
 Follow these strict extraction guidelines for this layout:
 1. Invoice Metadata:
    - "bill_no": Extract from the bill number field (e.g. "IV-202507/01229").
-   - "due_date": Extract the invoice/purchase date shown as "วันที่" on the bill (e.g. if the bill shows "วันที่ : 29/07/2025", due_date is 2025-07-29). Do NOT add the credit term days to this date — just use the date printed on the bill as-is.
+   - "due_date": Extract the invoice/purchase date shown as "วันที่" on the bill (e.g. if the bill shows "วันที่ : 29/07/2025", due_date is 2025-07-29). Do NOT use the separate "วันครบกำหนดชำระเงิน"/"DUE DATE" field even if the bill has one, and do NOT add the credit term days to the invoice date — always use the "วันที่" (invoice date) as-is.
    - "credit_term": Extract the term details (e.g. "90 Days" or "90 วัน").
    - "transport_by": Extract from "ขนส่งโดย" if present.
    - "subtotal", "vat_amount", & "grand_total": Extract the corresponding financial summaries at the bottom.

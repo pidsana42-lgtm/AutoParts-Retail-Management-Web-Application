@@ -79,6 +79,16 @@ func TestCreatePOSOrder_WalkInCustomer_Cash_WithChange(t *testing.T) {
 	assert.Equal(t, 2000.0, payment.Amount)
 	assert.Equal(t, 2500.0, payment.ReceivedAmount)
 	assert.Equal(t, 500.0, payment.ChangeAmount)
+
+	// stock_movements (movement_type = OUT) เขียนไว้ให้ฟีด "การเคลื่อนไหวของสินค้า" อ่านได้โดยตรง
+	var movements []entity.StockMovement
+	require.NoError(t, f.db.Where("sale_order_id = ?", order.ID).Find(&movements).Error)
+	require.Len(t, movements, 1)
+	assert.Equal(t, "OUT", movements[0].Movement_Type)
+	assert.Equal(t, 2, movements[0].Quantity)
+	assert.Equal(t, uint(101), movements[0].ProductID)
+	require.NotNil(t, movements[0].UserID)
+	assert.Equal(t, uint(1), *movements[0].UserID)
 }
 
 func TestCreatePOSOrder_WalkInCustomer_DefaultNameWhenEmpty(t *testing.T) {
@@ -509,4 +519,3 @@ func TestGetPaymentMethods_Success(t *testing.T) {
 	assert.Equal(t, "CASH", methods[0].MethodName)
 	assert.Equal(t, "QR_PROMPT_PAY", methods[1].MethodName)
 }
-

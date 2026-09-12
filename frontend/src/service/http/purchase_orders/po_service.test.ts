@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import apiClient from '../apiClient';
-import { poService } from './po_service';
-import type { CreatePORequest } from '../../../interface/purchase_orders/po_interface';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
+import apiClient from '../../../../src/service/http/apiClient';
+import { poService } from '../../../../src/service/http/purchase_orders/po_service';
+import type { CreatePORequest } from '../../../../src/interface/purchase_orders/po_interface';
 
-vi.mock('../apiClient', () => ({ default: {
+vi.mock('../../../../src/service/http/apiClient', () => ({ default: {
   get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn(),
 } }));
 
@@ -137,3 +137,5 @@ describe('poService', () => {
     await expect(run()).rejects.toBe(error);
   });
 });
+
+

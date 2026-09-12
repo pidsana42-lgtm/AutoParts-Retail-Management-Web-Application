@@ -1,7 +1,7 @@
 import apiClient from "../apiClient";
 import type { GetPOsResponse, GetPOsParams, POSummaryResponse, CreatePORequest, CreatePOResponse, 
   ProductSearchResponse, LocalPOItem, PreorderItem, UpdatePORequest, UpdatePOResponse, POResponse,
-  POAnalyticsResponse, PreOrderRaw, PreOrderItemRaw } from '../../../interface/purchase_orders/po_interface'; 
+  POAnalyticsResponse, PreOrderRaw, PreOrderItemRaw, POMonthlyCountResponse } from '../../../interface/purchase_orders/po_interface';
 import { generateLocalId } from "../../../utils/generateId";
 
 export const poService = {
@@ -198,10 +198,10 @@ export const poService = {
     }
   },
 
-  // 14. ดึงจำนวนใบสั่งซื้อทั้งหมดของเดือนนี้ (ทุก role เรียกได้ ไม่ต้องเป็น Owner)
-  getMonthlyCount: async (): Promise<{ total_count: number }> => {
+  // 14. ดึงสถิติ PO ที่อนุมัติของเดือนนี้เทียบเดือนก่อน (ทุก role เรียกได้)
+  getMonthlyCount: async (): Promise<POMonthlyCountResponse> => {
     try {
-      const response = await apiClient.get<{ total_count: number }>(`/po/monthly-count`);
+      const response = await apiClient.get<POMonthlyCountResponse>(`/po/monthly-count`);
       return response.data;
     } catch (error) {
       console.error("เกิดข้อผิดพลาดในการดึงจำนวนใบสั่งซื้อของเดือนนี้:", error);

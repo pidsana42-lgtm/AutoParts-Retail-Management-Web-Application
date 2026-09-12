@@ -250,6 +250,7 @@ const PurchaseOrders: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [monthlyTotalCount, setMonthlyTotalCount] = useState(0);
+  const [monthlyChangePercent, setMonthlyChangePercent] = useState(0);
   const [summary, setSummary] = useState<POSummaryResponse>({
     pending_amount: 0,
     approved_mtd_amount: 0,
@@ -310,12 +311,13 @@ const PurchaseOrders: React.FC = () => {
     return () => clearTimeout(delayDebounceFn);
   }, [currentPage, itemsPerPage, statusFilter, searchId, selectedMonth, selectedYear]);
 
-  // ดึงจำนวน PO เดือนนี้ — ทุก role เห็นได้ ไม่ขึ้นกับ isOwner
+  // ดึงสถิติ PO ที่อนุมัติสำหรับการ์ดของทุก role
   useEffect(() => {
     const fetchMonthlyCount = async () => {
       try {
         const response = await poService.getMonthlyCount();
         setMonthlyTotalCount(response.total_count);
+        setMonthlyChangePercent(response.change_percent);
       } catch (err) {
         console.error("Failed to fetch monthly PO count:", err);
       }
@@ -425,7 +427,7 @@ const PurchaseOrders: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Monthly Stats Card */}
+        {/* Monthly Stats Card — ทุก role เห็นข้อมูลจาก monthly-count endpoint */}
         <Card className="relative overflow-hidden border-t-4 border-t-red-600 bg-[#22252a] shadow-sm hover:shadow-md transition-shadow w-1/4">
           <CardContent className="p-4 flex items-center justify-between h-full">
             <div>
@@ -434,10 +436,10 @@ const PurchaseOrders: React.FC = () => {
                 <span className="text-5xl font-bold text-white leading-none">{monthlyTotalCount}</span>
                 <span className="text-base text-slate-400 mb-1">ใบสั่งซื้อ</span>
               </div>
-                <div className={`mt-4 flex items-center gap-1 text-sm ${summary.approved_change_percent >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                  {summary.approved_change_percent >= 0 ? ( <TrendingUp className="w-4 h-4 text-emerald-500" /> ) : (
+                <div className={`mt-4 flex items-center gap-1 text-sm ${monthlyChangePercent >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  {monthlyChangePercent >= 0 ? ( <TrendingUp className="w-4 h-4 text-emerald-500" /> ) : (
                       <TrendingDown className="w-4 h-4 text-red-500" /> )}
-                  <span>{Math.abs(summary.approved_change_percent).toFixed(1)}%</span>
+                  <span>{Math.abs(monthlyChangePercent).toFixed(1)}%</span>
                   <span className="text-slate-400">เทียบกับเดือนที่แล้ว</span>
                 </div>
               </div>

@@ -719,7 +719,7 @@ Analyze the input invoice/bill carefully. You can intelligently correct typos, g
 Follow these strict extraction guidelines for this layout:
 1. Invoice Metadata:
    - "bill_no": Extract from the bill number field (e.g. "IV-202507/01229").
-   - "due_date": Extract the invoice/purchase date shown as "วันที่" on the bill (e.g. if the bill shows "วันที่ : 29/07/2025", due_date is 2025-07-29). Do NOT add the credit term days to this date — just use the date printed on the bill as-is.
+   - "due_date": Extract the invoice/purchase date shown as "วันที่" on the bill (e.g. if the bill shows "วันที่ : 29/07/2025", due_date is 2025-07-29). Do NOT use the separate "วันครบกำหนดชำระเงิน"/"DUE DATE" field even if the bill has one, and do NOT add the credit term days to the invoice date — always use the "วันที่" (invoice date) as-is.
    - "credit_term": Extract the term details (e.g. "90 Days" or "90 วัน").
    - "transport_by": Extract from "ขนส่งโดย" if present.
    - "supplier_name": Extract the supplier company name visible in the invoice header/logo (e.g. "บริษัท ไทยออโตพาร์ท จำกัด" or "เจ.เจ. อะไหล่").
@@ -1263,6 +1263,57 @@ def generate_product_codes(request: GenerateCodesRequest):
         "generated_product_ids": generated,
         "generated_qr_urls": generated_qr_urls,
     }
+
+class RefreshEmbeddingsRequest(BaseModel):
+    product_ids: list[int] = []
+
+@app.post("/api/products/refresh-embeddings")
+def refresh_product_embeddings(request: RefreshEmbeddingsRequest):
+    """
+    Eagerly (re)compute embeddings for products right after a bill import creates/updates
+    them, instead of waiting for the next OCR scan's match_bill_products() call to do it
+    lazily. ProductMatcher.fit() only embeds new/changed items (content-hash cache in the
+    product_embeddings table), so this is cheap even though it refits against the whole
+    active product list.
+    """
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Database engine not available")
+
+    db_products = []
+    corrections = []
+    with engine.connect() as conn:
+        query = text("SELECT id, product_name, product_code, barcode FROM products WHERE is_active = true")
+        rows = conn.execute(query).fetchall()
+        for r in rows:
+            db_products.append({
+                "id": r[0],
+                "product_name": r[1],
+                "product_code": r[2],
+                "barcode": r[3] or ""
+            })
+        try:
+            corr_query = text("SELECT ai_product_name, ai_product_code, product_id, supplier_id FROM product_mapping_corrections")
+            corr_rows = conn.execute(corr_query).fetchall()
+            for cr in corr_rows:
+                corrections.append({
+                    "company_product_name": cr[0],
+                    "company_product_code": cr[1],
+                    "product_id": cr[2],
+                    "supplier_id": cr[3]
+                })
+        except Exception as ex:
+            print(f"Could not load mapping corrections: {ex}")
+
+    if not db_products:
+        return {"status": "success", "embedded_count": 0}
+
+    global global_matcher
+    if global_matcher is None:
+        from embedder import ProductMatcher
+        global_matcher = ProductMatcher()
+    global_matcher.fit(db_products, corrections, persist_engine=engine)
+
+    return {"status": "success", "product_count": len(db_products), "requested_ids": request.product_ids}
 
 @app.get("/health")
 def health_check():
