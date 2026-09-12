@@ -13,6 +13,9 @@ export interface SaleOrderItemRequest {
   brand_name?: string;
   model_name?: string;
   note?: string;
+  // supplier_id: มีค่าเฉพาะตอนที่บาร์โค้ด/รหัสล็อตที่แสกน-พิมพ์ค้นหาตรงกับ Supplier เจาะจงเท่านั้น
+  // (undefined = ค้นด้วยชื่อ/รหัสสินค้ากลางทั่วไป ไม่ทราบว่าขายจากล็อตของเจ้าไหน) — backend ใช้หักคงเหลือต่อบริษัทให้ตรงเจ้าจริง
+  supplier_id?: number;
 }
 
 // แมตช์ตาม CreateSaleOrderRequest ของฝั่ง Go (ก้อนวัตถุ Payload ภาพรวมทั้งบิล)

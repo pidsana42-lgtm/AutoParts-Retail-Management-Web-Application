@@ -235,7 +235,11 @@ const DebtDashboard: React.FC = () => {
         : startDate
         ? formatDateThai(startDate)
         : 'ทั้งหมด';
-      exportDebtAgingPdf(res.data.data ?? [], dateLabel);
+      await exportDebtAgingPdf(
+        res.data.data ?? [],
+        dateLabel,
+        `debt-aging-${startDate || 'all'}-${endDate || 'all'}.pdf`,
+      );
     } catch { /* silently ignore */ }
     finally { setExportingPdf(false); }
   };

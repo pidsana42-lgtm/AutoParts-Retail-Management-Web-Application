@@ -165,6 +165,14 @@ func SetupDatabase() {
 	// ขยายขนาดคอลัมน์ id_card_number_customer เป็น varchar(255) สำหรับรองรับ AES-256 ciphertext
 	_ = db.Exec("ALTER TABLE customers ALTER COLUMN id_card_number_customer TYPE varchar(255);").Error
 
+	// เลิกใช้บาร์โค้ดกลางของสินค้าที่ตาราง products แล้ว (ย้ายไปผูกกับ Supplier แต่ละเจ้าที่ inventories แทน)
+	// AutoMigrate ไม่ลบคอลัมน์ที่หายไปจาก struct ให้เอง ต้องสั่ง Drop เองแบบนี้ครั้งเดียว (เช็คก่อนกันซ้ำ)
+	if db.Migrator().HasColumn(&entity.Product{}, "barcode") {
+		if err := db.Migrator().DropColumn(&entity.Product{}, "barcode"); err != nil {
+			log.Printf("Warning: failed to drop obsolete products.barcode column: %v", err)
+		}
+	}
+
 	// Looktao
 	seed.Supplier(db)
 	seed.Role(db)

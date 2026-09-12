@@ -17,6 +17,7 @@ type PublicProductSupplier = {
   quantity: number;
   company_product_code?: string;
   variant_code?: string;
+  barcode?: string;
 };
 
 type PublicProduct = {
@@ -24,7 +25,6 @@ type PublicProduct = {
   product_code: string;
   part_number: string;
   product_name: string;
-  barcode: string;
   quantity: number;
   sale_price: number;
   is_active: boolean;
@@ -115,6 +115,14 @@ export default function PublicProductPage() {
     return product?.supplier_name || "";
   }, [product, variantCode]);
 
+  // บาร์โค้ด: ไม่มีบาร์โค้ดกลางของสินค้าเองแล้ว (ผูกกับ Supplier แต่ละเจ้าแทน) — ถ้าสแกนมาจากคิวอาร์ของบริษัทไหน
+  // เจาะจง ใช้รหัสของบริษัทนั้น ไม่งั้นใช้ของเจ้าแรกที่มี แล้วค่อย fallback เป็นรหัสสินค้า
+  const displayCode = useMemo(() => {
+    const matched = variantCode ? product?.suppliers?.find((s) => s.variant_code === variantCode) : undefined;
+    const supplier = matched || product?.suppliers?.[0];
+    return supplier?.variant_code || supplier?.barcode || product?.product_code || "";
+  }, [product, variantCode]);
+
   const imageUrl = resolveImageUrl(product?.thumbnail_url || "");
 
   if (loading) {
@@ -147,7 +155,7 @@ export default function PublicProductPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-normal text-red-700">
-                {product.product_code || product.barcode || `ID ${product.id}`}
+                {product.product_code || displayCode || `ID ${product.id}`}
               </p>
               <h1 className="mt-2 text-2xl font-bold leading-tight text-gray-950 sm:text-3xl">
                 {product.product_name}
@@ -184,7 +192,7 @@ export default function PublicProductPage() {
 
           <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
             <div className="grid gap-4 sm:grid-cols-2">
-              <InfoItem icon={<Barcode />} label="Barcode" value={product.barcode || "-"} />
+              <InfoItem icon={<Barcode />} label="Barcode" value={displayCode || "-"} />
               <InfoItem icon={<Tag />} label="Part No." value={product.part_number || "-"} />
               {importerName ? (
                 <InfoItem icon={<Building2 />} label="บริษัทที่นำเข้า" value={importerName} />

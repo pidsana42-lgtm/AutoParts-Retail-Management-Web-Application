@@ -202,7 +202,8 @@ describe('Claim detail item decisions', () => {
 
   it('keeps an unsuccessful edit as a draft and shows saved values after cancel', async () => {
     const user = await openPage('/owner/claims/detail/9?edit=1');
-    const reason = within(itemRow()).getByRole('textbox');
+    // The edit-query effect runs after the detail has first rendered.
+    const reason = await within(itemRow()).findByRole('textbox');
     await user.clear(reason);
     await user.type(reason, 'ยังบันทึกไม่ได้');
     mocks.put.mockRejectedValue(new Error('Write unavailable'));
@@ -233,5 +234,14 @@ describe('Claim detail item decisions', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('displays the reference order number correctly', async () => {
+    mocks.getClaim.mockResolvedValue({
+      ...claim,
+      order_number: 'INV2609080001',
+    });
+    await openPage();
+    expect(screen.getByText('INV2609080001')).toBeInTheDocument();
   });
 });

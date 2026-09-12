@@ -28,7 +28,8 @@ interface ScanViewProps {
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   batchImages: File[];
   batchProgress: { [key: string]: 'pending' | 'scanning' | 'success' | 'failed' };
-  batchResults: ScannedBillData[];
+  batchResults: (ScannedBillData | null)[];
+  isMergedBatch?: boolean;
   activeBatchIndex: number;
   handleSelectBatchItem: (index: number) => void;
   handlePrevBatchItem: () => void;
@@ -87,6 +88,7 @@ export default function ScanView({
   batchImages,
   batchProgress,
   batchResults,
+  isMergedBatch = false,
   activeBatchIndex,
   handleSelectBatchItem,
   handlePrevBatchItem,
@@ -375,7 +377,7 @@ export default function ScanView({
                 <button 
                   type="button"
                   onClick={handleOcrProcess}
-                  disabled={scanning}
+                  disabled={scanning || saving || isMergedBatch}
                   className="mt-6 cursor-pointer text-sm text-[#e51c23] font-bold hover:bg-gray-50 bg-white py-2 px-6 rounded-none shadow-sm flex items-center gap-2 transition-all border border-gray-100 disabled:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 >
                   {scanning ? (
@@ -448,9 +450,9 @@ export default function ScanView({
               <p className="text-sm max-w-md">กรุณาเลือกไฟล์บิลด้านซ้าย และกดปุ่มสแกนบิลเพื่อตรวจสอบวิเคราะห์ข้อมูล</p>
             </div>
           ) : (
-            <div key={`form-view-active-${activeBatchIndex}`} className="flex flex-col flex-1 animate-in fade-in duration-300">
+            <fieldset disabled={saving || scanning} key={`form-view-active-${activeBatchIndex}`} className="flex flex-col flex-1 min-w-0 border-0 p-0 m-0 animate-in fade-in duration-300">
               {/* Multi-Page Bill Merge Control Banner */}
-              {batchImages.length > 1 && (
+              {batchImages.length > 1 && !isMergedBatch && (
                 <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex items-center justify-between gap-4 flex-wrap text-xs">
                   <div className="flex items-center gap-2 text-amber-900 font-medium">
                     <AlertCircle size={16} className="text-amber-600 shrink-0" />
@@ -462,6 +464,7 @@ export default function ScanView({
                     <button
                       type="button"
                       onClick={handleMergeBatchResultsToSingleBill}
+                      disabled={scanning || saving}
                       className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3.5 py-1.5 rounded-none shadow-2xs transition-all cursor-pointer flex items-center gap-1.5 hover:scale-105 active:scale-95"
                     >
                       <span>รวมทุกแผ่นเป็น 1 บิล (Merge Multi-Page Bill)</span>
@@ -508,7 +511,7 @@ export default function ScanView({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-2">วันที่ครบกำหนดในบิล</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-2">วันที่ในบิล</label>
                   <input 
                     type="date" 
                     value={formData.due_date} 
@@ -813,7 +816,7 @@ export default function ScanView({
                         <button
                           type="button"
                           onClick={() => batchResults.length > 0 ? handleSaveAllBatchBills(true) : handleSaveBill(true)}
-                          disabled={saving || formData.items.length === 0}
+                          disabled={saving || scanning || formData.items.length === 0}
                           className="bg-[#1C1B1B] hover:bg-gray-800 text-white px-6 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
                         >
                           <Save size={16} />
@@ -837,7 +840,7 @@ export default function ScanView({
                             }
                           }
                         }}
-                        disabled={saving || formData.items.length === 0}
+                        disabled={saving || scanning || formData.items.length === 0}
                         className="bg-[#e51c23] hover:bg-[#c9181f] text-white px-8 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:bg-gray-400 cursor-pointer"
                       >
                         {saving ? (
@@ -854,7 +857,7 @@ export default function ScanView({
                                 : isDraftMode
                                   ? 'บันทึกเป็นแบบร่าง'
                                   : batchResults.length > 0
-                                    ? `บันทึกข้อมูลทั้งหมด (${batchResults.length} บิล)`
+                                    ? `บันทึกข้อมูลทั้งหมด (${batchResults.filter(Boolean).length} บิล)`
                                     : 'บันทึกข้อมูล'}
                             </span>
                           </>
@@ -863,7 +866,7 @@ export default function ScanView({
                     </>
                   )}
               </BillSummaryFooterBar>
-            </div>
+            </fieldset>
           )}
         </div>
       </div>

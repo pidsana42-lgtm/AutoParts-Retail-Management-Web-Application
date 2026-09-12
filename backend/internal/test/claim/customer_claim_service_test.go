@@ -246,6 +246,9 @@ func TestCreateCustomerClaim_ClaimNoFromSaleOrder(t *testing.T) {
 	if got.ClaimNo != "CLM-SO2026-0042" {
 		t.Errorf("response should carry ClaimNo, got %q", got.ClaimNo)
 	}
+	if got.OrderNumber != "SO2026-0042" {
+		t.Errorf("response should carry OrderNumber, got %q", got.OrderNumber)
+	}
 	if len(notifier.records) != 1 || notifier.records[0].typ != "CUSTOMER_CLAIM_CREATED" || notifier.records[0].userID != 0 {
 		t.Errorf("owners should be notified exactly once about creation, got %+v", notifier.records)
 	}
@@ -570,5 +573,29 @@ func TestListCustomerClaims_MapsEachEntity(t *testing.T) {
 	}
 	if len(got) != 2 || got[0].ID != 1 || got[1].Status != "APPROVED" {
 		t.Errorf("unexpected list mapping: %+v", got)
+	}
+}
+
+func TestUpdateCustomerClaimItem_CompletedCannotBeEdited(t *testing.T) {
+	repo := newMockClaimRepo()
+	repo.getItemFn = func(id uint) (*entity.CustomerClaimItem, error) {
+		return &entity.CustomerClaimItem{
+			Model:      gorm.Model{ID: 10},
+			Resolution: "COMPLETED",
+			Status:     "APPROVED",
+		}, nil
+	}
+
+	svc := newService(repo, &mockSORepo{}, nil)
+	_, err := svc.UpdateCustomerClaimItem(10, claimDTO.UpdateCustomerClaimItemDTO{
+		Resolution: "WAITING_SEND",
+	})
+	if err == nil {
+		t.Fatal("expected error when updating completed item, got nil")
+	}
+
+	_, errStatus := svc.UpdateCustomerClaimItemStatus(10, "REJECTED")
+	if errStatus == nil {
+		t.Fatal("expected error when updating status of completed item, got nil")
 	}
 }

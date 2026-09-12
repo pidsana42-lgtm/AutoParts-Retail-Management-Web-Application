@@ -1,0 +1,52 @@
+import { describe, expect, it } from 'vitest';
+import { guessColumnMapping, normalizeDateValue, validateBillItems } from './excelImport';
+import { importItem } from '../test/importFixtures';
+
+describe('Import spreadsheet normalization', () => {
+  it.each([
+    ['09/09/2569', '2026-09-09'], ['9/9/69', '2026-09-09'], ['09-09-2026', '2026-09-09'],
+    ['2026-9-9', '2026-09-09'], [new Date(2026, 8, 9), '2026-09-09'],
+    [25569, '1970-01-01'], [null, ''], [undefined, ''], ['', ''], ['not a date', ''], [10, ''],
+  ])('normalizes %s to %s', (value, expected) => {
+    expect(normalizeDateValue(value)).toBe(expected);
+  });
+  it.each([
+    ['รหัสสินค้า', 'ชื่อสินค้า', 'จำนวน', 'หน่วย', 'ราคาต่อหน่วย'],
+    ['product_code', 'description', 'qty', 'unit', 'price'],
+  ])('maps Thai and English spreadsheet headers (%#)', (...headers) => {
+    const { mapping, confidence } = guessColumnMapping(headers, [['PART-21', 'กรองน้ำมันเครื่อง', 2, 'ชิ้น', 100.50]]);
+    expect(mapping).toEqual({ code: headers[0], name: headers[1], quantity: headers[2], unit: headers[3], price: headers[4] });
+    expect(confidence).toBeGreaterThan(0.6);
+    expect(new Set(Object.values(mapping)).size).toBe(5);
+  });
+  it('does not report confident mappings for a sheet without data', () => {
+    expect(guessColumnMapping(['code', 'name', 'qty', 'price'], [])).toEqual({
+      mapping: { code: '', name: '', quantity: '', unit: '', price: '' }, confidence: 0,
+    });
+  });
+});
+
+describe('Import item validation', () => {
+  it('accepts valid rows and zero-price freebies', () => {
+    expect(validateBillItems([importItem, { ...importItem, company_product_code: 'FREE-1', price_per_unit: 0, is_freebie: true }])).toEqual({});
+  });
+  it.each([
+    { changes: { company_product_code: '', company_product_name: '' }, fields: ['code', 'name'] },
+    { changes: { company_product_name: '' }, fields: ['name'] },
+    { changes: { order_quantity: 0 }, fields: ['quantity'] },
+    { changes: { order_quantity: -1 }, fields: ['quantity'] },
+    { changes: { order_quantity: NaN }, fields: ['quantity'] },
+    { changes: { price_per_unit: -1 }, fields: ['price'] },
+    { changes: { price_per_unit: NaN }, fields: ['price'] },
+  ])('identifies the affected fields for invalid row %#', ({ changes, fields }) => {
+    const issues = validateBillItems([{ ...importItem, ...changes }]);
+    expect(issues[0].fields).toEqual(fields);
+    expect(issues[0].messages.length).toBeGreaterThan(0);
+  });
+  it('marks both duplicate rows while preserving other validation errors', () => {
+    const issues = validateBillItems([importItem, { ...importItem, company_product_code: ' PART-21 ', order_quantity: 0 }]);
+    expect(issues[0].fields).toContain('code');
+    expect(issues[1].fields).toEqual(['quantity', 'code']);
+    expect(issues[1].messages).toContain('รหัสสินค้าซ้ำกับแถว 1, 2');
+  });
+});

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"backend/internal/app/entity"
 	importDataDTO "backend/internal/app/dto/import_data"
+	"backend/internal/app/entity"
 	billRepo "backend/internal/app/repository/import_data"
 	billService "backend/internal/app/service/import_data"
 
@@ -18,21 +18,21 @@ import (
 // -----------------------------------------------------------------------------
 
 type mockImportBillRepo struct {
-	createBillFn             func(*entity.Bill) error
-	listBillsFn              func() ([]entity.Bill, error)
-	createBillImageFn        func(*entity.BillImage) error
-	createJobFn              func(*entity.BillImportJob) error
-	getJobByIDFn             func(id uint) (*entity.BillImportJob, error)
-	saveJobFn                func(*entity.BillImportJob) error
-	createItemFn             func(*entity.BillItem) error
-	confirmTxnFn             func(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob, role string) error
-	getBillByIDFn            func(id uint) (*entity.Bill, error)
-	updateBillFn             func(id uint, bill *entity.Bill, items []entity.BillItem) error
-	deleteBillFn             func(id uint) error
-	findOrCreateSupplierFn   func(name string) (uint, error)
-	listPOsFn                func() ([]entity.PO, error)
-	getPOByIDFn              func(id uint) (*entity.PO, error)
-	updateProductFn          func(id uint, product *entity.Product, modelIDs []uint) error
+	createBillFn           func(*entity.Bill) error
+	listBillsFn            func() ([]entity.Bill, error)
+	createBillImageFn      func(*entity.BillImage) error
+	createJobFn            func(*entity.BillImportJob) error
+	getJobByIDFn           func(id uint) (*entity.BillImportJob, error)
+	saveJobFn              func(*entity.BillImportJob) error
+	createItemFn           func(*entity.BillItem) error
+	confirmTxnFn           func(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob, role string) error
+	getBillByIDFn          func(id uint) (*entity.Bill, error)
+	updateBillFn           func(id uint, bill *entity.Bill, items []entity.BillItem) error
+	deleteBillFn           func(id uint) error
+	findOrCreateSupplierFn func(name string) (uint, error)
+	listPOsFn              func() ([]entity.PO, error)
+	getPOByIDFn            func(id uint) (*entity.PO, error)
+	updateProductFn        func(id uint, product *entity.Product, modelIDs []uint) error
 
 	called map[string]int
 }
@@ -184,15 +184,15 @@ var errDbFail = errors.New("db fail")
 
 func sampleBillDTO() importDataDTO.CreateBillDTO {
 	return importDataDTO.CreateBillDTO{
-		BillNo:      "BILL-2026-001",
-		TotalAmount: 5000,
-		Subtotal:    4500,
-		VatAmount:   315,
-		GrandTotal:  4815,
-		SupplierID:  3,
+		BillNo:        "BILL-2026-001",
+		TotalAmount:   5000,
+		Subtotal:      4500,
+		VatAmount:     315,
+		GrandTotal:    4815,
+		SupplierID:    3,
 		PaymentStatus: "unpaid",
-		DueDate:     importDataDTO.FlexTime{Time: time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)},
-		ReceiveDate: importDataDTO.FlexTime{Time: time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC)},
+		DueDate:       importDataDTO.FlexTime{Time: time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)},
+		ReceiveDate:   importDataDTO.FlexTime{Time: time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC)},
 	}
 }
 
@@ -312,9 +312,9 @@ func TestCreateBillImportJob_ForcesPendingStatus(t *testing.T) {
 func TestConfirmBillImport_WithExistingJob(t *testing.T) {
 	repo := newMockRepo()
 	existing := &entity.BillImportJob{
-		Model:    gorm.Model{ID: 5},
-		FileURL:  "/uploads/bill.jpg",
-		Status:   "processed",
+		Model:     gorm.Model{ID: 5},
+		FileURL:   "/uploads/bill.jpg",
+		Status:    "processed",
 		DraftJSON: "{}",
 	}
 	repo.getJobByIDFn = func(id uint) (*entity.BillImportJob, error) {
@@ -530,10 +530,10 @@ func TestDeleteBill_RoleRules(t *testing.T) {
 			wantDeleteCall: true,
 		},
 		{
-			name:     "employee cannot delete verified bill",
-			role:     "Employee",
-			billInDB: approvedBill,
-			wantErr:  billService.ErrBillDeleteForbidden,
+			name:          "employee cannot delete verified bill",
+			role:          "Employee",
+			billInDB:      approvedBill,
+			wantErr:       billService.ErrBillDeleteForbidden,
 			wantFetchCall: true,
 		},
 		{
@@ -546,10 +546,10 @@ func TestDeleteBill_RoleRules(t *testing.T) {
 			wantFetchCall: true,
 		},
 		{
-			name:     "fetch error returned as-is",
-			role:     "Employee",
-			fetchErr: errDbFail,
-			wantErr:  errDbFail,
+			name:          "fetch error returned as-is",
+			role:          "Employee",
+			fetchErr:      errDbFail,
+			wantErr:       errDbFail,
 			wantFetchCall: true,
 		},
 	}
@@ -605,7 +605,6 @@ func TestUpdateProduct_MapsAllFields(t *testing.T) {
 		ProductCode:   "SPK-100",
 		PartNumber:    "90915-10003",
 		ProductName:   "ไส้กรองน้ำมัน",
-		Barcode:       "885000000001",
 		Quantity:      25,
 		LimitQuantity: 5,
 		CostPrice:     90,

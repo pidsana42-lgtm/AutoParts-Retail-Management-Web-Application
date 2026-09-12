@@ -516,7 +516,9 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         unit_price: item.unit_price,
         discount_type: item.discount_type,
         discount_value: item.discount_value,
-        allocated_bill_discount: allocatedBillDiscount, 
+        // ถ้าตอนสแกน/ค้นหาตรงกับบาร์โค้ดของบริษัทไหนเจาะจงไว้ ส่งต่อไปให้ backend หักคงเหลือต่อบริษัทให้ตรงเจ้าจริง
+        supplier_id: item.supplier_id,
+        allocated_bill_discount: allocatedBillDiscount,
         net_subtotal: Math.round((subtotalAfterLineDiscount - allocatedBillDiscount) * 100) / 100,
       };
     });
@@ -743,10 +745,9 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
     setIsConfirming(true);
 
     const printReceiptAuto = async (orderIdToPrint: number | string) => {
+      const orderNum = currentOrderNumberRef.current || posSession.currentOrderNumber || orderIdToPrint;
+      const docTitle = activePaymentMethodId === 3 ? "ใบส่งของชั่วคราว" : "ใบเสร็จรับเงิน";
       try {
-        const orderNum = currentOrderNumberRef.current || posSession.currentOrderNumber || orderIdToPrint;
-        const docTitle = activePaymentMethodId === 3 ? "ใบส่งของชั่วคราว" : "ใบเสร็จรับเงิน";
-
         // เรียก API ดึงไฟล์ PDF มาตรฐานจาก Backend (Single Source of Truth) เพื่อสั่งพิมพ์
         await printPosReceiptFromBackend(orderIdToPrint, {
           orderNumber: String(orderNum),
@@ -755,6 +756,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         });
       } catch (err) {
         console.error("Error auto-printing POS receipt from backend:", err);
+        toast({
+          variant: "warning",
+          message: `บันทึกการขายสำเร็จ (${orderNum}) แต่เบราว์เซอร์ไม่สามารถเปิดหน้าต่างพิมพ์อัตโนมัติได้`,
+        });
       }
     };
 

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Trash2, SquarePen } from "lucide-react";
 import { useToast } from "../../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../../components/elements/alert_dialog";
 
 import { stockDataService } from "../../../../../service/http/wms/stock_data_service";
 import type { Unit } from "../../../../../interface/wms/stock_data";
@@ -20,6 +21,7 @@ interface UnitTabProps {
 
 export default function UnitTab({ search, units, loadData, addSignal }: UnitTabProps) {
   const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
 
   // Modals visibility state
   const [addOpen, setAddOpen] = useState(false);
@@ -40,8 +42,12 @@ export default function UnitTab({ search, units, loadData, addSignal }: UnitTabP
     setCurrentPage(1);
   }, [search]);
 
-  const handleDeleteUnit = async (id: number) => {
-    if (!confirm("คุณแน่ใจว่าต้องการลบหน่วยสินค้านี้?")) return;
+  const handleDeleteUnit = async (id: number, name: string) => {
+    const confirmed = await confirmDialog(
+      `ต้องการลบหน่วยนับสินค้า "${name}" ใช่หรือไม่?`,
+      { title: "ลบหน่วยนับสินค้า", confirmText: "ลบ", variant: "danger", icon: Trash2 }
+    );
+    if (!confirmed) return;
     try {
       await stockDataService.deleteUnit(id);
       toast({ variant: "success", message: "ลบหน่วยสินค้าสำเร็จ" });
@@ -99,7 +105,7 @@ export default function UnitTab({ search, units, loadData, addSignal }: UnitTabP
                         <SquarePen className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => handleDeleteUnit(unit.id)}
+                        onClick={() => handleDeleteUnit(unit.id, unit.unit_name)}
                         className="hover:text-red-600 transition-colors"
                       >
                         <Trash2 className="h-4 w-4" />

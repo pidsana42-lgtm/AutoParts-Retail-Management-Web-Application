@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { AlertCircle, Banknote, Calendar, ChevronRight, CircleCheck, ClipboardClock, Loader2, Lock, Phone, User, XCircle } from 'lucide-react';
+import { AlertCircle, Calendar, ChevronRight, CircleCheck, ClipboardClock, Loader2, Lock, Phone, User, XCircle } from 'lucide-react';
 // Components
 import Heading from '../../../components/elements/heading';
 import Badge from '../../../components/elements/badge';
@@ -14,6 +14,7 @@ import { formatDateThai } from '../../../utils/formatdate';
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import { useToast } from '../../../components/elements/toast';
 import Modal from '../../../components/elements/modal';
+import ConfirmDialog from '../../../components/elements/confirm_dialog';
 
 const STATUS_LABEL: Record<string, string> = {
   REFUNDED: 'คืนเงินจริงแล้ว',
@@ -38,6 +39,10 @@ const getItemReason = (reason: string | undefined, productName: string, index: n
 const ReturnDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  // ที่มาของการเข้าหน้านี้ (ถ้ามี) — ใช้ปรับเกล็ดขนมปังให้ตรงกับหน้าที่กดเข้ามาจริงๆ เช่นจากหน้า
+  // "การเคลื่อนไหวของคลังสินค้า" แทน "จัดการคืนสินค้า" ตามปกติ
+  const cameFromMovement = (location.state as { from?: string } | null)?.from === 'movement';
   const basePath = usePathBasePrefix();
   const userRole = (localStorage.getItem('role') || '').toUpperCase();
   const isManager = userRole === 'OWNER' || userRole === 'ADMIN';
@@ -48,6 +53,8 @@ const ReturnDetailPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
+  const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -75,11 +82,19 @@ const ReturnDetailPage: React.FC = () => {
     try {
       const updated = await returnService.updateSalesReturn(returnItem.id, { status: newStatus });
       setReturnItem(updated || { ...returnItem, status: newStatus });
-      alert(`ดำเนินการ${newStatus === 'APPROVED' ? 'อนุมัติคืนเงินสำเร็จ' : 'ปฏิเสธคำขอคืนเงิน'}เรียบร้อยแล้ว`);
+      toast({
+        title: newStatus === 'APPROVED' ? 'อนุมัติสำเร็จ' : 'ปฏิเสธสำเร็จ',
+        message: `ดำเนินการ${newStatus === 'APPROVED' ? 'อนุมัติคืนเงิน' : 'ปฏิเสธคำขอคืนเงิน'}เรียบร้อยแล้ว`,
+        variant: newStatus === 'APPROVED' ? 'success' : 'info',
+      });
       navigate(`${basePath}/returns`);
     } catch (err: any) {
       const message = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'เกิดข้อผิดพลาดในการอัปเดตสถานะ';
-      alert(message);
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        message,
+        variant: 'error',
+      });
     } finally {
       setIsUpdating(false);
     }
@@ -143,8 +158,11 @@ const ReturnDetailPage: React.FC = () => {
         <div className="flex items-center gap-4">
           <div className="flex-col space-y-2">
             <nav className="flex items-center text-sm text-gray-500 gap-2 font-light">
-              <Link to={`${basePath}/returns`} className="hover:text-black transition-colors">
-                จัดการคืนสินค้า
+              <Link
+                to={cameFromMovement ? '/owner/stock/stock-movement' : `${basePath}/returns`}
+                className="hover:text-black transition-colors"
+              >
+                {cameFromMovement ? 'การเคลื่อนไหวของคลังสินค้า' : 'จัดการคืนสินค้า'}
               </Link>
               <ChevronRight size={16} className="text-gray-400" />
               <span className="text-black font-normal">รายละเอียดใบคืนสินค้า</span>
@@ -286,8 +304,8 @@ const ReturnDetailPage: React.FC = () => {
                           type="button"
                           variant="approved"
                           disabled={isUpdating}
-                          onClick={() => handleStatusUpdate('APPROVED')}
-                          className="w-full"
+                          onClick={() => setIsApproveModalOpen(true)}
+                          className="w-full cursor-pointer"
                         >
                           {isUpdating ? <Loader2 size={16} className="animate-spin" /> : <CircleCheck size={18} />} อนุมัติคืนเงินสำเร็จ
                         </Button>
@@ -295,8 +313,8 @@ const ReturnDetailPage: React.FC = () => {
                           type="button"
                           variant="danger"
                           disabled={isUpdating}
-                          onClick={() => handleStatusUpdate('REJECTED')}
-                          className="w-full"
+                          onClick={() => setIsRejectModalOpen(true)}
+                          className="w-full cursor-pointer"
                         >
                           {isUpdating ? <Loader2 size={16} className="animate-spin" /> : <XCircle size={18} />} ปฏิเสธคำขอคืนเงิน
                         </Button>
@@ -379,6 +397,92 @@ const ReturnDetailPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Modal ยืนยันการอนุมัติคืนเงิน */}
+      <ConfirmDialog
+        isOpen={isApproveModalOpen}
+        onClose={() => !isUpdating && setIsApproveModalOpen(false)}
+        title="ยืนยันการอนุมัติคืนเงิน"
+        description={(
+          <div className="space-y-3 text-sm text-slate-700 text-left">
+            <p className="text-center text-slate-600">คุณต้องการอนุมัติคำขอคืนเงินสำหรับใบคืนสินค้านี้ใช่หรือไม่?</p>
+            {returnItem && (
+              <div className="bg-[#f6f3f2] p-3 space-y-2 mt-2">
+                <div className="flex justify-between gap-4 text-xs">
+                  <span className="text-slate-500">เลขที่ใบคืนสินค้า</span>
+                  <span className="font-semibold text-slate-900">{returnItem.return_number || '-'}</span>
+                </div>
+                <div className="flex justify-between gap-4 text-xs">
+                  <span className="text-slate-500">อ้างอิง Order</span>
+                  <span className="font-semibold text-slate-900">{orderNumber}</span>
+                </div>
+                <div className="flex justify-between gap-4 text-xs">
+                  <span className="text-slate-500">ลูกค้า</span>
+                  <span className="font-semibold text-slate-900">{customerName}</span>
+                </div>
+                <div className="flex justify-between gap-4 text-xs">
+                  <span className="text-slate-500">จำนวนสินค้าที่คืน</span>
+                  <span className="font-semibold text-slate-900">{totalQuantity} ชิ้น</span>
+                </div>
+                <div className="flex justify-between gap-4 text-xs">
+                  <span className="text-slate-500">ยอดเงินคืน</span>
+                  <span className="font-semibold text-[#e51c23]">
+                    ฿ {returnItem.refund_amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4 text-xs">
+                  <span className="text-slate-500">ช่องทางคืนเงิน</span>
+                  <span className="font-medium text-slate-900">{returnItem.refund_method || '-'}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        onConfirm={async () => {
+          setIsApproveModalOpen(false);
+          await handleStatusUpdate('APPROVED');
+        }}
+        confirmText="ยืนยันอนุมัติ"
+        cancelText="ยกเลิก"
+        variant="success"
+        icon={CircleCheck}
+        isSubmitting={isUpdating}
+      />
+
+      {/* Modal ยืนยันการปฏิเสธคำขอคืนเงิน */}
+      <ConfirmDialog
+        isOpen={isRejectModalOpen}
+        onClose={() => !isUpdating && setIsRejectModalOpen(false)}
+        title="ยืนยันการปฏิเสธคำขอคืนเงิน"
+        description={(
+          <div className="space-y-3 text-sm text-slate-700 text-left">
+            <p className="text-center text-slate-600">คุณต้องการปฏิเสธคำขอคืนเงินสำหรับใบคืนสินค้านี้ใช่หรือไม่?</p>
+            {returnItem && (
+              <div className="bg-[#f6f3f2] p-3 space-y-2 mt-2">
+                <div className="flex justify-between gap-4 text-xs">
+                  <span className="text-slate-500">เลขที่ใบคืนสินค้า</span>
+                  <span className="font-semibold text-slate-900">{returnItem.return_number || '-'}</span>
+                </div>
+                <div className="flex justify-between gap-4 text-xs">
+                  <span className="text-slate-500">ยอดเงินคืน</span>
+                  <span className="font-semibold text-[#e51c23]">
+                    ฿ {returnItem.refund_amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        onConfirm={async () => {
+          setIsRejectModalOpen(false);
+          await handleStatusUpdate('REJECTED');
+        }}
+        confirmText="ยืนยันปฏิเสธ"
+        cancelText="ยกเลิก"
+        variant="danger"
+        icon={XCircle}
+        isSubmitting={isUpdating}
+      />
     </div>
   );
 };

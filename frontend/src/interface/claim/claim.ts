@@ -30,6 +30,7 @@ export interface CustomerClaimItem {
   returned_item_id?: number;
   product_id: number;
   product_name?: string;
+  product_code?: string;
   qty: number;
   unit_price?: number;
   reason: string;
@@ -45,6 +46,7 @@ export interface CustomerClaimItem {
 export interface CustomerClaim {
   id?: number;
   claim_no?: string;
+  order_number?: string;
   claim_date: string;
   original_order_id: number;
   customer_name?: string;
@@ -87,3 +89,58 @@ export interface SupplierClaim {
   note: string;
   supplier_claims_items?: SupplierClaimItem[];
 }
+
+// ==========================================
+// Claim Types & UI Interfaces
+// ==========================================
+export type ClaimType = 'INSTANT' | 'SUPPLIER_PENDING' | 'CREDIT_ACCOUNT';
+export type ClaimStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export type TrackingStage = 'WAITING_SEND' | 'SENT_TO_SUPPLIER' | 'REPLACEMENT_RECEIVED' | 'COMPLETED';
+export type TrackingFilter = 'ALL' | TrackingStage;
+
+export interface ClaimFormProduct {
+  product_id: number;
+  product_name: string;
+  price: number;
+  sold_qty: number;
+  claim_qty: number;
+  reason: string;
+  claim_type?: ClaimType;
+  evidenceFile: File | null;
+  evidencePreview: string | null;
+}
+
+export interface FlatRow {
+  claimId: number;
+  claimNo: string;
+  claimDate: string;
+  customerName: string;
+  customerPhone: string;
+  claimType: ClaimType;
+  itemClaimType: ClaimType;
+  isFirst: boolean;
+  totalItems: number;
+  itemId: number;
+  productName: string;
+  qty: number;
+  reason: string;
+  resolution: string;
+  itemStatus: string;
+  rawClaim: CustomerClaim;
+}
+
+export interface ClaimsPageProps {
+  canApprove?: boolean;
+}
+
+export interface ClaimTrackingTabProps {
+  rawClaims: CustomerClaim[];
+  loading: boolean;
+  basePath: string;
+  onUpdateStage: (itemId: number, newStage: string) => Promise<void>;
+  updatingItemId: number | null;
+  trackingSearch: string;
+  trackingFilter: TrackingFilter;
+}
+
