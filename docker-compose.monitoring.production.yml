@@ -1,8 +1,0 @@
-services:
-  prometheus:
-    volumes:
-      - ./monitoring/prometheus/prometheus.production.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
-      - ./monitoring/secrets/prometheus_metrics_password:/run/secrets/prometheus_metrics_password:ro
-      - prometheus-data:/prometheus
-
