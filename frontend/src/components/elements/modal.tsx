@@ -70,7 +70,7 @@ export default function Modal({
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-slate-900/50 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-black/60 backdrop-blur-none"
         onClick={onClose}
         aria-hidden="true"
       />
