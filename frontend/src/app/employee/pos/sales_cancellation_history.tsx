@@ -7,6 +7,7 @@ import Input from "../../../components/elements/input";
 import Button from "../../../components/elements/button";
 import Select from "../../../components/elements/select";
 import Badge from "../../../components/elements/badge";
+import ConfirmDialog from "../../../components/elements/confirm_dialog";
 import {
   Eye,
   ChevronLeft,
@@ -46,6 +47,9 @@ const SalesCancellationHistory: React.FC = () => {
         selectedIds,
         isSelectAll,
         isLoading,
+        isRestoring,
+        isRestoreModalOpen,
+        setIsRestoreModalOpen,
         error,
         stats,
         isStatsLoading,
@@ -69,6 +73,7 @@ const SalesCancellationHistory: React.FC = () => {
         handleSelectRow,
         handleSearch,
         handleRestoreSelected,
+        handleConfirmRestore,
         refetch,
     } = useSalesCancellationHistory();
 
@@ -489,7 +494,7 @@ const SalesCancellationHistory: React.FC = () => {
                 className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 text-sm px-4 py-2.5 rounded-none cursor-pointer disabled:cursor-not-allowed transition-all"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span>กู้คืนใบสั่งซื้อที่เลือก ({selectedIds.length})</span>
+                <span>กู้คืนรายการขายที่เลือก ({selectedIds.length})</span>
               </Button>
             </div>
 
@@ -1122,6 +1127,20 @@ const SalesCancellationHistory: React.FC = () => {
           </aside>
         </div>
       )}
+
+      {/* ConfirmDialog ยืนยันการกู้คืนรายการขาย */}
+      <ConfirmDialog
+        isOpen={isRestoreModalOpen}
+        onClose={() => setIsRestoreModalOpen(false)}
+        onConfirm={handleConfirmRestore}
+        title="ยืนยันการกู้คืนรายการขาย"
+        description={`คุณต้องการกู้คืนรายการขาย ${selectedIds.length} รายการใช่หรือไม่?`}
+        confirmText="ยืนยันกู้คืน"
+        cancelText="ยกเลิก"
+        variant="danger"
+        icon={RotateCcw}
+        isSubmitting={isRestoring}
+      />
     </div>
   );
 };
