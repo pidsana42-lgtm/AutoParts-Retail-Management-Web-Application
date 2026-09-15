@@ -29,6 +29,16 @@ export interface EmployeePaymentCancellationStats {
   rejectedAmount: number;
 }
 
+export interface PaymentCancellationConfirmDialogState {
+  isOpen: boolean;
+  title: string;
+  description: React.ReactNode;
+  confirmText: string;
+  variant: "danger" | "warning" | "success" | "info";
+  icon?: any;
+  onConfirm: () => void;
+}
+
 export interface UsePaymentCancellationHistoryReturn {
   dataList: PaymentHistoryItem[];
   selectedIds: number[];
@@ -62,6 +72,10 @@ export interface UsePaymentCancellationHistoryReturn {
   handleSearch: () => void;
   refetch: () => Promise<void>;
   
+  // Confirm Dialog State & Actions
+  confirmDialog: PaymentCancellationConfirmDialogState;
+  closeConfirmDialog: () => void;
+
   // Drawer Details & Actions
   selectedReceipt: PaymentHistoryItem | null;
   setSelectedReceipt: (item: PaymentHistoryItem | null) => void;
@@ -72,9 +86,9 @@ export interface UsePaymentCancellationHistoryReturn {
   isProcessing: boolean;
   handleApproveCancel: () => Promise<void>;
   handleRejectCancel: () => Promise<void>;
-  handleRevertCancel: () => Promise<void>;
+  handleRevertCancel: () => Promise<void> | void;
   handleResubmitCancel: () => Promise<void>;
-  handleBatchApprove: () => Promise<void>;
-  handleBatchReject: () => Promise<void>;
-  handleBatchRevert: () => Promise<void>;
+  handleBatchApprove: () => Promise<void> | void;
+  handleBatchReject: () => Promise<void> | void;
+  handleBatchRevert: () => Promise<void> | void;
 }
