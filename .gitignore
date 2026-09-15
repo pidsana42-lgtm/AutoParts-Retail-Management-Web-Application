@@ -1,3 +1,11 @@
 
 # Google service account key
 backend/model/service_account.json
+
+# Local monitoring credentials
+.env.monitoring
+.env.monitoring.production
+
+# Production Prometheus scrape credentials
+monitoring/secrets/*
+!monitoring/secrets/README.md

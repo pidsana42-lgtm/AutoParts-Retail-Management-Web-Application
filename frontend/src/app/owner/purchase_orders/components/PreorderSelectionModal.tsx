@@ -43,7 +43,7 @@ export const PreorderSelectionModal: React.FC<PreorderSelectionModalProps> = ({
             <TableHeader className="bg-gray-100 text-gray-600">
               <TableRow>
                 <TableHead className="pl-4">ลำดับ</TableHead>
-                <TableHead className="pl-4">รหัสสินค้า</TableHead>
+                <TableHead className="pl-4">รหัสร้าน</TableHead>
                 <TableHead>ชื่อสินค้า</TableHead>
                 <TableHead className="text-center">จำนวนที่สั่ง</TableHead>
                 <TableHead className="text-right pr-6">ราคาคาดการณ์</TableHead>
@@ -71,7 +71,7 @@ export const PreorderSelectionModal: React.FC<PreorderSelectionModalProps> = ({
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-gray-500">
+                  <TableCell colSpan={6} className="text-center py-12 text-gray-500">
                     ไม่มีรายการพรีออเดอร์ค้างอยู่ในระบบ
                   </TableCell>
                 </TableRow>
