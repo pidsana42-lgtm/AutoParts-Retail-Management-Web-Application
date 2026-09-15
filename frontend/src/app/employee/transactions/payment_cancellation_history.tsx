@@ -6,6 +6,7 @@ import Input from "../../../components/elements/input";
 import Button from "../../../components/elements/button";
 import Select from "../../../components/elements/select";
 import Badge from "../../../components/elements/badge";
+import ConfirmDialog from "../../../components/elements/confirm_dialog";
 import {
   Eye,
   ChevronLeft,
@@ -52,6 +53,8 @@ const PaymentCancellationHistory: React.FC = () => {
     handleBatchApprove,
     handleBatchReject,
     handleBatchRevert,
+    confirmDialog,
+    closeConfirmDialog,
     isLoading,
     error,
     ownerStats,
@@ -1031,6 +1034,20 @@ const PaymentCancellationHistory: React.FC = () => {
           </aside>
         </div>
       )}
+
+      {/* ConfirmDialog ยืนยันการทำรายการ */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={closeConfirmDialog}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText="ยกเลิก"
+        variant={confirmDialog.variant}
+        {...(confirmDialog.icon ? { icon: confirmDialog.icon } : {})}
+        isSubmitting={isProcessing}
+      />
     </div>
   );
 };
