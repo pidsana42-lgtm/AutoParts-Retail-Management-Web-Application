@@ -46,9 +46,10 @@ func PurchaseOrdersItems(db *gorm.DB) error {
 
 		// ใช้ยอดรวมของ PO เป็นฐาน เพื่อให้ยอดรายการ Seed ตรงกับหัว PO เสมอ
 		unitPrice := po.Total_amount / row.Quantity
+		productID := product.ID
 		item := entity.POItems{
 			POID:                         po.ID,
-			ProductID:                    product.ID,
+			ProductID:                    &productID,
 			Product_name_snapshot:        product.Product_Name,
 			Product_code_snapshot:        product.Product_Code,
 			Supply_product_code_snapshot: inventory.CompanyProductCode,
