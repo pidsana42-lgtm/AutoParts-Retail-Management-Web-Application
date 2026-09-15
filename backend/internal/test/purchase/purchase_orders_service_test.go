@@ -203,6 +203,9 @@ func TestCreatePO_Success(t *testing.T) {
 				if item.ProductID != uint(i+1) || item.ProductNameSnapshot != "Oil filter" || item.ProductCodeSnapshot != "FALLBACK" || item.SupplyProductCodeSnapshot != wantSupplyCode || item.Unit != wantUnit || item.Quantity != i+2 || item.UnitPrice != 12.5 || item.SubTotal != float64(i+2)*12.5 || item.Notes != "item note" || item.OrderType != wantType || !reflect.DeepEqual(item.PreOrderItemID, req.POItems[i].PreOrderItemID) {
 					t.Errorf("incorrect item: %+v", item)
 				}
+				if saved.PO_Items[i].ProductID == nil || *saved.PO_Items[i].ProductID != uint(i+1) {
+					t.Errorf("saved product ID = %v, want %d", saved.PO_Items[i].ProductID, i+1)
+				}
 			}
 			if !reflect.DeepEqual(reserved, wantReserved) {
 				t.Errorf("reserved = %v, want %v", reserved, wantReserved)

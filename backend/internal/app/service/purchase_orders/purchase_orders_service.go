@@ -113,17 +113,6 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 		if err != nil {
 			return nil, fmt.Errorf("failed to find product ID %d: %w", item.ProductID, err)
 		}
-		if product == nil {
-			return nil, fmt.Errorf("product ID %d not found", item.ProductID)
-		}
-
-		productName := product.Product_Name
-		productCode := product.Product_Code
-		supplyProductCode := companyProductCodeForSupplier(product, req.SupplierID)
-		var unitName string
-		if product.Unit != nil {
-			unitName = product.Unit.Unit_Name
-		}
 
 		if item.PreOrderItemID != nil {
 			hasPreOrder = true
@@ -135,10 +124,10 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 		totalAmount += subTotal
 
 		poItem := poEntity.POItems{
-			ProductID:                    item.ProductID,
-			Product_name_snapshot:        productName,
-			Product_code_snapshot:        productCode,
-			Supply_product_code_snapshot: supplyProductCode,
+			ProductID:                    product.id,
+			Product_name_snapshot:        product.name,
+			Product_code_snapshot:        product.productCode,
+			Supply_product_code_snapshot: product.supplyProductCode,
 			Quantity:                     float64(item.Quantity),
 			Unit:                         product.unit,
 			UnitPrice:                    item.UnitPrice,
@@ -622,10 +611,10 @@ func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto
 
 			subTotal := float64(it.Quantity) * it.UnitPrice
 			item := poEntity.POItems{
-				ProductID:                    it.ProductID,
-				Product_name_snapshot:        product.Product_Name,
-				Product_code_snapshot:        product.Product_Code,
-				Supply_product_code_snapshot: companyProductCodeForSupplier(product, po.SupplierID),
+				ProductID:                    product.id,
+				Product_name_snapshot:        product.name,
+				Product_code_snapshot:        product.productCode,
+				Supply_product_code_snapshot: product.supplyProductCode,
 				Quantity:                     float64(it.Quantity),
 				Unit:                         product.unit,
 				UnitPrice:                    it.UnitPrice,
