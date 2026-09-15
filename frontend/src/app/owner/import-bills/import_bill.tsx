@@ -1660,7 +1660,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
         const price = Number(item.unit_price) || 0;
         return {
           item_sequence: idx + 1,
-          company_product_code: item.product_name_code_snapshot || item.product_code || '',
+          company_product_code: item.supply_product_code_snapshot || '',
           company_product_name: item.product_name_snapshot || item.product_name || '',
           order_quantity: qty,
           unit: item.unit || 'ชิ้น',

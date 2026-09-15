@@ -177,7 +177,8 @@ const CreatePurchaseOrders: React.FC = () => {
             id: generateLocalId(), 
             product_id: selectedPreorder.product_id,
             product_name_snapshot: selectedPreorder.product_name,
-            product_name_code_snapshot: selectedPreorder.product_code || "-",
+            product_code_snapshot: selectedPreorder.product_code || "-",
+            supply_product_code_snapshot: selectedPreorder.supplier_part_code || "",
             quantity: selectedPreorder.quantity,
             unit: selectedPreorder.unit || "ชิ้น",
             unit_price: unitCost,
@@ -502,7 +503,7 @@ const CreatePurchaseOrders: React.FC = () => {
                                                     <span className='text-red-600'>฿{product.price.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                 </div>
                                                 <div className='flex flex-row items-baseline justify-between text-gray-500 text-xs font-light'>
-                                                    <span>SKU: {product.code}</span>
+                                                    <span>รหัสร้าน: {product.code}</span>
                                                     <span>คงเหลือ: {product.stock_qty}</span>
                                                 </div>
                                             </div>
@@ -574,7 +575,7 @@ const CreatePurchaseOrders: React.FC = () => {
                                         <TableRow key={row.id}>
                                             <TableCell className='pl-6'>{index + 1}</TableCell>
                                             <TableCell>{row.order_type}</TableCell>
-                                            <TableCell>{row.product_name_code_snapshot}</TableCell>
+                                            <TableCell>{row.product_code_snapshot || '-'}</TableCell>
                                             <TableCell>{row.product_name_snapshot}</TableCell>
                                             <TableCell className='text-center'>
                                                 <div className='inline-flex items-center border border-gray-300 rounded-none bg-[#F6F3F2]'>
