@@ -39,13 +39,13 @@ import { PaymentTypeBadge, PaymentStatusBadge } from "../../../components/elemen
 import { formatDate } from "../../../utils/date";
 import { useUserRole } from "../../../hooks/useUserRole";
 import { posApiService } from "../../../service/http/pos/pos_service";
-import { autoPrintPdfBlob, downloadPdfBlob } from "../../../utils/payment_history_print";
+import { autoPrintPdfBlob } from "../../../utils/payment_history_print";
 
 
 export default function PaymentHistoryPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isOwnerOrAdmin } = useUserRole();
+  const { isOwnerOrManager } = useUserRole();
   const initialSearch = searchParams.get("search")?.trim() ?? "";
   const initialTypeFilter = searchParams.get("type") === "repayment" ? "repayment" : "";
   const [printingReceiptId, setPrintingReceiptId] = useState<number | string | null>(null);
@@ -146,7 +146,7 @@ export default function PaymentHistoryPage() {
               {/* ช่องที่ 1: ค้นหาคำ + พนักงาน */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 {/* 1.1 ค้นหาเลขที่ใบเสร็จ / บิล / ชื่อลูกค้า */}
-                <div className={cn("flex flex-col gap-1.5", isOwnerOrAdmin ? "md:col-span-8" : "md:col-span-12")}>
+                <div className={cn("flex flex-col gap-1.5", isOwnerOrManager ? "md:col-span-8" : "md:col-span-12")}>
                   <Text variant="xs" className="text-[#5F5E5E]">
                     ค้นหาเลขที่ใบเสร็จ / หมายเลขบิล / ชื่อลูกค้า
                   </Text>
@@ -165,7 +165,7 @@ export default function PaymentHistoryPage() {
                 </div>
 
                 {/* 1.2 พนักงานขาย (เฉพาะเจ้าของร้าน 4/12) */}
-                {isOwnerOrAdmin && (
+                {isOwnerOrManager && (
                   <div className="md:col-span-4 flex flex-col gap-1.5">
                     <Text variant="xs" className="text-[#5F5E5E]">
                       พนักงานผู้รับเงิน
@@ -275,7 +275,7 @@ export default function PaymentHistoryPage() {
           </Card>
 
           {/* Small Stat Cards เหนือตาราง */}
-          {isOwnerOrAdmin ? (
+          {isOwnerOrManager ? (
             /* 1. ฝั่งเจ้าของร้าน (Owner System) */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
               {/* Card 1: ยอดรับชำระสุทธิ (Net Total Collected) */}
@@ -856,7 +856,7 @@ export default function PaymentHistoryPage() {
                       variant="solid-red"
                       onClick={() => {
                         const targetOrder = selectedReceipt.order_numbers || selectedReceipt.receipt_number;
-                        const targetPath = isOwnerOrAdmin
+                        const targetPath = isOwnerOrManager
                           ? `/owner/pos/sales_history?order_number=${encodeURIComponent(targetOrder)}`
                           : `/employee/pos/sales_history?order_number=${encodeURIComponent(targetOrder)}`;
                         setSelectedReceipt(null);
@@ -908,7 +908,7 @@ export default function PaymentHistoryPage() {
                         </Card>
 
                         {/* ฟอร์มดำเนินการของ Owner / ปุ่มดึงกลับของ Employee */}
-                        {isOwnerOrAdmin ? (
+                        {isOwnerOrManager ? (
                           <div className="space-y-3 pt-1">
                             <div className="space-y-1.5">
                               <Text
@@ -985,7 +985,7 @@ export default function PaymentHistoryPage() {
                     {selectedReceipt.status === "completed" && (
                       <div className="space-y-3 pt-2">
                         <Text variant="xs" className="font-normal text-[#E51C23] uppercase tracking-wider mb-1">
-                          {isOwnerOrAdmin
+                          {isOwnerOrManager
                             ? "ระบุเหตุผลในการยกเลิกใบเสร็จรับเงิน (ทำให้ยอดหนี้กลับมาค้างชำระทันที)"
                             : "ระบุเหตุผลในการส่งคำขอยกเลิกใบเสร็จรับเงิน (ส่งไปยังเจ้าของร้าน)"}
                         </Text>
@@ -999,7 +999,7 @@ export default function PaymentHistoryPage() {
                         />
 
                         <div className="flex gap-3 pt-1">
-                          {isOwnerOrAdmin ? (
+                          {isOwnerOrManager ? (
                             <Button
                               type="button"
                               variant="solid-red"

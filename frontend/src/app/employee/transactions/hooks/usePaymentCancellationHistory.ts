@@ -11,7 +11,7 @@ import { useUserRole } from "../../../../hooks/useUserRole";
 import { getCurrentUserId } from "../../../../utils/auth";
 
 export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryReturn => {
-  const { isOwnerOrAdmin } = useUserRole();
+  const { isOwnerOrManager } = useUserRole();
   const { employeeList } = useEmployeeOptions();
   const [dataList, setDataList] = useState<PaymentHistoryItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -437,7 +437,7 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
 
     setIsProcessing(true);
     try {
-      if (isOwnerOrAdmin) {
+      if (isOwnerOrManager) {
         await posApiService.cancelPaymentReceipt(selectedReceipt.receipt_id, {
           cancelled_by_id: getCurrentUserId() || 1,
           reason: reason,

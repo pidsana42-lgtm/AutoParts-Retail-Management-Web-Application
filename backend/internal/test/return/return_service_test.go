@@ -97,8 +97,10 @@ func TestCreateReturn_ApprovalUsesAuthenticatedRole(t *testing.T) {
 		want enum.ReturnStatus
 	}{
 		{"owner", "OWNER", enum.ReturnApproved},
+		{"manager", "MANAGER", enum.ReturnApproved},
 		{"admin", "ADMIN", enum.ReturnApproved},
 		{"normalized_owner", " owner \t", enum.ReturnApproved},
+		{"normalized_manager", " manager ", enum.ReturnApproved},
 		{"normalized_admin", " admin ", enum.ReturnApproved},
 		{"employee", "EMPLOYEE", enum.ReturnPending},
 		{"unknown_role", "CUSTOMER", enum.ReturnPending},

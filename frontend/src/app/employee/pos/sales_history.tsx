@@ -43,7 +43,7 @@ export default function TransactionHistoryPage() {
   const { printingOrderId, handlePrintReceipt } = usePrintReceipt();
 
   // --- ดึงข้อมูลและ Handlers จริงจาก Custom Hook ---
-  const { isOwnerOrAdmin } = useUserRole();
+  const { isOwnerOrManager } = useUserRole();
 
   // --- ดึงข้อมูลและ Handlers จริงจาก Custom Hook ---
   const {
@@ -130,7 +130,7 @@ export default function TransactionHistoryPage() {
               {/* ค้นหาหลัก + ตัวกรองบุคคล */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 {/* ช่องที่ 1: ค้นหาคำ */}
-                <div className={cn("flex flex-col gap-1.5", isOwnerOrAdmin ? "md:col-span-8" : "md:col-span-12")}>
+                <div className={cn("flex flex-col gap-1.5", isOwnerOrManager ? "md:col-span-8" : "md:col-span-12")}>
                   <Text variant="xs" className="text-[#5F5E5E]">
                     ค้นหาเลขคำสั่งซื้อ / ชื่อลูกค้า
                   </Text>
@@ -150,7 +150,7 @@ export default function TransactionHistoryPage() {
                 </div>
 
                 {/* ช่องที่ 2: พนักงานขาย (เฉพาะเจ้าของร้าน 4/12) */}
-                {isOwnerOrAdmin && (
+                {isOwnerOrManager && (
                   <div className="md:col-span-4 flex flex-col gap-1.5">
                     <Text variant="xs" className="text-[#5F5E5E]">
                       พนักงานขาย
@@ -667,7 +667,7 @@ export default function TransactionHistoryPage() {
           getStatusText={getStatusText}
           handlePrintReceipt={handlePrintReceipt}
           printingOrderId={printingOrderId}
-          isOwnerOrAdmin={isOwnerOrAdmin}
+          isOwnerOrManager={isOwnerOrManager}
           onClose={() => setSelectedOrderId(null)}
           variant="drawer"
         />
