@@ -410,7 +410,7 @@ func TestRecordAuditLog_UsernameFallbackWhenNoFullName(t *testing.T) {
 	// User has only Username
 	repo.getUserByIDFn = func(userID uint) (*entity.User, error) {
 		return &entity.User{
-			Username: "admin_user",
+			Username: "manager_user",
 		}, nil
 	}
 
@@ -419,7 +419,7 @@ func TestRecordAuditLog_UsernameFallbackWhenNoFullName(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, repo.auditLogs, 1)
-	assert.Equal(t, "admin_user", repo.auditLogs[0].ChangedBy)
+	assert.Equal(t, "manager_user", repo.auditLogs[0].ChangedBy)
 	assert.Equal(t, uint(5), *repo.auditLogs[0].UserID)
 }
 
@@ -484,7 +484,7 @@ func TestGetAuditLogs_Success(t *testing.T) {
 				Model:     gorm.Model{ID: 2, CreatedAt: fixedTime.Add(1 * time.Hour)},
 				Action:    "แก้ไขการตั้งค่านโยบายการเงินและเครดิต",
 				Details:   "ส่วนลดสูงสุด: 15%, วงเงินเครดิต: ฿80000.00, ระยะเวลาค้างชำระ: 45 วัน",
-				ChangedBy: "admin_user",
+				ChangedBy: "manager_user",
 			},
 		}, nil
 	}
@@ -499,7 +499,7 @@ func TestGetAuditLogs_Success(t *testing.T) {
 	assert.Equal(t, fixedTime, logs[0].ChangedAt)
 
 	assert.Equal(t, uint(2), logs[1].ID)
-	assert.Equal(t, "admin_user", logs[1].ChangedBy)
+	assert.Equal(t, "manager_user", logs[1].ChangedBy)
 }
 
 func TestGetAuditLogs_RepoError(t *testing.T) {

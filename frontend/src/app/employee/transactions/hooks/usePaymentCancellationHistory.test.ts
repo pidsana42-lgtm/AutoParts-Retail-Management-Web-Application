@@ -14,7 +14,7 @@ vi.mock("../../../../service/http/pos/pos_service", () => ({
 }));
 
 vi.mock("../../../../hooks/useUserRole", () => ({
-  useUserRole: () => ({ isOwnerOrAdmin: true }),
+  useUserRole: () => ({ isOwnerOrManager: true, isOwnerOrAdmin: true }),
 }));
 
 vi.mock("../../../../hooks/useEmployeeOptions", () => ({

@@ -1,6 +1,9 @@
 import process from 'node:process';
 import { defineConfig, devices } from '@playwright/test';
-import 'dotenv/config';
+// @ts-ignore
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 export default defineConfig({
   testDir: './e2e',

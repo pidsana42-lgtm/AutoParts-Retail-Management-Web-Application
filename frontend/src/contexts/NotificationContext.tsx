@@ -43,7 +43,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!role) { setNotifications([]); return; }
     if (!loginSequence) return;
-    const basePath = ['OWNER', 'ADMIN'].includes(role.toUpperCase()) ? '/owner' : '/employee';
+    const basePath = ['OWNER', 'MANAGER', 'ADMIN'].includes(role.toUpperCase()) ? '/owner' : '/employee';
     // Reuse the request during StrictMode's effect replay, but attach a live
     // subscriber each time. A new login always starts a new reminder check.
     if (loginReminderRef.current?.sequence !== loginSequence) {

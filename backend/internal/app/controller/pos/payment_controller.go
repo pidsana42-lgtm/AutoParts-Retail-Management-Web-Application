@@ -74,56 +74,56 @@ func (ctrl *paymentController) GenerateSettleQR(c *gin.Context) {
 }
 
 func (ctrl *paymentController) ConfirmPayment(c *gin.Context) {
-    var req posDto.ConfirmPaymentRequest
-    if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูล Request ไม่ถูกต้อง"})
-        return
-    }
+	var req posDto.ConfirmPaymentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูล Request ไม่ถูกต้อง"})
+		return
+	}
 
-    // ส่ง req DTO ทั้งหมดเข้าไปใน PaymentService
-    res, err := ctrl.paymentService.ConfirmPayment(req)
-    if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-        return
-    }
+	// ส่ง req DTO ทั้งหมดเข้าไปใน PaymentService
+	res, err := ctrl.paymentService.ConfirmPayment(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-    c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, res)
 }
 
 // ดูรายการบิลค้างชำระของลูกค้า GET /api/pos/payments/unpaid-bills/:customer_id
 func (ctrl *paymentController) GetUnpaidBillsByCustomer(c *gin.Context) {
-    // ดึง customer_id จาก URL parameter (ที่เลือกมาจาก Dropdown หน้าเว็บ) 
-    // ซึ่งส่งมาเป็น string มาแปลงเป็นตัวเลขจำนวนเต็มบวก (uint64 ฐาน 10 ขอบเขต 32-bit)
-    customerID, err := strconv.ParseUint(c.Param("customer_id"), 10, 32) // อย่างเรียก /unpaid-bills/1 ก็จะได้ customerID = 1 (uint64) และแปลงเป็น uint32 ได้
-    if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรหัสลูกค้าไม่ถูกต้อง (ต้องเป็นตัวเลข)"})
-        return
-    }
+	// ดึง customer_id จาก URL parameter (ที่เลือกมาจาก Dropdown หน้าเว็บ)
+	// ซึ่งส่งมาเป็น string มาแปลงเป็นตัวเลขจำนวนเต็มบวก (uint64 ฐาน 10 ขอบเขต 32-bit)
+	customerID, err := strconv.ParseUint(c.Param("customer_id"), 10, 32) // อย่างเรียก /unpaid-bills/1 ก็จะได้ customerID = 1 (uint64) และแปลงเป็น uint32 ได้
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรหัสลูกค้าไม่ถูกต้อง (ต้องเป็นตัวเลข)"})
+		return
+	}
 
-    res, err := ctrl.paymentService.GetUnpaidBillsByCustomer(uint(customerID))
+	res, err := ctrl.paymentService.GetUnpaidBillsByCustomer(uint(customerID))
 
 	// ถ้าเกิดข้อผิดพลาด ส่ง response เป็น JSON พร้อมกับ HTTP Status Code 500 (Internal Server Error) และข้อความ error
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
-    c.JSON(http.StatusOK, res)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, res)
 }
 
 // ดูรายการบิลค้างชำระเจาะจงเฉพาะบิลเดียว GET /api/pos/payments/unpaid-order/:order_number
 func (ctrl *paymentController) GetUnpaidBillByOrderNumber(c *gin.Context) {
-    orderNumber := c.Param("order_number")
-    if orderNumber == "" {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเลขที่บิล"})
-        return
-    }
+	orderNumber := c.Param("order_number")
+	if orderNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเลขที่บิล"})
+		return
+	}
 
-    res, err := ctrl.paymentService.GetUnpaidBillByOrderNumber(orderNumber)
-    if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-        return
-    }
-    c.JSON(http.StatusOK, res)
+	res, err := ctrl.paymentService.GetUnpaidBillByOrderNumber(orderNumber)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, res)
 }
 
 // POST /api/pos/payments/settle-bills การชำระบิลค้างชำระของลูกค้า
@@ -149,17 +149,17 @@ func (ctrl *paymentController) GetPaymentHistory(c *gin.Context) {
 	endDate := c.Query("end_date")
 
 	roleVal, exists := c.Get("role")
-	var isOwnerOrAdmin bool
+	var isOwnerOrManager bool
 	if exists {
 		if roleStr, ok := roleVal.(string); ok {
-			if strings.EqualFold(roleStr, string(enum.RoleOwner)) || strings.EqualFold(roleStr, string(enum.RoleAdmin)) {
-				isOwnerOrAdmin = true
+			if strings.EqualFold(roleStr, string(enum.RoleOwner)) || strings.EqualFold(roleStr, string(enum.RoleManager)) || strings.EqualFold(roleStr, string(enum.RoleAdmin)) {
+				isOwnerOrManager = true
 			}
 		}
 	}
 
 	var employeeID uint = 0
-	if !isOwnerOrAdmin {
+	if !isOwnerOrManager {
 		// ถ้าเป็นพนักงาน ให้เห็นเฉพาะรายการที่ตนเองเป็นผู้รับเงิน/บันทึกรายการ
 		userIDVal, exists := c.Get("user_id")
 		if exists {
@@ -178,7 +178,7 @@ func (ctrl *paymentController) GetPaymentHistory(c *gin.Context) {
 			return
 		}
 	} else {
-		// ถ้าเป็น Owner/Admin และมีการระบุ employee_id มาใน query string
+		// ถ้าเป็น Owner/Manager และมีการระบุ employee_id มาใน query string
 		if empParam := c.Query("employee_id"); empParam != "" {
 			if empID, err := strconv.ParseUint(empParam, 10, 32); err == nil {
 				employeeID = uint(empID)
@@ -208,16 +208,16 @@ func (ctrl *paymentController) GetPaymentHistoryByID(c *gin.Context) {
 	}
 
 	roleVal, exists := c.Get("role")
-	var isOwnerOrAdmin bool
+	var isOwnerOrManager bool
 	if exists {
 		if roleStr, ok := roleVal.(string); ok {
-			if strings.EqualFold(roleStr, string(enum.RoleOwner)) || strings.EqualFold(roleStr, string(enum.RoleAdmin)) {
-				isOwnerOrAdmin = true
+			if strings.EqualFold(roleStr, string(enum.RoleOwner)) || strings.EqualFold(roleStr, string(enum.RoleManager)) || strings.EqualFold(roleStr, string(enum.RoleAdmin)) {
+				isOwnerOrManager = true
 			}
 		}
 	}
 
-	if !isOwnerOrAdmin {
+	if !isOwnerOrManager {
 		userIDVal, exists := c.Get("user_id")
 		if exists {
 			var userID uint
@@ -307,15 +307,15 @@ func (ctrl *paymentController) RequestCancelPaymentReceipt(c *gin.Context) {
 
 	// ตรวจสอบ Role ถ้าเป็นพนักงาน ต้องเป็นรายการที่ตนเองบันทึก
 	roleVal, exists := c.Get("role")
-	var isOwnerOrAdmin bool
+	var isOwnerOrManager bool
 	if exists {
 		if roleStr, ok := roleVal.(string); ok {
-			if strings.EqualFold(roleStr, string(enum.RoleOwner)) || strings.EqualFold(roleStr, string(enum.RoleAdmin)) {
-				isOwnerOrAdmin = true
+			if strings.EqualFold(roleStr, string(enum.RoleOwner)) || strings.EqualFold(roleStr, string(enum.RoleManager)) || strings.EqualFold(roleStr, string(enum.RoleAdmin)) {
+				isOwnerOrManager = true
 			}
 		}
 	}
-	if !isOwnerOrAdmin && repayment.ReceivedByID > 0 && repayment.ReceivedByID != currentUserID {
+	if !isOwnerOrManager && repayment.ReceivedByID > 0 && repayment.ReceivedByID != currentUserID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "คุณไม่มีสิทธิ์ส่งคำขอยกเลิกรายการรับชำระเงินของพนักงานท่านอื่น"})
 		return
 	}
@@ -351,16 +351,16 @@ func (ctrl *paymentController) RevertCancelPaymentReceiptRequest(c *gin.Context)
 	}
 
 	roleVal, exists := c.Get("role")
-	var isOwnerOrAdmin bool
+	var isOwnerOrManager bool
 	if exists {
 		if roleStr, ok := roleVal.(string); ok {
-			if strings.EqualFold(roleStr, string(enum.RoleOwner)) || strings.EqualFold(roleStr, string(enum.RoleAdmin)) {
-				isOwnerOrAdmin = true
+			if strings.EqualFold(roleStr, string(enum.RoleOwner)) || strings.EqualFold(roleStr, string(enum.RoleManager)) || strings.EqualFold(roleStr, string(enum.RoleAdmin)) {
+				isOwnerOrManager = true
 			}
 		}
 	}
 
-	if err := ctrl.paymentService.RevertCancelPaymentReceiptRequest(uint(receiptID), currentUserID, isOwnerOrAdmin); err != nil {
+	if err := ctrl.paymentService.RevertCancelPaymentReceiptRequest(uint(receiptID), currentUserID, isOwnerOrManager); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

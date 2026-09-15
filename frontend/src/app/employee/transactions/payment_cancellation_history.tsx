@@ -42,7 +42,7 @@ import { posApiService } from "../../../service/http/pos/pos_service";
 import { autoPrintPdfBlob } from "../../../utils/payment_history_print";
 
 const PaymentCancellationHistory: React.FC = () => {
-  const { isOwnerOrAdmin } = useUserRole();
+  const { isOwnerOrManager } = useUserRole();
   const { employeeList } = useEmployeeOptions();
   const {
     dataList,
@@ -124,12 +124,12 @@ const PaymentCancellationHistory: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
               <Heading level="h1" weight="semibold" className="m-0 text-black">
-                {isOwnerOrAdmin
+                {isOwnerOrManager
                   ? 'คำขอยกเลิกการชำระเงินจากพนักงาน'
                   : 'ประวัติการยกเลิกการชำระเงิน'}
               </Heading>
               <Heading level="h6" className="m-0 mt-1 text-gray-500">
-                {isOwnerOrAdmin
+                {isOwnerOrManager
                   ? 'ตรวจสอบและจัดการคำขอยกเลิกรายการชำระเงิน'
                   : 'ติดตามสถานะคำขอยกเลิกรายการชำระเงิน'}
               </Heading>
@@ -141,7 +141,7 @@ const PaymentCancellationHistory: React.FC = () => {
             <CardContent className="p-6 md:p-8">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 {/* 1. ค้นหาเลขที่ใบเสร็จ/บิล/ลูกค้า (ปรับ col-span ตาม role) */}
-                <div className={cn("flex flex-col gap-1.5", isOwnerOrAdmin ? "md:col-span-3" : "md:col-span-5")}>
+                <div className={cn("flex flex-col gap-1.5", isOwnerOrManager ? "md:col-span-3" : "md:col-span-5")}>
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     ค้นหาเลขที่ใบเสร็จ / บิล / ลูกค้า
                   </label>
@@ -157,8 +157,8 @@ const PaymentCancellationHistory: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 2. ผู้ขอยกเลิก / ผู้ทำรายการ (เฉพาะ Owner/Admin: 2 cols) */}
-                {isOwnerOrAdmin && (
+                {/* 2. ผู้ขอยกเลิก / ผู้ทำรายการ (เฉพาะ Owner/Manager: 2 cols) */}
+                {isOwnerOrManager && (
                   <div className="md:col-span-2 flex flex-col gap-1.5">
                     <label className="text-xs font-normal text-[#5F5E5E]">ผู้ขอยกเลิก / ผู้ทำรายการ</label> 
                     <Select
@@ -227,7 +227,7 @@ const PaymentCancellationHistory: React.FC = () => {
           </Card>
 
           {/* Small Stat Cards เหนือตาราง */}
-          {isOwnerOrAdmin ? (
+          {isOwnerOrManager ? (
             /* 1. ฝั่งเจ้าของร้าน (Owner System) */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
               {/* Card 1: รออนุมัติ */}
@@ -543,7 +543,7 @@ const PaymentCancellationHistory: React.FC = () => {
               <Text variant="xs" className="text-gray-500 mb-0">
                 เลือกอยู่ {selectedIds.length} รายการ
               </Text>
-              {isOwnerOrAdmin ? (
+              {isOwnerOrManager ? (
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <Button
                     onClick={handleBatchApprove}
@@ -773,7 +773,7 @@ const PaymentCancellationHistory: React.FC = () => {
 
                   // 1. สถานะ รออนุมัติยกเลิก (pending_cancel)
                   if (itemStatus === "pending_cancel") {
-                    if (isOwnerOrAdmin) {
+                    if (isOwnerOrManager) {
                       return (
                         <div className="space-y-4">
                           <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-2">
@@ -964,7 +964,7 @@ const PaymentCancellationHistory: React.FC = () => {
                             >
                               {isProcessing
                                 ? "กำลังดำเนินการ..."
-                                : isOwnerOrAdmin
+                                : isOwnerOrManager
                                   ? "อนุมัติยกเลิกรายการ (คืนหนี้)"
                                   : "ยืนยันการขออนุมัติยกเลิก"}
                             </Button>

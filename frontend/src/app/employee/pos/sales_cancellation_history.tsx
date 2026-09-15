@@ -40,7 +40,7 @@ import { autoPrintPdfBlob } from "../../../utils/payment_history_print";
 
 const SalesCancellationHistory: React.FC = () => {
     const navigate = useNavigate();
-    const { isOwnerOrAdmin } = useUserRole();
+    const { isOwnerOrManager } = useUserRole();
   // 1. ดึงข้อมูลตารางคำขอยกเลิกจาก useSalesCancellationHistory
     const {
         dataList,
@@ -832,7 +832,7 @@ const SalesCancellationHistory: React.FC = () => {
                     const hasBeenRejected = Boolean(orderDetail.cancel_remark);
 
                     if (status === "PENDING_CANCEL") {
-                      if (isOwnerOrAdmin) {
+                      if (isOwnerOrManager) {
                         return (
                           <div className="space-y-4">
                             <Card className="p-4 bg-[#FEFCE8] border border-[#FEF08A] rounded-none shadow-none space-y-3">
@@ -1088,7 +1088,7 @@ const SalesCancellationHistory: React.FC = () => {
                               type="button"
                               variant="solid-red"
                               onClick={
-                                isOwnerOrAdmin
+                                isOwnerOrManager
                                   ? handleDirectCancelByOwner
                                   : handleRequestCancel
                               }
@@ -1097,7 +1097,7 @@ const SalesCancellationHistory: React.FC = () => {
                             >
                               {isCancelling
                                 ? "กำลังดำเนินการ..."
-                                : isOwnerOrAdmin
+                                : isOwnerOrManager
                                 ? "อนุมัติยกเลิกรายการ (คืนสต็อก)"
                                 : "ยืนยันการขออนุมัติยกเลิก"}
                             </Button>

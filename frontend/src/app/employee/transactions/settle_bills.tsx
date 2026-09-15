@@ -8,7 +8,6 @@ import {
   CreditCard,
   Printer,
   RotateCcw,
-  X,
   Loader2,
   RefreshCw,
 } from "lucide-react";

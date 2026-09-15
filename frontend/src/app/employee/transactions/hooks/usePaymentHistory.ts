@@ -9,7 +9,7 @@ import { getCurrentUserId } from "../../../../utils/auth";
 import { printCustomerStatementFromBackend } from "../../../../utils/payment_history_print";
 
 export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
-  const { isOwnerOrAdmin } = useUserRole();
+  const { isOwnerOrManager } = useUserRole();
   const [items, setItems] = useState<PaymentHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -485,7 +485,7 @@ export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
     cancelReason,
     cancelRemark,
     isCancelling,
-    isOwnerOrAdmin,
+    isOwnerOrManager,
     isPrintingStatement,
     setSearch,
     setTypeFilter,

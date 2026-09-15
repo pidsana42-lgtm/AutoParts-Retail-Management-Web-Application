@@ -3,7 +3,7 @@
 // (1) แผงเลื่อนจากขวาที่หน้า "ประวัติการขายสินค้า" (variant="drawer", ของเดิม)
 // (2) หน้าเดี่ยวที่กดเข้ามาจากฟีด "การเคลื่อนไหวของคลังสินค้า" (variant="page")
 import { useNavigate } from "react-router-dom";
-import { Printer, X, CopyPlus } from "lucide-react";
+import { X, CopyPlus } from "lucide-react";
 import Heading from "../../../../components/elements/heading";
 import Text from "../../../../components/elements/text";
 import Button from "../../../../components/elements/button";
@@ -33,9 +33,10 @@ export interface OrderDetailPanelProps
     | "handleRevertCancel"
     | "getStatusText"
   > {
-  handlePrintReceipt: (orderId: number | string, orderNumber?: string) => Promise<void>;
-  printingOrderId: number | string | null;
-  isOwnerOrAdmin: boolean;
+  handlePrintReceipt?: (orderId: number | string, orderNumber?: string) => Promise<void>;
+  printingOrderId?: number | string | null;
+  isOwnerOrManager?: boolean;
+  isOwnerOrAdmin?: boolean;
   onClose: () => void;
   // drawer = แผงเลื่อนจากขวา มี backdrop มืด (ของเดิม) / page = การ์ดเต็มพื้นที่ ไม่มี backdrop (ใช้ตอนเป็นหน้าเดี่ยว)
   variant?: "drawer" | "page";
@@ -55,13 +56,15 @@ export default function OrderDetailPanel({
   handleRejectCancelByOwner,
   handleRevertCancel,
   getStatusText,
-  handlePrintReceipt,
-  printingOrderId,
+  handlePrintReceipt: _handlePrintReceipt,
+  printingOrderId: _printingOrderId,
+  isOwnerOrManager,
   isOwnerOrAdmin,
   onClose,
   variant = "drawer",
 }: OrderDetailPanelProps) {
   const navigate = useNavigate();
+  const effectiveIsOwnerOrManager = Boolean(isOwnerOrManager ?? isOwnerOrAdmin);
 
   if (!selectedOrderId) return null;
 
@@ -329,8 +332,8 @@ export default function OrderDetailPanel({
 
                     // 1. เคสรายการอยู่ระหว่างรออนุมัติการยกเลิก (PENDING_CANCEL)
                     if (status === "PENDING_CANCEL") {
-                      // 1.1 ถ้าผู้ใช้เป็น OWNER / ADMIN: แยกเป็น 2 ส่วน (กล่องสรุปข้อมูล + ฟอร์มการดำเนินการ)
-                      if (isOwnerOrAdmin) {
+                      // 1.1 ถ้าผู้ใช้เป็น OWNER / MANAGER: แยกเป็น 2 ส่วน (กล่องสรุปข้อมูล + ฟอร์มการดำเนินการ)
+                      if (effectiveIsOwnerOrManager) {
                         return (
                           <div className="space-y-4">
                             {/* ส่วนที่ 1: กล่องสรุปคำขอจากพนักงาน */}
@@ -513,7 +516,7 @@ export default function OrderDetailPanel({
                             variant="solid-red"
                             onClick={() => {
                               navigate(
-                                (isOwnerOrAdmin ? "/owner/pos/pos" : "/employee/pos/pos") +
+                                (effectiveIsOwnerOrManager ? "/owner/pos/pos" : "/employee/pos/pos") +
                                   `?recover_order_id=${orderDetail.id}`,
                                 { state: { recoverOrderId: orderDetail.id } }
                               );
@@ -592,7 +595,7 @@ export default function OrderDetailPanel({
                               type="button"
                               variant="solid-red"
                               onClick={
-                                isOwnerOrAdmin
+                                effectiveIsOwnerOrManager
                                   ? handleDirectCancelByOwner
                                   : handleRequestCancel
                               }
@@ -604,7 +607,7 @@ export default function OrderDetailPanel({
                             >
                               {isCancelling
                                 ? "กำลังดำเนินการ..."
-                                : isOwnerOrAdmin
+                                : effectiveIsOwnerOrManager
                                   ? "อนุมัติยกเลิกรายการ (คืนสต็อก)"
                                   : "ยืนยันการขออนุมัติยกเลิก"}
                             </Button>

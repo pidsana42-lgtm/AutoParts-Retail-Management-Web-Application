@@ -19,7 +19,7 @@ func SetupCustomerRoutes(r *gin.Engine, db *gorm.DB) {
 	customerGroup := r.Group("/api/customers")
 	customerGroup.Use(
 		middleware.AuthMiddleware(),
-		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleAdmin)),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleManager)),
 	)
 	{
 		customerGroup.POST("/register", customerCtrl.RegisterCustomer)
@@ -30,7 +30,7 @@ func SetupCustomerRoutes(r *gin.Engine, db *gorm.DB) {
 		customerGroup.GET("/credit/audit-logs", customerCtrl.GetCreditAuditLogs)
 		customerGroup.POST("/credit/audit-logs", customerCtrl.CreateCreditAuditLog)
 
-		// Protected Route ป้องกันรูปบัตรประชาชนรั่วไหล (ต้องมี Token และสิทธิ์ Owner, Employee หรือ Admin)
+		// Protected Route ป้องกันรูปบัตรประชาชนรั่วไหล (ต้องมี Token และสิทธิ์ Owner, Employee หรือ Manager)
 		customerGroup.GET("/document/view", customerCtrl.GetCustomerDocumentByPath)
 		customerGroup.GET("/:id/document", customerCtrl.GetCustomerDocument)
 	}
