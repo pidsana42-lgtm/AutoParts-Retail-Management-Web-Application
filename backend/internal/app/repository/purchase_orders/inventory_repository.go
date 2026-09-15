@@ -91,6 +91,7 @@ func (r *inventoryRepository) SearchProducts(ctx context.Context, supplierID str
 		Select(`DISTINCT
 			products.id AS id,
 			products.product_code AS code,
+			COALESCE(inventories.company_product_code, '') AS supply_product_code,
 			COALESCE(NULLIF(inventories.barcode, ''), products.product_code) AS barcode,
 			products.product_name AS name,
 			products.cost_price AS price,

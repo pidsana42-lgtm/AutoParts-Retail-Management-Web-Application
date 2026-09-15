@@ -46,8 +46,8 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
   const [isActionLoading, setIsActionLoading] = useState(false);
 
   const printOptions: SelectOption[] = [
-    { label: "พิมพ์พร้อมรหัสสินค้า", value: "with_code" },
-    { label: "พิมพ์ไม่เอารหัสสินค้า", value: "without_code" },
+    { label: "พิมพ์รหัส Supplier และ Part Number", value: "with_code" },
+    { label: "พิมพ์เฉพาะ Part Number", value: "without_code" },
   ];
   const handlePrint = async (includeCode: boolean) => {
     setIsPrinting(true);
