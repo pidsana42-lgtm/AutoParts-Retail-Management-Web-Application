@@ -122,7 +122,8 @@ export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoIt
             const newItem: LocalPOItem = {
                 id: generateLocalId(),
                 product_id: product.id,
-                product_name_code_snapshot: product.code,
+                product_code_snapshot: product.code,
+                supply_product_code_snapshot: product.supply_product_code || '',
                 product_name_snapshot: product.name,
                 quantity: qty,
                 unit: product.unit,

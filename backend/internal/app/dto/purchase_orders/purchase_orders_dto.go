@@ -42,8 +42,9 @@ type PurchaseOrderResponse struct {
 type POItemResponse struct {
 	ID                        uint    `json:"id"`
 	ProductID                 uint    `json:"product_id"`
-	ProductNameSnapshot       string  `json:"product_name_snapshot"`      // ชื่อสินค้า ณ วันที่กดสั่งซื้อ
-	SupplyProductCodeSnapshot string  `json:"product_name_code_snapshot"` // รหัสสินค้า ณ วันที่กดสั่งซื้อ
+	ProductNameSnapshot       string  `json:"product_name_snapshot"`        // ชื่อสินค้า ณ วันที่กดสั่งซื้อ
+	ProductCodeSnapshot       string  `json:"product_code_snapshot"`        // รหัสสินค้าภายในร้าน ณ วันที่กดสั่งซื้อ
+	SupplyProductCodeSnapshot string  `json:"supply_product_code_snapshot"` // รหัสสินค้าของ Supplier ณ วันที่กดสั่งซื้อ
 	Quantity                  int     `json:"quantity"`
 	Unit                      string  `json:"unit"`
 	UnitPrice                 float64 `json:"unit_price"`
@@ -118,13 +119,14 @@ type ProductSearchQuery struct {
 
 // หน้าตาข้อมูลที่จะส่งกลับไปให้หน้าบ้าน
 type ProductSearchResponse struct {
-	ID       int     `json:"id"`
-	Code     string  `json:"code"`
-	Barcode  string  `json:"barcode"`
-	Name     string  `json:"name"`
-	Price    float64 `json:"price"`
-	Unit     string  `json:"unit"`
-	StockQty int     `json:"stock_qty"`
+	ID                int     `json:"id"`
+	Code              string  `json:"code"`
+	SupplyProductCode string  `json:"supply_product_code"`
+	Barcode           string  `json:"barcode"`
+	Name              string  `json:"name"`
+	Price             float64 `json:"price"`
+	Unit              string  `json:"unit"`
+	StockQty          int     `json:"stock_qty"`
 }
 
 // แก้ไข PO กับ POItems
