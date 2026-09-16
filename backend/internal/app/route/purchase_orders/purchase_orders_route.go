@@ -42,7 +42,7 @@ func SetupPORoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotificati
 	poGroup := r.Group("/api/po")
 	poGroup.Use(
 		middleware.AuthMiddleware(),
-		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleAdmin)),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleManager)),
 	)
 	{
 		// CRUD

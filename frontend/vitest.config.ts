@@ -10,6 +10,5 @@ export default defineConfig({
     // e2e/ เป็น Playwright spec ไม่ใช่ vitest ต้องกันไม่ให้ vitest สแกนเข้าไปเจอ
     exclude: [...defaultExclude, 'e2e/**'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
-    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
   },
 });

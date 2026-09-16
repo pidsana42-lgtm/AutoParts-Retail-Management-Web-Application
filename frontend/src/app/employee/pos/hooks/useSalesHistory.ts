@@ -303,7 +303,7 @@ export const useSalesHistory = () => {
     }
   };
 
-  // 2. Handler สำหรับ เจ้าของร้าน (Owner/Admin): อนุมัติยกเลิกรายการ (หรือยกเลิกบิลโดยตรง)
+  // 2. Handler สำหรับ เจ้าของร้าน (Owner/Manager): อนุมัติยกเลิกรายการ (หรือยกเลิกบิลโดยตรง)
   const handleDirectCancelByOwner = async () => {
     if (!selectedOrderId) return;
 
@@ -338,7 +338,7 @@ export const useSalesHistory = () => {
     }
   };
 
-  // 3. Handler สำหรับ เจ้าของร้าน (Owner/Admin): ปฏิเสธคำขอยกเลิกรายการขาย
+  // 3. Handler สำหรับ เจ้าของร้าน (Owner/Manager): ปฏิเสธคำขอยกเลิกรายการขาย
   const handleRejectCancelByOwner = async () => {
     if (!selectedOrderId) return;
     const remarkToSend = cancelRemark.trim() || cancelReason.trim();

@@ -18,13 +18,13 @@ func NewNotificationController(service svcNotification.NotificationService) *Not
 	return &NotificationController{service: service}
 }
 
-// เจ้าของร้าน/แอดมิน ดูของทั้งร้าน (ForOwners) ส่วนพนักงานดูเฉพาะของตัวเอง (TargetUserID)
-// ?role=Owner|Admin|Employee|Staff&user_id=<id ของพนักงาน กรณี role เป็นพนักงาน>
+// เจ้าของร้าน/Manager ดูของทั้งร้าน (ForOwners) ส่วนพนักงานดูเฉพาะของตัวเอง (TargetUserID)
+// ?role=Owner|Manager|Admin|Employee|Staff&user_id=<id ของพนักงาน กรณี role เป็นพนักงาน>
 func (ctrl *NotificationController) List(c *gin.Context) {
 	role := strings.ToUpper(c.Query("role"))
-	isOwnerOrAdmin := role == "OWNER" || role == "ADMIN"
+	isOwnerOrManager := role == "OWNER" || role == "MANAGER" || role == "ADMIN"
 
-	if isOwnerOrAdmin {
+	if isOwnerOrManager {
 		res, err := ctrl.service.ListForOwners()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -62,12 +62,12 @@ func (ctrl *NotificationController) MarkRead(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "marked as read"})
 }
 
-// ?role=Owner|Admin|Employee|Staff&user_id=<id ของพนักงาน กรณี role เป็นพนักงาน>
+// ?role=Owner|Manager|Admin|Employee|Staff&user_id=<id ของพนักงาน กรณี role เป็นพนักงาน>
 func (ctrl *NotificationController) MarkAllRead(c *gin.Context) {
 	role := strings.ToUpper(c.Query("role"))
-	isOwnerOrAdmin := role == "OWNER" || role == "ADMIN"
+	isOwnerOrManager := role == "OWNER" || role == "MANAGER" || role == "ADMIN"
 
-	if isOwnerOrAdmin {
+	if isOwnerOrManager {
 		if err := ctrl.service.MarkAllReadForOwners(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

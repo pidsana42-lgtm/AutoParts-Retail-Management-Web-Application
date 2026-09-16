@@ -26,12 +26,12 @@ type PaymentService interface {
 	GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentHistoryItem, error)
 	GetCancelledPaymentHistory(search, startDate, endDate string) ([]posDto.CancelledPaymentItem, error)
 	RequestCancelPaymentReceipt(repaymentID uint, userID uint, reason string) error
-	RevertCancelPaymentReceiptRequest(repaymentID uint, userID uint, isOwnerOrAdmin bool) error
+	RevertCancelPaymentReceiptRequest(repaymentID uint, userID uint, isOwnerOrManager bool) error
 	ApproveCancelPaymentReceipt(repaymentID uint, ownerID uint, remark string) error
 	RejectCancelPaymentReceipt(repaymentID uint, remark string) error
 	CancelPaymentReceipt(repaymentID uint, req posDto.CancelPaymentReceiptRequest) error
 	GenerateDebtRepaymentReceiptPDF(ctx context.Context, identifier string) ([]byte, error)
-	GenerateCustomerStatementPDF(ctx context.Context, customerID uint, startDate, endDate, paymentType, status, paymentMethod string) ([]byte, error)
+	GenerateCustomerStatementPDF(ctx context.Context, customerID uint, startDate, endDate, paymentType, status, paymentMethod string, customerNameOpt ...string) ([]byte, error)
 }
 
 type paymentService struct {
@@ -998,7 +998,7 @@ func (s *paymentService) RequestCancelPaymentReceipt(repaymentID uint, userID ui
 // -------------------------------------------------------------
 // 7. พนักงานดึงคำขอยกเลิกใบเสร็จกลับ (Revert Cancel Request)
 // -------------------------------------------------------------
-func (s *paymentService) RevertCancelPaymentReceiptRequest(repaymentID uint, userID uint, isOwnerOrAdmin bool) error {
+func (s *paymentService) RevertCancelPaymentReceiptRequest(repaymentID uint, userID uint, isOwnerOrManager bool) error {
 	repayment, err := s.paymentRepo.GetRepaymentByID(repaymentID)
 	if err != nil {
 		return fmt.Errorf("ไม่พบรายการชำระเงินนี้")
@@ -1006,7 +1006,7 @@ func (s *paymentService) RevertCancelPaymentReceiptRequest(repaymentID uint, use
 	if repayment.Status != "pending_cancel" {
 		return errors.New("รายการนี้ไม่ได้อยู่ในสถานะรออนุมัติการยกเลิก")
 	}
-	if !isOwnerOrAdmin {
+	if !isOwnerOrManager {
 		if repayment.CancelRequestedByID != nil && *repayment.CancelRequestedByID != userID && repayment.RecordedByID != userID {
 			return errors.New("คุณไม่มีสิทธิ์ดึงคำขอยกเลิกของพนักงานท่านอื่นกลับ")
 		}

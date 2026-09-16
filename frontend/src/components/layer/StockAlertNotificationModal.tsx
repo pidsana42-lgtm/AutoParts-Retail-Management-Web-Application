@@ -5,7 +5,7 @@ import type { StockAlertItem } from '../../interface/dashboard/dashboard_interfa
 import { notificationService } from '../../service/http/notification_service';
 
 // Keep PO navigation within the signed-in user's existing role permissions.
-export default function StockAlertNotificationModal({ onClose, basePath }: { onClose: () => void; basePath: '/owner' | '/employee' }) {
+export default function StockAlertNotificationModal({ onClose, basePath }: { onClose: () => void; basePath: '/owner' | '/manager' | '/employee' }) {
   const [alerts, setAlerts] = useState<StockAlertItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
