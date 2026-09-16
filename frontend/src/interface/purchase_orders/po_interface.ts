@@ -38,7 +38,7 @@ export interface POItemResponse {
 }
 
 // ข้อมูลที่เพิ่ม type เพื่อใช้จัดการ State ภายในหน้าเว็บ
-export type LocalPOItem = POItemResponse & { 
+export type LocalPOItem = POItemResponse & { product_name_code_snapshot?: string;
     order_type: 'สั่งซื้อ' | 'พรีออเดอร์';
     pre_order_item_id?: number;
 };
@@ -99,7 +99,7 @@ export interface PreorderItem {
     product_id: number | null;
     product_name: string;
     product_code: string;
-    supplier_part_code: string;
+    supplier_part_code?: string;
     quantity: number;
     unit: string;
     unit_price: number;
