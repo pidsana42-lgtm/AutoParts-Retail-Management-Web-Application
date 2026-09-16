@@ -1,7 +1,7 @@
 export type DashboardRoleGroup = 'owner' | 'employee';
 
 const OWNER_DASHBOARD_ROLES = new Set(['OWNER', 'MANAGER', 'ADMIN']);
-const EMPLOYEE_DASHBOARD_ROLES = new Set(['EMPLOYEE', 'STAFF']);
+const EMPLOYEE_DASHBOARD_ROLES = new Set(['EMPLOYEE']);
 
 export function normalizeRole(role: string | null | undefined): string {
   return role?.trim().toUpperCase() ?? '';

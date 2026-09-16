@@ -23,6 +23,7 @@ import { cn } from "../../../utils/component";
 import { formatDateThai, getThaiMonthOptions, getYearOptions } from "../../../utils/formatdate";
 import { generateLocalId } from "../../../utils/generateId";
 import { usePathBasePrefix  } from "../../../utils/usePathBasePrefix";
+import { useAuth } from "../../../contexts/AuthContexts";
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "DRAFT")
@@ -39,7 +40,8 @@ function StatusBadge({ status }: { status: string }) {
 function ActionButtons({ id, status }: { id: number; status: string }) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const userRole = localStorage.getItem('role');
+  const { role } = useAuth();
+  const userRole = (role || '').toUpperCase();
   const basePath = usePathBasePrefix();
   const [isPrinting, setIsPrinting] = useState(false);
   const [confirmationAction, setConfirmationAction] = useState<"approve" | "delete" | null>(null);
@@ -156,7 +158,7 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
   }
 
   // สถานะ: รออนุมัติ
-  if (status === "PENDING" && userRole === 'Owner') {
+  if (status === "PENDING" && userRole === 'OWNER') {
     return (
       <>
         <div className="flex items-center justify-center gap-3">
@@ -239,6 +241,7 @@ const PO_STATUS_OPTIONS = [
 
 // ─── Page ──────────
 const PurchaseOrders: React.FC = () => {
+  const { role } = useAuth();
   const navigate = useNavigate();
   const basePath = usePathBasePrefix();
   // 0. Hook
@@ -274,8 +277,8 @@ const PurchaseOrders: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // 4. States สำหรับเช็คสิทธิ์ดู Summary Card
-  const userRole = localStorage.getItem('role');
-  const isOwner = userRole === 'Owner';
+  const userRole = (role || '').toUpperCase();
+  const isOwner = userRole === 'OWNER';
 
   // ดึงข้อมูล PO ทั้งหมดของทุก User
   useEffect(() => {

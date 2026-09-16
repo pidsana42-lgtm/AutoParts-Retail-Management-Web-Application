@@ -22,14 +22,14 @@ import (
 type PurchaseOrderService interface {
 	CreatePO(ctx context.Context, req *poDto.CreatePurchaseOrderRequest, creatorID uint) (*poDto.PurchaseOrderResponse, error)
 	GetPOByID(ctx context.Context, id uint) (*poDto.PurchaseOrderResponse, error)
-	UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus, updatedBy uint) error
+	UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus, updatedBy uint, role string) error
 	ListPOs(ctx context.Context, query poDto.ListPOQuery) (*poDto.ListPOResponse, error)
 	GetAvailableYears(ctx context.Context) ([]int, error)
 	GetPOSummary(ctx context.Context, role string) (*poDto.POSummaryResponse, error)
 	GeneratePOPDF(ctx context.Context, id uint, includeCode bool, printedBy uint) ([]byte, error)
 	Delete(ctx context.Context, id uint) error
 	SearchProducts(ctx context.Context, query poDto.ProductSearchQuery) ([]poDto.ProductSearchResponse, error)
-	UpdatePO(ctx context.Context, id uint, req *poDto.UpdatePurchaseOrderRequest, updatedBy uint) (*poEntity.PO, error)
+	UpdatePO(ctx context.Context, id uint, req *poDto.UpdatePurchaseOrderRequest, updatedBy uint, role string) (*poEntity.PO, error)
 	GetSupplierDeliveryEstimate(ctx context.Context, supplierID int) (*poDto.POAnalyticsResponse, error)
 	GetMonthlyPOCount(ctx context.Context) (*poDto.POMonthlyCountResponse, error)
 	RestorePO(ctx context.Context, poID uint, userID uint) error
@@ -301,7 +301,7 @@ func (s *purchaseOrderService) GetPOByID(ctx context.Context, id uint) (*poDto.P
 	}, nil
 }
 
-func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus, updatedBy uint) error {
+func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus, updatedBy uint, role string) error {
 	if status == poEnum.StatusDeleted {
 		return errors.New("ไม่สามารถตั้งสถานะนี้โดยตรง กรุณาใช้ฟังก์ชันลบ/กู้คืน")
 	}
@@ -315,6 +315,24 @@ func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, stat
 	}
 
 	if po.Status == poEnum.StatusApproved {
+		return ErrPOCannotUpdate
+	}
+
+	isOwner := strings.EqualFold(strings.TrimSpace(role), string(poEnum.RoleOwner))
+	if !isOwner && status != poEnum.StatusPending {
+		return ErrPOForbidden
+	}
+
+	validTransition := false
+	switch status {
+	case poEnum.StatusPending:
+		validTransition = po.Status == poEnum.StatusDraft || po.Status == poEnum.StatusResubmitted
+	case poEnum.StatusApproved:
+		validTransition = isOwner && (po.Status == poEnum.StatusDraft || po.Status == poEnum.StatusPending || po.Status == poEnum.StatusResubmitted)
+	case poEnum.StatusResubmitted, poEnum.StatusCancelled:
+		validTransition = isOwner && po.Status == poEnum.StatusPending
+	}
+	if !validTransition {
 		return ErrPOCannotUpdate
 	}
 
@@ -472,8 +490,9 @@ func (s *purchaseOrderService) GetMonthlyPOCount(ctx context.Context) (*poDto.PO
 
 var (
 	ErrPONotFound     = errors.New("purchase order not found")
-	ErrPOCannotDelete = errors.New("approved PO cannot be deleted")
-	ErrPOCannotUpdate = errors.New("approved PO cannot be updated")
+	ErrPOCannotDelete = errors.New("only draft or resubmitted PO can be deleted")
+	ErrPOCannotUpdate = errors.New("purchase order cannot be updated in its current status")
+	ErrPOForbidden    = errors.New("forbidden: insufficient permission for purchase order action")
 )
 
 // Delete แบบ Soft ให้กู้คืนได้
@@ -491,8 +510,8 @@ func (s *purchaseOrderService) Delete(ctx context.Context, id uint) error {
 	}
 
 	// 2. Business rule
-	if po.Status == poEnum.StatusApproved {
-		return ErrPOCannotDelete // ใช้ตัวแปร Error
+	if po.Status != poEnum.StatusDraft && po.Status != poEnum.StatusResubmitted {
+		return ErrPOCannotDelete
 	}
 
 	// 3. delete ดึง ID เตรียมไว้ก่อนลบ
@@ -521,7 +540,7 @@ func (s *purchaseOrderService) SearchProducts(ctx context.Context, query poDto.P
 }
 
 // Update
-func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto.UpdatePurchaseOrderRequest, updatedBy uint) (*poEntity.PO, error) {
+func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto.UpdatePurchaseOrderRequest, updatedBy uint, role string) (*poEntity.PO, error) {
 	if err := req.ValidatePrices(); err != nil {
 		return nil, err
 	}
@@ -535,6 +554,9 @@ func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto
 
 	if po.Status != "DRAFT" && po.Status != "PENDING" && po.Status != "RESUBMITTED" {
 		return nil, ErrPOCannotUpdate
+	}
+	if po.Status == poEnum.StatusPending && !strings.EqualFold(strings.TrimSpace(role), string(poEnum.RoleOwner)) {
+		return nil, ErrPOForbidden
 	}
 	// Resolve every item before writing header changes, including manual preorder
 	// references. Invalid references must not partially update the PO.

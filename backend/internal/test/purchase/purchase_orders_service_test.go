@@ -314,9 +314,9 @@ func TestPO_MutationGuards(t *testing.T) {
 				want := tc.want
 				switch op {
 				case "update":
-					_, err = s.UpdatePO(context.Background(), 42, &dto.UpdatePurchaseOrderRequest{}, 9)
+					_, err = s.UpdatePO(context.Background(), 42, &dto.UpdatePurchaseOrderRequest{}, 9, string(enum.RoleOwner))
 				case "status":
-					err = s.UpdatePOStatus(context.Background(), 42, enum.StatusPending, 9)
+					err = s.UpdatePOStatus(context.Background(), 42, enum.StatusPending, 9, string(enum.RoleOwner))
 				case "delete":
 					err = s.Delete(context.Background(), 42)
 					if tc.status == enum.StatusApproved {
@@ -407,7 +407,7 @@ func TestUpdatePO_RecalculatesItemsAndPreorderReservations(t *testing.T) {
 				return &entity.Product{Product_Name: "Filter", Product_Code: "P001", Unit: &entity.Unit{Unit_Name: "piece"}}, nil
 			}}
 			req := &dto.UpdatePurchaseOrderRequest{Notes: ptr("edited"), Items: []dto.UpdatePOItemRequest{{ID: ptr(uint(100)), ProductID: 1, Quantity: 2, UnitPrice: 12.5, PreOrderItemID: ptr(uint(21))}, {ProductID: 1, Quantity: 3, UnitPrice: 10, PreOrderItemID: ptr(uint(22))}, {ProductID: 1, Quantity: 1.5, UnitPrice: 20, AlertID: ptr(uint(5))}}}
-			got, err := service.NewPOService(r, products, nil, nil, pre, nil, nil, nil).UpdatePO(context.Background(), 42, req, 9)
+			got, err := service.NewPOService(r, products, nil, nil, pre, nil, nil, nil).UpdatePO(context.Background(), 42, req, 9, string(enum.RoleOwner))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -432,7 +432,11 @@ func TestUpdatePOStatus(t *testing.T) {
 		for _, fail := range []bool{false, true} {
 			t.Run(string(target)+map[bool]string{false: "/success", true: "/write error"}[fail], func(t *testing.T) {
 				failure := errors.New("status write failed")
-				po := &entity.PO{Model: gorm.Model{ID: 42}, Status: enum.StatusDraft, PO_Items: []entity.POItems{{PreOrderItemID: ptr(uint(20)), AlertID: ptr(uint(10))}, {}}}
+				currentStatus := enum.StatusDraft
+				if target == enum.StatusResubmitted || target == enum.StatusCancelled {
+					currentStatus = enum.StatusPending
+				}
+				po := &entity.PO{Model: gorm.Model{ID: 42}, Status: currentStatus, PO_Items: []entity.POItems{{PreOrderItemID: ptr(uint(20)), AlertID: ptr(uint(10))}, {}}}
 				writes, releases, resolves := 0, 0, 0
 				r := &mockPORepo{get: func(uint) (*entity.PO, error) { return po, nil }}
 				r.update = func(p *entity.PO) error {
@@ -472,7 +476,7 @@ func TestUpdatePOStatus(t *testing.T) {
 					}
 					return nil
 				}}
-				err := service.NewPOService(r, nil, nil, nil, pre, nil, alerts, nil).UpdatePOStatus(context.Background(), 42, target, 9)
+				err := service.NewPOService(r, nil, nil, nil, pre, nil, alerts, nil).UpdatePOStatus(context.Background(), 42, target, 9, string(enum.RoleOwner))
 				if fail {
 					if !errors.Is(err, failure) {
 						t.Fatal(err)
@@ -495,6 +499,65 @@ func TestUpdatePOStatus(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestPORoleAndStatusGuards(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		current    enum.POStatus
+		target     enum.POStatus
+		role       string
+		wantErr    error
+		wantWrites int
+	}{
+		{"owner approves pending", enum.StatusPending, enum.StatusApproved, "Owner", nil, 1},
+		{"employee submits draft", enum.StatusDraft, enum.StatusPending, "Employee", nil, 1},
+		{"employee cannot approve", enum.StatusPending, enum.StatusApproved, "Employee", service.ErrPOForbidden, 0},
+		{"manager cannot cancel", enum.StatusPending, enum.StatusCancelled, "Manager", service.ErrPOForbidden, 0},
+		{"cancelled cannot be resubmitted", enum.StatusCancelled, enum.StatusPending, "Employee", service.ErrPOCannotUpdate, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			writes := 0
+			po := &entity.PO{Model: gorm.Model{ID: 42}, Status: tc.current}
+			r := &mockPORepo{
+				get: func(uint) (*entity.PO, error) { return po, nil },
+				update: func(*entity.PO) error {
+					writes++
+					return nil
+				},
+				status: func(uint, enum.POStatus, uint) error {
+					writes++
+					return nil
+				},
+			}
+			err := newService(r).UpdatePOStatus(context.Background(), 42, tc.target, 9, tc.role)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("error=%v, want %v", err, tc.wantErr)
+			}
+			if writes != tc.wantWrites {
+				t.Fatalf("writes=%d, want %d", writes, tc.wantWrites)
+			}
+		})
+	}
+
+	t.Run("employee cannot edit pending PO", func(t *testing.T) {
+		r := &mockPORepo{get: func(uint) (*entity.PO, error) {
+			return &entity.PO{Model: gorm.Model{ID: 42}, Status: enum.StatusPending}, nil
+		}}
+		_, err := newService(r).UpdatePO(context.Background(), 42, &dto.UpdatePurchaseOrderRequest{}, 9, "Employee")
+		if !errors.Is(err, service.ErrPOForbidden) {
+			t.Fatalf("error=%v, want %v", err, service.ErrPOForbidden)
+		}
+	})
+
+	t.Run("pending PO cannot be deleted", func(t *testing.T) {
+		r := &mockPORepo{get: func(uint) (*entity.PO, error) {
+			return &entity.PO{Model: gorm.Model{ID: 42}, Status: enum.StatusPending}, nil
+		}}
+		if err := newService(r).Delete(context.Background(), 42); !errors.Is(err, service.ErrPOCannotDelete) {
+			t.Fatalf("error=%v, want %v", err, service.ErrPOCannotDelete)
+		}
+	})
 }
 
 func TestUpdatePO_Errors(t *testing.T) {
@@ -528,7 +591,7 @@ func TestUpdatePO_Errors(t *testing.T) {
 				}
 				return &entity.Product{}, nil
 			}}
-			got, err := service.NewPOService(r, products, nil, nil, nil, nil, nil, nil).UpdatePO(context.Background(), 42, &dto.UpdatePurchaseOrderRequest{Items: []dto.UpdatePOItemRequest{{ProductID: 3, Quantity: 1, UnitPrice: 10}}}, 9)
+			got, err := service.NewPOService(r, products, nil, nil, nil, nil, nil, nil).UpdatePO(context.Background(), 42, &dto.UpdatePurchaseOrderRequest{Items: []dto.UpdatePOItemRequest{{ProductID: 3, Quantity: 1, UnitPrice: 10}}}, 9, string(enum.RoleOwner))
 			if got != nil || err == nil {
 				t.Fatalf("got %+v, %v", got, err)
 			}
@@ -563,7 +626,7 @@ func TestUpdatePO_OmittedItemsPreserveExistingOrder(t *testing.T) {
 	items := []entity.POItems{{ProductID: ptr(uint(3)), Quantity: 2, UnitPrice: 10, SubTotal: 20}}
 	po := &entity.PO{Model: gorm.Model{ID: 42}, Status: enum.StatusDraft, SupplierID: 7, PO_type_id: 1, Total_amount: 20, PO_Items: items}
 	r := &mockPORepo{get: func(uint) (*entity.PO, error) { return po, nil }, update: func(*entity.PO) error { return nil }, reload: func(uint) (*entity.PO, error) { return po, nil }}
-	got, err := newService(r).UpdatePO(context.Background(), 42, &dto.UpdatePurchaseOrderRequest{Notes: ptr("changed")}, 9)
+	got, err := newService(r).UpdatePO(context.Background(), 42, &dto.UpdatePurchaseOrderRequest{Notes: ptr("changed")}, 9, string(enum.RoleOwner))
 	if err != nil {
 		t.Fatal(err)
 	}

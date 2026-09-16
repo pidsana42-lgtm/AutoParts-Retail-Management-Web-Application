@@ -19,6 +19,7 @@ import { cn } from '../../../utils/component';
 import { formatDateThai, getTodayDateString } from '../../../utils/formatdate';
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import { getDashboardRoleGroup } from '../../../utils/dashboardAccess';
+import { useAuth } from '../../../contexts/AuthContexts';
 // Modal
 import StockAlertPOModal from './components/StockAlertPOModal';
 
@@ -64,8 +65,8 @@ const MainDashboard: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const basePath = usePathBasePrefix();
-  const userRole = localStorage.getItem('role');
-  const isOwner = getDashboardRoleGroup(userRole) === 'owner';
+  const { role } = useAuth();
+  const isOwner = getDashboardRoleGroup(role) === 'owner';
   // Basic State
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

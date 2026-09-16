@@ -2,6 +2,7 @@ package dashboard_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +21,7 @@ type fakeDashboardService struct {
 	recentCalls  int
 	agingCalls   int
 	summaryErr   error
+	summaryData  []dashDTO.DisplayDashboardDTO
 }
 
 var _ dashService.DashboardService = (*fakeDashboardService)(nil)
@@ -29,7 +31,7 @@ func (f *fakeDashboardService) GetSummaryData(context.Context, dashDTO.SummaryQu
 	if f.summaryErr != nil {
 		return nil, f.summaryErr
 	}
-	return &dashDTO.SummaryResponse{SummaryData: []dashDTO.DisplayDashboardDTO{}, Total: 0}, nil
+	return &dashDTO.SummaryResponse{SummaryData: f.summaryData, Total: int64(len(f.summaryData))}, nil
 }
 func (f *fakeDashboardService) GetRecentSales(context.Context, dashDTO.SummaryQuery, int, int) (*dashDTO.RecentSalesResponse, error) {
 	f.recentCalls++
@@ -130,6 +132,54 @@ func TestDashboardControllerSuccessAndServiceError(t *testing.T) {
 			t.Fatalf("status=%d, want 500", response.Code)
 		}
 	})
+}
+
+func TestDashboardSummaryRedactsManagementMetricsForEmployeeRoles(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	for _, tc := range []struct {
+		role     string
+		redacted bool
+	}{
+		{"Owner", false},
+		{"Manager", false},
+		{"Employee", true},
+	} {
+		t.Run(tc.role, func(t *testing.T) {
+			fake := &fakeDashboardService{summaryData: []dashDTO.DisplayDashboardDTO{{
+				TotalRevenue:  150,
+				TotalCost:     100,
+				GrossProfit:   50,
+				MarginPercent: 33.33,
+			}}}
+			controller := dashboardController.NewDashboardController(fake)
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+			ctx.Request = httptest.NewRequest(http.MethodGet, "/dashboard/summary", nil)
+			ctx.Set("role", tc.role)
+
+			controller.GetSummaryData(ctx)
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+			var response dashDTO.SummaryResponse
+			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			row := response.SummaryData[0]
+			if row.TotalRevenue != 150 {
+				t.Fatalf("operational revenue must remain visible: %+v", row)
+			}
+			if tc.redacted {
+				if row.TotalCost != 0 || row.GrossProfit != 0 || row.MarginPercent != 0 {
+					t.Fatalf("management metrics leaked to %s: %+v", tc.role, row)
+				}
+			} else if row.TotalCost != 100 || row.GrossProfit != 50 || row.MarginPercent != 33.33 {
+				t.Fatalf("management metrics were removed from %s: %+v", tc.role, row)
+			}
+		})
+	}
 }
 
 func TestDashboardRoleMiddleware(t *testing.T) {
