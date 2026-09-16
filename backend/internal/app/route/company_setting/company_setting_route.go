@@ -25,21 +25,21 @@ func SetupCompanySettingRoutes(r *gin.Engine, db *gorm.DB) {
 			controller.GetCompanySetting,
 		)
 
-		// เฉพาะ Owner, Manager ที่สามารถอัปเดตข้อมูลร้านค้าได้
+		// เฉพาะ Owner เท่านั้นที่สามารถอัปเดตข้อมูลร้านค้าได้
 		group.PUT("",
-			middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleManager)),
+			middleware.RequireRoles(string(enum.RoleOwner)),
 			controller.UpdateCompanySetting,
 		)
 
-		// เฉพาะ Owner, Manager ที่สามารถดูข้อมูลการชำระเงินแบบถอดรหัสเต็มได้ (Unmask / Reveal)
+		// เฉพาะ Owner เท่านั้นที่สามารถดูข้อมูลการชำระเงินแบบถอดรหัสเต็มได้ (Unmask / Reveal)
 		group.GET("/payment/reveal",
-			middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleManager)),
+			middleware.RequireRoles(string(enum.RoleOwner)),
 			controller.RevealPaymentSetting,
 		)
 
-		// เฉพาะ Owner, Manager ที่สามารถอัปโหลดโลโก้ได้
+		// เฉพาะ Owner เท่านั้นที่สามารถอัปโหลดโลโก้ได้
 		group.POST("/logo",
-			middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleManager)),
+			middleware.RequireRoles(string(enum.RoleOwner)),
 			controller.UploadLogo,
 		)
 	}

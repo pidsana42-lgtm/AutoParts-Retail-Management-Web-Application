@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, Boxes, MonitorSmartphone,
   ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight, CircleCheck, History,
-  FileX, ReceiptText, BookOpen, ShieldCheck, UserCheck, RotateCcw
+  FileX, ReceiptText, BookOpen, ShieldCheck, UserCheck, RotateCcw, Building2
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -151,11 +151,12 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   // การตั้งค่า
   { icon: Settings, label: "การตั้งค่า", path: "/owner/storeconfig", roles: ["OWNER"],
    subs: [
+      { icon: Building2, path: "/owner/storeconfig", label: "ข้อมูลร้านค้า" },
       { icon: ShieldCheck, path: "/owner/storeconfig/financial-policy", label: "นโยบายการเงิน" },
       { icon: UserCheck, path: "/owner/storeconfig/customer-credit-control", label: "การควบคุมเครดิตลูกค้า" },
     ],
   },
-  { icon: Settings, label: "การตั้งค่า", path: "/manager/storeconfig", roles: ["MANAGER"],
+  { icon: Settings, label: "การตั้งค่า", path: "/manager/storeconfig/financial-policy", roles: ["MANAGER"],
    subs: [
       { icon: ShieldCheck, path: "/manager/storeconfig/financial-policy", label: "นโยบายการเงิน" },
       { icon: UserCheck, path: "/manager/storeconfig/customer-credit-control", label: "การควบคุมเครดิตลูกค้า" },

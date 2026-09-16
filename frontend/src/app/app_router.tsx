@@ -59,9 +59,10 @@ import { getDashboardRoleGroup } from '../utils/dashboardAccess';
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth();
 
-  const { isManagerOrOwner, isEmployeeOrStaff, firstMenuPath } = useMemo(() => {
+  const { isOwner, isManagerOrOwner, isEmployeeOrStaff, firstMenuPath } = useMemo(() => {
     const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
     const dashboardRoleGroup = getDashboardRoleGroup(currentRole);
+    const isOwner = currentRole === 'OWNER';
     const isOwnerOrManager = dashboardRoleGroup === 'owner';
     const isEmployee = dashboardRoleGroup === 'employee';
     
@@ -69,6 +70,7 @@ export default function AppRouter(): React.JSX.Element {
     const firstPath = userMenus && userMenus.length > 0 ? userMenus[0].path : "/login";
 
     return {
+      isOwner,
       isManagerOrOwner: isOwnerOrManager,
       isEmployeeOrStaff: isEmployee,
       firstMenuPath: firstPath
@@ -90,6 +92,14 @@ export default function AppRouter(): React.JSX.Element {
         {/* หน้าแรกสุด (/) ดีดส่งไปที่เมนูแรกสุดใน Sidebar ของ Role นั้นๆ */}
         <Route path="/" element={<Navigate to={firstMenuPath} replace />} />
 
+        {/* ตั้งค่าข้อมูลร้านค้า (StoreConfig): ให้สิทธิ์เฉพาะ OWNER เท่านั้น */}
+        <Route path="/owner/storeconfig" element={
+          isOwner ? <StoreConfig /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/manager/storeconfig" element={
+          <Navigate to="/manager/storeconfig/financial-policy" replace />
+        } />
+
         {/* เฉพาะ OWNER หรือ MANAGER เท่านั้นที่เข้าได้ (รองรับทั้ง path /owner และ /manager) */}
         {['/owner', '/manager'].map((prefix) => (
           <React.Fragment key={prefix}>
@@ -103,17 +113,14 @@ export default function AppRouter(): React.JSX.Element {
               isManagerOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
             } />
 
-            {/* -------------------- การตั้งค่า ------------------------ */}
-            <Route path={`${prefix}/storeconfig`} element={
-              isManagerOrOwner ? <StoreConfig /> : <Navigate to={firstMenuPath} replace />
-            } />
+            {/* -------------------- การตั้งค่า (เฉพาะนโยบายการเงินและการคุมเครดิต) ------------------------ */}
             <Route path={`${prefix}/storeconfig/financial-policy`} element={
               isManagerOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
             } />
             <Route path={`${prefix}/storeconfig/customer-credit-control`} element={
               isManagerOrOwner ? <CustomerCreditControl /> : <Navigate to={firstMenuPath} replace />
             } />
-            {/* ------------------------------------------------------ */}
+            {/* --------------------------------------------------------------------------------------------- */}
 
             <Route path={`${prefix}/stock`} element={
               isManagerOrOwner ? <Stock /> : <Navigate to={firstMenuPath} replace />
