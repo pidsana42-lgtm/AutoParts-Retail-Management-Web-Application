@@ -428,7 +428,7 @@ const CreatePurchaseOrders: React.FC = () => {
                                 value={searchInput}
                                 onChange={(e) => handleSearchInput(e.target.value)}
                                 onKeyDown={handleSearchKeyDown}
-                                className='bg-transparent border-none shadow-none focus:outline-none'
+                                className={`border-none shadow-none focus:outline-none ${listsSupplier ? 'bg-transparent' : 'bg-[#F6F3F2]'}`}
                                 disabled={!listsSupplier}
                                 leftIcon={
                                     <div className='pointer-events-auto relative z-10 flex items-center justify-center'>
@@ -517,7 +517,7 @@ const CreatePurchaseOrders: React.FC = () => {
                     </Card>
                     <Card className='w-full overflow-hidden' noPadding>
                         <Table>
-                            <TableHeader className='bg-gray-100 text-gray-600'>
+                            <TableHeader className='text-gray-600'>
                                 <TableRow>
                                     <TableHead className='pl-6'>ลำดับ</TableHead>
                                     <TableHead>ประเภท</TableHead>
@@ -535,7 +535,7 @@ const CreatePurchaseOrders: React.FC = () => {
                                     <TableRow>
                                         <TableCell colSpan={9} className='py-16'>
                                         <div className='flex flex-col items-center justify-center gap-4 text-gray-500'>
-                                            <ShoppingCart size={96} className='text-gray-300' />
+                                            <ShoppingCart size={96} className='text-gray-200' />
                                             <span>ไม่พบข้อมูลรายการสินค้า กรุณาเพิ่มสินค้า</span>
                                         </div>
                                         </TableCell>

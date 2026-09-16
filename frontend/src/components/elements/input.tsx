@@ -7,7 +7,7 @@ const inputVariants = cva(
     "h-10 w-full rounded-none bg-[#f6f3f2] px-3 text-sm text-black",
     "placeholder:text-gray-400 focus:ring-1 ring-red-600",
     "transition-colors duration-150 ease-out",
-    "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
+    "disabled:cursor-not-allowed disabled:bg-[#f6f3f2] disabled:text-slate-400",
   ],
   {
     variants: {
