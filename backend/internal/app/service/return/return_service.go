@@ -192,7 +192,7 @@ func (s *returnService) CreateReturn(input reDto.CreateReturnDTO, createdBy uint
 	returnEntity.ApprovedAt = nil
 	returnEntity.ApprovedBy = nil
 	role = strings.ToUpper(strings.TrimSpace(role))
-	if role == "OWNER" || role == "ADMIN" {
+	if role == "OWNER" || role == "MANAGER" || role == "ADMIN" {
 		now := time.Now()
 		returnEntity.Status = reEnum.ReturnApproved
 		returnEntity.ApprovedAt = &now

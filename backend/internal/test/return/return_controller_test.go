@@ -157,7 +157,7 @@ func TestReturnControllerRoleBoundariesAndTrustedActors(t *testing.T) {
 		name string
 		role any
 	}{
-		{"owner", "OWNER"}, {"normalized_admin", " admin "}, {"employee", " employee "},
+		{"owner", "OWNER"}, {"normalized_manager", " manager "}, {"normalized_admin", " admin "}, {"employee", " employee "},
 		{"customer", "CUSTOMER"}, {"missing", nil}, {"wrong_type", 1},
 	}
 	for _, operation := range operations {
@@ -165,7 +165,7 @@ func TestReturnControllerRoleBoundariesAndTrustedActors(t *testing.T) {
 			t.Run(operation.name+"/"+role.name, func(t *testing.T) {
 				service := &returnHTTPServiceStub{}
 				response := requestReturnController(service, operation.method, operation.path, operation.body, uint(23), role.role)
-				allowed := role.name == "owner" || role.name == "normalized_admin" || (role.name == "employee" && operation.employeeAllowed)
+				allowed := role.name == "owner" || role.name == "normalized_manager" || role.name == "normalized_admin" || (role.name == "employee" && operation.employeeAllowed)
 				if !allowed {
 					assertReturnHTTPStatus(t, response, http.StatusForbidden)
 					if len(service.calls) != 0 {

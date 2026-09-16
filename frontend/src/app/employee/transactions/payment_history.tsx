@@ -39,13 +39,13 @@ import { PaymentTypeBadge, PaymentStatusBadge } from "../../../components/elemen
 import { formatDate } from "../../../utils/date";
 import { useUserRole } from "../../../hooks/useUserRole";
 import { posApiService } from "../../../service/http/pos/pos_service";
-import { downloadPdfBlob } from "../../../utils/payment_history_print";
+import { autoPrintPdfBlob } from "../../../utils/payment_history_print";
 
 
 export default function PaymentHistoryPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isOwnerOrAdmin } = useUserRole();
+  const { isOwnerOrManager } = useUserRole();
   const initialSearch = searchParams.get("search")?.trim() ?? "";
   const initialTypeFilter = searchParams.get("type") === "repayment" ? "repayment" : "";
   const [printingReceiptId, setPrintingReceiptId] = useState<number | string | null>(null);
@@ -62,7 +62,7 @@ export default function PaymentHistoryPage() {
       }
       const rawNum = item.receipt_number || targetId;
       const fileName = String(rawNum).endsWith(".pdf") ? `${rawNum}` : `${rawNum}.pdf`;
-      downloadPdfBlob(blob, fileName);
+      autoPrintPdfBlob(blob, fileName);
     } catch (err) {
       console.error("Failed to print receipt:", err);
       alert("ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง");
@@ -146,7 +146,7 @@ export default function PaymentHistoryPage() {
               {/* ช่องที่ 1: ค้นหาคำ + พนักงาน */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 {/* 1.1 ค้นหาเลขที่ใบเสร็จ / บิล / ชื่อลูกค้า */}
-                <div className={cn("flex flex-col gap-1.5", isOwnerOrAdmin ? "md:col-span-8" : "md:col-span-12")}>
+                <div className={cn("flex flex-col gap-1.5", isOwnerOrManager ? "md:col-span-8" : "md:col-span-12")}>
                   <Text variant="xs" className="text-[#5F5E5E]">
                     ค้นหาเลขที่ใบเสร็จ / หมายเลขบิล / ชื่อลูกค้า
                   </Text>
@@ -165,7 +165,7 @@ export default function PaymentHistoryPage() {
                 </div>
 
                 {/* 1.2 พนักงานขาย (เฉพาะเจ้าของร้าน 4/12) */}
-                {isOwnerOrAdmin && (
+                {isOwnerOrManager && (
                   <div className="md:col-span-4 flex flex-col gap-1.5">
                     <Text variant="xs" className="text-[#5F5E5E]">
                       พนักงานผู้รับเงิน
@@ -275,7 +275,7 @@ export default function PaymentHistoryPage() {
           </Card>
 
           {/* Small Stat Cards เหนือตาราง */}
-          {isOwnerOrAdmin ? (
+          {isOwnerOrManager ? (
             /* 1. ฝั่งเจ้าของร้าน (Owner System) */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
               {/* Card 1: ยอดรับชำระสุทธิ (Net Total Collected) */}
@@ -527,25 +527,20 @@ export default function PaymentHistoryPage() {
 
                         {/* 3. ชื่อลูกค้า + เลขที่บิล */}
                         <TableCell className="py-3.5 px-3">
-                          {item.customer_name ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSearch(item.customer_name);
-                              }}
-                              className="text-left font-normal text-[#1C1B1B] hover:text-[#E51C23] hover:underline mb-0 truncate max-w-50 cursor-pointer bg-transparent border-none p-0 block"
-                              title="คลิกเพื่อกรองค้นหาเฉพาะลูกค้าคนนี้"
-                            >
-                              <Text variant="small" className="font-normal text-inherit mb-0 truncate">
-                                {getDisplayCustomerName(item)}
-                              </Text>
-                            </button>
-                          ) : (
-                            <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate max-w-50">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const filterName = item.customer_name || (item as any).customer_name_temp || "ลูกค้าทั่วไป";
+                              setSearch(filterName);
+                            }}
+                            className="text-left font-normal text-[#1C1B1B] hover:text-[#E51C23] hover:underline mb-0 truncate max-w-50 cursor-pointer bg-transparent border-none p-0 block"
+                            title="คลิกเพื่อกรองค้นหาเฉพาะลูกค้าคนนี้"
+                          >
+                            <Text variant="small" className="font-normal text-inherit mb-0 truncate">
                               {getDisplayCustomerName(item)}
                             </Text>
-                          )}
+                          </button>
                           <Text variant="xs" className="font-light text-[#A8A29E] mb-0 truncate max-w-50">
                             บิล: {item.order_numbers || "-"}
                           </Text>
@@ -582,7 +577,7 @@ export default function PaymentHistoryPage() {
                           </Badge>
                         </TableCell>
 
-                        {/* 9. จัดการ: ปุ่มดูรายละเอียด + ปุ่มพิมพ์ใบเสร็จ + ปุ่มพิมพ์สรุปยอดลูกค้า */}
+                        {/* 9. จัดการ: ปุ่มดูรายละเอียด + ปุ่มพิมพ์ใบเสร็จ + ปุ่มเปิดใบสรุปยอดลูกค้า */}
                         <TableCell
                           className="py-3.5 px-3 text-center"
                           onClick={(e) => e.stopPropagation()}
@@ -600,7 +595,7 @@ export default function PaymentHistoryPage() {
                               type="button"
                               disabled={printingReceiptId === (item.receipt_id || item.receipt_number)}
                               className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100 disabled:opacity-40"
-                              title="พิมพ์ใบเสร็จของบิลนี้"
+                              title="พิมพ์ใบเสร็จรับเงินของบิลนี้"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handlePrintReceipt(item);
@@ -608,20 +603,19 @@ export default function PaymentHistoryPage() {
                             >
                               <Printer className={cn("w-4 h-4 text-gray-600", printingReceiptId === (item.receipt_id || item.receipt_number) && "animate-pulse")} />
                             </button>
-                            {item.customer_name && (
-                              <button
-                                type="button"
-                                disabled={isPrintingStatement}
-                                className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
-                                title={`พิมพ์ใบสรุปยอดชำระและยอดคงเหลือของ ${item.customer_name}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handlePrintCustomerStatement(item.customer_name);
-                                }}
-                              >
-                                <FileText className="w-4 h-4" />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              disabled={isPrintingStatement}
+                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100 disabled:opacity-40"
+                              title={`เปิดใบสรุปยอดชำระและยอดคงเหลือของ ${getDisplayCustomerName(item)}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const custTarget = item.customer_name || (item as any).customer_name_temp || "ลูกค้าทั่วไป";
+                                handlePrintCustomerStatement(custTarget, "preview");
+                              }}
+                            >
+                              <FileText className={cn("w-4 h-4 text-gray-600", isPrintingStatement && "animate-pulse")} />
+                            </button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -817,7 +811,7 @@ export default function PaymentHistoryPage() {
                 </Card>
 
                 {/* ปุ่มพิมพ์ใบเสร็จรับเงิน (PDF) */}
-                <Button
+                {/* <Button
                   type="button"
                   variant="primary"
                   onClick={async () => {
@@ -843,7 +837,7 @@ export default function PaymentHistoryPage() {
                       ? "พิมพ์ใบเสร็จที่ยกเลิก (Void Receipt)"
                       : "พิมพ์ใบเสร็จรับเงิน (PDF)"}
                   </span>
-                </Button>
+                </Button> */}
 
                 {/* 2. กรณีเป็น Direct Payment (ชำระสดหน้าร้าน) -> มีปุ่มเด้งไปหน้าประวัติการขายสินค้าและเลือกบิลให้อัตโนมัติ */}
                 {selectedReceipt.payment_type === "payment" && selectedReceipt.status !== "cancelled" && (
@@ -862,7 +856,7 @@ export default function PaymentHistoryPage() {
                       variant="solid-red"
                       onClick={() => {
                         const targetOrder = selectedReceipt.order_numbers || selectedReceipt.receipt_number;
-                        const targetPath = isOwnerOrAdmin
+                        const targetPath = isOwnerOrManager
                           ? `/owner/pos/sales_history?order_number=${encodeURIComponent(targetOrder)}`
                           : `/employee/pos/sales_history?order_number=${encodeURIComponent(targetOrder)}`;
                         setSelectedReceipt(null);
@@ -914,7 +908,7 @@ export default function PaymentHistoryPage() {
                         </Card>
 
                         {/* ฟอร์มดำเนินการของ Owner / ปุ่มดึงกลับของ Employee */}
-                        {isOwnerOrAdmin ? (
+                        {isOwnerOrManager ? (
                           <div className="space-y-3 pt-1">
                             <div className="space-y-1.5">
                               <Text
@@ -991,7 +985,7 @@ export default function PaymentHistoryPage() {
                     {selectedReceipt.status === "completed" && (
                       <div className="space-y-3 pt-2">
                         <Text variant="xs" className="font-normal text-[#E51C23] uppercase tracking-wider mb-1">
-                          {isOwnerOrAdmin
+                          {isOwnerOrManager
                             ? "ระบุเหตุผลในการยกเลิกใบเสร็จรับเงิน (ทำให้ยอดหนี้กลับมาค้างชำระทันที)"
                             : "ระบุเหตุผลในการส่งคำขอยกเลิกใบเสร็จรับเงิน (ส่งไปยังเจ้าของร้าน)"}
                         </Text>
@@ -1005,7 +999,7 @@ export default function PaymentHistoryPage() {
                         />
 
                         <div className="flex gap-3 pt-1">
-                          {isOwnerOrAdmin ? (
+                          {isOwnerOrManager ? (
                             <Button
                               type="button"
                               variant="solid-red"
@@ -1091,7 +1085,7 @@ export default function PaymentHistoryPage() {
                       </div>
                     </Card>
 
-                    <Button
+                    {/* <Button
                       type="button"
                       variant="outline-cancel"
                       onClick={() => handlePrintReceipt(selectedReceipt)}
@@ -1100,7 +1094,7 @@ export default function PaymentHistoryPage() {
                     >
                       <Printer className={cn("w-4 h-4 text-[#E51C23]", printingReceiptId === (selectedReceipt.receipt_id || selectedReceipt.receipt_number) && "animate-pulse")} />
                       <span>พิมพ์ใบเสร็จที่ยกเลิก (เอกสารหลักฐาน)</span>
-                    </Button>
+                    </Button> */}
                   </div>
                 )}
               </div>

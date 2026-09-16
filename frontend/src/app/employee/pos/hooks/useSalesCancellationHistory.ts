@@ -186,34 +186,38 @@ export const useSalesCancellationHistory = () => {
     fetchCancellationHistory();
   };
 
-  // function สำหรับกู้คืนคำขอยกเลิกบิลที่เลือก ยิง API ไป revertCancellationRequest
-  const handleRestoreSelected = async () => {
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState<boolean>(false);
+  const [isRestoring, setIsRestoring] = useState<boolean>(false);
+
+  // function สำหรับเปิด Modal กู้คืนคำขอยกเลิกบิลที่เลือก
+  const handleRestoreSelected = () => {
     if (selectedIds.length === 0) {
       alert("กรุณาเลือกรายการที่ต้องการกู้คืนอย่างน้อย 1 รายการ");
       return;
     }
+    setIsRestoreModalOpen(true);
+  };
 
-    if (
-      confirm(
-        `คุณต้องการกู้คืนใบสั่งซื้อ ${selectedIds.length} รายการใช่หรือไม่?`,
-      )
-    ) {
-      try {
-        setIsLoading(true);
-        // ยิง API กู้คืนคำขอทีละรายการ
-        await Promise.all(
-          selectedIds.map((id) => posApiService.revertCancellationRequest(id))
-        );
+  // function สำหรับกู้คืนคำขอยกเลิกบิลที่เลือก ยิง API ไป revertCancellationRequest
+  const handleConfirmRestore = async () => {
+    try {
+      setIsRestoring(true);
+      setIsLoading(true);
+      // ยิง API กู้คืนคำขอทีละรายการ
+      await Promise.all(
+        selectedIds.map((id) => posApiService.revertCancellationRequest(id))
+      );
 
-        alert("ดึงคำขอยกเลิกบิลกลับสำเร็จ");
-        setSelectedIds([]);
-        fetchCancellationHistory();
-        fetchOverallStats();
-      } catch (err: any) {
-        alert(err?.response?.data?.message || "เกิดข้อผิดพลาดในการดึงคำขอกลับ");
-      } finally {
-        setIsLoading(false);
-      }
+      alert("ดึงคำขอยกเลิกบิลกลับสำเร็จ");
+      setSelectedIds([]);
+      fetchCancellationHistory();
+      fetchOverallStats();
+      setIsRestoreModalOpen(false);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "เกิดข้อผิดพลาดในการดึงคำขอกลับ");
+    } finally {
+      setIsRestoring(false);
+      setIsLoading(false);
     }
   };
 
@@ -230,7 +234,15 @@ export const useSalesCancellationHistory = () => {
     selectableCount: selectableItems.length,
     selectableItems,
     isLoading,
+    isRestoring,
     error,
+
+    // Restore Modal / Confirm Dialog
+    isRestoreModalOpen,
+    setIsRestoreModalOpen,
+    isRestoreConfirmOpen: isRestoreModalOpen,
+    setIsRestoreConfirmOpen: setIsRestoreModalOpen,
+    handleConfirmRestore,
 
     // Overall Stats
     stats,
