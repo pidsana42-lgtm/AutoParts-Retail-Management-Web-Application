@@ -22,6 +22,7 @@ import { usePoScanner } from './hooks/usePOScanner';
 import { usePreorders } from './hooks/usePreorder';
 // Utils
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
+import { useAuth } from '../../../contexts/AuthContexts';
 
 // Map Status Eng -> Thai
 const STATUS_LABEL: Record<string, string> = {
@@ -35,7 +36,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 // ฟังก์ชันสำหรับเช็คหัวข้อ
 const getPageTitle = (status: string, role: string | null): string => {
-    if (status === 'PENDING' && role !== 'Owner') {
+    if (status === 'PENDING' && role?.toUpperCase() !== 'OWNER') {
         return 'รายละเอียดใบสั่งซื้อ';
     }
     const titles: Record<string, string> = {
@@ -51,7 +52,7 @@ const getPageTitle = (status: string, role: string | null): string => {
 
 // ฟังก์ชันสำหรับเช็คคำอธิบายใต้หัวข้อ
 const getPageSubtitle = (status: string, role: string | null): string => {
-    if (status === 'PENDING' && role !== 'Owner') {
+    if (status === 'PENDING' && role?.toUpperCase() !== 'OWNER') {
         return 'ใบสั่งซื้อนี้อยู่ระหว่างรอการอนุมัติจากเจ้าของร้าน';
     }
     const subtitles: Record<string, string> = {
@@ -69,10 +70,11 @@ function OrderDetail() {
     const navigate = useNavigate();
     const basePath = usePathBasePrefix();
     const { toast } = useToast();
+    const { role: userRole } = useAuth();
     // ดึง id จาก URL มาใช้งาน (เช่น เอาไป Fetch API ต่อ)
     const { id } = useParams();
-    const userRole = localStorage.getItem('role');
-    const isOwner = userRole?.toUpperCase() === 'OWNER';
+    const normalizedRole = userRole?.toUpperCase() ?? '';
+    const isOwner = normalizedRole === 'OWNER';
     const [po, setPo] = useState<POResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

@@ -25,12 +25,14 @@ import { usePoScanner } from './hooks/usePOScanner';
 import { usePreorders } from './hooks/usePreorder';
 // Utils
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
+import { useAuth } from '../../../contexts/AuthContexts';
 
 const CreatePurchaseOrders: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const basePath = usePathBasePrefix();
     const { toast } = useToast();
+    const { role } = useAuth();
     // States ของ API
     const [item, setItem] = useState<LocalPOItem[]>([]);
     const [totalItems, setTotalItems] = useState(0);
@@ -50,8 +52,7 @@ const CreatePurchaseOrders: React.FC = () => {
     // ดึงข้อมูลจาก Hook เรียกรายการพรีออเดอร์
     const { preorders, totalPreorders, isLoading: isPreordersLoading } = usePreorders(item, setItem, setIsPreorderModalOpen);
     // สิทธิ์เจ้าของร้าน: กดอนุมัติแล้วอนุมัติทันทีโดยไม่ต้องรอ
-    const userRole = localStorage.getItem('role');
-    const isOwner = userRole?.toUpperCase() === 'OWNER';
+    const isOwner = role?.toUpperCase() === 'OWNER';
     // สำหรับดึงข้อมูลคาดการณ์ระยะเวลาจัดส่ง
     const [deliveryEstimate, setDeliveryEstimate] = useState<POAnalyticsResponse | null>(null);
     const [isEstimateLoading, setIsEstimateLoading] = useState(false);

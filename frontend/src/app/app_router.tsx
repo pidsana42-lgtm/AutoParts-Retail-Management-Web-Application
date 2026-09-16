@@ -57,10 +57,10 @@ import NewReturnPage from './owner/return/new_return';
 import { getDashboardRoleGroup } from '../utils/dashboardAccess';
 
 export default function AppRouter(): React.JSX.Element {
-  const { role } = useAuth();
+  const { role, isLoading } = useAuth();
 
-  const { isManagerOrOwner, isEmployeeOrStaff, firstMenuPath } = useMemo(() => {
-    const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
+  const { isManagerOrOwner, isEmployeeRole, firstMenuPath } = useMemo(() => {
+    const currentRole = (role || "").toUpperCase();
     const dashboardRoleGroup = getDashboardRoleGroup(currentRole);
     const isOwnerOrManager = dashboardRoleGroup === 'owner';
     const isEmployee = dashboardRoleGroup === 'employee';
@@ -70,10 +70,12 @@ export default function AppRouter(): React.JSX.Element {
 
     return {
       isManagerOrOwner: isOwnerOrManager,
-      isEmployeeOrStaff: isEmployee,
+      isEmployeeRole: isEmployee,
       firstMenuPath: firstPath
     };
   }, [role]); 
+
+  if (isLoading) return <></>;
 
   return (
     <Routes>
@@ -238,18 +240,19 @@ export default function AppRouter(): React.JSX.Element {
 
         {/* แดชบอร์ดของฝั่งพนักงาน */}
         <Route path="/employee/dashboard/maindashboard" element={
-          isEmployeeOrStaff ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeRole ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
         <Route path="/employee/dashboard/salesdashboard" element={
-          isEmployeeOrStaff ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeRole ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
         <Route path="/employee/dashboard/debtdashboard" element={
-          isEmployeeOrStaff ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeRole ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/employee/orders" element={<PurchaseOrders />} />
         <Route path="/employee/new-orders" element={<CreatePurchaseOrders />} />
         <Route path="/employee/orders/:id" element={<OrderDetail />} />
+        <Route path="/employee/orders/restore" element={<DeletedPoHistory />} />
 
         {/* หน้านำเข้าบิลสำหรับพนักงาน */}
         <Route path="/employee/import" element={<EmployeeImport />} />

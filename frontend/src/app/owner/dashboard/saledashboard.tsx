@@ -18,6 +18,7 @@ import type { DashboardSummaryItem, SummaryQuery, StockHealthStats } from '../..
 // Utils
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import { getDashboardRoleGroup } from '../../../utils/dashboardAccess';
+import { useAuth } from '../../../contexts/AuthContexts';
 import { formatDateThai, getTodayDateString } from '../../../utils/formatdate';
 import { exportTopSellerPdf } from '../../../utils/print';
 
@@ -45,8 +46,8 @@ const SaleDashboard: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const basePath = usePathBasePrefix();
-  const userRole = localStorage.getItem('role');
-  const isOwner = getDashboardRoleGroup(userRole) === 'owner';
+  const { role } = useAuth();
+  const isOwner = getDashboardRoleGroup(role) === 'owner';
 
   // Basic State
   const [isLoading, setIsLoading] = useState(false);

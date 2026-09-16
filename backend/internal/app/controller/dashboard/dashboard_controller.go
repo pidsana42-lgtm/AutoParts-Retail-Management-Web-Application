@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	dashDto "backend/internal/app/dto/dashboard"
 	dashSvc "backend/internal/app/service/dashboard"
@@ -54,6 +55,19 @@ func (ctrl *DashboardController) GetSummaryData(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Employees need operational sales counts and revenue on their dashboard,
+	// but cost, gross profit and margin are management-only information. Do the
+	// redaction at the API boundary so hidden UI cards cannot be bypassed.
+	if roleValue, exists := c.Get("role"); exists {
+		if role, ok := roleValue.(string); ok && strings.EqualFold(role, "Employee") {
+			for i := range result.SummaryData {
+				result.SummaryData[i].TotalCost = 0
+				result.SummaryData[i].GrossProfit = 0
+				result.SummaryData[i].MarginPercent = 0
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, result)

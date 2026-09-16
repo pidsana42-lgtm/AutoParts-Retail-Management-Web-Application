@@ -43,7 +43,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
     icon: LayoutDashboard, 
     label: "แดชบอร์ด", 
     path: "/employee/dashboard/maindashboard", 
-    roles: ["EMPLOYEE", "STAFF"] 
+    roles: ["EMPLOYEE"]
   },
 
   // นำเข้าสินค้า
@@ -99,7 +99,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
     subs: [{ icon: RotateCcw, path: "/manager/orders/restore", label: "กู้คืนใบสั่งซื้อ" }],
    },
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/employee/orders", roles: ["EMPLOYEE"],
-    subs: [{ icon: RotateCcw, path: "/owner/orders/restore", label: "กู้คืนใบสั่งซื้อ" }],
+    subs: [{ icon: RotateCcw, path: "/employee/orders/restore", label: "กู้คืนใบสั่งซื้อ" }],
    },
 
   // พรีออเดอร์
