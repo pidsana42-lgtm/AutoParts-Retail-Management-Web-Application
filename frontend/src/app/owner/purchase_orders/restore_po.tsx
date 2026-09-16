@@ -138,7 +138,7 @@ const DeletedPoHistory: React.FC = () => {
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
 
   return (
-    <div className="p-8 space-y-6 bg-white min-h-screen font-sans">
+    <div className="min-h-screen space-y-6 bg-white p-4 font-sans sm:p-6 lg:p-8">
       {/* Header */}
       <div className="flex items-center justify-start">
         <Heading level="h1" weight="semibold" className="m-0 text-black">
@@ -159,8 +159,8 @@ const DeletedPoHistory: React.FC = () => {
           <CardTitle className="text-base text-black">ค้นหาใบสั่งซื้อด้วย</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-5 gap-4 items-end">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="sm:col-span-2 lg:col-span-2">
               <Input
                 label="หมายเลขใบสั่งซื้อ"
                 placeholder="PO-XXXX-XXXX"
@@ -288,8 +288,8 @@ const DeletedPoHistory: React.FC = () => {
 
         {/* Pagination */}
         {!isLoading && !error && totalItems > 0 && (
-          <div className="bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-3 border-t border-gray-100 bg-[#fcfbfa] px-4 py-4 text-xs text-gray-500 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
               <span>
                 แสดง {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} ถึง {Math.min(currentPage * itemsPerPage, totalItems)} จาก {totalItems} ใบสั่งซื้อ
               </span>
@@ -307,7 +307,7 @@ const DeletedPoHistory: React.FC = () => {
                 </select>
               </div>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex max-w-full items-center gap-1 overflow-x-auto pb-1 lg:pb-0">
               <button disabled={currentPage === 1} onClick={() => setCurrentPage(1)} aria-label="หน้าแรก"
                 className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed">
                 <ChevronsLeft size={16} />
@@ -344,7 +344,7 @@ const DeletedPoHistory: React.FC = () => {
       </Card>
 
       {/* Bottom Action */}
-      <div className="flex justify-end">
+      <div className="flex justify-stretch sm:justify-end [&>button]:w-full sm:[&>button]:w-auto">
         <Button
           variant="primary"
           onClick={() => setIsRestoreConfirmOpen(true)}

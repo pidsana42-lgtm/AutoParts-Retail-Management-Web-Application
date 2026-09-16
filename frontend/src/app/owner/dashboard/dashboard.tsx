@@ -428,10 +428,10 @@ const MainDashboard: React.FC = () => {
 
   return (
     <>
-    <div className='p-8 space-y-8 bg-white min-h-screen font-sans'>
+    <div className='min-h-screen space-y-6 bg-white p-4 font-sans sm:p-6 lg:space-y-8 lg:p-8'>
       { /* Top Page Filter */ }
-      <div>
-        <div className='bg-[#F6F3F2] inline-flex items-center p-1'>
+      <div className='overflow-x-auto pb-1'>
+        <div className='inline-flex min-w-max items-center bg-[#F6F3F2] p-1'>
           {PageFilter.map((tab) => {
             const isActive = location.pathname.includes(tab.value);
             return (
@@ -446,14 +446,14 @@ const MainDashboard: React.FC = () => {
       </div>
 
       { /* Page Header */ }
-      <div className='flex items-end justify-between'>
+      <div className='flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between'>
         <div className='flex flex-col items-start justify-start'>
           <Heading level='h1' weight='semibold' className='m-0 text-black'>
             กระดานแดชบอร์ด
           </Heading>
           <Heading level='h6' className='m-0 mt-1'>ตัวชี้วัดประสิทธิภาพการดำเนินงานแบบเรียลไทม์</Heading>
         </div>
-        <div className='bg-[#F6F3F2] flex items-center p-1'>
+        <div className='flex max-w-full items-center overflow-x-auto bg-[#F6F3F2] p-1'>
           {Filter.map((filter) => (
             <button key={filter.value} onClick={() => handleFilterClick(filter.value)}
               className={`w-20 py-2.5 text-sm transition cursor-pointer ${selectedFilter === filter.value
@@ -479,7 +479,7 @@ const MainDashboard: React.FC = () => {
 
       { /* KPI Cards */ }
       {isOwner ? (
-        <div className='grid grid-cols-5 gap-6 items-stretch'>
+        <div className='grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-5 xl:gap-6'>
           {/* รายได้สุทธิ */}
           <Card className='border-l-[5px] border-l-red-500 flex flex-col justify-center p-5'>
             <Heading level='h6'>รายได้สุทธิ</Heading>
@@ -549,7 +549,7 @@ const MainDashboard: React.FC = () => {
           </Card>
         </div>
       ) : (
-        <div className='grid grid-cols-4 gap-6 items-stretch'>
+        <div className='grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-6'>
           {/* ออเดอร์ทั้งหมด */}
           <Card className='border-l-[5px] border-l-gray-300 flex flex-col justify-center p-5'>
             <Heading level='h6'>ออเดอร์ทั้งหมด</Heading>
@@ -631,10 +631,10 @@ const MainDashboard: React.FC = () => {
       )}
 
       { /* Content */ }
-      <div className='grid grid-cols-3 gap-4 items-start'>
-        <div className='col-span-2 flex flex-col gap-6'>
+      <div className='grid grid-cols-1 items-start gap-4 xl:grid-cols-3'>
+        <div className='flex flex-col gap-6 xl:col-span-2'>
           <Card className='col-span-2 overflow-hidden' noPadding>
-            <CardHeader className='flex items-center bg-[#F6F3F2]/50'>
+            <CardHeader className='flex flex-col items-start gap-2 bg-[#F6F3F2]/50 sm:flex-row sm:items-center sm:justify-between'>
               <Heading level='h4'>รายการขายล่าสุด</Heading>
               <Button variant='outline' size='sm' onClick={() => navigate(`${basePath}/pos/sales_history`)}
                 className='border-none hover:bg-transparent hover:text-red-700 hover:underline p-0 h-auto font-light'>ดูรายการทั้งหมด</Button>
@@ -674,9 +674,9 @@ const MainDashboard: React.FC = () => {
               </TableBody>
             </Table>
             {recentSaleTotal > 0 && (
-                <div className='bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500'>
+                <div className='flex flex-col gap-3 border-t border-gray-100 bg-[#fcfbfa] px-4 py-4 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between sm:px-6'>
                   <span>แสดง {Math.min((recentSalePage - 1) * PAGE_SIZE + 1, recentSaleTotal)} ถึง {Math.min(recentSalePage * PAGE_SIZE, recentSaleTotal)} จาก {recentSaleTotal} รายการ</span>
-                  <div className='flex items-center gap-1'>
+                  <div className='flex max-w-full items-center gap-1 overflow-x-auto pb-1 sm:pb-0'>
                     <button disabled={recentSalePage === 1} onClick={() => setRecentSalePage(1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsLeft size={16} /></button>
                     <button disabled={recentSalePage === 1} onClick={() => setRecentSalePage((p) => p - 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronLeft size={16} /></button>
                     {getPageNumbers(recentSalePage, recentSaleTotalPages).map((p, idx) =>
@@ -691,9 +691,9 @@ const MainDashboard: React.FC = () => {
           </Card>
 
           <Card className='col-span-2 overflow-hidden' noPadding>
-            <CardHeader className='flex items-center justify-between bg-[#F6F3F2]/50 px-6 py-4'>
+            <CardHeader className='flex flex-col items-start gap-3 bg-[#F6F3F2]/50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6'>
               <Heading level='h4' className='m-0'>สินค้าค้างสต๊อกเกิน {agingDays} วัน</Heading>
-              <div className='flex items-center gap-4'>
+              <div className='flex flex-wrap items-center gap-3 sm:gap-4'>
                 {/* Filter dropdown */}
                 <div className='relative flex items-center' ref={agingFilterRef}>
                   <Button
@@ -844,9 +844,9 @@ const MainDashboard: React.FC = () => {
             {(() => {
               const totalPages = Math.ceil(agingStock.length / PAGE_SIZE);
               return (
-                <div className='bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500'>
+                <div className='flex flex-col gap-3 border-t border-gray-100 bg-[#fcfbfa] px-4 py-4 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between sm:px-6'>
                   <span>แสดง {Math.min((agingStockPage - 1) * PAGE_SIZE + 1, agingStock.length)} ถึง {Math.min(agingStockPage * PAGE_SIZE, agingStock.length)} จาก {agingStock.length} รายการ</span>
-                  <div className='flex items-center gap-1'>
+                  <div className='flex max-w-full items-center gap-1 overflow-x-auto pb-1 sm:pb-0'>
                     <button disabled={agingStockPage === 1} onClick={() => setAgingStockPage(1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsLeft size={16} /></button>
                     <button disabled={agingStockPage === 1} onClick={() => setAgingStockPage((p) => p - 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronLeft size={16} /></button>
                     {getPageNumbers(agingStockPage, totalPages).map((p, idx) =>
@@ -862,7 +862,7 @@ const MainDashboard: React.FC = () => {
           </Card>
         </div>
 
-        <Card className='col-span-1 sticky top-4 z-10 self-start overflow-hidden border-[#DC2626] border-5' noPadding>
+        <Card className='self-start overflow-hidden border-5 border-[#DC2626] xl:sticky xl:top-4 xl:z-10 xl:col-span-1' noPadding>
           <CardHeader className='bg-[#DC2626] flex items-center'>
             <div className='flex items-center gap-4'>
               <TriangleAlert size={20} className='text-white' />
@@ -891,7 +891,7 @@ const MainDashboard: React.FC = () => {
                     disabled={!item.product_id}
                     title={item.product_id ? `ดูรายละเอียด ${item.product_name ?? 'สินค้า'}` : 'ไม่พบรหัสสินค้า'}
                     className={cn(
-                      'w-full rounded-sm px-4 py-3 flex items-center justify-between text-left transition',
+                      'w-full rounded-sm px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-left transition sm:flex-nowrap',
                       item.product_id
                         ? 'cursor-pointer hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500'
                         : 'cursor-not-allowed opacity-70',
@@ -924,7 +924,7 @@ const MainDashboard: React.FC = () => {
             )}
 
             {stockAlertTotalPages > 1 && (
-              <div className='px-2 py-2 flex items-center justify-between border-t border-gray-100 text-xs text-gray-500'>
+              <div className='flex flex-col gap-2 border-t border-gray-100 px-2 py-2 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between'>
                 <span>
                   แสดง {(stockAlertPage - 1) * STOCK_ALERT_PAGE_SIZE + 1}–{Math.min(stockAlertPage * STOCK_ALERT_PAGE_SIZE, stockAlerts.length)} จาก {stockAlerts.length}
                 </span>

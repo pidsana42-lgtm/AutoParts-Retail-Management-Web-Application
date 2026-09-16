@@ -2,7 +2,7 @@ import { isValidQuantity, validatePurchaseOrder } from './validation';
 // React Libraries
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { Building2, ChartNoAxesCombined, Info, ScanBarcode, ShoppingBag, ChevronRight, ShoppingCart, Plus, Minus, Trash2, MessageSquareMore} from 'lucide-react';
+import { Building2, ScanBarcode, ShoppingBag, ChevronRight, ShoppingCart, Plus, Minus, Trash2, MessageSquareMore} from 'lucide-react';
 // Components
 import Heading from '../../../components/elements/heading';
 import Button from '../../../components/elements/button';
@@ -14,7 +14,7 @@ import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { useToast } from '../../../components/elements/toast';
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
 // Interface
-import type { CreatePORequest, LocalPOItem, PreorderItem, POAnalyticsResponse } from '../../../interface/purchase_orders/po_interface';
+import type { CreatePORequest, LocalPOItem, PreorderItem } from '../../../interface/purchase_orders/po_interface';
 // Service & Utils
 import { poService } from '../../../service/http/purchase_orders/po_service';
 import { getSuppliersList } from '../../../service/http/wms/product';
@@ -53,9 +53,6 @@ const CreatePurchaseOrders: React.FC = () => {
     const { preorders, totalPreorders, isLoading: isPreordersLoading } = usePreorders(item, setItem, setIsPreorderModalOpen);
     // สิทธิ์เจ้าของร้าน: กดอนุมัติแล้วอนุมัติทันทีโดยไม่ต้องรอ
     const isOwner = role?.toUpperCase() === 'OWNER';
-    // สำหรับดึงข้อมูลคาดการณ์ระยะเวลาจัดส่ง
-    const [deliveryEstimate, setDeliveryEstimate] = useState<POAnalyticsResponse | null>(null);
-    const [isEstimateLoading, setIsEstimateLoading] = useState(false);
     // เก็บค่าที่ผู้ใช้กำลังพิมพ์อยู่ (ระหว่างลบเลขเดิมทิ้งแล้วยังพิมพ์ไม่เสร็จ) แยกจาก items จริง
     const [qtyDrafts, setQtyDrafts] = useState<Record<string | number, string>>({});
     const [showValidation, setShowValidation] = useState(false);
@@ -70,11 +67,24 @@ const CreatePurchaseOrders: React.FC = () => {
     const [pendingSupplierId, setPendingSupplierId] = useState<string | null>(null);
     // เก็บ key ของรายการที่รอยืนยันลบเนื่องจากจำนวนเหลือ 0
     const [removeConfirm, setRemoveConfirm] = useState<{ key: number | string } | null>(null);
+    const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false);
 
     // อัปเดต totalItems อัตโนมัติเมื่อตะกร้า (item) มีการเปลี่ยนแปลง
     useEffect(() => {
         setTotalItems(item.length);
     }, [item]);
+
+    useEffect(() => {
+        if (item.length === 0 || isSaving) return;
+
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [item.length, isSaving]);
     // คำนวณจำนวนหน่วยรวม
     const totalQuantity = React.useMemo(
         () => item.reduce((sum, row) => sum + row.quantity, 0),
@@ -121,29 +131,6 @@ const CreatePurchaseOrders: React.FC = () => {
         // ล้าง state ออกจาก history เพื่อกัน re-fill เมื่อ navigate back
         window.history.replaceState({}, '');
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-    // ดึงข้อมูลคาดการณ์ระยะเวลาจัดส่งของ Supplier ที่เลือก
-    useEffect(() => {
-        const fetchDeliveryEstimate = async () => {
-            if (!listsSupplier) {
-                setDeliveryEstimate(null);
-                return;
-            }
-
-            setIsEstimateLoading(true);
-            try {
-                const estimate = await poService.getSupplierDeliveryEstimate(listsSupplier);
-                setDeliveryEstimate(estimate);
-            } catch (error) {
-                console.error("โหลดข้อมูลคาดการณ์การจัดส่งล้มเหลว:", error);
-                setDeliveryEstimate(null);
-            } finally {
-                setIsEstimateLoading(false);
-            }
-        };
-
-        fetchDeliveryEstimate();
-    }, [listsSupplier]);
 
     // เมื่อมีการเลือกสินค้า (จาก Enter ในช่องค้นหา หรือคลิก dropdown) ให้เด้งไปช่องจำนวน
     useEffect(() => {
@@ -231,6 +218,17 @@ const CreatePurchaseOrders: React.FC = () => {
         setRemoveConfirm(null);
     };
 
+    const handleBackClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+        if (item.length === 0) return;
+        event.preventDefault();
+        setIsLeaveConfirmOpen(true);
+    };
+
+    const confirmLeavePage = () => {
+        setIsLeaveConfirmOpen(false);
+        navigate(`${basePath}/orders`);
+    };
+
     // ฟังก์ชัน: บันทึกร่าง / ส่งอนุมัติ
     const handleSavePO = async (submitStatus: 'DRAFT' | 'PENDING') => {
         if (isSaving) return;
@@ -313,7 +311,7 @@ const CreatePurchaseOrders: React.FC = () => {
     };    
 
     return (
-        <div className='p-8 space-y-6 bg-white min-h-screen'>
+        <div className='min-h-screen space-y-6 bg-white p-4 sm:p-6 lg:p-8'>
             {showValidation && validationErrors.length > 0 && (
                 <div role="alert" className="border border-red-300 bg-red-50 p-4 text-sm text-red-700">
                     <p className="font-medium">กรุณาตรวจสอบข้อมูลใบสั่งซื้อ</p>
@@ -323,10 +321,14 @@ const CreatePurchaseOrders: React.FC = () => {
                 </div>
             )}
             { /* Header */ }
-            <div className='flex items-center justify-between'>
+            <div className='flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
                 <div className='flex-col space-y-2'>
-                    <nav className='flex items-center text-sm text-gray-500 gap-2 font-light'>
-                        <Link to={`${basePath}/orders`} className='hover:text-gray-900 transition-colors cursor-pointer'>
+                    <nav className='flex flex-wrap items-center gap-2 text-sm font-light text-gray-500'>
+                        <Link
+                            to={`${basePath}/orders`}
+                            onClick={handleBackClick}
+                            className='hover:text-gray-900 transition-colors cursor-pointer'
+                        >
                             จัดการใบสั่งซื้อ
                         </Link>
                         <ChevronRight size={16} className='text-gray-400' />                        
@@ -336,7 +338,7 @@ const CreatePurchaseOrders: React.FC = () => {
                         สร้างใบสั่งซื้อสินค้าใหม่
                     </Heading>
                 </div>
-                <div className='flex items-end gap-4 justify-end'>
+                <div className='flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-end sm:justify-end [&>button]:w-full sm:[&>button]:w-auto'>
                     <Button size='md' variant='tertiary' disabled={isSaving} onClick={() => handleSavePO('DRAFT')}>{isSaving ? "กำลังบันทึก..." : "บันทึกฉบับร่าง"}</Button>
                     <Button size='md' disabled={isSaving} onClick={() => handleSavePO('PENDING')}>
                         {isSaving ? (isOwner ? "กำลังอนุมัติใบสั่งซื้อ..." : "กำลังส่งอนุมัติ...") : (isOwner ? "อนุมัติใบสั่งซื้อ" : "ส่งอนุมัติ")}
@@ -346,8 +348,8 @@ const CreatePurchaseOrders: React.FC = () => {
 
             { /* Contents */ }
             { /* Left Side */ }
-            <div className='flex gap-6 items-start'>
-                <div className='w-1/4 flex flex-col gap-6'>
+            <div className='flex flex-col items-start gap-6 xl:flex-row'>
+                <div className='flex w-full flex-col gap-6 xl:w-1/4'>
                     <Card className='border-l-[5px] border-l-red-800'>
                         <CardHeader className='items-center justify-start gap-4 mt-2 mb-2'>
                             <CardTitle className='text-base text-red-800'><Building2 size={24} /></CardTitle>
@@ -402,39 +404,6 @@ const CreatePurchaseOrders: React.FC = () => {
                             </div>
                         </CardContent>
                     </Card>
-                    {listsSupplier && (
-                        <div className='bg-[#22252a] text-white rounded-none p-6 h-fit shadow-sm relative overflow-hidden'>
-                            <div className='absolute right-4 top-4 opacity-5 pointer-events-none'>
-                                <ChartNoAxesCombined size={48} />
-                            </div>
-                            <div>
-                                <Heading level='h5' weight='semibold' className='text-white'>ข้อมูลวิเคราะห์จากระบบ</Heading>
-
-                                {isEstimateLoading ? (
-                                    <Heading level='p' weight='light' className='text-white mt-3'>
-                                        กำลังวิเคราะห์ข้อมูล...
-                                    </Heading>
-                                ) : !deliveryEstimate?.has_enough_data ? (
-                                    <Heading level='p' weight='light' className='text-white mt-3'>
-                                        บริษัทรายนี้มีประวัติการจัดส่งไม่เพียงพอสำหรับการคาดการณ์ระยะเวลาจัดส่ง
-                                    </Heading>
-                                ) : (
-                                    <>
-                                        <Heading level='p' weight='light' className='text-white mt-3'>
-                                            โดยปกติบริษัทรายนี้จะใช้เวลาจัดส่งประมาณ {deliveryEstimate.estimated_days} วันทำการ
-                                            เราขอแนะนำให้คุณวางแผนการขนส่งล่วงหน้าตามนั้น
-                                        </Heading>
-                                        <div className='flex items-center justify-start gap-3 mt-3'>
-                                            <Heading className='text-base text-white w-auto m-0'>{<Info size={16} />}</Heading>
-                                            <Heading level='p' weight='light' className='text-white w-auto m-0'>
-                                                ระยะเวลาการจัดส่ง: แม่นยำร้อยละ {deliveryEstimate.accuracy_rate}
-                                            </Heading>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    )}
                     <Card>
                         <CardHeader className='items-center justify-start gap-4 mt-2 mb-2'>
                             <CardTitle className='text-base text-black'><MessageSquareMore size={24} /></CardTitle>
@@ -451,8 +420,8 @@ const CreatePurchaseOrders: React.FC = () => {
                 </div>
 
                 { /* Right Side */ }
-                <div className='flex flex-col items-start w-3/4 gap-4'>
-                    <Card className='flex items-center w-full h-fit bg-white p-4 gap-4'>
+                <div className='flex w-full flex-col items-start gap-4 xl:w-3/4'>
+                    <Card className='flex h-fit w-full flex-col gap-3 bg-white p-4 sm:flex-row sm:items-center sm:gap-4'>
                         <div className='relative flex-1'>
                             <Input
                                 ref={searchInputRef} // ผูก Ref เข้ากับ Input
@@ -516,7 +485,7 @@ const CreatePurchaseOrders: React.FC = () => {
                             )}
                         </div>
 
-                        <div className='w-px h-8 bg-gray-300/60 mx-1'></div>
+                        <div className='hidden h-8 w-px bg-gray-300/60 sm:block'></div>
 
                         <Input
                             ref={quantityInputRef}
@@ -651,7 +620,7 @@ const CreatePurchaseOrders: React.FC = () => {
                             <TableFooter>
                                 <TableRow>
                                     <TableCell colSpan={9} className='py-5'>
-                                        <div className='flex items-center justify-end gap-10 pr-4'>
+                                        <div className='flex flex-col items-stretch justify-end gap-4 px-2 sm:flex-row sm:items-center sm:gap-6 sm:pr-4 lg:gap-10'>
                                             <div className='flex flex-col items-center gap-1'>
                                                 <span className='text-sm text-gray-500 font-light'>รายการทั้งหมด</span>
                                                 <span className='text-2xl font-semibold text-gray-900'>
@@ -659,7 +628,7 @@ const CreatePurchaseOrders: React.FC = () => {
                                                 </span>
                                             </div>
 
-                                            <div className='w-px h-10 bg-gray-200'></div>
+                                            <div className='hidden h-10 w-px bg-gray-200 sm:block'></div>
 
                                             <div className='flex flex-col items-center gap-1'>
                                                 <span className='text-sm text-gray-500 font-light'>จำนวนทั้งหมด</span>
@@ -668,7 +637,7 @@ const CreatePurchaseOrders: React.FC = () => {
                                                 </span>
                                             </div>
 
-                                            <div className='w-px h-10 bg-gray-200'></div>
+                                            <div className='hidden h-10 w-px bg-gray-200 sm:block'></div>
 
                                             <div className='flex flex-col items-center gap-1'>
                                                 <span className='text-sm text-gray-500 font-light'>ราคาสั่งซื้อโดยประมาณ</span>
@@ -689,6 +658,17 @@ const CreatePurchaseOrders: React.FC = () => {
                 onClose={() => setIsPreorderModalOpen(false)}
                 preorders={preorders}
                 onSelectPreorder={handleAddPreorderToPO}
+            />
+
+            <ConfirmDialog
+                isOpen={isLeaveConfirmOpen}
+                onClose={() => setIsLeaveConfirmOpen(false)}
+                onConfirm={confirmLeavePage}
+                title='ยืนยันการออกจากหน้าสร้างใบสั่งซื้อ'
+                description='มีสินค้าอยู่ในตะกร้า หากออกจากหน้านี้ข้อมูลที่ยังไม่ได้บันทึกจะหายไป ต้องการออกจากหน้านี้หรือไม่?'
+                confirmText='ออกจากหน้านี้'
+                cancelText='อยู่หน้านี้ต่อ'
+                variant='warning'
             />
 
             <ConfirmDialog

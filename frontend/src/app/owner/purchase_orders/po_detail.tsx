@@ -13,7 +13,7 @@ import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { useToast } from '../../../components/elements/toast';
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
 // Interface
-import type { POResponse, LocalPOItem, POAnalyticsResponse } from '../../../interface/purchase_orders/po_interface';
+import type { POResponse, LocalPOItem } from '../../../interface/purchase_orders/po_interface';
 // Service
 import { poService } from '../../../service/http/purchase_orders/po_service';
 import { formatDate } from '../../../utils/formatdate';
@@ -106,9 +106,6 @@ function OrderDetail() {
     // เปิด/ปิดปุ่มเพิ่มรายการและเปิด Modal ของ Preorder
     const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
     const [isPreorderModalOpen, setIsPreorderModalOpen] = useState(false);
-    // State สำหรับข้อมูลวิเคราะห์จากระบบ
-    const [deliveryEstimate, setDeliveryEstimate] = useState<POAnalyticsResponse | null>(null);
-    const [isEstimateLoading, setIsEstimateLoading] = useState(false);
     // เรียกใช้งาน Hook
     const searchInputRef = useRef<HTMLInputElement>(null);
     const supplierId = po?.supplier_id ? String(po.supplier_id) : '';
@@ -134,18 +131,6 @@ function OrderDetail() {
             .catch(() => setError('ไม่สามารถโหลดข้อมูลใบสั่งซื้อได้'))
             .finally(() => setLoading(false));
     }, [id]);
-
-    useEffect(() => {
-        if (!supplierId) {
-            setDeliveryEstimate(null);
-            return;
-        }
-        setIsEstimateLoading(true);
-        poService.getSupplierDeliveryEstimate(supplierId)
-            .then(setDeliveryEstimate)
-            .catch(() => setDeliveryEstimate(null))
-            .finally(() => setIsEstimateLoading(false));
-    }, [supplierId]);
 
     if (loading) return <div>กำลังโหลด...</div>;
     if (error || !po) return <div>{error ?? 'ไม่พบใบสั่งซื้อ'}</div>;
@@ -335,7 +320,7 @@ function OrderDetail() {
     };
 
     return (
-        <div className='p-8 space-y-6 bg-white min-h-screen relative pb-28'>
+        <div className='relative min-h-screen space-y-6 bg-white p-4 pb-28 sm:p-6 sm:pb-28 lg:p-8 lg:pb-28'>
             {showValidation && validationErrors.length > 0 && (
                 <div role="alert" className="border border-red-300 bg-red-50 p-4 text-sm text-red-700">
                     <p className="font-medium">กรุณาตรวจสอบข้อมูลใบสั่งซื้อ</p>
@@ -345,9 +330,9 @@ function OrderDetail() {
                 </div>
             )}
             { /* Header */ }
-            <div className='flex items-center justify-between'>
+            <div className='flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
                 <div className='flex-col space-y-2'>
-                    <nav className='flex items-center text-sm text-gray-500 gap-2 font-light'>
+                    <nav className='flex flex-wrap items-center gap-2 text-sm font-light text-gray-500'>
                         {po.status === 'DELETED' || po.status === 'CANCELLED' ? (
                             <Link to={`${basePath}/orders/restore`} className='hover:text-black transition-colors'>
                                 กู้คืนใบสั่งซื้อ
@@ -367,7 +352,7 @@ function OrderDetail() {
                         {getPageSubtitle(po.status, userRole)}
                     </Heading>
                 </div>
-                <div className='flex items-end gap-4 justify-end'>
+                <div className='flex items-end justify-start gap-4 sm:justify-end'>
                     <Badge variant='outline' size='lg' className='w-fit gap-2 p-2'>
                         <ClipboardClock size={14}/>
                         สถานะ : {STATUS_LABEL[po.status]}
@@ -389,7 +374,7 @@ function OrderDetail() {
             )}
 
             { /* ส่วนการ์ดรายละเอียดบริษัท ดึงจากใบสั่งซื้อใน DB */ }
-            <div className='grid grid-cols-2 gap-8 items-stretch'>
+            <div className='grid grid-cols-1 items-stretch gap-6 xl:grid-cols-2 xl:gap-8'>
                 { /* Left Card ส่วนของบริษัท */ }
                 <Card className='border-l-[5px] border-l-black h-full' noPadding>
                     <div className='flex items-center gap-3 px-6 py-5'>
@@ -397,7 +382,7 @@ function OrderDetail() {
                         <span className='font-semibold text-red-700 text-base'>รายละเอียดบริษัท</span>
                     </div>
                     <div className='px-6 pb-4 flex flex-col gap-4 h-full'>
-                        <div className='grid grid-cols-2 gap-4'>
+                        <div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
                             <div>
                                 <Heading level='p' weight='normal'>ชื่อบริษัท/ผู้จัดจำหน่าย</Heading>
                                 <Heading level='p'>{po.supplier_name}</Heading>
@@ -408,25 +393,6 @@ function OrderDetail() {
                             </div>
                         </div>
 
-                        {supplierId && (
-                            <div>
-                                <Heading level='p' weight='normal' className='text-black'>ข้อมูลวิเคราะห์จากระบบ</Heading>
-                                {isEstimateLoading ? (
-                                    <Heading level='p'>กำลังวิเคราะห์ข้อมูล...</Heading>
-                                ) : !deliveryEstimate?.has_enough_data ? (
-                                    <Heading level='p'>บริษัทรายนี้มีประวัติการจัดส่งไม่เพียงพอสำหรับการคาดการณ์ระยะเวลาจัดส่ง</Heading>
-                                ) : (
-                                    <>
-                                        <Heading level='p'>
-                                            โดยปกติบริษัทรายนี้จะใช้เวลาจัดส่งประมาณ {deliveryEstimate.estimated_days} วันทำการ
-                                        </Heading>
-                                        <Heading level='p'>
-                                            เราขอแนะนำให้คุณวางแผนการขนส่งล่วงหน้าตามนั้น
-                                        </Heading>
-                                    </>
-                                )}
-                            </div>
-                        )}
                     </div>
                 </Card>
 
@@ -440,7 +406,7 @@ function OrderDetail() {
                         <span className='font-semibold text-black text-base'>ข้อมูลผู้ทำรายการ</span>
                     </div>
                     <div className='relative z-10 px-6 pb-4 flex flex-col gap-4 h-full'>
-                        <div className='grid grid-cols-2 gap-4'>
+                        <div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
                             <div>
                                 <Heading level='p' weight='normal'>พนักงานผู้สร้าง</Heading>
                                 <Heading level='p'>{po.creator_name}</Heading>
@@ -486,9 +452,9 @@ function OrderDetail() {
 
             { /* ส่วนของตารางรายละเอียดใบสั่งซื้อ */ }
             <Card className='w-full overflow-hidden' noPadding>
-                <div className='bg-[#F0EDEC] flex items-center justify-between px-6 py-4'>
+                <div className='flex flex-col gap-3 bg-[#F0EDEC] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6'>
                     <span className='font-semibold text-black'>รายการสินค้าที่สั่งซื้อ</span>
-                    <div className='flex items-center gap-3'>
+                    <div className='flex flex-wrap items-center gap-3'>
                         {/* ส่วนปุ่ม Dropdown เลือกประเภทการเพิ่มรายการ */}
                         {isEditable && (
                             <div className='relative'>
@@ -536,7 +502,7 @@ function OrderDetail() {
                 </div>
                 {isAddPanelOpen && (
                     <div className='px-6 py-4 bg-gray-50 border-b border-gray-100 flex flex-col gap-3'>
-                        <div className='flex items-center gap-3'>
+                        <div className='flex flex-col gap-3 sm:flex-row sm:items-center'>
                             <div className='relative flex-1'>
                                 <Search className='w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2' />
                                 <input
@@ -580,11 +546,11 @@ function OrderDetail() {
                                 placeholder='จำนวน'
                                 value={addQuantity}
                                 onChange={(e) => setAddQuantity(e.target.value === '' ? '' : Number(e.target.value))}
-                                className='w-24 border border-gray-200 rounded px-3 py-2 text-sm outline-none focus:border-gray-400 bg-white'
+                                className='w-full rounded border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-gray-400 sm:w-24'
                             />
                             <Button
                                 variant='primary'
-                                className='px-6 py-2 text-sm whitespace-nowrap'
+                                className='w-full px-6 py-2 text-sm whitespace-nowrap sm:w-auto'
                                 onClick={() => {
                                     handleAddItem();
                                     searchInputRef.current?.focus();
@@ -700,15 +666,15 @@ function OrderDetail() {
                     <TableFooter>
                         <TableRow>
                             <TableCell colSpan={isEditable ? 9 : 8} className='py-0 px-0 bg-white!'>
-                                <div className='flex items-stretch justify-end'>
-                                    <div className='flex flex-col items-center justify-center px-12 py-6'>
+                                <div className='flex flex-col items-stretch justify-end sm:flex-row'>
+                                    <div className='flex flex-col items-center justify-center px-4 py-5 sm:px-8 lg:px-12 lg:py-6'>
                                         <span className='text-sm text-black font-medium mb-1'>จำนวนทั้งหมด</span>
                                         <div className='flex items-baseline gap-2'>
                                             <span className='text-2xl font-bold text-black'>{totalQuantity.toLocaleString()}</span>
                                             <span className='text-base font-medium text-black'>หน่วย</span>
                                         </div>
                                     </div>
-                                    <div className='flex flex-col items-center justify-center px-12 py-6 bg-red-50'>
+                                    <div className='flex flex-col items-center justify-center bg-red-50 px-4 py-5 sm:px-8 lg:px-12 lg:py-6'>
                                         <span className='text-sm text-red-700 font-medium mb-1'>ยอดรวมทั้งสิ้น</span>
                                         <div className='flex items-baseline gap-2'>
                                             <span className='text-2xl font-bold text-red-700'>{totalAmount.toLocaleString()}</span>
@@ -724,15 +690,15 @@ function OrderDetail() {
 
             { /* Button Actions */ }
             {canEditDraft && (
-                <div className='sticky bottom-0 z-20 bg-gray-50 py-4 border-t border-gray-200 flex justify-between'>
-                    <Button variant='outline' className='w-40' onClick={() => navigate(`${basePath}/orders`)} disabled={!!activeAction}>
+                <div className='sticky bottom-0 z-20 flex flex-col gap-3 border-t border-gray-200 bg-gray-50 py-4 sm:flex-row sm:justify-between'>
+                    <Button variant='outline' className='w-full sm:w-40' onClick={() => navigate(`${basePath}/orders`)} disabled={!!activeAction}>
                         ยกเลิก
                     </Button>
-                    <div className='flex gap-4'>
-                        <Button variant='secondary' className='w-40' onClick={handleSaveEdit} disabled={!!activeAction}>
+                    <div className='flex flex-col gap-3 sm:flex-row sm:gap-4'>
+                        <Button variant='secondary' className='w-full sm:w-40' onClick={handleSaveEdit} disabled={!!activeAction}>
                             {activeAction === 'draft' ? 'กำลังบันทึก...' : 'บันทึกฉบับร่าง'}
                         </Button>
-                        <Button variant='primary' className={isOwner ? 'w-44' : 'w-40'} onClick={handleSubmitForApproval} disabled={!!activeAction}>
+                        <Button variant='primary' className={isOwner ? 'w-full sm:w-44' : 'w-full sm:w-40'} onClick={handleSubmitForApproval} disabled={!!activeAction}>
                             {activeAction === 'submit'
                                 ? (isOwner ? 'กำลังอนุมัติใบสั่งซื้อ...' : 'กำลังส่งอนุมัติ...')
                                 : (isOwner ? 'อนุมัติใบสั่งซื้อ' : 'ส่งอนุมัติ')}
@@ -742,15 +708,15 @@ function OrderDetail() {
             )}
 
             {canApprove && (
-                <div className='sticky bottom-0 z-20 bg-gray-50 py-4 border-t border-gray-200 flex justify-between'>
-                    <Button variant='outline' className='w-40' onClick={handleReject} disabled={!!activeAction}>
+                <div className='sticky bottom-0 z-20 flex flex-col gap-3 border-t border-gray-200 bg-gray-50 py-4 sm:flex-row sm:justify-between'>
+                    <Button variant='outline' className='w-full sm:w-40' onClick={handleReject} disabled={!!activeAction}>
                         {activeAction === 'resubmitted' ? 'กำลังดำเนินการ...' : 'ไม่อนุมัติ'}
                     </Button>
-                    <div className='flex gap-4'>
-                        <Button variant='secondary' className='w-40' onClick={handleSaveEdit} disabled={!!activeAction}>
+                    <div className='flex flex-col gap-3 sm:flex-row sm:gap-4'>
+                        <Button variant='secondary' className='w-full sm:w-40' onClick={handleSaveEdit} disabled={!!activeAction}>
                             {activeAction === 'draft' ? 'กำลังบันทึก...' : 'บันทึกฉบับร่าง'}
                         </Button>
-                        <Button variant='primary' className='w-44' onClick={handleApprove} disabled={!!activeAction}>
+                        <Button variant='primary' className='w-full sm:w-44' onClick={handleApprove} disabled={!!activeAction}>
                             {activeAction === 'approve' ? 'กำลังอนุมัติใบสั่งซื้อ...' : 'อนุมัติใบสั่งซื้อ'}
                         </Button>
                     </div>
@@ -758,12 +724,12 @@ function OrderDetail() {
             )}
 
             {canRestore && (
-                <div className='sticky bottom-0 z-20 bg-gray-50 py-4 border-t border-gray-200 flex justify-between'>
-                    <Button variant='outline' className='w-40' onClick={() => navigate(`${basePath}/orders/restore`)} disabled={!!activeAction}>
+                <div className='sticky bottom-0 z-20 flex flex-col gap-3 border-t border-gray-200 bg-gray-50 py-4 sm:flex-row sm:justify-between'>
+                    <Button variant='outline' className='w-full sm:w-40' onClick={() => navigate(`${basePath}/orders/restore`)} disabled={!!activeAction}>
                         ย้อนกลับ
                     </Button>
                     <div className='flex gap-4'>
-                        <Button variant='primary' className='w-40' onClick={() => setIsRestoreConfirmOpen(true)} disabled={!!activeAction}>
+                        <Button variant='primary' className='w-full sm:w-40' onClick={() => setIsRestoreConfirmOpen(true)} disabled={!!activeAction}>
                             {activeAction === 'restore' ? 'กำลังกู้คืน...' : 'กู้คืนใบสั่งซื้อ'}
                         </Button>
                     </div>
