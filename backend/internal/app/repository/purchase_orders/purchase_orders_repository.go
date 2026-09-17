@@ -383,6 +383,7 @@ func (r *purchaseOrderRepository) SyncItems(ctx context.Context, poID uint, inco
 					Updates(map[string]interface{}{
 						"product_id":                   item.ProductID,
 						"product_name_snapshot":        item.Product_name_snapshot,
+						"product_code_snapshot":        item.Product_code_snapshot,
 						"supply_product_code_snapshot": item.Supply_product_code_snapshot,
 						"quantity":                     item.Quantity,
 						"unit":                         item.Unit,

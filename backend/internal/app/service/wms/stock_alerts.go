@@ -201,6 +201,7 @@ func toStockAlertResponse(sa *entity.StockAlert) *wmsDto.StockAlertResponseDTO {
 		// ดึง supplier จาก inventory ล่าสุด (preloaded ordered by id desc → [0] = newest)
 		if len(sa.Product.Inventories) > 0 {
 			inv := sa.Product.Inventories[0]
+			res.SupplyProductCode = inv.CompanyProductCode
 			if inv.Supplier != nil {
 				id := inv.Supplier.ID
 				res.SupplierID = &id

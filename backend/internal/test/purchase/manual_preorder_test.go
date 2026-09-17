@@ -31,7 +31,14 @@ func TestManualPreorderCreateAndEditWithoutWMSProduct(t *testing.T) {
 			if id != 8 {
 				return nil, gorm.ErrRecordNotFound
 			}
-			return &entity.PreOrderItem{Model: gorm.Model{ID: 8}, PreOrder: &entity.PreOrder{}, ProductNameSnapshot: "ekdmlkdmskl", Quantity: 2}, nil
+			return &entity.PreOrderItem{
+				Model:               gorm.Model{ID: 8},
+				PreOrder:            &entity.PreOrder{},
+				ProductNameSnapshot: "ekdmlkdmskl",
+				ProductCodeSnapshot: "STORE-001",
+				SupplierPartCode:    "SUPPLIER-001",
+				Quantity:            2,
+			}, nil
 		},
 		update: func([]uint, string) error { return nil },
 	}
@@ -46,7 +53,8 @@ func TestManualPreorderCreateAndEditWithoutWMSProduct(t *testing.T) {
 	require.Nil(t, saved.PO_Items[0].ProductID)
 	require.Zero(t, created.POItems[0].ProductID)
 	require.Equal(t, "ekdmlkdmskl", created.POItems[0].ProductNameSnapshot)
-	require.Empty(t, created.POItems[0].SupplyProductCodeSnapshot)
+	require.Equal(t, "STORE-001", created.POItems[0].ProductCodeSnapshot)
+	require.Equal(t, "SUPPLIER-001", created.POItems[0].SupplyProductCodeSnapshot)
 	require.Zero(t, created.TotalAmount)
 
 	edited, err := svc.UpdatePO(context.Background(), 42, &dto.UpdatePurchaseOrderRequest{
@@ -56,6 +64,8 @@ func TestManualPreorderCreateAndEditWithoutWMSProduct(t *testing.T) {
 	require.Nil(t, edited.PO_Items[0].ProductID)
 	require.Equal(t, float64(3), edited.PO_Items[0].Quantity)
 	require.Equal(t, "ekdmlkdmskl", edited.PO_Items[0].Product_name_snapshot)
+	require.Equal(t, "STORE-001", edited.PO_Items[0].Product_code_snapshot)
+	require.Equal(t, "SUPPLIER-001", edited.PO_Items[0].Supply_product_code_snapshot)
 
 	before := writes
 	_, err = svc.UpdatePO(context.Background(), 42, &dto.UpdatePurchaseOrderRequest{
