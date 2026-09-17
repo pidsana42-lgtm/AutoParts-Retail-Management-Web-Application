@@ -193,15 +193,18 @@ func TestCreatePO_Success(t *testing.T) {
 				t.Fatalf("items = %v", got.POItems)
 			}
 			for i, item := range got.POItems {
-				wantCode, wantUnit, wantType := "FALLBACK", "", "สั่งซื้อ"
+				wantSupplyCode, wantUnit, wantType := "", "", "สั่งซื้อ"
 				if i == 0 {
-					wantCode, wantUnit = "SUP-001", "piece"
+					wantSupplyCode, wantUnit = "SUP-001", "piece"
 				}
 				if tc.links[i] {
 					wantType = "พรีออเดอร์"
 				}
-				if item.ProductID != uint(i+1) || item.ProductNameSnapshot != "Oil filter" || item.SupplyProductCodeSnapshot != wantCode || item.Unit != wantUnit || item.Quantity != i+2 || item.UnitPrice != 12.5 || item.SubTotal != float64(i+2)*12.5 || item.Notes != "item note" || item.OrderType != wantType || !reflect.DeepEqual(item.PreOrderItemID, req.POItems[i].PreOrderItemID) {
+				if item.ProductID != uint(i+1) || item.ProductNameSnapshot != "Oil filter" || item.ProductCodeSnapshot != "FALLBACK" || item.SupplyProductCodeSnapshot != wantSupplyCode || item.Unit != wantUnit || item.Quantity != i+2 || item.UnitPrice != 12.5 || item.SubTotal != float64(i+2)*12.5 || item.Notes != "item note" || item.OrderType != wantType || !reflect.DeepEqual(item.PreOrderItemID, req.POItems[i].PreOrderItemID) {
 					t.Errorf("incorrect item: %+v", item)
+				}
+				if saved.PO_Items[i].ProductID == nil || *saved.PO_Items[i].ProductID != uint(i+1) {
+					t.Errorf("saved product ID = %v, want %d", saved.PO_Items[i].ProductID, i+1)
 				}
 			}
 			if !reflect.DeepEqual(reserved, wantReserved) {
@@ -414,7 +417,7 @@ func TestUpdatePO_RecalculatesItemsAndPreorderReservations(t *testing.T) {
 			if len(synced) != 3 {
 				t.Fatalf("synced = %v", synced)
 			}
-			if synced[0].ID != 100 || synced[0].SubTotal != 25 || synced[0].Product_name_snapshot != "Filter" || synced[0].Supply_product_code_snapshot != "P001" || synced[0].Unit != "piece" || synced[2].Quantity != 1.5 || *synced[2].AlertID != 5 {
+			if synced[0].ID != 100 || synced[0].SubTotal != 25 || synced[0].Product_name_snapshot != "Filter" || synced[0].Product_code_snapshot != "P001" || synced[0].Supply_product_code_snapshot != "" || synced[0].Unit != "piece" || synced[2].Quantity != 1.5 || *synced[2].AlertID != 5 {
 				t.Errorf("synced items = %+v", synced)
 			}
 			if !reflect.DeepEqual(reservations, []string{"PENDING", "RESERVED"}) {
