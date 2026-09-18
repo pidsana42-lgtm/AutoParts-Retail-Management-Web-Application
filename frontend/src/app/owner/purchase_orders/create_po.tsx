@@ -2,7 +2,7 @@ import { isValidQuantity, validatePurchaseOrder } from './validation';
 // React Libraries
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { Building2, ScanBarcode, ShoppingBag, ChevronRight, ShoppingCart, Plus, Minus, Trash2, MessageSquareMore} from 'lucide-react';
+import { Building2, ScanBarcode, ShoppingBag, ChevronRight, ShoppingCart, Plus, Minus, Trash2, MessageSquareMore, Clock } from 'lucide-react';
 // Components
 import Heading from '../../../components/elements/heading';
 import Button from '../../../components/elements/button';
@@ -14,7 +14,7 @@ import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { useToast } from '../../../components/elements/toast';
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
 // Interface
-import type { CreatePORequest, LocalPOItem, PreorderItem } from '../../../interface/purchase_orders/po_interface';
+import type { CreatePORequest, LocalPOItem, PreorderItem, POAnalyticsResponse } from '../../../interface/purchase_orders/po_interface';
 // Service & Utils
 import { poService } from '../../../service/http/purchase_orders/po_service';
 import { getSuppliersList } from '../../../service/http/wms/product';
@@ -53,6 +53,9 @@ const CreatePurchaseOrders: React.FC = () => {
     const { preorders, totalPreorders, isLoading: isPreordersLoading } = usePreorders(item, setItem, setIsPreorderModalOpen);
     // สิทธิ์เจ้าของร้าน: กดอนุมัติแล้วอนุมัติทันทีโดยไม่ต้องรอ
     const isOwner = role?.toUpperCase() === 'OWNER';
+    // สำหรับดึงข้อมูลคาดการณ์ระยะเวลาจัดส่ง
+    const [deliveryEstimate, setDeliveryEstimate] = useState<POAnalyticsResponse | null>(null);
+    const [isEstimateLoading, setIsEstimateLoading] = useState(false);
     // เก็บค่าที่ผู้ใช้กำลังพิมพ์อยู่ (ระหว่างลบเลขเดิมทิ้งแล้วยังพิมพ์ไม่เสร็จ) แยกจาก items จริง
     const [qtyDrafts, setQtyDrafts] = useState<Record<string | number, string>>({});
     const [showValidation, setShowValidation] = useState(false);
@@ -116,6 +119,29 @@ const CreatePurchaseOrders: React.FC = () => {
         fetchSuppliers();
     }, []);
 
+    // ดึงข้อมูลคาดการณ์ระยะเวลาจัดส่งของ Supplier ที่เลือก
+    useEffect(() => {
+        const fetchDeliveryEstimate = async () => {
+            if (!listsSupplier) {
+                setDeliveryEstimate(null);
+                return;
+            }
+
+            setIsEstimateLoading(true);
+            try {
+                const estimate = await poService.getSupplierDeliveryEstimate(listsSupplier);
+                setDeliveryEstimate(estimate);
+            } catch (error) {
+                console.error("โหลดข้อมูลคาดการณ์การจัดส่งล้มเหลว:", error);
+                setDeliveryEstimate(null);
+            } finally {
+                setIsEstimateLoading(false);
+            }
+        };
+
+        void fetchDeliveryEstimate();
+    }, [listsSupplier]);
+
     // Pre-fill จาก stock alert modal ของ dashboard (navigate state)
     useEffect(() => {
         const state = location.state as {
@@ -168,7 +194,7 @@ const CreatePurchaseOrders: React.FC = () => {
             product_code_snapshot: selectedPreorder.product_code || "-",
             supply_product_code_snapshot: selectedPreorder.supplier_part_code || "",
             quantity: selectedPreorder.quantity,
-            unit: selectedPreorder.unit || "ชิ้น",
+            unit: selectedPreorder.unit || "-",
             unit_price: unitCost,
             sub_total: unitCost * selectedPreorder.quantity,
             order_type: 'พรีออเดอร์', // มาจากพรีออเดอร์ ราคาแก้ไขได้ในตาราง
@@ -373,6 +399,24 @@ const CreatePurchaseOrders: React.FC = () => {
                                     onChange={(e) => setDate(e.target.value)}
                                 />
                             </div>
+                            {listsSupplier && (
+                                <div className='mt-3 pt-3 border-t border-gray-100 flex items-start gap-2 text-xs text-gray-600'>
+                                    <Clock size={14} className='text-red-800 shrink-0 mt-0.5' />
+                                    <div className='leading-tight'>
+                                        {isEstimateLoading ? (
+                                            <span className='text-gray-400'>กำลังประเมินเวลาจัดส่ง...</span>
+                                        ) : deliveryEstimate?.has_enough_data ? (
+                                            <div>
+                                                <span>ระยะเวลาจัดส่งโดยประมาณ: </span>
+                                                <strong className='text-gray-900 font-medium'>{deliveryEstimate.estimated_days} วันทำการ</strong>
+                                                <span className='text-gray-400 ml-1'>(แม่นยำ {deliveryEstimate.accuracy_rate}%)</span>
+                                            </div>
+                                        ) : (
+                                            <span className='text-gray-400'>ประวัติการส่งของยังไม่เพียงพอต่อการประเมิน</span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                     <Card className='border-l-[5px] border-l-black'>

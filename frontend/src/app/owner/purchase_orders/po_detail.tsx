@@ -1,7 +1,7 @@
 import { isValidQuantity, validatePurchaseOrder } from './validation';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useParams } from 'react-router-dom';
-import { Building2, ChevronRight, ClipboardClock, FileText, User, Trash2, Minus, Plus, Search, ChevronDown, MessageSquareWarning } from 'lucide-react';
+import { Building2, ChevronRight, ClipboardClock, Clock, FileText, User, Trash2, Minus, Plus, Search, ChevronDown, MessageSquareWarning } from 'lucide-react';
 // Components
 import Heading from '../../../components/elements/heading';
 import Badge from '../../../components/elements/badge';
@@ -13,7 +13,7 @@ import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { useToast } from '../../../components/elements/toast';
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
 // Interface
-import type { POResponse, LocalPOItem } from '../../../interface/purchase_orders/po_interface';
+import type { POResponse, LocalPOItem, POAnalyticsResponse } from '../../../interface/purchase_orders/po_interface';
 // Service
 import { poService } from '../../../service/http/purchase_orders/po_service';
 import { formatDate } from '../../../utils/formatdate';
@@ -78,6 +78,8 @@ function OrderDetail() {
     const [po, setPo] = useState<POResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [deliveryEstimate, setDeliveryEstimate] = useState<POAnalyticsResponse | null>(null);
+    const [isEstimateLoading, setIsEstimateLoading] = useState(false);
     const [isEditingNotes, setIsEditingNotes] = useState(false);
     const [notes, setNotes] = useState('');
     const [items, setItems] = useState<LocalPOItem[]>([]);
@@ -131,6 +133,28 @@ function OrderDetail() {
             .catch(() => setError('ไม่สามารถโหลดข้อมูลใบสั่งซื้อได้'))
             .finally(() => setLoading(false));
     }, [id]);
+
+    useEffect(() => {
+        if (!po?.supplier_id) {
+            setDeliveryEstimate(null);
+            return;
+        }
+
+        let mounted = true;
+        setIsEstimateLoading(true);
+        poService.getSupplierDeliveryEstimate(po.supplier_id)
+            .then((estimate) => {
+                if (mounted) setDeliveryEstimate(estimate);
+            })
+            .catch(() => {
+                if (mounted) setDeliveryEstimate(null);
+            })
+            .finally(() => {
+                if (mounted) setIsEstimateLoading(false);
+            });
+
+        return () => { mounted = false; };
+    }, [po?.supplier_id]);
 
     if (loading) return <div>กำลังโหลด...</div>;
     if (error || !po) return <div>{error ?? 'ไม่พบใบสั่งซื้อ'}</div>;
@@ -390,6 +414,23 @@ function OrderDetail() {
                             <div>
                                 <Heading level='p' weight='normal'>วันที่สั่งซื้อ</Heading>
                                 <Heading level='p'>{formatDate(po.created_at)}</Heading>
+                            </div>
+                        </div>
+
+                        <div className='flex items-start gap-2 border-t border-gray-100 pt-4 text-sm text-gray-600'>
+                            <Clock size={16} className='mt-0.5 shrink-0 text-red-700' />
+                            <div className='leading-relaxed'>
+                                {isEstimateLoading ? (
+                                    <span className='text-gray-400'>กำลังประเมินเวลาจัดส่ง...</span>
+                                ) : deliveryEstimate?.has_enough_data ? (
+                                    <div>
+                                        <span>ระยะเวลาจัดส่งโดยประมาณ: </span>
+                                        <strong className='font-medium text-gray-900'>{deliveryEstimate.estimated_days} วันทำการ</strong>
+                                        <span className='ml-1 text-gray-400'>(แม่นยำ {deliveryEstimate.accuracy_rate}%)</span>
+                                    </div>
+                                ) : (
+                                    <span className='text-gray-400'>ประวัติการส่งของยังไม่เพียงพอต่อการประเมิน</span>
+                                )}
                             </div>
                         </div>
 
@@ -690,7 +731,7 @@ function OrderDetail() {
 
             { /* Button Actions */ }
             {canEditDraft && (
-                <div className='sticky bottom-0 z-20 flex flex-col gap-3 border-t border-gray-200 bg-gray-50 py-4 sm:flex-row sm:justify-between'>
+                <div className='sticky bottom-0 z-20 flex flex-col gap-3 border-t border-gray-200 bg-white py-4 sm:flex-row sm:justify-between'>
                     <Button variant='outline' className='w-full sm:w-40' onClick={() => navigate(`${basePath}/orders`)} disabled={!!activeAction}>
                         ยกเลิก
                     </Button>
@@ -708,7 +749,7 @@ function OrderDetail() {
             )}
 
             {canApprove && (
-                <div className='sticky bottom-0 z-20 flex flex-col gap-3 border-t border-gray-200 bg-gray-50 py-4 sm:flex-row sm:justify-between'>
+                <div className='sticky bottom-0 z-20 flex flex-col gap-3 border-t border-gray-200 bg-white py-4 sm:flex-row sm:justify-between'>
                     <Button variant='outline' className='w-full sm:w-40' onClick={handleReject} disabled={!!activeAction}>
                         {activeAction === 'resubmitted' ? 'กำลังดำเนินการ...' : 'ไม่อนุมัติ'}
                     </Button>
@@ -724,7 +765,7 @@ function OrderDetail() {
             )}
 
             {canRestore && (
-                <div className='sticky bottom-0 z-20 flex flex-col gap-3 border-t border-gray-200 bg-gray-50 py-4 sm:flex-row sm:justify-between'>
+                <div className='sticky bottom-0 z-20 flex flex-col gap-3 border-t border-gray-200 bg-white py-4 sm:flex-row sm:justify-between'>
                     <Button variant='outline' className='w-full sm:w-40' onClick={() => navigate(`${basePath}/orders/restore`)} disabled={!!activeAction}>
                         ย้อนกลับ
                     </Button>
