@@ -4,6 +4,7 @@ import Button from "../../../../components/elements/button";
 import Input from "../../../../components/elements/input";
 import Modal from "../../../../components/elements/modal";
 import Select from "../../../../components/elements/select";
+import ImageUploader from "../../../../components/elements/image_uploader";
 import { employeeService } from "../../../../service/http/employee/employee_service";
 import { formatDate } from "../../../../utils/formatdate";
 import type { CreatedEmployee, EmployeeDetail, UpdateEmployeeRequest } from "../../../../interface/employee/employee_registration";
@@ -30,6 +31,8 @@ export default function EmployeeDetailModal({ employee, onClose, onSaved }: Empl
   const [isSaving, setIsSaving] = useState(false);
   const [editError, setEditError] = useState("");
   const [editForm, setEditForm] = useState<UpdateEmployeeRequest | null>(null);
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState("");
 
   useEffect(() => {
     setDetail(null);
@@ -39,6 +42,8 @@ export default function EmployeeDetailModal({ employee, onClose, onSaved }: Empl
     setIsEditing(false);
     setEditError("");
     setEditForm(null);
+    setProfileImageFile(null);
+    setProfileImagePreview("");
   }, [employee]);
 
   const handleClose = () => {
@@ -57,6 +62,7 @@ export default function EmployeeDetailModal({ employee, onClose, onSaved }: Empl
       setDetail(loadedDetail);
       setVerifiedPassword(password);
       setEditForm(toEditForm(loadedDetail, password));
+      setProfileImagePreview(loadedDetail.profile_image_path ? resolveAssetUrl(loadedDetail.profile_image_path) : "");
       setPassword("");
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "ไม่สามารถยืนยันตัวตนได้"));
@@ -76,8 +82,15 @@ export default function EmployeeDetailModal({ employee, onClose, onSaved }: Empl
       setIsSaving(true);
       setEditError("");
       const updated = await employeeService.update(employee.id, { ...editForm, password: verifiedPassword });
-      setDetail(updated);
-      setEditForm(toEditForm(updated, verifiedPassword));
+      let savedDetail = updated;
+      if (profileImageFile) {
+        const profileImagePath = await employeeService.uploadAvatar(employee.id, profileImageFile);
+        savedDetail = { ...updated, profile_image_path: profileImagePath };
+      }
+      setDetail(savedDetail);
+      setEditForm(toEditForm(savedDetail, verifiedPassword));
+      setProfileImageFile(null);
+      setProfileImagePreview(savedDetail.profile_image_path ? resolveAssetUrl(savedDetail.profile_image_path) : "");
       setIsEditing(false);
       onSaved?.();
     } catch (requestError) {
@@ -99,7 +112,7 @@ export default function EmployeeDetailModal({ employee, onClose, onSaved }: Empl
       footer={detail ? (
         <>
           {isEditing ? (
-            <Button type="button" variant="outline-cancel" onClick={() => { setIsEditing(false); setEditError(""); if (detail) setEditForm(toEditForm(detail, verifiedPassword)); }} disabled={isSaving} leftIcon={<X size={15} />}>ยกเลิก</Button>
+            <Button type="button" variant="outline-cancel" onClick={() => { setIsEditing(false); setEditError(""); setProfileImageFile(null); setProfileImagePreview(detail?.profile_image_path ? resolveAssetUrl(detail.profile_image_path) : ""); if (detail) setEditForm(toEditForm(detail, verifiedPassword)); }} disabled={isSaving} leftIcon={<X size={15} />}>ยกเลิก</Button>
           ) : (
             <Button type="button" variant="outline" onClick={() => setIsEditing(true)} leftIcon={<Edit3 size={15} />}>แก้ไข</Button>
           )}
@@ -118,15 +131,36 @@ export default function EmployeeDetailModal({ employee, onClose, onSaved }: Empl
     >
       {detail ? (
         <div className="space-y-5">
-          {detail.profile_image_path && (
-            <div className="flex justify-center border-b border-gray-200 pb-5">
-              <img src={resolveAssetUrl(detail.profile_image_path)} alt="รูปโปรไฟล์พนักงาน" className="h-28 w-28 rounded-full object-cover" />
-            </div>
-          )}
+          <div className="flex justify-center border-b border-gray-200 pb-5">
+            {isEditing ? (
+              <div className="w-48">
+                <ImageUploader
+                  label=""
+                  variant="profile"
+                  preview={profileImagePreview}
+                  onChange={(file) => {
+                    setProfileImageFile(file);
+                    setProfileImagePreview(URL.createObjectURL(file));
+                  }}
+                  onClear={() => {
+                    setProfileImageFile(null);
+                    setProfileImagePreview("");
+                  }}
+                />
+                {!profileImagePreview && <p className="mt-2 text-center text-xs font-normal text-slate-700">อัปโหลดรูปโปรไฟล์</p>}
+              </div>
+            ) : detail.profile_image_path ? (
+              <img src={resolveAssetUrl(detail.profile_image_path)} alt="รูปโปรไฟล์พนักงาน" className="h-40 w-40 rounded-none object-cover ring-4 ring-red-50" />
+            ) : (
+              <div className="flex h-40 w-40 items-center justify-center rounded-none bg-red-50 text-5xl font-semibold text-[#B70011] ring-4 ring-red-50">
+                {detail.first_name.slice(0, 1).toUpperCase()}
+              </div>
+            )}
+          </div>
           {isEditing && editForm ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Select label="คำนำหน้า" value={editForm.prefix} options={PREFIX_OPTIONS} onChange={(event) => updateEditField("prefix", event.target.value)} />
+            <div className="grid gap-4 sm:grid-cols-2 [&_label]:font-normal [&_label]:text-[12px] [&_label]:text-gray-500">
               <Select label="สิทธิ์การใช้งาน" value={editForm.role} options={ROLE_OPTIONS} onChange={(event) => updateEditField("role", event.target.value)} />
+              <Select label="คำนำหน้า" value={editForm.prefix} options={PREFIX_OPTIONS} onChange={(event) => updateEditField("prefix", event.target.value)} />
               <Input label="ชื่อ" value={editForm.first_name} onChange={(event) => updateEditField("first_name", event.target.value)} />
               <Input label="นามสกุล" value={editForm.last_name} onChange={(event) => updateEditField("last_name", event.target.value)} />
               <Input label="เลขบัตรประชาชน" value={formatThaiId(editForm.id_card_number_user)} onChange={(event) => updateEditField("id_card_number_user", event.target.value.replace(/\D/g, ""))} />

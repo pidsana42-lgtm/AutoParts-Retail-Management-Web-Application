@@ -219,7 +219,7 @@ export default function RegisterEmployeePage() {
                 <ImageUploader
                   label=""
                   variant="document"
-                  className="mt-2 lg:min-h-75"
+                  className="mt-2 lg:min-h-[300px] lg:p-10"
                   preview={profileImagePreview}
                   onChange={(file) => {
                     setProfileImageFile(file);
