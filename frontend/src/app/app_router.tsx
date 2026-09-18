@@ -52,12 +52,15 @@ import CustomerRegistration from './employee/customer/customer_registration';
 import FinancialPolicy from './owner/storeconfig/financial_policy';
 import CustomerCreditControl from './owner/storeconfig/customer_credit_control';
 import StoreConfig from './owner/storeconfig/storeconfig';
+import EmployeeManagementPage from './owner/storeconfig/employee_management';
+import RegisterEmployeePage from './owner/storeconfig/employee_registration';
 import DeletedPoHistory from './owner/purchase_orders/restore_po';
 import NewReturnPage from './owner/return/new_return';
 import { getDashboardRoleGroup } from '../utils/dashboardAccess';
 
 export default function AppRouter(): React.JSX.Element {
   const { role, isLoading } = useAuth();
+  const isOwner = (role || "").toUpperCase() === "OWNER";
 
   const { isManagerOrOwner, isEmployeeRole, firstMenuPath } = useMemo(() => {
     const currentRole = (role || "").toUpperCase();
@@ -114,6 +117,12 @@ export default function AppRouter(): React.JSX.Element {
             } />
             <Route path={`${prefix}/storeconfig/customer-credit-control`} element={
               isManagerOrOwner ? <CustomerCreditControl /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/storeconfig/register-employee`} element={
+              prefix === '/owner' && isOwner ? <EmployeeManagementPage /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/storeconfig/register-employee/new`} element={
+              prefix === '/owner' && isOwner ? <RegisterEmployeePage /> : <Navigate to={firstMenuPath} replace />
             } />
             {/* ------------------------------------------------------ */}
 

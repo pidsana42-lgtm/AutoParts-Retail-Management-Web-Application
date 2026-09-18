@@ -9,26 +9,11 @@ import ImageUploader from "../../../components/elements/image_uploader";
 import { useToast } from "../../../components/elements/toast";
 import type { CompanySettingReq } from "../../../interface/companysetting/company";
 import { companyService, resolveAssetUrl } from "../../../service/http/companysetting/company_service";
+import { BANK_OPTIONS } from "../../../utils/banks";
 
 const PROMPTPAY_TYPE_OPTIONS: SelectOption[] = [
   { label: "เบอร์โทรศัพท์มือถือ (10 หลัก)", value: "phone" },
   { label: "เลขประจำตัวผู้เสียภาษี / บัตรประชาชน (13 หลัก)", value: "tax_id" },
-];
-
-const BANK_OPTIONS: SelectOption[] = [
-  { label: "ธนาคารกสิกรไทย (KBANK)", value: "ธนาคารกสิกรไทย (KBANK)" },
-  { label: "ธนาคารไทยพาณิชย์ (SCB)", value: "ธนาคารไทยพาณิชย์ (SCB)" },
-  { label: "ธนาคารกรุงไทย (KTB)", value: "ธนาคารกรุงไทย (KTB)" },
-  { label: "ธนาคารกรุงเทพ (BBL)", value: "ธนาคารกรุงเทพ (BBL)" },
-  { label: "ธนาคารกรุงศรีอยุธยา (BAY)", value: "ธนาคารกรุงศรีอยุธยา (BAY)" },
-  { label: "ธนาคารทหารไทยธนชาต (TTB)", value: "ธนาคารทหารไทยธนชาต (TTB)" },
-  { label: "ธนาคารออมสิน (GSB)", value: "ธนาคารออมสิน (GSB)" },
-  { label: "ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร (ธ.ก.ส.)", value: "ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร (ธ.ก.ส.)" },
-  { label: "ธนาคารยูโอบี (UOB)", value: "ธนาคารยูโอบี (UOB)" },
-  { label: "ธนาคารเกียรตินาคินภัทร (KKP)", value: "ธนาคารเกียรตินาคินภัทร (KKP)" },
-  { label: "ธนาคารซีไอเอ็มบีไทย (CIMB)", value: "ธนาคารซีไอเอ็มบีไทย (CIMB)" },
-  { label: "ธนาคารทิสโก้ (TISCO)", value: "ธนาคารทิสโก้ (TISCO)" },
-  { label: "ธนาคารแลนด์ แอนด์ เฮ้าส์ (LH Bank)", value: "ธนาคารแลนด์ แอนด์ เฮ้าส์ (LH Bank)" },
 ];
 
 const StoreConfig: React.FC = () => {

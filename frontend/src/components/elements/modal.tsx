@@ -78,23 +78,23 @@ export default function Modal({
       {/* Panel */}
       <div className={cn(modalPanelVariants({ size }), className)}>
         {(title || description) && (
-          <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
             <div>
               {title && (
-                <h2 id="modal-title" className="text-base font-semibold text-slate-800">
+                <h2 id="modal-title" className="text-base font-semibold text-black">
                   {title}
                 </h2>
               )}
               {description && (
-                <p className="mt-0.5 text-sm text-slate-400">{description}</p>
+                <p className="mt-0.5 text-sm text-gray-400">{description}</p>
               )}
             </div>
             <button
               onClick={onClose}
               aria-label="ปิด"
               className={cn(
-                "rounded-none p-1 text-slate-400 transition-colors",
-                "hover:bg-slate-100 hover:text-slate-600",
+                "rounded-none p-1 text-gray-400 transition-colors",
+                "hover:bg-gray-100 hover:text-gray-600",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               )}
             >
@@ -108,7 +108,7 @@ export default function Modal({
         <div className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>
 
         {footer && (
-          <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3">
+          <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3">
             {footer}
           </div>
         )}
