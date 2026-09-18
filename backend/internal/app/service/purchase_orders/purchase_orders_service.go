@@ -710,7 +710,10 @@ func (s *purchaseOrderService) GetSupplierDeliveryEstimate(ctx context.Context, 
 	leadTimes := make([]float64, 0, len(history))
 	var total float64
 	for _, h := range history {
-		days := h.ReceivedAt.Sub(h.CreatedAt).Hours() / 24
+		days := h.ReceivedAt.Sub(h.ApprovedAt).Hours() / 24
+		if days < 0 {
+			days = 0
+		}
 		leadTimes = append(leadTimes, days)
 		total += days
 	}

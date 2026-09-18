@@ -728,3 +728,49 @@ func TestGetPOSummary_AccessAndErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestGetSupplierDeliveryEstimate(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		days     []int
+		enough   bool
+		estimate int
+		accuracy float64
+	}{
+		{"no history", nil, false, 0, 0},
+		{"below minimum", []int{2, 4}, false, 0, 0},
+		{"consistent with approved_at", []int{4, 4, 4}, true, 4, 100},
+		{"variable", []int{2, 4, 6}, true, 4, 59.18},
+		{"clamp accuracy", []int{0, 0, 12}, true, 4, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &mockPORepo{history: func(id int) ([]repo.POHistory, error) {
+				if id != 7 {
+					t.Fatal(id)
+				}
+				var history []repo.POHistory
+				start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+				for _, days := range tc.days {
+					history = append(history, repo.POHistory{
+						ApprovedAt: start,
+						ReceivedAt: start.AddDate(0, 0, days),
+					})
+				}
+				return history, nil
+			}}
+			got, err := newService(r).GetSupplierDeliveryEstimate(context.Background(), 7)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.SupplierID != 7 || got.HasEnoughData != tc.enough || got.EstimatedDays != tc.estimate || got.AccuracyRate != tc.accuracy {
+				t.Fatalf("estimate = %+v", got)
+			}
+		})
+	}
+	failure := errors.New("history failed")
+	r := &mockPORepo{history: func(int) ([]repo.POHistory, error) { return nil, failure }}
+	if got, err := newService(r).GetSupplierDeliveryEstimate(context.Background(), 7); got != nil || !errors.Is(err, failure) {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+}
+
