@@ -13,7 +13,6 @@ import {
   Eye,
   RotateCcw,
   CopyPlus,
-  ScanBarcode,
   Printer,
   X,
   CheckCircle2,
@@ -37,6 +36,7 @@ import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_hist
 import { useUserRole } from "../../../hooks/useUserRole";
 import { posApiService } from "../../../service/http/pos/pos_service";
 import { autoPrintPdfBlob } from "../../../utils/payment_history_print";
+import OrderCustomerSearchInput from "./components/order_customer_search_input";
 
 const SalesCancellationHistory: React.FC = () => {
     const { toast } = useToast();
@@ -135,6 +135,25 @@ const SalesCancellationHistory: React.FC = () => {
         refetch();
     };
 
+    const fetchCancellationOrderSuggestions = React.useCallback(async (q: string) => {
+        try {
+            const params = { search: q, limit: 6, page: 1 };
+            const res = isOwnerOrManager
+                ? await posApiService.getCancellationRequests(params)
+                : await posApiService.getMyCancellationRequests(params);
+            return (res.items || []).map((item) => ({
+                id: item.id,
+                order_number: item.order_number,
+                customer_name: getDisplayCustomerName(item),
+                total_amount: item.total_amount,
+                status: item.status,
+                order_date: item.order_date || item.created_at,
+            }));
+        } catch {
+            return [];
+        }
+    }, [isOwnerOrManager]);
+
   return (
     <div className="relative flex min-h-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
@@ -152,7 +171,7 @@ const SalesCancellationHistory: React.FC = () => {
           </div>
 
           {/* Filter Bar */}
-          <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
+          <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23]">
             <CardContent className="p-6 md:p-8">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 {/* 1. ค้นหาเลขบิล/ชื่อลูกค้า */}
@@ -160,16 +179,23 @@ const SalesCancellationHistory: React.FC = () => {
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     ค้นหาเลขคำสั่งซื้อ/ชื่อลูกค้า 
                   </label>
-                  <div className="relative flex-1">
-                    <ScanBarcode className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={18} />
-                    <Input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="สแกนบาร์โค้ด / INV-2024-XXX หรือ ชื่อลูกค้า"
-                      autoFocus
-                      className="w-full h-11 bg-white border border-gray-200 rounded-none pl-12 pr-4 text-sm text-[#1C1B1B] font-light focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 shadow-sm transition-all placeholder:text-[#6B7280]"
-                    />
-                  </div>
+                  <OrderCustomerSearchInput
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    onSelectCustomer={(customerName) => {
+                      setSearchQuery(customerName);
+                      handleSearch();
+                    }}
+                    onSelectOrder={(orderNumber) => {
+                      setSearchQuery(orderNumber);
+                      handleSearch();
+                    }}
+                    onSubmit={handleSearch}
+                    fetchOrders={fetchCancellationOrderSuggestions}
+                    placeholder="สแกนบาร์โค้ด / INV-2024-XXX หรือ ชื่อลูกค้า"
+                    inputClassName="h-11"
+                    autoFocus
+                  />
                 </div>
 
                 {/* พนักงานผู้ทำรายการ (เฉพาะ Owner/Manager) */}
@@ -463,29 +489,65 @@ const SalesCancellationHistory: React.FC = () => {
                           />
                         </TableCell>
 
-                        {/* เลขที่คำสั่งซื้อ */}
-                        <TableCell className="py-3 px-2.5 font-normal text-[#1C1B1B] truncate">
-                          {item.order_number}
+                        {/* เลขที่คำสั่งซื้อ */} 
+                        <TableCell className="py-3.5 px-4">
+                          <Text
+                            variant="small"
+                            className="font-normal text-[#1C1B1B] mb-0"
+                          >
+                            {item.order_number}
+                          </Text>
                         </TableCell>
 
                         {/* วันที่ขอยกเลิก */}
-                        <TableCell className="py-3 px-2.5 text-[#6B7280] font-light">
-                          {formatDate(item.cancel_requested_at || item.created_at)}
+                        <TableCell className="py-3.5 px-4">
+                          <Text
+                            variant="xs"
+                            className="font-light text-[#5B5B5B] mb-0"
+                          >
+                            {formatDate(item.cancel_requested_at || item.created_at)}
+                          </Text>
                         </TableCell>
 
                         {/* ชื่อลูกค้า */}
-                        <TableCell className="py-3 px-2.5 font-light text-[#1C1B1B] truncate">
-                          {getDisplayCustomerName(item)}
+                        <TableCell className="py-3.5 px-4 truncate">
+                          <Text
+                            variant="small"
+                            className="font-normal text-[#1C1B1B] mb-0 truncate"
+                          >
+                            {getDisplayCustomerName(item)}
+                          </Text>
+                          <Text
+                            variant="xs"
+                            className="font-light text-[#A8A29E] mb-0"
+                          >
+                            {item.phone_number || item.customer_phone_temp || "-"}
+                          </Text>
+                          <Text 
+                            variant="xs" 
+                            className="font-light text-[#A8A29E] mb-0">
+                            ประเภท: {item.customer_type_name || "-"}
+                          </Text>
                         </TableCell>
 
                         {/* ยอดเงินรวม */}
-                        <TableCell className="py-3 px-2.5 text-right font-normal text-[#1C1B1B]">
+                        <TableCell className="py-3.5 px-4 text-right">
+                          <Text
+                            variant="small"
+                            className="font-normal text-[#1C1B1B] mb-0"
+                          >
                           ฿{Number(item.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Text>
                         </TableCell>
 
                         {/* ผู้ขอยกเลิก */}
-                        <TableCell className="py-3 px-2.5 text-left font-light text-[#1C1B1B] truncate">
-                          {item.canceller || "-"}
+                        <TableCell className="py-3.5 px-4 truncate">
+                          <Text
+                            variant="xs"
+                            className="font-normal text-[#1C1B1B] mb-0"
+                          >
+                            {item.canceller || "-"}
+                          </Text>
                         </TableCell>
 
                         {/* สถานะ */}

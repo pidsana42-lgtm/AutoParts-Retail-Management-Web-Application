@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   Eye,
   ChevronRight,
-  ScanBarcode,
   Printer,
   X,
   FileText,
@@ -39,6 +38,7 @@ import { formatDate } from "../../../utils/date";
 import { useUserRole } from "../../../hooks/useUserRole";
 import { posApiService } from "../../../service/http/pos/pos_service";
 import { autoPrintPdfBlob } from "../../../utils/payment_history_print";
+import OrderCustomerSearchInput from "../pos/components/order_customer_search_input";
 
 
 export default function PaymentHistoryPage() {
@@ -124,6 +124,25 @@ export default function PaymentHistoryPage() {
   const kpiValue = (value: React.ReactNode) =>
     isLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
 
+  const fetchPaymentSuggestions = React.useCallback(async (q: string) => {
+    try {
+      const res = await posApiService.getPaymentHistory({
+        search: q,
+        ...(employeeId ? { employee_id: Number(employeeId) } : {}),
+      });
+      return (res || []).slice(0, 6).map((item) => ({
+        id: Number(item.receipt_id) || 0,
+        order_number: item.receipt_number || item.order_numbers || String(item.receipt_id),
+        customer_name: item.customer_name || (item as any).customer_name_temp || "ลูกค้าทั่วไป",
+        total_amount: Number(item.total_received) || 0,
+        status: item.status,
+        order_date: item.paid_at,
+      }));
+    } catch {
+      return [];
+    }
+  }, [employeeId]);
+
   return (
     <div className="relative flex min-h-screen bg-white text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
@@ -141,7 +160,7 @@ export default function PaymentHistoryPage() {
           </div>
 
           {/* Filter Bar */}
-          <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
+          <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23]">
             <CardContent className="p-5 md:p-6 space-y-4">
               {/* ช่องที่ 1: ค้นหาคำ + พนักงาน */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
@@ -150,18 +169,24 @@ export default function PaymentHistoryPage() {
                   <Text variant="xs" className="text-[#5F5E5E]">
                     ค้นหาเลขที่ใบเสร็จ / หมายเลขบิล / ชื่อลูกค้า
                   </Text>
-                  <div className="relative flex-1">
-                    <ScanBarcode
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10"
-                      size={18}
-                    />
-                    <Input
-                      placeholder="พิมพ์เลขที่ใบเสร็จ RE-XXX, INV-XXX, ชื่อลูกค้า..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="w-full h-10 bg-white border border-gray-200 rounded-none pl-11 pr-4 text-sm text-[#1C1B1B] font-light focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 shadow-sm transition-all placeholder:text-[#6B7280]"
-                    />
-                  </div>
+                  <OrderCustomerSearchInput
+                    value={search}
+                    onChange={setSearch}
+                    onSelectCustomer={(customerName) => {
+                      setSearch(customerName);
+                      handleApplyFilter();
+                    }}
+                    onSelectOrder={(orderNumber) => {
+                      setSearch(orderNumber);
+                      handleApplyFilter();
+                    }}
+                    onSubmit={handleApplyFilter}
+                    fetchOrders={fetchPaymentSuggestions}
+                    placeholder="พิมพ์เลขที่ใบเสร็จ RE-XXX, INV-XXX, ชื่อลูกค้า..."
+                    orderSectionTitle="รายการใบเสร็จ / การชำระเงิน (คลิกเพื่อค้นหาด้วยเลขที่นี้)"
+                    inputClassName="h-10"
+                    autoFocus
+                  />
                 </div>
 
                 {/* 1.2 พนักงานขาย (เฉพาะเจ้าของร้าน 4/12) */}

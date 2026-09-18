@@ -2,7 +2,6 @@ import React, { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Eye,
-  ScanBarcode,
   Printer,
 } from "lucide-react";
 
@@ -31,10 +30,11 @@ import { useSalesHistory } from "./hooks/useSalesHistory";
 import { getDisplayCustomerName, getPaymentVariant } from "../../../utils/poshelpers";
 import { SalesStatusBadge } from "../../../components/elements/status_badge";
 import { formatDate } from "../../../utils/date";
-import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
 import { useUserRole } from "../../../hooks/useUserRole";
 import { usePrintReceipt } from "./hooks/usePrintReceipt";
-
+import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
+import OrderCustomerSearchInput from "./components/order_customer_search_input";
+import { posApiService } from "../../../service/http/pos/pos_service";
 
 export default function TransactionHistoryPage() {
   const { printingOrderId, handlePrintReceipt } = usePrintReceipt();
@@ -104,6 +104,22 @@ export default function TransactionHistoryPage() {
   const kpiValue = (value: React.ReactNode) =>
     isStatsLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
 
+  const fetchOrderSuggestions = React.useCallback(async (q: string) => {
+    try {
+      const res = await posApiService.getSalesHistory({ search: q, limit: 6, page: 1 });
+      return (res.items || []).map((item) => ({
+        id: item.id,
+        order_number: item.order_number,
+        customer_name: getDisplayCustomerName(item),
+        total_amount: item.total_amount,
+        status: item.status,
+        order_date: item.order_date || item.created_at,
+      }));
+    } catch {
+      return [];
+    }
+  }, []);
+
   return (
     <div className="relative flex min-h-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
@@ -122,7 +138,7 @@ export default function TransactionHistoryPage() {
           </div>
 
           {/* Filter Bar */}
-          <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
+          <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23]">
             <CardContent className="p-5 md:p-6 space-y-4">
               {/* ค้นหาหลัก + ตัวกรองบุคคล */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
@@ -131,19 +147,23 @@ export default function TransactionHistoryPage() {
                   <Text variant="xs" className="text-[#5F5E5E]">
                     ค้นหาเลขคำสั่งซื้อ / ชื่อลูกค้า
                   </Text>
-                  <div className="relative flex-1">
-                    <ScanBarcode
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10"
-                      size={18}
-                    />
-                    <Input
-                      placeholder="สแกนบาร์โค้ด / INV-202X-XXX หรือ ชื่อลูกค้า..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      autoFocus
-                      className="w-full h-10 bg-white border border-gray-200 rounded-none pl-11 pr-4 text-sm text-[#1C1B1B] font-light focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 shadow-sm transition-all placeholder:text-[#6B7280]"
-                    />
-                  </div>
+                  <OrderCustomerSearchInput
+                    value={search}
+                    onChange={setSearch}
+                    onSelectCustomer={(customerName) => {
+                      setSearch(customerName);
+                      handleApplyFilter();
+                    }}
+                    onSelectOrder={(orderNumber) => {
+                      setSearch(orderNumber);
+                      handleApplyFilter();
+                    }}
+                    onSubmit={handleApplyFilter}
+                    fetchOrders={fetchOrderSuggestions}
+                    placeholder="สแกนบาร์โค้ด / INV-202X-XXX หรือ ชื่อลูกค้า..."
+                    inputClassName="h-10"
+                    autoFocus
+                  />
                 </div>
 
                 {/* ช่องที่ 2: พนักงานขาย (เฉพาะเจ้าของร้าน 4/12) */}

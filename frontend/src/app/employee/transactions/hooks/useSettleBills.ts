@@ -88,7 +88,7 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
   // บันทึก State ลง localStorage ทุกครั้งที่มีการเปลี่ยนแปลง เพื่อให้คงสถานะไว้เมื่อสลับหน้าเมนู
   useEffect(() => {
     try {
-      if (customerId || bills.length > 0 || searchQuery || selectedBillIds.length > 0) {
+      if ((customerId && bills.length > 0) || bills.length > 0 || searchQuery || selectedBillIds.length > 0) {
         const sessionToSave: SettleBillsSavedSession = {
           searchQuery,
           customerId,
@@ -194,6 +194,16 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
       const fetchedBills = res.bills || [];
       if (fetchedBills.length === 0) {
         toast({ variant: "warning", message: `ไม่พบบิลเลขที่ ${cleaned} หรือบิลนี้ไม่มียอดค้างชำระ` });
+        setBills([]);
+        setSelectedBillIds([]);
+        setCustomPayAmounts({});
+        setCustomPayDisplay({});
+        setSingleBillMode(false);
+        try {
+          localStorage.removeItem(SETTLE_SESSION_KEY);
+        } catch {
+          // ignore
+        }
         return;
       }
 
@@ -223,11 +233,28 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
       setSearchSuggestions({ customers: [], bills: [] });
     } catch (err: any) {
       console.error("Failed to load single unpaid bill:", err);
-      toast({ variant: "error", message: err?.response?.data?.error || `ไม่พบบิลเลขที่ ${cleaned} หรือบิลนี้ถูกยกเลิก/ชำระแล้ว` });
+      const errMsg = err?.response?.data?.error || `ไม่พบบิลเลขที่ ${cleaned} หรือบิลนี้ถูกยกเลิก/ชำระแล้ว`;
+      if (
+        errMsg.includes("ชำระเงินครบถ้วนแล้ว") ||
+        errMsg.includes("ไม่มียอดค้างชำระ") ||
+        errMsg.includes("ถูกยกเลิก")
+      ) {
+        setBills([]);
+        setSelectedBillIds([]);
+        setCustomPayAmounts({});
+        setCustomPayDisplay({});
+        setSingleBillMode(false);
+        try {
+          localStorage.removeItem(SETTLE_SESSION_KEY);
+        } catch {
+          // ignore
+        }
+      }
+      toast({ variant: "error", message: errMsg });
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   // รีเฟรชข้อมูลบิลล่าสุดในพื้นหลังตอน mount เมื่อมีข้อมูลค้างอยู่
   const hasSyncedOnMount = useMemo(() => ({ current: false }), []);
@@ -677,8 +704,29 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
 
       // ดึงข้อมูลอัปเดตยอดคงเหลือล่าสุดโดยคงโหมดเดิมไว้
       if (singleBillMode && selectedBills.length > 0) {
-        // ถ้าดูบิลเดี่ยว ให้รีเฟรชบิลเดิมนั้น
-        fetchSingleUnpaidBill(selectedBills[0].order_number);
+        const singleBill = selectedBills[0];
+        const payAmt = getBillPayAmount(singleBill);
+        const isFullyPaid = payAmt >= (singleBill.balance_due - 0.001);
+
+        if (isFullyPaid) {
+          // หากชำระเต็มจำนวนแล้ว บิลนี้ไม่มียอดหนี้ค้างชำระอีกต่อไป -> เคลียร์บิลนี้ออกจากหน้าจอทันที
+          setBills([]);
+          setSelectedBillIds([]);
+          setCustomPayAmounts({});
+          setCustomPayDisplay({});
+          setSingleBillMode(false);
+          setSearchQuery("");
+
+          if (customerId) {
+            // ถ้ามี customerId ให้ลองโหลดบิลอื่นที่ยังค้างชำระของลูกค้ารายนี้ (ถ้ามี)
+            fetchUnpaidBills(customerId);
+          } else {
+            handleClearCustomer();
+          }
+        } else {
+          // ถ้าเป็นการแบ่งจ่าย (ยังมีหนี้คงเหลือ) ค่อยรีเฟรชบิลเดิมเพื่ออัปเดตยอดหนี้คงเหลือ
+          fetchSingleUnpaidBill(singleBill.order_number);
+        }
       } else if (customerId) {
         // ถ้าดูลูกค้า ให้รีเฟรชบิลทั้งหมดของลูกค้ารายนี้
         fetchUnpaidBills(customerId);
