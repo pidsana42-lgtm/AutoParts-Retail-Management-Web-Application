@@ -17,6 +17,7 @@ import Input from "../../../components/elements/input";
 import Select from "../../../components/elements/select";
 import Button from "../../../components/elements/button";
 import Badge from "../../../components/elements/badge";
+import { useToast } from "../../../components/elements/toast";
 import {
   Table,
   TableHeader,
@@ -41,6 +42,7 @@ import { autoPrintPdfBlob } from "../../../utils/payment_history_print";
 
 
 export default function PaymentHistoryPage() {
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { isOwnerOrManager } = useUserRole();
@@ -63,7 +65,7 @@ export default function PaymentHistoryPage() {
       autoPrintPdfBlob(blob, fileName);
     } catch (err) {
       console.error("Failed to print receipt:", err);
-      alert("ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง");
+      toast({ variant: "error", message: "ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง" });
     } finally {
       setPrintingReceiptId(null);
     }
@@ -741,7 +743,7 @@ export default function PaymentHistoryPage() {
                       const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
                       window.open(blobUrl, "_blank");
                     } catch (err) {
-                      alert("ไม่สามารถเปิดพิมพ์ใบเสร็จได้");
+                      toast({ variant: "error", message: "ไม่สามารถเปิดพิมพ์ใบเสร็จได้" });
                     }
                   }}
                   className="w-full text-xs h-10 font-normal flex items-center justify-center gap-1.5 shadow-sm bg-[#1C1B1B] hover:bg-zinc-800 text-white cursor-pointer rounded-none"

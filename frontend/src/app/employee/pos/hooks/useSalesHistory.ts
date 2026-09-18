@@ -2,8 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { posApiService } from "../../../../service/http/pos/pos_service"; 
 import type { SalesHistoryFilterRequest, SalesHistoryItemResponse, GetSaleHistoryByIDResponse } from "../../../../interface/pos/sales_history_interface";
+import { useToast } from "../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 
 export const useSalesHistory = () => {
+  const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const [searchParams] = useSearchParams();
 
   //คำนวณหา วันที่ย้อนหลังไป 30 วัน นับจากวันนี้
@@ -279,7 +283,7 @@ export const useSalesHistory = () => {
     if (!selectedOrderId) return;
     const reasonToSend = cancelReason.trim() || cancelRemark.trim();
     if (!reasonToSend) {
-      alert("กรุณาระบุเหตุผลในการขอยกเลิกรายการ");
+      toast({ variant: "warning", message: "กรุณาระบุเหตุผลในการขอยกเลิกรายการ" });
       return;
     }
 
@@ -289,7 +293,7 @@ export const useSalesHistory = () => {
         reason: reasonToSend,
       });
 
-      alert("ส่งคำขอยกเลิกรายการเรียบร้อยแล้ว รอการอนุมัติจากเจ้าของร้าน");
+      toast({ variant: "success", message: "ส่งคำขอยกเลิกรายการเรียบร้อยแล้ว รอการอนุมัติจากเจ้าของร้าน" });
       
       setSelectedOrderId(null);
       setCancelReason("");
@@ -297,7 +301,7 @@ export const useSalesHistory = () => {
       fetchSalesHistory();
     } catch (err: any) {
       console.error("Failed to request cancel order:", err);
-      alert(err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถส่งคำขอยกเลิกรายการได้");
+      toast({ variant: "error", message: err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถส่งคำขอยกเลิกรายการได้" });
     } finally {
       setIsCancelling(false);
     }
@@ -313,7 +317,7 @@ export const useSalesHistory = () => {
     // ถ้าเป็นบิลปกติที่ยังไม่ได้ส่งคำขอ (Owner ขอยกเลิกเองโดยตรง) จำเป็นต้องมีเหตุผล
     const reasonOrRemark = cancelRemark.trim() || cancelReason.trim();
     if (!isPending && !reasonOrRemark) {
-      alert("กรุณาระบุเหตุผลในการยกเลิกรายการ");
+      toast({ variant: "warning", message: "กรุณาระบุเหตุผลในการยกเลิกรายการ" });
       return;
     }
 
@@ -323,7 +327,7 @@ export const useSalesHistory = () => {
         remark: reasonOrRemark || undefined,
       });
 
-      alert("ยกเลิกรายการขายและคืนสินค้าเข้าสต็อกเรียบร้อยแล้ว");
+      toast({ variant: "success", message: "ยกเลิกรายการขายและคืนสินค้าเข้าสต็อกเรียบร้อยแล้ว" });
       
       setSelectedOrderId(null);
       setCancelReason("");
@@ -332,7 +336,7 @@ export const useSalesHistory = () => {
       fetchOverallStats();
     } catch (err: any) {
       console.error("Failed to cancel order directly:", err);
-      alert(err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถยกเลิกรายการได้");
+      toast({ variant: "error", message: err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถยกเลิกรายการได้" });
     } finally {
       setIsCancelling(false);
     }
@@ -343,7 +347,7 @@ export const useSalesHistory = () => {
     if (!selectedOrderId) return;
     const remarkToSend = cancelRemark.trim() || cancelReason.trim();
     if (!remarkToSend) {
-      alert("กรุณาระบุหมายเหตุหรือเหตุผลในการปฏิเสธคำขอ");
+      toast({ variant: "warning", message: "กรุณาระบุหมายเหตุหรือเหตุผลในการปฏิเสธคำขอ" });
       return;
     }
 
@@ -354,7 +358,7 @@ export const useSalesHistory = () => {
         remark: remarkToSend,
       });
 
-      alert("ปฏิเสธคำขอยกเลิกรายการเรียบร้อยแล้ว");
+      toast({ variant: "success", message: "ปฏิเสธคำขอยกเลิกรายการเรียบร้อยแล้ว" });
       
       setSelectedOrderId(null);
       setCancelReason("");
@@ -363,7 +367,7 @@ export const useSalesHistory = () => {
       fetchOverallStats();
     } catch (err: any) {
       console.error("Failed to reject cancel order:", err);
-      alert(err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถปฏิเสธคำขอยกเลิกได้");
+      toast({ variant: "error", message: err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถปฏิเสธคำขอยกเลิกได้" });
     } finally {
       setIsCancelling(false);
     }
@@ -373,14 +377,23 @@ export const useSalesHistory = () => {
   const handleRevertCancel = async () => {
     if (!selectedOrderId) return;
 
-    if (!confirm("คุณต้องการยกเลิกคำขอ และคืนสถานะบิลนี้เป็นบิลปกติใช่หรือไม่?")) {
+    const confirmed = await confirmDialog(
+      "คุณต้องการยกเลิกคำขอ และคืนสถานะบิลนี้เป็นบิลปกติใช่หรือไม่?",
+      {
+        title: "ยืนยันการดึงคำขอยกเลิกกลับ",
+        confirmText: "ดึงคำขอยกเลิก",
+        variant: "danger",
+      }
+    );
+
+    if (!confirmed) {
       return;
     }
 
     setIsCancelling(true);
     try {
       await posApiService.revertCancellationRequest(selectedOrderId);
-      alert("ดึงคำขอยกเลิกกลับ และคืนสถานะบิลเรียบร้อยแล้ว");
+      toast({ variant: "success", message: "ดึงคำขอยกเลิกกลับ และคืนสถานะบิลเรียบร้อยแล้ว" });
       
       setSelectedOrderId(null);
       setCancelReason("");
@@ -389,7 +402,7 @@ export const useSalesHistory = () => {
       fetchOverallStats();
     } catch (err: any) {
       console.error("Failed to revert cancel request:", err);
-      alert(err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถดึงคำขอยกเลิกกลับได้");
+      toast({ variant: "error", message: err?.response?.data?.message || err?.response?.data?.error || "ไม่สามารถดึงคำขอยกเลิกกลับได้" });
     } finally {
       setIsCancelling(false);
     }

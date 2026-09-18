@@ -7,8 +7,12 @@ import { getTodayDateString, getDaysAgoDateString } from "../../../../utils/date
 import { useUserRole } from "../../../../hooks/useUserRole";
 import { getCurrentUserId } from "../../../../utils/auth";
 import { printCustomerStatementFromBackend } from "../../../../utils/payment_history_print";
+import { useToast } from "../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 
 export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
+  const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const { isOwnerOrManager } = useUserRole();
   const [items, setItems] = useState<PaymentHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -244,7 +248,7 @@ export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
     if (!selectedReceipt) return;
     const reason = cancelReason.trim() || cancelRemark.trim();
     if (!reason) {
-      alert("กรุณาระบุเหตุผลในการขอยกเลิกรายการ");
+      toast({ variant: "warning", message: "กรุณาระบุเหตุผลในการขอยกเลิกรายการ" });
       return;
     }
 
@@ -254,13 +258,13 @@ export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
         reason: reason,
       });
 
-      alert("ส่งคำขอยกเลิกใบเสร็จรับเงินไปยังเจ้าของร้านเรียบร้อยแล้ว");
+      toast({ variant: "success", message: "ส่งคำขอยกเลิกใบเสร็จรับเงินไปยังเจ้าของร้านเรียบร้อยแล้ว" });
       setSelectedReceipt(null);
       setCancelReason("");
       setCancelRemark("");
       fetchHistory();
     } catch (err: any) {
-      alert(err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการส่งคำขอยกเลิก");
+      toast({ variant: "error", message: err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการส่งคำขอยกเลิก" });
     } finally {
       setIsCancelling(false);
     }
@@ -269,18 +273,23 @@ export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
   // พนักงานดึงคำขอยกเลิกกลับ
   const handleRevertCancelRequest = async () => {
     if (!selectedReceipt) return;
-    if (!confirm("คุณต้องการดึงคำขอยกเลิกใบเสร็จนี้กลับใช่หรือไม่?")) return;
+    const confirmed = await confirmDialog("คุณต้องการดึงคำขอยกเลิกใบเสร็จนี้กลับใช่หรือไม่?", {
+      title: "ยืนยันการดึงคำขอยกเลิกกลับ",
+      confirmText: "ดึงคำขอยกเลิก",
+      variant: "danger",
+    });
+    if (!confirmed) return;
 
     try {
       setIsCancelling(true);
       await posApiService.revertCancelPaymentReceiptRequest(selectedReceipt.receipt_id);
-      alert("ดึงคำขอยกเลิกใบเสร็จรับเงินกลับเรียบร้อยแล้ว");
+      toast({ variant: "success", message: "ดึงคำขอยกเลิกใบเสร็จรับเงินกลับเรียบร้อยแล้ว" });
       setSelectedReceipt(null);
       setCancelReason("");
       setCancelRemark("");
       fetchHistory();
     } catch (err: any) {
-      alert(err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการดึงคำขอยกเลิกกลับ");
+      toast({ variant: "error", message: err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการดึงคำขอยกเลิกกลับ" });
     } finally {
       setIsCancelling(false);
     }
@@ -289,7 +298,12 @@ export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
   // เจ้าของร้านอนุมัติการยกเลิก (คืนยอดหนี้)
   const handleApproveCancelReceipt = async () => {
     if (!selectedReceipt) return;
-    if (!confirm("ยืนยันการอนุมัติยกเลิกใบเสร็จนี้? ระบบจะทำการคืนยอดหนี้กลับไปยังบัญชีลูกค้า")) return;
+    const confirmed = await confirmDialog("ยืนยันการอนุมัติยกเลิกใบเสร็จนี้? ระบบจะทำการคืนยอดหนี้กลับไปยังบัญชีลูกค้า", {
+      title: "ยืนยันการอนุมัติยกเลิกใบเสร็จ",
+      confirmText: "อนุมัติ",
+      variant: "success",
+    });
+    if (!confirmed) return;
 
     const remark = cancelRemark.trim() || cancelReason.trim();
 
@@ -299,13 +313,13 @@ export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
         remark: remark || undefined,
       });
 
-      alert("อนุมัติยกเลิกใบเสร็จรับเงินและคืนยอดหนี้เรียบร้อยแล้ว");
+      toast({ variant: "success", message: "อนุมัติยกเลิกใบเสร็จรับเงินและคืนยอดหนี้เรียบร้อยแล้ว" });
       setSelectedReceipt(null);
       setCancelRemark("");
       setCancelReason("");
       fetchHistory();
     } catch (err: any) {
-      alert(err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการอนุมัติยกเลิก");
+      toast({ variant: "error", message: err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการอนุมัติยกเลิก" });
     } finally {
       setIsCancelling(false);
     }
@@ -322,13 +336,13 @@ export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
         remark: remark || undefined,
       });
 
-      alert("ปฏิเสธคำขอยกเลิกใบเสร็จรับเงินเรียบร้อยแล้ว");
+      toast({ variant: "success", message: "ปฏิเสธคำขอยกเลิกใบเสร็จรับเงินเรียบร้อยแล้ว" });
       setSelectedReceipt(null);
       setCancelRemark("");
       setCancelReason("");
       fetchHistory();
     } catch (err: any) {
-      alert(err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการปฏิเสธคำขอ");
+      toast({ variant: "error", message: err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการปฏิเสธคำขอ" });
     } finally {
       setIsCancelling(false);
     }
@@ -339,7 +353,7 @@ export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
     if (!selectedReceipt) return;
     const reason = cancelReason.trim() || cancelRemark.trim();
     if (!reason) {
-      alert("กรุณาระบุเหตุผลในการยกเลิกรายการ");
+      toast({ variant: "warning", message: "กรุณาระบุเหตุผลในการยกเลิกรายการ" });
       return;
     }
 
@@ -352,13 +366,13 @@ export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
         payment_type: selectedReceipt.payment_type,
       });
 
-      alert("ยกเลิกรายการรับชำระเงินและคืนยอดหนี้เรียบร้อยแล้ว");
+      toast({ variant: "success", message: "ยกเลิกรายการรับชำระเงินและคืนยอดหนี้เรียบร้อยแล้ว" });
       setSelectedReceipt(null);
       setCancelReason("");
       setCancelRemark("");
       fetchHistory();
     } catch (err: any) {
-      alert(err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการยกเลิกรายการ");
+      toast({ variant: "error", message: err.response?.data?.error || err.response?.data?.message || "เกิดข้อผิดพลาดในการยกเลิกรายการ" });
     } finally {
       setIsCancelling(false);
     }
@@ -439,7 +453,7 @@ export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
 
         // 4. ตรวจสอบว่าได้ข้อมูลลูกค้าหรือไม่ (รวมถึง id: 0 สำหรับลูกค้าทั่วไป)
         if (!customerObj || customerObj.id === undefined || customerObj.id === null) {
-          alert(`กรุณาระบุหรือค้นหาชื่อลูกค้าที่ต้องการสรุปยอด (Customer Statement)`);
+          toast({ variant: "warning", message: "กรุณาระบุหรือค้นหาชื่อลูกค้าที่ต้องการสรุปยอด (Customer Statement)" });
           return;
         }
 
@@ -455,7 +469,10 @@ export function usePaymentHistory(initialSearch = "", initialTypeFilter = "") {
         });
       } catch (err) {
         console.error("Failed to process customer statement from backend:", err);
-        alert(action === "download" ? "เกิดข้อผิดพลาดในการดาวน์โหลดเอกสารสรุปยอด" : "เกิดข้อผิดพลาดในการสร้างเอกสารสรุปยอด");
+        toast({
+          variant: "error",
+          message: action === "download" ? "เกิดข้อผิดพลาดในการดาวน์โหลดเอกสารสรุปยอด" : "เกิดข้อผิดพลาดในการสร้างเอกสารสรุปยอด",
+        });
       } finally {
         setIsPrintingStatement(false);
       }

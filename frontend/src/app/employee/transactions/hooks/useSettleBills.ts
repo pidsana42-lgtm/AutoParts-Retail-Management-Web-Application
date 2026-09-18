@@ -193,7 +193,7 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
       const res = await posApiService.getUnpaidBillByOrderNumber(cleaned);
       const fetchedBills = res.bills || [];
       if (fetchedBills.length === 0) {
-        alert(`ไม่พบบิลเลขที่ ${cleaned} หรือบิลนี้ไม่มียอดค้างชำระ`);
+        toast({ variant: "warning", message: `ไม่พบบิลเลขที่ ${cleaned} หรือบิลนี้ไม่มียอดค้างชำระ` });
         return;
       }
 
@@ -223,7 +223,7 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
       setSearchSuggestions({ customers: [], bills: [] });
     } catch (err: any) {
       console.error("Failed to load single unpaid bill:", err);
-      alert(err?.response?.data?.error || `ไม่พบบิลเลขที่ ${cleaned} หรือบิลนี้ถูกยกเลิก/ชำระแล้ว`);
+      toast({ variant: "error", message: err?.response?.data?.error || `ไม่พบบิลเลขที่ ${cleaned} หรือบิลนี้ถูกยกเลิก/ชำระแล้ว` });
     } finally {
       setIsLoading(false);
     }
@@ -559,7 +559,7 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
       });
     } catch (err) {
       console.error("Failed to generate settle PromptPay QR:", err);
-      alert("ไม่สามารถสร้าง QR Code สำหรับชำระเงินได้");
+      toast({ variant: "error", message: "ไม่สามารถสร้าง QR Code สำหรับชำระเงินได้" });
       setQrCodeData(null);
     } finally {
       setIsLoadingQR(false);
@@ -569,7 +569,7 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
   // เปิด Modal รับชำระ
   const handleOpenModal = () => {
     if (totalPayAmount <= 0) {
-      alert("กรุณาระบุยอดชำระที่มากกว่า 0 บาท");
+      toast({ variant: "warning", message: "กรุณาระบุยอดชำระที่มากกว่า 0 บาท" });
       return;
     }
     setReceivedAmount(totalPayAmount);

@@ -9,8 +9,10 @@ import type {
 import { useEmployeeOptions } from "../../../../hooks/useEmployeeOptions";
 import { useUserRole } from "../../../../hooks/useUserRole";
 import { getCurrentUserId } from "../../../../utils/auth";
+import { useToast } from "../../../../components/elements/toast";
 
 export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryReturn => {
+  const { toast } = useToast();
   const { isOwnerOrManager } = useUserRole();
   const { employeeList } = useEmployeeOptions();
   const [dataList, setDataList] = useState<PaymentHistoryItem[]>([]);
@@ -281,13 +283,13 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
       await posApiService.approveCancelPaymentReceipt(selectedReceipt.receipt_id, {
         remark: cancelRemark,
       });
-      alert("อนุมัติการยกเลิกใบเสร็จและคืนยอดหนี้เรียบร้อยแล้ว");
+      toast({ variant: "success", message: "อนุมัติการยกเลิกใบเสร็จและคืนยอดหนี้เรียบร้อยแล้ว" });
       setSelectedReceipt(null);
       setCancelRemark("");
       fetchCancellationHistory();
       fetchOverallStats();
     } catch (err: any) {
-      alert(err?.response?.data?.error || "เกิดข้อผิดพลาดในการอนุมัติ");
+      toast({ variant: "error", message: err?.response?.data?.error || "เกิดข้อผิดพลาดในการอนุมัติ" });
     } finally {
       setIsProcessing(false);
     }
@@ -300,13 +302,13 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
       await posApiService.rejectCancelPaymentReceipt(selectedReceipt.receipt_id, {
         remark: cancelRemark,
       });
-      alert("ปฏิเสธคำขอยกเลิกเรียบร้อยแล้ว");
+      toast({ variant: "success", message: "ปฏิเสธคำขอยกเลิกเรียบร้อยแล้ว" });
       setSelectedReceipt(null);
       setCancelRemark("");
       fetchCancellationHistory();
       fetchOverallStats();
     } catch (err: any) {
-      alert(err?.response?.data?.error || "เกิดข้อผิดพลาดในการปฏิเสธ");
+      toast({ variant: "error", message: err?.response?.data?.error || "เกิดข้อผิดพลาดในการปฏิเสธ" });
     } finally {
       setIsProcessing(false);
     }
@@ -325,13 +327,13 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
         setIsProcessing(true);
         try {
           await posApiService.revertCancelPaymentReceiptRequest(selectedReceipt.receipt_id);
-          alert("ดึงคำขอยกเลิกกลับเรียบร้อยแล้ว");
+          toast({ variant: "success", message: "ดึงคำขอยกเลิกกลับเรียบร้อยแล้ว" });
           setSelectedReceipt(null);
           fetchCancellationHistory();
           fetchOverallStats();
           setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
         } catch (err: any) {
-          alert(err?.response?.data?.error || "เกิดข้อผิดพลาดในการดึงคำขอกลับ");
+          toast({ variant: "error", message: err?.response?.data?.error || "เกิดข้อผิดพลาดในการดึงคำขอกลับ" });
         } finally {
           setIsProcessing(false);
         }
@@ -355,13 +357,13 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
           for (const id of selectedIds) {
             await posApiService.approveCancelPaymentReceipt(id, { remark: "อนุมัติยกเลิกแบบกลุ่ม" });
           }
-          alert(`อนุมัติการยกเลิกเรียบร้อยแล้ว ${selectedIds.length} รายการ`);
+          toast({ variant: "success", message: `อนุมัติการยกเลิกเรียบร้อยแล้ว ${selectedIds.length} รายการ` });
           setSelectedIds([]);
           fetchCancellationHistory();
           fetchOverallStats();
           setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
         } catch (err: any) {
-          alert(err?.response?.data?.error || "เกิดข้อผิดพลาดในการอนุมัติแบบกลุ่ม");
+          toast({ variant: "error", message: err?.response?.data?.error || "เกิดข้อผิดพลาดในการอนุมัติแบบกลุ่ม" });
         } finally {
           setIsProcessing(false);
         }
@@ -384,13 +386,13 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
           for (const id of selectedIds) {
             await posApiService.rejectCancelPaymentReceipt(id, { remark: "ข้อความอัตโนมัติ ปฏิเสธคำขอยกเลิก" });
           }
-          alert(`ปฏิเสธคำขอยกเลิกเรียบร้อยแล้ว ${selectedIds.length} รายการ`);
+          toast({ variant: "success", message: `ปฏิเสธคำขอยกเลิกเรียบร้อยแล้ว ${selectedIds.length} รายการ` });
           setSelectedIds([]);
           fetchCancellationHistory();
           fetchOverallStats();
           setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
         } catch (err: any) {
-          alert(err?.response?.data?.error || "เกิดข้อผิดพลาดในการปฏิเสธแบบกลุ่ม");
+          toast({ variant: "error", message: err?.response?.data?.error || "เกิดข้อผิดพลาดในการปฏิเสธแบบกลุ่ม" });
         } finally {
           setIsProcessing(false);
         }
@@ -413,13 +415,13 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
           for (const id of selectedIds) {
             await posApiService.revertCancelPaymentReceiptRequest(id);
           }
-          alert(`ดึงคำขอยกเลิกกลับเรียบร้อยแล้ว ${selectedIds.length} รายการ`);
+          toast({ variant: "success", message: `ดึงคำขอยกเลิกกลับเรียบร้อยแล้ว ${selectedIds.length} รายการ` });
           setSelectedIds([]);
           fetchCancellationHistory();
           fetchOverallStats();
           setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
         } catch (err: any) {
-          alert(err?.response?.data?.error || "เกิดข้อผิดพลาดในการดึงคำขอกลับ");
+          toast({ variant: "error", message: err?.response?.data?.error || "เกิดข้อผิดพลาดในการดึงคำขอกลับ" });
         } finally {
           setIsProcessing(false);
         }
@@ -431,7 +433,7 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
     if (!selectedReceipt) return;
     const reason = cancelReason.trim();
     if (!reason) {
-      alert("กรุณาระบุเหตุผลในการขอยกเลิกรายการ");
+      toast({ variant: "warning", message: "กรุณาระบุเหตุผลในการขอยกเลิกรายการ" });
       return;
     }
 
@@ -443,12 +445,12 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
           reason: reason,
           payment_type: selectedReceipt.payment_type,
         });
-        alert("ยกเลิกรายการรับชำระเงินและคืนยอดหนี้เรียบร้อยแล้ว");
+        toast({ variant: "success", message: "ยกเลิกรายการรับชำระเงินและคืนยอดหนี้เรียบร้อยแล้ว" });
       } else {
         await posApiService.requestCancelPaymentReceipt(selectedReceipt.receipt_id, {
           reason: reason,
         });
-        alert("ยื่นคำขอยกเลิกใบเสร็จรับเงินใหม่อีกครั้งเรียบร้อยแล้ว");
+        toast({ variant: "success", message: "ยื่นคำขอยกเลิกใบเสร็จรับเงินใหม่อีกครั้งเรียบร้อยแล้ว" });
       }
 
       setSelectedReceipt(null);
@@ -456,7 +458,7 @@ export const usePaymentCancellationHistory = (): UsePaymentCancellationHistoryRe
       fetchCancellationHistory();
       fetchOverallStats();
     } catch (err: any) {
-      alert(err?.response?.data?.error || err?.response?.data?.message || "เกิดข้อผิดพลาดในการดำเนินการ");
+      toast({ variant: "error", message: err?.response?.data?.error || err?.response?.data?.message || "เกิดข้อผิดพลาดในการดำเนินการ" });
     } finally {
       setIsProcessing(false);
     }

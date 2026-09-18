@@ -6,8 +6,12 @@ import type {
 } from "../../../../interface/pos/sales_history_interface";
 import { useUserRole } from "../../../../hooks/useUserRole";
 import { useEmployeeOptions } from "../../../../hooks/useEmployeeOptions";
+import { useToast } from "../../../../components/elements/toast";
+import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 
 export const useSalesCancellationHistory = () => {
+  const { toast } = useToast();
+  const { confirmDialog } = useAlertDialog();
   const { isOwnerOrManager } = useUserRole();
   const { employeeList } = useEmployeeOptions();
 
@@ -193,15 +197,20 @@ export const useSalesCancellationHistory = () => {
   // 1. เจ้าของร้าน: อนุมัติแบบกลุ่ม (Batch Approve)
   const handleApproveSelected = async () => {
     if (selectedIds.length === 0) {
-      alert("กรุณาเลือกรายการที่ต้องการอนุมัติอย่างน้อย 1 รายการ");
+      toast({ variant: "warning", message: "กรุณาเลือกรายการที่ต้องการอนุมัติอย่างน้อย 1 รายการ" });
       return;
     }
 
-    if (
-      confirm(
-        `คุณต้องการอนุมัติยกเลิกบิลและคืนสต็อกจำนวน ${selectedIds.length} รายการใช่หรือไม่?`
-      )
-    ) {
+    const confirmed = await confirmDialog(
+      `คุณต้องการอนุมัติยกเลิกบิลและคืนสต็อกจำนวน ${selectedIds.length} รายการใช่หรือไม่?`,
+      {
+        title: "ยืนยันการอนุมัติยกเลิกบิล",
+        confirmText: "อนุมัติ",
+        variant: "success",
+      }
+    );
+
+    if (confirmed) {
       try {
         setIsLoading(true);
         await Promise.all(
@@ -210,12 +219,12 @@ export const useSalesCancellationHistory = () => {
           )
         );
 
-        alert("อนุมัติยกเลิกบิลสำเร็จ");
+        toast({ variant: "success", message: "อนุมัติยกเลิกบิลสำเร็จ" });
         setSelectedIds([]);
         fetchCancellationHistory();
         fetchOverallStats();
       } catch (err: any) {
-        alert(err?.response?.data?.message || "เกิดข้อผิดพลาดในการอนุมัติยกเลิกบิล");
+        toast({ variant: "error", message: err?.response?.data?.message || "เกิดข้อผิดพลาดในการอนุมัติยกเลิกบิล" });
       } finally {
         setIsLoading(false);
       }
@@ -225,28 +234,34 @@ export const useSalesCancellationHistory = () => {
   // 2. เจ้าของร้าน: ปฏิเสธแบบกลุ่ม (Batch Reject)
   const handleRejectSelected = async () => {
     if (selectedIds.length === 0) {
-      alert("กรุณาเลือกรายการที่ต้องการปฏิเสธอย่างน้อย 1 รายการ");
+      toast({ variant: "warning", message: "กรุณาเลือกรายการที่ต้องการปฏิเสธอย่างน้อย 1 รายการ" });
       return;
     }
 
-    const remark = prompt("ระบุเหตุผลในการปฏิเสธคำขอ (ถ้ามี):", "ไม่อนุมัติโดยเจ้าของร้าน");
-    if (remark === null) return;
+    const confirmed = await confirmDialog(
+      `คุณต้องการปฏิเสธคำขอยกเลิกจำนวน ${selectedIds.length} รายการใช่หรือไม่?`,
+      {
+        title: "ยืนยันการปฏิเสธคำขอยกเลิก",
+        confirmText: "ปฏิเสธ",
+        variant: "danger",
+      }
+    );
 
-    if (confirm(`คุณต้องการปฏิเสธคำขอยกเลิกจำนวน ${selectedIds.length} รายการใช่หรือไม่?`)) {
+    if (confirmed) {
       try {
         setIsLoading(true);
         await Promise.all(
           selectedIds.map((id) =>
-            posApiService.rejectCancelSaleOrder(id, { remark })
+            posApiService.rejectCancelSaleOrder(id, { remark: "ไม่อนุมัติโดยเจ้าของร้าน" })
           )
         );
 
-        alert("ปฏิเสธคำขอยกเลิกบิลสำเร็จ");
+        toast({ variant: "success", message: "ปฏิเสธคำขอยกเลิกบิลสำเร็จ" });
         setSelectedIds([]);
         fetchCancellationHistory();
         fetchOverallStats();
       } catch (err: any) {
-        alert(err?.response?.data?.message || "เกิดข้อผิดพลาดในการปฏิเสธคำขอยกเลิกบิล");
+        toast({ variant: "error", message: err?.response?.data?.message || "เกิดข้อผิดพลาดในการปฏิเสธคำขอยกเลิกบิล" });
       } finally {
         setIsLoading(false);
       }
@@ -259,7 +274,7 @@ export const useSalesCancellationHistory = () => {
 
   const handleRestoreSelected = () => {
     if (selectedIds.length === 0) {
-      alert("กรุณาเลือกรายการที่ต้องการกู้คืนอย่างน้อย 1 รายการ");
+      toast({ variant: "warning", message: "กรุณาเลือกรายการที่ต้องการกู้คืนอย่างน้อย 1 รายการ" });
       return;
     }
     setIsRestoreModalOpen(true);
@@ -273,13 +288,13 @@ export const useSalesCancellationHistory = () => {
         selectedIds.map((id) => posApiService.revertCancellationRequest(id))
       );
 
-      alert("ดึงคำขอยกเลิกบิลกลับสำเร็จ");
+      toast({ variant: "success", message: "ดึงคำขอยกเลิกบิลกลับสำเร็จ" });
       setSelectedIds([]);
       fetchCancellationHistory();
       fetchOverallStats();
       setIsRestoreModalOpen(false);
     } catch (err: any) {
-      alert(err?.response?.data?.message || "เกิดข้อผิดพลาดในการดึงคำขอกลับ");
+      toast({ variant: "error", message: err?.response?.data?.message || "เกิดข้อผิดพลาดในการดึงคำขอกลับ" });
     } finally {
       setIsRestoring(false);
       setIsLoading(false);

@@ -21,6 +21,10 @@ vi.mock("../../../../hooks/useEmployeeOptions", () => ({
   useEmployeeOptions: () => ({ employeeList: [] }),
 }));
 
+vi.mock("../../../../components/elements/toast", () => ({
+  useToast: () => ({ toast: vi.fn(), dismiss: vi.fn(), dismissAll: vi.fn() }),
+}));
+
 describe("usePaymentCancellationHistory - ConfirmDialog Flow", () => {
   beforeEach(() => {
     vi.resetAllMocks();
