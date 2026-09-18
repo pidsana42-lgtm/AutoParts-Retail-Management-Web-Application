@@ -16,7 +16,7 @@ import { dashboardService } from '../../../service/http/dashboard/dashboard_serv
 import type { SummaryQuery, DebtAgingQuery } from '../../../interface/dashboard/dashboard_interface';
 // Utils
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
-import { formatDateThai, getTodayDateString } from '../../../utils/formatdate';
+import { formatDateThai, getDashboardPeriodDateRange, getTodayDateString } from '../../../utils/formatdate';
 import { exportDebtAgingPdf } from '../../../utils/print';
 import { cn } from '../../../utils/component';
 
@@ -183,17 +183,30 @@ const DebtDashboard: React.FC = () => {
     }
   }, [agingBucket, customMinAgeDays]);
 
+  const debtDateRange = useMemo(() => {
+    if (startDate) {
+      return {
+        start_date: startDate,
+        end_date: endDate || startDate,
+      };
+    }
+    const period = getDashboardPeriodDateRange(selectedFilter);
+    return {
+      start_date: period.startDate,
+      end_date: period.endDate,
+    };
+  }, [selectedFilter, startDate, endDate]);
+
   const agingQuery = useMemo<DebtAgingQuery>(() => ({
-    ...(startDate && { start_date: startDate }),
-    ...(endDate && { end_date: endDate }),
+    ...debtDateRange,
     ...(statusFilter && { status: statusFilter }),
     ...agingBucketParams,
     page: currentPage,
     page_size: PAGE_SIZE,
-  }), [startDate, endDate, statusFilter, agingBucketParams, currentPage]);
+  }), [debtDateRange, statusFilter, agingBucketParams, currentPage]);
 
   const {
-    kpi, yearlyCollected, yearlyOutstanding, yearlyCollectedLoading, totalDebtors,
+    kpi, currentOutstanding, currentOutstandingLoading, totalDebtors,
     summaryLoading, summaryError,
     agingData, agingTotal, agingLoading, agingError,
   } = useDebtDashboard(summaryQuery, agingQuery);
@@ -220,25 +233,31 @@ const DebtDashboard: React.FC = () => {
   };
 
   const exportQuery = useMemo<DebtAgingQuery>(() => ({
-    ...(startDate && { start_date: startDate }),
-    ...(endDate && { end_date: endDate }),
+    ...debtDateRange,
     ...(statusFilter && { status: statusFilter }),
     ...agingBucketParams,
-  }), [startDate, endDate, statusFilter, agingBucketParams]);
+  }), [debtDateRange, statusFilter, agingBucketParams]);
+
+  const exportDateLabel = useMemo(() => {
+    const from = formatDateThai(debtDateRange.start_date, '-');
+    const to = formatDateThai(debtDateRange.end_date, '-');
+    return debtDateRange.start_date === debtDateRange.end_date ? from : `${from} – ${to}`;
+  }, [debtDateRange]);
+
+  const exportDateSlug = useMemo(() => {
+    const from = formatDateThai(debtDateRange.start_date, '-');
+    const to = formatDateThai(debtDateRange.end_date, '-');
+    return debtDateRange.start_date === debtDateRange.end_date ? from : `${from}_to_${to}`;
+  }, [debtDateRange]);
 
   const handleExportPdf = async () => {
     setExportingPdf(true);
     try {
       const res = await dashboardService.getAllDebtAging(exportQuery);
-      const dateLabel = startDate && endDate
-        ? `${formatDateThai(startDate)} – ${formatDateThai(endDate)}`
-        : startDate
-        ? formatDateThai(startDate)
-        : 'ทั้งหมด';
       await exportDebtAgingPdf(
         res.data.data ?? [],
-        dateLabel,
-        `debt-aging-${startDate || 'all'}-${endDate || 'all'}.pdf`,
+        exportDateLabel,
+        `debt-aging-${exportDateSlug}.pdf`,
       );
     } catch { /* silently ignore */ }
     finally { setExportingPdf(false); }
@@ -248,7 +267,7 @@ const DebtDashboard: React.FC = () => {
     setExportingExcel(true);
     try {
       const res = await dashboardService.exportDebtAgingExcel(exportQuery);
-      triggerDownload(res.data as Blob, `debt-aging-${startDate || 'all'}-${endDate || 'all'}.csv`);
+      triggerDownload(res.data as Blob, `debt-aging-${exportDateSlug}.csv`);
     } catch { /* silently ignore */ }
     finally { setExportingExcel(false); }
   };
@@ -277,7 +296,7 @@ const DebtDashboard: React.FC = () => {
       </div>
 
       {/* Header + Period filter */}
-      <div className='flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between'>
+      <div className='relative z-20 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between'>
         <div>
           <Heading level='h1' weight='semibold' className='m-0 text-black'>
             กระดานสรุปยอดหนี้
@@ -286,7 +305,7 @@ const DebtDashboard: React.FC = () => {
             ติดตามความเคลื่อนไหวของยอดหนี้ลูกค้าผ่านแดชบอร์ดเดียว
           </Heading>
         </div>
-        <div className='flex max-w-full items-center overflow-x-auto bg-[#F6F3F2] p-1'>
+        <div className='flex max-w-full items-center overflow-visible bg-[#F6F3F2] p-1'>
           {PERIOD_FILTER.map((f) => (
             <button key={f.value} onClick={() => handlePeriodClick(f.value)}
               className={`w-20 py-2.5 text-sm transition cursor-pointer ${
@@ -328,20 +347,22 @@ const DebtDashboard: React.FC = () => {
         {/* ยอดหนี้ค้างชำระทั้งหมด */}
         <Card className='border-l-[5px] border-l-sky-700 flex flex-col justify-center p-5'>
           <Heading level='h6' className='text-gray-500'>ยอดหนี้ค้างชำระทั้งหมด</Heading>
-          <Heading level='h3'>฿ {kpiVal(fmt(kpi.totalOutstanding))}</Heading>
+          <Heading level='h3'>
+            {currentOutstandingLoading
+              ? <span className='text-gray-400 animate-pulse'>...</span>
+              : `฿ ${fmt(currentOutstanding)}`}
+          </Heading>
           <Heading level='p' className='mt-1 invisible' aria-hidden>.</Heading>
         </Card>
 
-        {/* รายรับจากการเก็บหนี้ (ปีนี้) */}
+        {/* รายรับจากการเก็บหนี้ตามช่วงเวลาที่เลือก */}
         <Card className='border-l-[5px] border-l-emerald-500 flex flex-col justify-center p-5'>
-          <Heading level='h6' className='text-gray-500'>รายรับจากการเก็บหนี้ (ปีนี้)</Heading>
+          <Heading level='h6' className='text-gray-500'>รายรับจากการเก็บหนี้</Heading>
           <Heading level='h3'>
-            {yearlyCollectedLoading
-              ? <span className='text-gray-400 animate-pulse'>...</span>
-              : `฿ ${fmt(yearlyCollected)}`}
+            {kpiVal(`฿ ${fmt(kpi.collectedAmount)}`)}
           </Heading>
           <Heading level='p' className='text-gray-400'>
-            {yearlyCollectedLoading ? '...' : `เป้าหมาย: ฿ ${fmt(yearlyOutstanding)}`}
+            {currentOutstandingLoading ? '...' : `เป้าหมาย: ฿ ${fmt(currentOutstanding)}`}
           </Heading>
         </Card>
 

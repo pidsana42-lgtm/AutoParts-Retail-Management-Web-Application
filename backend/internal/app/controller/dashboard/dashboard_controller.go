@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	dashDto "backend/internal/app/dto/dashboard"
 	dashSvc "backend/internal/app/service/dashboard"
@@ -15,6 +16,14 @@ import (
 
 type DashboardController struct {
 	svc dashSvc.DashboardService
+}
+
+func formatThaiDateForExport(value string) string {
+	parsed, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return value
+	}
+	return fmt.Sprintf("%02d-%02d-%d", parsed.Day(), int(parsed.Month()), parsed.Year()+543)
 }
 
 func writeValidationError(c *gin.Context, err error) {
@@ -239,13 +248,14 @@ func (ctrl *DashboardController) ExportDebtAgingExcel(c *gin.Context) {
 	var buf bytes.Buffer
 	buf.WriteString("\xEF\xBB\xBF") // UTF-8 BOM for Excel
 	w := csv.NewWriter(&buf)
-	_ = w.Write([]string{"รหัสลูกค้า", "ชื่อลูกค้า", "ยอดหนี้ทั้งหมด", "วันที่ซื้อล่าสุด", "อายุหนี้ (วัน)", "สถานะ"})
+	_ = w.Write([]string{"รหัสลูกค้า", "ชื่อลูกค้า", "ยอดหนี้ทั้งหมด", "ยอดหนี้คงเหลือ", "วันที่ซื้อล่าสุด", "อายุหนี้ (วัน)", "สถานะ"})
 	for _, item := range allData {
 		_ = w.Write([]string{
 			item.CustomerCode,
 			item.CustomerName,
 			fmt.Sprintf("%.2f", item.TotalDebt),
-			item.LastPurchaseDate,
+			fmt.Sprintf("%.2f", item.RemainingBalance),
+			formatThaiDateForExport(item.LastPurchaseDate),
 			strconv.Itoa(item.AgeDays),
 			item.Status,
 		})
