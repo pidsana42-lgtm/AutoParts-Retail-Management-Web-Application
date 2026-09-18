@@ -107,16 +107,17 @@ func (s *service) ListEmployees(ownerID uint) (*employeeDTO.EmployeeListResponse
 	employees := make([]employeeDTO.EmployeeResponse, 0, len(users))
 	for _, user := range users {
 		employees = append(employees, employeeDTO.EmployeeResponse{
-			ID:            user.ID,
-			FirstName:     user.FirstName,
-			LastName:      user.LastName,
-			Username:      user.Username,
-			Role:          string(user.Role.RoleName),
-			BankName:      user.Bank.BankName,
-			AccountEnd:    lastFour(user.BankAccountNumber),
-			AccountMasked: maskBankAccount(user.BankAccountNumber),
-			LineConnected: strings.TrimSpace(user.LineUserID) != "",
-			CreatedAt:     user.CreatedAt,
+			ID:               user.ID,
+			FirstName:        user.FirstName,
+			LastName:         user.LastName,
+			Username:         user.Username,
+			Role:             string(user.Role.RoleName),
+			BankName:         user.Bank.BankName,
+			AccountEnd:       lastFour(user.BankAccountNumber),
+			AccountMasked:    maskBankAccount(user.BankAccountNumber),
+			LineConnected:    strings.TrimSpace(user.LineUserID) != "",
+			CreatedAt:        user.CreatedAt,
+			ProfileImagePath: user.ProfileImagePath,
 		})
 	}
 

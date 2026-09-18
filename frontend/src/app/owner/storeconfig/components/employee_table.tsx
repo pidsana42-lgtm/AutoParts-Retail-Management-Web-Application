@@ -3,6 +3,7 @@ import Badge from "../../../../components/elements/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../../components/elements/table";
 import { formatDate } from "../../../../utils/formatdate";
 import type { CreatedEmployee } from "../../../../interface/employee/employee_registration";
+import { resolveAssetUrl } from "../../../../service/http/companysetting/company_service";
 
 interface EmployeeTableProps {
   employees: CreatedEmployee[];
@@ -35,15 +36,19 @@ export default function EmployeeTable({ employees, onView }: EmployeeTableProps)
               }}>
                 <TableCell className="px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center bg-red-50 text-sm font-semibold text-[#B70011]">
-                      {employee.first_name.slice(0, 1).toUpperCase()}
-                    </span>
+                    {employee.profile_image_path ? (
+                      <img src={resolveAssetUrl(employee.profile_image_path)} alt="" className="h-9 w-9 shrink-0 rounded-none object-cover" />
+                    ) : (
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-none bg-red-50 text-sm font-semibold text-[#B70011]">
+                        {employee.first_name.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
                     <p className="truncate font-medium black">{employee.first_name} {employee.last_name}</p>
                   </div>
                 </TableCell>
                 <TableCell className="truncate px-4 py-4 font-medium">{employee.username}</TableCell>
                 <TableCell className="px-4 py-4">
-                  <Badge variant={employee.role === "Manager" ? "primary" : "neutral"} size="auto">
+                  <Badge variant={employee.role === "Manager" ? "primary" : "neutral"} size="auto" className="px-2.5 py-1 text-xs">
                     {employee.role === "Manager" ? "ผู้จัดการ" : "พนักงาน"}
                   </Badge>
                 </TableCell>
@@ -52,7 +57,7 @@ export default function EmployeeTable({ employees, onView }: EmployeeTableProps)
                   <p className="mt-0.5 text-xs tracking-wider text-gray-400">{employee.account_masked || "-"}</p>
                 </TableCell>
                 <TableCell className="px-4 py-4 text-center">
-                  <Badge variant={employee.line_connected ? "success" : "neutral"} size="auto">
+                  <Badge variant={employee.line_connected ? "success" : "neutral"} size="auto" className="px-2.5 py-1 text-xs">
                     {employee.line_connected ? "เชื่อมแล้ว" : "ยังไม่เชื่อม"}
                   </Badge>
                 </TableCell>
@@ -83,11 +88,20 @@ export default function EmployeeTable({ employees, onView }: EmployeeTableProps)
             if (event.key === "Enter" || event.key === " ") onView(employee);
           }} className="cursor-pointer space-y-4 p-5 transition-colors hover:bg-gray-50">
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div className="flex min-w-0 items-center gap-3">
+                {employee.profile_image_path ? (
+                  <img src={resolveAssetUrl(employee.profile_image_path)} alt="" className="h-10 w-10 shrink-0 rounded-none object-cover" />
+                ) : (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-red-50 text-sm font-semibold text-[#B70011]">
+                    {employee.first_name.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+                <div className="min-w-0">
                 <p className="font-medium text-gray-900">{employee.first_name} {employee.last_name}</p>
                 <p className="mt-0.5 text-xs text-gray-500">@{employee.username}</p>
+                </div>
               </div>
-              <Badge variant={employee.role === "Manager" ? "primary" : "success"} size="auto">
+              <Badge variant={employee.role === "Manager" ? "primary" : "success"} size="auto" className="px-2.5 py-1 text-xs">
                 {employee.role === "Manager" ? "ผู้จัดการ" : "พนักงาน"}
               </Badge>
             </div>
