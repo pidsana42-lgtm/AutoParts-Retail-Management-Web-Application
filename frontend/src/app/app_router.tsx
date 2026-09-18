@@ -44,7 +44,6 @@ import EmployeeClaimsPage from './employee/claim/claims';
 import MobileScanPage from './mobile-scan/mobile_scan_page';
 import PublicProductPage from './public-product/public_product_page';
 import SalesCancellationHistory from './employee/pos/sales_cancellation_history';
-import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_history';
 import SettleBills from './employee/transactions/settle_bills';
 import PaymentHistory from './employee/transactions/payment_history';
 import PaymentCancellationHistory from './employee/transactions/payment_cancellation_history';
@@ -205,7 +204,7 @@ export default function AppRouter(): React.JSX.Element {
             <Route path={`${prefix}/pos/pos`} element={isManagerOrOwner ? <Pos /> : <Navigate to={firstMenuPath} replace />} />
             <Route path={`${prefix}/pos/sales_history`} element={isManagerOrOwner ? <SalesHistory /> : <Navigate to={firstMenuPath} replace />} />
             <Route path={`${prefix}/pos/sales_cancellation_history`} element={
-              isManagerOrOwner ? <OwnerSalesCancellationHistory /> : <Navigate to={firstMenuPath} replace />
+              isManagerOrOwner ? <SalesCancellationHistory /> : <Navigate to={firstMenuPath} replace />
             } />
 
             {/* -------- หน้ารายการธุรกรรม / การเงิน -------- */}

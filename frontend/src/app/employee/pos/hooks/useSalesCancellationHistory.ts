@@ -4,15 +4,20 @@ import type {
   SalesHistoryItemResponse,
   SalesHistoryFilterRequest,
 } from "../../../../interface/pos/sales_history_interface";
+import { useUserRole } from "../../../../hooks/useUserRole";
+import { useEmployeeOptions } from "../../../../hooks/useEmployeeOptions";
 
 export const useSalesCancellationHistory = () => {
+  const { isOwnerOrManager } = useUserRole();
+  const { employeeList } = useEmployeeOptions();
+
   // --- Data & Loading States ---
   const [dataList, setDataList] = useState<SalesHistoryItemResponse[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // --- Overall Stats State (เฉพาะคำขอของพนักงานคนนี้) ---
+  // --- Overall Stats State ---
   const [stats, setStats] = useState({
     totalCount: 0,
     totalAmount: 0,
@@ -55,14 +60,14 @@ export const useSalesCancellationHistory = () => {
   const [customerType, setCustomerType] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("");
+  const [employeeId, setEmployeeId] = useState<string>("");
 
   // --- Fetch Data Function ---
   const fetchCancellationHistory = useCallback(async () => {
     try {
-        setIsLoading(true);
-        setError(null);
+      setIsLoading(true);
+      setError(null);
 
-      // ส่งค่าพารามิเตอร์ไปยัง API Service
       const params: SalesHistoryFilterRequest = {
         search: searchQuery,
         start_date: startDate,
@@ -70,29 +75,34 @@ export const useSalesCancellationHistory = () => {
         customer_type: customerType,
         status: status,
         payment_method: paymentMethod,
+        employee_id: isOwnerOrManager ? employeeId : undefined,
         page: page,
         limit: limit,
       };
 
-      // เรียก API สำหรับดึงรายการขอยกเลิกของพนักงานคนนี้โดยตรง
-      const response = await posApiService.getMyCancellationRequests(params);
+      const response = isOwnerOrManager
+        ? await posApiService.getCancellationRequests(params)
+        : await posApiService.getMyCancellationRequests(params);
 
       setDataList(response.items || []);
       setTotalRows(response.total_rows || 0);
       setTotalPages(response.total_pages || 1);
     } catch (err: any) {
-        console.error("Failed to fetch cancellation history:", err);
-        setError(err?.response?.data?.message || "ไม่สามารถโหลดข้อมูลประวัติการยกเลิกได้");
+      console.error("Failed to fetch cancellation history:", err);
+      setError(err?.response?.data?.message || "ไม่สามารถโหลดข้อมูลประวัติการยกเลิกได้");
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
-  }, [searchQuery, startDate, endDate, customerType, status, paymentMethod, page, limit]);
+  }, [searchQuery, startDate, endDate, customerType, status, paymentMethod, employeeId, isOwnerOrManager, page, limit]);
 
-  // --- Fetch Overall Stats (สถิติภาพรวมเฉพาะคำขอของพนักงานคนนี้ ไม่ขึ้นกับตัวกรอง) ---
+  // --- Fetch Overall Stats ---
   const fetchOverallStats = useCallback(async () => {
     try {
       setIsStatsLoading(true);
-      const response = await posApiService.getMyCancellationRequests({ limit: 0 });
+      const response = isOwnerOrManager
+        ? await posApiService.getCancellationRequests({ limit: 0 })
+        : await posApiService.getMyCancellationRequests({ limit: 0 });
+
       const allItems = response.items || [];
 
       let pendingCount = 0, pendingAmount = 0;
@@ -131,13 +141,12 @@ export const useSalesCancellationHistory = () => {
         rejectedAmount,
       });
     } catch (err) {
-      console.error("Failed to fetch employee cancellation stats:", err);
+      console.error("Failed to fetch cancellation stats:", err);
     } finally {
       setIsStatsLoading(false);
     }
-  }, []);
+  }, [isOwnerOrManager]);
 
-  // Effect สำหรับเรียกข้อมูลใหม่เมื่อ Filter/Pagination เปลี่ยน
   useEffect(() => {
     fetchCancellationHistory();
   }, [fetchCancellationHistory]);
@@ -147,17 +156,13 @@ export const useSalesCancellationHistory = () => {
   }, [fetchOverallStats]);
 
   // --- Selection Handlers ---
-
-  // ดึงเฉพาะรายการที่มีสถานะ "PENDING_CANCEL" เพื่อให้สามารถเลือกได้
   const selectableItems = dataList.filter(
     (item) => (item.status || "").toUpperCase() === "PENDING_CANCEL"
   );
 
-  // ตรวจสอบว่าเลือกครบทุกรายการที่สามารถเลือกได้แล้วหรือยัง
   const isSelectAll =
     selectableItems.length > 0 && selectedIds.length === selectableItems.length;
 
-  // เลือก/ยกเลิกเลือกเฉพาะรายการที่มีสถานะ "PENDING_CANCEL" ทั้งหมด
   const handleSelectAll = () => {
     if (isSelectAll) {
       setSelectedIds([]);
@@ -166,7 +171,6 @@ export const useSalesCancellationHistory = () => {
     }
   };
 
-  // เลือกทีละรายการ เช็คสถานะก่อนว่าถูกต้องหรือไม่ (เฉพาะ PENDING_CANCEL)
   const handleSelectRow = (id: number) => {
     const item = dataList.find((x) => x.id === id);
     if (!item) return;
@@ -186,10 +190,73 @@ export const useSalesCancellationHistory = () => {
     fetchCancellationHistory();
   };
 
+  // 1. เจ้าของร้าน: อนุมัติแบบกลุ่ม (Batch Approve)
+  const handleApproveSelected = async () => {
+    if (selectedIds.length === 0) {
+      alert("กรุณาเลือกรายการที่ต้องการอนุมัติอย่างน้อย 1 รายการ");
+      return;
+    }
+
+    if (
+      confirm(
+        `คุณต้องการอนุมัติยกเลิกบิลและคืนสต็อกจำนวน ${selectedIds.length} รายการใช่หรือไม่?`
+      )
+    ) {
+      try {
+        setIsLoading(true);
+        await Promise.all(
+          selectedIds.map((id) =>
+            posApiService.approveCancelSaleOrder(id, { remark: "อนุมัติแบบกลุ่มโดยเจ้าของร้าน" })
+          )
+        );
+
+        alert("อนุมัติยกเลิกบิลสำเร็จ");
+        setSelectedIds([]);
+        fetchCancellationHistory();
+        fetchOverallStats();
+      } catch (err: any) {
+        alert(err?.response?.data?.message || "เกิดข้อผิดพลาดในการอนุมัติยกเลิกบิล");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  // 2. เจ้าของร้าน: ปฏิเสธแบบกลุ่ม (Batch Reject)
+  const handleRejectSelected = async () => {
+    if (selectedIds.length === 0) {
+      alert("กรุณาเลือกรายการที่ต้องการปฏิเสธอย่างน้อย 1 รายการ");
+      return;
+    }
+
+    const remark = prompt("ระบุเหตุผลในการปฏิเสธคำขอ (ถ้ามี):", "ไม่อนุมัติโดยเจ้าของร้าน");
+    if (remark === null) return;
+
+    if (confirm(`คุณต้องการปฏิเสธคำขอยกเลิกจำนวน ${selectedIds.length} รายการใช่หรือไม่?`)) {
+      try {
+        setIsLoading(true);
+        await Promise.all(
+          selectedIds.map((id) =>
+            posApiService.rejectCancelSaleOrder(id, { remark })
+          )
+        );
+
+        alert("ปฏิเสธคำขอยกเลิกบิลสำเร็จ");
+        setSelectedIds([]);
+        fetchCancellationHistory();
+        fetchOverallStats();
+      } catch (err: any) {
+        alert(err?.response?.data?.message || "เกิดข้อผิดพลาดในการปฏิเสธคำขอยกเลิกบิล");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  // 3. พนักงาน: กู้คืนคำขอยกเลิกบิลที่เลือก (Revert Request)
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState<boolean>(false);
   const [isRestoring, setIsRestoring] = useState<boolean>(false);
 
-  // function สำหรับเปิด Modal กู้คืนคำขอยกเลิกบิลที่เลือก
   const handleRestoreSelected = () => {
     if (selectedIds.length === 0) {
       alert("กรุณาเลือกรายการที่ต้องการกู้คืนอย่างน้อย 1 รายการ");
@@ -198,12 +265,10 @@ export const useSalesCancellationHistory = () => {
     setIsRestoreModalOpen(true);
   };
 
-  // function สำหรับกู้คืนคำขอยกเลิกบิลที่เลือก ยิง API ไป revertCancellationRequest
   const handleConfirmRestore = async () => {
     try {
       setIsRestoring(true);
       setIsLoading(true);
-      // ยิง API กู้คืนคำขอทีละรายการ
       await Promise.all(
         selectedIds.map((id) => posApiService.revertCancellationRequest(id))
       );
@@ -237,12 +302,17 @@ export const useSalesCancellationHistory = () => {
     isRestoring,
     error,
 
-    // Restore Modal / Confirm Dialog
+    // Employee Restore Modal
     isRestoreModalOpen,
     setIsRestoreModalOpen,
     isRestoreConfirmOpen: isRestoreModalOpen,
     setIsRestoreConfirmOpen: setIsRestoreModalOpen,
+    handleRestoreSelected,
     handleConfirmRestore,
+
+    // Owner Batch Actions
+    handleApproveSelected,
+    handleRejectSelected,
 
     // Overall Stats
     stats,
@@ -264,6 +334,9 @@ export const useSalesCancellationHistory = () => {
     customerType,
     status,
     paymentMethod,
+    employeeId,
+    employeeList,
+    setEmployeeId,
     setSearchQuery,
     setStartDate,
     setEndDate,
@@ -271,11 +344,10 @@ export const useSalesCancellationHistory = () => {
     setStatus,
     setPaymentMethod,
 
-    // Handlers
+    // Common Handlers
     handleSelectAll,
     handleSelectRow,
     handleSearch,
-    handleRestoreSelected,
     refetch,
   };
 };
