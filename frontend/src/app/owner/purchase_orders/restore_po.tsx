@@ -239,7 +239,7 @@ const DeletedPoHistory: React.FC = () => {
                 return (
                   <TableRow
                     key={po.id}
-                    className={cn("hover:bg-gray-50/70", isSelected && "bg-red-50/40")}
+                    className={cn("hover:bg-gray-50/70", isSelected && "bg-white")}
                   >
                     <TableCell className="pl-6">
                       {isDeletedRow && (
