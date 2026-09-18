@@ -8,6 +8,7 @@ import Button from "../../../components/elements/button";
 import Select from "../../../components/elements/select";
 import Badge from "../../../components/elements/badge";
 import ConfirmDialog from "../../../components/elements/confirm_dialog";
+import { useToast } from "../../../components/elements/toast";
 import {
   Eye,
   RotateCcw,
@@ -38,6 +39,7 @@ import { posApiService } from "../../../service/http/pos/pos_service";
 import { autoPrintPdfBlob } from "../../../utils/payment_history_print";
 
 const SalesCancellationHistory: React.FC = () => {
+    const { toast } = useToast();
     const navigate = useNavigate();
     const { isOwnerOrManager } = useUserRole();
 
@@ -83,7 +85,7 @@ const SalesCancellationHistory: React.FC = () => {
     const kpiValue = (value: React.ReactNode) =>
         isStatsLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
 
-    // 2. ดึงเฉพาะ Drawer State และ Action Handlers จาก useSalesHistory
+    // 2. ดึงข้อมูลคำสั่งจัดการบิลจาก useSalesHistory (ใช้สำหรับ Drawer ด้านข้าง)
     const {
         selectedOrderId,
         setSelectedOrderId,
@@ -112,7 +114,7 @@ const SalesCancellationHistory: React.FC = () => {
             autoPrintPdfBlob(blob, fileName);
         } catch (err) {
             console.error("Failed to print receipt:", err);
-            alert("ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง");
+            toast({ variant: "error", message: "ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง" });
         } finally {
             setPrintingOrderId(null);
         }

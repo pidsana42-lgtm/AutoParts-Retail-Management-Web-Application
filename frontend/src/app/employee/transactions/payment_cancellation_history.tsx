@@ -7,6 +7,7 @@ import Button from "../../../components/elements/button";
 import Select from "../../../components/elements/select";
 import Badge from "../../../components/elements/badge";
 import ConfirmDialog from "../../../components/elements/confirm_dialog";
+import { useToast } from "../../../components/elements/toast";
 import {
   Eye,
   ScanBarcode,
@@ -38,6 +39,7 @@ import { posApiService } from "../../../service/http/pos/pos_service";
 import { autoPrintPdfBlob } from "../../../utils/payment_history_print";
 
 const PaymentCancellationHistory: React.FC = () => {
+  const { toast } = useToast();
   const { isOwnerOrManager } = useUserRole();
   const { employeeList } = useEmployeeOptions();
   const {
@@ -103,7 +105,7 @@ const PaymentCancellationHistory: React.FC = () => {
       autoPrintPdfBlob(blob, fileName);
     } catch (err) {
       console.error("Failed to print receipt:", err);
-      alert("ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง");
+      toast({ variant: "error", message: "ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง" });
     } finally {
       setPrintingReceiptId(null);
     }

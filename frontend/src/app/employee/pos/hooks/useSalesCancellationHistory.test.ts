@@ -3,17 +3,36 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSalesCancellationHistory } from "./useSalesCancellationHistory";
 import { posApiService } from "../../../../service/http/pos/pos_service";
 
+const mockToast = vi.fn();
+vi.mock("../../../../components/elements/toast", () => ({
+  useToast: () => ({ toast: mockToast, dismiss: vi.fn(), dismissAll: vi.fn() }),
+}));
+
+vi.mock("../../../../components/elements/alert_dialog", () => ({
+  useAlertDialog: () => ({ confirmDialog: vi.fn(), alertDialog: vi.fn() }),
+}));
+
+vi.mock("../../../../hooks/useEmployeeOptions", () => ({
+  useEmployeeOptions: () => ({ employeeList: [] }),
+}));
+
+vi.mock("../../../../hooks/useUserRole", () => ({
+  useUserRole: () => ({ isOwnerOrManager: false, isOwnerOrAdmin: false }),
+}));
+
 vi.mock("../../../../service/http/pos/pos_service", () => ({
   posApiService: {
     getMyCancellationRequests: vi.fn(),
     revertCancellationRequest: vi.fn(),
+    approveCancelSaleOrder: vi.fn(),
+    rejectCancelSaleOrder: vi.fn(),
   },
 }));
 
 describe("useSalesCancellationHistory - Restore Modal Flow", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    window.alert = vi.fn();
+    mockToast.mockClear();
     (posApiService.getMyCancellationRequests as any).mockResolvedValue({
       items: [
         { id: 101, status: "PENDING_CANCEL", total_amount: 500 },
@@ -39,9 +58,10 @@ describe("useSalesCancellationHistory - Restore Modal Flow", () => {
       result.current.handleRestoreSelected();
     });
 
-    expect(window.alert).toHaveBeenCalledWith(
-      "กรุณาเลือกรายการที่ต้องการกู้คืนอย่างน้อย 1 รายการ"
-    );
+    expect(mockToast).toHaveBeenCalledWith({
+      variant: "warning",
+      message: "กรุณาเลือกรายการที่ต้องการกู้คืนอย่างน้อย 1 รายการ",
+    });
     expect(result.current.isRestoreModalOpen).toBe(false);
   });
 
@@ -87,7 +107,10 @@ describe("useSalesCancellationHistory - Restore Modal Flow", () => {
 
     expect(posApiService.revertCancellationRequest).toHaveBeenCalledWith(101);
     expect(posApiService.revertCancellationRequest).toHaveBeenCalledWith(102);
-    expect(window.alert).toHaveBeenCalledWith("ดึงคำขอยกเลิกบิลกลับสำเร็จ");
+    expect(mockToast).toHaveBeenCalledWith({
+      variant: "success",
+      message: "ดึงคำขอยกเลิกบิลกลับสำเร็จ",
+    });
     expect(result.current.selectedIds).toEqual([]);
     expect(result.current.isRestoreModalOpen).toBe(false);
     expect(result.current.isRestoring).toBe(false);
@@ -113,7 +136,10 @@ describe("useSalesCancellationHistory - Restore Modal Flow", () => {
       await result.current.handleConfirmRestore();
     });
 
-    expect(window.alert).toHaveBeenCalledWith("Failed to revert");
+    expect(mockToast).toHaveBeenCalledWith({
+      variant: "error",
+      message: "Failed to revert",
+    });
     expect(result.current.isRestoring).toBe(false);
   });
 });
