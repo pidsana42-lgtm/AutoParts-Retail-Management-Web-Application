@@ -10,7 +10,6 @@ import ConfirmDialog from "../../../components/elements/confirm_dialog";
 import { useToast } from "../../../components/elements/toast";
 import {
   Eye,
-  ScanBarcode,
   X,
   RotateCcw,
   Printer,
@@ -37,6 +36,7 @@ import { useEmployeeOptions } from "../../../hooks/useEmployeeOptions";
 import type { PaymentHistoryItem } from "../../../interface/pos/payment_interface";
 import { posApiService } from "../../../service/http/pos/pos_service";
 import { autoPrintPdfBlob } from "../../../utils/payment_history_print";
+import OrderCustomerSearchInput from "../pos/components/order_customer_search_input";
 
 const PaymentCancellationHistory: React.FC = () => {
   const { toast } = useToast();
@@ -114,6 +114,27 @@ const PaymentCancellationHistory: React.FC = () => {
   const kpiValue = (value: React.ReactNode) =>
     isStatsLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
 
+  const fetchCancellationPaymentSuggestions = React.useCallback(async (q: string) => {
+    try {
+      const res = await posApiService.getPaymentHistory({ search: q });
+      const filtered = (res || []).filter((item) => {
+        const itemStatus = (item.status || "").toLowerCase();
+        const hasRemark = Boolean(item.cancel_remark && item.cancel_remark.trim() !== "");
+        return itemStatus === "pending_cancel" || itemStatus === "cancelled" || hasRemark;
+      });
+      return filtered.slice(0, 6).map((item) => ({
+        id: Number(item.receipt_id) || 0,
+        order_number: item.receipt_number || item.order_numbers || String(item.receipt_id),
+        customer_name: item.customer_name || (item as any).customer_name_temp || "ลูกค้าทั่วไป",
+        total_amount: Number(item.total_received) || 0,
+        status: item.status,
+        order_date: item.paid_at,
+      }));
+    } catch {
+      return [];
+    }
+  }, []);
+
   return (
     <div className="relative flex min-h-screen bg-white text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
@@ -135,7 +156,7 @@ const PaymentCancellationHistory: React.FC = () => {
           </div>
 
           {/* Filter Bar */}
-          <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
+          <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23]">
             <CardContent className="p-6 md:p-8">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 {/* 1. ค้นหาเลขที่ใบเสร็จ/บิล/ลูกค้า (ปรับ col-span ตาม role) */}
@@ -143,16 +164,24 @@ const PaymentCancellationHistory: React.FC = () => {
                   <label className="text-xs font-normal text-[#5F5E5E]">
                     ค้นหาเลขที่ใบเสร็จ / บิล / ลูกค้า
                   </label>
-                  <div className="relative flex-1">
-                    <ScanBarcode className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={18} />
-                    <Input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="PAY-XXX / RE-XXX หรือชื่อลูกค้า"
-                      autoFocus
-                      className="w-full h-11 bg-white border border-gray-200 rounded-none pl-12 pr-4 text-sm text-[#1C1B1B] font-light focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 shadow-sm transition-all placeholder:text-[#6B7280]"
-                    />
-                  </div>
+                  <OrderCustomerSearchInput
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    onSelectCustomer={(customerName) => {
+                      setSearchQuery(customerName);
+                      handleSearch();
+                    }}
+                    onSelectOrder={(orderNumber) => {
+                      setSearchQuery(orderNumber);
+                      handleSearch();
+                    }}
+                    onSubmit={handleSearch}
+                    fetchOrders={fetchCancellationPaymentSuggestions}
+                    placeholder="PAY-XXX / RE-XXX หรือชื่อลูกค้า"
+                    orderSectionTitle="รายการคำขอยกเลิกใบเสร็จ (คลิกเพื่อค้นหาด้วยเลขที่นี้)"
+                    inputClassName="h-11"
+                    autoFocus
+                  />
                 </div>
 
                 {/* 2. ผู้ขอยกเลิก / ผู้ทำรายการ (เฉพาะ Owner/Manager: 2 cols) */}

@@ -126,19 +126,31 @@ export default function SettleBillsPage(): React.JSX.Element {
               <Heading level="h3" weight="normal" className="text-2xl text-zinc-800 mb-0">
                 เลือกแล้ว {selectedBillIds.length} บิล
               </Heading>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => setSelectedBillIds([])}
-                disabled={selectedBillIds.length === 0}
-                className={`text-xs font-normal px-3 py-1.5 border cursor-pointer transition-all duration-200 ${
-                  selectedBillIds.length === 0
-                    ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed select-none"
-                    : "bg-[#E51C23] text-white border-[#E51C23] hover:bg-[#C62828] active:bg-[#B71C1C] shadow-sm"
-                }`}
-              >
-                ล้างการเลือก
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setSelectedBillIds([])}
+                  disabled={selectedBillIds.length === 0}
+                  className={`text-xs font-normal px-3 py-1.5 border cursor-pointer transition-all duration-200 ${
+                    selectedBillIds.length === 0
+                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed select-none"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50 active:bg-gray-100 shadow-sm"
+                  }`}
+                >
+                  ล้างการเลือก
+                </Button>
+                {(customerId || bills.length > 0 || singleBillMode) && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleClearCustomer}
+                    className="text-xs font-normal px-3 py-1.5 border cursor-pointer transition-all duration-200 bg-[#E51C23] text-white border-[#E51C23] hover:bg-[#C62828] active:bg-[#B71C1C] shadow-sm"
+                  >
+                    ล้างข้อมูลทั้งหมด
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -272,14 +284,24 @@ export default function SettleBillsPage(): React.JSX.Element {
                  <Text variant="xs" className="text-[#6B7280]">โหมดชำระเฉพาะบิล:</Text>
                 <Text variant="xs" className="text-[#1C1B1B] font-normal">{bills[0]?.order_number}</Text> ของลูกค้า <Text variant="xs" className="text-[#1C1B1B] font-normal">{customerName || "—"}</Text>
               </div>
-              {customerId && (
+              <div className="flex items-center gap-3">
+                {customerId && (
+                  <button
+                    type="button"
+                    onClick={handleViewAllBillsOfCustomer}
+                    className="text-xs text-[#6B7280] hover:text-[#E51C23] transition-colors cursor-pointer"
+                  >
+                    <RefreshCw size={14} className="inline-block mr-1" />แสดงบิลค้างชำระทั้งหมดของลูกค้ารายนี้
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={handleViewAllBillsOfCustomer}
-                  className="text-xs text-[#6B7280] hover:text-[#E51C23] transition-colors cursor-pointer"                >
-                  <RefreshCw size={14} className="inline-block mr-1" />แสดงบิลค้างชำระทั้งหมดของลูกค้ารายนี้
+                  onClick={handleClearCustomer}
+                  className="text-xs text-[#6B7280] hover:text-[#E51C23] transition-colors cursor-pointer"
+                >
+                  ✕ ยกเลิก/ค้นหาใหม่
                 </button>
-              )}
+              </div>
             </div>
           )}
 
