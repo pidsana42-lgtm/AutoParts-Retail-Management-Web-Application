@@ -8,12 +8,11 @@ import {
   CreditCard,
   Printer,
   RotateCcw,
-  Loader2,
   RefreshCw,
 } from "lucide-react";
+import { CashPaymentPad, PromptPayQRPanel } from "../../../components/pos";
 import Text from "../../../components/elements/text";
 import Heading from "../../../components/elements/heading";
-import Input from "../../../components/elements/input";
 import Button from "../../../components/elements/button";
 import Badge from "../../../components/elements/badge";
 import { formatDate } from "../../../utils/date";
@@ -701,213 +700,55 @@ export default function SettleBillsPage(): React.JSX.Element {
 
                 {/* ---------------- 1. เงินสด ---------------- */}
                 {paymentMethodId === 1 && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="border-l-3 border-[#E51C23] p-4 bg-[#F0EDEC]">
-                        <Text variant="xs" className="text-[#5F5E5E] mb-0">ยอดชำระสุทธิงวดนี้</Text>
-                        <div className="flex justify-between items-baseline mt-2">
-                          <Text variant="fourxl">{totalPayAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-                          <Text variant="xs" className="text-[#1C1B1B] mb-0">บาท</Text>
-                        </div>
-                      </div>
-                      <div className="border-l-3 border-[#006E0A] p-4 bg-[#86F976]/20">
-                        <Text variant="xs" className="text-[#259B24] mb-0">ยอดเงินทอน</Text>
-                        <div className="flex justify-between items-baseline mt-2">
-                          <Text variant="fourxl" className={`text-[#259B24] truncate ${Math.max(0, receivedAmount - totalPayAmount) > 999999 ? "text-2xl" : "text-4xl"}`}>
-                            {Math.max(0, receivedAmount - totalPayAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </Text>
-                          <Text variant="xs" className="text-[#259B24] mb-0">บาท</Text>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ส่วนรับเงินมา */}
-                    <div className="flex flex-col gap-1.5">
-                      <Text variant="small" className="text-[#1C1B1B] font-medium mb-0">รับเงินมา</Text>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex items-baseline justify-between w-full px-4 py-4 bg-white border-b-2 border-[#E7BDB8]">
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            className="w-full text-4xl text-[#1C1B1B] font-semibold bg-transparent border-none focus:outline-none [appearance:textfield]"
-                            value={displayValue || ""}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value.replace(/,/g, "")) || 0;
-                              setReceivedAmount(val);
-                              setDisplayValue(e.target.value);
-                            }}
-                            onBlur={() => {
-                              const formatted = receivedAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                              setDisplayValue(formatted);
-                            }}
-                            placeholder="0.00"
-                          />
-                          <Text variant="xs" className="text-[#1C1B1B] ml-2 font-medium mb-0">บาท</Text>
-                        </div>
-                        <div className="flex items-center justify-between w-full px-4 py-6 border-b border-[#E7BDB8]"></div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        {/* ปุ่มเพิ่มเงินด่วน */}
-                        <div className="grid grid-cols-3 gap-2 mt-4">
-                          {[10, 20, 50, 100, 500, 1000].map((amount) => (
-                            <button
-                              key={amount}
-                              type="button"
-                              onClick={() => {
-                                const newTotal = receivedAmount + amount;
-                                setReceivedAmount(newTotal);
-                                setDisplayValue(newTotal.toFixed(2));
-                              }}
-                              className="flex items-center justify-center px-2 py-4 bg-[#E5E2E1] rounded-none text-xs font-medium text-[#1C1B1B] hover:bg-[#D9D9D9] transition-all truncate"
-                            >
-                              {amount} บาท
-                            </button>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setReceivedAmount(totalPayAmount);
-                              setDisplayValue(totalPayAmount.toFixed(2));
-                            }}
-                            className="col-span-3 py-2 bg-[#1C1B1B] text-white hover:bg-zinc-900 text-xs font-normal rounded-none transition-colors cursor-pointer"
-                          >
-                            จ่ายพอดี (฿{totalPayAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })})
-                          </button>
-                        </div>
-
-                        {/* รายละเอียดวันที่ / เวลา / ผู้ดำเนินการ */}
-                        <div className="mt-4 space-y-1">
-                          <div className="flex justify-between items-center">
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">วันที่</Text>
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{currentDateStr}</Text>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">เวลา</Text>
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">{formatTime}</Text>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">ผู้ดำเนินการ</Text>
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">{currentStaff}</Text>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <CashPaymentPad
+                    finalTotal={totalPayAmount}
+                    receivedAmount={receivedAmount}
+                    displayValue={displayValue}
+                    onReceivedAmountChange={(val) => {
+                      const num = parseFloat(val.replace(/,/g, "")) || 0;
+                      setReceivedAmount(num);
+                      setDisplayValue(val);
+                    }}
+                    onAddAmount={(amount) => {
+                      const newTotal = receivedAmount + amount;
+                      setReceivedAmount(newTotal);
+                      setDisplayValue(newTotal.toFixed(2));
+                    }}
+                    onExactPayment={() => {
+                      setReceivedAmount(totalPayAmount);
+                      setDisplayValue(totalPayAmount.toFixed(2));
+                    }}
+                    onBlur={() => {
+                      const formatted = receivedAmount.toLocaleString("en-US", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      });
+                      setDisplayValue(formatted);
+                    }}
+                    netTotalTitle="ยอดชำระสุทธิงวดนี้"
+                    meta={{
+                      date: currentDateStr,
+                      time: formatTime,
+                      staff: currentStaff,
+                    }}
+                  />
                 )}
 
                 {/* ---------------- 2. QR CODE (PromptPay Real Gen) ---------------- */}
                 {paymentMethodId === 2 && (
-                  <div className="bg-white p-6 border border-[#E7BDB8]/50">
-                    <div className="grid grid-cols-2 gap-4">
-                      {/* ฝั่งซ้าย (ปรับสไตล์ให้เหมือนตัวอย่างที่สมดุล) */}
-                      <div className="flex flex-col items-center justify-between h-full">
-                        {/* กรอบรูป QR Code */}
-                        <div className="relative w-52 h-52 flex items-center justify-center">
-                          {isLoadingQR ? (
-                            <div className="flex flex-col items-center justify-center space-y-2">
-                              <Loader2 size={36} className="animate-spin text-[#E51C23]" />
-                              <span className="text-xs text-gray-500">กำลังสร้าง QR Code...</span>
-                            </div>
-                          ) : qrCodeData?.qrCode ? (
-                            <img
-                              src={qrCodeData.qrCode}
-                              alt="PromptPay QR Code"
-                              className="w-full h-full object-contain"
-                            />
-                          ) : (
-                            <div className="flex flex-col items-center justify-center text-center p-2">
-                              <QrCode size={48} className="text-gray-400 mb-2" />
-                              <button
-                                type="button"
-                                onClick={() => generateSettleQR(totalPayAmount)}
-                                className="flex items-center gap-1 text-xs text-[#E51C23] hover:underline cursor-pointer"
-                              >
-                                <RefreshCw size={12} />
-                                <span>สร้าง QR Code ใหม่อีกครั้ง</span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* ข้อความใต้ QR Code (ปรับโครงสร้างและสไตล์ให้เหมือนตัวอย่าง) */}
-                        <div className="flex-1 flex flex-col items-center justify-end text-center space-y-2.5 w-full max-w-[220px] pt-3">
-                          {/* ชื่อพร้อมเพย์ / ร้านค้า */}
-                          <div className="space-y-1">
-                            <Text variant="xs" className="font-medium text-[#1C1B1B] truncate block">
-                              {qrCodeData?.promptPayName || "เจเจ อะไหล่ยนต์"}
-                            </Text>
-                            <Text variant="xs" className="text-[#6B7280] leading-tight block">
-                              พร้อมเพย์ชำระยอดหนี้
-                            </Text>
-                          </div>
-
-                          {/* ข้อมูลบัญชีธนาคารประกอบ */}
-                          {qrCodeData?.bankAccountNumber && (
-                            <div className="w-full pt-2.5 border-t border-gray-100 space-y-1">
-                              <Text variant="xs" className="font-medium text-[#1C1B1B] truncate block">
-                                {qrCodeData.bankName || "บัญชีธนาคาร"}
-                              </Text>
-                                <Text variant="xs" className="text-[#6B7280] truncate block">
-                                  {qrCodeData.bankAccountNumber}
-                                </Text>
-                              {qrCodeData.bankAccountName && (
-                                <Text variant="xs" className="text-[#6B7280] truncate block">
-                                  {qrCodeData.bankAccountName}
-                                </Text>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Ref No. ด้านล่างสุด */}
-                          {qrCodeData?.refNo && (
-                            <div className="pt-2.5 w-full border-t border-dashed border-gray-100">
-                              <Text variant="xs" className="font-light text-gray-400 block truncate">
-                                Ref: {qrCodeData.refNo}
-                              </Text>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* ฝั่งขวา (คงโครงสร้างเดิมที่ถูกต้องไว้) */}
-                      <div className="flex flex-col justify-between h-full">
-                        {/* 1. กล่องยอดชำระสุทธิ (ขอบล่างตรงกับกรอบ QR Code) */}
-                        <div className="h-52 flex flex-col justify-end pb-5">
-                          <div className="border-l-3 border-[#E51C23] p-4 bg-[#F0EDEC]">
-                            <Text variant="xs" className="text-[#5F5E5E] mb-0">ยอดชำระสุทธิงวดนี้</Text>
-                            <div className="flex justify-between items-baseline mt-2">
-                              <Text variant="fourxl">
-                                {totalPayAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </Text>
-                              <Text variant="xs" className="text-[#1C1B1B] mb-0">บาท</Text>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 2. เส้นคั่น + รายละเอียด */}
-                        <div className="flex-1 flex flex-col justify-end pt-3">
-                          <div className="space-y-2 w-full">
-                            <div className="border-b border-[#E7BDB8]"></div>
-                            <div>
-                              <div className="flex justify-between items-center">
-                                <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">วันที่</Text>
-                                <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">{currentDateStr}</Text>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">เวลา</Text>
-                                <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">{formatTime}</Text>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">ผู้ดำเนินการ</Text>
-                                <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">{currentStaff}</Text>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <PromptPayQRPanel
+                    finalTotal={totalPayAmount}
+                    qrCodeData={qrCodeData}
+                    isLoading={isLoadingQR}
+                    onRetry={() => generateSettleQR(totalPayAmount)}
+                    netTotalTitle="ยอดชำระสุทธิงวดนี้"
+                    subtitle="พร้อมเพย์ชำระยอดหนี้"
+                    meta={{
+                      date: currentDateStr,
+                      time: formatTime,
+                      staff: currentStaff,
+                    }}
+                  />
                 )}
               </div>
         </ConfirmModal>

@@ -9,10 +9,6 @@ import Badge from "../../../components/elements/badge";
 import ConfirmDialog from "../../../components/elements/confirm_dialog";
 import {
   Eye,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   ScanBarcode,
   X,
   RotateCcw,
@@ -27,10 +23,10 @@ import {
   TableCell,
 } from "../../../components/elements/table";
 import { cn } from "../../../utils/component";
+import { TablePagination } from "../../../components/pos";
 import {
   formatDate,
   formatCurrency,
-  getPageNumbers,
   getPaymentVariant,
 } from "../../../utils/poshelpers";
 import { SalesCancellationStatusBadge } from "../../../components/elements/status_badge";
@@ -576,90 +572,16 @@ const PaymentCancellationHistory: React.FC = () => {
             </div>
 
             {/* Pagination Controls */}
-            {!isLoading && !error && totalRows > 0 && (
-              <div className="bg-[#FCFBFA] px-6 py-4 border-t border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
-                <div className="flex items-center gap-4">
-                  <Text variant="xs" className="text-[#5F5E5E] mb-0">
-                    แสดงรายการที่ {Math.min((page - 1) * limit + 1, totalRows)}-
-                    {Math.min(page * limit, totalRows)} จากทั้งหมด {totalRows} รายการ
-                  </Text>
-
-                  <div className="flex items-center gap-2">
-                    <Text variant="xs" className="text-[#5F5E5E] mb-0">รายการต่อหน้า:</Text>
-                    <select
-                      value={limit}
-                      onChange={(e) => {
-                        setLimit(Number(e.target.value));
-                        setPage(1);
-                      }}
-                      className="border border-gray-200 rounded-none px-2 py-1 text-gray-700 bg-white cursor-pointer"
-                    >
-                      <option value={5}>5</option>
-                      <option value={10}>10</option>
-                      <option value={20}>20</option>
-                      <option value={50}>50</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={page === 1}
-                    onClick={() => setPage(1)}
-                    className="p-1.5 border border-gray-200 bg-white text-gray-500 disabled:opacity-30 cursor-pointer"
-                  >
-                    <ChevronsLeft className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={page === 1}
-                    onClick={() => setPage(Math.max(1, page - 1))}
-                    className="p-1.5 border border-gray-200 bg-white text-gray-500 disabled:opacity-30 cursor-pointer"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-
-                  {getPageNumbers(page, totalPages).map((p, idx) =>
-                    p === "..." ? (
-                      <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">...</span>
-                    ) : (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setPage(Number(p))}
-                        className={cn(
-                          "px-3 py-1.5 font-medium text-xs cursor-pointer border",
-                          page === p
-                            ? "bg-[#E51C23] text-white border-[#E51C23]"
-                            : "bg-white text-gray-700 border-gray-200"
-                        )}
-                      >
-                        {p}
-                      </button>
-                    )
-                  )}
-
-                  <button
-                    type="button"
-                    disabled={page === totalPages}
-                    onClick={() => setPage(Math.min(totalPages, page + 1))}
-                    className="p-1.5 border border-gray-200 bg-white text-gray-500 disabled:opacity-30 cursor-pointer"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={page === totalPages}
-                    onClick={() => setPage(totalPages)}
-                    className="p-1.5 border border-gray-200 bg-white text-gray-500 disabled:opacity-30 cursor-pointer"
-                  >
-                    <ChevronsRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+            {!isLoading && !error && (
+              <TablePagination
+                page={page}
+                totalPages={totalPages}
+                totalRows={totalRows}
+                limit={limit}
+                onPageChange={setPage}
+                onLimitChange={setLimit}
+                unitLabel="รายการ"
+              />
             )}
           </Card>
         </main>

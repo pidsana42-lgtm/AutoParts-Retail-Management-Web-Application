@@ -1,10 +1,7 @@
 import React, { useState } from "react";
 import {
   Eye,
-  ChevronLeft,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   ScanBarcode,
   Printer,
   X,
@@ -32,9 +29,10 @@ import { Card, CardContent } from "../../../components/elements/card";
 import { cn } from "../../../utils/component";
 
 // Hooks & Helpers
+import { TablePagination } from "../../../components/pos";
 import { usePaymentHistory } from "./hooks/usePaymentHistory";
 import type { PaymentHistoryItem } from "../../../interface/pos/payment_interface";
-import { getDisplayCustomerName, getPageNumbers, getPaymentVariant } from "../../../utils/poshelpers";
+import { getDisplayCustomerName, getPaymentVariant } from "../../../utils/poshelpers";
 import { PaymentTypeBadge, PaymentStatusBadge } from "../../../components/elements/status_badge";
 import { formatDate } from "../../../utils/date";
 import { useUserRole } from "../../../hooks/useUserRole";
@@ -626,99 +624,16 @@ export default function PaymentHistoryPage() {
             </Table>
 
             {/* Pagination Controls */}
-            {!isLoading && !error && totalRows > 0 && (
-              <div className="bg-[#FCFBFA] px-6 py-4 border-t border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
-                <div className="flex items-center gap-4">
-                  <Text variant="xs" className="text-[#5F5E5E] mb-0">
-                    แสดง {Math.min((page - 1) * limit + 1, totalRows)} ถึง{" "}
-                    {Math.min(page * limit, totalRows)} จาก {totalRows} รายการ
-                  </Text>
-
-                  <div className="flex items-center gap-2">
-                    <Text variant="xs" className="text-[#5F5E5E] mb-0">
-                      รายการต่อหน้า:
-                    </Text>
-                    <select
-                      value={limit}
-                      onChange={(e) => {
-                        setLimit(Number(e.target.value));
-                        setPage(1);
-                      }}
-                      className="border border-gray-200 rounded-none px-2 py-1 text-gray-700 bg-white hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300 cursor-pointer"
-                    >
-                      <option value={5}>5</option>
-                      <option value={10}>10</option>
-                      <option value={20}>20</option>
-                      <option value={50}>50</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={page === 1}
-                    onClick={() => setPage(1)}
-                    aria-label="หน้าแรก"
-                    className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronsLeft className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={page === 1}
-                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                    aria-label="หน้าก่อนหน้า"
-                    className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-
-                  {getPageNumbers(page, totalPages).map((p, idx) =>
-                    p === "..." ? (
-                      <span key={`ellipsis-${idx}`} className="px-2 text-gray-400 select-none">
-                        ...
-                      </span>
-                    ) : (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setPage(Number(p))}
-                        aria-current={page === p ? "page" : undefined}
-                        className={cn(
-                          "px-3 py-1.5 rounded-none font-medium text-xs transition-colors cursor-pointer",
-                          page === p
-                            ? "bg-[#E51C23] text-white"
-                            : "text-gray-600 hover:bg-gray-100 border border-transparent"
-                        )}
-                      >
-                        {p}
-                      </button>
-                    )
-                  )}
-
-                  <button
-                    type="button"
-                    disabled={page === totalPages}
-                    onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                    aria-label="หน้าถัดไป"
-                    className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={page === totalPages}
-                    onClick={() => setPage(totalPages)}
-                    aria-label="หน้าสุดท้าย"
-                    className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronsRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+            {!isLoading && !error && (
+              <TablePagination
+                page={page}
+                totalPages={totalPages}
+                totalRows={totalRows}
+                limit={limit}
+                onPageChange={setPage}
+                onLimitChange={setLimit}
+                unitLabel="รายการ"
+              />
             )}
           </Card>
         </main>
