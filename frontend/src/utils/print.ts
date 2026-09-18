@@ -147,7 +147,7 @@ export async function exportDebtAgingPdf(
       <td>${escapeHtml(r.customer_name)}</td>
       <td class="num">฿${r.total_debt.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
       <td class="num debt">฿${r.remaining_balance.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
-      <td class="center">${escapeHtml(formatDateThai(r.last_purchase_date))}</td>
+      <td class="center">${escapeHtml(formatDateThai(r.last_purchase_date, '-'))}</td>
       <td class="center">${escapeHtml(r.age_days)}</td>
       <td class="${r.status === 'เกินกำหนด' ? 'badge-red' : r.status === 'ชำระหมดแล้ว' ? 'badge-gray' : 'badge-green'}">${escapeHtml(r.status)}</td>
     </tr>`).join('');

@@ -446,14 +446,14 @@ const MainDashboard: React.FC = () => {
       </div>
 
       { /* Page Header */ }
-      <div className='flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between'>
+      <div className='relative z-20 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between'>
         <div className='flex flex-col items-start justify-start'>
           <Heading level='h1' weight='semibold' className='m-0 text-black'>
             กระดานแดชบอร์ด
           </Heading>
           <Heading level='h6' className='m-0 mt-1'>ตัวชี้วัดประสิทธิภาพการดำเนินงานแบบเรียลไทม์</Heading>
         </div>
-        <div className='flex max-w-full items-center overflow-x-auto bg-[#F6F3F2] p-1'>
+        <div className='flex max-w-full items-center overflow-visible bg-[#F6F3F2] p-1'>
           {Filter.map((filter) => (
             <button key={filter.value} onClick={() => handleFilterClick(filter.value)}
               className={`w-20 py-2.5 text-sm transition cursor-pointer ${selectedFilter === filter.value

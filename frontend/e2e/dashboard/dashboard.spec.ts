@@ -33,10 +33,14 @@ type DashboardRequestLog = {
 async function mockDashboardApis(page: Page, requests: DashboardRequestLog) {
   await page.route('**/api/dashboard/summary*', async route => {
     requests.summaryUrls.push(route.request().url());
+    const url = new URL(route.request().url());
+    const responseItem = url.searchParams.get('monthly_summary') === '1'
+      ? { ...summaryItem, collected_debt_amount: 2_400 }
+      : summaryItem;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ summary_data: [summaryItem], total: 1 }),
+      body: JSON.stringify({ summary_data: [responseItem], total: 1 }),
     });
   });
 
@@ -245,6 +249,11 @@ test.describe('Dashboard', () => {
     await expect(authenticatedPage.getByText('CUS-E2E-001')).toBeVisible();
     await expect(authenticatedPage.getByText('฿ 3,500.00', { exact: true }).first()).toBeVisible();
     await expect(authenticatedPage.getByText('฿ 1,200.00', { exact: true })).toBeVisible();
+    await expect(authenticatedPage.getByText('เป้าหมาย: ฿ 3,500.00', { exact: true })).toBeVisible();
+
+    await dashboard.periodButton('เดือนนี้').click();
+    await expect(authenticatedPage.getByText('฿ 2,400.00', { exact: true })).toBeVisible();
+    await expect(authenticatedPage.getByText('เป้าหมาย: ฿ 3,500.00', { exact: true })).toBeVisible();
 
     await authenticatedPage.getByRole('button', { name: 'ตัวกรอง', exact: true }).click();
     await authenticatedPage.getByRole('button', { name: 'เกินกำหนด', exact: true }).click();
