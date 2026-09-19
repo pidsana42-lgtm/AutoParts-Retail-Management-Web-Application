@@ -2,9 +2,12 @@ package dashboard_test
 
 import (
 	"context"
+	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	dashboardController "backend/internal/app/controller/dashboard"
@@ -19,7 +22,10 @@ type fakeDashboardService struct {
 	summaryCalls int
 	recentCalls  int
 	agingCalls   int
+	agingQueries []dashDTO.DebtAgingQuery
+	agingData    []dashDTO.DebtAgingItemDTO
 	summaryErr   error
+	summaryData  []dashDTO.DisplayDashboardDTO
 }
 
 var _ dashService.DashboardService = (*fakeDashboardService)(nil)
@@ -29,7 +35,7 @@ func (f *fakeDashboardService) GetSummaryData(context.Context, dashDTO.SummaryQu
 	if f.summaryErr != nil {
 		return nil, f.summaryErr
 	}
-	return &dashDTO.SummaryResponse{SummaryData: []dashDTO.DisplayDashboardDTO{}, Total: 0}, nil
+	return &dashDTO.SummaryResponse{SummaryData: f.summaryData, Total: int64(len(f.summaryData))}, nil
 }
 func (f *fakeDashboardService) GetRecentSales(context.Context, dashDTO.SummaryQuery, int, int) (*dashDTO.RecentSalesResponse, error) {
 	f.recentCalls++
@@ -48,8 +54,9 @@ func (*fakeDashboardService) GetIncomeSummary(context.Context, dashDTO.SummaryQu
 func (*fakeDashboardService) GetTopSellers(context.Context, dashDTO.SummaryQuery, int) ([]dashDTO.TopSellerDTO, error) {
 	return []dashDTO.TopSellerDTO{}, nil
 }
-func (*fakeDashboardService) GetDebtAging(context.Context, dashDTO.DebtAgingQuery) (*dashDTO.DebtAgingResponse, error) {
-	return &dashDTO.DebtAgingResponse{}, nil
+func (f *fakeDashboardService) GetDebtAging(_ context.Context, query dashDTO.DebtAgingQuery) (*dashDTO.DebtAgingResponse, error) {
+	f.agingQueries = append(f.agingQueries, query)
+	return &dashDTO.DebtAgingResponse{Data: f.agingData, Total: int64(len(f.agingData))}, nil
 }
 
 func performControllerRequest(method, target string, handler gin.HandlerFunc) *httptest.ResponseRecorder {
@@ -132,9 +139,99 @@ func TestDashboardControllerSuccessAndServiceError(t *testing.T) {
 	})
 }
 
+func TestExportDebtAgingExcelAppliesFiltersAndFormatsThaiDate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	fake := &fakeDashboardService{agingData: []dashDTO.DebtAgingItemDTO{{
+		CustomerCode:     "00001",
+		CustomerName:     "ลูกค้าทดสอบ",
+		TotalDebt:        1500,
+		RemainingBalance: 750,
+		LastPurchaseDate: "2026-09-18",
+		AgeDays:          10,
+		Status:           "ทยอยชำระ",
+	}}}
+	controller := dashboardController.NewDashboardController(fake)
+	response := performControllerRequest(
+		http.MethodGet,
+		"/dashboard/debt-aging/export/excel?start_date=2026-09-18&end_date=2026-09-18&status=ทยอยชำระ&min_age_days=5&max_age_days=30",
+		controller.ExportDebtAgingExcel,
+	)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if len(fake.agingQueries) != 1 {
+		t.Fatalf("aging calls=%d, want 1", len(fake.agingQueries))
+	}
+	query := fake.agingQueries[0]
+	if query.StartDate != "2026-09-18" || query.EndDate != "2026-09-18" || query.Status != "ทยอยชำระ" || query.MinAgeDays != 5 || query.MaxAgeDays != 30 {
+		t.Fatalf("export filters were not forwarded: %+v", query)
+	}
+
+	body := strings.TrimPrefix(response.Body.String(), "\xEF\xBB\xBF")
+	records, err := csv.NewReader(strings.NewReader(body)).ReadAll()
+	if err != nil {
+		t.Fatalf("parse csv: %v", err)
+	}
+	if len(records) != 2 || len(records[0]) != 7 {
+		t.Fatalf("unexpected csv shape: %+v", records)
+	}
+	if records[1][3] != "750.00" || records[1][4] != "18-09-2569" {
+		t.Fatalf("unexpected exported values: %+v", records[1])
+	}
+}
+
+func TestDashboardSummaryRedactsManagementMetricsForEmployeeRoles(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	for _, tc := range []struct {
+		role     string
+		redacted bool
+	}{
+		{"Owner", false},
+		{"Manager", false},
+		{"Employee", true},
+	} {
+		t.Run(tc.role, func(t *testing.T) {
+			fake := &fakeDashboardService{summaryData: []dashDTO.DisplayDashboardDTO{{
+				TotalRevenue:  150,
+				TotalCost:     100,
+				GrossProfit:   50,
+				MarginPercent: 33.33,
+			}}}
+			controller := dashboardController.NewDashboardController(fake)
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+			ctx.Request = httptest.NewRequest(http.MethodGet, "/dashboard/summary", nil)
+			ctx.Set("role", tc.role)
+
+			controller.GetSummaryData(ctx)
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+			var response dashDTO.SummaryResponse
+			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			row := response.SummaryData[0]
+			if row.TotalRevenue != 150 {
+				t.Fatalf("operational revenue must remain visible: %+v", row)
+			}
+			if tc.redacted {
+				if row.TotalCost != 0 || row.GrossProfit != 0 || row.MarginPercent != 0 {
+					t.Fatalf("management metrics leaked to %s: %+v", tc.role, row)
+				}
+			} else if row.TotalCost != 100 || row.GrossProfit != 50 || row.MarginPercent != 33.33 {
+				t.Fatalf("management metrics were removed from %s: %+v", tc.role, row)
+			}
+		})
+	}
+}
+
 func TestDashboardRoleMiddleware(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	allowed := []string{string(enum.RoleAdmin), string(enum.RoleEmployee)}
+	allowed := []string{string(enum.RoleManager), string(enum.RoleEmployee)}
 
 	for _, test := range []struct {
 		name       string
@@ -142,6 +239,7 @@ func TestDashboardRoleMiddleware(t *testing.T) {
 		setRole    bool
 		wantStatus int
 	}{
+		{"manager allowed", string(enum.RoleManager), true, http.StatusOK},
 		{"admin allowed", string(enum.RoleAdmin), true, http.StatusOK},
 		{"employee allowed", string(enum.RoleEmployee), true, http.StatusOK},
 		{"unknown role forbidden", "Guest", true, http.StatusForbidden},

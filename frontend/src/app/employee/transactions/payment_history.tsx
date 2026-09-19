@@ -1,11 +1,7 @@
 import React, { useState } from "react";
 import {
   Eye,
-  ChevronLeft,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  ScanBarcode,
   Printer,
   X,
   FileText,
@@ -20,6 +16,7 @@ import Input from "../../../components/elements/input";
 import Select from "../../../components/elements/select";
 import Button from "../../../components/elements/button";
 import Badge from "../../../components/elements/badge";
+import { useToast } from "../../../components/elements/toast";
 import {
   Table,
   TableHeader,
@@ -32,20 +29,23 @@ import { Card, CardContent } from "../../../components/elements/card";
 import { cn } from "../../../utils/component";
 
 // Hooks & Helpers
+import { TablePagination } from "../../../components/pos";
 import { usePaymentHistory } from "./hooks/usePaymentHistory";
 import type { PaymentHistoryItem } from "../../../interface/pos/payment_interface";
-import { getDisplayCustomerName, getPageNumbers, getPaymentVariant } from "../../../utils/poshelpers";
+import { getDisplayCustomerName, getPaymentVariant } from "../../../utils/poshelpers";
 import { PaymentTypeBadge, PaymentStatusBadge } from "../../../components/elements/status_badge";
 import { formatDate } from "../../../utils/date";
 import { useUserRole } from "../../../hooks/useUserRole";
 import { posApiService } from "../../../service/http/pos/pos_service";
-import { downloadPdfBlob } from "../../../utils/payment_history_print";
+import { autoPrintPdfBlob } from "../../../utils/payment_history_print";
+import OrderCustomerSearchInput from "../pos/components/order_customer_search_input";
 
 
 export default function PaymentHistoryPage() {
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isOwnerOrAdmin } = useUserRole();
+  const { isOwnerOrManager } = useUserRole();
   const initialSearch = searchParams.get("search")?.trim() ?? "";
   const initialTypeFilter = searchParams.get("type") === "repayment" ? "repayment" : "";
   const [printingReceiptId, setPrintingReceiptId] = useState<number | string | null>(null);
@@ -62,10 +62,10 @@ export default function PaymentHistoryPage() {
       }
       const rawNum = item.receipt_number || targetId;
       const fileName = String(rawNum).endsWith(".pdf") ? `${rawNum}` : `${rawNum}.pdf`;
-      downloadPdfBlob(blob, fileName);
+      autoPrintPdfBlob(blob, fileName);
     } catch (err) {
       console.error("Failed to print receipt:", err);
-      alert("ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง");
+      toast({ variant: "error", message: "ไม่สามารถสร้างไฟล์ PDF ใบเสร็จได้ กรุณาลองใหม่อีกครั้ง" });
     } finally {
       setPrintingReceiptId(null);
     }
@@ -124,6 +124,25 @@ export default function PaymentHistoryPage() {
   const kpiValue = (value: React.ReactNode) =>
     isLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
 
+  const fetchPaymentSuggestions = React.useCallback(async (q: string) => {
+    try {
+      const res = await posApiService.getPaymentHistory({
+        search: q,
+        ...(employeeId ? { employee_id: Number(employeeId) } : {}),
+      });
+      return (res || []).slice(0, 6).map((item) => ({
+        id: Number(item.receipt_id) || 0,
+        order_number: item.receipt_number || item.order_numbers || String(item.receipt_id),
+        customer_name: item.customer_name || (item as any).customer_name_temp || "ลูกค้าทั่วไป",
+        total_amount: Number(item.total_received) || 0,
+        status: item.status,
+        order_date: item.paid_at,
+      }));
+    } catch {
+      return [];
+    }
+  }, [employeeId]);
+
   return (
     <div className="relative flex min-h-screen bg-white text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
@@ -141,31 +160,37 @@ export default function PaymentHistoryPage() {
           </div>
 
           {/* Filter Bar */}
-          <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
+          <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23]">
             <CardContent className="p-5 md:p-6 space-y-4">
               {/* ช่องที่ 1: ค้นหาคำ + พนักงาน */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 {/* 1.1 ค้นหาเลขที่ใบเสร็จ / บิล / ชื่อลูกค้า */}
-                <div className={cn("flex flex-col gap-1.5", isOwnerOrAdmin ? "md:col-span-8" : "md:col-span-12")}>
+                <div className={cn("flex flex-col gap-1.5", isOwnerOrManager ? "md:col-span-8" : "md:col-span-12")}>
                   <Text variant="xs" className="text-[#5F5E5E]">
                     ค้นหาเลขที่ใบเสร็จ / หมายเลขบิล / ชื่อลูกค้า
                   </Text>
-                  <div className="relative flex-1">
-                    <ScanBarcode
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10"
-                      size={18}
-                    />
-                    <Input
-                      placeholder="พิมพ์เลขที่ใบเสร็จ RE-XXX, INV-XXX, ชื่อลูกค้า..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="w-full h-10 bg-white border border-gray-200 rounded-none pl-11 pr-4 text-sm text-[#1C1B1B] font-light focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 shadow-sm transition-all placeholder:text-[#6B7280]"
-                    />
-                  </div>
+                  <OrderCustomerSearchInput
+                    value={search}
+                    onChange={setSearch}
+                    onSelectCustomer={(customerName) => {
+                      setSearch(customerName);
+                      handleApplyFilter();
+                    }}
+                    onSelectOrder={(orderNumber) => {
+                      setSearch(orderNumber);
+                      handleApplyFilter();
+                    }}
+                    onSubmit={handleApplyFilter}
+                    fetchOrders={fetchPaymentSuggestions}
+                    placeholder="RE-XXX, INV-XXX, ชื่อลูกค้า..."
+                    orderSectionTitle="รายการใบเสร็จ / การชำระเงิน (คลิกเพื่อค้นหาด้วยเลขที่นี้)"
+                    inputClassName="h-10"
+                    autoFocus
+                  />
                 </div>
 
                 {/* 1.2 พนักงานขาย (เฉพาะเจ้าของร้าน 4/12) */}
-                {isOwnerOrAdmin && (
+                {isOwnerOrManager && (
                   <div className="md:col-span-4 flex flex-col gap-1.5">
                     <Text variant="xs" className="text-[#5F5E5E]">
                       พนักงานผู้รับเงิน
@@ -275,7 +300,7 @@ export default function PaymentHistoryPage() {
           </Card>
 
           {/* Small Stat Cards เหนือตาราง */}
-          {isOwnerOrAdmin ? (
+          {isOwnerOrManager ? (
             /* 1. ฝั่งเจ้าของร้าน (Owner System) */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
               {/* Card 1: ยอดรับชำระสุทธิ (Net Total Collected) */}
@@ -527,25 +552,20 @@ export default function PaymentHistoryPage() {
 
                         {/* 3. ชื่อลูกค้า + เลขที่บิล */}
                         <TableCell className="py-3.5 px-3">
-                          {item.customer_name ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSearch(item.customer_name);
-                              }}
-                              className="text-left font-normal text-[#1C1B1B] hover:text-[#E51C23] hover:underline mb-0 truncate max-w-50 cursor-pointer bg-transparent border-none p-0 block"
-                              title="คลิกเพื่อกรองค้นหาเฉพาะลูกค้าคนนี้"
-                            >
-                              <Text variant="small" className="font-normal text-inherit mb-0 truncate">
-                                {getDisplayCustomerName(item)}
-                              </Text>
-                            </button>
-                          ) : (
-                            <Text variant="small" className="font-normal text-[#1C1B1B] mb-0 truncate max-w-50">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const filterName = item.customer_name || (item as any).customer_name_temp || "ลูกค้าทั่วไป";
+                              setSearch(filterName);
+                            }}
+                            className="text-left font-normal text-[#1C1B1B] hover:text-[#E51C23] hover:underline mb-0 truncate max-w-50 cursor-pointer bg-transparent border-none p-0 block"
+                            title="คลิกเพื่อกรองค้นหาเฉพาะลูกค้าคนนี้"
+                          >
+                            <Text variant="small" className="font-normal text-inherit mb-0 truncate">
                               {getDisplayCustomerName(item)}
                             </Text>
-                          )}
+                          </button>
                           <Text variant="xs" className="font-light text-[#A8A29E] mb-0 truncate max-w-50">
                             บิล: {item.order_numbers || "-"}
                           </Text>
@@ -582,7 +602,7 @@ export default function PaymentHistoryPage() {
                           </Badge>
                         </TableCell>
 
-                        {/* 9. จัดการ: ปุ่มดูรายละเอียด + ปุ่มพิมพ์ใบเสร็จ + ปุ่มพิมพ์สรุปยอดลูกค้า */}
+                        {/* 9. จัดการ: ปุ่มดูรายละเอียด + ปุ่มพิมพ์ใบเสร็จ + ปุ่มเปิดใบสรุปยอดลูกค้า */}
                         <TableCell
                           className="py-3.5 px-3 text-center"
                           onClick={(e) => e.stopPropagation()}
@@ -600,7 +620,7 @@ export default function PaymentHistoryPage() {
                               type="button"
                               disabled={printingReceiptId === (item.receipt_id || item.receipt_number)}
                               className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100 disabled:opacity-40"
-                              title="พิมพ์ใบเสร็จของบิลนี้"
+                              title="พิมพ์ใบเสร็จรับเงินของบิลนี้"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handlePrintReceipt(item);
@@ -608,20 +628,19 @@ export default function PaymentHistoryPage() {
                             >
                               <Printer className={cn("w-4 h-4 text-gray-600", printingReceiptId === (item.receipt_id || item.receipt_number) && "animate-pulse")} />
                             </button>
-                            {item.customer_name && (
-                              <button
-                                type="button"
-                                disabled={isPrintingStatement}
-                                className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
-                                title={`พิมพ์ใบสรุปยอดชำระและยอดคงเหลือของ ${item.customer_name}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handlePrintCustomerStatement(item.customer_name);
-                                }}
-                              >
-                                <FileText className="w-4 h-4" />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              disabled={isPrintingStatement}
+                              className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100 disabled:opacity-40"
+                              title={`เปิดใบสรุปยอดชำระและยอดคงเหลือของ ${getDisplayCustomerName(item)}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const custTarget = item.customer_name || (item as any).customer_name_temp || "ลูกค้าทั่วไป";
+                                handlePrintCustomerStatement(custTarget, "preview");
+                              }}
+                            >
+                              <FileText className={cn("w-4 h-4 text-gray-600", isPrintingStatement && "animate-pulse")} />
+                            </button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -632,99 +651,16 @@ export default function PaymentHistoryPage() {
             </Table>
 
             {/* Pagination Controls */}
-            {!isLoading && !error && totalRows > 0 && (
-              <div className="bg-[#FCFBFA] px-6 py-4 border-t border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
-                <div className="flex items-center gap-4">
-                  <Text variant="xs" className="text-[#5F5E5E] mb-0">
-                    แสดง {Math.min((page - 1) * limit + 1, totalRows)} ถึง{" "}
-                    {Math.min(page * limit, totalRows)} จาก {totalRows} รายการ
-                  </Text>
-
-                  <div className="flex items-center gap-2">
-                    <Text variant="xs" className="text-[#5F5E5E] mb-0">
-                      รายการต่อหน้า:
-                    </Text>
-                    <select
-                      value={limit}
-                      onChange={(e) => {
-                        setLimit(Number(e.target.value));
-                        setPage(1);
-                      }}
-                      className="border border-gray-200 rounded-none px-2 py-1 text-gray-700 bg-white hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300 cursor-pointer"
-                    >
-                      <option value={5}>5</option>
-                      <option value={10}>10</option>
-                      <option value={20}>20</option>
-                      <option value={50}>50</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={page === 1}
-                    onClick={() => setPage(1)}
-                    aria-label="หน้าแรก"
-                    className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronsLeft className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={page === 1}
-                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                    aria-label="หน้าก่อนหน้า"
-                    className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-
-                  {getPageNumbers(page, totalPages).map((p, idx) =>
-                    p === "..." ? (
-                      <span key={`ellipsis-${idx}`} className="px-2 text-gray-400 select-none">
-                        ...
-                      </span>
-                    ) : (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setPage(Number(p))}
-                        aria-current={page === p ? "page" : undefined}
-                        className={cn(
-                          "px-3 py-1.5 rounded-none font-medium text-xs transition-colors cursor-pointer",
-                          page === p
-                            ? "bg-[#E51C23] text-white"
-                            : "text-gray-600 hover:bg-gray-100 border border-transparent"
-                        )}
-                      >
-                        {p}
-                      </button>
-                    )
-                  )}
-
-                  <button
-                    type="button"
-                    disabled={page === totalPages}
-                    onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                    aria-label="หน้าถัดไป"
-                    className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={page === totalPages}
-                    onClick={() => setPage(totalPages)}
-                    aria-label="หน้าสุดท้าย"
-                    className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronsRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+            {!isLoading && !error && (
+              <TablePagination
+                page={page}
+                totalPages={totalPages}
+                totalRows={totalRows}
+                limit={limit}
+                onPageChange={setPage}
+                onLimitChange={setLimit}
+                unitLabel="รายการ"
+              />
             )}
           </Card>
         </main>
@@ -817,7 +753,7 @@ export default function PaymentHistoryPage() {
                 </Card>
 
                 {/* ปุ่มพิมพ์ใบเสร็จรับเงิน (PDF) */}
-                <Button
+                {/* <Button
                   type="button"
                   variant="primary"
                   onClick={async () => {
@@ -832,7 +768,7 @@ export default function PaymentHistoryPage() {
                       const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
                       window.open(blobUrl, "_blank");
                     } catch (err) {
-                      alert("ไม่สามารถเปิดพิมพ์ใบเสร็จได้");
+                      toast({ variant: "error", message: "ไม่สามารถเปิดพิมพ์ใบเสร็จได้" });
                     }
                   }}
                   className="w-full text-xs h-10 font-normal flex items-center justify-center gap-1.5 shadow-sm bg-[#1C1B1B] hover:bg-zinc-800 text-white cursor-pointer rounded-none"
@@ -843,7 +779,7 @@ export default function PaymentHistoryPage() {
                       ? "พิมพ์ใบเสร็จที่ยกเลิก (Void Receipt)"
                       : "พิมพ์ใบเสร็จรับเงิน (PDF)"}
                   </span>
-                </Button>
+                </Button> */}
 
                 {/* 2. กรณีเป็น Direct Payment (ชำระสดหน้าร้าน) -> มีปุ่มเด้งไปหน้าประวัติการขายสินค้าและเลือกบิลให้อัตโนมัติ */}
                 {selectedReceipt.payment_type === "payment" && selectedReceipt.status !== "cancelled" && (
@@ -862,7 +798,7 @@ export default function PaymentHistoryPage() {
                       variant="solid-red"
                       onClick={() => {
                         const targetOrder = selectedReceipt.order_numbers || selectedReceipt.receipt_number;
-                        const targetPath = isOwnerOrAdmin
+                        const targetPath = isOwnerOrManager
                           ? `/owner/pos/sales_history?order_number=${encodeURIComponent(targetOrder)}`
                           : `/employee/pos/sales_history?order_number=${encodeURIComponent(targetOrder)}`;
                         setSelectedReceipt(null);
@@ -914,7 +850,7 @@ export default function PaymentHistoryPage() {
                         </Card>
 
                         {/* ฟอร์มดำเนินการของ Owner / ปุ่มดึงกลับของ Employee */}
-                        {isOwnerOrAdmin ? (
+                        {isOwnerOrManager ? (
                           <div className="space-y-3 pt-1">
                             <div className="space-y-1.5">
                               <Text
@@ -991,7 +927,7 @@ export default function PaymentHistoryPage() {
                     {selectedReceipt.status === "completed" && (
                       <div className="space-y-3 pt-2">
                         <Text variant="xs" className="font-normal text-[#E51C23] uppercase tracking-wider mb-1">
-                          {isOwnerOrAdmin
+                          {isOwnerOrManager
                             ? "ระบุเหตุผลในการยกเลิกใบเสร็จรับเงิน (ทำให้ยอดหนี้กลับมาค้างชำระทันที)"
                             : "ระบุเหตุผลในการส่งคำขอยกเลิกใบเสร็จรับเงิน (ส่งไปยังเจ้าของร้าน)"}
                         </Text>
@@ -1005,7 +941,7 @@ export default function PaymentHistoryPage() {
                         />
 
                         <div className="flex gap-3 pt-1">
-                          {isOwnerOrAdmin ? (
+                          {isOwnerOrManager ? (
                             <Button
                               type="button"
                               variant="solid-red"
@@ -1091,7 +1027,7 @@ export default function PaymentHistoryPage() {
                       </div>
                     </Card>
 
-                    <Button
+                    {/* <Button
                       type="button"
                       variant="outline-cancel"
                       onClick={() => handlePrintReceipt(selectedReceipt)}
@@ -1100,7 +1036,7 @@ export default function PaymentHistoryPage() {
                     >
                       <Printer className={cn("w-4 h-4 text-[#E51C23]", printingReceiptId === (selectedReceipt.receipt_id || selectedReceipt.receipt_number) && "animate-pulse")} />
                       <span>พิมพ์ใบเสร็จที่ยกเลิก (เอกสารหลักฐาน)</span>
-                    </Button>
+                    </Button> */}
                   </div>
                 )}
               </div>

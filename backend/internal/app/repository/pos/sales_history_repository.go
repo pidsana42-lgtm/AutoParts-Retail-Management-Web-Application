@@ -474,7 +474,7 @@ func (r *salesHistoryRepository) RevertCancelOrder(orderID uint, note string) er
 func (r *salesHistoryRepository) GetEmployees() ([]entity.User, error) {
 	var users []entity.User
 	err := r.db.Joins("JOIN roles ON roles.id = users.role_id").
-		Where("roles.role_name IN ?", []string{"Employee", "Owner", "Admin"}).
+		Where("roles.role_name IN ?", []string{"Employee", "Owner", "Manager", "Admin"}).
 		Find(&users).Error
 	return users, err
 }

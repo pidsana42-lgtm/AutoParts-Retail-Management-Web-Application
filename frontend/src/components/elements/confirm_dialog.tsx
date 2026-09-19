@@ -75,17 +75,23 @@ export default function ConfirmDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !isSubmitting) onClose();
-      }}
     >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-none"
+        onClick={() => {
+          if (!isSubmitting) onClose();
+        }}
+        aria-hidden="true"
+      />
+
       <div
         className={cn(
-          "w-full max-w-sm rounded-none bg-white p-8 text-center shadow-2xl",
+          "relative z-10 w-full max-w-sm rounded-none bg-white p-8 text-center shadow-2xl",
           "animate-in fade-in zoom-in-95 duration-150"
         )}
       >
@@ -100,12 +106,12 @@ export default function ConfirmDialog({
         </div>
 
         {/* Title */}
-        <h2 id="confirm-dialog-title" className="mt-5 text-xl font-bold text-slate-800">
+        <h2 id="confirm-dialog-title" className="mt-5 text-lg font-medium text-[#1C1B1F]">
           {title}
         </h2>
 
         {/* Description */}
-        <div className="mt-2 text-sm leading-relaxed text-slate-500">{description}</div>
+        <div className="mt-2 text-sm leading-relaxed font-normal text-[#5B5B5B]">{description}</div>
 
         {/* Actions */}
         <div className="mt-7 flex gap-3">

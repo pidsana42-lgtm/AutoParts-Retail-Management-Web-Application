@@ -9,6 +9,7 @@ import (
 	reDto "backend/internal/app/dto/return"
 	reRepo "backend/internal/app/repository/return"
 	reSvc "backend/internal/app/service/return"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -46,9 +47,9 @@ func getRoleFromContext(c *gin.Context) string {
 	return ""
 }
 
-func isOwnerOrAdmin(c *gin.Context) bool {
+func isOwnerOrManager(c *gin.Context) bool {
 	role := getRoleFromContext(c)
-	return role == "OWNER" || role == "ADMIN"
+	return role == "OWNER" || role == "MANAGER" || role == "ADMIN"
 }
 
 func (ctl *ReturnController) GetReturns(c *gin.Context) {
@@ -136,7 +137,7 @@ func (ctl *ReturnController) CreateSalesReturn(c *gin.Context) {
 }
 
 func (ctl *ReturnController) UpdateSalesReturn(c *gin.Context) {
-	if !isOwnerOrAdmin(c) {
+	if !isOwnerOrManager(c) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "only the store owner can approve or reject a return"})
 		return
 	}
@@ -185,7 +186,7 @@ func (ctl *ReturnController) UpdateSalesReturn(c *gin.Context) {
 
 func (ctl *ReturnController) ProcessRefund(c *gin.Context) {
 	role := getRoleFromContext(c)
-	if role != "OWNER" && role != "EMPLOYEE" && role != "ADMIN" {
+	if role != "OWNER" && role != "EMPLOYEE" && role != "MANAGER" && role != "ADMIN" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "only the store owner or employee can process a refund"})
 		return
 	}

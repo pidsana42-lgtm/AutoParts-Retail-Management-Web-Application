@@ -246,7 +246,8 @@ export const posApiService = {
     endDate?: string,
     paymentType?: string,
     status?: string,
-    paymentMethod?: string
+    paymentMethod?: string,
+    customerName?: string
   ): Promise<Blob> => {
     try {
       const response = await apiClient.get(`/pos/payments/customers/${customerId}/statement-pdf`, {
@@ -256,6 +257,7 @@ export const posApiService = {
           payment_type: paymentType || undefined,
           status: status || undefined,
           payment_method: paymentMethod || undefined,
+          customer_name: customerName || undefined,
         },
         responseType: "blob",
       });
