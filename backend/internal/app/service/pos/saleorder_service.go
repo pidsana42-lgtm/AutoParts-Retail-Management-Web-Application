@@ -319,9 +319,17 @@ func (s *saleService) CreatePOSOrder(req *pos.CreateSaleOrderRequest, userID uin
 			return nil, errors.New("ลูกค้าทั่วไป/ขาจร ไม่สามารถเลือกชำระแบบซื้อเชื่อได้")
 		}
 
-		if customer.CurrentDebtAmount+totalAmount > customer.CreditLimit {
+		effectiveLimit := customer.CreditLimit
+		if effectiveLimit <= 0 {
+			storeConfig, err := s.repo.GetStoreConfig()
+			if err == nil && storeConfig.MaxCredit > 0 {
+				effectiveLimit = storeConfig.MaxCredit
+			}
+		}
+
+		if customer.CurrentDebtAmount+totalAmount > effectiveLimit {
 			tx.Rollback()
-			return nil, fmt.Errorf("วงเงินเครดิตไม่เพียงพอ! วงเงินคงเหลือขาดไป %.2f บาท", (customer.CurrentDebtAmount+totalAmount)-customer.CreditLimit)
+			return nil, fmt.Errorf("วงเงินเครดิตไม่เพียงพอ! วงเงินคงเหลือขาดไป %.2f บาท", (customer.CurrentDebtAmount+totalAmount)-effectiveLimit)
 		}
 
 		// คำนวณวันครบกำหนดชำระ
@@ -811,9 +819,17 @@ func (s *saleService) UpdatePOSOrder(orderNumber string, req *pos.UpdateSaleOrde
 			return nil, errors.New("ลูกค้าทั่วไป/ขาจร ไม่สามารถเลือกชำระแบบซื้อเชื่อได้")
 		}
 
-		if customer.CurrentDebtAmount+totalAmount > customer.CreditLimit {
+		effectiveLimit := customer.CreditLimit
+		if effectiveLimit <= 0 {
+			storeConfig, err := s.repo.GetStoreConfig()
+			if err == nil && storeConfig.MaxCredit > 0 {
+				effectiveLimit = storeConfig.MaxCredit
+			}
+		}
+
+		if customer.CurrentDebtAmount+totalAmount > effectiveLimit {
 			tx.Rollback()
-			return nil, fmt.Errorf("วงเงินเครดิตไม่เพียงพอ! วงเงินคงเหลือขาดไป %.2f บาท", (customer.CurrentDebtAmount+totalAmount)-customer.CreditLimit)
+			return nil, fmt.Errorf("วงเงินเครดิตไม่เพียงพอ! วงเงินคงเหลือขาดไป %.2f บาท", (customer.CurrentDebtAmount+totalAmount)-effectiveLimit)
 		}
 
 		// คำนวณวันครบกำหนดชำระ
