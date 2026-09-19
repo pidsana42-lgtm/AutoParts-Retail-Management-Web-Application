@@ -26,9 +26,9 @@ func SetupCustomerRoutes(r *gin.Engine, db *gorm.DB) {
 		customerGroup.GET("", customerCtrl.GetAllCustomers)
 		customerGroup.GET("/:id", customerCtrl.GetCustomerByID)
 		customerGroup.PUT("/:id", customerCtrl.UpdateCustomer)
-		customerGroup.PUT("/:id/discount", customerCtrl.UpdateCustomerDiscount)
-		customerGroup.GET("/credit/audit-logs", customerCtrl.GetCreditAuditLogs)
-		customerGroup.POST("/credit/audit-logs", customerCtrl.CreateCreditAuditLog)
+		customerGroup.PUT("/:id/discount", middleware.RequireRoles(string(enum.RoleOwner)), customerCtrl.UpdateCustomerDiscount)
+		customerGroup.GET("/credit/audit-logs", middleware.RequireRoles(string(enum.RoleOwner)), customerCtrl.GetCreditAuditLogs)
+		customerGroup.POST("/credit/audit-logs", middleware.RequireRoles(string(enum.RoleOwner)), customerCtrl.CreateCreditAuditLog)
 
 		// Protected Route ป้องกันรูปบัตรประชาชนรั่วไหล (ต้องมี Token และสิทธิ์ Owner, Employee หรือ Manager)
 		customerGroup.GET("/document/view", customerCtrl.GetCustomerDocumentByPath)

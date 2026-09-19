@@ -46,9 +46,19 @@ import { maskPhoneNumber, maskIdCardNumber } from "../../../utils/customerhelper
 import { useCustomerCreditControl } from "./hook/UseCustomerCreditControl";
 import type { CustomerCreditItem } from "../../../interface/storeconfig/customer_credit_interface";
 import { formatDate } from "../../../utils/date";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../../../contexts/AuthContexts";
 import ConfirmModal from "../../../components/elements/confirm_modal";
 
 export default function CustomerCreditControl() {
+  const { role } = useAuth();
+  const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
+  const isOwner = currentRole === "OWNER";
+
+  if (!isOwner) {
+    return <Navigate to="/" replace />;
+  }
+
   const {
     // Data & Stats
     customers,

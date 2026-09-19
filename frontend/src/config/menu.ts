@@ -148,19 +148,13 @@ export const SIDEBAR_MENUS: MenuItem[] = [
     ]
   },
 
-  // การตั้งค่า
+  // การตั้งค่า (เฉพาะ OWNER เท่านั้น)
   { icon: Settings, label: "การตั้งค่า", path: "/owner/storeconfig", roles: ["OWNER"],
    subs: [
       { icon: Building2, path: "/owner/storeconfig", label: "ข้อมูลร้านค้า" },
       { icon: UserPlus, path: "/owner/storeconfig/register-employee", label: "จัดการพนักงาน" },
       { icon: ShieldCheck, path: "/owner/storeconfig/financial-policy", label: "นโยบายการเงิน" },
       { icon: UserCheck, path: "/owner/storeconfig/customer-credit-control", label: "การควบคุมเครดิตลูกค้า" },
-    ],
-  },
-  { icon: Settings, label: "การตั้งค่า", path: "/manager/storeconfig/financial-policy", roles: ["MANAGER"],
-   subs: [
-      { icon: ShieldCheck, path: "/manager/storeconfig/financial-policy", label: "นโยบายการเงิน" },
-      { icon: UserCheck, path: "/manager/storeconfig/customer-credit-control", label: "การควบคุมเครดิตลูกค้า" },
     ],
   },
 ];
