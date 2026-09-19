@@ -2,6 +2,7 @@ package email
 
 import (
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"net/smtp"
 	"os"
@@ -54,17 +55,35 @@ func (s *emailService) SendEmail(to []string, subject, htmlBody string) error {
 		return fmt.Errorf("SMTP credentials not configured")
 	}
 
-	headers := make(map[string]string)
-	headers["From"] = fmt.Sprintf("%s <%s>", s.fromName, s.user)
-	headers["To"] = strings.Join(to, ",")
-	headers["Subject"] = "=?UTF-8?B?" + strings.TrimSpace(subject) + "?="
-	// Simple base64 subject or direct UTF-8
-	message := fmt.Sprintf("From: %s <%s>\r\n", s.fromName, s.user) +
-		fmt.Sprintf("To: %s\r\n", strings.Join(to, ",")) +
-		fmt.Sprintf("Subject: %s\r\n", subject) +
+	b64Subject := base64.StdEncoding.EncodeToString([]byte(subject))
+	encodedSubject := fmt.Sprintf("=?UTF-8?B?%s?=", b64Subject)
+
+	b64FromName := base64.StdEncoding.EncodeToString([]byte(s.fromName))
+	encodedFrom := fmt.Sprintf("=?UTF-8?B?%s?= <%s>", b64FromName, s.user)
+
+	now := time.Now()
+	msgID := fmt.Sprintf("<%d.%d@jjautopart-pakchong.com>", now.UnixNano(), os.Getpid())
+	dateStr := now.Format(time.RFC1123Z)
+
+	b64Body := base64.StdEncoding.EncodeToString([]byte(htmlBody))
+	var wrappedBody strings.Builder
+	for i := 0; i < len(b64Body); i += 76 {
+		end := i + 76
+		if end > len(b64Body) {
+			end = len(b64Body)
+		}
+		wrappedBody.WriteString(b64Body[i:end] + "\r\n")
+	}
+
+	message := fmt.Sprintf("From: %s\r\n", encodedFrom) +
+		fmt.Sprintf("To: %s\r\n", strings.Join(to, ", ")) +
+		fmt.Sprintf("Date: %s\r\n", dateStr) +
+		fmt.Sprintf("Message-ID: %s\r\n", msgID) +
+		fmt.Sprintf("Subject: %s\r\n", encodedSubject) +
 		"MIME-Version: 1.0\r\n" +
-		"Content-Type: text/html; charset=UTF-8\r\n\r\n" +
-		htmlBody
+		"Content-Type: text/html; charset=UTF-8\r\n" +
+		"Content-Transfer-Encoding: base64\r\n\r\n" +
+		wrappedBody.String()
 
 	addr := fmt.Sprintf("%s:%s", s.host, s.port)
 	auth := smtp.PlainAuth("", s.user, s.password, s.host)
