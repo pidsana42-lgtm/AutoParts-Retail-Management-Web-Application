@@ -55,6 +55,7 @@ func User(db *gorm.DB) error {
             LastName:          "System",
             IdCardNumberUser:  "1100000000001",
             Username:          "boss",
+            Email:             "b6643904@g.sut.ac.th",
             Password:          ownerPasswordHashed,
             StoreConfigID:     storeConfig.ID, // จะได้ค่าเป็น 1 เสมอ
             BankID:            bank.ID,
@@ -122,6 +123,8 @@ func User(db *gorm.DB) error {
             }
         } else if err != nil {
             return fmt.Errorf("failed to check existing user %s: %w", user.Username, err)
+        } else if user.Email != "" && existingUser.Email != user.Email {
+            db.Model(&existingUser).Update("email", user.Email)
         }
     }
 
