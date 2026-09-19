@@ -1,0 +1,11 @@
+*.gguf
+*.png
+*.jpg
+*.jpeg
+__pycache__
+*.pyc
+.env
+.env.local
+.git
+scratch
+test-bill

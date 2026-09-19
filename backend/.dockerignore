@@ -1,0 +1,14 @@
+.env
+.env.local
+.git
+__pycache__
+*.pyc
+server_bin
+test_build
+backend.log
+uploads/*
+!uploads/.gitkeep
+barcode/*
+!barcode/.gitkeep
+QRCode/*
+!QRCode/.gitkeep

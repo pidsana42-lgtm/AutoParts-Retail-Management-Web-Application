@@ -16,6 +16,7 @@ export function usePathBasePrefix(): string {
   const location = useLocation();
   if (location.pathname.startsWith('/employee')) return '/employee';
   if (location.pathname.startsWith('/owner')) return '/owner';
+  if (location.pathname.startsWith('/manager')) return '/manager';
   if (location.pathname.startsWith('/admin')) return '/admin';
   return '/owner'; // fallback สุดท้ายจริงๆ ไม่ควรถึงจุดนี้
 }

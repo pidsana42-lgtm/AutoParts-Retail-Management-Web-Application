@@ -41,7 +41,7 @@ func TestStockMonitorRefreshAllAuthenticatedRoles(t *testing.T) {
 	t.Setenv("JWT_SECRET", secret)
 	router := gin.New()
 	wmsRoute.RegisterStockAlertRoutes(router, service, notifications)
-	for _, role := range []string{"Owner", "Admin", "Employee", "Staff", "anonymous", "invalid-token"} {
+	for _, role := range []string{"Owner", "Manager", "Admin", "Employee", "Staff", "anonymous", "invalid-token"} {
 		t.Run(role, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/api/wms/stock-alerts/refresh", nil)
 			wantStatus := http.StatusOK

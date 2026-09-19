@@ -186,11 +186,10 @@ export default function ScanView({
 
             {isLocalhost ? (
               <div className="bg-amber-50 border border-amber-300 text-amber-800 text-xs p-3 w-full">
-                <p className="font-bold mb-1">⚠ เปิดเว็บด้วย IP Address ก่อน</p>
-                <p>มือถือไม่สามารถเข้า <code>localhost</code> ได้</p>
-                <p className="mt-1">ให้เปิดใน browser ด้วย:</p>
-                <p className="font-mono font-bold text-amber-900 mt-1 break-all">
-                  http://192.168.1.109:{window.location.port || '5173'}
+                <p className="font-bold mb-1">⚠ มือถือเข้า localhost ไม่ได้</p>
+                <p className="mt-1">
+                  ให้เปิดเว็บนี้ด้วย IP Address ของคอมพิวเตอร์เครื่องนี้แทน (เช่น ดูจากคำสั่ง <code>ipconfig</code> บน Windows
+                  หรือ <code>ifconfig</code> บน Mac) แทนที่ <code>localhost</code> ในแถบที่อยู่เว็บ
                 </p>
                 <p className="mt-1 text-[10px] text-amber-600">แล้วคลิกปุ่ม "เปิดบนมือถือ" อีกครั้ง</p>
               </div>

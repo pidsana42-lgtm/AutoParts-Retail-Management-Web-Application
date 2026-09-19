@@ -33,7 +33,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
   const { role } = useAuth();
   const normalizedRole = role?.trim().toUpperCase();
-  const isManager = normalizedRole === 'OWNER' || normalizedRole === 'ADMIN';
+  const isManager = normalizedRole === 'OWNER' || normalizedRole === 'MANAGER' || normalizedRole === 'ADMIN';
 
   const [claim, setClaim] = useState<CustomerClaim | null>(null);
   const [loading, setLoading] = useState(true);
@@ -208,7 +208,11 @@ export default function ClaimDetailPage(): React.JSX.Element {
       } catch (reloadError) {
         console.error('Failed to reload claim after save error:', reloadError);
       }
-      toast({ variant: 'error', message: 'บันทึกข้อมูลไม่ครบหรือโหลดผลล่าสุดไม่สำเร็จ กรุณาตรวจสอบและลองใหม่' });
+      const serverMessage = (err as any)?.response?.data?.error;
+      toast({
+        variant: 'error',
+        message: serverMessage || 'บันทึกข้อมูลไม่ครบหรือโหลดผลล่าสุดไม่สำเร็จ กรุณาตรวจสอบและลองใหม่',
+      });
     } finally {
       setSaving(false);
       mutationInProgress.current = false;
@@ -323,6 +327,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
   const displayItems = isEditing ? editItems : (claim.items ?? []);
   const totalQty = displayItems.reduce((acc, i) => acc + (i.qty || 0), 0);
   const basePath = window.location.pathname.startsWith('/employee') ? '/employee/claims' : '/owner/claims';
+  const breadcrumbRoot = { label: 'จัดการเคลมสินค้า', path: basePath };
 
   return (
     <div className="p-8 space-y-6 bg-white min-h-screen font-sans text-slate-800 animate-in fade-in duration-300">
@@ -339,8 +344,8 @@ export default function ClaimDetailPage(): React.JSX.Element {
       <div className="flex items-center justify-between mb-6">
         <div>
           <nav className="flex items-center text-sm text-gray-500 gap-2 font-light mb-2">
-            <Link to={basePath} className="hover:text-black transition-colors">
-              จัดการเคลมสินค้า
+            <Link to={breadcrumbRoot.path} className="hover:text-black transition-colors">
+              {breadcrumbRoot.label}
             </Link>
             <ChevronRight size={16} className="text-gray-400" />
             {isEditing ? (

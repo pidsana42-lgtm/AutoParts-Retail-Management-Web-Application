@@ -173,11 +173,11 @@ export default function Select({
               onKeyDown={handleKeyDown}
               onClick={() => setIsOpen((prev) => !prev)}
               className={cn(
-                "h-10 w-full rounded-none border-none bg-[#f6f3f2] px-3 pr-9 text-sm text-left",
+                "h-10 w-full rounded-none border-none bg-[#f6f3f2] px-3 pr-9 text-sm font-normal text-left",
                 "transition-colors duration-150 ease-out cursor-pointer",
                 "focus:outline-none focus:ring-1 focus:ring-offset-0",
                 "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
-                isPlaceholder ? "text-slate-400" : "text-slate-800",
+                isPlaceholder ? "text-[#6B7280] font-light" : "text-slate-800 font-normal",
                 error
                   ? "border-red-500! focus:border-red-500 ring-1 ring-red-500"
                   // ✅ focus สีแดง

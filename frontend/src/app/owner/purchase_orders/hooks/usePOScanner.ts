@@ -208,7 +208,8 @@ export const usePoScanner = (supplierId: string, poItems: LocalPOItem[], setPoIt
             if (requestId !== latestRequestId.current) return;
             if (results && results.length > 0) {
                 // หาโค้ดที่ตรงเป๊ะก่อน ถ้าไม่เจอค่อยใช้ตัวแรกของผลลัพธ์
-                const product = results.find((p) => p.barcode === code || p.code === code) || results[0];
+                const normalizedCode = code.toLocaleLowerCase();
+                const product = results.find((p) => p.barcode?.toLocaleLowerCase() === normalizedCode || p.code?.toLocaleLowerCase() === normalizedCode) || results[0];
                 handleSelectProduct(product);
             } else {
                 toast({ title: 'เกิดข้อผิดพลาด', message: `ไม่พบสินค้ารหัส: ${code}`, variant: 'error' });

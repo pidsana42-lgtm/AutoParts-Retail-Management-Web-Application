@@ -20,7 +20,7 @@ func RequireRoles(allowedRoles ...string) gin.HandlerFunc {
 
         // 2. เช็กว่าสิทธิ์ที่แกะออกมา ตรงกับที่กลุ่ม Route นั้น ๆ อนุญาตไหม
         for _, role := range allowedRoles {
-            if userRole == role {
+            if userRole == role || (userRole == "Admin" && role == "Manager") || (userRole == "Manager" && role == "Admin") {
                 c.Next() // สิทธิ์ถูกต้องตรงกัน ปล่อยให้วิ่งไปทำลอจิกถัดไป
                 return
             }

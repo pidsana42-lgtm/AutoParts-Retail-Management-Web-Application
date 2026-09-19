@@ -647,9 +647,12 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
 
     const newFiles: File[] = await Promise.all(
       newUrls.map(async (url) => {
+        const isStandardWebPort = window.location.protocol === 'https:' || window.location.port === '' || window.location.port === '80' || window.location.port === '443';
         const fullUrl = url.startsWith('http')
           ? url
-          : `${window.location.protocol}//${window.location.hostname}:8080${url.startsWith('/') ? '' : '/'}${url}`;
+          : isStandardWebPort && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+            ? `${window.location.protocol}//${window.location.hostname}${url.startsWith('/') ? '' : '/'}${url}`
+            : `${window.location.protocol}//${window.location.hostname}:8080${url.startsWith('/') ? '' : '/'}${url}`;
         const resp = await fetch(fullUrl);
         const blob = await resp.blob();
         const fileName = `mobile_${url.split('/').pop() || 'image.jpg'}`;
