@@ -1241,7 +1241,7 @@ def generate_product_codes(request: GenerateCodesRequest):
         for prod_id in request.product_ids:
             try:
                 # Use the internal WMS product code as the barcode source.
-                query = text("SELECT product_code, barcode FROM products WHERE id = :id")
+                query = text("SELECT product_code, COALESCE((SELECT barcode FROM inventories WHERE inventories.product_id = products.id LIMIT 1), '') AS barcode FROM products WHERE id = :id")
                 row = conn.execute(query, {"id": prod_id}).fetchone()
                 if not row:
                     print(f"Product ID {prod_id} not found in DB, skipping code generation.")
