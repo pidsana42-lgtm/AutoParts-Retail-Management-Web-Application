@@ -192,7 +192,7 @@ const SalesCancellationHistory: React.FC = () => {
                     }}
                     onSubmit={handleSearch}
                     fetchOrders={fetchCancellationOrderSuggestions}
-                    placeholder="สแกนบาร์โค้ด / INV-2024-XXX หรือ ชื่อลูกค้า"
+                    placeholder="ค้นหา INV-2024-XXX หรือ ชื่อลูกค้า"
                     inputClassName="h-11"
                     autoFocus
                   />
