@@ -1042,9 +1042,18 @@ export default function PreOrderManager() {
                     <div className="absolute top-full left-0 mt-1 w-full md:w-[560px] bg-white border border-gray-200 shadow-2xl z-50 max-h-80 overflow-y-auto rounded-none overflow-hidden">
                       {/* Option to add custom item typed */}
                       <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`เพิ่ม "${quickSearch}" เป็นสินค้าสั่งจองแบบกำหนดเอง`}
                         className="px-3 py-2.5 bg-red-50/70 hover:bg-red-100/90 border-b border-red-100 cursor-pointer text-xs flex items-center justify-between transition-colors font-medium"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleAddCustomItem(quickSearch)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleAddCustomItem(quickSearch);
+                          }
+                        }}
                       >
                         <div className="flex items-center gap-2">
                           <Plus size={14} className="text-[#e51c23] shrink-0" />
@@ -1101,16 +1110,6 @@ export default function PreOrderManager() {
                     </div>
                   )}
                 </div>
-
-                {/* Direct Manual Add Button */}
-                <button
-                  type="button"
-                  onClick={() => handleAddCustomItem('')}
-                  className="flex items-center gap-1.5 bg-white border border-gray-300 hover:border-[#e51c23] hover:text-[#e51c23] text-[#1C1B1B] text-xs font-bold px-4 py-2 h-10 transition-colors shadow-2xs shrink-0 cursor-pointer"
-                >
-                  <Plus size={14} className="text-[#e51c23]" />
-                  <span>+ เพิ่มรายการเอง (ไม่มีในระบบ)</span>
-                </button>
               </div>
 
               <div className="overflow-x-auto min-h-[220px]">

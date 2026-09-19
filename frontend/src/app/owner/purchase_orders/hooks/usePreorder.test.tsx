@@ -18,7 +18,7 @@ describe('manual preorders added to a PO', () => {
       return { items, ...usePreorders(items, setItems, setOpen) };
     });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    const first: PreorderItem = { id: 8, product_id: null, product_name: 'ekdmlkdmskl', product_code: '', quantity: 2, unit: 'ชิ้น', unit_price: 0 };
+    const first: PreorderItem = { id: 8, product_id: null, product_name: 'ekdmlkdmskl', product_code: '', supplier_part_code: '', quantity: 2, unit: 'ชิ้น', unit_price: 0 };
     act(() => result.current.handleAddPreorderToPO(first));
     act(() => result.current.handleAddPreorderToPO({ ...first, id: 9, product_name: 'Turbocharger' }));
     expect(result.current.items).toHaveLength(2);

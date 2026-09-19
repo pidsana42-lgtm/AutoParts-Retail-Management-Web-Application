@@ -8,11 +8,15 @@ import (
 type UserRepository interface {
 	GetByUsername(username string) (*entity.User, error)
 	GetByLineUserID(lineUserID string) (*entity.User, error)
+	GetByIdentifier(identifier string) (*entity.User, error)
 	GetByID(id uint) (*entity.User, error)
 	UpdateProfile(id uint, updates ProfileUpdates) (*entity.User, error)
 	ValueExistsExcludingUser(column, value string, userID uint) (bool, error)
 	UpdateProfileImage(id uint, path string) error
 	UpdatePassword(id uint, passwordHash string) error
+	SavePasswordReset(reset *entity.PasswordReset) error
+	GetValidPasswordReset(userID uint, otp string) (*entity.PasswordReset, error)
+	MarkPasswordResetUsed(resetID uint) error
 }
 
 type ProfileUpdates struct {
@@ -104,4 +108,31 @@ func (r *userRepository) UpdatePassword(id uint, passwordHash string) error {
 
 func (r *userRepository) UpdateProfileImage(id uint, path string) error {
 	return r.db.Model(&entity.User{}).Where("id = ?", id).Update("profile_image_path", path).Error
+}
+
+func (r *userRepository) GetByIdentifier(identifier string) (*entity.User, error) {
+	var user entity.User
+	err := r.db.Preload("Role").Where("LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)", identifier, identifier).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *userRepository) SavePasswordReset(reset *entity.PasswordReset) error {
+	return r.db.Create(reset).Error
+}
+
+func (r *userRepository) GetValidPasswordReset(userID uint, otp string) (*entity.PasswordReset, error) {
+	var reset entity.PasswordReset
+	err := r.db.Where("user_id = ? AND otp = ? AND is_used = false AND expires_at > NOW()", userID, otp).
+		Order("id DESC").First(&reset).Error
+	if err != nil {
+		return nil, err
+	}
+	return &reset, nil
+}
+
+func (r *userRepository) MarkPasswordResetUsed(resetID uint) error {
+	return r.db.Model(&entity.PasswordReset{}).Where("id = ?", resetID).Update("is_used", true).Error
 }

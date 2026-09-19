@@ -196,6 +196,10 @@ func (ctrl *CustomerClaimController) UpdateCustomerClaimItem(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		if errors.Is(err, claimSvc.ErrClaimItemAlreadyDelivered) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update item: " + err.Error()})
 		return
 	}
@@ -226,6 +230,10 @@ func (ctrl *CustomerClaimController) UpdateCustomerClaimItemStatus(c *gin.Contex
 	if err != nil {
 		if errors.Is(err, claimRepo.ErrClaimQuantityExceedsOrder) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, claimSvc.ErrClaimItemAlreadyDelivered) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update item status: " + err.Error()})
