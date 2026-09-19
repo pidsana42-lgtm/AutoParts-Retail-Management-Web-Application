@@ -11,7 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { type LucideIcon } from "lucide-react";
+import { type LucideIcon, CheckCircle2, AlertTriangle, Info } from "lucide-react";
 import Modal from "./modal";
 import Button from "./button";
 import ConfirmDialog from "./confirm_dialog";
@@ -19,6 +19,7 @@ import ConfirmDialog from "./confirm_dialog";
 interface AlertDialogState {
   message: ReactNode;
   title?: string;
+  variant?: "danger" | "warning" | "success" | "info";
 }
 
 // ConfirmDialogOptions: ปรับหน้าตา/ข้อความปุ่มของป๊อปอัพยืนยันได้ตามงานที่กำลังทำ
@@ -37,7 +38,11 @@ interface ConfirmDialogState extends ConfirmDialogOptions {
 }
 
 interface AlertDialogContextValue {
-  alertDialog: (message: ReactNode, title?: string) => Promise<void>;
+  alertDialog: (
+    message: ReactNode,
+    title?: string,
+    variant?: "danger" | "warning" | "success" | "info"
+  ) => Promise<void>;
   confirmDialog: (message: ReactNode, options?: ConfirmDialogOptions) => Promise<boolean>;
 }
 
@@ -51,12 +56,19 @@ export function AlertDialogProvider({ children }: { children: ReactNode }) {
   const resolveAlertRef = useRef<(() => void) | null>(null);
   const resolveConfirmRef = useRef<((confirmed: boolean) => void) | null>(null);
 
-  const alertDialog = useCallback((message: ReactNode, title?: string) => {
-    return new Promise<void>((resolve) => {
-      resolveAlertRef.current = resolve;
-      setAlertState({ message, title });
-    });
-  }, []);
+  const alertDialog = useCallback(
+    (
+      message: ReactNode,
+      title?: string,
+      variant?: "danger" | "warning" | "success" | "info"
+    ) => {
+      return new Promise<void>((resolve) => {
+        resolveAlertRef.current = resolve;
+        setAlertState({ message, title, variant });
+      });
+    },
+    []
+  );
 
   const closeAlert = useCallback(() => {
     setAlertState(null);
@@ -88,12 +100,47 @@ export function AlertDialogProvider({ children }: { children: ReactNode }) {
         title={alertState?.title ?? "แจ้งเตือน"}
         size="sm"
         footer={
-          <Button type="button" variant="primary" onClick={closeAlert} className="w-full">
+          <Button
+            type="button"
+            variant={
+              alertState?.variant === "success"
+                ? "approved"
+                : alertState?.variant === "danger"
+                ? "danger"
+                : "primary"
+            }
+            onClick={closeAlert}
+            className="w-full"
+          >
             ตกลง
           </Button>
         }
       >
-        <p className="whitespace-pre-wrap text-sm text-slate-700">{alertState?.message}</p>
+        <div className="flex flex-col items-center text-center py-2">
+          {alertState?.variant === "success" && (
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+              <CheckCircle2 className="h-8 w-8" />
+            </div>
+          )}
+          {alertState?.variant === "danger" && (
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-600">
+              <AlertTriangle className="h-8 w-8" />
+            </div>
+          )}
+          {alertState?.variant === "warning" && (
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+              <AlertTriangle className="h-8 w-8" />
+            </div>
+          )}
+          {alertState?.variant === "info" && (
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+              <Info className="h-8 w-8" />
+            </div>
+          )}
+          <p className="whitespace-pre-wrap text-sm text-slate-700 leading-relaxed font-normal">
+            {alertState?.message}
+          </p>
+        </div>
       </Modal>
 
       {confirmState !== null && (

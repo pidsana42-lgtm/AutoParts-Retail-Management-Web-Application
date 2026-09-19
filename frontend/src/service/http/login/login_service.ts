@@ -18,3 +18,23 @@ export async function loginUser(credentials: LoginRequest): Promise<LoginRespons
     throw new Error(errorMessage); 
   }
 }
+
+export async function requestForgotPassword(identifier: string): Promise<{ message: string }> {
+  try {
+    const response = await apiClient.post<{ message: string }>('/auth/forgot-password', { identifier });
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.error || error.message || 'ไม่สามารถส่งรหัสยืนยัน (OTP) ได้';
+    throw new Error(errorMessage);
+  }
+}
+
+export async function resetPassword(payload: { identifier: string; otp: string; new_password: string }): Promise<{ message: string }> {
+  try {
+    const response = await apiClient.post<{ message: string }>('/auth/reset-password', payload);
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.error || error.message || 'ไม่สามารถเปลี่ยนรหัสผ่านได้';
+    throw new Error(errorMessage);
+  }
+}

@@ -566,7 +566,7 @@ const CreatePurchaseOrders: React.FC = () => {
                                     <TableHead className='pl-6'>ลำดับ</TableHead>
                                     <TableHead>ประเภท</TableHead>
                                     <TableHead>รหัสสินค้า</TableHead>
-                                    <TableHead>ชื่อสินค้า</TableHead>
+                                    <TableHead className='w-56 max-w-56'>ชื่อสินค้า</TableHead>
                                     <TableHead className='text-center'>จำนวนต่อหน่วย</TableHead>
                                     <TableHead className='text-center'>หน่วย</TableHead>
                                     <TableHead className='text-center'>ราคาต่อหน่วย</TableHead>
@@ -590,7 +590,14 @@ const CreatePurchaseOrders: React.FC = () => {
                                             <TableCell className='pl-6'>{index + 1}</TableCell>
                                             <TableCell>{row.order_type}</TableCell>
                                             <TableCell>{row.product_code_snapshot || '-'}</TableCell>
-                                            <TableCell>{row.product_name_snapshot}</TableCell>
+                                            <TableCell className='w-56 max-w-56 align-top'>
+                                                <div
+                                                    className='w-56 whitespace-normal break-words leading-5 [overflow-wrap:anywhere]'
+                                                    title={row.product_name_snapshot}
+                                                >
+                                                    {row.product_name_snapshot}
+                                                </div>
+                                            </TableCell>
                                             <TableCell className='text-center'>
                                                 <div className='inline-flex items-center border border-gray-300 rounded-none bg-[#F6F3F2]'>
                                                     <button

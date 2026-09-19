@@ -188,7 +188,7 @@ describe('Preorder list and navigation', () => {
     expect(screen.getByRole('columnheader', { name: 'สถานะ' })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'จัดการ' })).not.toBeInTheDocument();
     for (const label of ['แก้ไข', 'ลบ', 'ส่งมอบสินค้า', 'ยกเลิกจอง']) {
-      expect(screen.queryByRole('button', { name: label, exact: true })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
     }
     expect(screen.getAllByText('รออนุมัติสั่งซื้อ')).toHaveLength(2);
     expect(screen.getAllByText('รอสินค้า')).toHaveLength(2);

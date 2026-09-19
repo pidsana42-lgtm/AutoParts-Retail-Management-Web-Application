@@ -10,9 +10,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type AuthController struct {
@@ -43,6 +46,41 @@ func (c *AuthController) Login(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, res)
+}
+
+func (c *AuthController) ForgotPassword(ctx *gin.Context) {
+	var req authDTO.ForgotPasswordRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "กรุณากรอกชื่อผู้ใช้งานหรืออีเมล"})
+		return
+	}
+
+	if err := c.authService.ForgotPassword(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "ส่งรหัสยืนยัน (OTP) ไปยังอีเมลเรียบร้อยแล้ว"})
+}
+
+func (c *AuthController) ResetPassword(ctx *gin.Context) {
+	var req authDTO.ResetPasswordRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "กรุณากรอกข้อมูลให้ครบถ้วน และรหัสผ่านใหม่อย่างน้อย 6 ตัวอักษร"})
+		return
+	}
+
+	if len(req.NewPassword) < 6 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร"})
+		return
+	}
+
+	if err := c.authService.ResetPassword(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่"})
 }
 
 func (ctrl *AuthController) LineCallback(c *gin.Context) {
@@ -133,4 +171,116 @@ func (ctrl *AuthController) LineCallback(c *gin.Context) {
 	// Success! Redirect to frontend login callback parser
 	c.Redirect(http.StatusFound, fmt.Sprintf("http://localhost:5173/login?token=%s&role=%s&username=%s&first_name=%s&id=%d",
 		res.Token, res.Role, res.Username, res.FirstName, res.ID))
+}
+
+func authenticatedUserID(ctx *gin.Context) (uint, bool) {
+	rawUserID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้จากโทเคน"})
+		return 0, false
+	}
+
+	parsedUserID, err := strconv.ParseUint(fmt.Sprint(rawUserID), 10, 64)
+	if err != nil || parsedUserID == 0 {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "ข้อมูลผู้ใช้ในโทเคนไม่ถูกต้อง"})
+		return 0, false
+	}
+	return uint(parsedUserID), true
+}
+
+func (c *AuthController) GetProfile(ctx *gin.Context) {
+	userID, ok := authenticatedUserID(ctx)
+	if !ok {
+		return
+	}
+
+	profile, err := c.authService.GetProfile(userID)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลโปรไฟล์"})
+		return
+	}
+	ctx.JSON(http.StatusOK, profile)
+}
+
+func (c *AuthController) UpdateProfile(ctx *gin.Context) {
+	userID, ok := authenticatedUserID(ctx)
+	if !ok {
+		return
+	}
+
+	var request authDTO.UpdateProfileRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "กรุณากรอกข้อมูลโปรไฟล์ให้ครบ"})
+		return
+	}
+
+	profile, err := c.authService.UpdateProfile(userID, &request)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, profile)
+}
+
+func (c *AuthController) ChangePassword(ctx *gin.Context) {
+	userID, ok := authenticatedUserID(ctx)
+	if !ok {
+		return
+	}
+
+	var request authDTO.ChangePasswordRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "กรุณากรอกรหัสผ่านให้ครบ"})
+		return
+	}
+	if err := c.authService.ChangePassword(userID, &request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว"})
+}
+
+func (c *AuthController) UploadProfileImage(ctx *gin.Context) {
+	userID, ok := authenticatedUserID(ctx)
+	if !ok {
+		return
+	}
+	file, err := ctx.FormFile("avatar")
+	if err != nil || file.Size > 5*1024*1024 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาเลือกไฟล์รูปภาพไม่เกิน 5MB"})
+		return
+	}
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp" && ext != ".gif" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "รองรับเฉพาะไฟล์ JPG, PNG, WEBP หรือ GIF"})
+		return
+	}
+	dir := filepath.Join("uploads", "employees")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถเตรียมพื้นที่เก็บรูปภาพได้"})
+		return
+	}
+	filename := uuid.NewString() + ext
+	if err := ctx.SaveUploadedFile(file, filepath.Join(dir, filename)); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกรูปภาพได้"})
+		return
+	}
+	path := "/uploads/employees/" + filename
+	if err := c.authService.SaveProfileImage(userID, path); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกรูปโปรไฟล์ได้"})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"profile_image_path": path})
+}
+
+func (c *AuthController) DeleteProfileImage(ctx *gin.Context) {
+	userID, ok := authenticatedUserID(ctx)
+	if !ok {
+		return
+	}
+	if err := c.authService.SaveProfileImage(userID, ""); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถลบรูปโปรไฟล์ได้"})
+		return
+	}
+	ctx.Status(http.StatusNoContent)
 }

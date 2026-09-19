@@ -107,6 +107,7 @@ func SetupDatabase() {
 		// pos
 		&entity.Role{},
 		&entity.User{},
+		&entity.PasswordReset{},
 		&entity.Supplier{},
 		&entity.Customer{},
 		&entity.CustomerCreditAuditLog{},

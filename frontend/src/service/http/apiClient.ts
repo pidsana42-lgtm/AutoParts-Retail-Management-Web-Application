@@ -3,8 +3,11 @@ import axios from 'axios';
 const getApiBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
   if (typeof window !== 'undefined') {
-    const { hostname, protocol } = window.location;
+    const { hostname, protocol, port } = window.location;
     if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      if (protocol === 'https:' || port === '' || port === '80' || port === '443') {
+        return '/api';
+      }
       if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
         return `${protocol}//${hostname}:8080/api`;
       }

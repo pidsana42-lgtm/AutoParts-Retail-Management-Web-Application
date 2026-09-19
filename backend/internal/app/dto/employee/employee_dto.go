@@ -9,6 +9,7 @@ type CreateEmployeeRequest struct {
 	LastName          string `json:"last_name" binding:"required,max=100"`
 	IDCardNumber      string `json:"id_card_number_user" binding:"required,len=13,numeric"`
 	Username          string `json:"username" binding:"required,min=4,max=100"`
+	Email             string `json:"email" binding:"required,email,max=100"`
 	Password          string `json:"password" binding:"required,min=8,max=72"`
 	LineUserID        string `json:"line_user_id" binding:"omitempty,max=100"`
 	BankID            uint   `json:"bank_id" binding:"omitempty"`

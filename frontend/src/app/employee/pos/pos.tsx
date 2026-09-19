@@ -583,25 +583,33 @@ export default function PosPage(): React.JSX.Element {
                         <td className="py-4 px-4 text-xs text-[#1C1B1B]">{item.product_code || "—"}</td>
                         {/* column2 Product Name */}
                         <td className="py-4 px-4">
-                          <div className="flex items-center gap-1.5">
-                            <Text variant="body" className="text-[#1C1B1B] mb-0 ">{item.product_name}</Text>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm font-medium text-[#1C1B1B] leading-tight">
+                              {item.product_name}
+                            </span>
+
                             {/* สินค้า 1 ชิ้นมาจากได้หลายบริษัท — ต้องรู้ว่าแถวนี้ตัดสต็อกจากบริษัทไหน (เจาะจงจากบาร์โค้ด/รหัสล็อตที่แสกน-เลือก) */}
                             {item.supplier_name && (
-                              <span
-                                title={`ตัดสต็อกจากบริษัท: ${item.supplier_name}`}
-                                className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700"
-                              >
-                                <Building2 size={10} />
-                                {item.supplier_name}
+                              <div>
+                                <span
+                                  title={`ตัดสต็อกจากบริษัท: ${item.supplier_name}`}
+                                  className="inline-flex shrink-0 items-center gap-1 rounded-none bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-[#E51C23] leading-none"
+                                >
+                                  <Building2 size={10} />
+                                  {item.supplier_name}
+                                </span>
+                              </div>
+                            )}
+
+                            <span className="text-[11px] text-[#6B7280] leading-tight">
+                              PN: {item.part_number || "—"}
+                            </span>
+                            {(item.brand_name || item.grade_name || item.model_name) && (
+                              <span className="text-[11px] text-[#6B7280] leading-tight">
+                                แบรนด์: {item.brand_name || "ไม่ระบุ"} | เกรด: {item.grade_name || "ทั่วไป"} | รุ่นรถที่รองรับ: {item.model_name || "ทุกรุ่น"}
                               </span>
                             )}
                           </div>
-                          <Text variant="small" className="text-[11px] text-[#6B7280] mt-0.5 mb-0">PN: {item.part_number || "—"}</Text>
-                          {(item.brand_name || item.grade_name || item.model_name) && (
-                            <Text variant="small" className="text-[11px] text-[#6B7280] mt-1 inline-block py-0.5 rounded-sm mb-0">
-                              แบรนด์: {item.brand_name || "ไม่ระบุ"} | เกรด: {item.grade_name || "ทั่วไป"} | รุ่นรถที่รองรับ: {item.model_name || "ทุกรุ่น"}
-                            </Text>
-                          )}
                         </td>
                         {/* column3 Unit Price */}
                         <td className="py-4 px-4 text-right text-[#1C1B1B]">{item.unit_price.toFixed(2)}</td>
