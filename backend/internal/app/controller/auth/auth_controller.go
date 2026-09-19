@@ -45,6 +45,46 @@ func (c *AuthController) Login(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, res)
 }
 
+func (c *AuthController) ForgotPassword(ctx *gin.Context) {
+	var req authDTO.ForgotPasswordRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "กรุณากรอกชื่อผู้ใช้งานหรืออีเมล"})
+		return
+	}
+
+	if err := c.authService.ForgotPassword(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "ส่งรหัสยืนยัน (OTP) ไปยังอีเมลเรียบร้อยแล้ว"})
+}
+
+func (c *AuthController) ResetPassword(ctx *gin.Context) {
+	var req authDTO.ResetPasswordRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "กรุณากรอกข้อมูลให้ครบถ้วน และรหัสผ่านใหม่อย่างน้อย 6 ตัวอักษร"})
+		return
+	}
+
+	decodedPassword, err := base64.StdEncoding.DecodeString(req.NewPassword)
+	if err == nil && len(decodedPassword) > 0 {
+		req.NewPassword = string(decodedPassword)
+	}
+
+	if len(req.NewPassword) < 6 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร"})
+		return
+	}
+
+	if err := c.authService.ResetPassword(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่"})
+}
+
 func (ctrl *AuthController) LineCallback(c *gin.Context) {
 	code := c.Query("code")
 	if code == "" {
