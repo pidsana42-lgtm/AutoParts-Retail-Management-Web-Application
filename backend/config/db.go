@@ -193,22 +193,24 @@ func SetupDatabase() {
 	seed.PurchaseOrdersType(db)
 	seed.CompanySetting(db)
 
+	// Master lookup tables (Units, Categories, Shelves, Brands, etc.)
+	seed.Supplier(db)
+	seed.Zone(db)
+	seed.Unit(db)
+	seed.Category(db)
+	seed.SubCategory(db)
+	seed.Grade(db)
+	seed.Shelf(db)
+	seed.Brand(db)
+	seed.Models(db)
+
 	// User auth
 	if err := seed.User(db); err != nil {
 		log.Printf("Warning: failed to seed default user: %v", err)
 	}
-	// seed.Customer(db)
 
-	// Mock data seeds disabled
-	// seed.Supplier(db)
-	// seed.Zone(db)
-	// seed.Unit(db)
-	// seed.Category(db)
-	// seed.SubCategory(db)
-	// seed.Grade(db)
-	// seed.Shelf(db)
-	// seed.Brand(db)
-	// seed.Models(db)
+	// Mock transactional data disabled
+	// seed.Customer(db)
 	// seed.Product(db)
 	// seed.PurchaseOrders(db)
 	// seed.Inventory(db)
