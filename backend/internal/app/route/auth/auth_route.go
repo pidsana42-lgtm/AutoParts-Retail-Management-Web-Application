@@ -4,6 +4,7 @@ import (
 	authCtrl "backend/internal/app/controller/auth"
 	authRepo "backend/internal/app/repository/auth"
 	authSvc "backend/internal/app/service/auth"
+	"backend/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -17,5 +18,10 @@ func SetupAuthRoutes(r *gin.Engine, db *gorm.DB) {
 	{
 		authGroup.POST("/login", authController.Login)
 		authGroup.GET("/line/callback", authController.LineCallback)
+		authGroup.GET("/profile", middleware.AuthMiddleware(), authController.GetProfile)
+		authGroup.PUT("/profile", middleware.AuthMiddleware(), authController.UpdateProfile)
+		authGroup.POST("/profile/avatar", middleware.AuthMiddleware(), authController.UploadProfileImage)
+		authGroup.DELETE("/profile/avatar", middleware.AuthMiddleware(), authController.DeleteProfileImage)
+		authGroup.PUT("/password", middleware.AuthMiddleware(), authController.ChangePassword)
 	}
 }
