@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { ScanBarcode, User, FileText, Loader2 } from "lucide-react";
+import { ScanBarcode, User, FileText, Loader2, X } from "lucide-react";
 import Input from "../../../../components/elements/input";
 import Badge from "../../../../components/elements/badge";
 import Text from "../../../../components/elements/text";
@@ -25,10 +25,13 @@ export interface OrderCustomerSearchInputProps {
   onSubmit?: () => void;
   placeholder?: string;
   orderSectionTitle?: string;
+  customerSectionTitle?: string;
   fetchOrders?: (query: string) => Promise<SuggestionOrder[]>;
+  fetchCustomers?: (query: string) => Promise<CustomerDiscountResponse[]>;
   autoFocus?: boolean;
   className?: string;
   inputClassName?: string;
+  icon?: React.ReactNode;
 }
 
 const getCustomerTypeVariant = (typeName?: string): any => {
@@ -65,10 +68,13 @@ export default function OrderCustomerSearchInput({
   onSubmit,
   placeholder = "สแกนบาร์โค้ด / INV-202X-XXX หรือ ชื่อลูกค้า...",
   orderSectionTitle = "รายการบิล / คำสั่งซื้อ (คลิกเพื่อค้นหาด้วยเลขที่บิลนี้)",
+  customerSectionTitle = "ลูกค้า / อู่ (คลิกเพื่อค้นหาด้วยชื่อนี้)",
   fetchOrders,
+  fetchCustomers,
   autoFocus = false,
   className,
   inputClassName,
+  icon,
 }: OrderCustomerSearchInputProps): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -141,7 +147,9 @@ export default function OrderCustomerSearchInput({
 
     const timer = setTimeout(async () => {
       try {
-        const customerPromise = posApiService.searchCustomerDiscount(cleaned);
+        const customerPromise = fetchCustomers
+          ? fetchCustomers(cleaned)
+          : posApiService.searchCustomerDiscount(cleaned);
         const orderPromise = fetchOrders ? fetchOrders(cleaned) : Promise.resolve([]);
 
         const [custRes, orderRes] = await Promise.all([customerPromise, orderPromise]);
@@ -171,7 +179,7 @@ export default function OrderCustomerSearchInput({
       isCurrent = false;
       clearTimeout(timer);
     };
-  }, [value, fetchOrders]);
+  }, [value, fetchOrders, fetchCustomers]);
 
   const handleCustomerClick = (cust: CustomerDiscountResponse) => {
     onChange(cust.customer_name);
@@ -214,10 +222,16 @@ export default function OrderCustomerSearchInput({
 
   return (
     <div ref={containerRef} className={cn("relative flex-1", className)}>
-      <ScanBarcode
-        className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none"
-        size={18}
-      />
+      {icon !== undefined ? (
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none flex items-center justify-center">
+          {icon}
+        </div>
+      ) : (
+        <ScanBarcode
+          className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none"
+          size={18}
+        />
+      )}
       <Input
         placeholder={placeholder}
         value={value}
@@ -231,11 +245,24 @@ export default function OrderCustomerSearchInput({
         )}
       />
 
-      {isLoading && (
+      {isLoading ? (
         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none">
           <Loader2 size={16} className="animate-spin text-gray-400" />
         </div>
-      )}
+      ) : value ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onChange("");
+            onSubmit?.();
+          }}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-0.5 cursor-pointer z-10"
+          title="ล้างคำค้นหา"
+        >
+          <X size={16} />
+        </button>
+      ) : null}
 
       {/* Autocomplete Dropdown - ใช้ createPortal ไปยัง document.body ป้องกันโดน parent overflow ตัดขอบ และไม่ซ้อนหลังกล่อง input/select อื่น */}
       {isOpen && hasSuggestions && coords && createPortal(
@@ -258,7 +285,7 @@ export default function OrderCustomerSearchInput({
               <div className="bg-[#F6F3F2] px-3.5 py-1.5 text-[11px] text-[#6B7280] flex items-center justify-between uppercase tracking-wider font-normal">
                 <span className="flex items-center gap-1.5">
                   <User size={12} className="text-gray-500" />
-                  ลูกค้า / อู่ (คลิกเพื่อค้นหาด้วยชื่อนี้)
+                  {customerSectionTitle}
                 </span>
                 <span className="text-[10px] text-gray-400 font-light">
                   {customerSuggestions.length} รายชื่อ
@@ -288,11 +315,18 @@ export default function OrderCustomerSearchInput({
                         </Badge>
                       )}
                     </div>
-                    {cust.phone_number && (
-                      <Text variant="xs" className="text-[11px] text-[#6B7280] mb-0 mt-1 font-light">
-                        โทร: {cust.phone_number}
-                      </Text>
-                    )}
+                    <div className="flex items-center gap-2 flex-wrap mt-1">
+                      {cust.phone_number && (
+                        <Text variant="xs" className="text-[11px] text-[#6B7280] mb-0 font-light">
+                          โทร: {cust.phone_number}
+                        </Text>
+                      )}
+                      {cust.id_card_number_customer && (
+                        <Text variant="xs" className="text-[11px] text-[#6B7280] mb-0 font-light">
+                          {cust.phone_number ? "• " : ""}เลขบัตร: {cust.id_card_number_customer}
+                        </Text>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right flex flex-col shrink-0 pl-4">
                     <span className="text-xs text-[#E51C23] font-normal">
