@@ -309,8 +309,8 @@ describe('Preorder form (real owner and employee pages, mocked API)', () => {
   it('adds and saves a manually entered product', async () => {
     const user = await newForm();
     await user.type(firstName(), 'ลูกค้า');
-    await user.click(screen.getByRole('button', { name: '+ เพิ่มรายการเอง (ไม่มีในระบบ)' }));
-    await user.type(screen.getByPlaceholderText('ระบุชื่อสินค้า...'), 'อะไหล่สั่งพิเศษ');
+    await user.type(searchProduct(), 'อะไหล่สั่งพิเศษ');
+    await user.click(await screen.findByRole('button', { name: 'เพิ่ม "อะไหล่สั่งพิเศษ" เป็นสินค้าสั่งจองแบบกำหนดเอง' }));
     await user.type(screen.getByPlaceholderText('-'), 'CUSTOM-1');
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '4' } });
     await user.click(save());
@@ -326,7 +326,9 @@ describe('Preorder form (real owner and employee pages, mocked API)', () => {
   it('does not submit a custom item without a name', async () => {
     const user = await newForm();
     await user.type(firstName(), 'ลูกค้า');
-    await user.click(screen.getByRole('button', { name: '+ เพิ่มรายการเอง (ไม่มีในระบบ)' }));
+    await user.type(searchProduct(), 'ทดสอบ');
+    await user.click(await screen.findByRole('button', { name: 'เพิ่ม "ทดสอบ" เป็นสินค้าสั่งจองแบบกำหนดเอง' }));
+    await user.clear(screen.getByPlaceholderText('ระบุชื่อสินค้า...'));
     await user.click(save());
     expect(screen.getByPlaceholderText('ระบุชื่อสินค้า...')).toBeInvalid();
     expect(mocks.create).not.toHaveBeenCalled();
