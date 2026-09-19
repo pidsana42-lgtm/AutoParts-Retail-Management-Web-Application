@@ -34,8 +34,8 @@ func NewAuthService(userRepo authRepo.UserRepository, emailSvc email.EmailServic
 }
 
 func (s *authService) Login(req *authDTO.LoginRequest) (*authDTO.LoginResponse, error) {
-    // 1. ค้นหาผู้ใช้ในฐานข้อมูลผ่าน Repo
-    user, err := s.userRepo.GetByUsername(req.Username)
+    // 1. ค้นหาผู้ใช้ในฐานข้อมูลผ่าน Repo (รองรับทั้ง Username และ Email)
+    user, err := s.userRepo.GetByIdentifier(req.Username)
     if err != nil {
         return nil, errors.New("ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง")
     }

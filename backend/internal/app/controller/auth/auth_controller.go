@@ -67,11 +67,6 @@ func (c *AuthController) ResetPassword(ctx *gin.Context) {
 		return
 	}
 
-	decodedPassword, err := base64.StdEncoding.DecodeString(req.NewPassword)
-	if err == nil && len(decodedPassword) > 0 {
-		req.NewPassword = string(decodedPassword)
-	}
-
 	if len(req.NewPassword) < 6 {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร"})
 		return
