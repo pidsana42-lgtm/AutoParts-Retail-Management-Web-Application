@@ -19,27 +19,27 @@ func SetupCompanySettingRoutes(r *gin.Engine, db *gorm.DB) {
 	group := r.Group("/api/company-setting")
 	group.Use(middleware.AuthMiddleware())
 	{
-		// Owner, Admin, Employee สามารถดูข้อมูลร้านค้าได้
+		// Owner, Manager, Employee สามารถดูข้อมูลร้านค้าได้
 		group.GET("",
-			middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin), string(enum.RoleEmployee)),
+			middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleManager), string(enum.RoleEmployee)),
 			controller.GetCompanySetting,
 		)
 
-		// เฉพาะ Owner, Admin ที่สามารถอัปเดตข้อมูลร้านค้าได้
+		// เฉพาะ Owner เท่านั้นที่สามารถอัปเดตข้อมูลร้านค้าได้
 		group.PUT("",
-			middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)),
+			middleware.RequireRoles(string(enum.RoleOwner)),
 			controller.UpdateCompanySetting,
 		)
 
-		// เฉพาะ Owner, Admin ที่สามารถดูข้อมูลการชำระเงินแบบถอดรหัสเต็มได้ (Unmask / Reveal)
+		// เฉพาะ Owner เท่านั้นที่สามารถดูข้อมูลการชำระเงินแบบถอดรหัสเต็มได้ (Unmask / Reveal)
 		group.GET("/payment/reveal",
-			middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)),
+			middleware.RequireRoles(string(enum.RoleOwner)),
 			controller.RevealPaymentSetting,
 		)
 
-		// เฉพาะ Owner, Admin ที่สามารถอัปโหลดโลโก้ได้
+		// เฉพาะ Owner เท่านั้นที่สามารถอัปโหลดโลโก้ได้
 		group.POST("/logo",
-			middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)),
+			middleware.RequireRoles(string(enum.RoleOwner)),
 			controller.UploadLogo,
 		)
 	}

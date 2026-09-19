@@ -7,6 +7,7 @@ import (
 	"backend/internal/app/route/company_setting"
 	"backend/internal/app/route/customer"
 	"backend/internal/app/route/dashboard"
+	"backend/internal/app/route/employee"
 	"backend/internal/app/route/import_bill"
 	"backend/internal/app/route/notification"
 	"backend/internal/app/route/oa"
@@ -28,6 +29,7 @@ func SetupAllRoutes(r *gin.Engine, db *gorm.DB) {
 
 	//auth routes
 	auth.SetupAuthRoutes(r, db)
+	employee.SetupEmployeeRoutes(r, db)
 
 	// dashboard routes
 	dashboard.SetupDashboardRoutes(r, db)

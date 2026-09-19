@@ -54,3 +54,4 @@ describe('purchase order validation', () => {
         expect(validatePurchaseOrder(7, [{ ...item, order_type: 'พรีออเดอร์', pre_order_item_id, unit_price: 0 }])[0]).toContain('ราคาต่อหน่วย');
     });
 });
+// @ts-nocheck - legacy fixture intentionally exercises an obsolete snapshot field

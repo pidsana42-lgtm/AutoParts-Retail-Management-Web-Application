@@ -23,11 +23,11 @@ export const RejectedBreakdownModal: React.FC<RejectedBreakdownModalProps> = ({
   const total = data.reduce((sum, item) => sum + Number(item.amount), 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="w-full max-w-2xl overflow-hidden bg-white shadow-xl border border-gray-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 backdrop-blur-sm sm:p-4">
+      <div className="max-h-[95vh] w-full max-w-2xl overflow-hidden border border-gray-200 bg-white shadow-xl">
 
         {/* Header */}
-        <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200">
+        <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-4 sm:px-6">
           <div>
             <Heading level="h4" className="font-semibold text-gray-900">
               ยอดรอส่งอนุมัติใหม่แยกตามบริษัท ({data.length} บริษัท)
@@ -65,7 +65,7 @@ export const RejectedBreakdownModal: React.FC<RejectedBreakdownModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setExpandedSupplierId(isExpanded ? null : supplierKey)}
-                        className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-gray-50"
+                        className="flex w-full flex-col items-start justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-gray-50 sm:flex-row sm:items-center sm:gap-4"
                         aria-expanded={isExpanded}
                       >
                         <div className="flex min-w-0 items-center gap-3">
@@ -129,7 +129,7 @@ export const RejectedBreakdownModal: React.FC<RejectedBreakdownModalProps> = ({
                 })}
               </div>
 
-              <div className="mt-4 border-t pt-4 flex items-center justify-between">
+              <div className="mt-4 flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
                 <span className="font-medium text-gray-700">
                   รวมทั้งหมด
                 </span>

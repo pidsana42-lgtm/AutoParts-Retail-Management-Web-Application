@@ -2,12 +2,12 @@ package purchaseorders
 
 import (
 	poCtrl "backend/internal/app/controller/purchase_orders"
-	poRepo "backend/internal/app/repository/purchase_orders"
-	poSvc "backend/internal/app/service/purchase_orders"
+	"backend/internal/app/cron"
 	preOrderRepo "backend/internal/app/repository/pre_oder"
+	poRepo "backend/internal/app/repository/purchase_orders"
 	wmsRepo "backend/internal/app/repository/wms"
 	svcNotification "backend/internal/app/service/notification"
-	"backend/internal/app/cron"
+	poSvc "backend/internal/app/service/purchase_orders"
 
 	"backend/internal/app/enum"
 	"backend/internal/middleware"
@@ -42,7 +42,7 @@ func SetupPORoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotificati
 	poGroup := r.Group("/api/po")
 	poGroup.Use(
 		middleware.AuthMiddleware(),
-		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleAdmin)),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleManager)),
 	)
 	{
 		// CRUD
@@ -55,7 +55,7 @@ func SetupPORoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotificati
 		// PO Management
 		poGroup.GET("/get-all-po", poController.ListPOs)
 		poGroup.GET("/available-years", poController.GetAvailableYears)
-		poGroup.GET("/summary", poController.GetSummary)
+		poGroup.GET("/summary", middleware.RequireRoles(string(enum.RoleOwner)), poController.GetSummary)
 		poGroup.GET("/monthly-count", poController.GetMonthlyCount)
 		poGroup.GET("/print/:id", poController.PrintPO)
 		// Supplier Delivery Estimate

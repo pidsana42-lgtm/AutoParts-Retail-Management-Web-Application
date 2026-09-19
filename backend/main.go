@@ -34,6 +34,7 @@ func main() {
 	// Prometheus middleware wraps Recovery so panic responses are recorded as 500.
 	r.Use(gin.Logger(), middleware.PrometheusMetrics(httpMetrics), gin.Recovery())
 	r.Use(middleware.CORSMiddleware())
+	r.Use(middleware.SecurityHeaders())
 
 	// 3. เปิดโฟลเดอร์สำหรับฝากรูปภาพอะไหล่หรือสลิปเงิน
 	r.Static("/uploads", "./uploads")

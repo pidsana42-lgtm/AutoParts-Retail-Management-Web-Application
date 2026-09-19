@@ -20,7 +20,7 @@ func SetupSalesHistoryRoutes(r *gin.Engine, db *gorm.DB, notificationService svc
 	salesGroup := r.Group("/api/pos")
 	salesGroup.Use(
 		middleware.AuthMiddleware(),
-		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleAdmin)),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleManager)),
 	)
 	{
 		salesGroup.GET("/sales/history", ctrl.GetSalesHistory)
@@ -36,9 +36,9 @@ func SetupSalesHistoryRoutes(r *gin.Engine, db *gorm.DB, notificationService svc
 		// ดึงรายชื่อพนักงานในแผนก POS
 		salesGroup.GET("/employees", ctrl.GetEmployees)
 
-		// ส่วนสิทธิ์ของ Owner/Admin ค่อยแตก Group ย่อยออกมาจาก salesGroup อีกที
+		// ส่วนสิทธิ์ของ Owner/Manager ค่อยแตก Group ย่อยออกมาจาก salesGroup อีกที
 		ownerOnly := salesGroup.Group("")
-		ownerOnly.Use(middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)))
+		ownerOnly.Use(middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleManager)))
 		{
 			// เพิ่มดูคำขอยกเลิกบิลทั้งหมด (กรองตาม status เช่น PENDING ได้)
             ownerOnly.GET("/cancellation-requests", ctrl.GetCancellationRequests)

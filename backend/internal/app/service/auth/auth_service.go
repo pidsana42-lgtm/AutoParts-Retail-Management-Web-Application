@@ -7,7 +7,6 @@ import (
 	"time"
 	"os"
 	"golang.org/x/crypto/bcrypt"
-    "log"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -30,10 +29,6 @@ func (s *authService) Login(req *authDTO.LoginRequest) (*authDTO.LoginResponse, 
     if err != nil {
         return nil, errors.New("ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง")
     }
-
-    log.Println("=== [DEBUG AUTH] ===")
-    log.Printf("Trying Username: %s", req.Username)
-    log.Printf("Input Raw Password from Client: '%s'", req.Password)
 
     err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
     if err != nil {
