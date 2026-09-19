@@ -33,22 +33,22 @@ export default function Sidebar({
       <div className="relative">
         <button
           onClick={onToggle}
-          className="absolute -right-4 top-9 bg-[#E51C23] text-white w-10 h-10 rounded-full flex items-center justify-center border border-gray-800 cursor-pointer z-10"
+          className="absolute -right-4 top-7 bg-[#E51C23] text-white w-10 h-10 rounded-full flex items-center justify-center border border-gray-800 cursor-pointer z-10"
         >
           {collapsed ? <Menu size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        <div className="h-28 border-b border-gray-800 flex items-center justify-center px-4 overflow-hidden py-2">
+        <div className="h-24 border-b border-gray-800 flex items-center justify-center px-4 overflow-hidden py-2">
           <img
             src="/LOGO.png"
             alt="AutoParts Logo"
             className={`object-contain transition-all duration-300 filter brightness-0 invert ${
-              collapsed ? "h-12 w-12" : "h-24 w-auto max-w-[95%]"
+              collapsed ? "h-10 w-10" : "h-20 w-auto max-w-[90%]"
             }`}
           />
         </div>
 
-        <ul className="mt-4 space-y-0.5">
+        <ul className="mt-6 space-y-1">
           {menuItems.map((item, index) => {
             const Icon = item.icon;
             const isActive =
