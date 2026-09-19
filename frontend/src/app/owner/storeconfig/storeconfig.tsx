@@ -1,14 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {
-  Loader2,
-  Save,
-  Eye,
-  EyeOff,
-  ShieldCheck,
-  QrCode,
-  Building2,
-} from "lucide-react";
-
+import { Loader2, Save, Eye, EyeOff, ShieldCheck, QrCode, Building2, Store, Image } from "lucide-react";
 import Heading from "../../../components/elements/heading";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../components/elements/card";
 import Input from "../../../components/elements/input";
@@ -20,26 +11,11 @@ import type { CompanySettingReq } from "../../../interface/companysetting/compan
 import { companyService, resolveAssetUrl } from "../../../service/http/companysetting/company_service";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContexts";
+import { BANK_OPTIONS } from "../../../utils/banks";
 
 const PROMPTPAY_TYPE_OPTIONS: SelectOption[] = [
   { label: "เบอร์โทรศัพท์มือถือ (10 หลัก)", value: "phone" },
   { label: "เลขประจำตัวผู้เสียภาษี / บัตรประชาชน (13 หลัก)", value: "tax_id" },
-];
-
-const BANK_OPTIONS: SelectOption[] = [
-  { label: "ธนาคารกสิกรไทย (KBANK)", value: "ธนาคารกสิกรไทย (KBANK)" },
-  { label: "ธนาคารไทยพาณิชย์ (SCB)", value: "ธนาคารไทยพาณิชย์ (SCB)" },
-  { label: "ธนาคารกรุงไทย (KTB)", value: "ธนาคารกรุงไทย (KTB)" },
-  { label: "ธนาคารกรุงเทพ (BBL)", value: "ธนาคารกรุงเทพ (BBL)" },
-  { label: "ธนาคารกรุงศรีอยุธยา (BAY)", value: "ธนาคารกรุงศรีอยุธยา (BAY)" },
-  { label: "ธนาคารทหารไทยธนชาต (TTB)", value: "ธนาคารทหารไทยธนชาต (TTB)" },
-  { label: "ธนาคารออมสิน (GSB)", value: "ธนาคารออมสิน (GSB)" },
-  { label: "ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร (ธ.ก.ส.)", value: "ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร (ธ.ก.ส.)" },
-  { label: "ธนาคารยูโอบี (UOB)", value: "ธนาคารยูโอบี (UOB)" },
-  { label: "ธนาคารเกียรตินาคินภัทร (KKP)", value: "ธนาคารเกียรตินาคินภัทร (KKP)" },
-  { label: "ธนาคารซีไอเอ็มบีไทย (CIMB)", value: "ธนาคารซีไอเอ็มบีไทย (CIMB)" },
-  { label: "ธนาคารทิสโก้ (TISCO)", value: "ธนาคารทิสโก้ (TISCO)" },
-  { label: "ธนาคารแลนด์ แอนด์ เฮ้าส์ (LH Bank)", value: "ธนาคารแลนด์ แอนด์ เฮ้าส์ (LH Bank)" },
 ];
 
 const StoreConfig: React.FC = () => {
@@ -346,7 +322,10 @@ const StoreConfig: React.FC = () => {
         {/* Company Info Card */}
         <Card className="border-l-[5px] border-l-red-600">
           <CardHeader>
-            <CardTitle className="text-xl font-normal">ข้อมูลร้าน</CardTitle>
+            <CardTitle className="text-xl font-normal flex items-center gap-2">
+              <Store size={20} className="text-red-600"/>
+              <span>ข้อมูลร้าน</span>
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -645,7 +624,10 @@ const StoreConfig: React.FC = () => {
         {/* Logo Card */}
         <Card className="border-l-[5px] border-l-red-600">
           <CardHeader>
-            <CardTitle className="text-xl font-normal">โลโก้ร้าน</CardTitle>
+            <CardTitle className="text-xl font-normal flex items-center gap-2">
+              <Image size={20} className="text-red-600"/>
+              <span>โลโก้ร้าน</span>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ImageUploader
