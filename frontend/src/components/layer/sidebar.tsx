@@ -33,17 +33,17 @@ export default function Sidebar({
       <div className="relative">
         <button
           onClick={onToggle}
-          className="absolute -right-4 top-5 bg-[#E51C23] text-white w-10 h-10 rounded-full flex items-center justify-center border border-gray-800 cursor-pointer"
+          className="absolute -right-4 top-9 bg-[#E51C23] text-white w-10 h-10 rounded-full flex items-center justify-center border border-gray-800 cursor-pointer z-10"
         >
           {collapsed ? <Menu size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        <div className="h-16 border-b border-gray-800 flex items-center justify-center px-4 overflow-hidden">
+        <div className="h-28 border-b border-gray-800 flex items-center justify-center px-4 overflow-hidden py-2">
           <img
             src="/LOGO.png"
             alt="AutoParts Logo"
             className={`object-contain transition-all duration-300 filter brightness-0 invert ${
-              collapsed ? "h-8 w-8" : "h-10 max-w-[80%]"
+              collapsed ? "h-12 w-12" : "h-24 w-auto max-w-[95%]"
             }`}
           />
         </div>
