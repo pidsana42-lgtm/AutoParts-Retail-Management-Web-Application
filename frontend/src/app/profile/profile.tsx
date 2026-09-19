@@ -15,12 +15,14 @@ import { profileService } from "../../service/http/profile/profile_service";
 import { BANK_OPTIONS } from "../../utils/banks";
 import { digitsOnly, formatBankAccount, formatThaiId, getApiErrorMessage, isValidThaiId } from "../../utils/employee";
 import AccountFormCard from "./account_form_card";
+import { usePathBasePrefix } from "../../utils/usePathBasePrefix";
 
 type ProfileForm = {
   prefix: string;
   firstName: string;
   lastName: string;
   username: string;
+  email: string;
   role: string;
   idCardNumber: string;
   lineUserId: string;
@@ -29,13 +31,14 @@ type ProfileForm = {
   bankAccountName: string;
 };
 
-type ProfileErrors = Partial<Record<"prefix" | "firstName" | "lastName" | "idCardNumber" | "bankName" | "bankAccountNumber" | "bankAccountName", string>>;
+type ProfileErrors = Partial<Record<"prefix" | "firstName" | "lastName" | "email" | "idCardNumber" | "bankName" | "bankAccountNumber" | "bankAccountName", string>>;
 
 const EMPTY_FORM: ProfileForm = {
   prefix: "",
   firstName: "",
   lastName: "",
   username: "",
+  email: "",
   role: "",
   idCardNumber: "",
   lineUserId: "",
@@ -54,6 +57,7 @@ export default function ProfilePage(): React.JSX.Element {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, role, setUser } = useAuth();
+  const basePath = usePathBasePrefix();
   const [form, setForm] = useState<ProfileForm>(EMPTY_FORM);
   const [initialForm, setInitialForm] = useState<ProfileForm>(EMPTY_FORM);
   const [errors, setErrors] = useState<ProfileErrors>({});
@@ -79,6 +83,7 @@ export default function ProfilePage(): React.JSX.Element {
           firstName: profile.first_name || "",
           lastName: profile.last_name || "",
           username: profile.username || "",
+          email: profile.email || "",
           role: profile.role || "",
           idCardNumber: formatThaiId(profile.id_card_number_user || ""),
           lineUserId: profile.line_user_id || "",
@@ -121,6 +126,7 @@ export default function ProfilePage(): React.JSX.Element {
     if (!form.prefix) next.prefix = "กรุณาเลือกคำนำหน้า";
     if (!form.firstName.trim()) next.firstName = "กรุณากรอกชื่อ";
     if (!form.lastName.trim()) next.lastName = "กรุณากรอกนามสกุล";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) next.email = "กรุณากรอกอีเมลให้ถูกต้อง";
     if (!isValidThaiId(form.idCardNumber)) next.idCardNumber = "เลขบัตรประชาชนต้องมี 13 หลัก";
     if (showBankDetails) {
       if (!form.bankName) next.bankName = "กรุณาเลือกธนาคาร";
@@ -145,6 +151,7 @@ export default function ProfilePage(): React.JSX.Element {
         prefix: form.prefix,
         first_name: form.firstName.trim(),
         last_name: form.lastName.trim(),
+        email: form.email.trim().toLowerCase(),
         id_card_number_user: digitsOnly(form.idCardNumber),
         line_user_id: form.lineUserId.trim(),
         bank_name: form.bankName,
@@ -177,6 +184,7 @@ export default function ProfilePage(): React.JSX.Element {
         firstName: profile.first_name,
         lastName: profile.last_name,
         username: profile.username,
+        email: profile.email,
         role: profile.role,
         idCardNumber: formatThaiId(profile.id_card_number_user),
         lineUserId: profile.line_user_id || "",
@@ -191,6 +199,7 @@ export default function ProfilePage(): React.JSX.Element {
       setShouldDeleteProfileImage(false);
       setProfileImagePreview(profileImagePath ? resolveAssetUrl(profileImagePath) : "");
       toast({ variant: "success", title: "บันทึกสำเร็จ", message: "อัปเดตข้อมูลโปรไฟล์เรียบร้อยแล้ว" });
+      navigate(`${basePath}/dashboard/maindashboard`)
     } catch (error) {
       toast({ variant: "error", title: "บันทึกไม่สำเร็จ", message: getApiErrorMessage(error, "ไม่สามารถบันทึกข้อมูลโปรไฟล์ได้") });
     } finally {
@@ -258,7 +267,8 @@ export default function ProfilePage(): React.JSX.Element {
                       <Input label="นามสกุล" required autoComplete="family-name" value={form.lastName} error={errors.lastName} onChange={(event) => updateField("lastName", event.target.value)} placeholder="เช่น ใจดี" />
                     </div>
                     <div className="grid gap-5 sm:grid-cols-2">
-                      <Input label="เลขบัตรประชาชน" required inputMode="numeric" value={form.idCardNumber} error={errors.idCardNumber} onChange={(event) => updateField("idCardNumber", formatThaiId(event.target.value))} placeholder="X-XXXX-XXXXX-XX-X" />
+                      <Input label="เลขบัตรประชาชน" required inputMode="numeric" value={form.idCardNumber} error={errors.idCardNumber} onChange={(event) => updateField("idCardNumber", formatThaiId(event.target.value))} placeholder="X-XXXX-XXXXX-XX-X" containerClassName="sm:col-span-2" />
+                      <Input label="อีเมล" required type="email" autoComplete="email" value={form.email} error={errors.email} onChange={(event) => updateField("email", event.target.value)} placeholder="เช่น somchai@example.com" />
                       <Input label="LINE User ID (ถ้ามี)" value={form.lineUserId} onChange={(event) => updateField("lineUserId", event.target.value.trim())} placeholder="เช่น U1234abcd..." />
                     </div>
 

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/mail"
 	"os"
 	"time"
 
@@ -37,6 +38,7 @@ func profileResponse(user *entity.User) *authDTO.ProfileResponse {
 		FirstName:         user.FirstName,
 		LastName:          user.LastName,
 		Username:          user.Username,
+		Email:             user.Email,
 		Role:              string(user.Role.RoleName),
 		ProfileImagePath:  user.ProfileImagePath,
 		IDCardNumber:      user.IdCardNumberUser,
@@ -66,6 +68,7 @@ func (s *authService) UpdateProfile(userID uint, req *authDTO.UpdateProfileReque
 	req.Prefix = strings.TrimSpace(req.Prefix)
 	req.FirstName = strings.TrimSpace(req.FirstName)
 	req.LastName = strings.TrimSpace(req.LastName)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	req.IDCardNumber = regexp.MustCompile(`\D`).ReplaceAllString(req.IDCardNumber, "")
 	req.LineUserID = strings.TrimSpace(req.LineUserID)
 	req.BankName = strings.TrimSpace(req.BankName)
@@ -73,6 +76,10 @@ func (s *authService) UpdateProfile(userID uint, req *authDTO.UpdateProfileReque
 	req.BankAccountName = strings.TrimSpace(req.BankAccountName)
 	if req.Prefix == "" || req.FirstName == "" || req.LastName == "" {
 		return nil, errors.New("กรุณากรอกข้อมูลส่วนตัวให้ครบ")
+	}
+	parsedEmail, emailErr := mail.ParseAddress(req.Email)
+	if emailErr != nil || parsedEmail.Address != req.Email {
+		return nil, errors.New("กรุณากรอกอีเมลให้ถูกต้อง")
 	}
 	if len(req.IDCardNumber) != 13 {
 		return nil, errors.New("เลขบัตรประชาชนต้องมี 13 หลัก")
@@ -90,6 +97,11 @@ func (s *authService) UpdateProfile(userID uint, req *authDTO.UpdateProfileReque
 	} else if exists {
 		return nil, errors.New("เลขบัตรประชาชนนี้ถูกใช้งานแล้ว")
 	}
+	if exists, err := s.userRepo.ValueExistsExcludingUser("LOWER(email)", req.Email, userID); err != nil {
+		return nil, err
+	} else if exists {
+		return nil, errors.New("อีเมลนี้ถูกใช้งานแล้ว")
+	}
 	if req.LineUserID != "" {
 		if exists, err := s.userRepo.ValueExistsExcludingUser("line_user_id", req.LineUserID, userID); err != nil {
 			return nil, err
@@ -102,6 +114,7 @@ func (s *authService) UpdateProfile(userID uint, req *authDTO.UpdateProfileReque
 		Prefix:            req.Prefix,
 		FirstName:         req.FirstName,
 		LastName:          req.LastName,
+		Email:             req.Email,
 		IDCardNumber:      req.IDCardNumber,
 		LineUserID:        req.LineUserID,
 		BankName:          req.BankName,
