@@ -23,6 +23,7 @@ type ProfileUpdates struct {
 	Prefix            string
 	FirstName         string
 	LastName          string
+	Email             string
 	IDCardNumber      string
 	LineUserID        string
 	BankName          string
@@ -76,6 +77,7 @@ func (r *userRepository) UpdateProfile(id uint, updates ProfileUpdates) (*entity
 		"prefix":              updates.Prefix,
 		"first_name":          updates.FirstName,
 		"last_name":           updates.LastName,
+		"email":               updates.Email,
 		"id_card_number_user": updates.IDCardNumber,
 		"line_user_id":        lineUserID,
 	}

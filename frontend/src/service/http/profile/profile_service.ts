@@ -6,6 +6,7 @@ export interface UserProfile {
   first_name: string;
   last_name: string;
   username: string;
+  email: string;
   role: string;
   profile_image_path?: string;
 	 id_card_number_user: string;
@@ -20,6 +21,7 @@ export interface UpdateProfileRequest {
   prefix: string;
   first_name: string;
   last_name: string;
+  email: string;
 	 id_card_number_user: string;
 	 line_user_id: string;
 	 bank_name: string;
