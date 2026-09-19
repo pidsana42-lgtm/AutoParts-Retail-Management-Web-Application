@@ -99,7 +99,7 @@ export interface PreorderItem {
     product_id: number | null;
     product_name: string;
     product_code: string;
-    supplier_part_code: string;
+    supplier_part_code?: string;
     quantity: number;
     unit: string;
     unit_price: number;

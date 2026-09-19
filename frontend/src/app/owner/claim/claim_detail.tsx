@@ -323,6 +323,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
   const displayItems = isEditing ? editItems : (claim.items ?? []);
   const totalQty = displayItems.reduce((acc, i) => acc + (i.qty || 0), 0);
   const basePath = window.location.pathname.startsWith('/employee') ? '/employee/claims' : '/owner/claims';
+  const breadcrumbRoot = { label: 'จัดการเคลมสินค้า', path: basePath };
 
   return (
     <div className="p-8 space-y-6 bg-white min-h-screen font-sans text-slate-800 animate-in fade-in duration-300">

@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { LocalPOItem } from '../../../../src/interface/purchase_orders/po_interface';
 import { validatePurchaseOrder } from '../../../../src/app/owner/purchase_orders/validation';
 
@@ -42,7 +42,7 @@ describe('purchase order validation', () => {
         expect(validatePurchaseOrder(7, [item, preorder])).toEqual([]);
     });
     it('accepts a named preorder without a WMS product or product code', () => {
-        expect(validatePurchaseOrder(7, [{ ...item, product_id: 0, product_name_snapshot: 'ekdmlkdmskl', product_name_code_snapshot: '', order_type: 'พรีออเดอร์', pre_order_item_id: 8, unit_price: 0 }])).toEqual([]);
+        expect(validatePurchaseOrder(7, [{ ...item, product_id: 0, product_name_snapshot: 'ekdmlkdmskl', product_code_snapshot: '', order_type: 'พรีออเดอร์', pre_order_item_id: 8, unit_price: 0 }])).toEqual([]);
     });
     it('still rejects missing WMS products for ordinary purchases', () => {
         expect(validatePurchaseOrder(7, [{ ...item, product_id: 0 }])[0]).toContain('สินค้าไม่ถูกต้อง');
