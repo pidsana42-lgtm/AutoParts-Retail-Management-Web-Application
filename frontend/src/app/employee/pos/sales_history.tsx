@@ -160,7 +160,7 @@ export default function TransactionHistoryPage() {
                     }}
                     onSubmit={handleApplyFilter}
                     fetchOrders={fetchOrderSuggestions}
-                    placeholder="สแกนบาร์โค้ด / INV-202X-XXX หรือ ชื่อลูกค้า..."
+                    placeholder="ค้นหา INV-202X-XXX หรือ ชื่อลูกค้า..."
                     inputClassName="h-10"
                     autoFocus
                   />
