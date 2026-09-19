@@ -81,10 +81,12 @@ func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomer
 		itemEntity.CustomerClaimID = claimEntity.ID
 		itemEntity.Status = claimEntity.Status // ให้สถานะของ Item ล้อตามสถานะของใบเคลม (เช่น APPROVED หรือ PENDING)
 		issueOut, receiveIn := prepareStockFlags(&itemEntity)
+		applyCredit := prepareCreditFlag(&itemEntity)
 		if err := s.repo.CreateCustomerClaimItem(&itemEntity); err != nil {
 			return claimDTO.CustomerClaimResponseDTO{}, err
 		}
 		s.applyStockAdjustments(&itemEntity, issueOut, receiveIn)
+		s.applyCreditAdjustment(&itemEntity, applyCredit)
 		claimEntity.Items[i] = itemEntity
 	}
 
@@ -111,11 +113,13 @@ func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomer
 func (s *customerClaimService) CreateCustomerClaimItem(input claimDTO.CreateCustomerClaimItemDTO) (claimDTO.CustomerClaimItemResponseDTO, error) {
 	entity := input.ToEntity()
 	issueOut, receiveIn := prepareStockFlags(&entity)
+	applyCredit := prepareCreditFlag(&entity)
 	err := s.repo.CreateCustomerClaimItem(&entity)
 	if err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
 	s.applyStockAdjustments(&entity, issueOut, receiveIn)
+	s.applyCreditAdjustment(&entity, applyCredit)
 	return claimDTO.ToCustomerClaimItemResponseDTO(&entity), nil
 }
 
@@ -161,6 +165,35 @@ func (s *customerClaimService) applyStockAdjustments(item *entity.CustomerClaimI
 func (s *customerClaimService) adjustProductStock(productID uint, delta int, movementType, note string) {
 	if err := s.repo.AdjustProductStock(productID, delta, movementType, note); err != nil {
 		fmt.Printf("[Stock] failed to adjust product %d stock (%s): %v\n", productID, movementType, err)
+	}
+}
+
+// prepareCreditFlag: ตรวจว่าต้อง "หักยอดหนี้ค้างชำระเข้าบัญชีเชื่อ" ของลูกค้าหรือยัง สำหรับรายการเคลม
+// ประเภท CREDIT_ACCOUNT (ลงบัญชีเชื่อ) ที่เพิ่งได้รับการอนุมัติ (APPROVED) โดยเช็ค CreditApplied เดิมของ item
+// กันไม่ให้หักซ้ำเวลาสถานะถูกสลับไปมา (เช่น อนุมัติ -> ปฏิเสธ -> อนุมัติใหม่) เพราะยอดหนี้ถูกหักจริงแค่ครั้งเดียว
+func prepareCreditFlag(item *entity.CustomerClaimItem) (applyCredit bool) {
+	if item.CreditApplied {
+		return false
+	}
+	claimTypeUp := strings.ToUpper(strings.TrimSpace(item.ClaimType))
+	statusUp := strings.ToUpper(strings.TrimSpace(item.Status))
+	if claimTypeUp == "CREDIT_ACCOUNT" && statusUp == "APPROVED" {
+		item.CreditApplied = true
+		return true
+	}
+	return false
+}
+
+func (s *customerClaimService) applyCreditAdjustment(item *entity.CustomerClaimItem, applyCredit bool) {
+	if !applyCredit {
+		return
+	}
+	amount := float64(item.Qty) * item.UnitPrice
+	if amount <= 0 {
+		return
+	}
+	if err := s.repo.ReduceCustomerDebtForClaim(item.CustomerClaimID, amount); err != nil {
+		fmt.Printf("[Credit] failed to reduce customer debt (claim item %d): %v\n", item.ID, err)
 	}
 }
 
@@ -267,6 +300,9 @@ func (s *customerClaimService) UpdateCustomerClaimItem(id uint, input claimDTO.U
 	if input.Qty > 0 {
 		existing.Qty = uint(input.Qty)
 	}
+	if input.UnitPrice > 0 {
+		existing.UnitPrice = input.UnitPrice
+	}
 	if input.Reason != "" {
 		existing.Reason = input.Reason
 	}
@@ -283,10 +319,12 @@ func (s *customerClaimService) UpdateCustomerClaimItem(id uint, input claimDTO.U
 		existing.EvidenceURL = input.EvidenceURL
 	}
 	issueOut, receiveIn := prepareStockFlags(existing)
+	applyCredit := prepareCreditFlag(existing)
 	if err := s.repo.UpdateCustomerClaimItem(existing); err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
 	s.applyStockAdjustments(existing, issueOut, receiveIn)
+	s.applyCreditAdjustment(existing, applyCredit)
 	s.syncParentClaimStatus(existing.CustomerClaimID)
 	return claimDTO.ToCustomerClaimItemResponseDTO(existing), nil
 }
@@ -301,10 +339,12 @@ func (s *customerClaimService) UpdateCustomerClaimItemStatus(id uint, status str
 	}
 	existing.Status = status
 	issueOut, receiveIn := prepareStockFlags(existing)
+	applyCredit := prepareCreditFlag(existing)
 	if err := s.repo.UpdateCustomerClaimItem(existing); err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
 	s.applyStockAdjustments(existing, issueOut, receiveIn)
+	s.applyCreditAdjustment(existing, applyCredit)
 	s.syncParentClaimStatus(existing.CustomerClaimID)
 	return claimDTO.ToCustomerClaimItemResponseDTO(existing), nil
 }
