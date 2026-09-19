@@ -361,3 +361,104 @@ pm2 start mcp_server.py --name "mcp-server" --interpreter python3
 5. ทดสอบผ่าน LINE Chat หรือ `/api/oa/simulate`
 
 > **สรุป:** MCP เป็น upgrade ที่ทำได้และเหมาะมากกับ project นี้ โดยเฉพาะส่วน AI Agent ที่ปัจจุบัน generate SQL ดิบ — เปลี่ยนเป็น MCP tool calling จะ **ปลอดภัยกว่า แม่นยำกว่า และ maintain ง่ายกว่า** มาก
+
+---
+
+## 7. คู่มือการ Deploy ด้วย Docker และการผูกโดเมน (Docker Production Deployment)
+
+### A. ข้อมูลโครงสร้างพื้นฐาน (Infrastructure Overview)
+* **โดเมนหลัก (Frontend):** `jjautopart-pakchong.com` และ `www.jjautopart-pakchong.com` (จัดการผ่าน Hostinger DNS)
+* **ซับโดเมน API (Backend):** `api.jjautopart-pakchong.com`
+* **คลาวด์เซิร์ฟเวอร์ (Cloud VPS):** Alibaba Cloud ECS (Singapore)
+  * **Public IP:** `8.219.93.236`
+  * **OS & Specs:** Ubuntu, 2 vCPU, 4GB RAM
+  * **พอร์ตที่เปิดใน Security Group:** `80` (HTTP), `443` (HTTPS), `22` (SSH)
+
+---
+
+### B. สถาปัตยกรรม Docker Compose (`docker-compose.yml`)
+ระบบถูกจัดให้อยู่ใน Container เพื่อให้บิวด์และดูแลรักษาง่ายในคำสั่งเดียว:
+1. **`postgres` (PostgreSQL 15):** จัดเก็บข้อมูลระบบทั้งหมด โดยผูกข้อมูลไว้กับ Docker Volume `postgres_data` (ข้อมูลไม่สูญหายเมื่อรีสตาร์ต)
+2. **`ai-service` (Python FastAPI):** บริการ OCR สแกนบิลและ AI Agent บนพอร์ต `8000` (รันในโหมด TF-IDF ประหยัด RAM ไม่โหลดโมเดลหนัก 5GB ลงเครื่อง)
+3. **`backend` (Go Gin API):** รันบนพอร์ต `8080` เชื่อมต่อไปยังฐานข้อมูล `postgres` และ `ai-service` อัตโนมัติ พร้อมผูก Volume สำหรับรูปภาพ (`uploads`), บาร์โค้ด (`barcode`), และคิวอาร์โค้ด (`QRCode`)
+4. **`frontend` (React + Nginx):** บิวด์ไฟล์ static และรัน Nginx รองรับทั้ง HTTP (Redirect สู่ HTTPS) และ HTTPS (พอร์ต `443`) พร้อม SSL Certificate
+
+---
+
+### C. การติดตั้ง SSL Certificate ให้เว็บเป็น HTTPS ปลอดภัย (มีรูปแม่กุญแจ 🔒)
+
+มีสคริปต์อัตโนมัติ `get-ssl.sh` เตรียมไว้ที่รูทของโปรเจกต์ ซึ่งจะจัดการขอใบรับรองฟรีสำหรับทั้ง 3 โดเมน (`jjautopart-pakchong.com`, `www.jjautopart-pakchong.com`, `api.jjautopart-pakchong.com`) และสตาร์ตรักษาความปลอดภัย HTTPS พร้อมบริการ Python FastAPI ให้อัตโนมัติ:
+
+#### วิธีที่ 1: รันผ่านสคริปต์อัตโนมัติ (แนะนำ สะดวกและเร็วที่สุด):
+```bash
+git pull origin deploy-docker
+bash get-ssl.sh
+```
+
+#### วิธีที่ 2: รันคำสั่งด้วยตนเองผ่าน Docker Certbot:
+```bash
+# 1. หยุด frontend ชั่วคราวเพื่อให้พอร์ต 80 ว่าง
+docker compose stop frontend
+
+# 2. ขอใบรับรอง SSL ผ่าน Docker Certbot (ป้องกันปัญหาไลบรารี Python ชนกันบนเครื่องแม่)
+docker run --rm -p 80:80 \
+  -v /etc/letsencrypt:/etc/letsencrypt \
+  -v /var/lib/letsencrypt:/var/lib/letsencrypt \
+  certbot/certbot certonly --standalone \
+  -d jjautopart-pakchong.com \
+  -d www.jjautopart-pakchong.com \
+  -d api.jjautopart-pakchong.com \
+  --agree-tos --register-unsafely-without-email --non-interactive
+
+# 3. สั่งรันระบบทั้งหมดกลับขึ้นมาพร้อม HTTPS และ Python FastAPI
+docker compose up -d --build
+```
+*(ใบรับรองจะถูกเก็บไว้ที่ `/etc/letsencrypt` บนเซิร์ฟเวอร์ และแชร์เข้าสู่คอนเทนเนอร์ Nginx อัตโนมัติ)*
+
+---
+
+### D. ขั้นตอนการอัปเดตเมื่อเพื่อนแก้โค้ดเสร็จ (Update & Redeploy Workflow)
+
+เมื่อเพื่อนร่วมทีมทำการแก้โค้ดเสร็จแล้ว และทำการ Merge รวมโค้ดเข้าสู่ Branch หลักบน GitHub เรียบร้อยแล้ว การนำโค้ดใหม่ขึ้นเซิร์ฟเวอร์มีขั้นตอนเพียง **3 ขั้นตอนสั้นๆ**:
+
+```bash
+# 1. เข้าสู่โฟลเดอร์โปรเจกต์บนเซิร์ฟเวอร์
+cd /var/www/AutoParts-Retail-Management-Web-Application
+
+# 2. ดึงโค้ดล่าสุดที่เพื่อนแก้ลงมา
+git pull
+
+# 3. สั่งให้ Docker บิวด์ใหม่เฉพาะส่วนที่เปลี่ยนแปลง และเริ่มทำงานใหม่อัตโนมัติ
+docker compose up -d --build
+```
+
+> **จุดเด่นของการใช้ Docker ในขั้นตอนนี้:**
+> * **Zero Data Loss:** ข้อมูลใน Database (PostgreSQL) และรูปภาพบิล/อะไหล่ที่อัปโหลดไว้จะไม่สูญหาย 100% เพราะถูกเก็บแยกไว้ใน Docker Volume
+> * **Auto-Migrate:** หากมีการเพิ่มโมเดลหรือคอลัมน์ใหม่ใน Go Backend ระบบจะ Migrate ฐานข้อมูลให้อัตโนมัติทันที
+> * **Fast Build:** Docker จะใช้ Cache บิวด์ใหม่เฉพาะส่วนของไฟล์ที่มีการแก้ไขเท่านั้น
+> * **Pre-built Frontend:** หากมีการแก้โค้ด Frontend ให้รันบิวด์บนเครื่องก่อน (`cd frontend && npx vite build`) แล้ว commit โฟลเดอร์ `dist` ขึ้นมา เซิร์ฟเวอร์จะใช้เวลาบิวด์ Nginx เพียงแค่ 2 วินาที ไม่ต้องลง Node.js หรือเสียเวลารัน npm install บนเซิร์ฟเวอร์ใหม่อีกเลย
+
+---
+
+### E. คำสั่งที่มีประโยชน์ในการตรวจสอบและดูแลระบบ (Useful Docker Commands)
+
+```bash
+# ตรวจสอบสถานะว่าคอนเทนเนอร์ไหนรันอยู่บ้าง
+docker compose ps
+
+# ดู Log การทำงานของ Backend (ดู Error หรือการเชื่อมต่อ)
+docker compose logs -f backend
+
+# ดู Log การทำงานของ Frontend (Nginx)
+docker compose logs -f frontend
+
+# ตรวจสอบการใช้งาน RAM และ CPU ของแต่ละคอนเทนเนอร์
+docker stats
+
+# สั่ง Restart ทุกบริการ
+docker compose restart
+
+# สำรองข้อมูลฐานข้อมูล (Backup Database) ออกมาเป็นไฟล์ .sql
+docker exec -t autoparts-postgres pg_dump -U postgres Autopartsdb > backup_$(date +%Y%m%d).sql
+```
+

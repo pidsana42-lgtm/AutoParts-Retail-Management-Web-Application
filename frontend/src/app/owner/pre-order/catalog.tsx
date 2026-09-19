@@ -168,9 +168,12 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
           if (newUrls.length > 0) {
             const url = newUrls[newUrls.length - 1];
             newUrls.forEach(u => loadedMobileUrlsRef.current.add(u));
+            const isStandardWebPort = window.location.protocol === 'https:' || window.location.port === '' || window.location.port === '80' || window.location.port === '443';
             const fullUrl = url.startsWith('http')
               ? url
-              : `${window.location.protocol}//${window.location.hostname}:8080${url.startsWith('/') ? '' : '/'}${url}`;
+              : isStandardWebPort && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+                ? `${window.location.protocol}//${window.location.hostname}${url.startsWith('/') ? '' : '/'}${url}`
+                : `${window.location.protocol}//${window.location.hostname}:8080${url.startsWith('/') ? '' : '/'}${url}`;
             const response = await fetch(fullUrl);
             const blob = await response.blob();
             const fileName = `mobile_catalog_${url.split('/').pop() || 'image.jpg'}`;
@@ -625,11 +628,10 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
       <div className="flex flex-col items-center gap-5">
         {isLocalhost ? (
           <div className="bg-amber-50 border border-amber-300 text-amber-800 text-xs p-3 w-full">
-            <p className="font-bold mb-1">⚠ เปิดเว็บด้วย IP Address ก่อน</p>
-            <p>มือถือไม่สามารถเข้า <code>localhost</code> ได้</p>
-            <p className="mt-1">ให้เปิดใน browser ด้วย:</p>
-            <p className="font-mono font-bold text-amber-900 mt-1 break-all">
-              http://192.168.1.109:{window.location.port || '5173'}
+            <p className="font-bold mb-1">⚠ มือถือเข้า localhost ไม่ได้</p>
+            <p className="mt-1">
+              ให้เปิดเว็บนี้ด้วย IP Address ของคอมพิวเตอร์เครื่องนี้แทน (เช่น ดูจากคำสั่ง <code>ipconfig</code> บน Windows
+              หรือ <code>ifconfig</code> บน Mac) แทนที่ <code>localhost</code> ในแถบที่อยู่เว็บ
             </p>
             <p className="mt-1 text-[10px] text-amber-600">แล้วคลิกปุ่ม "เปิดบนมือถือ" อีกครั้ง</p>
           </div>
@@ -652,26 +654,16 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   if (currentView === 'home') {
     return (
       <div className="p-8 max-w-full mx-auto w-full bg-white min-h-screen animate-in fade-in duration-300 font-sans">
-        {qrModal}
-
         <div className="flex items-center justify-between mb-8">
           <Heading level="h1" weight="semibold" className="m-0 text-[#1C1B1B]">
             นำเข้าและจัดการแคตตาล็อกสินค้า
           </Heading>
-          <button
-            onClick={() => setShowQR(true)}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-bold rounded-none transition-colors cursor-pointer"
-            title="เปิดบนมือถือผ่าน QR Code"
-          >
-            <Smartphone size={16} />
-            เปิดบนมือถือ
-          </button>
         </div>
 
         {/* Scan and manual entry */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {/* Card 1: สแกนด้วยรูปภาพ / PDF (Red #e51c23) */}
-          <div 
+          <div
             onClick={handleOpenScan}
             className="bg-[#e51c23] hover:bg-[#c9181f] text-white p-8 rounded-none flex items-center justify-between cursor-pointer transition-all shadow-md group"
           >
@@ -681,14 +673,14 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
               </div>
               <div>
                 <h2 className="text-xl font-bold mb-1">สแกนด้วยรูปภาพ / PDF</h2>
-                <p className="text-xs text-white/70">Scan & Extract Catalog Automatically</p>
+                <p className="text-xs text-white/70">ถ่ายหรืออัปโหลดหน้าแคตตาล็อกให้ AI ดึงข้อมูลให้อัตโนมัติ</p>
               </div>
             </div>
             <ArrowRight size={32} className="text-white/50 group-hover:text-white transition-colors" />
           </div>
 
           {/* Card 2: กรอกข้อมูลด้วยตนเอง (Black #1C1B1B) */}
-          <div 
+          <div
             onClick={handleOpenManual}
             className="bg-[#1C1B1B] hover:bg-[#2a2929] text-white p-8 rounded-none flex items-center justify-between cursor-pointer transition-all shadow-md group"
           >
@@ -698,7 +690,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
               </div>
               <div>
                 <h2 className="text-xl font-bold mb-1">กรอกข้อมูลด้วยตนเอง</h2>
-                <p className="text-xs text-gray-400">Manual Entry & Add Part Rows</p>
+                <p className="text-xs text-gray-400">พิมพ์รายการอะไหล่เข้าเล่มแคตตาล็อกเอง</p>
               </div>
             </div>
             <LayoutPanelLeft size={36} className="text-white/20" />
