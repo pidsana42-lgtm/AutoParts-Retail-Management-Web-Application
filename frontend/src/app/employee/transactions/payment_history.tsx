@@ -182,7 +182,7 @@ export default function PaymentHistoryPage() {
                     }}
                     onSubmit={handleApplyFilter}
                     fetchOrders={fetchPaymentSuggestions}
-                    placeholder="พิมพ์เลขที่ใบเสร็จ RE-XXX, INV-XXX, ชื่อลูกค้า..."
+                    placeholder="RE-XXX, INV-XXX, ชื่อลูกค้า..."
                     orderSectionTitle="รายการใบเสร็จ / การชำระเงิน (คลิกเพื่อค้นหาด้วยเลขที่นี้)"
                     inputClassName="h-10"
                     autoFocus
