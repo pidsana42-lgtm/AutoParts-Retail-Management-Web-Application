@@ -65,6 +65,7 @@ const TYPE_ORDER: MovementFeedType[] = [
 
 // พรีเซ็ตช่วงเวลาด่วน (แบบเดียวกับแถบตัวกรองในหน้าแดชบอร์ด) — ใช้ควบคู่กับ DateRangePicker สำหรับเลือกช่วงเอง
 const PERIOD_PRESETS: { label: string; value: string }[] = [
+  { label: "วันนี้", value: "daily" },
   { label: "สัปดาห์นี้", value: "weekly" },
   { label: "เดือนนี้", value: "monthly" },
   { label: "ไตรมาสนี้", value: "quarterly" },
@@ -78,6 +79,8 @@ function getPeriodRange(period: string): { start: Date; end: Date } | null {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   switch (period) {
+    case "daily":
+      return { start: startOfToday, end: now };
     case "weekly": {
       const daysSinceMonday = (now.getDay() + 6) % 7;
       const start = new Date(startOfToday);
