@@ -11,8 +11,9 @@ type RegisterCustomerRequest struct {
 	PhoneNumber          string `json:"phone_number" form:"phone_number" binding:"required"`
 	IdCardNumberCustomer string `json:"id_card_number_customer" form:"id_card_number_customer" binding:"required"`
 	RegisteredAddress    string `json:"registered_address" form:"registered_address" binding:"required"`
-	ShippingAddress      string `json:"shipping_address" form:"shipping_address" binding:"required"`
-	IdCardImagePath      string `json:"id_card_image_path" form:"id_card_image_path"`
+	ShippingAddress      string   `json:"shipping_address" form:"shipping_address" binding:"required"`
+	IdCardImagePath      string   `json:"id_card_image_path" form:"id_card_image_path"`
+	CreditLimit          *float64 `json:"credit_limit,omitempty" form:"credit_limit"`
 }
 
 type UpdateCustomerRequest struct {
@@ -34,10 +35,14 @@ func ToCustomerEntity(req RegisterCustomerRequest, idCardImagePath string, defau
 	if idCardImagePath == "" && req.IdCardImagePath != "" {
 		idCardImagePath = req.IdCardImagePath
 	}
+	creditLimit := defaultCreditLimit
+	if req.CreditLimit != nil && *req.CreditLimit >= 0 {
+		creditLimit = *req.CreditLimit
+	}
 	return &entity.Customer{
 		CustomerName:         req.CustomerName,
 		CustomerTypeID:       req.CustomerTypeID,
-		CreditLimit:          defaultCreditLimit, //ใช้ค่าจากนโยบายร้านที่ Service ส่งมาให้
+		CreditLimit:          creditLimit, // ใช้วงเงินที่ระบุ หรือตามนโยบายร้านที่ Service ส่งมาให้
 		PhoneNumber:          req.PhoneNumber,
 		IdCardNumberCustomer: req.IdCardNumberCustomer,
 		IdCardImagePath:      idCardImagePath, //รับพาร์ทข้อความ String ไปบันทึกป้ายบอกทาง

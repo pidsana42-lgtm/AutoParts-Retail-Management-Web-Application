@@ -1,4 +1,4 @@
-import { Search, Bell, CheckCircle, Info, AlertTriangle, XCircle, Trash2, CheckCheck, ImageOff, Loader2 } from "lucide-react";
+import { Search, Bell, CheckCircle, Info, AlertTriangle, XCircle, Trash2, CheckCheck, ImageOff, Loader2, ChevronDown, UserRoundPen, KeyRound } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContexts";
 import { useNotification, type AppNotification } from "../../contexts/NotificationContext";
@@ -9,14 +9,16 @@ import type { StockItem } from "../../interface/wms/product";
 import { buildProductSearchIndex, searchProductIndex } from "../../utils/productSearch";
 
 export default function Navbar(): React.JSX.Element {
-  const { user, role } = useAuth() as any;
+  const { user, role } = useAuth();
   const navigate = useNavigate();
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotification();
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
 
   const [showNotif, setShowNotif] = useState(false);
   const [showStockAlertPO, setShowStockAlertPO] = useState(false);
   const closeStockAlertPO = useCallback(() => setShowStockAlertPO(false), []);
   const notifRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   // ช่องค้นหาสินค้า (ด้วยเลขอะไหล่/รหัสสินค้า หรือรุ่นรถ) — โหลดรายการสินค้าแบบ lazy ตอนโฟกัสช่องค้นหาครั้งแรกเท่านั้น
   // กันไม่ให้ทุกหน้ายิง request โหลดสินค้าทั้งร้านโดยไม่จำเป็น (Navbar อยู่ทุกหน้าเพราะอยู่ใน MainLayout)
@@ -48,7 +50,7 @@ export default function Navbar(): React.JSX.Element {
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     return searchProductIndex(searchIndex, searchQuery, allProducts).slice(0, 8);
-  }, [searchQuery, allProducts]);
+  }, [searchQuery, searchIndex, allProducts]);
 
   const goToProduct = (product: StockItem) => {
     setShowSearchResults(false);
@@ -84,6 +86,9 @@ export default function Navbar(): React.JSX.Element {
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setShowNotif(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -125,7 +130,7 @@ export default function Navbar(): React.JSX.Element {
     <nav className="sticky top-0 z-40 flex items-center justify-between bg-white px-6 border-b-2 border-b-[#E51C23] h-16 select-none shrink-0 shadow-sm">
 
       {/* ช่องค้นหา */}
-      <div className="relative w-[350px] lg:w-[550px]" ref={searchRef}>
+      <div className="relative w-87.5 lg:w-137.5" ref={searchRef}>
         <div className="flex items-center bg-[#F6F3F2] px-3 py-2 rounded-lg border border-transparent focus-within:border-gray-300 transition-all">
           <Search className="w-4 h-4 text-[#6B7280] mr-2 shrink-0" />
           <input
@@ -264,16 +269,59 @@ export default function Navbar(): React.JSX.Element {
           )}
         </div>
 
-        <div className="h-6 w-[1px] bg-gray-200"></div>
+        <div className="h-6 w-px bg-gray-200"></div>
 
         {/* ข้อมูลผู้ใช้งาน */}
-        <div className="flex items-center space-x-2 text-xs min-w-[120px] max-w-[200px]">
-          <div className="text-left flex flex-col justify-center min-w-0">
-            <p className="text-[10px] text-gray-400 leading-none mb-0.5">บัญชีผู้ใช้</p>
-            <p className=" text-gray-700 tracking-wide truncate pr-2" title={displayName}>
-              {displayName}
-            </p>
-          </div>
+        <div className="relative" ref={userMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsUserMenuOpen((prev) => !prev)}
+            className="flex items-center rounded-none px-2 py-1.5 transition-colors cursor-pointer"
+            aria-haspopup="menu"
+            aria-expanded={isUserMenuOpen}
+          >
+            <div className="text-left flex flex-col justify-center min-w-0 pr-3">
+              <p className="text-[10px] text-gray-400 leading-none mb-0.5">บัญชีผู้ใช้</p>
+              <p className="text-xs text-gray-700 tracking-wide truncate" title={displayName}>
+                {displayName}
+              </p>
+            </div>
+            <ChevronDown
+              className={`h-3.5 w-3.5 text-gray-400 transition-transform duration-200 ${isUserMenuOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+
+          {isUserMenuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full z-50 mt-2 w-52 rounded-none border border-gray-100 bg-white p-1.5 shadow-lg animate-in fade-in slide-in-from-top-2 duration-150"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  navigate("/profile");
+                }}
+                className="flex w-full items-center gap-3 rounded-none px-2 py-2 text-left text-sm text-gray-700 transition-colors hover:text-red-600 hover:bg-red-50 cursor-pointer"
+              >
+                <UserRoundPen className="h-4 w-4" />
+                <span>แก้ไขโปรไฟล์</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  navigate("/change-password");
+                }}
+                className="flex w-full items-center gap-3 rounded-none px-2 py-2 text-left text-sm text-gray-700 transition-colors hover:text-red-600 hover:bg-red-50 cursor-pointer"
+              >
+                <KeyRound className="h-4 w-4" />
+                <span>เปลี่ยนรหัสผ่าน</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
       {showStockAlertPO && <StockAlertNotificationModal onClose={closeStockAlertPO} basePath={isOwnerOrManager ? (currentRole === 'MANAGER' ? '/manager' : '/owner') : '/employee'} />}
