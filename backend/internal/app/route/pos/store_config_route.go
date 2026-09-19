@@ -25,21 +25,21 @@ func SetupStoreConfigRoutes(r *gin.Engine, db *gorm.DB) {
             storeConfigCtrl.GetStoreConfig,
         )
 
-        // สร้างการตั้งค่าร้านค้าครั้งแรก (POST)
+        // สร้างการตั้งค่าร้านค้าครั้งแรก (POST) - เฉพาะ Owner เท่านั้น
         storeConfigGroup.POST("", 
-            middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleManager)), 
+            middleware.RequireRoles(string(enum.RoleOwner)), 
             storeConfigCtrl.CreateStoreConfig,
         )
 
-        // เฉพาะ Owner/Manager ที่อัปเดตตั้งค่าร้านได้ (PUT)
+        // เฉพาะ Owner ที่อัปเดตตั้งค่าร้านได้ (PUT)
         storeConfigGroup.PUT("", 
-            middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleManager)), 
+            middleware.RequireRoles(string(enum.RoleOwner)), 
             storeConfigCtrl.UpdateStoreConfig,
         )
 
-        // ดูประวัติการแก้ไขการตั้งค่า (Audit Logs)
+        // ดูประวัติการแก้ไขการตั้งค่า (Audit Logs) - เฉพาะ Owner เท่านั้น
         storeConfigGroup.GET("/audit-logs", 
-            middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleManager)), 
+            middleware.RequireRoles(string(enum.RoleOwner)), 
             storeConfigCtrl.GetAuditLogs,
         )
     }
