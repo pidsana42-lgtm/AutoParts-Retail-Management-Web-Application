@@ -22,7 +22,7 @@ func SetupDashboardRoutes(r *gin.Engine, db *gorm.DB) {
 	dashboardGroup := r.Group("/api/dashboard")
 	dashboardGroup.Use(
 		middleware.AuthMiddleware(),
-		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin), string(enum.RoleEmployee)),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleManager), string(enum.RoleEmployee)),
 	)
 	{
 		dashboardGroup.GET("/summary", ctrl.GetSummaryData)

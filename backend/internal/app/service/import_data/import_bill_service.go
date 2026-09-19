@@ -184,7 +184,7 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 				log.Printf("[Notification] failed to notify owners (bill %d): %v\n", bill.ID, errNotify)
 			}
 		} else if bill.PriceChangeDetected {
-			// เจ้าของร้าน (หรือ Admin) นำเข้าเอง ราคาทุนถูกอัปเดตอัตโนมัติไปแล้ว แต่ยังแจ้งเตือนไว้เผื่อสังเกตความผิดปกติ
+			// เจ้าของร้าน (หรือ Manager) นำเข้าเอง ราคาทุนถูกอัปเดตอัตโนมัติไปแล้ว แต่ยังแจ้งเตือนไว้เผื่อสังเกตความผิดปกติ
 			if errNotify := s.notification.NotifyOwners(
 				"IMPORT_BILL_PRICE_CHANGED",
 				"ราคาทุนสินค้าเปลี่ยนจากบิลนำเข้า",
@@ -300,7 +300,7 @@ func (s *importBillService) UpdateBill(id uint, input importDataDTO.ConfirmBillI
 
 func (s *importBillService) DeleteBill(id uint, role string) error {
 	// พนักงานลบได้เฉพาะบิลที่ยังไม่อนุมัติ — บิลที่อนุมัติแล้ว (is_verified / payment_status=approved) ลบได้เฉพาะเจ้าของ
-	isOwner := strings.EqualFold(role, string(enum.RoleOwner)) || strings.EqualFold(role, string(enum.RoleAdmin))
+	isOwner := strings.EqualFold(role, string(enum.RoleOwner)) || strings.EqualFold(role, string(enum.RoleManager)) || strings.EqualFold(role, "Admin")
 	if !isOwner {
 		bill, err := s.repo.GetBillByID(id)
 		if err != nil {

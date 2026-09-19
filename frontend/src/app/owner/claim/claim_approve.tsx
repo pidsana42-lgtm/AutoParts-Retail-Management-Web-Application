@@ -156,7 +156,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
             size="md"
             leftIcon={<Printer className="h-4 w-4" />}
             onClick={handleApproveAndPrint}
-            disabled={saving}
+            disabled={saving || !claim.items?.length}
             isLoading={saving}
           >
             {saving ? 'กำลังบันทึก...' : 'อนุมัติและพิมพ์ใบเคลม'}
@@ -357,7 +357,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
             size="md"
             leftIcon={<Printer className="h-4 w-4" />}
             onClick={handleApproveAndPrint}
-            disabled={saving}
+            disabled={saving || !claim.items?.length}
             isLoading={saving}
           >
             {saving ? 'กำลังบันทึก...' : 'อนุมัติและพิมพ์ใบเคลม'}

@@ -9,6 +9,7 @@ import (
 	reDto "backend/internal/app/dto/return"
 	reRepo "backend/internal/app/repository/return"
 	reSvc "backend/internal/app/service/return"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -46,9 +47,9 @@ func getRoleFromContext(c *gin.Context) string {
 	return ""
 }
 
-func isOwnerOrAdmin(c *gin.Context) bool {
+func isOwnerOrManager(c *gin.Context) bool {
 	role := getRoleFromContext(c)
-	return role == "OWNER" || role == "ADMIN"
+	return role == "OWNER" || role == "MANAGER" || role == "ADMIN"
 }
 
 func (ctl *ReturnController) GetReturns(c *gin.Context) {
@@ -106,6 +107,10 @@ func (ctl *ReturnController) CreateSalesReturn(c *gin.Context) {
 		return
 	}
 
+	if err := input.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	createdBy := getUserIDFromContext(c)
 	res, err := ctl.service.CreateReturn(input, createdBy, getRoleFromContext(c))
 	if err != nil {
@@ -132,7 +137,7 @@ func (ctl *ReturnController) CreateSalesReturn(c *gin.Context) {
 }
 
 func (ctl *ReturnController) UpdateSalesReturn(c *gin.Context) {
-	if !isOwnerOrAdmin(c) {
+	if !isOwnerOrManager(c) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "only the store owner can approve or reject a return"})
 		return
 	}
@@ -150,6 +155,10 @@ func (ctl *ReturnController) UpdateSalesReturn(c *gin.Context) {
 		return
 	}
 
+	if err := input.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	approvedBy := getUserIDFromContext(c)
 	res, err := ctl.service.UpdateReturn(uint(id), input, approvedBy)
 	if err != nil {
@@ -177,7 +186,7 @@ func (ctl *ReturnController) UpdateSalesReturn(c *gin.Context) {
 
 func (ctl *ReturnController) ProcessRefund(c *gin.Context) {
 	role := getRoleFromContext(c)
-	if role != "OWNER" && role != "EMPLOYEE" && role != "ADMIN" {
+	if role != "OWNER" && role != "EMPLOYEE" && role != "MANAGER" && role != "ADMIN" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "only the store owner or employee can process a refund"})
 		return
 	}
@@ -194,7 +203,7 @@ func (ctl *ReturnController) ProcessRefund(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
-		if errors.Is(err, reRepo.ErrInvalidRefundMethod) || errors.Is(err, reRepo.ErrRefundRequiresCustomer) || errors.Is(err, reRepo.ErrRefundAmountExceedsOrder) {
+		if errors.Is(err, reRepo.ErrInvalidRefundMethod) || errors.Is(err, reRepo.ErrRefundRequiresCustomer) || errors.Is(err, reRepo.ErrRefundAmountExceedsOrder) || errors.Is(err, reRepo.ErrReturnQuantityExceedsOrder) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}

@@ -70,7 +70,9 @@ describe('Return list', () => {
     mocks.update.mockReturnValue(pending.promise);
     const control = row().getByRole('button', { name: 'อนุมัติรายการคืนสินค้า' });
     expect(row('RTN-TEST-0082').queryByRole('button', { name: 'อนุมัติรายการคืนสินค้า' })).not.toBeInTheDocument();
-    await user.dblClick(control);
+    await user.click(control);
+    expect(mocks.update).not.toHaveBeenCalled();
+    await user.dblClick(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'ยืนยันอนุมัติ' }));
     expect(control).toBeDisabled();
     expect(mocks.update).toHaveBeenCalledExactlyOnceWith(81, { status: 'APPROVED' });
     mocks.get.mockResolvedValue({ ...returnsResponse, data: returnsResponse.data.map(item => ({ ...item, status: 'APPROVED' })) });
@@ -83,6 +85,8 @@ describe('Return list', () => {
     mocks.update.mockRejectedValue({ response: { data: { error: 'ไม่สามารถอนุมัติได้' } } });
     const user = await openList();
     await user.click(row().getByRole('button', { name: 'อนุมัติรายการคืนสินค้า' }));
+    expect(mocks.update).not.toHaveBeenCalled();
+    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'ยืนยันอนุมัติ' }));
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'error', message: 'ไม่สามารถอนุมัติได้' })));
     expect(mocks.toast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }));
     expect(row().getByText('รอดำเนินการ')).toBeInTheDocument();

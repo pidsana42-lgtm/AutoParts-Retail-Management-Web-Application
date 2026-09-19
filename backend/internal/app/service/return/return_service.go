@@ -192,7 +192,7 @@ func (s *returnService) CreateReturn(input reDto.CreateReturnDTO, createdBy uint
 	returnEntity.ApprovedAt = nil
 	returnEntity.ApprovedBy = nil
 	role = strings.ToUpper(strings.TrimSpace(role))
-	if role == "OWNER" || role == "ADMIN" {
+	if role == "OWNER" || role == "MANAGER" || role == "ADMIN" {
 		now := time.Now()
 		returnEntity.Status = reEnum.ReturnApproved
 		returnEntity.ApprovedAt = &now
@@ -239,6 +239,9 @@ func (s *returnService) UpdateReturn(id uint, input reDto.UpdateReturnDTO, appro
 	if err != nil {
 		return nil, err
 	}
+	if existing.Status == reEnum.ReturnRefunded {
+		return nil, reRepo.ErrReturnAlreadyProcessed
+	}
 
 	updated := input.ToEntity(*existing)
 	// Approval metadata is server-owned; never accept it from the request body.
@@ -251,6 +254,9 @@ func (s *returnService) UpdateReturn(id uint, input reDto.UpdateReturnDTO, appro
 		}
 		if status == reEnum.ReturnRefunded {
 			return nil, ErrInvalidReturnStatus
+		}
+		if status == reEnum.ReturnPending && existing.Status != reEnum.ReturnPending {
+			return nil, reRepo.ErrReturnAlreadyProcessed
 		}
 		if status == reEnum.ReturnApproved {
 			if existing.Status == reEnum.ReturnApproved {

@@ -121,7 +121,7 @@ func TestReturnControllerCreateUsesAuthenticatedActorAndRole(t *testing.T) {
 	for _, actor := range []any{float64(23), uint(23), int(23), int64(23)} {
 		t.Run(fmt.Sprintf("actor_%T", actor), func(t *testing.T) {
 			service := &returnHTTPServiceStub{}
-			body := `{"original_order_id":9,"reason":"Wrong part","refund_method":"CASH","created_by":999,"approved_by":998,"role":"OWNER","status":"APPROVED"}`
+			body := `{"original_order_id":9,"reason":"Wrong part","refund_method":"CASH","created_by":999,"approved_by":998,"role":"OWNER","status":"APPROVED","items":[{"product_id":1,"quantity":1,"unit_price":100}]}`
 			response := requestReturnController(service, http.MethodPost, "/api/returns", body, actor, " employee ")
 			assertReturnHTTPStatus(t, response, http.StatusCreated)
 			if len(service.calls) != 1 || service.calls[0] != "CreateReturn" || service.actorID != 23 || service.role != "EMPLOYEE" {
@@ -157,7 +157,7 @@ func TestReturnControllerRoleBoundariesAndTrustedActors(t *testing.T) {
 		name string
 		role any
 	}{
-		{"owner", "OWNER"}, {"normalized_admin", " admin "}, {"employee", " employee "},
+		{"owner", "OWNER"}, {"normalized_manager", " manager "}, {"normalized_admin", " admin "}, {"employee", " employee "},
 		{"customer", "CUSTOMER"}, {"missing", nil}, {"wrong_type", 1},
 	}
 	for _, operation := range operations {
@@ -165,7 +165,7 @@ func TestReturnControllerRoleBoundariesAndTrustedActors(t *testing.T) {
 			t.Run(operation.name+"/"+role.name, func(t *testing.T) {
 				service := &returnHTTPServiceStub{}
 				response := requestReturnController(service, operation.method, operation.path, operation.body, uint(23), role.role)
-				allowed := role.name == "owner" || role.name == "normalized_admin" || (role.name == "employee" && operation.employeeAllowed)
+				allowed := role.name == "owner" || role.name == "normalized_manager" || role.name == "normalized_admin" || (role.name == "employee" && operation.employeeAllowed)
 				if !allowed {
 					assertReturnHTTPStatus(t, response, http.StatusForbidden)
 					if len(service.calls) != 0 {

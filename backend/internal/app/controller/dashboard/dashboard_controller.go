@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	dashDto "backend/internal/app/dto/dashboard"
 	dashSvc "backend/internal/app/service/dashboard"
@@ -14,6 +16,14 @@ import (
 
 type DashboardController struct {
 	svc dashSvc.DashboardService
+}
+
+func formatThaiDateForExport(value string) string {
+	parsed, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return value
+	}
+	return fmt.Sprintf("%02d-%02d-%d", parsed.Day(), int(parsed.Month()), parsed.Year()+543)
 }
 
 func writeValidationError(c *gin.Context, err error) {
@@ -54,6 +64,19 @@ func (ctrl *DashboardController) GetSummaryData(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Employees need operational sales counts and revenue on their dashboard,
+	// but cost, gross profit and margin are management-only information. Do the
+	// redaction at the API boundary so hidden UI cards cannot be bypassed.
+	if roleValue, exists := c.Get("role"); exists {
+		if role, ok := roleValue.(string); ok && strings.EqualFold(role, "Employee") {
+			for i := range result.SummaryData {
+				result.SummaryData[i].TotalCost = 0
+				result.SummaryData[i].GrossProfit = 0
+				result.SummaryData[i].MarginPercent = 0
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, result)
@@ -225,13 +248,14 @@ func (ctrl *DashboardController) ExportDebtAgingExcel(c *gin.Context) {
 	var buf bytes.Buffer
 	buf.WriteString("\xEF\xBB\xBF") // UTF-8 BOM for Excel
 	w := csv.NewWriter(&buf)
-	_ = w.Write([]string{"รหัสลูกค้า", "ชื่อลูกค้า", "ยอดหนี้ทั้งหมด", "วันที่ซื้อล่าสุด", "อายุหนี้ (วัน)", "สถานะ"})
+	_ = w.Write([]string{"รหัสลูกค้า", "ชื่อลูกค้า", "ยอดหนี้ทั้งหมด", "ยอดหนี้คงเหลือ", "วันที่ซื้อล่าสุด", "อายุหนี้ (วัน)", "สถานะ"})
 	for _, item := range allData {
 		_ = w.Write([]string{
 			item.CustomerCode,
 			item.CustomerName,
 			fmt.Sprintf("%.2f", item.TotalDebt),
-			item.LastPurchaseDate,
+			fmt.Sprintf("%.2f", item.RemainingBalance),
+			formatThaiDateForExport(item.LastPurchaseDate),
 			strconv.Itoa(item.AgeDays),
 			item.Status,
 		})

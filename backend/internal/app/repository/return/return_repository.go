@@ -251,22 +251,19 @@ func (r *returnRepository) CreateReturn(returnItem *reEntity.SalesReturn, items 
 }
 
 func validateReturnItems(items []reEntity.SalesReturnItem, orderItems []reEntity.SaleOrderItem) error {
+	if len(items) == 0 {
+		return ErrReturnQuantityExceedsOrder
+	}
 	ordered := make(map[uint]int, len(orderItems))
 	for _, item := range orderItems {
 		ordered[item.ProductID] += item.Qty
 	}
 
-	returned := make(map[uint]int, len(items))
 	for _, item := range items {
-		if item.Quantity <= 0 {
+		if item.Quantity <= 0 || item.Quantity > ordered[item.ProductID] {
 			return ErrReturnQuantityExceedsOrder
 		}
-		returned[item.ProductID] += item.Quantity
-	}
-	for productID, quantity := range returned {
-		if ordered[productID] < quantity {
-			return ErrReturnQuantityExceedsOrder
-		}
+		ordered[item.ProductID] -= item.Quantity
 	}
 	return nil
 }
@@ -409,9 +406,9 @@ func (r *returnRepository) updateDailySummaryForRefund(tx *gorm.DB, order *reEnt
 		"net_revenue":   summary.TotalRevenue - newReturnAmount,
 	}
 	if methodColumn != "" {
-		updates[methodColumn] = gorm.Expr(methodColumn + " - ?", amount)
+		updates[methodColumn] = gorm.Expr(methodColumn+" - ?", amount)
 	}
-	updates[customerColumn] = gorm.Expr(customerColumn + " - ?", amount)
+	updates[customerColumn] = gorm.Expr(customerColumn+" - ?", amount)
 	return tx.Model(&reEntity.DailySummary{}).
 		Where("id = ?", summary.ID).
 		Updates(updates).Error
@@ -457,6 +454,13 @@ func (r *returnRepository) ProcessRefund(id uint, processedBy uint) error {
 		now := time.Now()
 		var items []reEntity.SalesReturnItem
 		if err := tx.Where("sales_return_id = ?", returnItem.ID).Find(&items).Error; err != nil {
+			return err
+		}
+		var soldItems []reEntity.SaleOrderItem
+		if err := tx.Where("order_id = ?", order.ID).Find(&soldItems).Error; err != nil {
+			return err
+		}
+		if err := validateReturnItems(items, soldItems); err != nil {
 			return err
 		}
 		returnedByProduct := make(map[uint]int, len(items))
@@ -569,7 +573,20 @@ func (r *returnRepository) ApproveReturn(id uint, approvedBy uint) error {
 }
 
 func (r *returnRepository) UpdateReturn(returnItem *reEntity.SalesReturn) error {
-	return r.db.Save(returnItem).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var current reEntity.SalesReturn
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, returnItem.ID).Error; err != nil {
+			return err
+		}
+		// Recheck under the same row lock used by approval/refund, so a stale
+		// edit cannot restore an old status after those transactions complete.
+		if current.Status == enum.ReturnRefunded ||
+			(current.Status != enum.ReturnPending && current.Status != returnItem.Status) ||
+			(returnItem.Status != current.Status && returnItem.Status != enum.ReturnRejected) {
+			return ErrReturnAlreadyProcessed
+		}
+		return tx.Save(returnItem).Error
+	})
 }
 
 func (r *returnRepository) DeleteReturn(id uint) error {

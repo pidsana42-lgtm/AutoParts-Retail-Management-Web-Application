@@ -469,7 +469,7 @@ func (s *service) SetUserRichMenu(lineUserID string) error {
 	if err == nil && sysUser != nil && sysUser.Role.RoleName != "" {
 		roleName := strings.ToUpper(string(sysUser.Role.RoleName))
 		log.Printf("[RichMenu] User %s is a system staff. Role: %s\n", lineUserID, roleName)
-		if roleName == "OWNER" || roleName == "ADMIN" {
+		if roleName == "OWNER" || roleName == "MANAGER" || roleName == "ADMIN" {
 			richMenuID = os.Getenv("LINE_RICH_MENU_OWNER")
 		} else {
 			richMenuID = os.Getenv("LINE_RICH_MENU_EMPLOYEE")

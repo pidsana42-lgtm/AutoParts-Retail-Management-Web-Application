@@ -89,7 +89,7 @@ func (h *Hub) run() {
 				case scopeAll:
 					send = true
 				case scopeOwners:
-					send = info.Role == "OWNER" || info.Role == "ADMIN"
+					send = info.Role == "OWNER" || info.Role == "MANAGER" || info.Role == "ADMIN"
 				case scopeUser:
 					send = info.UserID != 0 && info.UserID == out.UserID
 				case scopeEmployees:

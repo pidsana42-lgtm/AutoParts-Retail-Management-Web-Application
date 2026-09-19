@@ -29,6 +29,8 @@ interface SelectProps {
   required?: boolean;
   disabled?: boolean;
   id?: string;
+  // ใช้ตอนไม่มี <label> ให้เห็นในหน้าจอ (เช่น dropdown ในตาราง) แต่ยังต้องมีชื่อให้ screen reader/เทสอ้างถึงได้
+  "aria-label"?: string;
   // ✅ เพิ่มใหม่: override หน้าตาปุ่ม trigger เอง (เช่น icon-only trigger)
   // ยังใช้ logic เปิด/ปิด dropdown และ handleSelect เดิมทั้งหมด
   renderTrigger?: (props: SelectTriggerRenderProps) => ReactNode;
@@ -50,6 +52,7 @@ export default function Select({
   required,
   disabled,
   id,
+  "aria-label": ariaLabel,
   renderTrigger,
   menuAlign = "left",
 }: SelectProps) {
@@ -166,14 +169,15 @@ export default function Select({
               aria-haspopup="listbox"
               aria-expanded={isOpen}
               aria-invalid={!!error}
+              aria-label={ariaLabel}
               onKeyDown={handleKeyDown}
               onClick={() => setIsOpen((prev) => !prev)}
               className={cn(
-                "h-10 w-full rounded-none border-none bg-[#f6f3f2] px-3 pr-9 text-sm text-left",
+                "h-10 w-full rounded-none border-none bg-[#f6f3f2] px-3 pr-9 text-sm font-normal text-left",
                 "transition-colors duration-150 ease-out cursor-pointer",
                 "focus:outline-none focus:ring-1 focus:ring-offset-0",
                 "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
-                isPlaceholder ? "text-slate-400" : "text-slate-800",
+                isPlaceholder ? "text-[#6B7280] font-light" : "text-slate-800 font-normal",
                 error
                   ? "border-red-500! focus:border-red-500 ring-1 ring-red-500"
                   // ✅ focus สีแดง

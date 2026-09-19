@@ -23,6 +23,7 @@ import { cn } from "../../../utils/component";
 import { formatDateThai, getThaiMonthOptions, getYearOptions } from "../../../utils/formatdate";
 import { generateLocalId } from "../../../utils/generateId";
 import { usePathBasePrefix  } from "../../../utils/usePathBasePrefix";
+import { useAuth } from "../../../contexts/AuthContexts";
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "DRAFT")
@@ -39,15 +40,16 @@ function StatusBadge({ status }: { status: string }) {
 function ActionButtons({ id, status }: { id: number; status: string }) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const userRole = localStorage.getItem('role');
+  const { role } = useAuth();
+  const userRole = (role || '').toUpperCase();
   const basePath = usePathBasePrefix();
   const [isPrinting, setIsPrinting] = useState(false);
   const [confirmationAction, setConfirmationAction] = useState<"approve" | "delete" | null>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
 
   const printOptions: SelectOption[] = [
-    { label: "พิมพ์พร้อมรหัสสินค้า", value: "with_code" },
-    { label: "พิมพ์ไม่เอารหัสสินค้า", value: "without_code" },
+    { label: "พิมพ์รหัส Supplier และ Part Number", value: "with_code" },
+    { label: "พิมพ์เฉพาะ Part Number", value: "without_code" },
   ];
   const handlePrint = async (includeCode: boolean) => {
     setIsPrinting(true);
@@ -156,7 +158,7 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
   }
 
   // สถานะ: รออนุมัติ
-  if (status === "PENDING" && userRole === 'Owner') {
+  if (status === "PENDING" && userRole === 'OWNER') {
     return (
       <>
         <div className="flex items-center justify-center gap-3">
@@ -239,6 +241,7 @@ const PO_STATUS_OPTIONS = [
 
 // ─── Page ──────────
 const PurchaseOrders: React.FC = () => {
+  const { role } = useAuth();
   const navigate = useNavigate();
   const basePath = usePathBasePrefix();
   // 0. Hook
@@ -274,8 +277,8 @@ const PurchaseOrders: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // 4. States สำหรับเช็คสิทธิ์ดู Summary Card
-  const userRole = localStorage.getItem('role');
-  const isOwner = userRole === 'Owner';
+  const userRole = (role || '').toUpperCase();
+  const isOwner = userRole === 'OWNER';
 
   // ดึงข้อมูล PO ทั้งหมดของทุก User
   useEffect(() => {
@@ -364,10 +367,10 @@ const PurchaseOrders: React.FC = () => {
   }, [currentPage, totalPages]);
 
   return (
-    <div className="p-8 space-y-6 bg-white min-h-screen font-sans">
+    <div className="min-h-screen space-y-6 bg-white p-4 font-sans sm:p-6 lg:p-8">
 
       {/* 1. Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Heading level="h1" weight="semibold" className="m-0 text-black">
           จัดการใบสั่งซื้อ
         </Heading>
@@ -377,15 +380,15 @@ const PurchaseOrders: React.FC = () => {
       </div>
 
       {/* 2. Search + Stats */}
-      <div className="flex gap-6 items-stretch">
+      <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
         {/* Search Card */}
-        <Card className="flex-1 w-3/4">
+        <Card className="w-full flex-1 xl:w-3/4">
           <CardHeader>
             <CardTitle className="text-base text-black">ค้นหาใบสั่งซื้อด้วย</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-5 gap-4 items-end">
-              <div className="col-span-2">
+            <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="sm:col-span-2 lg:col-span-2">
                 <Input
                   label="หมายเลขใบสั่งซื้อ"
                   placeholder="PO-XXXX-XXXX"
@@ -428,7 +431,7 @@ const PurchaseOrders: React.FC = () => {
         </Card>
 
         {/* Monthly Stats Card — ทุก role เห็นข้อมูลจาก monthly-count endpoint */}
-        <Card className="relative overflow-hidden border-t-4 border-t-red-600 bg-[#22252a] shadow-sm hover:shadow-md transition-shadow w-1/4">
+        <Card className="relative w-full overflow-hidden border-t-4 border-t-red-600 bg-[#22252a] shadow-sm transition-shadow hover:shadow-md xl:w-1/4">
           <CardContent className="p-4 flex items-center justify-between h-full">
             <div>
               <Heading level="p" className="font-normal uppercase tracking-wider text-slate-400">ใบสั่งซื้อที่อนุมัติในเดือนนี้</Heading>
@@ -452,7 +455,7 @@ const PurchaseOrders: React.FC = () => {
 
       { /* TODO: แก้ไขเรียกจากฟังก์ชันจริง */ }
       { isOwner && (
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
           <Card className="border-l-[5px] border-l-black flex flex-col justify-between h-24 p-5">
             <Heading level="p" className="text-[#6B7280] font-medium">รออนุมัติ</Heading>
             <Heading level="h3" className="font-bold mt-1 text-black">
@@ -550,8 +553,8 @@ const PurchaseOrders: React.FC = () => {
 
         {/* 4. Pagination */}
         {!isLoading && !error && totalItems > 0 && (
-          <div className="bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-3 border-t border-gray-100 bg-[#fcfbfa] px-4 py-4 text-xs text-gray-500 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
               <span>
                 แสดง {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} ถึง {Math.min(currentPage * itemsPerPage, totalItems)} จาก {totalItems} ใบสั่งซื้อ
               </span>
@@ -570,7 +573,7 @@ const PurchaseOrders: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex max-w-full items-center gap-1 overflow-x-auto pb-1 lg:pb-0">
               <button
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(1)}

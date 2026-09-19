@@ -18,7 +18,7 @@ async function mount() {
     <Route path="/owner/claims/approve/:id" element={<ClaimApprovePage />} />
     <Route path="/owner/claims/detail/:id" element={<p>กลับรายละเอียดแล้ว</p>} />
   </Routes></MemoryRouter>);
-  await screen.findByRole('button', { name: 'อนุมัติและปริ้นใบเคลม' });
+  await screen.findAllByRole('button', { name: 'อนุมัติและพิมพ์ใบเคลม' });
   return userEvent.setup();
 }
 describe('Claim approval regression checks', () => {
@@ -36,7 +36,7 @@ describe('Claim approval regression checks', () => {
   ])('lets the backend derive the parent status for %s without overwriting it', async (_, initial, expected) => {
     mocks.get.mockResolvedValue({ ...claim, items: claim.items!.map((item, index) => ({ ...item, status: initial[index] })) });
     const user = await mount();
-    await user.click(screen.getByRole('button', { name: 'อนุมัติและปริ้นใบเคลม' }));
+    await user.click(screen.getAllByRole('button', { name: 'อนุมัติและพิมพ์ใบเคลม' })[0]);
     expect(mocks.item.mock.calls).toEqual([[1, expected[0]], [2, expected[1]]]);
     expect(mocks.header).not.toHaveBeenCalled();
     expect(window.print).toHaveBeenCalledOnce();
@@ -46,9 +46,9 @@ describe('Claim approval regression checks', () => {
     let finish!: (result: { id: number; status: string }) => void;
     mocks.item.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
     const user = await mount();
-    await user.click(screen.getByRole('button', { name: 'อนุมัติและปริ้นใบเคลม' }));
+    await user.click(screen.getAllByRole('button', { name: 'อนุมัติและพิมพ์ใบเคลม' })[0]);
     expect(mocks.item).toHaveBeenCalledExactlyOnceWith(1, 'REJECTED');
-    expect(screen.getByRole('button', { name: 'กำลังบันทึก...' })).toBeDisabled();
+    screen.getAllByRole('button', { name: 'กำลังบันทึก...' }).forEach(button => expect(button).toBeDisabled());
     expect(window.print).not.toHaveBeenCalled();
     await act(async () => finish({ id: 1, status: 'REJECTED' }));
     await waitFor(() => expect(mocks.item).toHaveBeenCalledTimes(2));
@@ -57,16 +57,16 @@ describe('Claim approval regression checks', () => {
     if (failure) mocks.item.mockRejectedValueOnce(failure);
     else mocks.item.mockResolvedValueOnce(null);
     const user = await mount();
-    await user.click(screen.getByRole('button', { name: 'อนุมัติและปริ้นใบเคลม' }));
+    await user.click(screen.getAllByRole('button', { name: 'อนุมัติและพิมพ์ใบเคลม' })[0]);
     expect(mocks.header).not.toHaveBeenCalled();
     expect(window.print).not.toHaveBeenCalled();
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'error' }));
-    expect(screen.getByRole('button', { name: 'อนุมัติและปริ้นใบเคลม' })).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'อนุมัติและพิมพ์ใบเคลม' })[0]).toBeEnabled();
   });
   it('does not allow an empty claim to be approved', async () => {
     mocks.get.mockResolvedValue({ ...claim, items: [] });
     await mount();
-    expect(screen.getByRole('button', { name: 'อนุมัติและปริ้นใบเคลม' })).toBeDisabled();
+    screen.getAllByRole('button', { name: 'อนุมัติและพิมพ์ใบเคลม' }).forEach(button => expect(button).toBeDisabled());
     expect(mocks.item).not.toHaveBeenCalled();
   });
 });

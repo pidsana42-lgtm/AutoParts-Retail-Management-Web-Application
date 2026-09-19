@@ -32,7 +32,7 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotifica
 	importDataGroup := r.Group("/api/import-data")
 	importDataGroup.Use(
 		middleware.AuthMiddleware(),
-		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleAdmin)),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleManager)),
 	)
 	{
 		importDataGroup.POST("/bill-images", ctrl.CreateBillImage)
@@ -46,7 +46,6 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotifica
 		importDataGroup.POST("/bill-items", ctrl.CreateBillItem)
 		importDataGroup.GET("/purchase-orders", ctrl.ListPurchaseOrders)
 		importDataGroup.GET("/purchase-orders/:id", ctrl.GetPurchaseOrderById)
-		importDataGroup.PUT("/products/:id", ctrl.UpdateProduct)
 
 		// Custom route for WMS Import Bill flow to fetch categories with preloaded subcategories (Keeps friend's files untouched)
 		importDataGroup.GET("/categories-tree", func(c *gin.Context) {
@@ -57,6 +56,17 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotifica
 			}
 			c.JSON(200, categories)
 		})
+	}
+
+	// Owner/Admin-only: แก้ไขและปรับราคาสินค้าในหน้า "แก้ไขและปรับราคาสินค้า" (edit-stock-bill)
+	// ให้ตรงกับสิทธิ์ฝั่ง frontend (isAdminOrOwner) — พนักงานเรียก endpoint นี้ตรงๆ ไม่ได้อีกต่อไป
+	ownerAdminGroup := r.Group("/api/import-data")
+	ownerAdminGroup.Use(
+		middleware.AuthMiddleware(),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)),
+	)
+	{
+		ownerAdminGroup.PUT("/products/:id", ctrl.UpdateProduct)
 	}
 
 	// Owner-only: ปรับราคาทุนสินค้าเมื่อราคาในบิลไม่ตรงกับระบบ — เฉพาะเจ้าของเท่านั้น
@@ -101,7 +111,7 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotifica
 	apiGroup := r.Group("/api")
 	apiGroup.Use(
 		middleware.AuthMiddleware(),
-		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleAdmin)),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleManager)),
 	)
 	{
 		apiGroup.GET("/purchase-orders", ctrl.ListPurchaseOrders)

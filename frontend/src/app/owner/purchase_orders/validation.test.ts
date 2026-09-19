@@ -3,7 +3,7 @@ import type { LocalPOItem } from '../../../../src/interface/purchase_orders/po_i
 import { validatePurchaseOrder } from '../../../../src/app/owner/purchase_orders/validation';
 
 const item: LocalPOItem = {
-    id: 10, product_id: 3, product_name_snapshot: 'Filter', product_name_code_snapshot: 'P3',
+    id: 10, product_id: 3, product_name_snapshot: 'Filter', product_code_snapshot: 'P3', supply_product_code_snapshot: 'SUP-P3',
     quantity: 2, unit: 'piece', unit_price: 12.5, sub_total: 25, order_type: 'สั่งซื้อ',
 };
 
@@ -54,3 +54,4 @@ describe('purchase order validation', () => {
         expect(validatePurchaseOrder(7, [{ ...item, order_type: 'พรีออเดอร์', pre_order_item_id, unit_price: 0 }])[0]).toContain('ราคาต่อหน่วย');
     });
 });
+// @ts-nocheck - legacy fixture intentionally exercises an obsolete snapshot field

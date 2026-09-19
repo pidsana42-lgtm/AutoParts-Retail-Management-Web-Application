@@ -22,14 +22,14 @@ import (
 type PurchaseOrderService interface {
 	CreatePO(ctx context.Context, req *poDto.CreatePurchaseOrderRequest, creatorID uint) (*poDto.PurchaseOrderResponse, error)
 	GetPOByID(ctx context.Context, id uint) (*poDto.PurchaseOrderResponse, error)
-	UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus, updatedBy uint) error
+	UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus, updatedBy uint, role string) error
 	ListPOs(ctx context.Context, query poDto.ListPOQuery) (*poDto.ListPOResponse, error)
 	GetAvailableYears(ctx context.Context) ([]int, error)
 	GetPOSummary(ctx context.Context, role string) (*poDto.POSummaryResponse, error)
 	GeneratePOPDF(ctx context.Context, id uint, includeCode bool, printedBy uint) ([]byte, error)
 	Delete(ctx context.Context, id uint) error
 	SearchProducts(ctx context.Context, query poDto.ProductSearchQuery) ([]poDto.ProductSearchResponse, error)
-	UpdatePO(ctx context.Context, id uint, req *poDto.UpdatePurchaseOrderRequest, updatedBy uint) (*poEntity.PO, error)
+	UpdatePO(ctx context.Context, id uint, req *poDto.UpdatePurchaseOrderRequest, updatedBy uint, role string) (*poEntity.PO, error)
 	GetSupplierDeliveryEstimate(ctx context.Context, supplierID int) (*poDto.POAnalyticsResponse, error)
 	GetMonthlyPOCount(ctx context.Context) (*poDto.POMonthlyCountResponse, error)
 	RestorePO(ctx context.Context, poID uint, userID uint) error
@@ -111,7 +111,7 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 	for _, item := range req.POItems {
 		product, err := s.resolveProductSnapshot(ctx, item.ProductID, item.PreOrderItemID, req.SupplierID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to find product ID %d: %w", item.ProductID, err)
 		}
 
 		if item.PreOrderItemID != nil {
@@ -126,7 +126,8 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 		poItem := poEntity.POItems{
 			ProductID:                    product.id,
 			Product_name_snapshot:        product.name,
-			Supply_product_code_snapshot: product.code,
+			Product_code_snapshot:        product.productCode,
+			Supply_product_code_snapshot: product.supplyProductCode,
 			Quantity:                     float64(item.Quantity),
 			Unit:                         product.unit,
 			UnitPrice:                    item.UnitPrice,
@@ -199,6 +200,7 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 			ID:                        item.ID,
 			ProductID:                 poProductID(item.ProductID),
 			ProductNameSnapshot:       item.Product_name_snapshot,
+			ProductCodeSnapshot:       item.Product_code_snapshot,
 			SupplyProductCodeSnapshot: item.Supply_product_code_snapshot,
 			Quantity:                  int(item.Quantity),
 			Unit:                      item.Unit,
@@ -259,6 +261,7 @@ func (s *purchaseOrderService) GetPOByID(ctx context.Context, id uint) (*poDto.P
 			ID:                        item.ID,
 			ProductID:                 poProductID(item.ProductID),
 			ProductNameSnapshot:       item.Product_name_snapshot,
+			ProductCodeSnapshot:       item.Product_code_snapshot,
 			SupplyProductCodeSnapshot: item.Supply_product_code_snapshot,
 			Quantity:                  int(item.Quantity),
 			Unit:                      item.Unit,
@@ -298,7 +301,7 @@ func (s *purchaseOrderService) GetPOByID(ctx context.Context, id uint) (*poDto.P
 	}, nil
 }
 
-func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus, updatedBy uint) error {
+func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, status poEnum.POStatus, updatedBy uint, role string) error {
 	if status == poEnum.StatusDeleted {
 		return errors.New("ไม่สามารถตั้งสถานะนี้โดยตรง กรุณาใช้ฟังก์ชันลบ/กู้คืน")
 	}
@@ -312,6 +315,24 @@ func (s *purchaseOrderService) UpdatePOStatus(ctx context.Context, id uint, stat
 	}
 
 	if po.Status == poEnum.StatusApproved {
+		return ErrPOCannotUpdate
+	}
+
+	isOwner := strings.EqualFold(strings.TrimSpace(role), string(poEnum.RoleOwner))
+	if !isOwner && status != poEnum.StatusPending {
+		return ErrPOForbidden
+	}
+
+	validTransition := false
+	switch status {
+	case poEnum.StatusPending:
+		validTransition = po.Status == poEnum.StatusDraft || po.Status == poEnum.StatusResubmitted
+	case poEnum.StatusApproved:
+		validTransition = isOwner && (po.Status == poEnum.StatusDraft || po.Status == poEnum.StatusPending || po.Status == poEnum.StatusResubmitted)
+	case poEnum.StatusResubmitted, poEnum.StatusCancelled:
+		validTransition = isOwner && po.Status == poEnum.StatusPending
+	}
+	if !validTransition {
 		return ErrPOCannotUpdate
 	}
 
@@ -389,6 +410,7 @@ func (s *purchaseOrderService) ListPOs(ctx context.Context, query poDto.ListPOQu
 				ID:                        item.ID,
 				ProductID:                 poProductID(item.ProductID),
 				ProductNameSnapshot:       item.Product_name_snapshot,
+				ProductCodeSnapshot:       item.Product_code_snapshot,
 				SupplyProductCodeSnapshot: item.Supply_product_code_snapshot,
 				Quantity:                  int(item.Quantity),
 				Unit:                      item.Unit,
@@ -468,8 +490,9 @@ func (s *purchaseOrderService) GetMonthlyPOCount(ctx context.Context) (*poDto.PO
 
 var (
 	ErrPONotFound     = errors.New("purchase order not found")
-	ErrPOCannotDelete = errors.New("approved PO cannot be deleted")
-	ErrPOCannotUpdate = errors.New("approved PO cannot be updated")
+	ErrPOCannotDelete = errors.New("only draft or resubmitted PO can be deleted")
+	ErrPOCannotUpdate = errors.New("purchase order cannot be updated in its current status")
+	ErrPOForbidden    = errors.New("forbidden: insufficient permission for purchase order action")
 )
 
 // Delete แบบ Soft ให้กู้คืนได้
@@ -487,8 +510,8 @@ func (s *purchaseOrderService) Delete(ctx context.Context, id uint) error {
 	}
 
 	// 2. Business rule
-	if po.Status == poEnum.StatusApproved {
-		return ErrPOCannotDelete // ใช้ตัวแปร Error
+	if po.Status != poEnum.StatusDraft && po.Status != poEnum.StatusResubmitted {
+		return ErrPOCannotDelete
 	}
 
 	// 3. delete ดึง ID เตรียมไว้ก่อนลบ
@@ -517,7 +540,7 @@ func (s *purchaseOrderService) SearchProducts(ctx context.Context, query poDto.P
 }
 
 // Update
-func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto.UpdatePurchaseOrderRequest, updatedBy uint) (*poEntity.PO, error) {
+func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto.UpdatePurchaseOrderRequest, updatedBy uint, role string) (*poEntity.PO, error) {
 	if err := req.ValidatePrices(); err != nil {
 		return nil, err
 	}
@@ -531,6 +554,9 @@ func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto
 
 	if po.Status != "DRAFT" && po.Status != "PENDING" && po.Status != "RESUBMITTED" {
 		return nil, ErrPOCannotUpdate
+	}
+	if po.Status == poEnum.StatusPending && !strings.EqualFold(strings.TrimSpace(role), string(poEnum.RoleOwner)) {
+		return nil, ErrPOForbidden
 	}
 	// Resolve every item before writing header changes, including manual preorder
 	// references. Invalid references must not partially update the PO.
@@ -609,7 +635,8 @@ func (s *purchaseOrderService) UpdatePO(ctx context.Context, id uint, req *poDto
 			item := poEntity.POItems{
 				ProductID:                    product.id,
 				Product_name_snapshot:        product.name,
-				Supply_product_code_snapshot: product.code,
+				Product_code_snapshot:        product.productCode,
+				Supply_product_code_snapshot: product.supplyProductCode,
 				Quantity:                     float64(it.Quantity),
 				Unit:                         product.unit,
 				UnitPrice:                    it.UnitPrice,
@@ -683,7 +710,10 @@ func (s *purchaseOrderService) GetSupplierDeliveryEstimate(ctx context.Context, 
 	leadTimes := make([]float64, 0, len(history))
 	var total float64
 	for _, h := range history {
-		days := h.ReceivedAt.Sub(h.CreatedAt).Hours() / 24
+		days := h.ReceivedAt.Sub(h.ApprovedAt).Hours() / 24
+		if days < 0 {
+			days = 0
+		}
 		leadTimes = append(leadTimes, days)
 		total += days
 	}
@@ -764,15 +794,15 @@ func (s *purchaseOrderService) SendStaleDraftReminders(ctx context.Context) erro
 
 // companyProductCodeForSupplier: หารหัสสินค้าที่ Supplier เจ้านี้ใช้เรียกสินค้าชิ้นนี้ (จาก Inventory ที่ preload มาแล้ว)
 // CompanyProductCode ย้ายมาอยู่ที่ Inventory แทน Product โดยตรง เพราะสินค้า 1 ชิ้นมาจากหลาย Supplier ได้
-// แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน — คืนค่า CompanyProductCode ของ Supplier เจ้านั้น หรือ fallback เป็น Product_Code ถ้ายังไม่เคยระบุ
+// แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน — ถ้ายังไม่เคยระบุให้คืนค่าว่าง โดยไม่ใช้รหัสภายในร้านแทน
 func companyProductCodeForSupplier(product *poEntity.Product, supplierID uint) string {
 	if product == nil {
 		return ""
 	}
 	for _, inv := range product.Inventories {
-		if inv.SupplierID == supplierID && inv.CompanyProductCode != "" {
-			return inv.CompanyProductCode
+		if inv.SupplierID == supplierID && strings.TrimSpace(inv.CompanyProductCode) != "" {
+			return strings.TrimSpace(inv.CompanyProductCode)
 		}
 	}
-	return product.Product_Code
+	return ""
 }

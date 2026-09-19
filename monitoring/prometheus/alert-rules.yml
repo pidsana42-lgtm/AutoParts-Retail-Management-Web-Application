@@ -1,0 +1,46 @@
+groups:
+  - name: autoparts-backend
+    rules:
+      - alert: AutoPartsBackendDown
+        expr: max(up{job="autoparts-backend"}) == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: AutoParts backend is unavailable
+          description: Prometheus has been unable to scrape the backend for more than one minute.
+
+      - alert: AutoPartsHighServerErrorRate
+        expr: |
+          sum(rate(autoparts_http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(autoparts_http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: AutoParts backend has a high 5xx error rate
+          description: More than 5% of backend requests have returned 5xx responses for five minutes.
+
+      - alert: AutoPartsDatabaseDown
+        expr: autoparts_database_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: AutoParts database is unavailable
+          description: The backend has been unable to ping the database for more than one minute.
+
+      - alert: AutoPartsHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(autoparts_http_request_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: AutoParts backend p95 latency is high
+          description: The 95th percentile backend response time has exceeded two seconds for five minutes.

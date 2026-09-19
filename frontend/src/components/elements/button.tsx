@@ -24,7 +24,7 @@ const buttonVariants = cva(
         secondary: "bg-black text-white hover:bg-gray-800",
         tertiary:  "bg-[#E5E2E1] text-black hover:bg-[#D4D0CE]",
         danger:    "bg-red-700 text-white hover:bg-red-800",
-        outline:   "border-2 border-red-600 text-red-600 hover:bg-red-50",
+        outline:   "border-1 border-red-600 text-red-600 hover:bg-red-50",
         // ขอบแดงอ่อน พื้นขาว (สำหรับปุ่มยกเลิก)
         "outline-cancel": [
           "bg-white border border-[#FFCDD2] text-gray-700",

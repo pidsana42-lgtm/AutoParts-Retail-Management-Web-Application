@@ -7,8 +7,11 @@ import (
 )
 
 type poProductSnapshot struct {
-	id               *uint
-	name, code, unit string
+	id                *uint
+	name              string
+	productCode       string
+	supplyProductCode string
+	unit              string
 }
 
 // A manual preorder is not a WMS product yet. Keep the actual preorder snapshot
@@ -29,11 +32,12 @@ func (s *purchaseOrderService) resolveProductSnapshot(ctx context.Context, produ
 			if name == "" {
 				return poProductSnapshot{}, fmt.Errorf("รายการพรีออเดอร์ %d ไม่มีชื่อสินค้า", *preorderID)
 			}
-			code := item.SupplierPartCode
-			if code == "" {
-				code = item.ProductCodeSnapshot
-			}
-			return poProductSnapshot{name: name, code: code, unit: "ชิ้น"}, nil
+			return poProductSnapshot{
+				name:              name,
+				productCode:       strings.TrimSpace(item.ProductCodeSnapshot),
+				supplyProductCode: strings.TrimSpace(item.SupplierPartCode),
+				unit:              "ชิ้น",
+			}, nil
 		}
 	}
 	product, err := s.productRepo.GetProductByID(ctx, productID)
@@ -47,7 +51,13 @@ func (s *purchaseOrderService) resolveProductSnapshot(ctx context.Context, produ
 	if product.Unit != nil {
 		unit = product.Unit.Unit_Name
 	}
-	return poProductSnapshot{id: &productID, name: product.Product_Name, code: companyProductCodeForSupplier(product, supplierID), unit: unit}, nil
+	return poProductSnapshot{
+		id:                &productID,
+		name:              product.Product_Name,
+		productCode:       product.Product_Code,
+		supplyProductCode: companyProductCodeForSupplier(product, supplierID),
+		unit:              unit,
+	}, nil
 }
 
 // Keep the existing API representation (0 = not yet linked) for older clients.

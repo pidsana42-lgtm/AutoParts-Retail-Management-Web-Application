@@ -399,7 +399,7 @@ const ReturnsPage: React.FC = () => {
                           {approvingId === item.id ? <Loader2 size={16} className='animate-spin' /> : <CircleCheck size={16} />}
                         </button>
                       )}
-                      {(userRole === 'OWNER' || userRole === 'EMPLOYEE' || userRole === 'ADMIN') && item.status === 'APPROVED' && (
+                      {(userRole === 'OWNER' || userRole === 'EMPLOYEE' || userRole === 'MANAGER' || userRole === 'ADMIN') && item.status === 'APPROVED' && (
                         <button
                           type="button"
                           title="ดำเนินการคืนเงินจริง"
