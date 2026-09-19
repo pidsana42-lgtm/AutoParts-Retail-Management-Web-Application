@@ -133,120 +133,239 @@ func (s *emailService) SendEmail(to []string, subject, htmlBody string) error {
 }
 
 func (s *emailService) SendPasswordResetOTP(toEmail, username, otp string) error {
-	subject := "รหัสยืนยันการตั้งรหัสผ่านใหม่ (OTP) - JJ AutoParts"
-	htmlBody := fmt.Sprintf(`
-	<!DOCTYPE html>
-	<html>
-	<head><meta charset="utf-8"></head>
-	<body style="margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f4f5f7;">
-		<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="padding: 40px 0;">
-			<tr>
-				<td align="center">
-					<table width="500" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
-						<!-- Header -->
-						<tr>
-							<td style="background-color: #1c1b1b; padding: 25px 30px; text-align: center;">
-								<h1 style="color: #ffffff; margin: 0; font-size: 22px; letter-spacing: 1px;">JJ AUTO PARTS</h1>
-								<p style="color: #e51c23; margin: 5px 0 0; font-size: 12px; font-weight: bold;">ระบบบริหารจัดการร้านขายปลีกอะไหล่ยนต์</p>
-							</td>
-						</tr>
-						<!-- Body -->
-						<tr>
-							<td style="padding: 35px 30px;">
-								<h2 style="color: #222222; margin: 0 0 15px; font-size: 18px;">รีเซ็ตรหัสผ่านสำหรับบัญชี %s</h2>
-								<p style="color: #555555; line-height: 1.6; margin: 0 0 25px; font-size: 14px;">
-									เราได้รับคำขอรีเซ็ตรหัสผ่านสำหรับบัญชีผู้ใช้งานของคุณ กรุณานำรหัสยืนยัน (OTP) ด้านล่างนี้ไปกรอกในหน้าเว็บเพื่อตั้งรหัสผ่านใหม่:
-								</p>
-								<div style="background-color: #fff2f2; border: 1px dashed #e51c23; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 25px;">
-									<span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #e51c23;">%s</span>
-									<p style="color: #888888; font-size: 12px; margin: 8px 0 0;">(รหัสมีอายุการใช้งาน 15 นาที)</p>
+	subject := "🔐 รหัสยืนยันการตั้งรหัสผ่านใหม่ (OTP) - JJ AutoParts"
+	currentYear := time.Now().Year()
+	currentTime := time.Now().Format("02/01/2006 15:04 น.")
+
+	htmlBody := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="th">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>รหัสยืนยัน OTP - JJ AutoParts</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Prompt', 'Kanit', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1e293b;">
+	<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 35px 15px;">
+		<tr>
+			<td align="center">
+				<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="max-width: 560px; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04); border: 1px solid #e2e8f0;">
+					
+					<!-- Header Section with Logo -->
+					<tr>
+						<td style="background: linear-gradient(135deg, #18181b 0%%, #09090b 100%%); padding: 36px 30px; text-align: center; border-bottom: 4px solid #b70011;">
+							<table width="100%%" border="0" cellspacing="0" cellpadding="0">
+								<tr>
+									<td align="center">
+										<div style="display: inline-block; background-color: #ffffff; padding: 10px 14px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); margin-bottom: 12px;">
+											<img src="https://jjautopart-pakchong.com/LOGO.png" alt="JJ AutoParts" width="52" height="52" style="display: block; object-fit: contain; margin: 0 auto;" />
+										</div>
+									</td>
+								</tr>
+								<tr>
+									<td align="center">
+										<h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;">
+											JJ AUTOPARTS <span style="color: #ef4444; font-weight: 900;">PAK CHONG</span>
+										</h1>
+										<p style="color: #94a3b8; margin: 6px 0 0; font-size: 13px; font-weight: 500; letter-spacing: 0.5px;">
+											ระบบบริหารจัดการร้านขายปลีกอะไหล่ยนต์ครบวงจร
+										</p>
+									</td>
+								</tr>
+							</table>
+						</td>
+					</tr>
+
+					<!-- Content Section -->
+					<tr>
+						<td style="padding: 40px 36px 32px;">
+							<!-- Badge -->
+							<div style="text-align: center; margin-bottom: 24px;">
+								<span style="display: inline-block; background-color: #fef2f2; color: #b70011; border: 1px solid #fecaca; padding: 6px 16px; border-radius: 9999px; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">
+									🛡️ ยืนยันความปลอดภัย (SECURITY VERIFICATION)
+								</span>
+							</div>
+
+							<h2 style="color: #0f172a; margin: 0 0 14px; font-size: 20px; font-weight: 700; text-align: center;">
+								คำขอรีเซ็ตรหัสผ่านสำหรับบัญชี <span style="color: #b70011;">%s</span>
+							</h2>
+							<p style="color: #475569; font-size: 14px; line-height: 1.7; margin: 0 0 28px; text-align: center;">
+								เราได้รับคำขอรีเซ็ตรหัสผ่านสำหรับเข้าสู่ระบบ JJ AutoParts<br/>
+								กรุณานำรหัสยืนยันแบบใช้ครั้งเดียว (OTP) ด้านล่างนี้ไปกรอกในหน้าต่างเปลี่ยนรหัสผ่าน:
+							</p>
+
+							<!-- Luxury OTP Card -->
+							<div style="background: linear-gradient(180deg, #fff7f7 0%%, #fff1f2 100%%); border: 2px dashed #b70011; border-radius: 16px; padding: 28px 20px; text-align: center; margin-bottom: 28px; box-shadow: inset 0 2px 4px rgba(183,0,17,0.04);">
+								<div style="color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;">
+									รหัสยืนยันของคุณ (ONE-TIME PASSWORD)
 								</div>
-								<p style="color: #888888; font-size: 13px; line-height: 1.5; margin: 0;">
-									* หากคุณไม่ได้เป็นผู้ส่งคำขอนี้ สามารถเพิกเฉยต่ออีเมลฉบับนี้ได้ บัญชีของคุณจะยังคงปลอดภัย
+								<div style="font-size: 42px; font-weight: 900; letter-spacing: 12px; color: #b70011; font-family: 'Courier New', Courier, monospace; text-shadow: 0 2px 4px rgba(183,0,17,0.15); margin: 6px 0 10px; padding-left: 12px;">
+									%s
+								</div>
+								<div style="display: inline-block; background-color: #fee2e2; color: #991b1b; padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+									⏱️ รหัสมีอายุการใช้งาน 15 นาที
+								</div>
+							</div>
+
+							<!-- Action Button -->
+							<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 28px;">
+								<tr>
+									<td align="center">
+										<a href="https://jjautopart-pakchong.com/login" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #b70011 0%%, #dc2626 100%%); color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 14px 34px; border-radius: 12px; box-shadow: 0 6px 20px -3px rgba(183, 0, 17, 0.4); letter-spacing: 0.5px;">
+											เปิดหน้าเว็บเพื่อกรอกรหัส →
+										</a>
+									</td>
+								</tr>
+							</table>
+
+							<!-- Notice Alert Box -->
+							<div style="background-color: #f8fafc; border-left: 4px solid #64748b; border-radius: 8px; padding: 14px 18px; margin-bottom: 12px;">
+								<p style="color: #64748b; font-size: 12px; line-height: 1.6; margin: 0;">
+									🔒 <strong>คำแนะนำด้านความปลอดภัย:</strong> โปรดอย่าเปิดเผยรหัส OTP นี้ให้แก่ผู้อื่น หากคุณไม่ได้ทำรายการนี้ สามารถเพิกเฉยต่ออีเมลฉบับนี้ได้ บัญชีของคุณยังคงปลอดภัย
 								</p>
-							</td>
-						</tr>
-						<!-- Footer -->
-						<tr>
-							<td style="background-color: #f9fafb; padding: 18px 30px; text-align: center; border-top: 1px solid #eeeeee;">
-								<p style="color: #999999; font-size: 12px; margin: 0;">&copy; %d JJ AutoParts Pakchong. All rights reserved.</p>
-							</td>
-						</tr>
-					</table>
-				</td>
-			</tr>
-		</table>
-	</body>
-	</html>
-	`, username, otp, time.Now().Year())
+							</div>
+							<p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 16px 0 0;">
+								เวลาที่ทำรายการ: %s
+							</p>
+						</td>
+					</tr>
+
+					<!-- Footer Section -->
+					<tr>
+						<td style="background-color: #0f172a; padding: 24px 30px; text-align: center; border-top: 1px solid #1e293b;">
+							<p style="color: #94a3b8; font-size: 12px; margin: 0 0 6px; font-weight: 600;">
+								JJ AutoParts Pak Chong • ปากช่อง นครราชสีมา
+							</p>
+							<p style="color: #64748b; font-size: 11px; margin: 0;">
+								&copy; %d JJ AutoParts. สงวนลิขสิทธิ์ทุกประการ
+							</p>
+						</td>
+					</tr>
+
+				</table>
+			</td>
+		</tr>
+	</table>
+</body>
+</html>`, username, otp, currentTime, currentYear)
 
 	return s.SendEmail([]string{toEmail}, subject, htmlBody)
 }
 
 func (s *emailService) SendLowStockAlert(productName, productCode string, currentQty, limitQty int) error {
-	toEmail := s.user // ส่งหาเจ้าของร้านเอง
+	toEmail := s.user
 	if toEmail == "" {
 		return nil
 	}
 
 	subject := fmt.Sprintf("⚠️ แจ้งเตือนสต็อกสินค้าใกล้หมด: %s (%s)", productName, productCode)
-	htmlBody := fmt.Sprintf(`
-	<!DOCTYPE html>
-	<html>
-	<head><meta charset="utf-8"></head>
-	<body style="margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f4f5f7;">
-		<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="padding: 40px 0;">
-			<tr>
-				<td align="center">
-					<table width="520" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
-						<!-- Header -->
-						<tr>
-							<td style="background-color: #b70011; padding: 22px 30px; text-align: center;">
-								<h1 style="color: #ffffff; margin: 0; font-size: 20px;">⚠️ แจ้งเตือนสต็อกสินค้าใกล้หมด</h1>
-								<p style="color: #ffcccc; margin: 4px 0 0; font-size: 13px;">ระบบตรวจพบสินค้ามีจำนวนต่ำกว่าเกณฑ์ขั้นต่ำ</p>
-							</td>
-						</tr>
-						<!-- Body -->
-						<tr>
-							<td style="padding: 30px;">
-								<table width="100%%" border="0" cellspacing="0" cellpadding="8" style="font-size: 14px; border-collapse: collapse;">
-									<tr style="border-bottom: 1px solid #eeeeee;">
-										<td style="color: #666666; width: 35%%;">ชื่อสินค้า:</td>
-										<td style="color: #111111; font-weight: bold;">%s</td>
-									</tr>
-									<tr style="border-bottom: 1px solid #eeeeee;">
-										<td style="color: #666666;">รหัสสินค้า:</td>
-										<td style="color: #111111; font-weight: bold;">%s</td>
-									</tr>
-									<tr style="border-bottom: 1px solid #eeeeee;">
-										<td style="color: #666666;">คงเหลือปัจจุบัน:</td>
-										<td style="color: #e51c23; font-size: 16px; font-weight: bold;">%d ชิ้น</td>
-									</tr>
-									<tr>
-										<td style="color: #666666;">เกณฑ์เตือนขั้นต่ำ:</td>
-										<td style="color: #555555;">%d ชิ้น</td>
-									</tr>
-								</table>
-								<div style="margin-top: 25px; padding: 15px; background-color: #fff9e6; border-left: 4px solid #f59e0b; border-radius: 4px;">
-									<p style="color: #92400e; margin: 0; font-size: 13px;">
-										<strong>คำแนะนำ:</strong> กรุณาตรวจสอบและดำเนินการเปิดใบสั่งซื้อ (PO) หรือจัดเตรียมสินค้าเข้าคลังเพิ่มเติม
-									</p>
+	currentYear := time.Now().Year()
+	currentTime := time.Now().Format("02/01/2006 15:04 น.")
+
+	htmlBody := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="th">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>แจ้งเตือนสต็อกสินค้า</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Prompt', 'Kanit', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1e293b;">
+	<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 35px 15px;">
+		<tr>
+			<td align="center">
+				<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="max-width: 560px; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08); border: 1px solid #e2e8f0;">
+					
+					<!-- Header -->
+					<tr>
+						<td style="background: linear-gradient(135deg, #991b1b 0%%, #b70011 100%%); padding: 32px 30px; text-align: center; border-bottom: 4px solid #7f1d1d;">
+							<div style="font-size: 32px; margin-bottom: 8px;">⚠️</div>
+							<h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.5px;">
+								แจ้งเตือนสต็อกสินค้าใกล้หมด
+							</h1>
+							<p style="color: #fecaca; margin: 6px 0 0; font-size: 13px;">
+								ระบบตรวจพบสินค้ามีจำนวนคงเหลือต่ำกว่าเกณฑ์ขั้นต่ำ
+							</p>
+						</td>
+					</tr>
+
+					<!-- Content -->
+					<tr>
+						<td style="padding: 36px 32px;">
+							<!-- Product Card -->
+							<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; margin-bottom: 24px;">
+								<tr>
+									<td style="padding: 20px 22px; border-bottom: 1px solid #e2e8f0; background-color: #ffffff;">
+										<div style="color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">
+											รายการสินค้า
+										</div>
+										<div style="color: #0f172a; font-size: 17px; font-weight: 800; line-height: 1.4;">
+											%s
+										</div>
+										<div style="color: #b70011; font-size: 13px; font-weight: 700; margin-top: 4px;">
+											รหัสสินค้า: %s
+										</div>
+									</td>
+								</tr>
+								<tr>
+									<td style="padding: 18px 22px;">
+										<table width="100%%" border="0" cellspacing="0" cellpadding="0">
+											<tr>
+												<td width="50%%">
+													<div style="color: #64748b; font-size: 12px; margin-bottom: 4px;">จำนวนคงเหลือ:</div>
+													<div style="color: #dc2626; font-size: 26px; font-weight: 900;">
+														%d <span style="font-size: 14px; font-weight: 600; color: #64748b;">ชิ้น</span>
+													</div>
+												</td>
+												<td width="50%%">
+													<div style="color: #64748b; font-size: 12px; margin-bottom: 4px;">เกณฑ์แจ้งเตือนขั้นต่ำ:</div>
+													<div style="color: #0f172a; font-size: 26px; font-weight: 900;">
+														%d <span style="font-size: 14px; font-weight: 600; color: #64748b;">ชิ้น</span>
+													</div>
+												</td>
+											</tr>
+										</table>
+									</td>
+								</tr>
+							</table>
+
+							<!-- Suggestion -->
+							<div style="background-color: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 10px; padding: 16px 18px; margin-bottom: 26px;">
+								<div style="color: #92400e; font-size: 13px; line-height: 1.6;">
+									<strong>💡 ข้อแนะนำ:</strong> กรุณาเข้าสู่ระบบเพื่อดำเนินการเปิดใบสั่งซื้อ (PO) กับตัวแทนจำหน่าย หรือวางแผนสต็อกสินค้าเข้าคลังเพื่อไม่ให้กระทบต่อยอดขาย
 								</div>
-							</td>
-						</tr>
-						<!-- Footer -->
-						<tr>
-							<td style="background-color: #f9fafb; padding: 15px 30px; text-align: center; border-top: 1px solid #eeeeee;">
-								<p style="color: #999999; font-size: 12px; margin: 0;">JJ AutoParts - ระบบแจ้งเตือนอัตโนมัติ</p>
-							</td>
-						</tr>
-					</table>
-				</td>
-			</tr>
-		</table>
-	</body>
-	</html>
-	`, productName, productCode, currentQty, limitQty)
+							</div>
+
+							<!-- Button -->
+							<table width="100%%" border="0" cellspacing="0" cellpadding="0">
+								<tr>
+									<td align="center">
+										<a href="https://jjautopart-pakchong.com" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #18181b 0%%, #27272a 100%%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; padding: 13px 28px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+											เข้าสู่ระบบจัดการสต็อกสินค้า →
+										</a>
+									</td>
+								</tr>
+							</table>
+
+							<p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 24px 0 0;">
+								เวลาที่ตรวจพบ: %s
+							</p>
+						</td>
+					</tr>
+
+					<!-- Footer -->
+					<tr>
+						<td style="background-color: #0f172a; padding: 20px 30px; text-align: center;">
+							<p style="color: #64748b; font-size: 11px; margin: 0;">
+								&copy; %d JJ AutoParts Pak Chong • ระบบแจ้งเตือนสต็อกสินค้าอัตโนมัติ
+							</p>
+						</td>
+					</tr>
+
+				</table>
+			</td>
+		</tr>
+	</table>
+</body>
+</html>`, productName, productCode, currentQty, limitQty, currentTime, currentYear)
 
 	return s.SendEmail([]string{toEmail}, subject, htmlBody)
 }
@@ -257,68 +376,115 @@ func (s *emailService) SendNewOrderAlert(orderType, orderCode string, totalPrice
 		return nil
 	}
 
-	subject := fmt.Sprintf("📦 มีรายการ%sใหม่: %s", orderType, orderCode)
-	
-	itemsHtml := ""
-	for _, itm := range items {
-		itemsHtml += fmt.Sprintf("<li style='margin-bottom: 6px; color: #333;'>%s</li>", itm)
+	subject := fmt.Sprintf("📦 มีรายการ%sใหม่: %s (฿%.2f)", orderType, orderCode, totalPrice)
+	currentYear := time.Now().Year()
+	currentTime := time.Now().Format("02/01/2006 15:04 น.")
+
+	itemsRows := ""
+	for i, itm := range items {
+		bgColor := "#ffffff"
+		if i%2 == 1 {
+			bgColor = "#f8fafc"
+		}
+		itemsRows += fmt.Sprintf(`
+		<tr style="background-color: %s;">
+			<td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 13px;">• %s</td>
+		</tr>`, bgColor, itm)
 	}
 
-	htmlBody := fmt.Sprintf(`
-	<!DOCTYPE html>
-	<html>
-	<head><meta charset="utf-8"></head>
-	<body style="margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f4f5f7;">
-		<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="padding: 40px 0;">
-			<tr>
-				<td align="center">
-					<table width="520" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
-						<!-- Header -->
-						<tr>
-							<td style="background-color: #1c1b1b; padding: 22px 30px; text-align: center;">
-								<h1 style="color: #ffffff; margin: 0; font-size: 20px;">📦 มีรายการ%sใหม่</h1>
-								<p style="color: #4ade80; margin: 4px 0 0; font-size: 14px; font-weight: bold;">รหัส: %s</p>
-							</td>
-						</tr>
-						<!-- Body -->
-						<tr>
-							<td style="padding: 30px;">
-								<table width="100%%" border="0" cellspacing="0" cellpadding="8" style="font-size: 14px; border-collapse: collapse;">
-									<tr style="border-bottom: 1px solid #eeeeee;">
-										<td style="color: #666666; width: 35%%;">ประเภทรายการ:</td>
-										<td style="color: #111111; font-weight: bold;">%s</td>
-									</tr>
-									<tr style="border-bottom: 1px solid #eeeeee;">
-										<td style="color: #666666;">ลูกค้า:</td>
-										<td style="color: #111111; font-weight: bold;">%s</td>
-									</tr>
-									<tr style="border-bottom: 1px solid #eeeeee;">
-										<td style="color: #666666;">ยอดรวม:</td>
-										<td style="color: #059669; font-size: 18px; font-weight: bold;">฿%.2f</td>
-									</tr>
-								</table>
+	htmlBody := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="th">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>รายการสั่งซื้อใหม่ - JJ AutoParts</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Prompt', 'Kanit', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1e293b;">
+	<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 35px 15px;">
+		<tr>
+			<td align="center">
+				<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="max-width: 560px; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08); border: 1px solid #e2e8f0;">
+					
+					<!-- Header -->
+					<tr>
+						<td style="background: linear-gradient(135deg, #18181b 0%%, #09090b 100%%); padding: 32px 30px; text-align: center; border-bottom: 4px solid #16a34a;">
+							<div style="display: inline-block; background-color: #15803d; color: #ffffff; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-bottom: 10px;">
+								✨ NEW ORDER ALERT
+							</div>
+							<h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800;">
+								มีรายการ%sใหม่
+							</h1>
+							<p style="color: #86efac; margin: 6px 0 0; font-size: 15px; font-weight: 700; font-family: 'Courier New', monospace;">
 								%s
-							</td>
-						</tr>
-						<!-- Footer -->
-						<tr>
-							<td style="background-color: #f9fafb; padding: 15px 30px; text-align: center; border-top: 1px solid #eeeeee;">
-								<p style="color: #999999; font-size: 12px; margin: 0;">JJ AutoParts - ระบบแจ้งเตือนอัตโนมัติ</p>
-							</td>
-						</tr>
-					</table>
-				</td>
-			</tr>
-		</table>
-	</body>
-	</html>
-	`, orderType, orderCode, orderType, customerName, totalPrice, 
+							</p>
+						</td>
+					</tr>
+
+					<!-- Content -->
+					<tr>
+						<td style="padding: 36px 32px;">
+							<!-- Order Info Table -->
+							<table width="100%%" border="0" cellspacing="0" cellpadding="10" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 14px; margin-bottom: 24px;">
+								<tr style="border-bottom: 1px solid #e2e8f0;">
+									<td style="color: #64748b; font-weight: 600; width: 35%%;">ประเภทรายการ:</td>
+									<td style="color: #0f172a; font-weight: 700;">%s</td>
+								</tr>
+								<tr style="border-bottom: 1px solid #e2e8f0;">
+									<td style="color: #64748b; font-weight: 600;">ลูกค้า:</td>
+									<td style="color: #0f172a; font-weight: 700;">%s</td>
+								</tr>
+								<tr>
+									<td style="color: #64748b; font-weight: 600;">ยอดรวมทั้งสิ้น:</td>
+									<td style="color: #16a34a; font-size: 22px; font-weight: 900;">฿%.2f</td>
+								</tr>
+							</table>
+
+							<!-- Items List -->
+							%s
+
+							<!-- Button -->
+							<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 28px;">
+								<tr>
+									<td align="center">
+										<a href="https://jjautopart-pakchong.com" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #16a34a 0%%, #15803d 100%%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; padding: 13px 30px; border-radius: 10px; box-shadow: 0 4px 14px rgba(22, 163, 74, 0.3);">
+											ดูรายละเอียดรายการสั่งซื้อ →
+										</a>
+									</td>
+								</tr>
+							</table>
+
+							<p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 24px 0 0;">
+								เวลาที่บันทึกรายการ: %s
+							</p>
+						</td>
+					</tr>
+
+					<!-- Footer -->
+					<tr>
+						<td style="background-color: #0f172a; padding: 20px 30px; text-align: center;">
+							<p style="color: #64748b; font-size: 11px; margin: 0;">
+								&copy; %d JJ AutoParts Pak Chong • ระบบแจ้งเตือนอัตโนมัติ
+							</p>
+						</td>
+					</tr>
+
+				</table>
+			</td>
+		</tr>
+	</table>
+</body>
+</html>`, orderType, orderCode, orderType, customerName, totalPrice,
 		func() string {
-			if itemsHtml != "" {
-				return "<div style='margin-top: 20px;'><p style='color: #666; font-size: 13px; font-weight: bold; margin-bottom: 8px;'>รายการสินค้า:</p><ul style='padding-left: 20px; font-size: 13px; margin: 0;'>" + itemsHtml + "</ul></div>"
+			if itemsRows != "" {
+				return `<div style="border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; margin-top: 10px;">
+					<div style="background-color: #f1f5f9; padding: 10px 14px; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase;">
+						รายการสินค้าในออเดอร์
+					</div>
+					<table width="100%" border="0" cellspacing="0" cellpadding="0">` + itemsRows + `</table>
+				</div>`
 			}
 			return ""
-		}())
+		}(), currentTime, currentYear)
 
 	return s.SendEmail([]string{toEmail}, subject, htmlBody)
 }
