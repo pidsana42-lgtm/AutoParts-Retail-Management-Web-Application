@@ -997,7 +997,7 @@ def match_bill_products(result):
         if engine is not None:
             with engine.connect() as conn:
                 # Get base products
-                query = text("SELECT id, product_name, product_code, barcode FROM products WHERE is_active = true")
+                query = text("SELECT id, product_name, product_code, COALESCE((SELECT barcode FROM inventories WHERE inventories.product_id = products.id LIMIT 1), '') AS barcode FROM products WHERE is_active = true")
                 rows = conn.execute(query).fetchall()
                 for r in rows:
                     db_products.append({
@@ -1282,7 +1282,7 @@ def refresh_product_embeddings(request: RefreshEmbeddingsRequest):
     db_products = []
     corrections = []
     with engine.connect() as conn:
-        query = text("SELECT id, product_name, product_code, barcode FROM products WHERE is_active = true")
+        query = text("SELECT id, product_name, product_code, COALESCE((SELECT barcode FROM inventories WHERE inventories.product_id = products.id LIMIT 1), '') AS barcode FROM products WHERE is_active = true")
         rows = conn.execute(query).fetchall()
         for r in rows:
             db_products.append({
