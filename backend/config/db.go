@@ -193,11 +193,11 @@ func SetupDatabase() {
 	seed.PurchaseOrdersType(db)
 	seed.CompanySetting(db)
 
-	// User auth & Customers
+	// User auth
 	if err := seed.User(db); err != nil {
 		log.Printf("Warning: failed to seed default user: %v", err)
 	}
-	seed.Customer(db)
+	// seed.Customer(db)
 
 	// Mock data seeds disabled
 	// seed.Supplier(db)
