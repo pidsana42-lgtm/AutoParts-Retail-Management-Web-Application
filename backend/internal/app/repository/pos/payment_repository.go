@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 
 	"backend/internal/app/entity"
@@ -40,6 +41,7 @@ type PaymentRepository interface {
     GetRepaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.PaymentRepayment, error)
     GetDirectPaymentHistory(search, startDate, endDate string, employeeID uint) ([]entity.Payment, error)
     GetCancelledRepaymentHistory(search, startDate, endDate string) ([]entity.PaymentRepayment, error)
+    GetWalkInDirectPaymentsByDate(startDate, endDate, customerName string) ([]entity.Payment, error)
     RequestCancelRepayment(repaymentID uint, userID uint, reason string) error
     RevertCancelRepayment(repaymentID uint) error
     RejectCancelRepayment(repaymentID uint, remark string) error
@@ -408,6 +410,34 @@ func (r *paymentRepository) GetDirectPaymentsByCustomerAndDate(customerID uint, 
         Preload("ReceivedBy").
         Joins("JOIN sale_orders ON sale_orders.id = payments.order_id").
         Where("sale_orders.customer_id = ? AND payments.paid_at IS NOT NULL", customerID)
+
+    if startDate != "" && endDate != "" {
+        query = query.Where("payments.paid_at BETWEEN ? AND ?", startDate+" 00:00:00", endDate+" 23:59:59")
+    } else if startDate != "" {
+        query = query.Where("payments.paid_at >= ?", startDate+" 00:00:00")
+    } else if endDate != "" {
+        query = query.Where("payments.paid_at <= ?", endDate+" 23:59:59")
+    }
+
+    err := query.Order("payments.paid_at asc").Find(&payments).Error
+    return payments, err
+}
+
+func (r *paymentRepository) GetWalkInDirectPaymentsByDate(startDate, endDate, customerName string) ([]entity.Payment, error) {
+    var payments []entity.Payment
+    query := r.db.Preload("Order").
+        Preload("Order.Customer").
+        Preload("Order.Customer.CustomerType").
+        Preload("PaymentMethod").
+        Preload("ReceivedBy").
+        Joins("JOIN sale_orders ON sale_orders.id = payments.order_id").
+        Where("sale_orders.customer_id IS NULL AND payments.paid_at IS NOT NULL")
+
+    cleanName := strings.TrimSpace(customerName)
+    if cleanName != "" && !strings.EqualFold(cleanName, "ลูกค้าทั่วไป") && !strings.EqualFold(cleanName, "ลูกค้าขาจร") {
+        like := "%" + cleanName + "%"
+        query = query.Where("sale_orders.customer_name_temp LIKE ?", like)
+    }
 
     if startDate != "" && endDate != "" {
         query = query.Where("payments.paid_at BETWEEN ? AND ?", startDate+" 00:00:00", endDate+" 23:59:59")

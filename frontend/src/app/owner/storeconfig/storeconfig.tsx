@@ -18,6 +18,8 @@ import ImageUploader from "../../../components/elements/image_uploader";
 import { useToast } from "../../../components/elements/toast";
 import type { CompanySettingReq } from "../../../interface/companysetting/company";
 import { companyService, resolveAssetUrl } from "../../../service/http/companysetting/company_service";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../../../contexts/AuthContexts";
 
 const PROMPTPAY_TYPE_OPTIONS: SelectOption[] = [
   { label: "เบอร์โทรศัพท์มือถือ (10 หลัก)", value: "phone" },
@@ -41,6 +43,15 @@ const BANK_OPTIONS: SelectOption[] = [
 ];
 
 const StoreConfig: React.FC = () => {
+  const { role } = useAuth();
+  const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
+  const isOwner = currentRole === "OWNER";
+
+  if (!isOwner) {
+    const redirectPath = currentRole === "MANAGER" ? "/manager/storeconfig/financial-policy" : "/";
+    return <Navigate to={redirectPath} replace />;
+  }
+
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     company_name: "",

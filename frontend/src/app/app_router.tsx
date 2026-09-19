@@ -44,7 +44,6 @@ import EmployeeClaimsPage from './employee/claim/claims';
 import MobileScanPage from './mobile-scan/mobile_scan_page';
 import PublicProductPage from './public-product/public_product_page';
 import SalesCancellationHistory from './employee/pos/sales_cancellation_history';
-import OwnerSalesCancellationHistory from './owner/pos/sales_cancellation_history';
 import SettleBills from './employee/transactions/settle_bills';
 import PaymentHistory from './employee/transactions/payment_history';
 import PaymentCancellationHistory from './employee/transactions/payment_cancellation_history';
@@ -59,17 +58,19 @@ import { getDashboardRoleGroup } from '../utils/dashboardAccess';
 export default function AppRouter(): React.JSX.Element {
   const { role } = useAuth();
 
-  const { isAdminOrOwner, isEmployeeOrStaff, firstMenuPath } = useMemo(() => {
+  const { isOwner, isManagerOrOwner, isEmployeeOrStaff, firstMenuPath } = useMemo(() => {
     const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
     const dashboardRoleGroup = getDashboardRoleGroup(currentRole);
-    const isOwnerOrAdmin = dashboardRoleGroup === 'owner';
+    const isOwner = currentRole === 'OWNER';
+    const isOwnerOrManager = dashboardRoleGroup === 'owner';
     const isEmployee = dashboardRoleGroup === 'employee';
     
     const userMenus = getMenuByRole(currentRole);
     const firstPath = userMenus && userMenus.length > 0 ? userMenus[0].path : "/login";
 
     return {
-      isAdminOrOwner: isOwnerOrAdmin,
+      isOwner,
+      isManagerOrOwner: isOwnerOrManager,
       isEmployeeOrStaff: isEmployee,
       firstMenuPath: firstPath
     };
@@ -90,156 +91,156 @@ export default function AppRouter(): React.JSX.Element {
         {/* หน้าแรกสุด (/) ดีดส่งไปที่เมนูแรกสุดใน Sidebar ของ Role นั้นๆ */}
         <Route path="/" element={<Navigate to={firstMenuPath} replace />} />
 
-        {/* เฉพาะ OWNER หรือ ADMIN เท่านั้นที่เข้าได้ */}
-        <Route path="/owner/dashboard/maindashboard" element={
-          isAdminOrOwner ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
-        } />
-        <Route path="/owner/dashboard/salesdashboard" element={
-          isAdminOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
-        } />
-        <Route path="/owner/dashboard/debtdashboard" element={
-          isAdminOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
-        } />
-
-        {/* -------------------- การตั้งค่า ------------------------ */}
+        {/* ตั้งค่าข้อมูลร้านค้า (StoreConfig): ให้สิทธิ์เฉพาะ OWNER เท่านั้น */}
         <Route path="/owner/storeconfig" element={
-          isAdminOrOwner ? <StoreConfig /> : <Navigate to={firstMenuPath} replace />
+          isOwner ? <StoreConfig /> : <Navigate to={firstMenuPath} replace />
         } />
-        <Route path="/owner/storeconfig/financial-policy" element={
-          isAdminOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
-        } />
-        <Route path="/owner/storeconfig/customer-credit-control" element={
-          isAdminOrOwner ? <CustomerCreditControl /> : <Navigate to={firstMenuPath} replace />
-        } />
-        {/* ------------------------------------------------------ */}
-
-        
-
-        <Route path="/owner/stock" element={
-          isAdminOrOwner ? <Stock /> : <Navigate to={firstMenuPath} replace />
+        <Route path="/manager/storeconfig" element={
+          <Navigate to="/manager/storeconfig/financial-policy" replace />
         } />
 
-        <Route path="/owner/stock/new" element={
-          isAdminOrOwner ? <AddProductPage /> : <Navigate to={firstMenuPath} replace />
-        } />
+        {/* เฉพาะ OWNER หรือ MANAGER เท่านั้นที่เข้าได้ (รองรับทั้ง path /owner และ /manager) */}
+        {['/owner', '/manager'].map((prefix) => (
+          <React.Fragment key={prefix}>
+            <Route path={`${prefix}/dashboard/maindashboard`} element={
+              isManagerOrOwner ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/dashboard/salesdashboard`} element={
+              isManagerOrOwner ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/dashboard/debtdashboard`} element={
+              isManagerOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
+            } />
 
-        <Route path="/owner/stock/trash" element={
-          isAdminOrOwner ? <TrashStockPage /> : <Navigate to={firstMenuPath} replace />
-        } />
+            {/* -------------------- การตั้งค่า (เฉพาะนโยบายการเงินและการคุมเครดิต) ------------------------ */}
+            <Route path={`${prefix}/storeconfig/financial-policy`} element={
+              isManagerOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/storeconfig/customer-credit-control`} element={
+              isManagerOrOwner ? <CustomerCreditControl /> : <Navigate to={firstMenuPath} replace />
+            } />
+            {/* --------------------------------------------------------------------------------------------- */}
 
-        <Route path="/owner/stock/:id" element={
-          isAdminOrOwner ? <ProductDetailPage /> : <Navigate to={firstMenuPath} replace />
-        } />
+            <Route path={`${prefix}/stock`} element={
+              isManagerOrOwner ? <Stock /> : <Navigate to={firstMenuPath} replace />
+            } />
 
-        <Route path="/owner/stock/:id/edit" element={
-          isAdminOrOwner ? <EditProductPage /> : <Navigate to={firstMenuPath} replace />
-        } />
+            <Route path={`${prefix}/stock/new`} element={
+              isManagerOrOwner ? <AddProductPage /> : <Navigate to={firstMenuPath} replace />
+            } />
 
-        <Route path="/owner/stock/stock-movement" element={
-          isAdminOrOwner ? <StockMovement /> : <Navigate to={firstMenuPath} replace />
-        } />
+            <Route path={`${prefix}/stock/trash`} element={
+              isManagerOrOwner ? <TrashStockPage /> : <Navigate to={firstMenuPath} replace />
+            } />
 
-        <Route path="/owner/stock/stock-movement/orders/:orderId" element={
-          isAdminOrOwner ? <StockMovementOrderDetail /> : <Navigate to={firstMenuPath} replace />
-        } />
+            <Route path={`${prefix}/stock/:id`} element={
+              isManagerOrOwner ? <ProductDetailPage /> : <Navigate to={firstMenuPath} replace />
+            } />
 
-        <Route path="/owner/stock/stock-movement/pre-orders/:id" element={
-          isAdminOrOwner ? <StockMovementPreOrderDetail /> : <Navigate to={firstMenuPath} replace />
-        } />
+            <Route path={`${prefix}/stock/:id/edit`} element={
+              isManagerOrOwner ? <EditProductPage /> : <Navigate to={firstMenuPath} replace />
+            } />
 
-        <Route path="/owner/stock/stock-check" element={
-          isAdminOrOwner ? <StockCheck /> : <Navigate to={firstMenuPath} replace />
-        } />
+            <Route path={`${prefix}/stock/stock-movement`} element={
+              isManagerOrOwner ? <StockMovement /> : <Navigate to={firstMenuPath} replace />
+            } />
 
-        <Route path="/owner/stock/stock-check/new" element={
-          isAdminOrOwner ? <AddCheckStockSchedulePage /> : <Navigate to={firstMenuPath} replace />
-        } />
+            <Route path={`${prefix}/stock/stock-movement/orders/:orderId`} element={
+              isManagerOrOwner ? <StockMovementOrderDetail /> : <Navigate to={firstMenuPath} replace />
+            } />
 
-        <Route path="/owner/stock/stock-check/:id" element={
-          isAdminOrOwner ? <ScheduleDetailPage /> : <Navigate to={firstMenuPath} replace />
-        } />
+            <Route path={`${prefix}/stock/stock-movement/pre-orders/:id`} element={
+              isManagerOrOwner ? <StockMovementPreOrderDetail /> : <Navigate to={firstMenuPath} replace />
+            } />
 
-        <Route path="/owner/stock/stock-data" element={
-          isAdminOrOwner ? <Stockdata /> : <Navigate to={firstMenuPath} replace />
-        } />
-        {/* -------- เพิ่ม Route สำหรับหน้านำเข้าบิลและจัดการราคาสินค้า -------- */}
-        <Route path="/owner/import-bills" element={<ImportBill />} />
-        <Route path="/owner/import-bills/scan" element={<ImportBill />} />
-        <Route path="/owner/import-bills/excel" element={<ImportBill />} />
-        <Route path="/owner/import-bills/mapping" element={<ImportBill />} />
-        <Route path="/owner/import-bills/manual" element={<ImportBill />} />
-        <Route path="/owner/import-bills/po" element={<ImportBill />} />
-        <Route path="/owner/import-bills/approve/:id" element={<ImportBill />} />
-        <Route path="/owner/import-bills/edit-stock-bill" element={
-          isAdminOrOwner ? <EditStockBillPage /> : <Navigate to={firstMenuPath} replace />
-        } />
-        {/* -------------------------------------------------- */}
-        
-        {/* -------- เพิ่ม Route สำหรับหน้าพรีออเดอร์ตรงนี้ครับ -------- */}
-        <Route path="/owner/pre-orders" element={<PreOrder />} />
-        <Route path="/owner/pre-orders/catalog" element={<CatalogPage />} />
-        <Route path="/owner/pre-order" element={<PreOrder />} />
-        <Route path="/owner/pre-order/catalog" element={<CatalogPage />} />
-        {/* --------------------------------------------------- */}
+            <Route path={`${prefix}/stock/stock-check`} element={
+              isManagerOrOwner ? <StockCheck /> : <Navigate to={firstMenuPath} replace />
+            } />
 
-        {/* -------- เพิ่ม Route สำหรับหน้าคืนเเละเคลมสินค้าตรงนี้ครับ -------- */}
-        <Route path="/owner/claims" element={<ClaimsPage />} />
-        <Route path="/owner/claims/detail/:id" element={<ClaimDetailPage />} />
-        <Route path="/owner/claims/edit/:id" element={<ClaimEditPage canApprove={true} />} />
-        <Route path="/owner/claims/approve/:id" element={<ClaimApprovePage />} />
-        <Route path="/owner/claims/status/:id" element={<Navigate to="/owner/claims/detail/:id" replace />} />
-        <Route path="/owner/returns" element={<ReturnsPage />} />
-        <Route path="/owner/returns/new-return" element={<NewReturnPage />} />
-        <Route path="/owner/returns/:id" element={<ReturnDetailPage />} />
-        <Route path="/owner/returns/detail/:id" element={<ReturnDetailPage />} />
-        {/* ----------------------------------------------------------- */}
+            <Route path={`${prefix}/stock/stock-check/new`} element={
+              isManagerOrOwner ? <AddCheckStockSchedulePage /> : <Navigate to={firstMenuPath} replace />
+            } />
 
-        {/* -------- เพิ่ม Route สำหรับ POS -------- */}
-        {/* ทุกคนใช้งาน */}
-        <Route path="/owner/pos/pos" element={isAdminOrOwner ? <Pos /> : <Navigate to={firstMenuPath} replace />} />
-        <Route path="/owner/pos/sales_history" element={isAdminOrOwner ? <SalesHistory /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/stock/stock-check/:id`} element={
+              isManagerOrOwner ? <ScheduleDetailPage /> : <Navigate to={firstMenuPath} replace />
+            } />
+
+            <Route path={`${prefix}/stock/stock-data`} element={
+              isManagerOrOwner ? <Stockdata /> : <Navigate to={firstMenuPath} replace />
+            } />
+            {/* -------- เพิ่ม Route สำหรับหน้านำเข้าบิลและจัดการราคาสินค้า -------- */}
+            <Route path={`${prefix}/import-bills`} element={<ImportBill />} />
+            <Route path={`${prefix}/import-bills/scan`} element={<ImportBill />} />
+            <Route path={`${prefix}/import-bills/excel`} element={<ImportBill />} />
+            <Route path={`${prefix}/import-bills/mapping`} element={<ImportBill />} />
+            <Route path={`${prefix}/import-bills/manual`} element={<ImportBill />} />
+            <Route path={`${prefix}/import-bills/po`} element={<ImportBill />} />
+            <Route path={`${prefix}/import-bills/approve/:id`} element={<ImportBill />} />
+            <Route path={`${prefix}/import-bills/edit-stock-bill`} element={
+              isManagerOrOwner ? <EditStockBillPage /> : <Navigate to={firstMenuPath} replace />
+            } />
+            {/* -------------------------------------------------- */}
+            
+            {/* -------- เพิ่ม Route สำหรับหน้าพรีออเดอร์ตรงนี้ครับ -------- */}
+            <Route path={`${prefix}/pre-orders`} element={<PreOrder />} />
+            <Route path={`${prefix}/pre-orders/catalog`} element={<CatalogPage />} />
+            <Route path={`${prefix}/pre-order`} element={<PreOrder />} />
+            <Route path={`${prefix}/pre-order/catalog`} element={<CatalogPage />} />
+            {/* --------------------------------------------------- */}
+
+            {/* -------- เพิ่ม Route สำหรับหน้าคืนเเละเคลมสินค้าตรงนี้ครับ -------- */}
+            <Route path={`${prefix}/claims`} element={<ClaimsPage />} />
+            <Route path={`${prefix}/claims/detail/:id`} element={<ClaimDetailPage />} />
+            <Route path={`${prefix}/claims/edit/:id`} element={<ClaimEditPage canApprove={true} />} />
+            <Route path={`${prefix}/claims/approve/:id`} element={<ClaimApprovePage />} />
+            <Route path={`${prefix}/claims/status/:id`} element={<Navigate to={`${prefix}/claims/detail/:id`} replace />} />
+            <Route path={`${prefix}/returns`} element={<ReturnsPage />} />
+            <Route path={`${prefix}/returns/new-return`} element={<NewReturnPage />} />
+            <Route path={`${prefix}/returns/:id`} element={<ReturnDetailPage />} />
+            <Route path={`${prefix}/returns/detail/:id`} element={<ReturnDetailPage />} />
+            {/* ----------------------------------------------------------- */}
+
+            {/* -------- เพิ่ม Route สำหรับ POS -------- */}
+            <Route path={`${prefix}/pos/pos`} element={isManagerOrOwner ? <Pos /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/pos/sales_history`} element={isManagerOrOwner ? <SalesHistory /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/pos/sales_cancellation_history`} element={
+              isManagerOrOwner ? <SalesCancellationHistory /> : <Navigate to={firstMenuPath} replace />
+            } />
+
+            {/* -------- หน้ารายการธุรกรรม / การเงิน -------- */}
+            <Route path={`${prefix}/transactions/settle-bills`} element={
+              isManagerOrOwner ? <SettleBills /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/transactions/payment-history`} element={
+              isManagerOrOwner ? <PaymentHistory /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/transactions/payment-cancellation-history`} element={
+              isManagerOrOwner ? <PaymentCancellationHistory /> : <Navigate to={firstMenuPath} replace />
+            } />
+
+            {/* ------------------ ข้อมูลลูกค้า ----------------- */}
+            <Route path={`${prefix}/customers/customer-registration`} element={
+              isManagerOrOwner ? <CustomerRegistration /> : <Navigate to={firstMenuPath} replace />
+            } />
+
+            {/* ------------------ สั่งซื้อ ----------------- */}
+            <Route path={`${prefix}/orders`} element={<PurchaseOrders />} />
+            <Route path={`${prefix}/new-orders`} element={<CreatePurchaseOrders />} />
+            <Route path={`${prefix}/orders/:id`} element={<OrderDetail />} />
+            <Route path={`${prefix}/orders/restore`} element={<DeletedPoHistory />} />
+          </React.Fragment>
+        ))}
+
+        {/* -------- Route สำหรับ Employee (POS, รายการธุรกรรม, ลูกค้า) -------- */}
         <Route path="/employee/pos/pos" element={<Pos />} />
         <Route path="/employee/pos/sales_history" element={<SalesHistory />} />
-        
-        {/* หน้าฝั่งพนักงาน */}
         <Route path="/employee/pos/sales_cancellation_history" element={<SalesCancellationHistory />} />
-        
-        {/* หน้าฝั่งเจ้าของร้าน (ล็อกสิทธิ์ด้วย isAdminOrOwner) */}
-        <Route path="/owner/pos/sales_cancellation_history" element={
-          isAdminOrOwner ? <OwnerSalesCancellationHistory /> : <Navigate to={firstMenuPath} replace />
-        } />
-        {/* --------------------------------------------------- */}
 
-        {/* -------- หน้ารายการธุรกรรม / การเงิน -------- */}
         <Route path="/employee/transactions/settle-bills" element={<SettleBills />} />
         <Route path="/employee/transactions/payment-history" element={<PaymentHistory />} />
         <Route path="/employee/transactions/payment-cancellation-history" element={<PaymentCancellationHistory />} />
 
-        <Route path="/owner/transactions/settle-bills" element={
-          isAdminOrOwner ? <SettleBills /> : <Navigate to={firstMenuPath} replace />
-        } />
-        <Route path="/owner/transactions/payment-history" element={
-          isAdminOrOwner ? <PaymentHistory /> : <Navigate to={firstMenuPath} replace />
-        } />
-        <Route path="/owner/transactions/payment-cancellation-history" element={
-          isAdminOrOwner ? <PaymentCancellationHistory /> : <Navigate to={firstMenuPath} replace />
-        } />
-        {/* --------------------------------------------------- */}
-
-        {/* ------------------ ข้อมูลลูกค้า ----------------- */}
-        {/* พนักงาน */}
         <Route path="/employee/customers/customer-registration" element={<CustomerRegistration />} />
-
-        {/* เจ้าของร้าน */}
-        <Route path="/owner/customers/customer-registration" element={
-          isAdminOrOwner ? <CustomerRegistration /> : <Navigate to={firstMenuPath} replace />
-        } />
-        {/* --------------------------------------------------- */}
-
-        <Route path="/owner/orders" element={<PurchaseOrders />} />
-        <Route path="/owner/new-orders" element={<CreatePurchaseOrders />} />
-        <Route path="/owner/orders/:id" element={<OrderDetail />} />
-        <Route path="/owner/orders/restore" element={<DeletedPoHistory />} />
 
         {/* แดชบอร์ดของฝั่งพนักงาน */}
         <Route path="/employee/dashboard/maindashboard" element={

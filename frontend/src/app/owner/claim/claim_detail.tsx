@@ -33,7 +33,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
   const { role } = useAuth();
   const normalizedRole = role?.trim().toUpperCase();
-  const isManager = normalizedRole === 'OWNER' || normalizedRole === 'ADMIN';
+  const isManager = normalizedRole === 'OWNER' || normalizedRole === 'MANAGER' || normalizedRole === 'ADMIN';
 
   const [claim, setClaim] = useState<CustomerClaim | null>(null);
   const [loading, setLoading] = useState(true);

@@ -134,7 +134,7 @@ func TestDashboardControllerSuccessAndServiceError(t *testing.T) {
 
 func TestDashboardRoleMiddleware(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	allowed := []string{string(enum.RoleAdmin), string(enum.RoleEmployee)}
+	allowed := []string{string(enum.RoleManager), string(enum.RoleEmployee)}
 
 	for _, test := range []struct {
 		name       string
@@ -142,6 +142,7 @@ func TestDashboardRoleMiddleware(t *testing.T) {
 		setRole    bool
 		wantStatus int
 	}{
+		{"manager allowed", string(enum.RoleManager), true, http.StatusOK},
 		{"admin allowed", string(enum.RoleAdmin), true, http.StatusOK},
 		{"employee allowed", string(enum.RoleEmployee), true, http.StatusOK},
 		{"unknown role forbidden", "Guest", true, http.StatusForbidden},

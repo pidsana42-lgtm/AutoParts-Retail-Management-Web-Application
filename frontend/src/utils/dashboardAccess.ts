@@ -1,6 +1,6 @@
 export type DashboardRoleGroup = 'owner' | 'employee';
 
-const OWNER_DASHBOARD_ROLES = new Set(['OWNER', 'ADMIN']);
+const OWNER_DASHBOARD_ROLES = new Set(['OWNER', 'MANAGER', 'ADMIN']);
 const EMPLOYEE_DASHBOARD_ROLES = new Set(['EMPLOYEE', 'STAFF']);
 
 export function normalizeRole(role: string | null | undefined): string {
@@ -24,12 +24,14 @@ export function canAccessDashboardPath(
   const group = getDashboardRoleGroup(role);
   if (!group) return false;
 
-  if (path.startsWith('/owner/dashboard/')) return group === 'owner';
+  if (path.startsWith('/owner/dashboard/') || path.startsWith('/manager/dashboard/')) return group === 'owner';
   if (path.startsWith('/employee/dashboard/')) return group === 'employee';
   return false;
 }
 
 export function getDashboardHome(role: string | null | undefined): string {
+  const normalized = normalizeRole(role);
+  if (normalized === 'MANAGER' || normalized === 'ADMIN') return '/manager/dashboard/maindashboard';
   const group = getDashboardRoleGroup(role);
   if (group === 'owner') return '/owner/dashboard/maindashboard';
   if (group === 'employee') return '/employee/dashboard/maindashboard';

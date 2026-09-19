@@ -28,7 +28,7 @@ export default function Navbar(): React.JSX.Element {
   const searchRef = useRef<HTMLDivElement>(null);
 
   const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
-  const isOwnerOrAdmin = currentRole === "OWNER" || currentRole === "ADMIN";
+  const isOwnerOrManager = currentRole === "OWNER" || currentRole === "MANAGER" || currentRole === "ADMIN";
 
   const loadProductsForSearch = () => {
     if (productsLoaded || loadingProducts) return;
@@ -53,7 +53,7 @@ export default function Navbar(): React.JSX.Element {
   const goToProduct = (product: StockItem) => {
     setShowSearchResults(false);
     setSearchQuery("");
-    navigate(isOwnerOrAdmin ? `/owner/stock/${product.ID}` : `/employee/wms/stock-data/${product.ID}`);
+    navigate(isOwnerOrManager ? (currentRole === 'MANAGER' ? `/manager/stock/${product.ID}` : `/owner/stock/${product.ID}`) : `/employee/wms/stock-data/${product.ID}`);
   };
 
   useEffect(() => {
@@ -276,7 +276,7 @@ export default function Navbar(): React.JSX.Element {
           </div>
         </div>
       </div>
-      {showStockAlertPO && <StockAlertNotificationModal onClose={closeStockAlertPO} basePath={isOwnerOrAdmin ? '/owner' : '/employee'} />}
+      {showStockAlertPO && <StockAlertNotificationModal onClose={closeStockAlertPO} basePath={isOwnerOrManager ? (currentRole === 'MANAGER' ? '/manager' : '/owner') : '/employee'} />}
     </nav>
   );
 }

@@ -72,7 +72,7 @@ describe('Claim detail item decisions', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
-  it.each(['OWNER', ' admin '])('shows inline decisions only for pending items to %s', async role => {
+  it.each(['OWNER', 'MANAGER', ' admin '])('shows inline decisions only for pending items to %s', async role => {
     mocks.role = role;
     const user = await openPage();
     const dropdown = within(itemRow()).getByRole('button', { name: 'สถานะ สายพานไดชาร์จ' });
