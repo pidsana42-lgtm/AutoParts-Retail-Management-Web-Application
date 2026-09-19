@@ -18,6 +18,7 @@ import type { DashboardSummaryItem, SummaryQuery, StockHealthStats } from '../..
 // Utils
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import { getDashboardRoleGroup } from '../../../utils/dashboardAccess';
+import { useAuth } from '../../../contexts/AuthContexts';
 import { formatDateThai, getTodayDateString } from '../../../utils/formatdate';
 import { exportTopSellerPdf } from '../../../utils/print';
 
@@ -45,8 +46,8 @@ const SaleDashboard: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const basePath = usePathBasePrefix();
-  const userRole = localStorage.getItem('role');
-  const isOwner = getDashboardRoleGroup(userRole) === 'owner';
+  const { role } = useAuth();
+  const isOwner = getDashboardRoleGroup(role) === 'owner';
 
   // Basic State
   const [isLoading, setIsLoading] = useState(false);
@@ -245,10 +246,10 @@ const SaleDashboard: React.FC = () => {
   const kpiValue = (value: string) => isLoading ? <span className='text-gray-400 animate-pulse'>...</span> : value;
 
   return (
-    <div className='p-8 space-y-8 bg-white min-h-screen font-sans'>
+    <div className='min-h-screen space-y-6 bg-white p-4 font-sans sm:p-6 lg:space-y-8 lg:p-8'>
       { /* Top Page Filter */ }
-      <div>
-        <div className='bg-[#F6F3F2] inline-flex items-center p-1'>
+      <div className='overflow-x-auto pb-1'>
+        <div className='inline-flex min-w-max items-center bg-[#F6F3F2] p-1'>
           {PageFilter.map((tab) => {
             const isActive = location.pathname.includes(tab.value);
             return (
@@ -263,14 +264,14 @@ const SaleDashboard: React.FC = () => {
       </div>
 
       { /* Page Header */ }
-      <div className='flex items-end justify-between'>
+      <div className='relative z-20 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between'>
         <div className='flex flex-col items-start justify-start'>
           <Heading level='h1' weight='semibold' className='m-0 text-black'>
             กระดานสรุปยอดขาย
           </Heading>
           <Heading level='h6' className='m-0 mt-1'>ติดตามความเคลื่อนไหวของยอดขายผ่านแดชบอร์ดเดียว</Heading>
         </div>
-        <div className='bg-[#F6F3F2] flex items-center p-1'>
+        <div className='flex max-w-full items-center overflow-visible bg-[#F6F3F2] p-1'>
           {Filter.map((filter) => (
             <button key={filter.value} onClick={() => handleFilterClick(filter.value)}
               className={`w-20 py-2.5 text-sm transition cursor-pointer ${selectedFilter === filter.value
@@ -296,7 +297,7 @@ const SaleDashboard: React.FC = () => {
 
       { /* KPI Cards */ }
       {isOwner ? (
-        <div className='grid grid-cols-4 gap-6 items-stretch'>
+        <div className='grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-6'>
           {/* รายได้สุทธิ */}
           <Card className='border-l-[5px] border-l-red-500 flex flex-col justify-center p-5'>
             <Heading level='h6'>รายได้สุทธิ</Heading>
@@ -346,7 +347,7 @@ const SaleDashboard: React.FC = () => {
           </Card>
         </div>
       ) : (
-        <div className='grid grid-cols-2 gap-6 items-stretch'>
+        <div className='grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:gap-6'>
           {/* ออเดอร์ทั้งหมด */}
           <Card className='border-l-[5px] border-l-gray-300 flex flex-col justify-center p-5'>
             <Heading level='h6'>ออเดอร์ทั้งหมด</Heading>
@@ -381,7 +382,7 @@ const SaleDashboard: React.FC = () => {
         </div>
       )}
 
-      <div className='grid grid-cols-2 gap-6 items-stretch'>
+      <div className='grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2 lg:gap-6'>
         <DonutChartCard
           title='รายได้แยกประเภทลูกค้า'
           icon={<Banknote size={24} />}
@@ -399,9 +400,9 @@ const SaleDashboard: React.FC = () => {
       </div>
       <div className='col-span-1 flex flex-col gap-6'>
         <Card className='col-span-1 overflow-hidden' noPadding>
-            <CardHeader className='flex items-center justify-between bg-[#F6F3F2]/50 px-6 py-4'>
+            <CardHeader className='flex flex-col items-start gap-3 bg-[#F6F3F2]/50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6'>
               <Heading level='h4' className='m-0'>สินค้าขายดี {topLimit} อันดับของร้าน</Heading>
-              <div className='flex items-center gap-4'>
+              <div className='flex flex-wrap items-center gap-3 sm:gap-4'>
                 {/* Filter dropdown */}
                 <div className='relative flex items-center' ref={topFilterRef}>
                   <Button

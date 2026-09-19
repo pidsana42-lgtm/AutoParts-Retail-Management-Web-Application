@@ -51,12 +51,15 @@ import CustomerRegistration from './employee/customer/customer_registration';
 import FinancialPolicy from './owner/storeconfig/financial_policy';
 import CustomerCreditControl from './owner/storeconfig/customer_credit_control';
 import StoreConfig from './owner/storeconfig/storeconfig';
+import EmployeeManagementPage from './owner/storeconfig/employee_management';
+import RegisterEmployeePage from './owner/storeconfig/employee_registration';
 import DeletedPoHistory from './owner/purchase_orders/restore_po';
 import NewReturnPage from './owner/return/new_return';
 import { getDashboardRoleGroup } from '../utils/dashboardAccess';
 
 export default function AppRouter(): React.JSX.Element {
-  const { role } = useAuth();
+  const { role, isLoading } = useAuth();
+  const isOwner = (role || "").toUpperCase() === "OWNER";
 
   const { isOwner, isManagerOrOwner, isEmployeeOrStaff, firstMenuPath } = useMemo(() => {
     const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
@@ -71,10 +74,12 @@ export default function AppRouter(): React.JSX.Element {
     return {
       isOwner,
       isManagerOrOwner: isOwnerOrManager,
-      isEmployeeOrStaff: isEmployee,
+      isEmployeeRole: isEmployee,
       firstMenuPath: firstPath
     };
   }, [role]); 
+
+  if (isLoading) return <></>;
 
   return (
     <Routes>
@@ -119,7 +124,13 @@ export default function AppRouter(): React.JSX.Element {
             <Route path={`${prefix}/storeconfig/customer-credit-control`} element={
               isManagerOrOwner ? <CustomerCreditControl /> : <Navigate to={firstMenuPath} replace />
             } />
-            {/* --------------------------------------------------------------------------------------------- */}
+            <Route path={`${prefix}/storeconfig/register-employee`} element={
+              prefix === '/owner' && isOwner ? <EmployeeManagementPage /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/storeconfig/register-employee/new`} element={
+              prefix === '/owner' && isOwner ? <RegisterEmployeePage /> : <Navigate to={firstMenuPath} replace />
+            } />
+            {/* ------------------------------------------------------ */}
 
             <Route path={`${prefix}/stock`} element={
               isManagerOrOwner ? <Stock /> : <Navigate to={firstMenuPath} replace />
@@ -244,18 +255,19 @@ export default function AppRouter(): React.JSX.Element {
 
         {/* แดชบอร์ดของฝั่งพนักงาน */}
         <Route path="/employee/dashboard/maindashboard" element={
-          isEmployeeOrStaff ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeRole ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
         <Route path="/employee/dashboard/salesdashboard" element={
-          isEmployeeOrStaff ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeRole ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
         <Route path="/employee/dashboard/debtdashboard" element={
-          isEmployeeOrStaff ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeRole ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/employee/orders" element={<PurchaseOrders />} />
         <Route path="/employee/new-orders" element={<CreatePurchaseOrders />} />
         <Route path="/employee/orders/:id" element={<OrderDetail />} />
+        <Route path="/employee/orders/restore" element={<DeletedPoHistory />} />
 
         {/* หน้านำเข้าบิลสำหรับพนักงาน */}
         <Route path="/employee/import" element={<EmployeeImport />} />

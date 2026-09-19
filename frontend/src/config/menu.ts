@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, Boxes, MonitorSmartphone,
   ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight, CircleCheck, History,
-  FileX, ReceiptText, BookOpen, ShieldCheck, UserCheck, RotateCcw, Building2
+  FileX, ReceiptText, BookOpen, ShieldCheck, UserCheck, RotateCcw, Building2, Undo2, UserPlus
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -43,7 +43,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
     icon: LayoutDashboard, 
     label: "แดชบอร์ด", 
     path: "/employee/dashboard/maindashboard", 
-    roles: ["EMPLOYEE", "STAFF"] 
+    roles: ["EMPLOYEE"]
   },
 
   // นำเข้าสินค้า
@@ -99,7 +99,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
     subs: [{ icon: RotateCcw, path: "/manager/orders/restore", label: "กู้คืนใบสั่งซื้อ" }],
    },
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/employee/orders", roles: ["EMPLOYEE"],
-    subs: [{ icon: RotateCcw, path: "/owner/orders/restore", label: "กู้คืนใบสั่งซื้อ" }],
+    subs: [{ icon: RotateCcw, path: "/employee/orders/restore", label: "กู้คืนใบสั่งซื้อ" }],
    },
 
   // พรีออเดอร์
@@ -141,7 +141,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
     ]
   },
   { 
-    icon: RefreshCw, label: "คืน และ เคลมสินค้า", path: "/employee/claims", roles: ["EMPLOYEE", "STAFF"],
+    icon: Undo2, label: "คืน และ เคลมสินค้า", path: "/employee/claims", roles: ["EMPLOYEE", "STAFF"],
     subs: [
       { label: "รายการเคลมสินค้า", path: "/employee/claims", icon: FileText },
       { label: "รายการคืนสินค้า", path: "/employee/returns", icon: RefreshCw }
@@ -152,6 +152,7 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   { icon: Settings, label: "การตั้งค่า", path: "/owner/storeconfig", roles: ["OWNER"],
    subs: [
       { icon: Building2, path: "/owner/storeconfig", label: "ข้อมูลร้านค้า" },
+      { icon: UserPlus, path: "/owner/storeconfig/register-employee", label: "จัดการพนักงาน" },
       { icon: ShieldCheck, path: "/owner/storeconfig/financial-policy", label: "นโยบายการเงิน" },
       { icon: UserCheck, path: "/owner/storeconfig/customer-credit-control", label: "การควบคุมเครดิตลูกค้า" },
     ],

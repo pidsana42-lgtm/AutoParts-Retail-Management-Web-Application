@@ -33,6 +33,8 @@ type dashboardRepository struct {
 	db *gorm.DB
 }
 
+const completedRepaymentStatus = "completed"
+
 // NewDashboardRepository ใช้สำหรับส่ง gorm.DB เข้ามาตอนเริ่มระบบ
 func NewDashboardRepository(db *gorm.DB) DashboardRepository {
 	return &dashboardRepository{
@@ -334,22 +336,12 @@ func (r *dashboardRepository) calculateSummaryForDate(ctx context.Context, date 
 		summary.MarginPercent = 0
 	}
 
-	// 6) ยอดเก็บหนี้ได้ในวันนี้ (Payment + PaymentRepayment)
-	var paymentCollected float64
-	if err := db.Model(&dashEntity.Payment{}).
-		Select("COALESCE(SUM(amount),0)").
-		Where("paid_at >= ? AND paid_at < ? AND deleted_at IS NULL", start, end).
-		Scan(&paymentCollected).Error; err != nil {
+	// 6) ยอดเก็บหนี้ได้ในวันนี้ นับเฉพาะการเคลียร์บิลที่สำเร็จแล้วเท่านั้น
+	collectedDebtByDate, err := r.getCollectedDebtByDate(ctx, start, end)
+	if err != nil {
 		return nil, err
 	}
-	var repaymentCollected float64
-	if err := db.Model(&dashEntity.PaymentRepayment{}).
-		Select("COALESCE(SUM(amount_paid),0)").
-		Where("paid_at >= ? AND paid_at < ? AND deleted_at IS NULL", start, end).
-		Scan(&repaymentCollected).Error; err != nil {
-		return nil, err
-	}
-	summary.CollectedDebtAmount = paymentCollected + repaymentCollected
+	summary.CollectedDebtAmount = collectedDebtByDate[start.Format("2006-01-02")]
 
 	// 7) Snapshot หนี้คงค้าง ณ ตอนนี้ (ไม่ผูกกับ order_date ของวันนั้น)
 	now := time.Now()
@@ -596,6 +588,34 @@ func (r *dashboardRepository) GetTotalDebtors(ctx context.Context) (int64, error
 	return count, err
 }
 
+// getCollectedDebtByDate คืนยอดรับชำระหนี้แยกตามวันจากรายการเคลียร์บิลที่สำเร็จ
+// การรวมใน Go ทำให้ใช้ขอบเขตเวลาและ timezone เดียวกับ dashboard โดยไม่ขึ้นกับ timezone ของฐานข้อมูล
+func (r *dashboardRepository) getCollectedDebtByDate(ctx context.Context, start, end time.Time) (map[string]float64, error) {
+	type repaymentRow struct {
+		AmountPaid float64
+		PaidAt     *time.Time
+	}
+
+	var rows []repaymentRow
+	if err := r.db.WithContext(ctx).
+		Model(&dashEntity.PaymentRepayment{}).
+		Select("amount_paid, paid_at").
+		Where("paid_at >= ? AND paid_at < ? AND status = ?", start, end, completedRepaymentStatus).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	amounts := make(map[string]float64)
+	for _, row := range rows {
+		if row.PaidAt == nil {
+			continue
+		}
+		key := row.PaidAt.In(start.Location()).Format("2006-01-02")
+		amounts[key] += row.AmountPaid
+	}
+	return amounts, nil
+}
+
 // GetHistoricalSummaries อ่านจาก daily_summary และคำนวณใหม่เฉพาะวันที่มีการคืนเงินจริง
 // เพื่อให้รายการคืนที่เกิดภายหลังยังหักออกจากวันที่ขายได้ทันที
 func (r *dashboardRepository) GetHistoricalSummaries(ctx context.Context, start, end time.Time) ([]dashEntity.DailySummary, error) {
@@ -627,6 +647,13 @@ func (r *dashboardRepository) GetHistoricalSummaries(ctx context.Context, start,
 		affectedDates[saleDate.Format("2006-01-02")] = struct{}{}
 	}
 
+	// daily_summaries เก่าอาจยังมียอดขายหน้าร้านปนอยู่ จึงแทนค่ายอดเก็บหนี้
+	// ด้วยข้อมูลเคลียร์บิลจริงทุกครั้งที่อ่าน เพื่อให้ช่วงย้อนหลังถูกต้องทันที
+	collectedDebtByDate, err := r.getCollectedDebtByDate(ctx, start, end)
+	if err != nil {
+		return nil, err
+	}
+
 	// 3. วนทุกวันใน [start, end) จาก end-1 ลงมา เติม zero สำหรับวันที่ไม่มีข้อมูล
 	var result []dashEntity.DailySummary
 	for d := end.AddDate(0, 0, -1); !d.Before(start); d = d.AddDate(0, 0, -1) {
@@ -636,14 +663,17 @@ func (r *dashboardRepository) GetHistoricalSummaries(ctx context.Context, start,
 			if err != nil {
 				return nil, err
 			}
+			fresh.CollectedDebtAmount = collectedDebtByDate[key]
 			result = append(result, *fresh)
 			continue
 		}
 		if s, ok := byDate[key]; ok {
+			s.CollectedDebtAmount = collectedDebtByDate[key]
 			result = append(result, s)
 		} else {
 			result = append(result, dashEntity.DailySummary{
-				SummaryDate: time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location()),
+				SummaryDate:         time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location()),
+				CollectedDebtAmount: collectedDebtByDate[key],
 			})
 		}
 	}
