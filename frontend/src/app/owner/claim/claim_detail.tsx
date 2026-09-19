@@ -33,7 +33,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
   const { role } = useAuth();
   const normalizedRole = role?.trim().toUpperCase();
-  const isManager = normalizedRole === 'OWNER' || normalizedRole === 'ADMIN';
+  const isManager = normalizedRole === 'OWNER' || normalizedRole === 'MANAGER' || normalizedRole === 'ADMIN';
 
   const [claim, setClaim] = useState<CustomerClaim | null>(null);
   const [loading, setLoading] = useState(true);
@@ -208,7 +208,11 @@ export default function ClaimDetailPage(): React.JSX.Element {
       } catch (reloadError) {
         console.error('Failed to reload claim after save error:', reloadError);
       }
-      toast({ variant: 'error', message: 'บันทึกข้อมูลไม่ครบหรือโหลดผลล่าสุดไม่สำเร็จ กรุณาตรวจสอบและลองใหม่' });
+      const serverMessage = (err as any)?.response?.data?.error;
+      toast({
+        variant: 'error',
+        message: serverMessage || 'บันทึกข้อมูลไม่ครบหรือโหลดผลล่าสุดไม่สำเร็จ กรุณาตรวจสอบและลองใหม่',
+      });
     } finally {
       setSaving(false);
       mutationInProgress.current = false;

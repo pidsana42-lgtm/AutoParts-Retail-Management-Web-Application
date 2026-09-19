@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useLocation, useSearchParams, useNavigate } from "react-router-dom";
-import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, ScanBarcode, Building2} from "lucide-react";
+import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, ScanBarcode, Building2, Search} from "lucide-react";
 import Button from "../../../components/elements/button";
 import { usePosPayment } from "./hooks/usepospayment";
 import { usePosCart, findMatchedSupplier } from "./hooks/useposcart";
@@ -17,6 +17,7 @@ import { usePosSessionMeta } from "./hooks/usePosSessionMeta";
 import {useCustomerFinancials} from "./hooks/useCustomerFinancials";
 import Heading from "../../../components/elements/heading";
 import ConfirmModal from "../../../components/elements/confirm_modal";
+import { CashPaymentPad, PromptPayQRPanel } from "../../../components/pos";
 
 export default function PosPage(): React.JSX.Element {
   // ─── STATE & HOOK SETUP ───
@@ -228,7 +229,11 @@ export default function PosPage(): React.JSX.Element {
             {/* ช่องแสกนบาร์โค้ด / ค้นหา (ช่องเดิมช่องเดียว สลับ Placeholder และผลลัพธ์ตาม Switch) */}
             <form onSubmit={cartHook.handleAddProduct} className="mt-2 flex gap-2 items-center">
               <div className="relative flex-1">
-                <ScanBarcode className="absolute left-4 top-3.5 text-gray-400" size={18} />
+                {isRecoverMode ? (
+                  <Search className="absolute left-4 top-3.5 text-gray-400" size={18} />
+                ) : (
+                  <ScanBarcode className="absolute left-4 top-3.5 text-gray-400" size={18} />
+                )}
                 <input
                   type="text"
                   value={cartHook.searchQuery}
@@ -245,7 +250,7 @@ export default function PosPage(): React.JSX.Element {
                   }}
                   placeholder={
                     isRecoverMode
-                      ? "สแกนบาร์โค้ด / INV-202X-XXX หรือ ชื่อลูกค้า..."
+                      ? "ค้นหา INV-202X-XXX หรือ ชื่อลูกค้า..."
                       : "สแกนบาร์โค้ดสินค้า, พิมพ์เลขบาร์โค้ด, พิมพ์รหัสสินค้า, Part Number หรือชื่อสินค้าเพื่อเพิ่มรายการ..."
                   }
                   className="w-full bg-white border border-gray-200 rounded-none pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-red-500 shadow-sm"
@@ -1005,200 +1010,61 @@ export default function PosPage(): React.JSX.Element {
                 {/* 3. ส่วนเนื้อหาเฉพาะ */}
                 {/* เงินสด ยอดชำระสุทธิ และ ยอดเงินทอน */}
                 {paymentData.paymentMethodId === 1 && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="border-l-3 border-[#E51C23] p-4 bg-[#F0EDEC]">
-                        <Text variant="xs" className="text-[#5F5E5E]">ยอดชำระสุทธิ</Text>
-                        <div className="flex justify-between items-baseline mt-2">
-                          <Text variant="fourxl">{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-                          <Text variant="xs" className="text-[#1C1B1B]">บาท</Text>
-                        </div>
-                      </div>
-                      <div className="border-l-3 border-[#006E0A] p-4 bg-[#86F976]/20">
-                        <Text variant="xs" className="text-[#259B24]">ยอดเงินทอน</Text>
-                        <div className="flex justify-between items-baseline mt-2">
-                          <Text variant="fourxl" className={`text-[#259B24] truncate ${Math.max(0, paymentData.receivedAmount - paymentData.finalTotal) > 999999 ? "text-2xl" : "text-4xl"}`}>
-                            {Math.max(0, paymentData.receivedAmount - paymentData.finalTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </Text>
-                          <Text variant="xs" className="text-[#259B24]">บาท</Text>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ส่วนรับเงินมา */}
-                    <div className="flex flex-col gap-1.5">
-                      <Text variant="small" className="text-[#1C1B1B] font-medium">รับเงินมา</Text>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex items-baseline justify-between w-full px-4 py-4 bg-white border-b-2 border-[#E7BDB8]">
-                          <Input 
-                            type="text" 
-                            inputMode="decimal" 
-                            className="w-full text-4xl text-[#1C1B1B] font-semibold bg-transparent border-none focus:outline-none [appearance:textfield]" 
-                            value={paymentData.displayValue || ""} 
-                            onChange={(e) => paymentData.handleReceivedAmountChange(e.target.value)} 
-                            onBlur={() => { paymentData.handleReceivedAmountBlur(); 
-                              const formatted = paymentData.receivedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); paymentData.setDisplayValue(formatted); }} 
-                              onFocus={paymentData.handleReceivedAmountFocus} placeholder="0.00" />
-                          <Text variant="xs" className="text-[#1C1B1B] ml-2 font-medium">บาท</Text>
-                        </div>
-                        <div className="flex items-center justify-between w-full px-4 py-6 border-b border-[#E7BDB8]"></div>
-                      </div>   
-                      <div className="grid grid-cols-2 gap-4">
-                        {/* ฝั่งขวา ปุ่มเพิ่มจำนวนเงินที่รับมา */}
-                        <div className="grid grid-cols-3 gap-3 mt-4">
-                          {[10, 20, 50, 100, 500, 1000].map((amount) => (
-                            <button
-                              key={amount}
-                              type="button"
-                              onClick={() => {
-                                const newTotal = paymentData.receivedAmount + amount;
-                                paymentData.setReceivedAmount(newTotal);
-                                paymentData.setDisplayValue(newTotal.toFixed(2));
-                              }}
-                              className="flex items-center justify-center px-2 py-4 bg-[#E5E2E1] rounded-none text-xs font-medium text-[#1C1B1B] hover:bg-[#D9D9D9] transition-all truncate"
-                            >
-                              {amount} บาท
-                            </button>
-                          ))}
-                        </div>
-                        {/*ฝั่งขวา วันที่, เวลา, ผู้ดำเนินการ */}
-                        <div className="mt-4">
-                          <div className="flex justify-between items-center">
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">วันที่</Text>
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{formatDate}</Text>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">เวลา</Text>
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{formatTime}</Text>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">ผู้ดำเนินการ</Text>
-                            <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2">{currentStaff}</Text>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <CashPaymentPad
+                    finalTotal={paymentData.finalTotal}
+                    receivedAmount={paymentData.receivedAmount}
+                    displayValue={paymentData.displayValue}
+                    onReceivedAmountChange={paymentData.handleReceivedAmountChange}
+                    onAddAmount={(amount) => {
+                      const newTotal = paymentData.receivedAmount + amount;
+                      paymentData.setReceivedAmount(newTotal);
+                      paymentData.setDisplayValue(newTotal.toFixed(2));
+                      paymentData.updateSession("receivedAmount", newTotal);
+                    }}
+                    onExactPayment={() => {
+                      paymentData.setReceivedAmount(paymentData.finalTotal);
+                      paymentData.setDisplayValue(paymentData.finalTotal.toFixed(2));
+                      paymentData.updateSession("receivedAmount", paymentData.finalTotal);
+                    }}
+                    onBlur={() => {
+                      paymentData.handleReceivedAmountBlur();
+                      const formatted = paymentData.receivedAmount.toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      });
+                      paymentData.setDisplayValue(formatted);
+                    }}
+                    onFocus={paymentData.handleReceivedAmountFocus}
+                    meta={{
+                      date: formatDate,
+                      time: formatTime,
+                      staff: currentStaff,
+                    }}
+                  />
                 )}
 
+                {/* QR CODE พร้อมเพย์ */}
                 {paymentData.paymentMethodId === 2 && (
-                <div className="bg-white p-6 border border-[#E7BDB8]/50">
-                  {/* Grid หลัก */}
-                  <div className="grid grid-cols-2 gap-4">
-
-                    {/* ฝั่งซ้าย */}
-                    <div className="flex flex-col items-center justify-between h-full">
-                      {/* กรอบรูป QR Code */}
-                      <div className="relative w-52 h-52 flex items-center justify-center">
-                        {paymentData.isLoadingQR ? (
-                          <div className="flex flex-col items-center justify-center text-gray-400 h-full">
-                            <span className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#E51C23] mb-2"></span>
-                            <Text variant="xs" className="text-xs">กำลังสร้าง QR Code...</Text>
-                          </div>
-                        ) : paymentData.qrCodeData?.qrCode ? (
-                          <img 
-                            src={paymentData.qrCodeData.qrCode} 
-                            alt="PromptPay QR Code" 
-                            className="w-full h-full object-contain"
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center text-gray-400 text-center p-2">
-                            <p className="text-xs text-red-500 mb-2">ไม่สามารถโหลด QR Code ได้</p>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                let targetOrderId = paymentData.currentOrderId || paymentData.posSession.currentOrderId;
-                                if (!targetOrderId) {
-                                  targetOrderId = await paymentData.submitOrderToDatabase();
-                                }
-                                if (targetOrderId) {
-                                  paymentData.handleGeneratePromptPayQR(targetOrderId, 1);
-                                }
-                              }}
-                              className="px-3 py-1 bg-white text-gray-700 text-xs rounded border border-gray-200 hover:bg-gray-50 transition"
-                            >
-                              ลองใหม่อีกครั้ง
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* ข้อความใต้ QR Code */}
-                      <div className="flex-1 flex flex-col items-center justify-end text-center space-y-2.5 w-full max-w-[220px] pt-3">
-                        {/* ชื่อพร้อมเพย์ / ร้านค้า */}
-                        <div className="space-y-1">
-                          <Text variant="xs" className="font-medium text-[#1C1B1B] truncate block">
-                            {paymentData.qrCodeData?.promptPayName || "เจเจ อะไหล่ยนต์"}
-                          </Text>
-                          <Text variant="xs" className="text-[#6B7280] leading-tight block">
-                            พร้อมเพย์รับชำระเงิน
-                          </Text>
-                        </div>
-
-                        {/* ข้อมูลบัญชีธนาคารประกอบ */}
-                        {paymentData.qrCodeData?.bankAccountNumber && (
-                          <div className="w-full pt-2.5 border-t border-gray-100 space-y-1">
-                            <Text variant="xs" className="font-medium text-[#1C1B1B] truncate block">
-                              {paymentData.qrCodeData.bankName || "บัญชีธนาคาร"}
-                            </Text>
-                            <Text variant="xs" className="text-[#6B7280] truncate block">
-                              {paymentData.qrCodeData.bankAccountNumber}
-                            </Text>
-                            {paymentData.qrCodeData.bankAccountName && (
-                              <Text variant="xs" className="text-[#6B7280] truncate block">
-                                {paymentData.qrCodeData.bankAccountName}
-                              </Text>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Ref No. ด้านล่างสุด */}
-                        {paymentData.qrCodeData?.refNo && (
-                          <div className="pt-2.5 w-full border-t border-dashed border-gray-100">
-                            <Text variant="xs" className="font-light text-gray-400 block truncate">
-                              Ref: {paymentData.qrCodeData.refNo}
-                            </Text>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* ---------------- ฝั่งขวา ---------------- */}
-                    <div className="flex flex-col justify-between h-full">
-                      {/* 1. กล่องยอดชำระสุทธิ (ขอบล่างตรงกับกรอบ QR Code) */}
-                      <div className="h-52 flex flex-col justify-end pb-5">
-                        <div className="border-l-3 border-[#E51C23] p-4 bg-[#F0EDEC]">
-                          <Text variant="xs" className="text-[#5F5E5E] mb-0">ยอดชำระสุทธิ</Text>
-                          <div className="flex justify-between items-baseline mt-2">
-                            <Text variant="fourxl">{paymentData.finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-                            <Text variant="xs" className="text-[#1C1B1B] mb-0">บาท</Text>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 2. เส้นคั่น + รายละเอียด  */}
-                      <div className="flex-1 flex flex-col justify-end pt-3">
-                        <div className="space-y-2 w-full">
-                          <div className="border-b border-[#E7BDB8]"></div>
-                          <div>
-                            <div className="flex justify-between items-center">
-                              <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">วันที่</Text>
-                              <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">{formatDate}</Text>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">เวลา</Text>
-                              <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">{formatTime}</Text>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">ผู้ดำเนินการ</Text>
-                              <Text variant="xs" className="text-[#1C1B1B] font-normal ml-2 mb-0">{currentStaff}</Text>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  <PromptPayQRPanel
+                    finalTotal={paymentData.finalTotal}
+                    qrCodeData={paymentData.qrCodeData}
+                    isLoading={paymentData.isLoadingQR}
+                    onRetry={async () => {
+                      let targetOrderId = paymentData.currentOrderId || paymentData.posSession.currentOrderId;
+                      if (!targetOrderId) {
+                        targetOrderId = await paymentData.submitOrderToDatabase();
+                      }
+                      if (targetOrderId) {
+                        paymentData.handleGeneratePromptPayQR(targetOrderId, 1);
+                      }
+                    }}
+                    subtitle="พร้อมเพย์รับชำระเงิน"
+                    meta={{
+                      date: formatDate,
+                      time: formatTime,
+                      staff: currentStaff,
+                    }}
+                  />
                 )}
 
                 {paymentData.paymentMethodId === 3 && (

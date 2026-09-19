@@ -63,8 +63,8 @@ func GenerateDebtRepaymentReceiptPDF(
 	// 3. ตั้งค่าหน้ากระดาษและฟอนต์
 	m := pdf.NewMaroto(consts.Portrait, consts.A4)
 	m.SetPageMargins(10, 15, 10)
-	m.AddUTF8Font("THSarabun", consts.Normal, "assets/fonts/THSarabunNew.ttf")
-	m.AddUTF8Font("THSarabun", consts.Bold, "assets/fonts/THSarabunNew Bold.ttf")
+	m.AddUTF8Font("THSarabun", consts.Normal, ResolveFontPath("assets/fonts/THSarabunNew.ttf"))
+	m.AddUTF8Font("THSarabun", consts.Bold, ResolveFontPath("assets/fonts/THSarabunNew Bold.ttf"))
 	m.SetDefaultFontFamily("THSarabun")
 
 	paidDate := firstRepayment.CreatedAt.Format("02/01/2006 15:04")
@@ -124,12 +124,19 @@ func GenerateDebtRepaymentReceiptPDF(
 		}
 	}
 
+	logoPath, logoBase64, logoExtension, _ := LoadLogo(nil, logoURL)
+
 	// 4. ส่วนหัวเอกสาร (Header)
 	m.RegisterHeader(func() {
 		m.Row(25, func() {
 			m.Col(3, func() {
-				if logoURL != "" {
-					_ = m.FileImage(logoURL, props.Rect{
+				if logoPath != "" {
+					_ = m.FileImage(logoPath, props.Rect{
+						Percent: 400,
+						Center:  false,
+					})
+				} else if logoBase64 != "" {
+					_ = m.Base64Image(logoBase64, logoExtension, props.Rect{
 						Percent: 400,
 						Center:  false,
 					})

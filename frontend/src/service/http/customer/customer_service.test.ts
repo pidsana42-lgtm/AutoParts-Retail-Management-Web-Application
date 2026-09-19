@@ -273,7 +273,7 @@ describe('customer_service', () => {
             customer_name: 'อู่ช่างชาติ',
             action: 'UPDATE_DISCOUNT',
             details: 'เปลี่ยนส่วนลดเป็น 5%',
-            changed_by: 'Admin',
+            changed_by: 'Manager',
             changed_at: '2026-09-07T10:00:00Z',
           },
         ];

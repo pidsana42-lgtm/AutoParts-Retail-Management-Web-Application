@@ -27,7 +27,7 @@ func User(db *gorm.DB) error {
     }
 
     // 3. ดึงข้อมูลบทบาท (Role) มารอไว้สำหรับสร้าง User (เอาอันที่สั่งรัน Seed ซ้ำออก)
-    var roleOwner, roleEmployee, roleAdmin entity.Role
+    var roleOwner, roleEmployee, roleManager entity.Role
     
     if err := db.Where("role_name = ?", enum.RoleOwner).First(&roleOwner).Error; err != nil {
         return fmt.Errorf("failed to fetch role owner: %w", err)
@@ -35,18 +35,18 @@ func User(db *gorm.DB) error {
     if err := db.Where("role_name = ?", enum.RoleEmployee).First(&roleEmployee).Error; err != nil {
         return fmt.Errorf("failed to fetch role employee: %w", err)
     }
-    if err := db.Where("role_name = ?", enum.RoleAdmin).First(&roleAdmin).Error; err != nil {
-        return fmt.Errorf("failed to fetch role admin: %w", err)
+    if err := db.Where("role_name = ?", enum.RoleManager).First(&roleManager).Error; err != nil {
+        return fmt.Errorf("failed to fetch role manager: %w", err)
     }
 
     // 4. เข้ารหัส Passwords เตรียมไว้ล่วงหน้า
     ownerHashBytes, _ := bcrypt.GenerateFromPassword([]byte("123456"), 10)
     employeeHashBytes, _ := bcrypt.GenerateFromPassword([]byte("employee123"), 10)
-    adminHashBytes, _ := bcrypt.GenerateFromPassword([]byte("123456"), 10)
+    managerHashBytes, _ := bcrypt.GenerateFromPassword([]byte("123456"), 10)
 
     ownerPasswordHashed := string(ownerHashBytes)
     employeePasswordHashed := string(employeeHashBytes)
-    adminPasswordHashed := string(adminHashBytes)
+    managerPasswordHashed := string(managerHashBytes)
 
     // 5. ลิสต์ข้อมูลจำลองผู้ใช้ (ผูก StoreConfigID เป็น 1 ตามที่ดึงมาตะกี้)
     usersToSeed := []entity.User{
@@ -90,24 +90,24 @@ func User(db *gorm.DB) error {
             FirstName:         "Manager",
             LastName:          "IT",
             IdCardNumberUser:  "1100000000003",
-            Username:          "admin",
-            Password:          adminPasswordHashed,
+            Username:          "manager",
+            Password:          managerPasswordHashed,
             StoreConfigID:     storeConfig.ID,
             BankID:            bank.ID,
             BankAccountNumber: "123-4-56789-2",
-            RoleID:            3, // roleAdmin.ID
-            LineUserID:        "LINE_ADMIN",
+            RoleID:            roleManager.ID,
+            LineUserID:        "LINE_MANAGER",
         },
         {
             FirstName:         "เนตรนภัทร",
             LastName:          "ชำนินอก",
             IdCardNumberUser:  "1100000000004",
             Username:          "manager2",
-            Password:          adminPasswordHashed,
+            Password:          managerPasswordHashed,
             StoreConfigID:     storeConfig.ID,
             BankID:            bank.ID,
             BankAccountNumber: "123-4-56789-3",
-            RoleID:            3, // roleAdmin.ID
+            RoleID:            roleManager.ID,
             LineUserID:        "LINE_MANAGER2",
         },
     }

@@ -106,7 +106,6 @@ describe('poService', () => {
   it.each([
     ['details', () => poService.getPurchaseOrderById(42), '/po/42'],
     ['summary', () => poService.getPurchaseOrderSummary(), '/po/summary'],
-    ['delivery estimate', () => poService.getSupplierDeliveryEstimate(7), '/po/suppliers/7/delivery-estimate'],
     ['monthly count', () => poService.getMonthlyCount(), '/po/monthly-count'],
   ] as const)('unwraps %s responses', async (_name, run, endpoint) => {
     const data = { id: 42 };

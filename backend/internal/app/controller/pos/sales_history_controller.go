@@ -1,21 +1,22 @@
 package pos
 
 import (
-    "backend/internal/app/dto/pos"
-    salesHistorySvc "backend/internal/app/service/pos"
-    "fmt"
-    "net/http"
+	"backend/internal/app/dto/pos"
+	salesHistorySvc "backend/internal/app/service/pos"
+	"fmt"
 	"log"
+	"net/http"
 	"strings"
-    "github.com/gin-gonic/gin"
+
+	"github.com/gin-gonic/gin"
 )
 
 type SalesHistoryController struct {
-    salesHistoryService salesHistorySvc.SalesHistoryService
+	salesHistoryService salesHistorySvc.SalesHistoryService
 }
 
 func NewSalesHistoryController(salesHistoryService salesHistorySvc.SalesHistoryService) *SalesHistoryController {
-    return &SalesHistoryController{salesHistoryService: salesHistoryService}
+	return &SalesHistoryController{salesHistoryService: salesHistoryService}
 }
 
 func (c *SalesHistoryController) GetSalesHistory(ctx *gin.Context) {
@@ -31,16 +32,16 @@ func (c *SalesHistoryController) GetSalesHistory(ctx *gin.Context) {
 
 	// เช็คบทบาท (Role) ของผู้ใช้งานจาก Context
 	roleVal, exists := ctx.Get("role")
-	var isOwnerOrAdmin bool
+	var isOwnerOrManager bool
 	if exists {
 		roleStr, ok := roleVal.(string)
-		if ok && (roleStr == "Owner" || roleStr == "Admin") {
-			isOwnerOrAdmin = true
+		if ok && (roleStr == "Owner" || roleStr == "Manager" || roleStr == "Admin") {
+			isOwnerOrManager = true
 		}
 	}
 
 	// ถ้าเป็นพนักงาน/แคชเชียร์ธรรมดา ให้เห็นเฉพาะออเดอร์ที่ตนเองขาย (ล็อกค่า EmployeeID)
-	if !isOwnerOrAdmin {
+	if !isOwnerOrManager {
 		userIDVal, exists := ctx.Get("user_id")
 		if exists {
 			var userID uint
@@ -81,46 +82,46 @@ func (c *SalesHistoryController) GetSalesHistory(ctx *gin.Context) {
 }
 
 func (c *SalesHistoryController) GetSaleHistoryByID(ctx *gin.Context) {
-    identifier := ctx.Param("id")
-    if identifier == "" {
-        ctx.JSON(http.StatusBadRequest, gin.H{
-            "message": "กรุณาระบุรหัสรายการขายหรือเลขที่ใบเสร็จ",
-            "error":   "Identifier parameter is required",
-        })
-        return
-    }
+	identifier := ctx.Param("id")
+	if identifier == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "กรุณาระบุรหัสรายการขายหรือเลขที่ใบเสร็จ",
+			"error":   "Identifier parameter is required",
+		})
+		return
+	}
 
-    reqCtx := ctx.Request.Context()
-    result, err := c.salesHistoryService.GetSaleHistoryByID(reqCtx, identifier)
-    if err != nil {
-        ctx.JSON(http.StatusInternalServerError, gin.H{
-            "message": "ไม่สามารถดึงข้อมูลรายละเอียดรายการขายได้",
-            "error":   err.Error(),
-        })
-        return
-    }
+	reqCtx := ctx.Request.Context()
+	result, err := c.salesHistoryService.GetSaleHistoryByID(reqCtx, identifier)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "ไม่สามารถดึงข้อมูลรายละเอียดรายการขายได้",
+			"error":   err.Error(),
+		})
+		return
+	}
 
-    ctx.JSON(http.StatusOK, gin.H{
-        "message": "ดึงข้อมูลรายละเอียดรายการขายสำเร็จ",
-        "data":    result,
-    })
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "ดึงข้อมูลรายละเอียดรายการขายสำเร็จ",
+		"data":    result,
+	})
 }
 
 // พนักงานส่งคำขอยกเลิก
 func (c *SalesHistoryController) RequestCancelSale(ctx *gin.Context) {
-    identifier := ctx.Param("id")
+	identifier := ctx.Param("id")
 
-    // ดึง userID ของผู้ใช้งานที่ทำรายการ
-    userIDFloat, exists := ctx.Get("user_id")
-    if !exists {
-        ctx.JSON(http.StatusUnauthorized, gin.H{
-            "message": "ไม่พบข้อมูลพนักงานในระบบ",
-        })
-        return
-    }
-    userID := uint(userIDFloat.(float64))
+	// ดึง userID ของผู้ใช้งานที่ทำรายการ
+	userIDFloat, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{
+			"message": "ไม่พบข้อมูลพนักงานในระบบ",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
 
-    var req pos.RequestCancelOrderRequest
+	var req pos.RequestCancelOrderRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
@@ -130,14 +131,14 @@ func (c *SalesHistoryController) RequestCancelSale(ctx *gin.Context) {
 		return
 	}
 
-    // ส่ง userID ต่อให้ Service
-    if err := c.salesHistoryService.RequestCancelSale(ctx.Request.Context(), identifier, userID, req); err != nil {
-        ctx.JSON(http.StatusBadRequest, gin.H{
-            "message": "ไม่สามารถส่งคำขอยกเลิกรายการได้",
-            "error":   err.Error(),
-        })
-        return
-    }
+	// ส่ง userID ต่อให้ Service
+	if err := c.salesHistoryService.RequestCancelSale(ctx.Request.Context(), identifier, userID, req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "ไม่สามารถส่งคำขอยกเลิกรายการได้",
+			"error":   err.Error(),
+		})
+		return
+	}
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"message": "ส่งคำขอยกเลิกรายการสำเร็จ รอการอนุมัติจากเจ้าของร้าน",
@@ -198,85 +199,85 @@ func (c *SalesHistoryController) RejectCancelSale(ctx *gin.Context) {
 }
 
 func (c *SalesHistoryController) GetCancellationRequests(ctx *gin.Context) {
-    var req pos.SalesHistoryFilterRequest
-    if err := ctx.ShouldBindQuery(&req); err != nil {
-        ctx.JSON(http.StatusBadRequest, gin.H{
-            "message": "รูปแบบ Query Parameter ไม่ถูกต้อง",
-            "error":   err.Error(),
-        })
-        return
-    }
+	var req pos.SalesHistoryFilterRequest
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "รูปแบบ Query Parameter ไม่ถูกต้อง",
+			"error":   err.Error(),
+		})
+		return
+	}
 
-    result, err := c.salesHistoryService.GetCancellationRequests(ctx.Request.Context(), req)
-    if err != nil {
-        ctx.JSON(http.StatusInternalServerError, gin.H{
-            "message": "ไม่สามารถดึงข้อมูลรายการคำขอยกเลิกได้",
-            "error":   err.Error(),
-        })
-        return
-    }
+	result, err := c.salesHistoryService.GetCancellationRequests(ctx.Request.Context(), req)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "ไม่สามารถดึงข้อมูลรายการคำขอยกเลิกได้",
+			"error":   err.Error(),
+		})
+		return
+	}
 
-    ctx.JSON(http.StatusOK, gin.H{
-        "message": "ดึงข้อมูลรายการคำขอยกเลิกสำเร็จ",
-        "data":    result,
-    })
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "ดึงข้อมูลรายการคำขอยกเลิกสำเร็จ",
+		"data":    result,
+	})
 }
 
 func (c *SalesHistoryController) GetMyCancellationRequests(ctx *gin.Context) {
 	log.Printf("DEBUG context keys: user_id=%v", ctx.Value("user_id"))
-    userIDVal, exists := ctx.Get("user_id")
-    if !exists {
-        ctx.JSON(http.StatusUnauthorized, gin.H{
-            "message": "ไม่พบข้อมูลพนักงานในระบบ",
-        })
-        return
-    }
+	userIDVal, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{
+			"message": "ไม่พบข้อมูลพนักงานในระบบ",
+		})
+		return
+	}
 
-    //  ป้องกันเรื่อง Type Mismatch จาก JWT Claim ต่างๆ
-    var userID uint
-    switch v := userIDVal.(type) {
-    case float64:
-        userID = uint(v)
-    case uint:
-        userID = v
-    case int:
-        userID = uint(v)
-    case int64:
-        userID = uint(v)
-    default:
-        ctx.JSON(http.StatusInternalServerError, gin.H{
-            "message": "ชนิดข้อมูล user_id ไม่ถูกต้อง",
-        })
-        return
-    }
+	//  ป้องกันเรื่อง Type Mismatch จาก JWT Claim ต่างๆ
+	var userID uint
+	switch v := userIDVal.(type) {
+	case float64:
+		userID = uint(v)
+	case uint:
+		userID = v
+	case int:
+		userID = uint(v)
+	case int64:
+		userID = uint(v)
+	default:
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "ชนิดข้อมูล user_id ไม่ถูกต้อง",
+		})
+		return
+	}
 
-    var req pos.SalesHistoryFilterRequest
-    if err := ctx.ShouldBindQuery(&req); err != nil {
-        ctx.JSON(http.StatusBadRequest, gin.H{
-            "message": "รูปแบบ Query Parameter ไม่ถูกต้อง",
-            "error":   err.Error(),
-        })
-        return
-    }
+	var req pos.SalesHistoryFilterRequest
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "รูปแบบ Query Parameter ไม่ถูกต้อง",
+			"error":   err.Error(),
+		})
+		return
+	}
 
-    result, err := c.salesHistoryService.GetMyCancellationRequests(ctx.Request.Context(), userID, req)
-    if err != nil {
-        ctx.JSON(http.StatusInternalServerError, gin.H{
-            "message": "ไม่สามารถดึงข้อมูลรายการคำขอยกเลิกของฉันได้",
-            "error":   err.Error(),
-        })
-        return
-    }
+	result, err := c.salesHistoryService.GetMyCancellationRequests(ctx.Request.Context(), userID, req)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "ไม่สามารถดึงข้อมูลรายการคำขอยกเลิกของฉันได้",
+			"error":   err.Error(),
+		})
+		return
+	}
 
-    ctx.JSON(http.StatusOK, gin.H{
-        "message": "ดึงข้อมูลรายการคำขอยกเลิกของฉันสำเร็จ",
-        "data":    result,
-    })
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "ดึงข้อมูลรายการคำขอยกเลิกของฉันสำเร็จ",
+		"data":    result,
+	})
 }
 
 func (c *SalesHistoryController) RevertCancellationRequest(ctx *gin.Context) {
-    identifier := ctx.Param("id") // อ่าน identifier จาก URL Parameter
-	if identifier == "" { // ตรวจสอบว่ามีการส่ง identifier มาหรือไม่
+	identifier := ctx.Param("id") // อ่าน identifier จาก URL Parameter
+	if identifier == "" {         // ตรวจสอบว่ามีการส่ง identifier มาหรือไม่
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"message": "กรุณาระบุรหัสรายการขายหรือเลขที่ใบเสร็จ",
 			"error":   "Identifier parameter is required",
@@ -284,7 +285,7 @@ func (c *SalesHistoryController) RevertCancellationRequest(ctx *gin.Context) {
 		return
 	}
 
-    // ดึง userID ของผู้ใช้งานที่ทำรายการ
+	// ดึง userID ของผู้ใช้งานที่ทำรายการ
 	userIDVal, exists := ctx.Get("user_id")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
@@ -310,10 +311,10 @@ func (c *SalesHistoryController) RevertCancellationRequest(ctx *gin.Context) {
 		return
 	}
 
-    // เรียกใช้ Service เพื่อให้ไปประมวลผลการดึงคำขอยกเลิกบิลกลับ
+	// เรียกใช้ Service เพื่อให้ไปประมวลผลการดึงคำขอยกเลิกบิลกลับ
 	res, err := c.salesHistoryService.RevertCancellationRequest(ctx.Request.Context(), identifier, userID)
 	// ถ้ามี error เกิดขึ้น ให้ส่ง response กลับไปยัง client ว่าเกิดข้อผิดพลาด
-    if err != nil {
+	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"message": err.Error(),
 		})

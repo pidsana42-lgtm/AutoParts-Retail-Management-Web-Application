@@ -46,7 +46,7 @@ describe('Return detail', () => {
     expect(second.getAllByText('฿ 299.50')).toHaveLength(2);
   });
 
-  it.each(['OWNER', 'ADMIN'])('allows %s to approve or reject a pending return', async role => {
+  it.each(['OWNER', 'MANAGER', 'ADMIN'])('allows %s to approve or reject a pending return', async role => {
     renderDetail(role);
     expect(await screen.findByRole('button', { name: 'อนุมัติคืนเงินสำเร็จ' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'ปฏิเสธคำขอคืนเงิน' })).toBeEnabled();
@@ -89,7 +89,7 @@ describe('Return detail', () => {
     expect(screen.queryByText('กลับรายการคืนสินค้าแล้ว')).not.toBeInTheDocument();
   });
 
-  it.each(['OWNER', 'EMPLOYEE', 'ADMIN'])('lets %s refund an approved return only after the existing confirmation', async role => {
+  it.each(['OWNER', 'EMPLOYEE', 'MANAGER', 'ADMIN'])('lets %s refund an approved return only after the existing confirmation', async role => {
     mocks.get.mockResolvedValue({ ...salesReturn, status: 'APPROVED' });
     const pending = deferred<SalesReturn>();
     mocks.refund.mockReturnValue(pending.promise);
