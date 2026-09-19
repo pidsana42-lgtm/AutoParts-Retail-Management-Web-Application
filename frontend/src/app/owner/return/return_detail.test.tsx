@@ -68,7 +68,9 @@ describe('Return detail', () => {
     mocks.update.mockReturnValue(pending.promise);
     const user = renderDetail();
     const control = await screen.findByRole('button', { name: button });
-    await user.dblClick(control);
+    await user.click(control);
+    expect(mocks.update).not.toHaveBeenCalled();
+    await user.dblClick(within(screen.getByRole('alertdialog')).getByRole('button', { name: status === 'APPROVED' ? 'ยืนยันอนุมัติ' : 'ยืนยันปฏิเสธ' }));
     expect(control).toBeDisabled();
     expect(mocks.update).toHaveBeenCalledExactlyOnceWith(81, { status });
     expect(mocks.refund).not.toHaveBeenCalled();
@@ -80,7 +82,9 @@ describe('Return detail', () => {
     mocks.update.mockRejectedValue({ response: { data: { error: 'รายการถูกดำเนินการแล้ว' } } });
     const user = renderDetail();
     await user.click(await screen.findByRole('button', { name: 'อนุมัติคืนเงินสำเร็จ' }));
-    await waitFor(() => expect(window.alert).toHaveBeenCalledExactlyOnceWith('รายการถูกดำเนินการแล้ว'));
+    expect(mocks.update).not.toHaveBeenCalled();
+    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'ยืนยันอนุมัติ' }));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'error', message: 'รายการถูกดำเนินการแล้ว' })));
     expect(screen.getByRole('button', { name: 'อนุมัติคืนเงินสำเร็จ' })).toBeEnabled();
     expect(screen.queryByText('กลับรายการคืนสินค้าแล้ว')).not.toBeInTheDocument();
   });

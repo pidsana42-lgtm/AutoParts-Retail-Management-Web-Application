@@ -133,11 +133,11 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 		m.Col(1, func() { m.Text("ประเภท", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left}) })
 		if includeCode {
 			m.Col(2, func() {
-				m.Text("รหัสสินค้า", props.Text{Size: 9, Style: consts.Bold, Align: consts.Left})
+				m.Text("รหัส Supplier", props.Text{Size: 9, Style: consts.Bold, Align: consts.Left})
 			})
 		}
 		m.Col(2, func() {
-			m.Text("Part No.", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left})
+			m.Text("Part Number", props.Text{Size: 9, Style: consts.Bold, Align: consts.Left})
 		})
 		productNameCol := uint(4)
 		if includeCode {
@@ -157,8 +157,6 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 
 	// วนลูปข้อมูลสินค้า (Content)
 	for i, item := range poData.PO_Items {
-		// Supply_product_code_snapshot คือรหัสที่ Supplier ของ PO นี้ใช้ ณ วันที่สร้าง PO
-		// ห้าม fallback ไป Product_Code เพราะเป็นรหัสภายในร้านและไม่ผูกกับ Supplier
 		supplierProductCode := strings.TrimSpace(item.Supply_product_code_snapshot)
 		if supplierProductCode == "" {
 			supplierProductCode = "-"

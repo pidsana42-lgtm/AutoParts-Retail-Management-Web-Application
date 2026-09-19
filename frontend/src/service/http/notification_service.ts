@@ -1,4 +1,5 @@
 import apiClient from "./apiClient";
+import type { StockAlertItem } from '../../interface/dashboard/dashboard_interface';
 
 export interface NotificationRecord {
   id: number;
@@ -18,6 +19,10 @@ export interface NotificationListResponse {
 
 // role/userId มาจาก useAuth() — เจ้าของร้าน/แอดมินเห็นแจ้งเตือนของทั้งร้าน ส่วนพนักงานเห็นเฉพาะของตัวเอง
 export const notificationService = {
+  refreshStockAlerts: async (): Promise<StockAlertItem[]> => {
+    const res = await apiClient.post<StockAlertItem[]>('/wms/stock-alerts/refresh');
+    return res.data ?? [];
+  },
   list: async (role: string, userId?: string | number): Promise<NotificationListResponse> => {
     const params = new URLSearchParams({ role });
     if (userId != null) params.set("user_id", String(userId));

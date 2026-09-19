@@ -10,7 +10,7 @@ type CreateCustomerClaimItemDTO struct {
 	ReturnItemID    *uint   `json:"return_item_id"`
 	ProductID       uint    `json:"product_id" binding:"required"`
 	Qty             float64 `json:"qty" binding:"required,gt=0"`
-	UnitPrice       float64 `json:"unit_price"`
+	UnitPrice       float64 `json:"unit_price" binding:"gte=0"`
 	Reason          string  `json:"reason" binding:"required"`
 	Resolution      string  `json:"resolution"`
 	ClaimType       string  `json:"claim_type"`
@@ -19,8 +19,8 @@ type CreateCustomerClaimItemDTO struct {
 
 // UpdateCustomerClaimItemDTO ใช้สำหรับอัปเดตรายการสินค้า
 type UpdateCustomerClaimItemDTO struct {
-	Qty         float64 `json:"qty"`
-	UnitPrice   float64 `json:"unit_price"`
+	Qty         float64 `json:"qty" binding:"gte=0"`
+	UnitPrice   float64 `json:"unit_price" binding:"gte=0"`
 	Reason      string  `json:"reason"`
 	Resolution  string  `json:"resolution"`
 	Status      string  `json:"status"`

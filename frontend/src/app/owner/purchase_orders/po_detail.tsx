@@ -214,7 +214,7 @@ function OrderDetail() {
 
     const handleItemChange = (
         key: number | string,
-        field: 'quantity' | 'unit_price' | 'product_id' | 'product_name_snapshot' | 'product_name_code_snapshot' | 'unit',
+        field: 'quantity' | 'unit_price' | 'product_id' | 'product_name_snapshot' | 'product_code_snapshot' | 'unit',
         value: number | string
     ) => {
         setItems(prev =>
@@ -560,7 +560,7 @@ function OrderDetail() {
                                                 >
                                                     <div>
                                                         <div className='text-sm font-medium text-black'>{product.name}</div>
-                                                        <div className='text-xs text-gray-400'>{product.code} · คงเหลือ {product.stock_qty} {product.unit}</div>
+                                                        <div className='text-xs text-gray-400'>รหัสร้าน: {product.code} · คงเหลือ {product.stock_qty} {product.unit}</div>
                                                     </div>
                                                     <div className='text-sm font-medium text-black whitespace-nowrap'>{product.price.toLocaleString()} ฿</div>
                                                 </button>
@@ -621,7 +621,7 @@ function OrderDetail() {
                             <TableRow key={itemKey}>
                                 <TableCell className='pl-6 text-black'>{index + 1}</TableCell>
                                 <TableCell className='text-black'>{item.order_type}</TableCell>
-                                <TableCell className='text-black'>{item.product_name_code_snapshot}</TableCell>
+                                <TableCell className='text-black'>{item.product_code_snapshot || '-'}</TableCell>
                                 <TableCell className='text-black'>{item.product_name_snapshot}</TableCell>
                                 <TableCell className='text-center'>
                                     {isEditable ? (

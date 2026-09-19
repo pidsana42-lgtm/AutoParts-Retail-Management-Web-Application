@@ -55,6 +55,12 @@ export interface GenerateSettleQRResponse {
   qr_code: string;
   reference_number: string;
   created_at: string;
+  promptpay_type?: string;
+  promptpay_name?: string;
+  promptpay_number?: string;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_name?: string;
 }
 
 // Interface เพิ่มเติมสำหรับการค้นหาและ Dropdown

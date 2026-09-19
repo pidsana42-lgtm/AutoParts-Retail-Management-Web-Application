@@ -68,7 +68,7 @@ type CreateReturnItemInputDTO struct {
 	ProductName string  `json:"product_name,omitempty"`
 	ProductCode string  `json:"product_code,omitempty"`
 	Quantity    int     `json:"quantity" binding:"required,min=1"`
-	UnitPrice   float64 `json:"unit_price" binding:"required"`
+	UnitPrice   float64 `json:"unit_price" binding:"gt=0"`
 }
 
 type CreateReturnDTO struct {
@@ -76,7 +76,7 @@ type CreateReturnDTO struct {
 	OriginalOrderID uint       `json:"original_order_id" binding:"required"`
 	ReturnDate      *time.Time `json:"return_date,omitempty"`
 	Reason          string     `json:"reason" binding:"required"`
-	RefundAmount    float64    `json:"refund_amount"`
+	RefundAmount    float64    `json:"refund_amount" binding:"gte=0"`
 	RefundMethod    string     `json:"refund_method" binding:"required"`
 	RequestedAt     *time.Time `json:"requested_at,omitempty"`
 	ApprovedAt      *time.Time `json:"approved_at,omitempty"`
@@ -94,7 +94,7 @@ type UpdateReturnDTO struct {
 	ReturnDate   *time.Time `json:"return_date,omitempty"`
 	Status       string     `json:"status,omitempty"`
 	Reason       string     `json:"reason,omitempty"`
-	RefundAmount float64    `json:"refund_amount,omitempty"`
+	RefundAmount float64    `json:"refund_amount,omitempty" binding:"gte=0"`
 	RefundMethod string     `json:"refund_method,omitempty"`
 	ApprovedAt   *time.Time `json:"approved_at,omitempty"`
 	Note         string     `json:"note,omitempty"`

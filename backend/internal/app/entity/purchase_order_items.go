@@ -6,10 +6,11 @@ type POItems struct {
 	gorm.Model
 	POID                         uint     `gorm:"column:po_id;not null" json:"po_id"`
 	PO                           *PO      `gorm:"foreignKey:POID" json:"po,omitempty"`
-	ProductID                    uint     `gorm:"column:product_id;not null" json:"product_id"`
+	ProductID                    *uint    `gorm:"column:product_id" json:"product_id"` // nil for a preorder not yet linked to WMS
 	Product                      *Product `gorm:"foreignKey:ProductID" json:"product,omitempty"`
 	Product_name_snapshot        string   `gorm:"type:varchar(255);not null" json:"product_name_snapshot"`
-	Supply_product_code_snapshot string   `gorm:"type:varchar(100);not null" json:"product_name_code_snapshot"`
+	Product_code_snapshot        string   `gorm:"type:varchar(100);not null;default:''" json:"product_code_snapshot"`
+	Supply_product_code_snapshot string   `gorm:"type:varchar(100);not null" json:"supply_product_code_snapshot"`
 	Quantity                     float64  `gorm:"type:decimal(10,2);not null" json:"quantity"`
 	Unit                         string   `gorm:"type:varchar(50);not null" json:"unit"`
 	UnitPrice                    float64  `gorm:"type:decimal(10,2);not null" json:"unit_price"`

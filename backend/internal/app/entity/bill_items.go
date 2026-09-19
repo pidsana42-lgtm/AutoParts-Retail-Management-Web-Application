@@ -3,6 +3,8 @@ package entity
 import "gorm.io/gorm"
 
 type BillItem struct {
+	POItemID       *uint `gorm:"index" json:"po_item_id"`
+	PreOrderItemID *uint `gorm:"index" json:"pre_order_item_id"`
 	gorm.Model
 	BillID             uint     `gorm:"not null;index" json:"bill_id"`
 	Bill               *Bill    `gorm:"foreignKey:BillID" json:"bill,omitempty"`

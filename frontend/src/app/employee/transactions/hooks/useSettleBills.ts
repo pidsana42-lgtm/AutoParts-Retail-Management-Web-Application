@@ -74,7 +74,15 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- QR Code States ---
-  const [qrCodeData, setQrCodeData] = useState<{ qrCode: string; refNo: string; amount: number } | null>(null);
+  const [qrCodeData, setQrCodeData] = useState<{
+    qrCode: string;
+    refNo: string;
+    amount: number;
+    promptPayName?: string;
+    bankName?: string;
+    bankAccountNumber?: string;
+    bankAccountName?: string;
+  } | null>(null);
   const [isLoadingQR, setIsLoadingQR] = useState(false);
 
   // บันทึก State ลง localStorage ทุกครั้งที่มีการเปลี่ยนแปลง เพื่อให้คงสถานะไว้เมื่อสลับหน้าเมนู
@@ -544,6 +552,10 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
         qrCode: res.qr_code,
         refNo: res.reference_number,
         amount: res.amount,
+        promptPayName: res.promptpay_name,
+        bankName: res.bank_name,
+        bankAccountNumber: res.bank_account_number,
+        bankAccountName: res.bank_account_name,
       });
     } catch (err) {
       console.error("Failed to generate settle PromptPay QR:", err);

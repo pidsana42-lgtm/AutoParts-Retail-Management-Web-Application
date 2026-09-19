@@ -22,6 +22,9 @@ type GetCustomerDiscountResponse struct {
     CustomerType         CustomerTypeInfoResponse `json:"customer_type"` // ผูก Object ประเภทเข้าท่อส่งออก
     ShippingAddress      string                   `json:"shipping_address"`
     RegisteredAddress    string                   `json:"registered_address"`
+    MaxUnpaidDays        int                      `json:"max_unpaid_days"`
+    HasUnpaidOrder       bool                     `json:"has_unpaid_order"`
+    IsOverdue            bool                     `json:"is_overdue"`
 }
 
 func ToCustomerDiscountResponse(customer *entity.Customer) *GetCustomerDiscountResponse {

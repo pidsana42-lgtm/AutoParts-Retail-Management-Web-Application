@@ -5,6 +5,7 @@ import (
 )
 
 type PurchaseOrderItemImportDTO struct {
+	PreOrderItemID     *uint   `json:"pre_order_item_id"`
 	ID                 uint    `json:"id"`
 	POID               uint    `json:"po_id"`
 	ProductID          uint    `json:"product_id"`
@@ -35,10 +36,15 @@ func ToPurchaseOrderImportDTO(po *entity.PO) PurchaseOrderImportDTO {
 
 	itemsDTO := make([]PurchaseOrderItemImportDTO, 0, len(po.PO_Items))
 	for _, item := range po.PO_Items {
+		var productID uint
+		if item.ProductID != nil {
+			productID = *item.ProductID
+		}
 		itemsDTO = append(itemsDTO, PurchaseOrderItemImportDTO{
 			ID:                 item.ID,
+			PreOrderItemID:     item.PreOrderItemID,
 			POID:               item.POID,
-			ProductID:          item.ProductID,
+			ProductID:          productID,
 			CompanyProductCode: item.Supply_product_code_snapshot,
 			CompanyProductName: item.Product_name_snapshot,
 			OrderQuantity:      item.Quantity,

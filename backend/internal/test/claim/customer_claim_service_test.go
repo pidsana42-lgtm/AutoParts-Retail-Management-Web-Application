@@ -19,6 +19,13 @@ import (
 // Mock Repositories + Fake Notifier
 // -----------------------------------------------------------------------------
 
+type stockAdjustment struct {
+	productID    uint
+	delta        int
+	movementType string
+	note         string
+}
+
 type mockClaimRepo struct {
 	createClaimFn  func(*entity.CustomerClaim) error
 	createItemFn   func(*entity.CustomerClaimItem) error
@@ -28,8 +35,10 @@ type mockClaimRepo struct {
 	updateClaimFn  func(*entity.CustomerClaim) error
 	updateItemFn   func(*entity.CustomerClaimItem) error
 	deleteClaimFn  func(id uint) error
+	adjustStockFn  func(productID uint, delta int, movementType, note string) error
 
-	called map[string]int
+	called          map[string]int
+	stockAdjustments []stockAdjustment
 }
 
 func newMockClaimRepo() *mockClaimRepo {
@@ -100,6 +109,15 @@ func (m *mockClaimRepo) DeleteCustomerClaim(id uint) error {
 	m.track("DeleteCustomerClaim")
 	if m.deleteClaimFn != nil {
 		return m.deleteClaimFn(id)
+	}
+	return nil
+}
+
+func (m *mockClaimRepo) AdjustProductStock(productID uint, delta int, movementType, note string) error {
+	m.track("AdjustProductStock")
+	m.stockAdjustments = append(m.stockAdjustments, stockAdjustment{productID: productID, delta: delta, movementType: movementType, note: note})
+	if m.adjustStockFn != nil {
+		return m.adjustStockFn(productID, delta, movementType, note)
 	}
 	return nil
 }
@@ -597,5 +615,194 @@ func TestUpdateCustomerClaimItem_CompletedCannotBeEdited(t *testing.T) {
 	_, errStatus := svc.UpdateCustomerClaimItemStatus(10, "REJECTED")
 	if errStatus == nil {
 		t.Fatal("expected error when updating status of completed item, got nil")
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Stock movement: จ่ายสินค้าทดแทนออก (INSTANT อนุมัติ / SUPPLIER_PENDING ส่งเคลม) และรับกลับ (ได้รับของเปลี่ยน)
+// -----------------------------------------------------------------------------
+
+// newStockFixture จำลอง DB จริงคล้าย newSyncFixture แต่ตั้งค่า ProductID/ClaimType ที่ตรรกะสต็อกต้องใช้
+func newStockFixture(item entity.CustomerClaimItem) *syncFixture {
+	item.CustomerClaimID = 10
+	f := &syncFixture{
+		parent: &entity.CustomerClaim{
+			Model: gorm.Model{ID: 10}, ClaimNo: "CLM-STOCK-1", Status: "PENDING", CreatedBy: 3,
+			Items: []entity.CustomerClaimItem{item},
+		},
+		notifier: &fakeNotifier{},
+		repo:     newMockClaimRepo(),
+	}
+	f.repo.getItemFn = func(id uint) (*entity.CustomerClaimItem, error) {
+		for i := range f.parent.Items {
+			if f.parent.Items[i].ID == id {
+				cp := f.parent.Items[i]
+				return &cp, nil
+			}
+		}
+		return nil, gorm.ErrRecordNotFound
+	}
+	f.repo.updateItemFn = func(it *entity.CustomerClaimItem) error {
+		for i := range f.parent.Items {
+			if f.parent.Items[i].ID == it.ID {
+				f.parent.Items[i] = *it
+			}
+		}
+		return nil
+	}
+	f.repo.getClaimFn = func(uint) (*entity.CustomerClaim, error) {
+		cp := *f.parent
+		return &cp, nil
+	}
+	f.repo.updateClaimFn = func(c *entity.CustomerClaim) error {
+		f.parent.Status = c.Status
+		return nil
+	}
+	return f
+}
+
+func TestUpdateCustomerClaimItemStatus_InstantApproved_DeductsStockOnce(t *testing.T) {
+	f := newStockFixture(entity.CustomerClaimItem{
+		Model: gorm.Model{ID: 1}, Status: "Pending", ClaimType: "INSTANT", ProductID: 55, Qty: 2,
+	})
+	svc := newService(f.repo, &mockSORepo{}, f.notifier)
+
+	if _, err := svc.UpdateCustomerClaimItemStatus(1, "APPROVED"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.stockAdjustments) != 1 {
+		t.Fatalf("expected exactly one stock adjustment, got %+v", f.repo.stockAdjustments)
+	}
+	adj := f.repo.stockAdjustments[0]
+	if adj.productID != 55 || adj.delta != -2 || adj.movementType != "CLAIM_OUT" {
+		t.Errorf("expected -2 CLAIM_OUT for product 55, got %+v", adj)
+	}
+	if !f.parent.Items[0].StockOutIssued {
+		t.Error("StockOutIssued should be persisted as true after issuing")
+	}
+
+	// เปลี่ยนสถานะไปมา (APPROVED -> REJECTED -> APPROVED ใหม่) ต้องไม่ตัดสต็อกซ้ำ เพราะของจริงจ่ายให้ลูกค้าไปแล้วครั้งเดียว
+	if _, err := svc.UpdateCustomerClaimItemStatus(1, "REJECTED"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := svc.UpdateCustomerClaimItemStatus(1, "APPROVED"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.stockAdjustments) != 1 {
+		t.Fatalf("re-approving must not deduct stock again, expected 1 adjustment total, got %+v", f.repo.stockAdjustments)
+	}
+}
+
+func TestUpdateCustomerClaimItemStatus_InstantStillPending_NoStockMovement(t *testing.T) {
+	f := newStockFixture(entity.CustomerClaimItem{
+		Model: gorm.Model{ID: 1}, Status: "Pending", ClaimType: "INSTANT", ProductID: 55, Qty: 2,
+	})
+	svc := newService(f.repo, &mockSORepo{}, f.notifier)
+
+	if _, err := svc.UpdateCustomerClaimItemStatus(1, "REJECTED"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.stockAdjustments) != 0 {
+		t.Errorf("rejecting an INSTANT item must never deduct stock, got %+v", f.repo.stockAdjustments)
+	}
+}
+
+func TestCreateCustomerClaimItem_SupplierPending_DeductsStockImmediately(t *testing.T) {
+	repo := newMockClaimRepo()
+	repo.createItemFn = func(i *entity.CustomerClaimItem) error {
+		i.ID = 1
+		return nil
+	}
+	svc := newService(repo, &mockSORepo{}, nil)
+
+	_, err := svc.CreateCustomerClaimItem(claimDTO.CreateCustomerClaimItemDTO{
+		ProductID: 77, Qty: 3, Reason: "ส่งเช็คโรงงาน", ClaimType: "SUPPLIER_PENDING",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(repo.stockAdjustments) != 1 {
+		t.Fatalf("expected exactly one stock adjustment, got %+v", repo.stockAdjustments)
+	}
+	adj := repo.stockAdjustments[0]
+	if adj.productID != 77 || adj.delta != -3 || adj.movementType != "CLAIM_OUT" {
+		t.Errorf("expected -3 CLAIM_OUT for product 77, got %+v", adj)
+	}
+}
+
+func TestCreateCustomerClaimItem_InstantNotYetApproved_NoStockMovement(t *testing.T) {
+	repo := newMockClaimRepo()
+	repo.createItemFn = func(i *entity.CustomerClaimItem) error {
+		i.ID = 1
+		return nil
+	}
+	svc := newService(repo, &mockSORepo{}, nil)
+
+	// ToEntity() ของ CreateCustomerClaimItemDTO ตั้ง Status เริ่มต้นเป็น "Pending" เสมอ
+	_, err := svc.CreateCustomerClaimItem(claimDTO.CreateCustomerClaimItemDTO{
+		ProductID: 77, Qty: 1, Reason: "ไฟไม่ติด", ClaimType: "INSTANT",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(repo.stockAdjustments) != 0 {
+		t.Errorf("INSTANT item still pending must not deduct stock yet, got %+v", repo.stockAdjustments)
+	}
+}
+
+func TestCreateCustomerClaim_OwnerCreatedInstantAutoApproved_DeductsStockAtCreate(t *testing.T) {
+	repo := newMockClaimRepo()
+	repo.createClaimFn = func(c *entity.CustomerClaim) error { c.ID = 20; return nil }
+	var createdItems []entity.CustomerClaimItem
+	repo.createItemFn = func(i *entity.CustomerClaimItem) error {
+		i.ID = uint(len(createdItems) + 1) //nolint:gosec // test data
+		createdItems = append(createdItems, *i)
+		return nil
+	}
+	svc := newService(repo, &mockSORepo{}, nil)
+
+	// Owner สร้างใบเคลมเอง -> status ของ header/items เป็น APPROVED ทันที (ตาม claims.tsx: canApprove -> 'APPROVED')
+	_, err := svc.CreateCustomerClaim(claimDTO.CreateCustomerClaimDTO{
+		OriginalOrderID: 1, Status: "APPROVED",
+		Items: []claimDTO.CreateCustomerClaimItemDTO{
+			{ProductID: 9, Qty: 1, UnitPrice: 100, Reason: "ชำรุด", ClaimType: "INSTANT"},
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(repo.stockAdjustments) != 1 {
+		t.Fatalf("expected exactly one stock adjustment, got %+v", repo.stockAdjustments)
+	}
+	adj := repo.stockAdjustments[0]
+	if adj.productID != 9 || adj.delta != -1 || adj.movementType != "CLAIM_OUT" {
+		t.Errorf("expected -1 CLAIM_OUT for product 9, got %+v", adj)
+	}
+}
+
+func TestUpdateCustomerClaimItem_ReplacementReceived_RestocksOnce(t *testing.T) {
+	f := newStockFixture(entity.CustomerClaimItem{
+		Model: gorm.Model{ID: 1}, Status: "Pending", ClaimType: "SUPPLIER_PENDING", ProductID: 42, Qty: 4,
+		StockOutIssued: true, // สมมติว่าจ่ายของสำรองออกไปแล้วตอนสร้างใบเคลม
+	})
+	svc := newService(f.repo, &mockSORepo{}, f.notifier)
+
+	if _, err := svc.UpdateCustomerClaimItem(1, claimDTO.UpdateCustomerClaimItemDTO{Resolution: "REPLACEMENT_RECEIVED"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.stockAdjustments) != 1 {
+		t.Fatalf("expected exactly one stock adjustment, got %+v", f.repo.stockAdjustments)
+	}
+	adj := f.repo.stockAdjustments[0]
+	if adj.productID != 42 || adj.delta != 4 || adj.movementType != "CLAIM_IN" {
+		t.Errorf("expected +4 CLAIM_IN for product 42, got %+v", adj)
+	}
+
+	// กดยืนยันซ้ำ (เช่น แก้ไขข้อมูลอื่นในฟอร์มเดิมอีกครั้ง) ต้องไม่เติมสต็อกซ้ำ
+	if _, err := svc.UpdateCustomerClaimItem(1, claimDTO.UpdateCustomerClaimItemDTO{Resolution: "REPLACEMENT_RECEIVED"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.stockAdjustments) != 1 {
+		t.Fatalf("re-confirming receipt must not restock again, expected 1 adjustment total, got %+v", f.repo.stockAdjustments)
 	}
 }

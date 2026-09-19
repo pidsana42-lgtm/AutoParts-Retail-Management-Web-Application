@@ -7,6 +7,7 @@ export interface AppNotification {
   title: string;
   message?: string;
   type?: 'info' | 'success' | 'warning' | 'error';
+  eventType?: string;
   isRead: boolean;
   link?: string;
   createdAt: Date;
@@ -26,10 +27,41 @@ interface NotificationContextProps {
 
 const NotificationContext = createContext<NotificationContextProps | undefined>(undefined);
 
+function notificationSeverity(eventType?: string): AppNotification['type'] {
+  const type = eventType?.toLowerCase();
+  if (type === 'low_stock' || type === 'out_of_stock') return 'warning';
+  if (type === 'success' || type === 'warning' || type === 'error') return type;
+  return 'info';
+}
+
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
-  const { role, user } = useAuth();
+  const { role, user, loginSequence } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const localIdRef = useRef(0);
+  const loginReminderRef = useRef<{ sequence: number; request: ReturnType<typeof notificationService.refreshStockAlerts> } | null>(null);
+
+  useEffect(() => {
+    if (!role) { setNotifications([]); return; }
+    if (!loginSequence) return;
+    const basePath = ['OWNER', 'ADMIN'].includes(role.toUpperCase()) ? '/owner' : '/employee';
+    // Reuse the request during StrictMode's effect replay, but attach a live
+    // subscriber each time. A new login always starts a new reminder check.
+    if (loginReminderRef.current?.sequence !== loginSequence) {
+      loginReminderRef.current = { sequence: loginSequence, request: notificationService.refreshStockAlerts() };
+    }
+    let active = true;
+    loginReminderRef.current.request.then((alerts) => {
+      if (!active || alerts.length === 0) return;
+      const id = `local-stock-login-${loginSequence}`;
+      setNotifications((prev) => [{
+        id, title: `มีสินค้าถึงจุดแจ้งเตือนสต็อก ${alerts.length} รายการ`,
+        message: 'กดเพื่อเลือกสินค้าและสร้างใบสั่งซื้อ', type: 'warning',
+        eventType: 'LOW_STOCK', link: `${basePath}/dashboard?stock-alerts=1`,
+        isRead: false, createdAt: new Date(), persisted: false,
+      }, ...prev.filter((n) => n.id !== id)]);
+    }).catch((err) => console.error('Failed to check stock on login:', err));
+    return () => { active = false; };
+  }, [role, loginSequence]);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -83,19 +115,19 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     setNotifications([]);
   }, []);
 
-  // โหลดประวัติแจ้งเตือนจาก DB ตอนล็อกอินเสร็จ/รีเฟรชหน้า (ของเดิมมีแค่ push สด อยู่แค่ session เดียว รีเฟรชแล้วหาย)
-  useEffect(() => {
+  // โหลดประวัติแจ้งเตือนจาก DB — ใช้ทั้งตอนล็อกอินเสร็จ/รีเฟรชหน้า และเรียกซ้ำเป็นระยะ (ดู polling ด้านล่าง)
+  // เป็น safety net เผื่อ WebSocket หลุด/ยังไม่ทันต่อ connection ตอนที่มีแจ้งเตือนเกิดขึ้นพอดี (เช่น cron แจ้งสต็อกต่ำ
+  // ที่รันเบื้องหลังโดยไม่รู้ว่าผู้ใช้เปิดหน้าเว็บอยู่ไหม) ไม่งั้นแจ้งเตือนนั้นจะหายไปเงียบๆ จนกว่าจะรีเฟรชหน้าเอง
+  const fetchHistory = useCallback(() => {
     if (!role) return;
-    let alive = true;
-
-    notificationService.list(role, user?.id)
+    return notificationService.list(role, user?.id)
       .then(res => {
-        if (!alive) return;
         const historyItems: AppNotification[] = res.notifications.map(r => ({
           id: String(r.id),
           title: r.title,
           message: r.message,
-          type: (r.type?.toLowerCase() as AppNotification['type']) || 'info',
+          type: notificationSeverity(r.type),
+          eventType: r.type,
           isRead: r.is_read,
           link: r.link,
           createdAt: new Date(r.created_at),
@@ -108,11 +140,23 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         });
       })
       .catch(err => console.error('Failed to load notification history:', err));
+  }, [role, user?.id]);
+
+  useEffect(() => {
+    if (!role) return;
+    let alive = true;
+    if (alive) fetchHistory();
+
+    // Polling สำรองทุก 45 วินาที — จับแจ้งเตือนที่ WebSocket พลาดไป (ดูคอมเมนต์ด้านบน)
+    const pollInterval = setInterval(() => {
+      if (alive) fetchHistory();
+    }, 45000);
 
     return () => {
       alive = false;
+      clearInterval(pollInterval);
     };
-  }, [role, user?.id]);
+  }, [role, fetchHistory]);
 
   // ต่อ websocket รับแจ้งเตือนสด — ส่ง role/user_id ไปด้วยตอนเปิด connection เพื่อให้ backend รู้ว่าควรส่งอะไรมาให้ connection นี้บ้าง
   useEffect(() => {
@@ -149,6 +193,11 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       const socket = new WebSocket(wsUrl);
       ws = socket;
 
+      // เพิ่งต่อ (หรือต่อกลับ) สำเร็จ — ดึงประวัติซ้ำทันที เผื่อพลาดแจ้งเตือนไปช่วงที่หลุดการเชื่อมต่อ
+      socket.onopen = () => {
+        fetchHistory();
+      };
+
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -159,7 +208,8 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
                 id: String(data.id),
                 title: data.title,
                 message: data.message,
-                type: data.type,
+                type: notificationSeverity(data.type),
+                eventType: data.type,
                 link: data.link,
                 isRead: false,
                 createdAt: new Date(),
@@ -182,7 +232,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
       socket.onclose = () => {
         if (disposed) return;
-        reconnectTimeout = setTimeout(connect, 3000);
+        reconnectTimeout = setTimeout(connect, 1500);
       };
     };
 
@@ -205,7 +255,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         ws.onopen = () => ws.close();
       }
     };
-  }, [role, user?.id, addNotification, addServerNotification]);
+  }, [role, user?.id, addNotification, addServerNotification, fetchHistory]);
 
   return (
     <NotificationContext.Provider value={{

@@ -106,6 +106,10 @@ func (ctl *ReturnController) CreateSalesReturn(c *gin.Context) {
 		return
 	}
 
+	if err := input.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	createdBy := getUserIDFromContext(c)
 	res, err := ctl.service.CreateReturn(input, createdBy, getRoleFromContext(c))
 	if err != nil {
@@ -150,6 +154,10 @@ func (ctl *ReturnController) UpdateSalesReturn(c *gin.Context) {
 		return
 	}
 
+	if err := input.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	approvedBy := getUserIDFromContext(c)
 	res, err := ctl.service.UpdateReturn(uint(id), input, approvedBy)
 	if err != nil {
@@ -194,7 +202,7 @@ func (ctl *ReturnController) ProcessRefund(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
-		if errors.Is(err, reRepo.ErrInvalidRefundMethod) || errors.Is(err, reRepo.ErrRefundRequiresCustomer) || errors.Is(err, reRepo.ErrRefundAmountExceedsOrder) {
+		if errors.Is(err, reRepo.ErrInvalidRefundMethod) || errors.Is(err, reRepo.ErrRefundRequiresCustomer) || errors.Is(err, reRepo.ErrRefundAmountExceedsOrder) || errors.Is(err, reRepo.ErrReturnQuantityExceedsOrder) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}

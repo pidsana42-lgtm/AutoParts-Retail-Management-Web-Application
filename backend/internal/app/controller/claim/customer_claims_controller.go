@@ -1,10 +1,11 @@
 package claim
 
 import (
-	"fmt"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	claimDTO "backend/internal/app/dto/claim"
@@ -21,12 +22,35 @@ func NewCustomerClaimController(svc claimSvc.CustomerClaimService) *CustomerClai
 	return &CustomerClaimController{svc: svc}
 }
 
+func getRoleFromContext(c *gin.Context) string {
+	if val, exists := c.Get("role"); exists {
+		if role, ok := val.(string); ok {
+			return strings.ToUpper(strings.TrimSpace(role))
+		}
+	}
+	return ""
+}
+
+func isOwnerOrAdmin(c *gin.Context) bool {
+	role := getRoleFromContext(c)
+	return role == "OWNER" || role == "ADMIN"
+}
+
 func (ctrl *CustomerClaimController) CreateCustomerClaim(c *gin.Context) {
 	var input claimDTO.CreateCustomerClaimDTO
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: " + err.Error()})
 		return
+	}
+	if !prepareClaimStatus(c, &input.Status, true) {
+		return
+	}
+	for _, item := range input.Items {
+		if err := item.ValidateQuantity(); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	// ตรวจสอบ ID ของ User ที่สร้างใบเคลมจาก JWT Token (ไม่เชื่อค่าที่ client ส่งมาเอง)
@@ -40,6 +64,10 @@ func (ctrl *CustomerClaimController) CreateCustomerClaim(c *gin.Context) {
 
 	res, err := ctrl.svc.CreateCustomerClaim(input, createdBy)
 	if err != nil {
+		if errors.Is(err, claimRepo.ErrClaimQuantityExceedsOrder) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		if errors.Is(err, claimRepo.ErrOrderInProgress) {
 			c.JSON(http.StatusConflict, gin.H{"error": "sale order is already being claimed or returned"})
 			return
@@ -55,6 +83,9 @@ func (ctrl *CustomerClaimController) CreateCustomerClaim(c *gin.Context) {
 }
 
 func (ctrl *CustomerClaimController) CreateCustomerClaimItem(c *gin.Context) {
+	if !requireClaimStaff(c) {
+		return
+	}
 	var input claimDTO.CreateCustomerClaimItemDTO
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -62,8 +93,16 @@ func (ctrl *CustomerClaimController) CreateCustomerClaimItem(c *gin.Context) {
 		return
 	}
 
+	if err := input.ValidateQuantity(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	res, err := ctrl.svc.CreateCustomerClaimItem(input)
 	if err != nil {
+		if errors.Is(err, claimRepo.ErrClaimQuantityExceedsOrder) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create customer claim item: " + err.Error()})
 		return
 	}
@@ -115,6 +154,11 @@ func (ctrl *CustomerClaimController) UpdateCustomerClaim(c *gin.Context) {
 		return
 	}
 
+	if !prepareClaimStatus(c, &input.Status, false) {
+		return
+	}
+	// Approval identity is not client-editable through this general edit route.
+	input.ApprovedBy = nil
 	res, err := ctrl.svc.UpdateCustomerClaim(uint(id), input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update customer claim: " + err.Error()})
@@ -139,8 +183,19 @@ func (ctrl *CustomerClaimController) UpdateCustomerClaimItem(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: " + err.Error()})
 		return
 	}
+	if err := input.ValidateQuantity(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if !prepareClaimStatus(c, &input.Status, false) {
+		return
+	}
 	res, err := ctrl.svc.UpdateCustomerClaimItem(uint(id), input)
 	if err != nil {
+		if errors.Is(err, claimRepo.ErrClaimQuantityExceedsOrder) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update item: " + err.Error()})
 		return
 	}
@@ -148,6 +203,11 @@ func (ctrl *CustomerClaimController) UpdateCustomerClaimItem(c *gin.Context) {
 }
 
 func (ctrl *CustomerClaimController) UpdateCustomerClaimItemStatus(c *gin.Context) {
+	if !isOwnerOrAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only the store owner can approve or reject a claim"})
+		return
+	}
+
 	idStr := c.Param("itemId")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -159,8 +219,15 @@ func (ctrl *CustomerClaimController) UpdateCustomerClaimItemStatus(c *gin.Contex
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: " + err.Error()})
 		return
 	}
+	if !prepareClaimStatus(c, &input.Status, false) {
+		return
+	}
 	res, err := ctrl.svc.UpdateCustomerClaimItemStatus(uint(id), input.Status)
 	if err != nil {
+		if errors.Is(err, claimRepo.ErrClaimQuantityExceedsOrder) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update item status: " + err.Error()})
 		return
 	}
@@ -168,6 +235,9 @@ func (ctrl *CustomerClaimController) UpdateCustomerClaimItemStatus(c *gin.Contex
 }
 
 func (ctrl *CustomerClaimController) DeleteCustomerClaim(c *gin.Context) {
+	if !requireClaimStaff(c) {
+		return
+	}
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -217,5 +287,3 @@ func (ctrl *CustomerClaimController) GenerateChecklistPDF(c *gin.Context) {
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
-
-

@@ -2,6 +2,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../../utils/component";
 import { type ReactNode, useEffect } from "react";
 import { createPortal } from "react-dom";
+import Text from "./text";
 
 const modalPanelVariants = cva(
   [
@@ -81,14 +82,16 @@ export default function ConfirmModal({
           <div className="bg-[#1C1B1B] flex items-start justify-between gap-3 border-b border-gray-100 px-6 py-4">
             <div>
               {typeof title === "string" ? (
-                <h2 id="modal-title" className="text-2xl font-semibold text-white m-0 leading-tight">
+                <Text variant="lead" className="text-white mb-0 font-medium">
                   {title}
-                </h2>
+                </Text>
               ) : (
                 title
               )}
               {description && (
-                <p className="mt-1 text-xs text-white font-light m-0">{description}</p>
+                <Text variant="xs" className="mt-1 text-white font-light m-0">
+                  {description}
+                </Text>
               )}
             </div>
             <button

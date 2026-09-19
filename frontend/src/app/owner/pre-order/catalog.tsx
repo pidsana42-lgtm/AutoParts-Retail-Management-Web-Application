@@ -15,6 +15,7 @@ import Button from '../../../components/elements/button';
 import Input from '../../../components/elements/input';
 import Modal from '../../../components/elements/modal';
 import ConfirmDialog from '../../../components/elements/confirm_dialog';
+import { useToast } from '../../../components/elements/toast';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import apiClient from '../../../service/http/apiClient';
 import { getCatalogs, createCatalog, updateCatalog, deleteCatalog, extractCatalogFromImage } from '../../../service/http/catalog/catalog_service';
@@ -29,6 +30,7 @@ interface CatalogManagerProps {
 export default function CatalogManager({ isEmployee = false }: CatalogManagerProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const basePath = isEmployee ? '/employee/pre-orders' : '/owner/pre-orders';
   const catalogPath = `${basePath}/catalog`;
   const initialCatalogParams = new URLSearchParams(location.search);
@@ -43,7 +45,6 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
 
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [selectedSupplier, setSelectedSupplier] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const activeTab: 'books' | 'items' = initialCatalogParams.get('tab') === 'items' ? 'items' : 'books';
@@ -216,11 +217,6 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   }, []);
 
   const filteredCatalogs = catalogs.filter(c => {
-    const matchSupplier = 
-      selectedSupplier === 'ALL' || 
-      String(c.supplier_id) === selectedSupplier || 
-      (c.supplier_name && c.supplier_name.toLowerCase().includes(selectedSupplier.toLowerCase()));
-    
     const q = searchQuery.toLowerCase();
     const matchSearch = 
       c.catalog_name.toLowerCase().includes(q) || 
@@ -233,7 +229,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         it.part_name.toLowerCase().includes(q) || 
         (it.compatible_cars && it.compatible_cars.toLowerCase().includes(q))
       ));
-    return matchSupplier && matchSearch;
+    return matchSearch;
   });
 
   // Flat list of all items for the Items tab
@@ -392,7 +388,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
       }
       setDeleteTargetId(null);
     } catch (err) {
-      alert('ไม่สามารถลบแคตตาล็อกได้');
+      toast({ variant: 'error', message: 'ไม่สามารถลบแคตตาล็อกได้' });
     } finally {
       setIsDeleting(false);
     }
@@ -517,7 +513,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   // AI Scan Execution
   const handleRunAiScan = async () => {
     if (!selectedFile) {
-      alert('กรุณาเลือกไฟล์ภาพหรือ PDF หน้าแคตตาล็อกก่อนกดสแกน');
+      toast({ variant: 'warning', message: 'กรุณาเลือกไฟล์ภาพหรือ PDF หน้าแคตตาล็อกก่อนกดสแกน' });
       return;
     }
     setExtracting(true);
@@ -557,17 +553,17 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         const existingValid = newItems.filter(it => it.part_number || it.part_name);
         if (existingValid.length > 0) {
           setNewItems([...existingValid, ...scannedItems]);
-          alert(`AI สแกนและเพิ่มรายการอะไหล่ต่อท้ายสำเร็จ ${scannedItems.length} รายการ (รวมเป็น ${existingValid.length + scannedItems.length} รายการ)`);
+          toast({ variant: 'success', message: `AI สแกนและเพิ่มรายการอะไหล่ต่อท้ายสำเร็จ ${scannedItems.length} รายการ (รวมเป็น ${existingValid.length + scannedItems.length} รายการ)` });
         } else {
           setNewItems(scannedItems);
-          alert(`AI สแกนและดึงข้อมูลอะไหล่จากหน้าแคตตาล็อกสำเร็จ ${scannedItems.length} รายการ`);
+          toast({ variant: 'success', message: `AI สแกนและดึงข้อมูลอะไหล่จากหน้าแคตตาล็อกสำเร็จ ${scannedItems.length} รายการ` });
         }
       } else {
-        alert('ไม่พบรายการอะไหล่ในไฟล์ที่ส่งตรวจ');
+        toast({ variant: 'warning', message: 'ไม่พบรายการอะไหล่ในไฟล์ที่ส่งตรวจ' });
       }
     } catch (err: any) {
       console.error(err);
-      alert('เกิดข้อผิดพลาดในการสแกนด้วย AI: ' + (err.message || 'โปรดลองใหม่อีกครั้ง'));
+      toast({ variant: 'error', message: 'เกิดข้อผิดพลาดในการสแกนด้วย AI: ' + (err.message || 'โปรดลองใหม่อีกครั้ง') });
     } finally {
       setExtracting(false);
     }
@@ -575,7 +571,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
 
   const handleFormSubmit = async () => {
     if (!newCatalog.catalog_name) {
-      alert('กรุณากรอกชื่อแคตตาล็อก');
+      toast({ variant: 'warning', message: 'กรุณากรอกชื่อแคตตาล็อก' });
       return;
     }
 
@@ -608,15 +604,15 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
 
       if (editingCatalogId) {
         await updateCatalog(editingCatalogId, payload);
-        alert('แก้ไขข้อมูลแคตตาล็อกเรียบร้อยแล้ว');
+        toast({ variant: 'success', message: 'แก้ไขข้อมูลแคตตาล็อกเรียบร้อยแล้ว' });
       } else {
         await createCatalog(payload);
-        alert('บันทึกแคตตาล็อกใหม่เรียบร้อยแล้ว');
+        toast({ variant: 'success', message: 'บันทึกแคตตาล็อกใหม่เรียบร้อยแล้ว' });
       }
       setCurrentView('home');
       fetchCatalogList();
     } catch (err) {
-      alert(editingCatalogId ? 'ไม่สามารถแก้ไขแคตตาล็อกได้' : 'ไม่สามารถสร้างแคตตาล็อกได้');
+      toast({ variant: 'error', message: editingCatalogId ? 'ไม่สามารถแก้ไขแคตตาล็อกได้' : 'ไม่สามารถสร้างแคตตาล็อกได้' });
     } finally {
       setSaving(false);
     }
@@ -658,11 +654,11 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   // =========================================================================
   if (currentView === 'home') {
     return (
-      <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300 font-sans">
+      <div className="p-8 max-w-full mx-auto w-full bg-white min-h-screen animate-in fade-in duration-300 font-sans">
         {qrModal}
 
         <div className="flex items-center justify-between mb-8">
-          <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
+          <Heading level="h1" weight="semibold" className="m-0 text-[#1C1B1B]">
             นำเข้าและจัดการแคตตาล็อกสินค้า
           </Heading>
           <button
@@ -675,8 +671,8 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
           </button>
         </div>
 
-        {/* Action Cards Section (2 clean columns matching import-bills) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        {/* Scan and manual entry */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {/* Card 1: สแกนด้วยรูปภาพ / PDF (Red #e51c23) */}
           <div 
             onClick={handleOpenScan}
@@ -712,62 +708,44 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
           </div>
         </div>
 
-        {/* Filter Bar & Toolbar */}
-        <div className="bg-white border border-gray-200 p-4 mb-6 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-          {/* ฝั่งซ้าย: ค้นหา */}
-          <div className="relative flex-1 min-w-60">
+        {/* Search */}
+        <div className="p-3.5 mb-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-sm">
+          <div className="relative flex-1 min-w-0">
             <Input
               type="text"
               placeholder="ค้นหารหัสอะไหล่ ชื่อเล่ม หรือรุ่นรถยนต์..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               leftIcon={<Search size={16} className="text-gray-400" />}
-              className="text-xs h-10 w-full"
+              className="text-sm h-10 w-full"
             />
           </div>
 
-          {/* ฝั่งขวา: ดรอปดาวน์บริษัททั้งหมด + แท็บรายการ */}
-          <div className="flex items-center gap-3 flex-wrap justify-end">
-            {/* ดรอปดาวน์บริษัทซัพพลายเออร์ */}
-            <div className="relative min-w-[210px]">
-              <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              <select
-                value={selectedSupplier}
-                onChange={(e) => setSelectedSupplier(e.target.value)}
-                className="w-full bg-white border border-gray-300 rounded-none pl-9 pr-8 py-2 text-xs font-bold text-[#1C1B1B] focus:border-[#e51c23] outline-none cursor-pointer appearance-none"
-              >
-                <option value="ALL">ทุกบริษัท ซัพพลายเออร์</option>
-                {suppliers.map(sup => (
-                  <option key={sup.id} value={String(sup.id)}>
-                    {sup.supplier_name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
+        </div>
 
-            {/* แท็บเล่มแคตตาล็อก / รายการอะไหล่ทั้งหมด */}
-            <div className="flex border border-gray-300 p-0.5 bg-gray-100">
-              <button
-                type="button"
-                onClick={() => setActiveTab('books')}
-                className={`px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === 'books' ? 'bg-white text-[#1C1B1B] shadow-2xs' : 'text-gray-500 hover:text-black'
-                }`}
-              >
-                เล่มแคตตาล็อก {filteredCatalogs.length}
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('items')}
-                className={`px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === 'items' ? 'bg-white text-[#1C1B1B] shadow-2xs' : 'text-gray-500 hover:text-black'
-                }`}
-              >
-                รายการอะไหล่ทั้งหมด {allCatalogItems.length}
-              </button>
-            </div>
-          </div>
+        <div className="flex items-center gap-2 mb-6 border-b border-gray-200 bg-white px-3 pt-2 shadow-xs overflow-x-auto">
+          {[
+            { value: 'books' as const, label: 'เล่มแคตตาล็อก', icon: BookOpen, count: filteredCatalogs.length },
+            { value: 'items' as const, label: 'รายการอะไหล่ทั้งหมด', icon: Layers, count: allCatalogItems.length },
+          ].map(tab => (
+            <button
+              key={tab.value}
+              type="button"
+              aria-pressed={activeTab === tab.value}
+              onClick={() => setActiveTab(tab.value)}
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-normal border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
+                activeTab === tab.value
+                  ? 'border-[#e51c23] text-[#e51c23]'
+                  : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              <tab.icon size={16} />
+              {tab.label}
+              <span className={`px-2 py-0.5 text-sm rounded-full ${activeTab === tab.value ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
         </div>
 
         {/* Content Area */}
@@ -780,7 +758,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
           filteredCatalogs.length === 0 ? (
             <div className="bg-white border border-gray-200 p-12 text-center flex flex-col items-center justify-center">
               <BookOpen size={48} className="text-gray-300 mb-3" />
-              <p className="font-bold text-[#1C1B1B] text-base">ไม่พบข้อมูลแคตตาล็อก</p>
+              <p className="font-normal text-[#1C1B1B] text-base">ไม่พบข้อมูลแคตตาล็อก</p>
               <p className="text-xs text-gray-500 mt-1">ลองเปลี่ยนคำค้นหา หรือกดสแกนแคตตาล็อกใหม่</p>
             </div>
           ) : (
@@ -788,43 +766,42 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
               {filteredCatalogs.map(cat => (
                 <div 
                   key={cat.id} 
-                  className="bg-white border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all flex flex-col justify-between group overflow-hidden"
+                  className="bg-white border border-gray-200 hover:border-gray-300 transition-colors flex flex-col justify-between group overflow-hidden"
                 >
                   <div>
-                    <div className="h-40 bg-gradient-to-br from-gray-900 to-gray-800 relative overflow-hidden flex items-center justify-center p-4">
+                    <div className="h-40 bg-[#f6f3f2] relative overflow-hidden flex items-center justify-center p-4">
                       {cat.cover_image ? (
                         <img 
                           src={cat.cover_image} 
                           alt={cat.catalog_name} 
-                          className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-300" 
+                          className="w-full h-full object-contain"
                         />
                       ) : null}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
                       
                       <div className="absolute top-3 left-3 flex items-center gap-1.5 flex-wrap">
                         {cat.category && (
-                          <span className="bg-white/20 backdrop-blur-xs text-white text-[10px] font-medium px-2 py-0.5">
+                          <span className="bg-white/95 border border-gray-200 text-gray-600 text-[10px] font-medium px-2 py-0.5">
                             {cat.category}
                           </span>
                         )}
                         {cat.catalog_file && (
-                          <span className="bg-[#e51c23] text-white text-[10px] font-black px-1.5 py-0.5 flex items-center gap-0.5">
+                          <span className="bg-[#e51c23] text-white text-[10px] font-medium px-1.5 py-0.5 flex items-center gap-0.5">
                             <FileText size={10} /> PDF
                           </span>
                         )}
                       </div>
 
-                      <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 backdrop-blur-xs p-1">
+                      <div className="absolute top-3 right-3 flex items-center gap-1 bg-white/95 border border-gray-200 p-1">
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleOpenEdit(cat);
                           }}
-                          className="text-gray-300 hover:text-white hover:bg-white/20 p-1 transition-colors cursor-pointer"
+                          className="text-gray-400 hover:text-[#e51c23] p-1.5 transition-colors cursor-pointer"
                           title="แก้ไขแคตตาล็อก"
                         >
-                          <Edit size={14} />
+                          <Edit size={16} />
                         </button>
                         <button
                           type="button"
@@ -832,56 +809,56 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                             e.stopPropagation();
                             handleDelete(cat.id);
                           }}
-                          className="text-gray-300 hover:text-red-400 hover:bg-white/20 p-1 transition-colors cursor-pointer"
+                          className="text-gray-400 hover:text-[#e51c23] p-1.5 transition-colors cursor-pointer"
                           title="ลบแคตตาล็อก"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={16} />
                         </button>
                       </div>
 
-                      <div className="absolute bottom-3 left-3 right-3 text-white">
-                        <p className="text-[11px] font-mono text-gray-300 font-bold">{cat.catalog_code}</p>
-                        <h3 className="font-bold text-sm text-white line-clamp-1 leading-snug">
-                          {cat.catalog_name}
-                        </h3>
-                      </div>
+                    </div>
+                    <div className="px-4 pt-4">
+                      <p className="text-[11px] font-mono text-gray-500 font-normal">{cat.catalog_code}</p>
+                      <h3 className="font-medium text-sm text-[#1C1B1B] line-clamp-1 leading-snug">
+                        {cat.catalog_name}
+                      </h3>
                     </div>
 
                     <div className="p-4 space-y-3 text-xs">
                       {/* Highlighted Supplier Box */}
-                      <div className="bg-gray-50 border border-gray-200 p-2 flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-gray-700 truncate max-w-[200px]" title={cat.supplier_name || 'ซัพพลายเออร์'}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-gray-700 truncate max-w-50" title={cat.supplier_name || 'ซัพพลายเออร์'}>
                           <Building2 size={14} className="text-[#e51c23] shrink-0" />
-                          <span className="font-extrabold text-[#1C1B1B] truncate">{cat.supplier_name || suppliers.find(s => s.id === cat.supplier_id)?.supplier_name || 'ไม่ระบุซัพพลายเออร์'}</span>
+                          <span className="font-normal text-[#1C1B1B] truncate">{cat.supplier_name || suppliers.find(s => s.id === cat.supplier_id)?.supplier_name || 'ไม่ระบุซัพพลายเออร์'}</span>
                         </div>
-                        <span className="font-extrabold text-[#e51c23] bg-red-50 border border-red-200 px-2 py-0.5 shrink-0 text-[11px]">
+                        <span className="font-normal text-[#e51c23] bg-red-50 px-2 py-0.5 shrink-0 text-[11px]">
                           {cat.item_count || cat.catalog_items?.length || 0} รายการ
                         </span>
                       </div>
 
-                      <p className="text-gray-600 line-clamp-2 min-h-[32px] leading-relaxed">
+                      <p className="text-gray-600 line-clamp-2 min-h-8 leading-relaxed">
                         {cat.description || 'ไม่มีคำอธิบายเพิ่มเติม'}
                       </p>
 
                       {cat.catalog_items && cat.catalog_items.length > 0 && (
                         <div className="space-y-1.5 pt-2 border-t border-gray-100">
-                          <span className="text-[11px] text-gray-500 font-extrabold block uppercase flex items-center justify-between">
+                          <span className="text-[11px] text-gray-500 font-normal uppercase flex items-center justify-between">
                             <span>สินค้าที่แกะมาในเล่ม:</span>
                             <span className="text-gray-400 font-normal">{cat.catalog_items.length} รายการ</span>
                           </span>
                           <div className="flex flex-wrap gap-1.5">
                             {cat.catalog_items.slice(0, 3).map((it, idx) => (
-                              <div key={idx} className="bg-white border border-gray-200 p-1 flex items-center gap-1 shadow-2xs">
+                              <div key={idx} className="bg-white border border-gray-200 p-1 flex items-center gap-1">
                                 {it.image ? (
                                   <img src={it.image} alt={it.part_name} className="w-6 h-6 object-contain bg-gray-50 border border-gray-100" />
                                 ) : null}
-                                <span className="text-[10px] font-mono font-bold text-gray-800">
+                                <span className="text-[10px] font-mono font-normal text-gray-800">
                                   {it.part_number}
                                 </span>
                               </div>
                             ))}
                             {cat.catalog_items.length > 3 && (
-                              <span className="text-[10px] text-gray-500 font-bold self-center px-1.5 py-0.5 bg-gray-100 border border-gray-200">
+                              <span className="text-[10px] text-gray-500 font-normal self-center px-1.5 py-0.5 bg-gray-100 border border-gray-200">
                                 + {cat.catalog_items.length - 3} รายการ
                               </span>
                             )}
@@ -895,7 +872,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                     <button
                       type="button"
                       onClick={() => handleOpenDetail(cat)}
-                      className="w-full bg-[#1C1B1B] hover:bg-black text-white text-xs font-bold py-2.5 px-3 flex items-center justify-center gap-1.5 transition-colors cursor-pointer rounded-none"
+                      className="w-full bg-white hover:bg-red-50 border border-gray-200 hover:border-red-200 text-[#e51c23] text-sm font-normal py-2.5 px-3 flex items-center justify-center gap-1.5 transition-colors cursor-pointer rounded-none"
                     >
                       <Eye size={14} /> เปิดดูเล่มแคตตาล็อก
                     </button>
@@ -909,55 +886,54 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
             {allCatalogItems.map((item, idx) => (
               <div 
                 key={idx} 
-                className="bg-white border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all flex flex-col justify-between group overflow-hidden"
+                className="bg-white border border-gray-200 hover:border-gray-300 transition-colors flex flex-col justify-between group overflow-hidden"
               >
                 <div>
-                  <div className="h-40 bg-gradient-to-br from-gray-900 to-gray-800 relative overflow-hidden flex items-center justify-center p-4">
+                  <div className="h-40 bg-[#f6f3f2] relative overflow-hidden flex items-center justify-center p-4">
                     {item.image || item.cover_image ? (
                       <img 
                         src={item.image || item.cover_image} 
                         alt={item.part_name} 
-                        className="w-full h-full object-contain opacity-90 group-hover:scale-105 transition-transform duration-300" 
+                        className="w-full h-full object-contain"
                       />
                     ) : null}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
                     
                     <div className="absolute top-3 left-3 flex items-center gap-1.5 max-w-[85%]">
-                      <span className="bg-[#e51c23] text-white text-[10px] font-black px-2 py-0.5 uppercase tracking-wider shrink-0">
+                      <span className="bg-[#e51c23] text-white text-[10px] font-medium px-2 py-0.5 uppercase tracking-wider shrink-0">
                         {item.brand}
                       </span>
                       {item.catalog_category && (
-                        <span className="bg-white/20 backdrop-blur-xs text-white text-[10px] font-medium px-2 py-0.5 truncate">
+                        <span className="bg-white/95 border border-gray-200 text-gray-600 text-[10px] font-medium px-2 py-0.5 truncate">
                           {item.catalog_category}
                         </span>
                       )}
                     </div>
 
-                    <div className="absolute bottom-3 left-3 right-3 text-white">
-                      <p className="text-[12px] font-mono text-red-400 font-extrabold tracking-wide">{item.part_number}</p>
-                      <h3 className="font-bold text-sm text-white line-clamp-1 leading-snug">
-                        {item.part_name}
-                      </h3>
-                    </div>
+                  </div>
+                  <div className="px-4 pt-4">
+                    <p className="text-[12px] font-mono text-[#e51c23] font-normal tracking-wide">{item.part_number}</p>
+                    <h3 className="font-medium text-sm text-[#1C1B1B] line-clamp-1 leading-snug">
+                      {item.part_name}
+                    </h3>
                   </div>
 
                   <div className="p-4 space-y-3 text-xs">
-                    <div className="bg-gray-50 border border-gray-200 p-2 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-gray-700 truncate max-w-[190px]" title={item.supplier_name || 'ซัพพลายเออร์'}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-gray-700 truncate max-w-47.5" title={item.supplier_name || 'ซัพพลายเออร์'}>
                         <Building2 size={13} className="text-[#e51c23] shrink-0" />
-                        <span className="font-extrabold text-[#1C1B1B] truncate">{item.supplier_name || 'ซัพพลายเออร์'}</span>
+                        <span className="font-normal text-[#1C1B1B] truncate">{item.supplier_name || 'ซัพพลายเออร์'}</span>
                       </div>
-                      <span className="font-bold text-gray-600 bg-white border border-gray-200 px-1.5 py-0.5 rounded-none shrink-0 text-[10px] font-mono truncate max-w-[110px]" title={item.catalog_title}>
+                      <span className="font-normal text-gray-600 bg-white border border-gray-200 px-1.5 py-0.5 rounded-none shrink-0 text-[10px] font-mono truncate max-w-[110px]" title={item.catalog_title}>
                         {item.catalog_code}
                       </span>
                     </div>
 
-                    <p className="text-gray-600 line-clamp-2 min-h-[32px] leading-relaxed">
+                    <p className="text-gray-600 line-clamp-2 min-h-8 leading-relaxed">
                       {item.remark || 'อะไหล่แท้มาตรฐาน OEM คุณภาพสูง รองรับการใช้งานระยะยาว'}
                     </p>
 
                     <div className="space-y-1 pt-1 border-t border-gray-100">
-                      <span className="text-[10px] text-gray-500 font-extrabold block uppercase flex items-center gap-1">
+                      <span className="text-[10px] text-gray-500 font-normal uppercase flex items-center gap-1">
                         รุ่นรถยนต์ที่รองรับ
                       </span>
                       <div className="bg-gray-50 border border-gray-200 p-1.5 text-[11px] text-gray-800 font-medium truncate">
@@ -971,7 +947,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                   <button
                     type="button"
                     onClick={() => navigate(basePath, { state: { prefillItem: item, catalog: { catalog_name: item.catalog_title, supplier_name: item.supplier_name } } })}
-                    className="w-full bg-[#1C1B1B] hover:bg-black text-white text-xs font-bold py-2.5 px-3 flex items-center justify-center gap-1.5 transition-colors cursor-pointer rounded-none shadow-2xs"
+                    className="w-full bg-white hover:bg-red-50 border border-gray-200 hover:border-red-200 text-[#e51c23] text-sm font-normal py-2.5 px-3 flex items-center justify-center gap-1.5 transition-colors cursor-pointer rounded-none"
                   >
                     <ShoppingBag size={14} className="text-[#e51c23]" /> สั่งจองสินค้านี้
                   </button>
@@ -1023,7 +999,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   if (currentView === 'scan') {
     return (
       <div 
-        className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300 font-sans"
+        className="p-8 max-w-full mx-auto w-full bg-white min-h-screen animate-in fade-in duration-300 font-sans"
       >
         <input
           type="file"
@@ -1050,23 +1026,23 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         {qrModal}
 
         {/* Breadcrumbs & Header Bar */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <div className="space-y-1">
-            <nav className="flex items-center gap-2 text-xs text-gray-500">
-              <Link to={catalogPath} className="hover:text-[#e51c23] font-bold">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-5 border-b border-gray-100">
+          <div className="space-y-2">
+            <nav className="flex items-center gap-2 text-sm text-gray-500">
+              <Link to={catalogPath} className="hover:text-[#e51c23] font-normal">
                 นำเข้าแคตตาล็อก
               </Link>
               <ChevronRight size={14} className="text-gray-400" />
-              <span className="text-[#1C1B1B] font-bold">สแกนหน้าแคตตาล็อก</span>
+              <span className="text-[#1C1B1B] font-normal">สแกนหน้าแคตตาล็อก</span>
             </nav>
-            <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
+            <Heading level="h1" weight="semibold" className="m-0 text-[#1C1B1B]">
               สแกนและดึงข้อมูลแคตตาล็อก
             </Heading>
           </div>
 
           <button
             onClick={() => setShowQR(true)}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-bold rounded-none transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-normal rounded-none transition-colors cursor-pointer"
             title="เปิดบนมือถือผ่าน QR Code"
           >
             <Smartphone size={16} />
@@ -1078,17 +1054,17 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         <div id="split-pane-container" className="flex flex-col lg:flex-row gap-6 min-h-[750px] relative">
           {/* LEFT PANEL: Interactive Image / Document Viewer with Zoom & Rotate */}
           <div 
-            style={{ width: `${leftWidth}%` }} 
-            className="bg-white border border-gray-200 p-4 flex flex-col justify-between shadow-md"
+            style={{ '--viewer-width': `${leftWidth}%` } as React.CSSProperties}
+            className="w-full lg:w-[var(--viewer-width)] lg:shrink-0 min-w-0 bg-white border border-gray-200 flex flex-col justify-between"
           >
             {/* Viewer Control Bar */}
-            <div className="flex items-center justify-between pb-3 border-b border-gray-200 text-[#1C1B1B] text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 bg-[#F6F3F2] border-b border-gray-200 text-[#5F5E5E] text-sm">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-[#5F5E5E]">
+                <span className="font-medium text-[#5F5E5E] break-all">
                   {selectedFile ? selectedFile.name : 'ตัวอย่างเอกสารหน้าแคตตาล็อก'}
                 </span>
                 {selectedFile && (
-                  <span className="bg-[#e51c23] text-white text-[10px] font-black px-1.5 py-0.5">
+                  <span className="bg-[#e51c23] text-white text-[10px] font-medium px-1.5 py-0.5">
                     {selectedFile.type.includes('pdf') ? 'PDF' : 'IMAGE'}
                   </span>
                 )}
@@ -1098,7 +1074,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                 <button
                   type="button"
                   onClick={() => setZoom(prev => Math.max(0.5, prev - 0.2))}
-                  className="p-1.5 hover:bg-gray-100 text-gray-500 hover:text-[#1C1B1B] transition-colors"
+                  className="p-1.5 text-gray-400 hover:text-[#e51c23] transition-colors cursor-pointer"
                   title="Zoom Out"
                 >
                   <ZoomOut size={16} />
@@ -1109,7 +1085,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                 <button
                   type="button"
                   onClick={() => setZoom(prev => Math.min(3, prev + 0.2))}
-                  className="p-1.5 hover:bg-gray-100 text-gray-500 hover:text-[#1C1B1B] transition-colors"
+                  className="p-1.5 text-gray-400 hover:text-[#e51c23] transition-colors cursor-pointer"
                   title="Zoom In"
                 >
                   <ZoomIn size={16} />
@@ -1117,7 +1093,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                 <button
                   type="button"
                   onClick={() => setRotate(prev => (prev + 90) % 360)}
-                  className="p-1.5 hover:bg-gray-100 text-gray-500 hover:text-[#1C1B1B] transition-colors ml-1"
+                  className="p-1.5 text-gray-400 hover:text-[#e51c23] transition-colors cursor-pointer ml-1"
                   title="Rotate"
                 >
                   <RotateCw size={16} />
@@ -1126,7 +1102,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
             </div>
 
             {/* Viewer Canvas */}
-            <div className="flex-1 min-h-[450px] overflow-auto flex items-center justify-center p-2">
+            <div className="flex-1 min-h-[450px] overflow-auto flex items-center justify-center bg-gray-50 p-4">
               {previewImage ? (
                 <div 
                   style={{ 
@@ -1138,46 +1114,50 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                   <img 
                     src={previewImage} 
                     alt="Catalog scan" 
-                    className="w-full h-full max-w-full max-h-full object-contain shadow-md border border-gray-200" 
+                    className="w-full h-full max-w-full max-h-full object-contain border border-gray-200"
                   />
                 </div>
               ) : selectedFile?.name.toLowerCase().endsWith('.pdf') ? (
                 <div className="text-center p-8 text-[#1C1B1B] space-y-3">
                   <FileText size={56} className="text-[#e51c23] mx-auto" />
-                  <p className="font-bold text-sm">{selectedFile.name}</p>
+                  <p className="font-normal text-sm">{selectedFile.name}</p>
                   <p className="text-xs text-gray-500">ไฟล์ PDF พร้อมสำหรับการส่งให้ AI สแกนดึงข้อมูลอะไหล่</p>
                 </div>
               ) : (
                 <div 
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-300 hover:border-[#e51c23] p-12 text-center cursor-pointer transition-colors text-gray-500 space-y-3"
+                  className="w-full border border-dashed border-gray-300 hover:border-red-300 bg-[#f6f3f2] hover:bg-red-50 px-6 py-12 text-center cursor-pointer transition-colors text-gray-500 space-y-3"
                 >
                   <Camera size={44} className="mx-auto text-gray-400" />
-                  <p className="font-bold text-sm text-[#1C1B1B]">คลิกเพื่อเลือกไฟล์ภาพ หรือไฟล์ PDF แคตตาล็อก</p>
+                  <p className="font-normal text-sm text-[#1C1B1B]">คลิกเพื่อเลือกไฟล์ภาพ หรือไฟล์ PDF แคตตาล็อก</p>
                 </div>
               )}
             </div>
 
             {/* Viewer Footer Bar with Trigger Button */}
-            <div className="pt-3 border-t border-gray-200 flex items-center justify-between gap-3">
+            <div className="px-5 py-4 border-t border-gray-100 bg-white flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => fileInputRef.current?.click()}
-                  className="text-xs text-[#1C1B1B] flex items-center gap-1.5 py-2 px-3 bg-gray-100 hover:bg-gray-200 font-bold transition-colors cursor-pointer"
+                  className="font-normal"
                 >
-                  <Upload size={14} /> {selectedFile ? 'เลือกไฟล์อื่น' : 'อัปโหลดไฟล์'}
-                </button>
+                  <Upload size={16} /> {selectedFile ? 'เลือกไฟล์อื่น' : 'อัปโหลดไฟล์'}
+                </Button>
               </div>
 
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="sm"
                 disabled={!selectedFile || extracting}
                 onClick={handleRunAiScan}
-                className="bg-[#e51c23] hover:bg-[#c9181f] text-white text-xs font-black py-2.5 px-5 transition-all shadow-md disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="font-normal"
               >
                 {extracting ? 'กำลังสแกนด้วย AI...' : 'เริ่มสแกนด้วย AI'}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -1189,16 +1169,16 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
           />
 
           {/* RIGHT PANEL: Extracted Form & Editable Parts Table */}
-          <div className="flex-1 bg-white border border-gray-200 p-6 shadow-xs space-y-6 overflow-y-auto">
+          <div className="flex-1 min-w-0 bg-white border border-gray-200 p-5 space-y-6 overflow-y-auto">
             {/* General Header Inputs */}
             <div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-3 mb-4 border-b border-gray-200">
-                <h2 className="text-sm font-extrabold text-[#1C1B1B]">
+              <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3 px-5 py-3 -mx-5 -mt-5 mb-5 bg-[#F6F3F2] border-b border-gray-200">
+                <h2 className="text-sm font-semibold text-[#1C1B1B]">
                   ข้อมูลทั่วไปของเล่มแคตตาล็อก
                 </h2>
 
                 <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <span className="text-xs text-gray-500 font-bold shrink-0">บันทึกเข้า:</span>
+                  <span className="text-xs text-gray-500 font-normal shrink-0">บันทึกเข้า:</span>
                   <select
                     value={editingCatalogId ? String(editingCatalogId) : 'NEW'}
                     onChange={(e) => {
@@ -1224,7 +1204,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                         }
                       }
                     }}
-                    className="bg-gray-50 border border-gray-300 py-1.5 px-2.5 text-xs font-bold text-[#1C1B1B] focus:border-[#e51c23] outline-none cursor-pointer max-w-[280px] truncate shadow-2xs"
+                    className="h-10 bg-white border-none px-3 text-sm font-normal text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600 cursor-pointer w-full sm:max-w-[280px] truncate"
                   >
                     <option value="NEW">[+] สร้างเป็นเล่มใหม่</option>
                     <optgroup label="-- เพิ่มรายการเข้าเล่มเดิม --">
@@ -1241,25 +1221,25 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
 
 
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 text-sm">
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1.5">ชื่อเล่มแคตตาล็อก *</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">ชื่อเล่มแคตตาล็อก *</label>
                   <input
                     type="text"
                     required
                     value={newCatalog.catalog_name}
                     onChange={e => setNewCatalog({ ...newCatalog, catalog_name: e.target.value })}
                     placeholder="เช่น แคตตาล็อกไส้กรอง 2026"
-                    className="w-full h-10 border border-gray-300 px-3 text-xs font-bold text-[#1C1B1B] focus:border-[#e51c23] outline-none bg-white rounded-none placeholder-gray-400"
+                    className="w-full h-10 border-none bg-[#f6f3f2] px-3 text-sm font-normal text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600 rounded-none placeholder:text-gray-400"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1.5">บริษัท ซัพพลายเออร์ *</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">บริษัท ซัพพลายเออร์ *</label>
                   <div className="relative">
                     <select
                       value={newCatalog.supplier_id}
                       onChange={e => setNewCatalog({ ...newCatalog, supplier_id: Number(e.target.value) })}
-                      className="w-full h-10 border border-gray-300 pl-3 pr-8 text-xs font-bold text-[#1C1B1B] focus:border-[#e51c23] outline-none bg-white cursor-pointer rounded-none appearance-none"
+                      className="w-full h-10 border-none bg-[#f6f3f2] pl-3 pr-9 text-sm font-normal text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600 cursor-pointer rounded-none appearance-none"
                     >
                       {suppliers.map(sup => (
                         <option key={sup.id} value={sup.id}>
@@ -1267,17 +1247,17 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                         </option>
                       ))}
                     </select>
-                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#B70011] pointer-events-none" />
                   </div>
                 </div>
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1.5">หมวดหมู่อะไหล่</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">หมวดหมู่อะไหล่</label>
                   <input
                     type="text"
                     value={newCatalog.category}
                     onChange={e => setNewCatalog({ ...newCatalog, category: e.target.value })}
                     placeholder="เช่น ไส้กรองน้ำมันเครื่อง"
-                    className="w-full h-10 border border-gray-300 px-3 text-xs font-bold text-[#1C1B1B] focus:border-[#e51c23] outline-none bg-white rounded-none placeholder-gray-400"
+                    className="w-full h-10 border-none bg-[#f6f3f2] px-3 text-sm font-normal text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600 rounded-none placeholder:text-gray-400"
                   />
                 </div>
               </div>
@@ -1285,36 +1265,38 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
 
             {/* Extracted Items Table */}
             <div>
-              <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-200">
-                <h3 className="text-sm font-extrabold text-[#1C1B1B]">
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-gray-100">
+                <h3 className="text-sm font-semibold text-[#1C1B1B]">
                   รายการอะไหล่ที่แกะมาได้ ({newItems.length} รายการ)
                 </h3>
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => setNewItems(prev => [
                     ...prev,
                     { part_number: '', part_name: '', brand: newCatalog.brand, compatible_cars: '', standard_price: 0, unit: 'ชิ้น', st_no: '', image: '', image_thumbnail: '' }
                   ])}
-                  className="text-xs font-bold text-gray-700 hover:text-black border border-gray-300 px-3 py-1.5 bg-gray-50 flex items-center gap-1 cursor-pointer transition-colors"
+                  className="font-normal"
                 >
-                  <Plus size={14} /> เพิ่มแถวอะไหล่
-                </button>
+                  <Plus size={16} /> เพิ่มแถวอะไหล่
+                </Button>
               </div>
 
-              <div className="overflow-x-auto border border-gray-200">
+              <div className="overflow-x-auto">
                 <Table className="min-w-[750px]">
-                  <TableHeader className="bg-gray-100 text-gray-700 text-xs font-bold">
+                  <TableHeader className="bg-[#F6F3F2] text-[#797878]">
                     <TableRow>
-                      <TableHead className="py-2 px-2 w-20 text-center">ลำดับที่</TableHead>
-                      <TableHead className="py-2 px-2 w-28 text-center">ภาพอะไหล่</TableHead>
-                      <TableHead className="py-2 px-2 w-28">รหัสสินค้าคู่ค้า</TableHead>
-                      <TableHead className="py-2 px-2 w-36">PART NO *</TableHead>
-                      <TableHead className="py-2 px-2 min-w-[150px]">ชื่ออะไหล่ *</TableHead>
-                      <TableHead className="py-2 px-2 min-w-[160px]">รุ่นรถยนต์ที่รองรับ</TableHead>
-                      <TableHead className="py-2 px-2 w-8 text-center">ลบ</TableHead>
+                      <TableHead className="py-3 pl-6 w-20 text-center">ลำดับที่</TableHead>
+                      <TableHead className="py-3 px-4 w-28 text-center">ภาพอะไหล่</TableHead>
+                      <TableHead className="py-3 px-4 w-28">รหัสสินค้าคู่ค้า</TableHead>
+                      <TableHead className="py-3 px-4 w-36">PART NO *</TableHead>
+                      <TableHead className="py-3 px-4 min-w-[150px]">ชื่ออะไหล่ *</TableHead>
+                      <TableHead className="py-3 px-4 min-w-[160px]">รุ่นรถยนต์ที่รองรับ</TableHead>
+                      <TableHead className="py-3 pr-6 w-8 text-center">ลบ</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody className="divide-y divide-gray-100 text-xs">
+                  <TableBody className="divide-y divide-gray-100 text-sm">
                     {newItems.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} className="py-12 text-center text-gray-400">
@@ -1323,9 +1305,9 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                       </TableRow>
                     ) : (
                       newItems.map((it, idx) => (
-                        <TableRow key={idx} className="hover:bg-gray-50">
-                          <TableCell className="py-2 px-2 text-center font-bold text-gray-400">{idx + 1}</TableCell>
-                          <TableCell className="py-1 px-2 text-center">
+                        <TableRow key={idx} className="bg-white hover:bg-red-50/20">
+                          <TableCell className="py-3 pl-6 text-center font-normal text-gray-400">{idx + 1}</TableCell>
+                          <TableCell className="py-3 px-4 text-center">
                             {it.image || it.image_thumbnail ? (
                               <div className="relative group inline-block">
                                 <img 
@@ -1339,7 +1321,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                                     setActiveRowImageIdx(idx);
                                     rowImageInputRef.current?.click();
                                   }}
-                                  className="absolute inset-0 bg-black/60 text-white text-[9px] font-bold opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                                  className="absolute inset-0 bg-black/60 text-white text-[9px] font-normal opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
                                 >
                                   เปลี่ยนรูป
                                 </button>
@@ -1354,11 +1336,11 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                                 className="w-20 h-12 bg-gray-50 hover:bg-gray-100 border border-dashed border-gray-300 flex flex-col items-center justify-center mx-auto text-gray-400"
                               >
                                 <Upload size={12} />
-                                <span className="text-[9px] font-bold">เพิ่มรูป</span>
+                                <span className="text-[9px] font-normal">เพิ่มรูป</span>
                               </button>
                             )}
                           </TableCell>
-                          <TableCell className="py-1 px-1">
+                          <TableCell className="py-3 px-4">
                             <input
                               type="text"
                               value={it.st_no || ''}
@@ -1366,10 +1348,10 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                                 const val = e.target.value;
                                 setNewItems(prev => prev.map((item, i) => i === idx ? { ...item, st_no: val } : item));
                               }}
-                              className="w-full border border-gray-300 p-1 text-xs font-mono font-bold text-gray-700 outline-none"
+                              className="w-full h-10 border-none bg-[#f6f3f2] px-3 text-sm font-mono font-normal text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600"
                             />
                           </TableCell>
-                          <TableCell className="py-1 px-1">
+                          <TableCell className="py-3 px-4">
                             <input
                               type="text"
                               required
@@ -1378,10 +1360,10 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                                 const val = e.target.value;
                                 setNewItems(prev => prev.map((item, i) => i === idx ? { ...item, part_number: val } : item));
                               }}
-                              className="w-full border border-gray-300 p-1 text-xs font-mono font-bold text-[#e51c23] bg-red-50/20 outline-none"
+                              className="w-full h-10 border-none bg-[#f6f3f2] px-3 text-sm font-mono font-normal text-[#e51c23] focus:outline-none focus:ring-1 focus:ring-red-600"
                             />
                           </TableCell>
-                          <TableCell className="py-1 px-1">
+                          <TableCell className="py-3 px-4">
                             <input
                               type="text"
                               required
@@ -1390,10 +1372,10 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                                 const val = e.target.value;
                                 setNewItems(prev => prev.map((item, i) => i === idx ? { ...item, part_name: val } : item));
                               }}
-                              className="w-full border border-gray-300 p-1 text-xs font-bold text-gray-800 outline-none"
+                              className="w-full h-10 border-none bg-[#f6f3f2] px-3 text-sm font-normal text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600"
                             />
                           </TableCell>
-                          <TableCell className="py-1 px-1">
+                          <TableCell className="py-3 px-4">
                             <input
                               type="text"
                               value={it.compatible_cars || ''}
@@ -1401,16 +1383,18 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                                 const val = e.target.value;
                                 setNewItems(prev => prev.map((item, i) => i === idx ? { ...item, compatible_cars: val } : item));
                               }}
-                              className="w-full border border-gray-300 p-1 text-xs text-gray-700 outline-none"
+                              className="w-full h-10 border-none bg-[#f6f3f2] px-3 text-sm text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600"
                             />
                           </TableCell>
-                          <TableCell className="py-1 px-1 text-center">
+                          <TableCell className="py-3 px-4 text-center">
                             <button
                               type="button"
                               onClick={() => setRemoveItemIndex(idx)}
-                              className="text-gray-400 hover:text-red-600 p-1"
+                              title="ลบรายการอะไหล่"
+                              aria-label={`ลบรายการอะไหล่ ${idx + 1}`}
+                              className="text-gray-400 hover:text-[#e51c23] p-1.5 transition-colors cursor-pointer"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={16} />
                             </button>
                           </TableCell>
                         </TableRow>
@@ -1424,9 +1408,9 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         </div>
 
         {/* BOTTOM ACTION BAR */}
-        <div className="bg-white border border-gray-200 p-4 mt-6 shadow-xs flex flex-col sm:flex-row justify-between items-center gap-3">
-          <div className="text-xs text-gray-500 font-bold">
-            รายการอะไหล่ในเล่มทั้งหมด: <span className="text-[#e51c23] font-extrabold">{newItems.length}</span> รายการ
+        <div className="bg-[#fcfbfa] border-t border-gray-100 px-6 py-4 mt-6 flex flex-col sm:flex-row justify-between items-center gap-3">
+          <div className="text-sm text-gray-500 font-normal">
+            รายการอะไหล่ในเล่มทั้งหมด: <span className="text-[#e51c23] font-semibold">{newItems.length}</span> รายการ
           </div>
           <div className="flex items-center gap-3">
             <Button
@@ -1434,7 +1418,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
               variant="outline"
               size="md"
               onClick={() => setCurrentView('home')}
-              className="font-bold text-xs cursor-pointer"
+              className="font-normal"
             >
               ยกเลิกและกลับ
             </Button>
@@ -1444,7 +1428,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
               size="md"
               disabled={saving}
               onClick={handleFormSubmit}
-              className="gap-2 font-bold text-xs bg-[#e51c23] hover:bg-[#c9181f] text-white cursor-pointer shadow-xs"
+              className="gap-2"
             >
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
               บันทึกแคตตาล็อกเข้าสู่ระบบ
@@ -1488,7 +1472,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   // =========================================================================
   if (currentView === 'manual') {
     return (
-      <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300 font-sans">
+      <div className="p-8 max-w-full mx-auto w-full bg-white min-h-screen animate-in fade-in duration-300 font-sans">
         <input
           type="file"
           ref={rowImageInputRef}
@@ -1512,18 +1496,18 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         />
 
         {/* Header Bar */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <div className="space-y-1">
-            <nav className="flex items-center gap-2 text-xs text-gray-500">
-              <Link to={catalogPath} className="hover:text-[#e51c23] font-bold">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-5 border-b border-gray-100">
+          <div className="space-y-2">
+            <nav className="flex items-center gap-2 text-sm text-gray-500">
+              <Link to={catalogPath} className="hover:text-[#e51c23] font-normal">
                 นำเข้าแคตตาล็อก
               </Link>
               <ChevronRight size={14} className="text-gray-400" />
-              <span className="text-[#1C1B1B] font-bold">
+              <span className="text-[#1C1B1B] font-normal">
                 {editingCatalogId ? 'แก้ไขเล่มแคตตาล็อก' : 'กรอกข้อมูลแคตตาล็อกด้วยตนเอง'}
               </span>
             </nav>
-            <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
+            <Heading level="h1" weight="semibold" className="m-0 text-[#1C1B1B]">
               {editingCatalogId ? 'แก้ไขข้อมูลแคตตาล็อก' : 'สร้างเล่มแคตตาล็อกใหม่'}
             </Heading>
           </div>
@@ -1532,169 +1516,175 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         {/* Form Container */}
         <div className="space-y-6">
           {/* General Information Card */}
-          <div className="bg-white border border-gray-200 p-6 shadow-xs space-y-4">
-            <h2 className="text-sm font-extrabold text-[#1C1B1B] pb-2 border-b border-gray-200">
+          <div className="bg-white border border-gray-200">
+            <h2 className="bg-[#F6F3F2] px-5 py-3 text-sm font-semibold text-[#5F5E5E] border-b border-gray-200">
               ข้อมูลทั่วไปของเล่มแคตตาล็อก
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-              <div>
-                <label className="block font-bold text-gray-700 mb-1.5">ชื่อเล่มแคตตาล็อก *</label>
-                <input
-                  type="text"
-                  required
-                  value={newCatalog.catalog_name}
-                  onChange={e => setNewCatalog({ ...newCatalog, catalog_name: e.target.value })}
-                  placeholder="เช่น แคตตาล็อกไส้กรอง 2026"
-                  className="w-full h-10 border border-gray-300 px-3 text-xs font-bold text-[#1C1B1B] focus:border-[#e51c23] outline-none bg-white rounded-none placeholder-gray-400"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 mb-1.5">บริษัท ซัพพลายเออร์ *</label>
-                <div className="relative">
-                  <select
-                    value={newCatalog.supplier_id}
-                    onChange={e => setNewCatalog({ ...newCatalog, supplier_id: Number(e.target.value) })}
-                    className="w-full h-10 border border-gray-300 pl-3 pr-8 text-xs font-bold text-[#1C1B1B] focus:border-[#e51c23] outline-none bg-white cursor-pointer rounded-none appearance-none"
-                  >
-                    {suppliers.map(sup => (
-                      <option key={sup.id} value={sup.id}>
-                        {sup.supplier_name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <div className="p-5 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">ชื่อเล่มแคตตาล็อก *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newCatalog.catalog_name}
+                    onChange={e => setNewCatalog({ ...newCatalog, catalog_name: e.target.value })}
+                    placeholder="เช่น แคตตาล็อกไส้กรอง 2026"
+                    className="w-full h-10 border-none bg-[#f6f3f2] px-3 text-sm font-normal text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600 rounded-none placeholder:text-gray-400"
+                  />
                 </div>
-              </div>
 
-              <div>
-                <label className="block font-bold text-gray-700 mb-1.5">หมวดหมู่อะไหล่</label>
-                <input
-                  type="text"
-                  value={newCatalog.category}
-                  onChange={e => setNewCatalog({ ...newCatalog, category: e.target.value })}
-                  placeholder="เช่น ไส้กรองน้ำมันเครื่อง"
-                  className="w-full h-10 border border-gray-300 px-3 text-xs font-bold text-[#1C1B1B] focus:border-[#e51c23] outline-none bg-white rounded-none placeholder-gray-400"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-1">
-              <div>
-                <label className="block font-bold text-gray-700 mb-1.5">
-                  คำอธิบายเพิ่มเติมเกี่ยวกับเล่ม
-                </label>
-                <textarea
-                  value={newCatalog.description}
-                  onChange={e => setNewCatalog({ ...newCatalog, description: e.target.value })}
-                  placeholder="รายละเอียดเนื้อหาในเล่ม..."
-                  className="w-full h-16 border border-gray-300 p-2.5 text-xs text-[#1C1B1B] focus:border-[#e51c23] outline-none bg-white rounded-none placeholder-gray-400 resize-none"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block font-bold text-gray-700 flex items-center gap-1.5">
-                    <ImageIcon size={15} className="text-[#e51c23]" /> รูปภาพหน้าปกแคตตาล็อก (ไม่บังคับ)
-                  </label>
-                  {previewImage && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPreviewImage(null);
-                        setNewCatalog(prev => ({ ...prev, cover_image: '' }));
-                      }}
-                      className="text-[#e51c23] hover:text-[#c9181f] text-[11px] font-bold cursor-pointer"
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">บริษัท ซัพพลายเออร์ *</label>
+                  <div className="relative">
+                    <select
+                      value={newCatalog.supplier_id}
+                      onChange={e => setNewCatalog({ ...newCatalog, supplier_id: Number(e.target.value) })}
+                      className="w-full h-10 border-none bg-[#f6f3f2] pl-3 pr-9 text-sm font-normal text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600 cursor-pointer rounded-none appearance-none"
                     >
-                      ลบหน้าปก
-                    </button>
-                  )}
+                      {suppliers.map(sup => (
+                        <option key={sup.id} value={sup.id}>
+                          {sup.supplier_name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#B70011] pointer-events-none" />
+                  </div>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">หมวดหมู่อะไหล่</label>
+                  <input
+                    type="text"
+                    value={newCatalog.category}
+                    onChange={e => setNewCatalog({ ...newCatalog, category: e.target.value })}
+                    placeholder="เช่น ไส้กรองน้ำมันเครื่อง"
+                    className="w-full h-10 border-none bg-[#f6f3f2] px-3 text-sm font-normal text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600 rounded-none placeholder:text-gray-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    คำอธิบายเพิ่มเติมเกี่ยวกับเล่ม
+                  </label>
+                  <textarea
+                    value={newCatalog.description}
+                    onChange={e => setNewCatalog({ ...newCatalog, description: e.target.value })}
+                    placeholder="รายละเอียดเนื้อหาในเล่ม..."
+                    className="w-full h-24 border-none bg-[#f6f3f2] p-3 text-sm text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600 rounded-none placeholder:text-gray-400 resize-none"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                      <ImageIcon size={15} className="text-[#e51c23]" /> รูปภาพหน้าปกแคตตาล็อก (ไม่บังคับ)
+                    </label>
+                    {previewImage && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreviewImage(null);
+                          setNewCatalog(prev => ({ ...prev, cover_image: '' }));
+                        }}
+                        className="text-[#e51c23] hover:text-[#c9181f] text-[11px] font-normal cursor-pointer"
+                      >
+                        ลบหน้าปก
+                      </button>
+                    )}
+                  </div>
                 
-                {previewImage ? (
-                  <div className="flex items-center justify-between bg-white border border-gray-300 px-3 py-2 h-16 rounded-none">
-                    <div className="flex items-center gap-3">
-                      <img src={previewImage} alt="Cover preview" className="w-12 h-12 object-cover border border-gray-200" />
-                      <span className="font-bold text-[#1C1B1B] text-xs">ภาพหน้าปกเล่มแคตตาล็อก</span>
+                  {previewImage ? (
+                    <div className="flex items-center justify-between bg-white border border-gray-300 px-3 py-2 h-24 rounded-none">
+                      <div className="flex items-center gap-3">
+                        <img src={previewImage} alt="Cover preview" className="w-12 h-12 object-cover border border-gray-200" />
+                        <span className="font-normal text-[#1C1B1B] text-xs">ภาพหน้าปกเล่มแคตตาล็อก</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => coverInputRef.current?.click()}
+                        className="text-xs text-[#1C1B1B] hover:text-[#e51c23] hover:underline font-normal cursor-pointer"
+                      >
+                        เปลี่ยนรูปภาพ
+                      </button>
                     </div>
+                  ) : (
                     <button
                       type="button"
                       onClick={() => coverInputRef.current?.click()}
-                      className="text-xs text-[#1C1B1B] hover:text-[#e51c23] hover:underline font-bold cursor-pointer"
+                      className="w-full h-24 border border-dashed border-gray-300 hover:border-red-300 bg-[#f6f3f2] hover:bg-red-50 text-gray-600 font-normal text-sm flex items-center justify-center gap-2 cursor-pointer transition-colors rounded-none"
                     >
-                      เปลี่ยนรูปภาพ
+                      <Upload size={15} className="text-gray-400" /> เลือกรูปภาพหน้าปกแคตตาล็อก
                     </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => coverInputRef.current?.click()}
-                    className="w-full h-16 border border-dashed border-gray-300 hover:border-gray-400 bg-gray-50/50 hover:bg-gray-100 text-gray-600 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors rounded-none"
-                  >
-                    <Upload size={15} className="text-gray-400" /> เลือกรูปภาพหน้าปกแคตตาล็อก
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Parts Table */}
-          <div className="bg-white border border-gray-200 shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="bg-white border border-gray-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-200 bg-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-extrabold text-[#1C1B1B] flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-[#1C1B1B] flex items-center gap-2">
                   <Layers size={16} className="text-[#e51c23]" />
                   รายการอะไหล่ในเล่ม ({newItems.length} รายการ)
                 </h3>
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => setNewItems(prev => [
                     ...prev, 
                     { part_number: '', part_name: '', brand: newCatalog.brand, compatible_cars: '', standard_price: 0, unit: 'ชิ้น', st_no: '', image: '', image_thumbnail: '' }
                   ])}
-                  className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-bold px-3 py-1.5 flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                  className="font-normal"
                 >
-                  <Plus size={14} /> เพิ่มแถวอะไหล่
-                </button>
-                <button
+                  <Plus size={16} /> เพิ่มแถวอะไหล่
+                </Button>
+                <Button
                   type="button"
+                  variant="primary"
+                  size="sm"
                   onClick={() => setCurrentView('scan', editingCatalogId || undefined)}
-                  className="bg-red-50 hover:bg-[#e51c23] border border-red-200 hover:border-[#e51c23] text-[#e51c23] hover:text-white text-xs font-bold px-3 py-1.5 flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                  className="font-normal"
                   title="เปิดหน้าสแกนด้วยรูปภาพหรือ PDF เพื่อดึงรายการเข้าเล่มนี้"
                 >
-                  <Camera size={14} /> สแกนด้วย AI เพิ่มรายการ
-                </button>
+                  <Camera size={16} /> สแกนด้วย AI เพิ่มรายการ
+                </Button>
               </div>
             </div>
 
             <div className="overflow-x-auto">
               <Table className="min-w-[1000px]">
-                <TableHeader className="bg-gray-100 text-gray-600 text-xs font-bold">
+                <TableHeader className="bg-[#F6F3F2] text-[#797878]">
                   <TableRow>
-                    <TableHead className="py-2.5 px-3 w-20 text-center">ลำดับที่</TableHead>
-                    <TableHead className="py-2.5 px-3 w-36 text-center">ภาพอะไหล่</TableHead>
-                    <TableHead className="py-2.5 px-3 w-36">รหัสสินค้าคู่ค้า</TableHead>
-                    <TableHead className="py-2.5 px-3 w-48">รหัส PART NO *</TableHead>
-                    <TableHead className="py-2.5 px-3 min-w-[200px]">ชื่ออะไหล่ *</TableHead>
-                    <TableHead className="py-2.5 px-3 min-w-[220px]">รุ่นรถยนต์ที่รองรับ</TableHead>
-                    <TableHead className="py-2.5 px-2 w-10 text-center">ลบ</TableHead>
+                    <TableHead className="py-3 pl-6 w-20 text-center">ลำดับที่</TableHead>
+                    <TableHead className="py-3 px-4 w-36 text-center">ภาพอะไหล่</TableHead>
+                    <TableHead className="py-3 px-4 w-36">รหัสสินค้าคู่ค้า</TableHead>
+                    <TableHead className="py-3 px-4 w-48">รหัส PART NO *</TableHead>
+                    <TableHead className="py-3 px-4 min-w-[200px]">ชื่ออะไหล่ *</TableHead>
+                    <TableHead className="py-3 px-4 min-w-[220px]">รุ่นรถยนต์ที่รองรับ</TableHead>
+                    <TableHead className="py-3 pr-6 w-10 text-center">ลบ</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody className="divide-y divide-gray-100 text-xs">
+                <TableBody className="divide-y divide-gray-100 text-sm">
                   {newItems.map((it, idx) => (
-                    <TableRow key={idx} className="hover:bg-gray-50/70 align-middle">
-                      <TableCell className="py-2 px-3 text-center font-bold text-gray-400">{idx + 1}</TableCell>
-                      <TableCell className="py-2 px-3 text-center">
+                    <TableRow key={idx} className="bg-white hover:bg-red-50/20 align-middle">
+                      <TableCell className="py-3 pl-6 text-center font-normal text-gray-400">{idx + 1}</TableCell>
+                      <TableCell className="py-3 px-4 text-center">
                         {it.image || it.image_thumbnail ? (
                           <div className="relative group inline-block">
                             <img 
                               src={it.image || it.image_thumbnail} 
                               alt={it.part_name || 'ภาพอะไหล่'} 
-                              className="w-24 h-14 object-contain bg-white border border-gray-300 p-0.5 rounded shadow-2xs hover:scale-110 transition-transform" 
+                              className="w-24 h-14 object-contain bg-white border border-gray-200 p-0.5"
                             />
                             <button
                               type="button"
@@ -1702,7 +1692,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                                 setActiveRowImageIdx(idx);
                                 rowImageInputRef.current?.click();
                               }}
-                              className="absolute inset-0 bg-black/60 text-white text-[10px] font-bold opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                              className="absolute inset-0 bg-black/60 text-white text-[10px] font-normal opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
                             >
                               เปลี่ยนรูป
                             </button>
@@ -1717,12 +1707,12 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                             className="w-24 h-14 bg-gray-50 hover:bg-gray-100 border border-dashed border-gray-300 flex flex-col items-center justify-center mx-auto text-gray-400 hover:text-black cursor-pointer transition-colors"
                           >
                             <Upload size={14} className="mb-0.5" />
-                            <span className="text-[10px] font-bold">เพิ่มรูป</span>
+                            <span className="text-[10px] font-normal">เพิ่มรูป</span>
                           </button>
                         )}
                       </TableCell>
 
-                      <TableCell className="py-2 px-2">
+                      <TableCell className="py-3 px-4">
                         <input
                           type="text"
                           value={it.st_no || ''}
@@ -1731,10 +1721,10 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                             const val = e.target.value;
                             setNewItems(prev => prev.map((item, i) => i === idx ? { ...item, st_no: val } : item));
                           }}
-                          className="w-full border border-gray-300 p-1.5 text-xs font-mono font-bold text-gray-700 outline-none"
+                          className="w-full h-10 border-none bg-[#f6f3f2] px-3 text-sm font-mono font-normal text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600"
                         />
                       </TableCell>
-                      <TableCell className="py-2 px-2">
+                      <TableCell className="py-3 px-4">
                         <input
                           type="text"
                           required
@@ -1744,10 +1734,10 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                             const val = e.target.value;
                             setNewItems(prev => prev.map((item, i) => i === idx ? { ...item, part_number: val } : item));
                           }}
-                          className="w-full border border-gray-300 p-1.5 text-xs font-mono font-bold text-[#e51c23] bg-red-50/30 outline-none"
+                          className="w-full h-10 border-none bg-[#f6f3f2] px-3 text-sm font-mono font-normal text-[#e51c23] focus:outline-none focus:ring-1 focus:ring-red-600"
                         />
                       </TableCell>
-                      <TableCell className="py-2 px-2">
+                      <TableCell className="py-3 px-4">
                         <input
                           type="text"
                           required
@@ -1757,10 +1747,10 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                             const val = e.target.value;
                             setNewItems(prev => prev.map((item, i) => i === idx ? { ...item, part_name: val } : item));
                           }}
-                          className="w-full border border-gray-300 p-1.5 text-xs font-bold text-gray-800 outline-none"
+                          className="w-full h-10 border-none bg-[#f6f3f2] px-3 text-sm font-normal text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600"
                         />
                       </TableCell>
-                      <TableCell className="py-2 px-2">
+                      <TableCell className="py-3 px-4">
                         <input
                           type="text"
                           value={it.compatible_cars || ''}
@@ -1769,16 +1759,18 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                             const val = e.target.value;
                             setNewItems(prev => prev.map((item, i) => i === idx ? { ...item, compatible_cars: val } : item));
                           }}
-                          className="w-full border border-gray-300 p-1.5 text-xs text-gray-700 outline-none"
+                          className="w-full h-10 border-none bg-[#f6f3f2] px-3 text-sm text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-600"
                         />
                       </TableCell>
-                      <TableCell className="py-2 px-2 text-center">
+                      <TableCell className="py-3 px-4 text-center">
                         <button
                           type="button"
                           onClick={() => setRemoveItemIndex(idx)}
-                          className="text-gray-400 hover:text-red-600 p-1"
+                          title="ลบรายการอะไหล่"
+                          aria-label={`ลบรายการอะไหล่ ${idx + 1}`}
+                          className="text-gray-400 hover:text-[#e51c23] p-1.5 transition-colors cursor-pointer"
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={16} />
                         </button>
                       </TableCell>
                     </TableRow>
@@ -1789,9 +1781,9 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
           </div>
 
           {/* BOTTOM ACTION BAR */}
-          <div className="bg-white border border-gray-200 p-4 mt-6 shadow-xs flex flex-col sm:flex-row justify-between items-center gap-3">
-            <div className="text-xs text-gray-500 font-bold">
-              รายการอะไหล่ในเล่มทั้งหมด: <span className="text-[#e51c23] font-extrabold">{newItems.length}</span> รายการ
+          <div className="bg-[#fcfbfa] border-t border-gray-100 px-6 py-4 mt-6 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div className="text-sm text-gray-500 font-normal">
+              รายการอะไหล่ในเล่มทั้งหมด: <span className="text-[#e51c23] font-semibold">{newItems.length}</span> รายการ
             </div>
             <div className="flex items-center gap-3">
               <Button
@@ -1799,7 +1791,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                 variant="outline"
                 size="md"
                 onClick={() => setCurrentView('home')}
-                className="font-bold text-xs cursor-pointer"
+                className="font-normal"
               >
                 ยกเลิกและกลับ
               </Button>
@@ -1809,7 +1801,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                 size="md"
                 disabled={saving}
                 onClick={handleFormSubmit}
-                className="gap-2 font-bold text-xs bg-[#e51c23] hover:bg-[#c9181f] text-white cursor-pointer shadow-xs"
+                className="gap-2"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 {editingCatalogId ? 'บันทึกการแก้ไข' : 'บันทึกแคตตาล็อกเข้าสู่ระบบ'}
@@ -1854,36 +1846,36 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   // =========================================================================
   if (currentView === 'detail' && activeCatalog) {
     return (
-      <div className="p-8 max-w-full mx-auto w-full animate-in fade-in duration-300 font-sans">
+      <div className="p-8 max-w-full mx-auto w-full bg-white min-h-screen animate-in fade-in duration-300 font-sans">
         {/* Breadcrumb Navigation */}
         <nav className="flex items-center gap-2 text-xs text-gray-500 mb-4">
           <Link
             to={catalogPath}
-            className="hover:text-[#e51c23] transition-colors font-bold"
+            className="hover:text-[#e51c23] transition-colors font-normal"
           >
             นำเข้าแคตตาล็อก
           </Link>
           <ChevronRight size={14} className="text-gray-400" />
-          <span className="text-[#1C1B1B] font-bold">{activeCatalog.catalog_code}</span>
+          <span className="text-[#1C1B1B] font-normal">{activeCatalog.catalog_code}</span>
         </nav>
 
         {/* Detail Header Bar */}
         <div className="bg-white border border-gray-200 p-6 mb-6 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="bg-[#e51c23] text-white text-xs font-black px-2.5 py-0.5 uppercase tracking-wider">
+              <span className="bg-[#e51c23] text-white text-xs font-medium px-2.5 py-0.5 uppercase tracking-wider">
                 {activeCatalog.brand}
               </span>
               {activeCatalog.category && (
-                <span className="bg-gray-100 text-gray-700 text-xs font-bold px-2.5 py-0.5 border border-gray-200">
+                <span className="bg-gray-100 text-gray-700 text-xs font-normal px-2.5 py-0.5 border border-gray-200">
                   {activeCatalog.category}
                 </span>
               )}
-              <span className="text-xs font-mono font-bold text-gray-500 bg-gray-50 px-2 py-0.5 border border-gray-200">
+              <span className="text-xs font-mono font-normal text-gray-500 bg-gray-50 px-2 py-0.5 border border-gray-200">
                 {activeCatalog.catalog_code}
               </span>
             </div>
-            <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B] text-xl md:text-2xl">
+            <Heading level="h1" weight="semibold" className="m-0 text-[#1C1B1B] text-xl md:text-2xl">
               {activeCatalog.catalog_name}
             </Heading>
             <div className="flex items-center gap-2 text-xs text-gray-500 pt-1">
@@ -1898,7 +1890,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                 variant="outline"
                 size="md"
                 onClick={() => setShowPdfViewer(!showPdfViewer)}
-                className="gap-1.5 font-bold text-xs bg-red-50 text-[#e51c23] border-red-200 hover:bg-red-100 cursor-pointer"
+                className="gap-2"
               >
                 <FileText size={15} /> {showPdfViewer ? 'ซ่อนเอกสาร PDF' : 'เปิดดูไฟล์ PDF แคตตาล็อก'}
               </Button>
@@ -1907,7 +1899,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
               variant="primary"
               size="md"
               onClick={() => handleOpenEdit(activeCatalog)}
-              className="gap-1.5 font-bold text-xs bg-[#e51c23] hover:bg-[#c9181f] text-white cursor-pointer shadow-xs"
+              className="gap-2"
             >
               <Edit size={15} /> แก้ไขเล่มนี้และจัดการรายการ
             </Button>
@@ -1918,14 +1910,14 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         {showPdfViewer && activeCatalog.catalog_file && (
           <div className="bg-white border border-gray-200 p-4 mb-6 shadow-xs animate-in fade-in duration-200">
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-200">
-              <span className="text-sm font-extrabold text-[#1C1B1B] flex items-center gap-2">
+              <span className="text-sm font-semibold text-[#1C1B1B] flex items-center gap-2">
                 <FileText size={16} className="text-[#e51c23]" /> เอกสาร PDF แคตตาล็อกฉบับสมบูรณ์
               </span>
               <div className="flex items-center gap-2">
                 <a
                   href={activeCatalog.catalog_file}
                   download={`${activeCatalog.catalog_code}.pdf`}
-                  className="text-xs font-bold text-gray-600 hover:text-black flex items-center gap-1 border border-gray-300 px-3 py-1.5 bg-gray-50"
+                  className="text-xs font-normal text-gray-600 hover:text-black flex items-center gap-1 border border-gray-300 px-3 py-1.5 bg-gray-50"
                 >
                   <Download size={13} /> ดาวน์โหลด PDF
                 </a>
@@ -1949,9 +1941,9 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
         )}
 
         {/* Table Container - Full Width */}
-        <div className="bg-white border border-gray-200 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-            <h3 className="text-sm font-extrabold text-[#1C1B1B] flex items-center gap-2">
+        <div className="bg-white overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 bg-white flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-[#1C1B1B] flex items-center gap-2">
               <Layers size={16} className="text-[#e51c23]" />
               รายการอะไหล่ทั้งหมดในเล่ม {activeCatalog.catalog_items?.length || 0} รายการ
             </h3>
@@ -1959,18 +1951,18 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
 
           <div className="overflow-x-auto">
             <Table className="min-w-[850px]">
-              <TableHeader className="bg-gray-100 text-gray-600 text-xs font-bold">
+              <TableHeader className="bg-[#F6F3F2] text-[#797878]">
                 <TableRow>
-                  <TableHead className="py-3 px-3 w-20 text-center">ลำดับที่</TableHead>
-                  <TableHead className="py-3 px-3 w-28 text-center">ภาพอะไหล่</TableHead>
-                  <TableHead className="py-3 px-3 w-36">รหัสสินค้าคู่ค้า</TableHead>
-                  <TableHead className="py-3 px-3 w-40">PART NO (พาร์ทนัมเบอร์)</TableHead>
-                  <TableHead className="py-3 px-3">ชื่ออะไหล่</TableHead>
-                  <TableHead className="py-3 px-3">รุ่นรถที่รองรับ</TableHead>
-                  <TableHead className="py-3 px-3 w-24 text-center">การสั่งจอง</TableHead>
+                  <TableHead className="py-3 pl-6 w-20 text-center">ลำดับที่</TableHead>
+                  <TableHead className="py-3 px-4 w-28 text-center">ภาพอะไหล่</TableHead>
+                  <TableHead className="py-3 px-4 w-36">รหัสสินค้าคู่ค้า</TableHead>
+                  <TableHead className="py-3 px-4 w-40">PART NO (พาร์ทนัมเบอร์)</TableHead>
+                  <TableHead className="py-3 px-4">ชื่ออะไหล่</TableHead>
+                  <TableHead className="py-3 px-4">รุ่นรถที่รองรับ</TableHead>
+                  <TableHead className="py-3 pr-6 w-24 text-center">การสั่งจอง</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody className="divide-y divide-gray-100 text-xs">
+              <TableBody className="divide-y divide-gray-100 text-sm">
                 {!activeCatalog.catalog_items || activeCatalog.catalog_items.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="py-12 text-center text-gray-400">
@@ -1984,14 +1976,14 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                       : '-';
 
                     return (
-                      <TableRow key={idx} className="hover:bg-gray-50 transition-colors">
-                        <TableCell className="py-3 px-3 text-center font-bold text-gray-400">{idx + 1}</TableCell>
-                        <TableCell className="py-2 px-3 text-center">
+                      <TableRow key={idx} className="bg-white hover:bg-red-50/20 transition-colors">
+                        <TableCell className="py-3 pl-6 text-center font-normal text-gray-400">{idx + 1}</TableCell>
+                        <TableCell className="py-3 px-4 text-center">
                           {it.image ? (
                             <img 
                               src={it.image} 
                               alt={it.part_name} 
-                              className="w-24 h-14 object-contain bg-gray-50 border border-gray-200 p-0.5 rounded shadow-2xs mx-auto" 
+                              className="w-24 h-14 object-contain bg-gray-50 border border-gray-200 p-0.5 mx-auto"
                             />
                           ) : (
                             <div className="w-20 h-12 bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center mx-auto text-gray-300">
@@ -1999,24 +1991,27 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="py-3 px-3 font-mono font-bold text-gray-700">
+                        <TableCell className="py-3 px-4 font-mono font-normal text-gray-700">
                           {cleanSupplierCode || '-'}
                         </TableCell>
-                        <TableCell className="py-3 px-3 font-mono font-bold text-[#e51c23]">
+                        <TableCell className="py-3 px-4 font-mono font-normal text-[#e51c23]">
                           {it.part_number}
                         </TableCell>
-                        <TableCell className="py-3 px-3 font-bold text-gray-800">{it.part_name}</TableCell>
-                        <TableCell className="py-3 px-3 text-gray-700">
+                        <TableCell className="py-3 px-4 font-normal text-gray-800">{it.part_name}</TableCell>
+                        <TableCell className="py-3 px-4 text-gray-700">
                           <span>{it.compatible_cars || '-'}</span>
                         </TableCell>
-                        <TableCell className="py-3 px-3 text-center">
-                          <button
+                        <TableCell className="py-3 pr-6 text-center">
+                          <Button
                             type="button"
+                            variant="primary"
+                            size="sm"
+                            leftIcon={<ShoppingBag size={16} />}
                             onClick={() => navigate(basePath, { state: { prefillItem: it, catalog: activeCatalog } })}
-                            className="bg-[#1C1B1B] hover:bg-black text-white text-[11px] font-bold px-3 py-1.5 transition-colors cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                            className="font-normal"
                           >
-                            <ShoppingBag size={13} className="text-[#e51c23]" /> สั่งจอง
-                          </button>
+                            สั่งจอง
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );

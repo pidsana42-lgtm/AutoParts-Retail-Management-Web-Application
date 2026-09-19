@@ -26,8 +26,17 @@ func (s *customerDiscountService) GetCustomerDiscount(searchQuery string) ([]*cu
         return nil, err
     }
 
+    agingMap, _ := s.repo.GetCustomersDebtAging()
+
     for i := range customers {
         customerDiscount := customerdiscountDto.ToCustomerDiscountResponse(&customers[i])
+        if agingMap != nil {
+            if aging, ok := agingMap[customers[i].ID]; ok && (customers[i].CurrentDebtAmount > 0 || aging.HasUnpaidOrder) {
+                customerDiscount.MaxUnpaidDays = aging.MaxUnpaidDays
+                customerDiscount.HasUnpaidOrder = aging.HasUnpaidOrder
+                customerDiscount.IsOverdue = aging.IsOverdue
+            }
+        }
         customerDiscounts = append(customerDiscounts, customerDiscount)
     }
 

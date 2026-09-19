@@ -22,6 +22,8 @@ func TestUpdatePreOrder_DoesNotCascadeSaveStalePreloadedAssociations(t *testing.
 		&entity.Inventory{},
 		&entity.PreOrder{},
 		&entity.PreOrderItem{},
+		&entity.BillItem{},
+		&entity.POItems{},
 	))
 	repo := preOrderRepo.NewPreOrderRepository(db)
 

@@ -159,6 +159,18 @@ func SetupDatabase() {
 		log.Fatalf("failed to migrate schema: %v", err)
 	}
 
+	// เติมรหัสสินค้าภายในร้านให้รายการ PO เดิมหลัง AutoMigrate เพิ่มคอลัมน์ snapshot ใหม่
+	// โดยเติมเฉพาะแถวที่ยังไม่มีค่า เพื่อไม่เขียนทับ snapshot ที่เคยบันทึกไว้แล้ว
+	if err := db.Exec(`
+		UPDATE purchase_order_items AS poi
+		SET product_code_snapshot = COALESCE(products.product_code, '')
+		FROM products
+		WHERE products.id = poi.product_id
+		  AND COALESCE(poi.product_code_snapshot, '') = ''
+	`).Error; err != nil {
+		log.Printf("Warning: failed to backfill PO product code snapshots: %v", err)
+	}
+
 	// 3. สำคัญ: เปิดการตรวจสอบ Foreign Key กลับคืนสู่สถานะปกติ
 	db.Exec("SET session_replication_role = 'origin';")
 
@@ -198,13 +210,16 @@ func SetupDatabase() {
 	// Chompoo
 	seed.PurchaseOrdersType(db)
 	seed.PurchaseOrders(db)
-	seed.PurchaseOrdersItems(db)
+	if err := seed.Inventory(db); err != nil {
+		log.Printf("Warning: failed to seed inventories: %v", err)
+	}
+	if err := seed.PurchaseOrdersItems(db); err != nil {
+		log.Printf("Warning: failed to seed purchase order items: %v", err)
+	}
 
 	// Siri
 	seed.BillImage(db)
 	seed.Bill(db)
-	seed.SaleOrder(db)
-	seed.SaleOrderItems(db)
 
 	// Company Setting
 	seed.CompanySetting(db)
