@@ -100,11 +100,36 @@ func (s *paymentService) GenerateCustomerStatementPDF(
 	customerID uint,
 	startDate, endDate string,
 	paymentType, status, paymentMethod string,
+	customerNameOpt ...string,
 ) ([]byte, error) {
-	// 1. ดึงข้อมูลลูกค้า
-	customer, err := s.paymentRepo.GetCustomerByID(ctx, customerID)
-	if err != nil {
-		return nil, fmt.Errorf("could not get customer: %w", err)
+	customName := ""
+	if len(customerNameOpt) > 0 {
+		customName = strings.TrimSpace(customerNameOpt[0])
+	}
+
+	// 1. ดึงข้อมูลลูกค้า (กรณี customerID == 0 คือ ลูกค้าทั่วไป/ขาจร ที่ไม่มี record ในตาราง customers)
+	var customer *entity.Customer
+	if customerID == 0 {
+		name := customName
+		if name == "" {
+			name = "ลูกค้าทั่วไป"
+		}
+		customer = &entity.Customer{
+			CustomerName:      name,
+			PhoneNumber:       "-",
+			RegisteredAddress: "-",
+			ShippingAddress:   "-",
+			CustomerType: entity.CustomerType{
+				TypeName:  "ลูกค้าทั่วไป",
+				TypeLabel: "ขาจร",
+			},
+		}
+	} else {
+		var err error
+		customer, err = s.paymentRepo.GetCustomerByID(ctx, customerID)
+		if err != nil {
+			return nil, fmt.Errorf("could not get customer: %w", err)
+		}
 	}
 
 	// 2. ดึงข้อมูลบริษัท
@@ -117,41 +142,61 @@ func (s *paymentService) GenerateCustomerStatementPDF(
 	var repayments []entity.PaymentRepayment
 	var directPayments []entity.Payment
 
-	// ถ้าไม่ได้เจาะจงเฉพาะ "ชำระสดหน้าร้าน" (payment) ให้ดึง repayments
-	if !strings.EqualFold(paymentType, "payment") {
-		allRepayments, _ := s.paymentRepo.GetRepaymentsByCustomerAndDate(customerID, startDate, endDate)
-		for _, r := range allRepayments {
-			if status != "" && !strings.EqualFold(r.Status, status) {
-				continue
+	if customerID > 0 {
+		// ถ้าไม่ได้เจาะจงเฉพาะ "ชำระสดหน้าร้าน" (payment) ให้ดึง repayments
+		if !strings.EqualFold(paymentType, "payment") {
+			allRepayments, _ := s.paymentRepo.GetRepaymentsByCustomerAndDate(customerID, startDate, endDate)
+			for _, r := range allRepayments {
+				if status != "" && !strings.EqualFold(r.Status, status) {
+					continue
+				}
+				if paymentMethod != "" && !matchPaymentMethod(r.PaymentMethod.MethodName, paymentMethod) {
+					continue
+				}
+				repayments = append(repayments, r)
 			}
-			if paymentMethod != "" && !matchPaymentMethod(r.PaymentMethod.MethodName, paymentMethod) {
-				continue
+		}
+
+		// ถ้าไม่ได้เจาะจงเฉพาะ "ชำระหนี้เงินเชื่อ" (repayment) ให้ดึง directPayments
+		if !strings.EqualFold(paymentType, "repayment") {
+			allDirectPayments, _ := s.paymentRepo.GetDirectPaymentsByCustomerAndDate(customerID, startDate, endDate)
+			for _, p := range allDirectPayments {
+				orderStatus := "completed"
+				if strings.EqualFold(string(p.Order.Status), "cancelled") {
+					orderStatus = "cancelled"
+				}
+				if status != "" && !strings.EqualFold(orderStatus, status) {
+					continue
+				}
+				if paymentMethod != "" && !matchPaymentMethod(p.PaymentMethod.MethodName, paymentMethod) {
+					continue
+				}
+				directPayments = append(directPayments, p)
 			}
-			repayments = append(repayments, r)
+		}
+	} else {
+		// กรณีลูกค้าทั่วไป (customerID == 0): ดึง direct payments ของลูกค้าขาจร (customer_id IS NULL)
+		if !strings.EqualFold(paymentType, "repayment") {
+			allWalkInPayments, _ := s.paymentRepo.GetWalkInDirectPaymentsByDate(startDate, endDate, customName)
+			for _, p := range allWalkInPayments {
+				orderStatus := "completed"
+				if strings.EqualFold(string(p.Order.Status), "cancelled") {
+					orderStatus = "cancelled"
+				}
+				if status != "" && !strings.EqualFold(orderStatus, status) {
+					continue
+				}
+				if paymentMethod != "" && !matchPaymentMethod(p.PaymentMethod.MethodName, paymentMethod) {
+					continue
+				}
+				directPayments = append(directPayments, p)
+			}
 		}
 	}
 
-	// ถ้าไม่ได้เจาะจงเฉพาะ "ชำระหนี้เงินเชื่อ" (repayment) ให้ดึง directPayments
-	if !strings.EqualFold(paymentType, "repayment") {
-		allDirectPayments, _ := s.paymentRepo.GetDirectPaymentsByCustomerAndDate(customerID, startDate, endDate)
-		for _, p := range allDirectPayments {
-			orderStatus := "completed"
-			if strings.EqualFold(string(p.Order.Status), "cancelled") {
-				orderStatus = "cancelled"
-			}
-			if status != "" && !strings.EqualFold(orderStatus, status) {
-				continue
-			}
-			if paymentMethod != "" && !matchPaymentMethod(p.PaymentMethod.MethodName, paymentMethod) {
-				continue
-			}
-			directPayments = append(directPayments, p)
-		}
-	}
-
-	// 4. ดึงบิลที่ยังค้างชำระในปัจจุบัน (เฉพาะเมื่อไม่ได้กรองเฉพาะชำระสดหน้าร้าน และไม่ได้กรองเฉพาะสถานะยกเลิก)
+	// 4. ดึงบิลที่ยังค้างชำระในปัจจุบัน (เฉพาะลูกค้าสมาชิกที่มี customerID > 0)
 	var unpaidOrders []entity.SaleOrder
-	if !strings.EqualFold(paymentType, "payment") && !strings.EqualFold(status, "cancelled") {
+	if customerID > 0 && !strings.EqualFold(paymentType, "payment") && !strings.EqualFold(status, "cancelled") {
 		orders, _ := s.paymentRepo.GetUnpaidOrdersByCustomerID(customerID)
 		unpaidOrders = orders
 	}

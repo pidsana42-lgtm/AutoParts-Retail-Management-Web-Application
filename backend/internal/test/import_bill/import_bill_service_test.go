@@ -518,6 +518,11 @@ func TestDeleteBill_RoleRules(t *testing.T) {
 			wantDeleteCall: true,
 		},
 		{
+			name:           "manager (case-insensitive) skips check",
+			role:           "mAnAgEr",
+			wantDeleteCall: true,
+		},
+		{
 			name:           "admin (case-insensitive) skips check",
 			role:           "aDmIn",
 			wantDeleteCall: true,

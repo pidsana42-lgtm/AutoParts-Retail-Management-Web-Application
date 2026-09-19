@@ -4,6 +4,7 @@ import { posApiService, getDefaultProductDiscount } from "../../../../service/ht
 import { useDiscountCalculation } from "./useDiscountCalculation";
 import type { UsePosCartProps, CartItem, UsePosCartReturn } from "../../../../interface/pos/usePosCart.interface";
 import type { POSProductResponse, POSProductSupplierInfo } from "../../../../interface/pos/product_interface";
+import { useToast } from "../../../../components/elements/toast";
 
 // findMatchedSupplier: ถ้าคำค้นหา/บาร์โค้ดที่พิมพ์-แสกนตรงกับรหัสของ Supplier เจ้าใดเจาะจง (บาร์โค้ด/รหัสล็อต/
 // รหัสบริษัท) ให้คืนข้อมูลเจ้านั้น เพื่อผูกการขายชิ้นนี้กับบริษัทนั้น (โชว์ในตารางบิล + หักคงเหลือต่อบริษัทให้ตรงเจ้าจริง)
@@ -27,6 +28,7 @@ function totalQtyInCartForProduct(cart: CartItem[], productId: number, excludeIn
 }
 
 export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCancelledOrder }: UsePosCartProps): UsePosCartReturn {
+  const { toast } = useToast();
   
   const [cart, setCart] = useState<CartItem[]>(() => {
     // cart = เก็บข้อมูลสินค้าที่อยู่ในตะกร้า (POS Cart) ของบิลขายปัจจุบัน (ตัวแปรฝั่งข้อมูล)
@@ -231,11 +233,12 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
           }
         }
 
-        alert(
-          isRecoverMode
+        toast({
+          variant: "warning",
+          message: isRecoverMode
             ? "ไม่พบข้อมูลสินค้าหรือบิลยกเลิกที่ตรงกันในระบบ"
-            : "ไม่พบข้อมูลสินค้าชิ้นนี้ในระบบ (รองรับการค้นหาจาก บาร์โค้ด, รหัสสินค้า, Part Number และชื่อสินค้า)"
-        );
+            : "ไม่พบข้อมูลสินค้าชิ้นนี้ในระบบ (รองรับการค้นหาจาก บาร์โค้ด, รหัสสินค้า, Part Number และชื่อสินค้า)",
+        });
         return;
       }
       // ค้นหาตัวเลือกที่ตรงกับเงื่อนไขที่สุด (ไม่ว่าจะเป็น barcode, product_code, part_number, product_name
@@ -256,7 +259,7 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
       const maxStock = matchedSupplier ? matchedSupplier.quantity : (product.quantity ?? 0);
       if (maxStock <= 0) {
         const supplierNote = matchedSupplier ? ` จากบริษัท ${matchedSupplier.supplier_name}` : "";
-        alert(`สินค้า ${product.product_name || product.product_code}${supplierNote} หมดสต็อก (คงเหลือ 0 ชิ้น) ไม่สามารถเพิ่มลงในบิลได้`);
+        toast({ variant: "warning", message: `สินค้า ${product.product_name || product.product_code}${supplierNote} หมดสต็อก (คงเหลือ 0 ชิ้น) ไม่สามารถเพิ่มลงในบิลได้` });
         return;
       }
 
@@ -273,7 +276,7 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
       const currentRowQty = existingIndex > -1 ? cart[existingIndex].qty : 0;
       const qtyToCompare = matchedSupplier ? currentRowQty : totalQtyInCartForProduct(cart, product.id);
       if (qtyToCompare + 1 > maxStock) {
-        alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+        toast({ variant: "warning", message: `ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น` });
         return;
       }
 
@@ -324,7 +327,7 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
       setCancelledOrderSuggestions([]);
       setShowSuggestions(false);
     } catch (error) {
-      alert("เกิดข้อผิดพลาดในการดึงข้อมูลสินค้าหลังบ้าน");
+      toast({ variant: "error", message: "เกิดข้อผิดพลาดในการดึงข้อมูลสินค้าหลังบ้าน" });
     }
   };
 
@@ -339,7 +342,7 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
       // ไม่รู้บริษัท (แถวจากการค้นทั่วไป) ต้องรวมกับแถวอื่นของสินค้าเดียวกันด้วย กันไม่ให้รวมกันเกินยอดรวมทั้งร้าน
       const otherRowsQty = item.supplier_id !== undefined ? 0 : totalQtyInCartForProduct(cart, item.product_id, index);
       if (otherRowsQty + item.qty + delta > maxStock) {
-        alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+        toast({ variant: "warning", message: `ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น` });
         return;
       }
     }
@@ -366,7 +369,7 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
     if (isNaN(value) || value <= 0) {
       item.qty = 1;
     } else if (value > maxForThisRow) {
-      alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+      toast({ variant: "warning", message: `ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น` });
       item.qty = maxForThisRow;
     } else {
       item.qty = value;
@@ -431,7 +434,7 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
     });
 
     if (!policy.isValid) {
-      if (policy.errorMsg) alert(policy.errorMsg);
+      if (policy.errorMsg) toast({ variant: "warning", message: policy.errorMsg });
       const maxRate = Number(item.max_discount_rate) || 0;
       setCart((prev) =>
         prev.map((cartItem, i) =>
@@ -490,7 +493,7 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
     const maxStock = matchedSupplier ? matchedSupplier.quantity : (product.quantity ?? 0);
     if (maxStock <= 0) {
       const supplierNote = matchedSupplier ? ` จากบริษัท ${matchedSupplier.supplier_name}` : "";
-      alert(`สินค้า ${product.product_name || product.product_code}${supplierNote} หมดสต็อก (คงเหลือ 0 ชิ้น) ไม่สามารถเพิ่มลงในบิลได้`);
+      toast({ variant: "warning", message: `สินค้า ${product.product_name || product.product_code}${supplierNote} หมดสต็อก (คงเหลือ 0 ชิ้น) ไม่สามารถเพิ่มลงในบิลได้` });
       return;
     }
 
@@ -505,7 +508,7 @@ export function usePosCart({ customer, activeTypeId, isRecoverMode, onRecoverCan
     const currentRowQty = existingIndex > -1 ? cart[existingIndex].qty : 0;
     const qtyToCompare = matchedSupplier ? currentRowQty : totalQtyInCartForProduct(cart, product.id);
     if (qtyToCompare + 1 > maxStock) {
-      alert(`ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น`);
+      toast({ variant: "warning", message: `ไม่สามารถเพิ่มจำนวนได้ สินค้าในระบบมีเพียง ${maxStock} ชิ้น` });
       return;
     }
 

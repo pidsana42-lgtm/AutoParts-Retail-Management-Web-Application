@@ -14,7 +14,7 @@ import OrderDetailPanel from "../../../employee/pos/components/order_detail_pane
 export default function StockMovementOrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
-  const { isOwnerOrAdmin } = useUserRole();
+  const { isOwnerOrManager } = useUserRole();
   const { printingOrderId, handlePrintReceipt } = usePrintReceipt();
 
   const {
@@ -66,7 +66,7 @@ export default function StockMovementOrderDetail() {
           getStatusText={getStatusText}
           handlePrintReceipt={handlePrintReceipt}
           printingOrderId={printingOrderId}
-          isOwnerOrAdmin={isOwnerOrAdmin}
+          isOwnerOrManager={isOwnerOrManager}
           onClose={() => navigate("/owner/stock/stock-movement")}
           variant="page"
         />

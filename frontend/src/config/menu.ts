@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, Boxes, MonitorSmartphone,
   ShoppingCart, FileClock, RefreshCw, Settings, FolderPlus, ArrowLeftRight, CircleCheck, History,
-  FileX, ReceiptText, BookOpen, ShieldCheck, UserCheck, RotateCcw
+  FileX, ReceiptText, BookOpen, ShieldCheck, UserCheck, RotateCcw, Building2
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -24,15 +24,21 @@ export interface MenuItem {
 }
 
 export const SIDEBAR_MENUS: MenuItem[] = [
-  // แดชบอร์ดของเจ้าของร้าน (ให้เห็นเฉพาะ OWNER, ADMIN)
+  // แดชบอร์ดของเจ้าของร้าน
   { 
     icon: LayoutDashboard, 
     label: "แดชบอร์ด", 
     path: "/owner/dashboard/maindashboard", 
-    roles: ["OWNER", "ADMIN"] 
+    roles: ["OWNER"] 
   },
-  
-  // แดชบอร์ดของพนักงาน (ให้เห็นเฉพาะ EMPLOYEE, STAFF)
+  // แดชบอร์ดของจัดการร้าน (Manager)
+  { 
+    icon: LayoutDashboard, 
+    label: "แดชบอร์ด", 
+    path: "/manager/dashboard/maindashboard", 
+    roles: ["MANAGER"] 
+  },
+  // แดชบอร์ดของพนักงาน
   { 
     icon: LayoutDashboard, 
     label: "แดชบอร์ด", 
@@ -40,41 +46,42 @@ export const SIDEBAR_MENUS: MenuItem[] = [
     roles: ["EMPLOYEE", "STAFF"] 
   },
 
-  // เมนูอื่น ๆ ล็อกสิทธิ์ตามที่วางโครงสร้างไว้
-  { 
-    icon: FileText, 
-    label: "นำเข้าสินค้าจากบิล", 
-    path: "/owner/import-bills", 
-    roles: ["OWNER", "ADMIN"]
-  },
-  { 
-    icon: FileText, 
-    label: "นำเข้าสินค้าจากบิล", 
-    path: "/employee/import", 
-    roles: ["EMPLOYEE", "STAFF"]
-  },
-  { icon: Boxes, label: "คลังสินค้า", path: "/owner/stock", roles: ["OWNER", "ADMIN"],
+  // นำเข้าสินค้า
+  { icon: FileText, label: "นำเข้าสินค้าจากบิล", path: "/owner/import-bills", roles: ["OWNER"] },
+  { icon: FileText, label: "นำเข้าสินค้าจากบิล", path: "/manager/import-bills", roles: ["MANAGER"] },
+  { icon: FileText, label: "นำเข้าสินค้าจากบิล", path: "/employee/import", roles: ["EMPLOYEE", "STAFF"] },
+
+  // คลังสินค้า
+  { icon: Boxes, label: "คลังสินค้า", path: "/owner/stock", roles: ["OWNER"],
     subs: [
       { icon: ArrowLeftRight, path: "/owner/stock/stock-movement", label: "การเคลื่อนไหวของคลังสินค้า" },
       { icon: FolderPlus, path: "/owner/stock/stock-data", label: "การตั้งค่าข้อมูลสินค้า" },
       { icon: CircleCheck, path: "/owner/stock/stock-check", label: "ตรวจสอบสินค้า"},
     ],
   },
-  // งานตรวจสอบสินค้าที่มอบหมายให้พนักงาน (เห็นเฉพาะ EMPLOYEE, STAFF)
+  { icon: Boxes, label: "คลังสินค้า", path: "/manager/stock", roles: ["MANAGER"],
+    subs: [
+      { icon: ArrowLeftRight, path: "/manager/stock/stock-movement", label: "การเคลื่อนไหวของคลังสินค้า" },
+      { icon: FolderPlus, path: "/manager/stock/stock-data", label: "การตั้งค่าข้อมูลสินค้า" },
+      { icon: CircleCheck, path: "/manager/stock/stock-check", label: "ตรวจสอบสินค้า"},
+    ],
+  },
   { icon: Boxes, label: "คลังสินค้า", path: "/employee/wms/stock-data", roles: ["EMPLOYEE", "STAFF"],
     subs: [
       { icon: CircleCheck, path: "/employee/wms/check-stock", label: "ตรวจสอบสินค้า" },
     ],
    },
+
   // POS
-  { icon: MonitorSmartphone, label: "ระบบขาย POS", path: "/employee/pos/pos", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"], 
+  { icon: MonitorSmartphone, label: "ระบบขาย POS", path: "/employee/pos/pos", roles: ["OWNER", "MANAGER", "EMPLOYEE", "STAFF"], 
     subs: [
       { icon: History, path: "/employee/pos/sales_history", label: "ประวัติการขาย" },
       { icon: FileX, path: "/employee/pos/sales_cancellation_history", label: "ประวัติยกเลิกการขาย" },
     ],
   },
+
   // รายการธุรกรรม / การเงิน
-  { icon: ReceiptText, label: "รายการธุรกรรม / การเงิน", path: "/employee/transactions/settle-bills", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],
+  { icon: ReceiptText, label: "รายการธุรกรรม / การเงิน", path: "/employee/transactions/settle-bills", roles: ["OWNER", "MANAGER", "EMPLOYEE", "STAFF"],
     subs: [
       { icon: History, path: "/employee/transactions/payment-history", label: "ประวัติการชำระเงิน" },
       { icon: FileX, path: "/employee/transactions/payment-cancellation-history", label: "ประวัติยกเลิกการชำระเงิน" },
@@ -82,65 +89,90 @@ export const SIDEBAR_MENUS: MenuItem[] = [
   },
 
   // ข้อมูลลูกค้า
-  { icon: FolderPlus, label: "ข้อมูลลูกค้า", path: "/employee/customers/customer-registration", roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],},
+  { icon: FolderPlus, label: "ข้อมูลลูกค้า", path: "/employee/customers/customer-registration", roles: ["OWNER", "MANAGER", "EMPLOYEE", "STAFF"] },
 
-
-  { icon: ShoppingCart, label: "สั่งซื้อ", path: "/owner/orders", roles: ["OWNER", "ADMIN"],
-    subs: [
-      { icon: RotateCcw, path: "/owner/orders/restore", label: "กู้คืนใบสั่งซื้อ" },
-    ],
+  // สั่งซื้อ
+  { icon: ShoppingCart, label: "สั่งซื้อ", path: "/owner/orders", roles: ["OWNER"],
+    subs: [{ icon: RotateCcw, path: "/owner/orders/restore", label: "กู้คืนใบสั่งซื้อ" }],
+   },
+  { icon: ShoppingCart, label: "สั่งซื้อ", path: "/manager/orders", roles: ["MANAGER"],
+    subs: [{ icon: RotateCcw, path: "/manager/orders/restore", label: "กู้คืนใบสั่งซื้อ" }],
    },
   { icon: ShoppingCart, label: "สั่งซื้อ", path: "/employee/orders", roles: ["EMPLOYEE"],
-    subs: [
-      { icon: RotateCcw, path: "/owner/orders/restore", label: "กู้คืนใบสั่งซื้อ" },
-    ],
+    subs: [{ icon: RotateCcw, path: "/owner/orders/restore", label: "กู้คืนใบสั่งซื้อ" }],
    },
+
+  // พรีออเดอร์
   { 
-    icon: FileClock, 
-    label: "พรีออเดอร์", 
-    path: "/owner/pre-orders", 
-    roles: ["OWNER", "ADMIN"],
+    icon: FileClock, label: "พรีออเดอร์", path: "/owner/pre-orders", roles: ["OWNER"],
     subs: [
       { icon: FileClock, path: "/owner/pre-orders", label: "รายการสั่งจองสินค้า" },
       { icon: BookOpen, path: "/owner/pre-orders/catalog", label: "แคตตาล็อกสินค้า" },
     ]
   },
   { 
-    icon: FileClock, 
-    label: "พรีออเดอร์", 
-    path: "/employee/pre-orders", 
-    roles: ["EMPLOYEE", "STAFF"],
+    icon: FileClock, label: "พรีออเดอร์", path: "/manager/pre-orders", roles: ["MANAGER"],
+    subs: [
+      { icon: FileClock, path: "/manager/pre-orders", label: "รายการสั่งจองสินค้า" },
+      { icon: BookOpen, path: "/manager/pre-orders/catalog", label: "แคตตาล็อกสินค้า" },
+    ]
+  },
+  { 
+    icon: FileClock, label: "พรีออเดอร์", path: "/employee/pre-orders", roles: ["EMPLOYEE", "STAFF"],
     subs: [
       { icon: FileClock, path: "/employee/pre-orders", label: "รายการสั่งจองสินค้า" },
       { icon: BookOpen, path: "/employee/pre-orders/catalog", label: "แคตตาล็อกสินค้า" },
     ]
   },
+
+  // คืน และ เคลมสินค้า
   { 
-    icon: RefreshCw, 
-    label: "คืน และ เคลมสินค้า", 
-    path: "/owner/claims", 
-    roles: ["OWNER", "ADMIN", "EMPLOYEE", "STAFF"],
+    icon: RefreshCw, label: "คืน และ เคลมสินค้า", path: "/owner/claims", roles: ["OWNER"],
     subs: [
       { label: "รายการเคลมสินค้า", path: "/owner/claims", icon: FileText },
       { label: "รายการคืนสินค้า", path: "/owner/returns", icon: RefreshCw }
     ]
   },
+  { 
+    icon: RefreshCw, label: "คืน และ เคลมสินค้า", path: "/manager/claims", roles: ["MANAGER"],
+    subs: [
+      { label: "รายการเคลมสินค้า", path: "/manager/claims", icon: FileText },
+      { label: "รายการคืนสินค้า", path: "/manager/returns", icon: RefreshCw }
+    ]
+  },
+  { 
+    icon: RefreshCw, label: "คืน และ เคลมสินค้า", path: "/employee/claims", roles: ["EMPLOYEE", "STAFF"],
+    subs: [
+      { label: "รายการเคลมสินค้า", path: "/employee/claims", icon: FileText },
+      { label: "รายการคืนสินค้า", path: "/employee/returns", icon: RefreshCw }
+    ]
+  },
 
-  { icon: Settings, label: "การตั้งค่า", path: "/owner/storeconfig", roles: ["OWNER", "ADMIN"],
+  // การตั้งค่า
+  { icon: Settings, label: "การตั้งค่า", path: "/owner/storeconfig", roles: ["OWNER"],
    subs: [
+      { icon: Building2, path: "/owner/storeconfig", label: "ข้อมูลร้านค้า" },
       { icon: ShieldCheck, path: "/owner/storeconfig/financial-policy", label: "นโยบายการเงิน" },
       { icon: UserCheck, path: "/owner/storeconfig/customer-credit-control", label: "การควบคุมเครดิตลูกค้า" },
+    ],
+  },
+  { icon: Settings, label: "การตั้งค่า", path: "/manager/storeconfig/financial-policy", roles: ["MANAGER"],
+   subs: [
+      { icon: ShieldCheck, path: "/manager/storeconfig/financial-policy", label: "นโยบายการเงิน" },
+      { icon: UserCheck, path: "/manager/storeconfig/customer-credit-control", label: "การควบคุมเครดิตลูกค้า" },
     ],
   },
 ];
 
 /**
  * ดึงรายการเมนู Sidebar ที่เปิดสิทธิ์ให้ใช้งานตาม Role ผู้เล่น
- * และสลับ Route Path ของเมนูย่อยให้อัตโนมัติตามสิทธิ์ (OWNER/ADMIN vs EMPLOYEE/STAFF)
+ * แยกสิทธิ์ระหว่าง OWNER และ MANAGER อย่างชัดเจน
  */
 export const getMenuByRole = (role: string): MenuItem[] => {
-  const currentRole = role.toUpperCase();
-  const isOwnerOrAdmin = currentRole === "OWNER" || currentRole === "ADMIN";
+  const normalized = role.toUpperCase();
+  const currentRole = normalized === "ADMIN" ? "MANAGER" : normalized;
+  const isOwnerOrManager = currentRole === "OWNER" || currentRole === "MANAGER";
+  const rolePrefix = currentRole === "MANAGER" ? "/manager" : isOwnerOrManager ? "/owner" : "/employee";
 
   return SIDEBAR_MENUS
     // 1. กรองเมนูหลักตามสิทธิ์ของ Role
@@ -149,26 +181,31 @@ export const getMenuByRole = (role: string): MenuItem[] => {
     .map((menu) => {
       let updatedMenu = { ...menu };
 
+      // ถ้าเป็น Manager ให้แปลง path หลักที่ขึ้นต้นด้วย /owner ให้เป็น /manager
+      if (currentRole === "MANAGER" && updatedMenu.path.startsWith("/owner")) {
+        updatedMenu.path = updatedMenu.path.replace(/^\/owner/, "/manager");
+      }
+
       // 1. สลับ Main Path ของ POS ตาม Role
       if (menu.path.includes("/pos/pos")) {
-        updatedMenu.path = isOwnerOrAdmin ? "/owner/pos/pos" : "/employee/pos/pos";
+        updatedMenu.path = isOwnerOrManager ? `${rolePrefix}/pos/pos` : "/employee/pos/pos";
       }
 
       // 2. สลับ Main Path ของ รายการธุรกรรม ตาม Role
       if (menu.path.includes("/transactions/settle-bills")) {
-        updatedMenu.path = isOwnerOrAdmin
-          ? "/owner/transactions/settle-bills"
+        updatedMenu.path = isOwnerOrManager
+          ? `${rolePrefix}/transactions/settle-bills`
           : "/employee/transactions/settle-bills";
       }
 
       // 3. สลับ Main Path ของ คืน และ เคลมสินค้า ตาม Role
       if (menu.path.includes("/claims") || menu.path.includes("/returns")) {
-        updatedMenu.path = isOwnerOrAdmin ? "/owner/claims" : "/employee/claims";
+        updatedMenu.path = isOwnerOrManager ? `${rolePrefix}/claims` : "/employee/claims";
       }
 
       if (menu.path.includes("/customer-registration")) {
-        updatedMenu.path = isOwnerOrAdmin
-          ? "/owner/customers/customer-registration"
+        updatedMenu.path = isOwnerOrManager
+          ? `${rolePrefix}/customers/customer-registration`
           : "/employee/customers/customer-registration";
       }
 
@@ -178,59 +215,66 @@ export const getMenuByRole = (role: string): MenuItem[] => {
       return {
         ...updatedMenu,
         subs: updatedMenu.subs.map((sub) => {
+          let updatedSub = { ...sub };
+
+          // ถ้าเป็น Manager ให้แปลง sub path ที่ขึ้นต้นด้วย /owner ให้เป็น /manager
+          if (currentRole === "MANAGER" && updatedSub.path.startsWith("/owner")) {
+            updatedSub.path = updatedSub.path.replace(/^\/owner/, "/manager");
+          }
+
           if (sub.path.includes("sales_cancellation_history")) {
             return {
-              ...sub,
-              label: isOwnerOrAdmin ? "คำขอยกเลิกบิล" : "ประวัติยกเลิกการขาย",
-              path: isOwnerOrAdmin
-                ? "/owner/pos/sales_cancellation_history"
+              ...updatedSub,
+              label: isOwnerOrManager ? "คำขอยกเลิกบิล" : "ประวัติยกเลิกการขาย",
+              path: isOwnerOrManager
+                ? `${rolePrefix}/pos/sales_cancellation_history`
                 : "/employee/pos/sales_cancellation_history",
             };
           }
 
           if (sub.path.includes("sales_history")) {
             return {
-              ...sub,
-              path: isOwnerOrAdmin
-                ? "/owner/pos/sales_history"
+              ...updatedSub,
+              path: isOwnerOrManager
+                ? `${rolePrefix}/pos/sales_history`
                 : "/employee/pos/sales_history",
             };
           }
 
           if (sub.path.includes("payment-history")) {
             return {
-              ...sub,
-              path: isOwnerOrAdmin
-                ? "/owner/transactions/payment-history"
+              ...updatedSub,
+              path: isOwnerOrManager
+                ? `${rolePrefix}/transactions/payment-history`
                 : "/employee/transactions/payment-history",
             };
           }
 
           if (sub.path.includes("payment-cancellation-history")) {
             return {
-              ...sub,
-              label: isOwnerOrAdmin ? "คำขอยกเลิกการชำระเงิน" : "ประวัติยกเลิกการชำระเงิน",
-              path: isOwnerOrAdmin
-                ? "/owner/transactions/payment-cancellation-history"
+              ...updatedSub,
+              label: isOwnerOrManager ? "คำขอยกเลิกการชำระเงิน" : "ประวัติยกเลิกการชำระเงิน",
+              path: isOwnerOrManager
+                ? `${rolePrefix}/transactions/payment-cancellation-history`
                 : "/employee/transactions/payment-cancellation-history",
             };
           }
 
           if (sub.path.includes("claims")) {
             return {
-              ...sub,
-              path: isOwnerOrAdmin ? "/owner/claims" : "/employee/claims",
+              ...updatedSub,
+              path: isOwnerOrManager ? `${rolePrefix}/claims` : "/employee/claims",
             };
           }
 
           if (sub.path.includes("returns")) {
             return {
-              ...sub,
-              path: isOwnerOrAdmin ? "/owner/returns" : "/employee/returns",
+              ...updatedSub,
+              path: isOwnerOrManager ? `${rolePrefix}/returns` : "/employee/returns",
             };
           }
 
-          return sub;
+          return updatedSub;
         }),
       };
     });

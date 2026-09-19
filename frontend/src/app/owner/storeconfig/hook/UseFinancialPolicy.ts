@@ -5,8 +5,10 @@ import type {
   FinancialPolicyAuditLog,
   UseFinancialPolicyReturn,
 } from "../../../../interface/storeconfig/financial_policy_interface";
+import { useToast } from "../../../../components/elements/toast";
 
 export const useFinancialPolicy = (): UseFinancialPolicyReturn => {
+  const { toast } = useToast();
   const [config, setConfig] = useState<FinancialPolicyConfig>({
     max_credit: 0,
     max_overdue_days: 0,
@@ -101,6 +103,7 @@ export const useFinancialPolicy = (): UseFinancialPolicyReturn => {
     setConfig(initialConfig);
     setError(null);
     setSuccessMessage(null);
+    toast({ variant: "info", message: "คืนค่าเดิมเรียบร้อยแล้ว" });
   };
 
   // บันทึกการเปลี่ยนแปลง
@@ -112,17 +115,23 @@ export const useFinancialPolicy = (): UseFinancialPolicyReturn => {
 
       // Validation
       if (config.max_extra_discount_rate < 0 || config.max_extra_discount_rate > 100) {
-        setError("เพดานส่วนลดต้องอยู่ระหว่าง 0 - 100%");
+        const msg = "เพดานส่วนลดต้องอยู่ระหว่าง 0 - 100%";
+        setError(msg);
+        toast({ variant: "warning", message: msg });
         return false;
       }
 
       if (config.max_credit < 0) {
-        setError("วงเงินเครดิตต้องไม่ติดลบ");
+        const msg = "วงเงินเครดิตต้องไม่ติดลบ";
+        setError(msg);
+        toast({ variant: "warning", message: msg });
         return false;
       }
 
       if (config.max_overdue_days < 0) {
-        setError("ระยะเวลาค้างชำระต้องไม่ติดลบ");
+        const msg = "ระยะเวลาค้างชำระต้องไม่ติดลบ";
+        setError(msg);
+        toast({ variant: "warning", message: msg });
         return false;
       }
 
@@ -145,10 +154,13 @@ export const useFinancialPolicy = (): UseFinancialPolicyReturn => {
       fetchAuditLogs(); // อัปเดตประวัติจาก Backend อัตโนมัติ
 
       setSuccessMessage("บันทึกการตั้งค่านโยบายเรียบร้อยแล้ว");
+      toast({ variant: "success", message: "บันทึกการตั้งค่านโยบายเรียบร้อยแล้ว" });
       return true;
     } catch (err: any) {
       console.error("Failed to update store config:", err);
-      setError(err?.response?.data?.message || err?.response?.data?.error || "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+      const errMsg = err?.response?.data?.message || err?.response?.data?.error || "เกิดข้อผิดพลาดในการบันทึกข้อมูล";
+      setError(errMsg);
+      toast({ variant: "error", message: errMsg });
       return false;
     } finally {
       setIsSaving(false);

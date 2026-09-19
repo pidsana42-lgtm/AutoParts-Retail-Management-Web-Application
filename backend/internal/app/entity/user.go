@@ -22,7 +22,7 @@ type User struct {
 
     BankAccountNumber string `gorm:"type:varchar(50);not null" json:"bank_account_number" binding:"required"`
 
-    // Admin กำหนดให้
+    // Manager กำหนดให้
     RoleID uint `gorm:"not null" json:"role_id"`
     Role   Role `gorm:"foreignKey:RoleID" json:"role"`
 

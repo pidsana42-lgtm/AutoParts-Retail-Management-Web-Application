@@ -45,8 +45,8 @@ const ReturnDetailPage: React.FC = () => {
   const cameFromMovement = (location.state as { from?: string } | null)?.from === 'movement';
   const basePath = usePathBasePrefix();
   const userRole = (localStorage.getItem('role') || '').toUpperCase();
-  const isManager = userRole === 'OWNER' || userRole === 'ADMIN';
-  const canProcessRefund = userRole === 'OWNER' || userRole === 'EMPLOYEE' || userRole === 'ADMIN';
+  const isManager = userRole === 'OWNER' || userRole === 'MANAGER' || userRole === 'ADMIN';
+  const canProcessRefund = userRole === 'OWNER' || userRole === 'EMPLOYEE' || userRole === 'MANAGER' || userRole === 'ADMIN';
   const { toast } = useToast();
 
   const [returnItem, setReturnItem] = useState<SalesReturn | null>(null);
