@@ -19,6 +19,7 @@ interface HomeViewProps {
   setEditingBillId: (id: number | null) => void;
   setErrorMsg: (msg: string | null) => void;
   setBatchErrorMsg: (msg: string | null) => void;
+  setPoReference: (ref: string) => void;
   suppliers: Supplier[];
   bills: SavedBill[];
   loadingBills: boolean;
@@ -41,6 +42,7 @@ export default function HomeView({
   setEditingBillId,
   setErrorMsg,
   setBatchErrorMsg,
+  setPoReference,
   suppliers,
   bills,
   loadingBills,
@@ -80,7 +82,7 @@ export default function HomeView({
       {/* Cards Section */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         {/* Card 1: สแกนบิลด้วยรูปภาพ / PDF */}
-        <div 
+        <div
           onClick={() => {
             setBillImage(null);
             setBatchImages([]);
@@ -90,6 +92,7 @@ export default function HomeView({
             setEditingBillId(null);
             setErrorMsg(null);
             setBatchErrorMsg(null);
+            setPoReference('');
             setCurrentView('scan');
           }}
           className="bg-[#e51c23] hover:bg-[#c9181f] text-white p-8 rounded-none flex items-center justify-between cursor-pointer transition-all shadow-md group"
@@ -181,6 +184,7 @@ export default function HomeView({
             setEditingBillId(null);
             setErrorMsg(null);
             setBatchErrorMsg(null);
+            setPoReference('');
             setCurrentView('manual');
           }}
           className="bg-[#059669] hover:bg-[#047857] text-white p-8 rounded-none flex items-center justify-between cursor-pointer transition-all shadow-md group"

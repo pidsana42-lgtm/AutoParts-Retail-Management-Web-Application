@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	preOrderDTO "backend/internal/app/dto/pre_oder"
 	svcNotification "backend/internal/app/service/notification"
@@ -24,6 +25,11 @@ func (ctrl *PreOrderController) CreatePreOrder(c *gin.Context) {
 	var input preOrderDTO.CreatePreOrderDTO
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: " + err.Error()})
+		return
+	}
+
+	if input.CustomerID == 0 && strings.TrimSpace(input.CustomerName) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุชื่อลูกค้า"})
 		return
 	}
 
@@ -57,6 +63,11 @@ func (ctrl *PreOrderController) CreatePreOrderItem(c *gin.Context) {
 	var input preOrderDTO.CreatePreOrderItemDTO
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: " + err.Error()})
+		return
+	}
+
+	if input.PreOrderID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุพรีออเดอร์สำหรับรายการสินค้า"})
 		return
 	}
 
@@ -110,6 +121,12 @@ func (ctrl *PreOrderController) UpdatePreOrder(c *gin.Context) {
 	var input preOrderDTO.UpdatePreOrderDTO
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: " + err.Error()})
+		return
+	}
+
+	if input.CustomerID != nil && *input.CustomerID == 0 &&
+		(input.CustomerName == nil || strings.TrimSpace(*input.CustomerName) == "") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุชื่อลูกค้า"})
 		return
 	}
 

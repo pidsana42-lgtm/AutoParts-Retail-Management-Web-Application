@@ -2,7 +2,9 @@ package pre_oder
 
 import (
 	"backend/internal/app/entity"
+	"backend/internal/pkg/preorderstock"
 	"context"
+	"fmt"
 	"strings"
 
 	"gorm.io/gorm"
@@ -121,7 +123,11 @@ func (r *preOrderRepository) GetPreOrderByID(id uint) (*entity.PreOrder, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &preOrder, nil
+	orders := []entity.PreOrder{preOrder}
+	if err := preorderstock.Populate(r.db, orders); err != nil {
+		return nil, err
+	}
+	return &orders[0], nil
 }
 
 // 6. Implement Method: ดึงรายการ Pre-Order ทั้งหมด
@@ -137,12 +143,22 @@ func (r *preOrderRepository) ListPreOrders() ([]entity.PreOrder, error) {
 		Order("id DESC").
 		Find(&preOrders).Error
 
+	if err == nil {
+		err = preorderstock.Populate(r.db, preOrders)
+	}
 	return preOrders, err
 }
 
 // 7. Implement Method: อัปเดตข้อมูล Pre-Order (เช่น อัปเดตสถานะการสั่งซื้อ หรือยอดมัดจำ)
 func (r *preOrderRepository) UpdatePreOrder(preOrder *entity.PreOrder) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		linked, err := protectLinkedItems(tx, preOrder)
+		if err != nil {
+			return err
+		}
+		if linked {
+			return tx.Omit("Customer", "Supplier", "PreOrderItems").Save(preOrder).Error
+		}
 		// 1. ลบไอเทมเดิมออกก่อนเพื่อไม่ให้เกิดขยะตกค้าง
 		if err := tx.Where("pre_order_id = ?", preOrder.ID).Delete(&entity.PreOrderItem{}).Error; err != nil {
 			return err
@@ -160,6 +176,13 @@ func (r *preOrderRepository) UpdatePreOrder(preOrder *entity.PreOrder) error {
 // 8. Implement Method: ลบข้อมูล Pre-Order (Soft Delete)
 func (r *preOrderRepository) DeletePreOrder(id uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		var linked int64
+		if err := tx.Model(&entity.POItems{}).Where("pre_order_item_id IN (?)", tx.Model(&entity.PreOrderItem{}).Select("id").Where("pre_order_id = ?", id)).Count(&linked).Error; err != nil {
+			return err
+		}
+		if linked > 0 {
+			return fmt.Errorf("พรีออเดอร์ถูกส่งไปสั่งซื้อแล้ว กรุณายกเลิกแทนการลบ")
+		}
 		// ลบไอเทมย่อยก่อน
 		if err := tx.Where("pre_order_id = ?", id).Delete(&entity.PreOrderItem{}).Error; err != nil {
 			return err
@@ -216,7 +239,11 @@ func (r *preOrderRepository) GetLinkedPOsByItemIDs(ctx context.Context, itemIDs 
 
 	for _, item := range poItems {
 		if item.PreOrderItemID != nil && item.PO != nil {
-			result[*item.PreOrderItemID] = *item.PO
+			// Keep approval visible when more than one PO references the same booking item.
+			previous, exists := result[*item.PreOrderItemID]
+			if !exists || (previous.Status != "APPROVED" && previous.Approved_at == nil) {
+				result[*item.PreOrderItemID] = *item.PO
+			}
 		}
 	}
 	return result, nil

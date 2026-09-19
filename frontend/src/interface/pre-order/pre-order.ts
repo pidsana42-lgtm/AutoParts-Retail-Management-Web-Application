@@ -6,6 +6,7 @@ export interface PreOrderItem {
   supplier_part_code?: string;
   supplier_name?: string;
   quantity: number;
+  received_quantity?: number;
   unit_price: number;
   net_amount?: number;
 }
@@ -20,6 +21,7 @@ export interface PreOrder {
   status: string;
   po_number?: string;
   po_status?: string;
+  can_edit?: boolean;
   po_id?: number;
   order_date?: string;
   supplier_id: number;

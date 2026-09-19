@@ -1327,6 +1327,8 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
           is_freebie: item.is_freebie,
           remark: item.remark,
           product_id: item.product_id,
+        po_item_id: item.po_item_id,
+        pre_order_item_id: item.pre_order_item_id,
           category_id: item.category_id,
           sub_category_id: item.sub_category_id,
           sub_sub_category_id: item.sub_sub_category_id,
@@ -1342,6 +1344,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
 
   const handleViewSavedBill = (bill: SavedBill) => {
     setEditingBillId(bill.id);
+    setPoReference(bill.po_id ? String(bill.po_id) : '');
     setErrorMsg(null);
     
     setFormData({
@@ -1370,6 +1373,8 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
         is_freebie: item.is_freebie,
         remark: item.remark,
         product_id: item.product_id,
+        po_item_id: item.po_item_id,
+        pre_order_item_id: item.pre_order_item_id,
         category_id: item.category_id,
         sub_category_id: item.sub_category_id,
         sub_sub_category_id: item.sub_sub_category_id
@@ -1646,7 +1651,18 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
 
   const handleSelectPO = async (poId: number) => {
     try {
-      const poData = await getPurchaseOrderById(poId);
+      const [poData, receiptResponse] = await Promise.all([
+        getPurchaseOrderById(poId),
+        apiClient.get('/import-data/bills'),
+      ]);
+      const receipts: SavedBill[] = receiptResponse.data?.data || receiptResponse.data || [];
+      const receivedByLine = new Map<number, number>();
+      for (const receipt of receipts) {
+        if (Number(receipt.po_id) !== poId || receipt.payment_status.toLowerCase() === 'draft') continue;
+        for (const item of receipt.bill_items || []) {
+          if (item.po_item_id) receivedByLine.set(item.po_item_id, (receivedByLine.get(item.po_item_id) || 0) + item.order_quantity);
+        }
+      }
       if (!poData) {
         toast({ variant: 'error', message: 'ไม่พบข้อมูลรายละเอียดใบสั่งซื้อ' });
         return;
@@ -1656,12 +1672,12 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
       setOriginalPOItems(poItems);
 
       const mappedItems: BillItemDTO[] = poItems.map((item: any, idx: number) => {
-        const qty = Number(item.quantity) || 1;
-        const price = Number(item.unit_price) || 0;
+        const qty = Math.max(0, Number(item.quantity ?? item.order_quantity ?? 0) - (receivedByLine.get(Number(item.id)) || 0));
+        const price = Number(item.unit_price ?? item.price_per_unit) || 0;
         return {
           item_sequence: idx + 1,
-          company_product_code: item.supply_product_code_snapshot || '',
-          company_product_name: item.product_name_snapshot || item.product_name || '',
+          company_product_code: item.supply_product_code_snapshot || item.company_product_code || '',
+          company_product_name: item.product_name_snapshot || item.product_name || item.company_product_name || '',
           order_quantity: qty,
           unit: item.unit || 'ชิ้น',
           conversion_factor: 1,
@@ -1671,9 +1687,14 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
           is_freebie: false,
           remark: '',
           product_id: item.product_id || null,
-          pre_order_item_id: item.pre_order_item_id || null
+          pre_order_item_id: item.pre_order_item_id || null,
+          po_item_id: item.id
         };
-      });
+      }).filter((item: BillItemDTO) => item.order_quantity > 0);
+      if (mappedItems.length === 0) {
+        toast({ variant: 'info', message: 'รับสินค้าครบตามใบสั่งซื้อนี้แล้ว' });
+        return;
+      }
 
       const subtotal = mappedItems.reduce((sum, i) => sum + i.net_amount, 0);
       const selectedPO = poList.find(po => Number(po.id) === Number(poId));
@@ -1688,8 +1709,8 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
       );
 
       setFormData({
-        bill_no: `PO-IMPORT-${poData.po_number || poData.order_number || poId}`,
-        total_amount: poData.total_amount || subtotal,
+        bill_no: `PO-IMPORT-${poData.po_number || poData.order_number || poId}-${Date.now()}`,
+        total_amount: subtotal,
         due_date: new Date().toISOString().split('T')[0],
         transport_by: '',
         supplier_id: supplierId,
@@ -1698,7 +1719,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
         discount_total: 0,
         receive_date: new Date().toISOString().split('T')[0],
         vat_amount: 0,
-        grand_total: poData.total_amount || subtotal,
+        grand_total: subtotal,
         payment_status: 'unpaid',
         items: mappedItems,
         db_job_id: 0,
@@ -2022,6 +2043,8 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
           is_freebie: Boolean(item.is_freebie),
           remark: String(item.remark || ''),
           product_id: item.product_id ? Number(item.product_id) : 0,
+          po_item_id: item.po_item_id || undefined,
+          pre_order_item_id: item.pre_order_item_id || undefined,
           category_id: item.category_id ? Number(item.category_id) : undefined,
           sub_category_id: item.sub_category_id ? Number(item.sub_category_id) : undefined,
           sub_sub_category_id: item.sub_sub_category_id ? Number(item.sub_sub_category_id) : undefined
@@ -2158,6 +2181,8 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
             is_freebie: item.is_freebie,
             remark: item.remark,
             product_id: item.product_id ? Number(item.product_id) : 0,
+          po_item_id: item.po_item_id || undefined,
+          pre_order_item_id: item.pre_order_item_id || undefined,
             category_id: item.category_id ? Number(item.category_id) : undefined,
             sub_category_id: item.sub_category_id ? Number(item.sub_category_id) : undefined,
             sub_sub_category_id: item.sub_sub_category_id ? Number(item.sub_sub_category_id) : undefined
@@ -2241,6 +2266,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
           setEditingBillId={setEditingBillId}
           setErrorMsg={setErrorMsg}
           setBatchErrorMsg={setBatchErrorMsg}
+          setPoReference={setPoReference}
           suppliers={suppliers}
           bills={bills}
           loadingBills={loadingBills}

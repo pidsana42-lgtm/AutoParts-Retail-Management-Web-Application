@@ -322,6 +322,7 @@ export default function ManualEntryView({
                               สินค้าพรีออเดอร์ของลูกค้า
                             </span>
                           )}
+                          {item.po_item_id && !item.pre_order_item_id && <span className="text-[10px] text-slate-600">สินค้าเติมสต็อกร้าน</span>}
                         </div>
                       </TableCell>
                       <TableCell className="py-2.5 px-3">
