@@ -133,9 +133,8 @@ func (s *emailService) SendEmail(to []string, subject, htmlBody string) error {
 }
 
 func (s *emailService) SendPasswordResetOTP(toEmail, username, otp string) error {
-	subject := "🔐 รหัสยืนยันการตั้งรหัสผ่านใหม่ (OTP) - JJ AutoParts"
+	subject := "รหัสยืนยันสำหรับตั้งรหัสผ่านใหม่ - JJ AutoParts"
 	currentYear := time.Now().Year()
-	currentTime := time.Now().Format("02/01/2006 15:04 น.")
 
 	htmlBody := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="th">
@@ -144,99 +143,52 @@ func (s *emailService) SendPasswordResetOTP(toEmail, username, otp string) error
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>รหัสยืนยัน OTP - JJ AutoParts</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Prompt', 'Kanit', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1e293b;">
-	<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 35px 15px;">
+<body style="margin: 0; padding: 0; background-color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Prompt', 'Kanit', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #27272a;">
+	<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f4f4f5; padding: 32px 16px;">
 		<tr>
 			<td align="center">
-				<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="max-width: 560px; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04); border: 1px solid #e2e8f0;">
-					
-					<!-- Header Section with Logo -->
+				<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="max-width: 480px; background-color: #ffffff; border: 1px solid #e4e4e7;">
+
+					<!-- Header -->
 					<tr>
-						<td style="background: linear-gradient(135deg, #18181b 0%%, #09090b 100%%); padding: 36px 30px; text-align: center; border-bottom: 4px solid #b70011;">
-							<table width="100%%" border="0" cellspacing="0" cellpadding="0">
-								<tr>
-									<td align="center">
-										<div style="display: inline-block; background-color: #ffffff; padding: 10px 14px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); margin-bottom: 12px;">
-											<img src="https://jjautopart-pakchong.com/LOGO.png" alt="JJ AutoParts" width="52" height="52" style="display: block; object-fit: contain; margin: 0 auto;" />
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<td align="center">
-										<h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;">
-											JJ AUTOPARTS <span style="color: #ef4444; font-weight: 900;">PAK CHONG</span>
-										</h1>
-										<p style="color: #94a3b8; margin: 6px 0 0; font-size: 13px; font-weight: 500; letter-spacing: 0.5px;">
-											ระบบบริหารจัดการร้านขายปลีกอะไหล่ยนต์ครบวงจร
-										</p>
-									</td>
-								</tr>
-							</table>
+						<td style="padding: 24px 32px; border-bottom: 3px solid #b70011;">
+							<span style="font-size: 15px; font-weight: 700; color: #18181b; letter-spacing: 0.5px;">JJ AUTOPARTS</span>
+							<span style="font-size: 13px; color: #71717a; margin-left: 6px;">ปากช่อง</span>
 						</td>
 					</tr>
 
-					<!-- Content Section -->
+					<!-- Content -->
 					<tr>
-						<td style="padding: 40px 36px 32px;">
-							<!-- Badge -->
-							<div style="text-align: center; margin-bottom: 24px;">
-								<span style="display: inline-block; background-color: #fef2f2; color: #b70011; border: 1px solid #fecaca; padding: 6px 16px; border-radius: 9999px; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">
-									🛡️ ยืนยันความปลอดภัย (SECURITY VERIFICATION)
-								</span>
-							</div>
-
-							<h2 style="color: #0f172a; margin: 0 0 14px; font-size: 20px; font-weight: 700; text-align: center;">
-								คำขอรีเซ็ตรหัสผ่านสำหรับบัญชี <span style="color: #b70011;">%s</span>
-							</h2>
-							<p style="color: #475569; font-size: 14px; line-height: 1.7; margin: 0 0 28px; text-align: center;">
-								เราได้รับคำขอรีเซ็ตรหัสผ่านสำหรับเข้าสู่ระบบ JJ AutoParts<br/>
-								กรุณานำรหัสยืนยันแบบใช้ครั้งเดียว (OTP) ด้านล่างนี้ไปกรอกในหน้าต่างเปลี่ยนรหัสผ่าน:
+						<td style="padding: 32px;">
+							<p style="font-size: 14px; line-height: 1.7; margin: 0 0 4px; color: #27272a;">
+								สวัสดีคุณ %s
+							</p>
+							<p style="font-size: 14px; line-height: 1.7; margin: 0 0 24px; color: #52525b;">
+								มีคำขอตั้งรหัสผ่านใหม่สำหรับบัญชีของคุณ กรอกรหัสด้านล่างนี้ในหน้าเว็บเพื่อดำเนินการต่อ
 							</p>
 
-							<!-- Luxury OTP Card -->
-							<div style="background: linear-gradient(180deg, #fff7f7 0%%, #fff1f2 100%%); border: 2px dashed #b70011; border-radius: 16px; padding: 28px 20px; text-align: center; margin-bottom: 28px; box-shadow: inset 0 2px 4px rgba(183,0,17,0.04);">
-								<div style="color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;">
-									รหัสยืนยันของคุณ (ONE-TIME PASSWORD)
-								</div>
-								<div style="font-size: 42px; font-weight: 900; letter-spacing: 12px; color: #b70011; font-family: 'Courier New', Courier, monospace; text-shadow: 0 2px 4px rgba(183,0,17,0.15); margin: 6px 0 10px; padding-left: 12px;">
+							<!-- OTP -->
+							<div style="background-color: #fafafa; border: 1px solid #e4e4e7; border-radius: 6px; padding: 20px; text-align: center; margin-bottom: 20px;">
+								<div style="font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #18181b; font-family: 'Courier New', Courier, monospace;">
 									%s
 								</div>
-								<div style="display: inline-block; background-color: #fee2e2; color: #991b1b; padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;">
-									⏱️ รหัสมีอายุการใช้งาน 15 นาที
-								</div>
 							</div>
 
-							<!-- Action Button -->
-							<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 28px;">
-								<tr>
-									<td align="center">
-										<a href="https://jjautopart-pakchong.com/login" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #b70011 0%%, #dc2626 100%%); color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 14px 34px; border-radius: 12px; box-shadow: 0 6px 20px -3px rgba(183, 0, 17, 0.4); letter-spacing: 0.5px;">
-											เปิดหน้าเว็บเพื่อกรอกรหัส →
-										</a>
-									</td>
-								</tr>
-							</table>
+							<p style="font-size: 13px; color: #71717a; margin: 0 0 24px;">
+								รหัสนี้ใช้ได้ครั้งเดียวและหมดอายุภายใน 15 นาที
+							</p>
 
-							<!-- Notice Alert Box -->
-							<div style="background-color: #f8fafc; border-left: 4px solid #64748b; border-radius: 8px; padding: 14px 18px; margin-bottom: 12px;">
-								<p style="color: #64748b; font-size: 12px; line-height: 1.6; margin: 0;">
-									🔒 <strong>คำแนะนำด้านความปลอดภัย:</strong> โปรดอย่าเปิดเผยรหัส OTP นี้ให้แก่ผู้อื่น หากคุณไม่ได้ทำรายการนี้ สามารถเพิกเฉยต่ออีเมลฉบับนี้ได้ บัญชีของคุณยังคงปลอดภัย
-								</p>
-							</div>
-							<p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 16px 0 0;">
-								เวลาที่ทำรายการ: %s
+							<p style="font-size: 13px; line-height: 1.6; color: #71717a; margin: 0; padding-top: 16px; border-top: 1px solid #e4e4e7;">
+								หากคุณไม่ได้ขอตั้งรหัสผ่านใหม่ ไม่ต้องดำเนินการใดๆ กับอีเมลฉบับนี้ บัญชีของคุณยังปลอดภัยอยู่
 							</p>
 						</td>
 					</tr>
 
-					<!-- Footer Section -->
+					<!-- Footer -->
 					<tr>
-						<td style="background-color: #0f172a; padding: 24px 30px; text-align: center; border-top: 1px solid #1e293b;">
-							<p style="color: #94a3b8; font-size: 12px; margin: 0 0 6px; font-weight: 600;">
-								JJ AutoParts Pak Chong • ปากช่อง นครราชสีมา
-							</p>
-							<p style="color: #64748b; font-size: 11px; margin: 0;">
-								&copy; %d JJ AutoParts. สงวนลิขสิทธิ์ทุกประการ
+						<td style="padding: 16px 32px; background-color: #fafafa; border-top: 1px solid #e4e4e7;">
+							<p style="font-size: 11px; color: #a1a1aa; margin: 0;">
+								JJ AutoParts Pak Chong &middot; &copy; %d
 							</p>
 						</td>
 					</tr>
@@ -246,7 +198,7 @@ func (s *emailService) SendPasswordResetOTP(toEmail, username, otp string) error
 		</tr>
 	</table>
 </body>
-</html>`, username, otp, currentTime, currentYear)
+</html>`, username, otp, currentYear)
 
 	return s.SendEmail([]string{toEmail}, subject, htmlBody)
 }
