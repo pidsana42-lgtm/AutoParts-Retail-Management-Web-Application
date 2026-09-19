@@ -40,7 +40,7 @@ export default function Sidebar({
 
         <div className="h-16 border-b border-gray-800 flex items-center justify-center px-4 overflow-hidden">
           <img
-            src="/LOGO.svg"
+            src="/LOGO.png"
             alt="AutoParts Logo"
             className={`object-contain transition-all duration-300 filter brightness-0 invert ${
               collapsed ? "h-8 w-8" : "h-10 max-w-[80%]"

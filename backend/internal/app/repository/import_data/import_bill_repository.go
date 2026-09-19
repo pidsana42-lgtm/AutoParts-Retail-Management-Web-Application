@@ -10,6 +10,7 @@ import (
 	"backend/internal/app/enum"
 	"backend/internal/pkg/lotcode"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type ImportBillRepository interface {
@@ -72,10 +73,17 @@ func (r *billRepository) SaveBillImportJob(job *entity.BillImportJob) error {
 }
 
 func (r *billRepository) CreateBillItem(item *entity.BillItem) error {
+	if item.POItemID != nil || item.PreOrderItemID != nil {
+		return fmt.Errorf("รายการอ้างอิงใบสั่งซื้อต้องรับเข้าผ่านการยืนยันบิล")
+	}
 	return r.db.Create(item).Error
 }
 
 func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob, role string) error {
+	return r.confirmBillImportTransaction(bill, items, job, role, nil)
+}
+
+func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob, role string, verified *bool) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		bill.BillNo = strings.TrimSpace(bill.BillNo)
 		if bill.BillNo == "" {
@@ -160,33 +168,21 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 
 		// reverseBillStock subtracts the stock that was added by a previous confirm of this bill.
 		// Must be called before deleting the old bill_items, so quantities are still readable.
+		stockUnchanged := false
 		reverseBillStock := func(billID, supplierID uint) error {
-			var oldItems []entity.BillItem
-			if err := tx.Unscoped().Where("bill_id = ?", billID).Find(&oldItems).Error; err != nil {
+			var old entity.Bill
+			if err := tx.Unscoped().First(&old, billID).Error; err != nil {
 				return err
 			}
-			for _, item := range oldItems {
-				if item.ProductID == 0 || item.OrderQuantity <= 0 {
-					continue
-				}
-				if err := tx.Model(&entity.Product{}).
-					Where("id = ? AND quantity >= ?", item.ProductID, item.OrderQuantity).
-					UpdateColumn("quantity", gorm.Expr("quantity - ?", item.OrderQuantity)).Error; err != nil {
-					return err
-				}
-				// คืนยอดต่อบริษัทด้วย (ลดได้ไม่ต่ำกว่า 0) เพื่อไม่ให้ที่มาค้างยอดผิดหลัง import ซ้ำ
-				if err := tx.Model(&entity.Inventory{}).
-					Where("product_id = ? AND supplier_id = ?", item.ProductID, supplierID).
-					Updates(map[string]interface{}{
-						"inventory_quantity":     gorm.Expr("GREATEST(inventory_quantity - ?, 0)", item.OrderQuantity),
-						"last_updated_date_time": time.Now(),
-					}).Error; err != nil {
-					return err
-				}
+			var err error
+			stockUnchanged, err = receiptStockUnchanged(tx, &old, bill, items)
+			if err != nil {
+				return err
 			}
-			// ลบ stock_movements ที่เคยบันทึกไว้ตอน confirm ครั้งก่อนของบิลนี้ทั้งหมด — จะสร้างใหม่ให้ตรงกับ
-			// รายการปัจจุบันในลูปด้านล่าง ไม่งั้นจะเหลือ "สลิป" ของยอดที่เพิ่งถูกย้อนกลับไปค้างอยู่ในประวัติ
-			return tx.Unscoped().Where("bill_id = ?", billID).Delete(&entity.StockMovement{}).Error
+			if stockUnchanged {
+				return nil
+			}
+			return reverseReceiptStock(tx, billID, supplierID)
 		}
 
 		// recordBillStockIn บันทึกแถว stock_movements (movement_type = IN, ผูก BillID) ทุกครั้งที่บิลนี้ทำให้
@@ -213,19 +209,25 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 		}
 
 		var existingBill entity.Bill
-		errExist := tx.Unscoped().Where("LOWER(TRIM(bill_no)) = LOWER(TRIM(?))", bill.BillNo).First(&existingBill).Error
+		errExist := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).Where("LOWER(TRIM(bill_no)) = LOWER(TRIM(?))", bill.BillNo).First(&existingBill).Error
 
 		if errExist == nil && existingBill.ID > 0 {
+			if bill.ID != 0 && bill.ID != existingBill.ID {
+				return fmt.Errorf("เลขที่บิลซ้ำกับบิลอื่น")
+			}
+			if bill.POID == nil {
+				bill.POID = existingBill.POID
+			}
 			bill.ID = existingBill.ID
 			if existingBill.DeletedAt.Valid {
 				if err := tx.Unscoped().Model(&existingBill).Update("deleted_at", nil).Error; err != nil {
 					return err
 				}
 			}
-			if err := tx.Unscoped().Model(&existingBill).Updates(bill).Error; err != nil {
+			if err := reverseBillStock(existingBill.ID, existingBill.SupplierID); err != nil {
 				return err
 			}
-			if err := reverseBillStock(existingBill.ID, existingBill.SupplierID); err != nil {
+			if err := tx.Unscoped().Model(&existingBill).Updates(bill).Error; err != nil {
 				return err
 			}
 			if err := tx.Unscoped().Where("bill_id = ?", existingBill.ID).Delete(&entity.BillItem{}).Error; err != nil {
@@ -242,16 +244,19 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 			if targetID > 0 {
 				var linkedBill entity.Bill
 				if errLinked := tx.Unscoped().Where("id = ?", targetID).First(&linkedBill).Error; errLinked == nil {
+					if bill.POID == nil {
+						bill.POID = linkedBill.POID
+					}
 					bill.ID = targetID
 					if linkedBill.DeletedAt.Valid {
 						if err := tx.Unscoped().Model(&linkedBill).Update("deleted_at", nil).Error; err != nil {
 							return err
 						}
 					}
-					if err := tx.Unscoped().Model(&linkedBill).Updates(bill).Error; err != nil {
+					if err := reverseBillStock(targetID, linkedBill.SupplierID); err != nil {
 						return err
 					}
-					if err := reverseBillStock(targetID, linkedBill.SupplierID); err != nil {
+					if err := tx.Unscoped().Model(&linkedBill).Updates(bill).Error; err != nil {
 						return err
 					}
 					if err := tx.Unscoped().Where("bill_id = ?", targetID).Delete(&entity.BillItem{}).Error; err != nil {
@@ -269,22 +274,33 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 			}
 		}
 
+		if err := validateReceiptLinks(tx, bill, items); err != nil {
+			return err
+		}
+		if err := tx.Model(bill).Update("po_id", bill.POID).Error; err != nil {
+			return err
+		}
+		isDraft := strings.EqualFold(bill.PaymentStatus, "draft")
 		var changedItems []entity.BillItem
 
 		for i := range items {
 			items[i].BillID = bill.ID
+			receiptQuantity := items[i].OrderQuantity
+			if isDraft || stockUnchanged {
+				receiptQuantity = 0
+			}
 
 			var prod entity.Product
 			var err error
 
 			if items[i].ProductID > 0 {
-				err = tx.Where("id = ?", items[i].ProductID).First(&prod).Error
+				err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", items[i].ProductID).First(&prod).Error
 			} else {
 				prodName := strings.TrimSpace(items[i].CompanyProductName)
 				prodCode := strings.TrimSpace(items[i].CompanyProductCode)
 				// กรณีชื่อ/รหัสซ้ำกันมีหลายสินค้า (ชื่อเดียวกันแต่ต่างบริษัท) → เลือกตัวที่เคยรับจากบริษัทนี้มาก่อน
 				// แล้วค่อย fallback เป็นตัวที่ id เก่าสุด เพื่อให้ผลลัพธ์คาดเดาได้เสมอ
-				err = tx.Where("LOWER(TRIM(product_name)) = LOWER(TRIM(?)) OR (LOWER(TRIM(product_code)) = LOWER(TRIM(?)) AND product_code != '')", prodName, prodCode).
+				err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("LOWER(TRIM(product_name)) = LOWER(TRIM(?)) OR (LOWER(TRIM(product_code)) = LOWER(TRIM(?)) AND product_code != '')", prodName, prodCode).
 					Order(fmt.Sprintf("CASE WHEN EXISTS (SELECT 1 FROM inventories i WHERE i.product_id = products.id AND i.supplier_id = %d AND i.deleted_at IS NULL) THEN 0 ELSE 1 END", bill.SupplierID)).
 					Order("id").
 					First(&prod).Error
@@ -317,7 +333,7 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 					Cost_price:       items[i].PricePerUnit,
 					Sale_price:       items[i].PricePerUnit * 1.25,
 					Is_Active:        true,
-					Quantity:         items[i].OrderQuantity,
+					Quantity:         receiptQuantity,
 					Limit_Quantity:   5,
 					Models:           []entity.Models{{Model: gorm.Model{ID: 1}}},
 					UnitID:           1,
@@ -333,21 +349,21 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 				prod = newProd
 
 				// ผูกสินค้าใหม่เข้ากับบริษัทที่นำเข้าบิลนี้ ตั้งแต่ชิ้นแรก
-				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, items[i].OrderQuantity, items[i].CompanyProductCode); err != nil {
+				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, receiptQuantity, items[i].CompanyProductCode); err != nil {
 					return err
 				}
 			} else if err == nil {
-				if err := tx.Model(&prod).Update("quantity", prod.Quantity+items[i].OrderQuantity).Error; err != nil {
+				if err := tx.Model(&prod).Update("quantity", prod.Quantity+receiptQuantity).Error; err != nil {
 					return err
 				}
 				// บวกยอดเข้าบริษัทของบิลนี้ — ทำให้สินค้าชื่อเดียวกันจากต่างบริษัทไล่ยอด/ที่มาแยกกันได้
-				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, items[i].OrderQuantity, items[i].CompanyProductCode); err != nil {
+				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, receiptQuantity, items[i].CompanyProductCode); err != nil {
 					return err
 				}
 				// สินค้าที่มีอยู่แล้วรับเข้าเพิ่ม -> บันทึกลงฟีดการเคลื่อนไหว (สินค้าใหม่ไม่ต้องซ้ำ เพราะมี PRODUCT_ADDED
 				// ที่โชว์จำนวนเริ่มต้นให้อยู่แล้วตอนสร้างแถวสินค้าด้านบน)
 				billNote := fmt.Sprintf("รับเข้าจากบิลซื้อ %s", bill.BillNo)
-				if err := recordBillStockIn(prod.ID, bill.SupplierID, items[i].OrderQuantity, billNote); err != nil {
+				if err := recordBillStockIn(prod.ID, bill.SupplierID, receiptQuantity, billNote); err != nil {
 					return err
 				}
 				if items[i].PricePerUnit > 0 && items[i].PricePerUnit != prod.Cost_price {
@@ -391,6 +407,12 @@ func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items [
 
 		isOwner := strings.EqualFold(role, string(enum.RoleOwner)) || strings.EqualFold(role, string(enum.RoleAdmin)) || strings.EqualFold(role, "Owner") || strings.EqualFold(role, "Admin")
 		autoApprove := isOwner || len(changedItems) == 0
+		if verified != nil {
+			autoApprove = *verified
+		}
+		if isDraft {
+			autoApprove = false
+		}
 		if autoApprove {
 			if err := tx.Model(&entity.Bill{}).Where("id = ?", bill.ID).Update("is_verified", true).Error; err != nil {
 				return err
@@ -435,74 +457,20 @@ func (r *billRepository) GetBillByID(id uint) (*entity.Bill, error) {
 }
 
 func (r *billRepository) UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		bill.ID = id
-		if err := tx.Model(bill).Updates(bill).Error; err != nil {
-			return err
-		}
-		// GORM's struct-based Updates(bill) above skips zero-value fields, so bill.IsVerified == false
-		// would silently leave a stale is_verified=true from a prior approval untouched. Force it
-		// explicitly so re-editing a bill (e.g. by an employee after a price change) resets approval.
-		if err := tx.Model(&entity.Bill{}).Where("id = ?", id).Update("is_verified", bill.IsVerified).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("bill_id = ?", id).Delete(&entity.BillItem{}).Error; err != nil {
-			return err
-		}
-		for i := range items {
-			items[i].BillID = id
-
-			// Ensure items[i].ProductID is valid to satisfy foreign key constraint fk_products_bill_items
-			if items[i].ProductID > 0 {
-				var count int64
-				tx.Model(&entity.Product{}).Where("id = ?", items[i].ProductID).Count(&count)
-				if count == 0 {
-					items[i].ProductID = 0
-				}
-			}
-
-			if items[i].ProductID == 0 {
-				var prod entity.Product
-				prodName := strings.TrimSpace(items[i].CompanyProductName)
-				prodCode := strings.TrimSpace(items[i].CompanyProductCode)
-				if prodName != "" || prodCode != "" {
-					if errMatch := tx.Where("LOWER(TRIM(product_name)) = LOWER(TRIM(?)) OR (LOWER(TRIM(product_code)) = LOWER(TRIM(?)) AND product_code != '')", prodName, prodCode).First(&prod).Error; errMatch == nil {
-						items[i].ProductID = prod.ID
-					}
-				}
-				if items[i].ProductID == 0 {
-					var firstProd entity.Product
-					if errFirst := tx.First(&firstProd).Error; errFirst == nil {
-						items[i].ProductID = firstProd.ID
-					}
-				}
-			}
-
-			if err := tx.Create(&items[i]).Error; err != nil {
-				return err
-			}
-		}
-
-		// เมื่อเจ้าของอนุมัติ → อัปเดต cost_price ของสินค้าที่ match
-		if bill.IsVerified {
-			for _, item := range items {
-				if item.ProductID == 0 || item.PricePerUnit <= 0 {
-					continue
-				}
-				if err := tx.Model(&entity.Product{}).
-					Where("id = ?", item.ProductID).
-					Update("cost_price", item.PricePerUnit).Error; err != nil {
-					return err
-				}
-			}
-		}
-
-		return nil
-	})
+	bill.ID = id
+	verified := bill.IsVerified
+	return r.confirmBillImportTransaction(bill, items, nil, "", &verified)
 }
 
 func (r *billRepository) DeleteBill(id uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		var bill entity.Bill
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&bill, id).Error; err != nil {
+			return err
+		}
+		if err := reverseReceiptStock(tx, id, bill.SupplierID); err != nil {
+			return err
+		}
 		if err := tx.Where("bill_id = ?", id).Delete(&entity.BillItem{}).Error; err != nil {
 			return err
 		}
@@ -539,13 +507,13 @@ func (r *billRepository) FindOrCreateSupplierByName(name string) (uint, error) {
 
 func (r *billRepository) ListPurchaseOrders() ([]entity.PO, error) {
 	var pos []entity.PO
-	err := r.db.Preload("Items").Preload("Supplier").Order("created_at desc").Find(&pos).Error
+	err := r.db.Preload("PO_Items").Preload("Supplier").Order("created_at desc").Find(&pos).Error
 	return pos, err
 }
 
 func (r *billRepository) GetPurchaseOrderByID(id uint) (*entity.PO, error) {
 	var po entity.PO
-	err := r.db.Preload("Items").Preload("Supplier").First(&po, id).Error
+	err := r.db.Preload("PO_Items").Preload("Supplier").First(&po, id).Error
 	if err != nil {
 		return nil, err
 	}

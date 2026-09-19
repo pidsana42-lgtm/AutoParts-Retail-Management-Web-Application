@@ -124,7 +124,7 @@ const Login: React.FC = () => {
         <div className="absolute left-12 top-12 z-10 animate-[fade-in-up_0.6s_ease-out_both]">
           <div className="flex items-center gap-3 text-xl font-bold tracking-widest text-white">
             <div className="flex-none flex h-10 w-10 items-center justify-center rounded bg-white p-1.5 shadow-md">
-              <img src="/LOGO.svg" alt="AutoParts Logo" className="h-full w-full object-contain" />
+              <img src="/LOGO.png" alt="AutoParts Logo" className="h-full w-full object-contain" />
             </div>
             JJ AUTOPARTS
           </div>

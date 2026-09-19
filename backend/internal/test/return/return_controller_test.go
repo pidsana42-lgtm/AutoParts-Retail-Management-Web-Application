@@ -121,7 +121,7 @@ func TestReturnControllerCreateUsesAuthenticatedActorAndRole(t *testing.T) {
 	for _, actor := range []any{float64(23), uint(23), int(23), int64(23)} {
 		t.Run(fmt.Sprintf("actor_%T", actor), func(t *testing.T) {
 			service := &returnHTTPServiceStub{}
-			body := `{"original_order_id":9,"reason":"Wrong part","refund_method":"CASH","created_by":999,"approved_by":998,"role":"OWNER","status":"APPROVED"}`
+			body := `{"original_order_id":9,"reason":"Wrong part","refund_method":"CASH","created_by":999,"approved_by":998,"role":"OWNER","status":"APPROVED","items":[{"product_id":1,"quantity":1,"unit_price":100}]}`
 			response := requestReturnController(service, http.MethodPost, "/api/returns", body, actor, " employee ")
 			assertReturnHTTPStatus(t, response, http.StatusCreated)
 			if len(service.calls) != 1 || service.calls[0] != "CreateReturn" || service.actorID != 23 || service.role != "EMPLOYEE" {

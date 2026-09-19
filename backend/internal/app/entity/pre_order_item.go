@@ -3,6 +3,7 @@ package entity
 import "gorm.io/gorm"
 
 type PreOrderItem struct {
+	ReceivedQuantity int `gorm:"-" json:"received_quantity"`
 	gorm.Model
 	PreOrderID uint      `gorm:"not null;index" json:"pre_order_id"`
 	PreOrder   *PreOrder `gorm:"foreignKey:PreOrderID" json:"pre_order,omitempty"`

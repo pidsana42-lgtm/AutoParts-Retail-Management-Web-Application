@@ -13,11 +13,11 @@ type CreatePreOrderDTO struct {
 	CustomerID    uint                    `json:"customer_id"`
 	CustomerName  string                  `json:"customer_name"`
 	CustomerPhone string                  `json:"customer_phone"`
-	DepositAmount float64                 `json:"deposit_amount"`
+	DepositAmount float64                 `json:"deposit_amount" binding:"gte=0"`
 	Status        string                  `json:"status" binding:"required"`
 	OrderDate     time.Time               `json:"order_date" binding:"required"`
 	SupplierID    uint                    `json:"supplier_id"`
-	PreOrderItems []CreatePreOrderItemDTO `json:"pre_order_items"`
+	PreOrderItems []CreatePreOrderItemDTO `json:"pre_order_items" binding:"required,min=1,dive"`
 }
 
 type UpdatePreOrderDTO struct {
@@ -25,14 +25,15 @@ type UpdatePreOrderDTO struct {
 	CustomerID    *uint                    `json:"customer_id,omitempty"`
 	CustomerName  *string                  `json:"customer_name,omitempty"`
 	CustomerPhone *string                  `json:"customer_phone,omitempty"`
-	DepositAmount *float64                 `json:"deposit_amount,omitempty"`
+	DepositAmount *float64                 `json:"deposit_amount,omitempty" binding:"omitempty,gte=0"`
 	Status        *string                  `json:"status,omitempty"`
 	OrderDate     *time.Time               `json:"order_date,omitempty"`
 	SupplierID    *uint                    `json:"supplier_id,omitempty"`
-	PreOrderItems *[]CreatePreOrderItemDTO `json:"pre_order_items,omitempty"`
+	PreOrderItems *[]CreatePreOrderItemDTO `json:"pre_order_items,omitempty" binding:"omitempty,min=1,dive"`
 }
 
 type PreOrderResponseDTO struct {
+	CanEdit       bool                      `json:"can_edit"`
 	ID            uint                      `json:"id"`
 	PreOrderType  string                    `json:"pre_order_type"`
 	CustomerID    uint                      `json:"customer_id"`
@@ -103,6 +104,20 @@ func (d *UpdatePreOrderDTO) ToEntity(existing entity.PreOrder) entity.PreOrder {
 }
 
 func ToPreOrderResponseDTO(m *entity.PreOrder) PreOrderResponseDTO {
+	status := m.Status
+	if status != "COMPLETED" && status != "CANCELLED" {
+		received, complete := false, len(m.PreOrderItems) > 0
+		for _, item := range m.PreOrderItems {
+			received = received || item.ReceivedQuantity > 0
+			complete = complete && item.Quantity > 0 && item.ReceivedQuantity >= item.Quantity
+		}
+		if complete {
+			status = "READY"
+		} else if received {
+			status = "PARTIALLY_RECEIVED"
+		}
+	}
+
 	var items []PreOrderItemResponseDTO
 	for _, item := range m.PreOrderItems {
 		items = append(items, ToPreOrderItemResponseDTO(&item))
@@ -121,13 +136,14 @@ func ToPreOrderResponseDTO(m *entity.PreOrder) PreOrderResponseDTO {
 	}
 
 	return PreOrderResponseDTO{
+		CanEdit:       status == "PENDING" || status == "PO_PENDING" || status == "PO_DRAFT",
 		ID:            m.ID,
 		PreOrderType:  m.PreOrderType,
 		CustomerID:    m.CustomerID,
 		CustomerName:  custName,
 		CustomerPhone: custPhone,
 		DepositAmount: m.DepositAmount,
-		Status:        m.Status,
+		Status:        status,
 		OrderDate:     m.OrderDate,
 		SupplierID:    m.SupplierID,
 		SupplierName:  suppName,

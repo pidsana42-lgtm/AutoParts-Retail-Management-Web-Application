@@ -49,4 +49,23 @@ describe('Import item validation', () => {
     expect(issues[1].fields).toEqual(['quantity', 'code']);
     expect(issues[1].messages).toContain('รหัสสินค้าซ้ำกับแถว 1, 2');
   });
+  it('does not flag a freshly added blank row (no code/name, price still 0) as an error', () => {
+    // ค่าเริ่มต้นตรงกับ handleAddRow ใน import_bill.tsx: code/name ว่าง, qty=1, price=0
+    const issues = validateBillItems([{
+      ...importItem, company_product_code: '', company_product_name: '', price_per_unit: 0,
+    }]);
+    expect(issues).toEqual({});
+  });
+  it('still flags an otherwise-blank row once the user enters a real price without a code/name', () => {
+    const issues = validateBillItems([{
+      ...importItem, company_product_code: '', company_product_name: '', price_per_unit: 50,
+    }]);
+    expect(issues[0].fields).toEqual(['code', 'name']);
+  });
+  it('still flags a blank row with an invalid quantity even though code/name are excused', () => {
+    const issues = validateBillItems([{
+      ...importItem, company_product_code: '', company_product_name: '', price_per_unit: 0, order_quantity: -1,
+    }]);
+    expect(issues[0].fields).toEqual(['quantity']);
+  });
 });

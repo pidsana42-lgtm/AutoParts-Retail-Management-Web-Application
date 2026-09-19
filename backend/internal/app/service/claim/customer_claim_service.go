@@ -62,18 +62,26 @@ func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomer
 		claimEntity.ClaimAmount = total
 	}
 
+	// Let the repository check the entire batch under the sale-order lock
+	// before writing a header, including duplicate product rows.
+	for _, item := range input.Items {
+		claimEntity.Items = append(claimEntity.Items, item.ToEntity())
+	}
 	if err := s.repo.CreateCustomerClaim(&claimEntity); err != nil {
 		return claimDTO.CustomerClaimResponseDTO{}, err
 	}
 
 	// สร้าง items พร้อมกันหลัง claim header ถูกสร้างแล้ว
-	for _, itemInput := range input.Items {
+	for i, itemInput := range input.Items {
 		itemEntity := itemInput.ToEntity()
 		itemEntity.CustomerClaimID = claimEntity.ID
 		itemEntity.Status = claimEntity.Status // ให้สถานะของ Item ล้อตามสถานะของใบเคลม (เช่น APPROVED หรือ PENDING)
+		issueOut, receiveIn := prepareStockFlags(&itemEntity)
 		if err := s.repo.CreateCustomerClaimItem(&itemEntity); err != nil {
 			return claimDTO.CustomerClaimResponseDTO{}, err
 		}
+		s.applyStockAdjustments(&itemEntity, issueOut, receiveIn)
+		claimEntity.Items[i] = itemEntity
 	}
 
 	// แจ้งเตือนเฉพาะเจ้าของร้าน/แอดมิน (ไม่ไปโผล่หน้าพนักงานคนอื่น) — ของเดิม broadcast ทุกคน
@@ -98,11 +106,58 @@ func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomer
 
 func (s *customerClaimService) CreateCustomerClaimItem(input claimDTO.CreateCustomerClaimItemDTO) (claimDTO.CustomerClaimItemResponseDTO, error) {
 	entity := input.ToEntity()
+	issueOut, receiveIn := prepareStockFlags(&entity)
 	err := s.repo.CreateCustomerClaimItem(&entity)
 	if err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
+	s.applyStockAdjustments(&entity, issueOut, receiveIn)
 	return claimDTO.ToCustomerClaimItemResponseDTO(&entity), nil
+}
+
+// prepareStockFlags: ตรวจว่าตอนนี้ต้อง "จ่ายสินค้าดีออกไปทดแทน" (StockOutIssued) หรือ
+// "รับสินค้าทดแทนจากซัพพลายเออร์เข้าคลัง" (StockInReceived) หรือยัง โดยดูจาก:
+//   - จ่ายออก: ประเภทเคลม SUPPLIER_PENDING (ให้ของสำรองไปก่อนระหว่างรอส่งของเสียไปเคลม) หรือ
+//     INSTANT ที่สถานะเป็น APPROVED (หยิบของดีให้ลูกค้าทันทีตอนอนุมัติ)
+//   - รับเข้า: resolution ถูกตั้งเป็น REPLACEMENT_RECEIVED (พนักงานกดยืนยันว่าได้รับของเปลี่ยนจากซัพพลายเออร์แล้ว)
+//
+// ถ้าเข้าเงื่อนไขและ "ยังไม่เคยทำมาก่อน" (เช็คจาก flag เดิมของ item) จะ set flag เป็น true ทันที (ให้ถูกบันทึก
+// ไปพร้อมกับการ Save/Create ครั้งนี้เลย) และคืนค่ากลับมาว่าต้องปรับสต็อกจริงหลัง save สำเร็จหรือไม่ — ป้องกันการ
+// ตัด/เติมสต็อกซ้ำเวลามีคนสลับสถานะไปมา (เช่น อนุมัติ -> ปฏิเสธ -> อนุมัติใหม่) เพราะของจริงจ่าย/รับแค่ครั้งเดียว
+func prepareStockFlags(item *entity.CustomerClaimItem) (issueOut, receiveIn bool) {
+	if item.ProductID == 0 || item.Qty == 0 {
+		return false, false
+	}
+	claimTypeUp := strings.ToUpper(strings.TrimSpace(item.ClaimType))
+	statusUp := strings.ToUpper(strings.TrimSpace(item.Status))
+	resolutionUp := strings.ToUpper(strings.TrimSpace(item.Resolution))
+
+	if !item.StockOutIssued && (claimTypeUp == "SUPPLIER_PENDING" || (claimTypeUp == "INSTANT" && statusUp == "APPROVED")) {
+		item.StockOutIssued = true
+		issueOut = true
+	}
+	if !item.StockInReceived && resolutionUp == "REPLACEMENT_RECEIVED" {
+		item.StockInReceived = true
+		receiveIn = true
+	}
+	return issueOut, receiveIn
+}
+
+func (s *customerClaimService) applyStockAdjustments(item *entity.CustomerClaimItem, issueOut, receiveIn bool) {
+	if issueOut {
+		s.adjustProductStock(item.ProductID, -int(item.Qty), "CLAIM_OUT",
+			fmt.Sprintf("จ่ายสินค้าทดแทนให้ลูกค้า (รายการเคลม #%d)", item.ID))
+	}
+	if receiveIn {
+		s.adjustProductStock(item.ProductID, int(item.Qty), "CLAIM_IN",
+			fmt.Sprintf("รับสินค้าทดแทนจากซัพพลายเออร์ (รายการเคลม #%d)", item.ID))
+	}
+}
+
+func (s *customerClaimService) adjustProductStock(productID uint, delta int, movementType, note string) {
+	if err := s.repo.AdjustProductStock(productID, delta, movementType, note); err != nil {
+		fmt.Printf("[Stock] failed to adjust product %d stock (%s): %v\n", productID, movementType, err)
+	}
 }
 
 func (s *customerClaimService) GetCustomerClaimByID(id uint) (claimDTO.CustomerClaimResponseDTO, error) {
@@ -223,9 +278,11 @@ func (s *customerClaimService) UpdateCustomerClaimItem(id uint, input claimDTO.U
 	if input.EvidenceURL != "" {
 		existing.EvidenceURL = input.EvidenceURL
 	}
+	issueOut, receiveIn := prepareStockFlags(existing)
 	if err := s.repo.UpdateCustomerClaimItem(existing); err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
+	s.applyStockAdjustments(existing, issueOut, receiveIn)
 	s.syncParentClaimStatus(existing.CustomerClaimID)
 	return claimDTO.ToCustomerClaimItemResponseDTO(existing), nil
 }
@@ -239,9 +296,11 @@ func (s *customerClaimService) UpdateCustomerClaimItemStatus(id uint, status str
 		return claimDTO.CustomerClaimItemResponseDTO{}, errors.New("รายการเคลมนี้ถูกส่งมอบลูกค้าแล้ว ไม่สามารถแก้ไขได้อีก")
 	}
 	existing.Status = status
+	issueOut, receiveIn := prepareStockFlags(existing)
 	if err := s.repo.UpdateCustomerClaimItem(existing); err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
+	s.applyStockAdjustments(existing, issueOut, receiveIn)
 	s.syncParentClaimStatus(existing.CustomerClaimID)
 	return claimDTO.ToCustomerClaimItemResponseDTO(existing), nil
 }

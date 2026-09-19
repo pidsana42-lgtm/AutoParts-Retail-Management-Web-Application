@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ImportBill from './import_bill';
+import EmployeeImport from '../../employee/import';
 import { importProduct, importSupplier, savedImport, scannedImport } from '../../../test/importFixtures';
 import type { ScannedBillData } from '../../../interface/import';
 
@@ -24,23 +25,25 @@ vi.mock('../../../components/elements/toast', () => ({
   useToast: () => ({ toast: mocks.toast }),
 }));
 
-const sessionKey = 'import-bill-session:owner:current-user';
-function Location() { return <output data-testid="location">{useLocation().pathname}</output>; }
-function mount(path = '/owner/import-bills/scan', form?: ScannedBillData, editingBillId?: number) {
-  if (form) sessionStorage.setItem(sessionKey, JSON.stringify({ formData: form, editingBillId, batchResults: [], originalPOItems: [] }));
-  return render(<MemoryRouter initialEntries={[path]}><ImportBill /><Location /></MemoryRouter>);
-}
-async function uploadAndScan(files = [new File(['bill'], 'invoice.jpg', { type: 'image/jpeg' })]) {
-  const user = userEvent.setup();
-  const { container } = mount();
-  await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/wms/products'));
-  // The upload input is intentionally hidden inside the visible upload label.
-  await user.upload(container.querySelector<HTMLInputElement>('input[type="file"]')!, files);
-  await user.click(await screen.findByRole('button', { name: files.length > 1 ? 'สแกนข้อมูลแบบกลุ่ม' : 'สแกนข้อมูลบิล' }));
-  return user;
-}
+describe.each(['owner', 'employee'] as const)('Import bill workflows for %s (real views, mocked network)', role => {
+  const basePath = role === 'employee' ? '/employee/import' : '/owner/import-bills';
+  const sessionKey = `import-bill-session:${role}:current-user`;
+  const Page = role === 'employee' ? EmployeeImport : ImportBill;
+  function Location() { return <output data-testid="location">{useLocation().pathname}</output>; }
+  function mount(path = `${basePath}/scan`, form?: ScannedBillData, editingBillId?: number) {
+    if (form) sessionStorage.setItem(sessionKey, JSON.stringify({ formData: form, editingBillId, batchResults: [], originalPOItems: [] }));
+    return render(<MemoryRouter initialEntries={[path]}><Page /><Location /></MemoryRouter>);
+  }
+  async function uploadAndScan(files = [new File(['bill'], 'invoice.jpg', { type: 'image/jpeg' })]) {
+    const user = userEvent.setup();
+    const { container } = mount();
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/wms/products'));
+    // The upload input is intentionally hidden inside the visible upload label.
+    await user.upload(container.querySelector<HTMLInputElement>('input[type="file"]')!, files);
+    await user.click(await screen.findByRole('button', { name: files.length > 1 ? 'สแกนข้อมูลแบบกลุ่ม' : 'สแกนข้อมูลบิล' }));
+    return user;
+  }
 
-describe('Import bill frontend workflows (real views, mocked network)', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     sessionStorage.clear();
@@ -62,6 +65,53 @@ describe('Import bill frontend workflows (real views, mocked network)', () => {
   });
   afterEach(() => { sessionStorage.clear(); vi.unstubAllGlobals(); });
 
+  it('imports only the outstanding quantities by PO line, even for the same product', async () => {
+    const po = { id: 71, po_number: 'PO-71', supplier_id: 7, supplier_name: importSupplier.supplier_name, status: 'APPROVED', total_amount: 900,
+      po_items: [
+        { id: 81, product_id: 21, pre_order_item_id: 91, quantity: 4, unit_price: 100, product_name_snapshot: 'กรองน้ำมัน', supply_product_code_snapshot: 'SUP-21' },
+        { id: 82, product_id: 21, quantity: 5, unit_price: 100, product_name_snapshot: 'กรองน้ำมัน', supply_product_code_snapshot: 'SUP-21' },
+      ],
+    };
+    mocks.pos.mockResolvedValue([po]);
+    mocks.po.mockResolvedValue(po);
+    mocks.get.mockImplementation(async (url: string) => ({ data: { data:
+      url === '/wms/suppliers' ? [importSupplier] : url === '/wms/products' ? [importProduct] : url === '/import-data/bills'
+        ? [savedImport({ po_id: 71, payment_status: 'unpaid', bill_items: [{ ...savedImport().bill_items![0], po_item_id: 81, pre_order_item_id: 91, order_quantity: 2 }] })] : [],
+    } }));
+    const user = userEvent.setup();
+    mount(`${basePath}/po`);
+    await user.click(await screen.findByRole('button', { name: 'ดึงข้อมูลเข้าบิล' }));
+    await screen.findAllByPlaceholderText('ชื่อสินค้าในบิล');
+    const form = JSON.parse(sessionStorage.getItem(sessionKey)!).formData;
+    expect(form.items).toEqual([
+      expect.objectContaining({ po_item_id: 81, pre_order_item_id: 91, order_quantity: 2 }),
+      expect.objectContaining({ po_item_id: 82, pre_order_item_id: null, order_quantity: 5 }),
+    ]);
+    expect(form.grand_total).toBe(700);
+    expect(mocks.confirm).not.toHaveBeenCalled();
+  });
+  it('preserves explicit PO and preorder line references when saving a receipt', async () => {
+    const form = scannedImport();
+    form.items[0].po_item_id = 81;
+    form.items[0].pre_order_item_id = 91;
+    sessionStorage.setItem(sessionKey, JSON.stringify({ formData: form, poReference: '71', batchResults: [], originalPOItems: [] }));
+    const user = userEvent.setup();
+    mount(`${basePath}/manual`);
+    await screen.findByDisplayValue('INV-TEST-001');
+    await user.click(screen.getByRole('button', { name: 'บันทึกข้อมูล' }));
+    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledWith(91, expect.objectContaining({
+      bill: expect.objectContaining({ po_id: 71 }),
+      items: [expect.objectContaining({ po_item_id: 81, pre_order_item_id: 91 })],
+    })));
+  });
+  it('does not carry over a leftover PO reference when starting a brand-new manual entry from home', async () => {
+    // Session leftover from an earlier PO-based flow the user never finished/left.
+    sessionStorage.setItem(sessionKey, JSON.stringify({ formData: null, poReference: '71', batchResults: [], originalPOItems: [] }));
+    const user = userEvent.setup();
+    mount(basePath);
+    await user.click(await screen.findByText('กรอกข้อมูลด้วยตนเอง'));
+    expect(await screen.findByRole('combobox')).toHaveValue('');
+  });
   it('uploads an image, displays the AI result and matches its supplier', async () => {
     await uploadAndScan();
     expect(await screen.findByDisplayValue('INV-TEST-001')).toBeInTheDocument();
@@ -122,7 +172,7 @@ describe('Import bill frontend workflows (real views, mocked network)', () => {
       bill: expect.objectContaining({ bill_no: 'INV-TEST-001', supplier_id: 7, subtotal: 300, grand_total: 314, bill_image_id: 81, due_date: '2026-10-09T00:00:00.000Z' }),
       items: [expect.objectContaining({ company_product_name: 'กรองน้ำมันแก้ไขแล้ว', order_quantity: 3, net_amount: 300, product_id: 21 })],
     })));
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/owner\/import-bills$/));
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe(basePath));
     expect(sessionStorage.getItem(sessionKey)).toBeNull();
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }));
   });
@@ -141,7 +191,7 @@ describe('Import bill frontend workflows (real views, mocked network)', () => {
 
   it('restores a saved manual-entry session and updates the existing bill instead of creating one', async () => {
     const user = userEvent.setup();
-    mount('/owner/import-bills/manual', scannedImport(), 51);
+    mount(`${basePath}/manual`, scannedImport(), 51);
     await screen.findByDisplayValue('INV-TEST-001');
     await user.click(screen.getByRole('button', { name: 'บันทึกข้อมูล' }));
     await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(51, expect.objectContaining({ items: [expect.objectContaining({ product_id: 21 })] })));
@@ -150,7 +200,7 @@ describe('Import bill frontend workflows (real views, mocked network)', () => {
 
   it('requires explicit confirmation before saving a draft', async () => {
     const user = userEvent.setup();
-    mount('/owner/import-bills/manual', scannedImport());
+    mount(`${basePath}/manual`, scannedImport());
     await user.click(await screen.findByRole('button', { name: 'บันทึกเป็นแบบร่าง' }));
     expect(mocks.confirm).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'ยืนยันบันทึกเป็นแบบร่าง' }));
@@ -160,7 +210,7 @@ describe('Import bill frontend workflows (real views, mocked network)', () => {
   it('warns about duplicate bill numbers before sending an import', async () => {
     mocks.get.mockImplementation(async (url: string) => ({ data: { data: url === '/import-data/bills' ? [savedImport()] : url === '/wms/products' ? [importProduct] : [] } }));
     const user = userEvent.setup();
-    mount('/owner/import-bills/manual', scannedImport());
+    mount(`${basePath}/manual`, scannedImport());
     await user.click(await screen.findByRole('button', { name: 'บันทึกข้อมูล' }));
     expect(await screen.findByText(/เลขที่บิล.*มีอยู่ในระบบแล้ว/)).toBeInTheDocument();
     expect(mocks.confirm).not.toHaveBeenCalled();
@@ -178,7 +228,7 @@ describe('Import bill frontend workflows (real views, mocked network)', () => {
       excelBillMeta: { bill_no: 'EXCEL-001', supplier_name: importSupplier.supplier_name, due_date: '2026-10-09', receive_date: '2026-09-09' },
       ...overrides,
     }));
-    return mount('/owner/import-bills/mapping');
+    return mount(`${basePath}/mapping`);
   }
 
   it('converts Excel column mappings into editable items, excluding summary and blank rows', async () => {
@@ -188,7 +238,7 @@ describe('Import bill frontend workflows (real views, mocked network)', () => {
     await user.click(screen.getByRole('button', { name: 'ยืนยันการจับคู่คอลัมน์' }));
     expect(await screen.findByDisplayValue('EXCEL-001')).toBeInTheDocument();
     expect(screen.getAllByPlaceholderText('ชื่อสินค้าในบิล')).toHaveLength(1);
-    expect(screen.getByTestId('location')).toHaveTextContent('/owner/import-bills/manual');
+    expect(screen.getByTestId('location')).toHaveTextContent(`${basePath}/manual`);
     const form = JSON.parse(sessionStorage.getItem(sessionKey)!).formData;
     expect(form).toEqual(expect.objectContaining({ subtotal: 2401, grand_total: 2401, supplier_id: 7 }));
     expect(form.items).toEqual([expect.objectContaining({ item_sequence: 1, order_quantity: 2, price_per_unit: 1200.5, net_amount: 2401, unit: 'ชิ้น' })]);
@@ -232,7 +282,7 @@ describe('Import bill frontend workflows (real views, mocked network)', () => {
     await user.click(await screen.findByRole('button', { name: 'บันทึกข้อมูลทั้งหมด (1 บิล)' }));
     await waitFor(() => expect(mocks.confirm).toHaveBeenCalledExactlyOnceWith(102, expect.objectContaining({ bill: expect.objectContaining({ bill_no: 'BATCH-2' }) })));
     expect(await screen.findByText(/ยังมีรายการที่ไม่สำเร็จ/)).toBeInTheDocument();
-    expect(screen.getByTestId('location')).toHaveTextContent('/owner/import-bills/scan');
+    expect(screen.getByTestId('location')).toHaveTextContent(`${basePath}/scan`);
     expect(screen.getByRole('button', { name: /first.jpg/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /second.jpg/ })).not.toBeInTheDocument();
     expect(JSON.parse(sessionStorage.getItem(sessionKey)!).batchResults).toEqual([null]);
@@ -241,7 +291,7 @@ describe('Import bill frontend workflows (real views, mocked network)', () => {
     await user.click(await screen.findByRole('button', { name: 'บันทึกข้อมูลทั้งหมด (1 บิล)' }));
     await waitFor(() => expect(mocks.confirm).toHaveBeenCalledTimes(2));
     expect(mocks.confirm.mock.calls.map(call => call[0])).toEqual([102, 101]);
-    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/owner/import-bills'));
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe(basePath));
   });
 
   it('keeps all failed saves and their edited data, then retries without rescanning', async () => {
@@ -257,7 +307,7 @@ describe('Import bill frontend workflows (real views, mocked network)', () => {
     expect(mocks.confirm).toHaveBeenCalledTimes(2);
     mocks.confirm.mockResolvedValue({ id: 51 });
     await user.click(screen.getByRole('button', { name: 'บันทึกข้อมูลทั้งหมด (2 บิล)' }));
-    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/owner/import-bills'));
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe(basePath));
     expect(mocks.confirm.mock.calls.map(call => call[0])).toEqual([101, 102, 101, 102]);
     expect(mocks.scan).toHaveBeenCalledTimes(2);
   });
@@ -275,7 +325,7 @@ describe('Import bill frontend workflows (real views, mocked network)', () => {
     mount();
     await screen.findByDisplayValue('BATCH-2');
     await user.click(screen.getByRole('button', { name: 'บันทึกข้อมูลทั้งหมด (1 บิล)' }));
-    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/owner/import-bills'));
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe(basePath));
     expect(mocks.confirm.mock.calls.map(call => call[0])).toEqual([101, 102, 102]);
   });
 
@@ -293,7 +343,7 @@ describe('Import bill frontend workflows (real views, mocked network)', () => {
       bill: expect.objectContaining({ subtotal: 400, grand_total: 428 }),
       items: [expect.objectContaining({ item_sequence: 1 }), expect.objectContaining({ item_sequence: 2, company_product_name: 'สินค้าหน้าสองแก้ไข' })],
     })));
-    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/owner/import-bills'));
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe(basePath));
   });
 
   it('restores a merged session as a single bill after refresh', async () => {
