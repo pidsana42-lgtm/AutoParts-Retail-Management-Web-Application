@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"time"
 
@@ -154,7 +155,11 @@ func (s *authService) ForgotPassword(req *authDTO.ForgotPasswordRequest) error {
 	}
 
 	go func() {
-		_ = s.emailSvc.SendPasswordResetOTP(targetEmail, user.Username, otp)
+		if err := s.emailSvc.SendPasswordResetOTP(targetEmail, user.Username, otp); err != nil {
+			log.Printf("[Email] Failed to send OTP to %s: %v\n", targetEmail, err)
+		} else {
+			log.Printf("[Email] Successfully sent OTP to %s\n", targetEmail)
+		}
 	}()
 
 	return nil
