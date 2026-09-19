@@ -46,7 +46,7 @@ describe('Return detail', () => {
     expect(second.getAllByText('฿ 299.50')).toHaveLength(2);
   });
 
-  it.each(['OWNER', 'ADMIN'])('allows %s to approve or reject a pending return', async role => {
+  it.each(['OWNER', 'MANAGER', 'ADMIN'])('allows %s to approve or reject a pending return', async role => {
     renderDetail(role);
     expect(await screen.findByRole('button', { name: 'อนุมัติคืนเงินสำเร็จ' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'ปฏิเสธคำขอคืนเงิน' })).toBeEnabled();
@@ -68,7 +68,9 @@ describe('Return detail', () => {
     mocks.update.mockReturnValue(pending.promise);
     const user = renderDetail();
     const control = await screen.findByRole('button', { name: button });
-    await user.dblClick(control);
+    await user.click(control);
+    expect(mocks.update).not.toHaveBeenCalled();
+    await user.dblClick(within(screen.getByRole('alertdialog')).getByRole('button', { name: status === 'APPROVED' ? 'ยืนยันอนุมัติ' : 'ยืนยันปฏิเสธ' }));
     expect(control).toBeDisabled();
     expect(mocks.update).toHaveBeenCalledExactlyOnceWith(81, { status });
     expect(mocks.refund).not.toHaveBeenCalled();
@@ -80,12 +82,14 @@ describe('Return detail', () => {
     mocks.update.mockRejectedValue({ response: { data: { error: 'รายการถูกดำเนินการแล้ว' } } });
     const user = renderDetail();
     await user.click(await screen.findByRole('button', { name: 'อนุมัติคืนเงินสำเร็จ' }));
-    await waitFor(() => expect(window.alert).toHaveBeenCalledExactlyOnceWith('รายการถูกดำเนินการแล้ว'));
+    expect(mocks.update).not.toHaveBeenCalled();
+    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'ยืนยันอนุมัติ' }));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'error', message: 'รายการถูกดำเนินการแล้ว' })));
     expect(screen.getByRole('button', { name: 'อนุมัติคืนเงินสำเร็จ' })).toBeEnabled();
     expect(screen.queryByText('กลับรายการคืนสินค้าแล้ว')).not.toBeInTheDocument();
   });
 
-  it.each(['OWNER', 'EMPLOYEE', 'ADMIN'])('lets %s refund an approved return only after the existing confirmation', async role => {
+  it.each(['OWNER', 'EMPLOYEE', 'MANAGER', 'ADMIN'])('lets %s refund an approved return only after the existing confirmation', async role => {
     mocks.get.mockResolvedValue({ ...salesReturn, status: 'APPROVED' });
     const pending = deferred<SalesReturn>();
     mocks.refund.mockReturnValue(pending.promise);

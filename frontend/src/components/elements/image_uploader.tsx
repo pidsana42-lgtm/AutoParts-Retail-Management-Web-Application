@@ -8,7 +8,7 @@ interface ImageUploaderProps {
   onClear: () => void;
   label?: string;
   className?: string;
-  variant?: "default" | "document";
+  variant?: "default" | "document" | "profile";
 }
 
 export default function ImageUploader({
@@ -67,7 +67,7 @@ export default function ImageUploader({
             "group relative w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm",
             className
           )}
-          style={{ aspectRatio: "16/7" }}
+            style={{ aspectRatio: variant === "profile" ? "1 / 1" : "16 / 7" }}
         >
           <img
             src={preview}
@@ -101,20 +101,21 @@ export default function ImageUploader({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
+          style={variant === "profile" ? { aspectRatio: "1 / 1" } : undefined}
           className={cn(
             "flex w-full cursor-pointer flex-col items-center justify-center text-center select-none transition-all duration-200",
-            variant === "document"
+            variant === "document" || variant === "profile"
               ? "gap-2 border border-dashed border-[#E7BDB8] bg-white p-8 hover:bg-red-50/20"
               : "gap-3 rounded-xl border-2 border-dashed py-8",
             dragging
               ? "border-red-400 bg-red-50 text-red-500 scale-[1.01]"
-              : variant === "document"
+              : variant === "document" || variant === "profile"
                 ? "text-[#5B5B5B]"
                 : "border-slate-200 bg-slate-50 text-slate-400 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-500",
             className
           )}
         >
-          {variant === "document" ? (
+          {variant === "document" || variant === "profile" ? (
             <UploadCloud className={cn("h-10 w-10 stroke-[1.5]", dragging ? "text-red-500" : "text-[#5B5B5B]")} />
           ) : (
             <div
@@ -126,11 +127,11 @@ export default function ImageUploader({
               <UploadCloud className={cn("h-6 w-6 transition-colors", dragging ? "text-red-500" : "text-slate-400")} />
             </div>
           )}
-          <div>
-            <p className={cn("text-sm", variant === "document" ? "font-normal text-[#1C1B1B]" : "font-semibold")}>
+          <div className={variant === "profile" ? "sr-only" : undefined}>
+            <p className={cn("text-sm", variant === "document" || variant === "profile" ? "font-normal text-[#1C1B1B]" : "font-semibold")}>
               {dragging ? "วางไฟล์ที่นี่เลย!" : "ลากและวางรูปภาพ หรือคลิกเพื่อเลือก"}
             </p>
-            <p className={cn("mt-1 text-xs", variant === "document" ? "font-light text-[#5B5B5B]" : "text-slate-400")}>
+            <p className={cn("mt-1 text-xs", variant === "document" || variant === "profile" ? "font-light text-[#5B5B5B]" : "text-slate-400")}>
               JPG, PNG, WEBP, GIF (ขนาดไม่เกิน 5MB)
             </p>
           </div>

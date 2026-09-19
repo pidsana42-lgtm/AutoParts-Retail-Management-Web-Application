@@ -56,6 +56,13 @@ function savedClaim(status: string): CustomerClaim {
   return { ...claim, items: claim.items!.map(item => item.id === pendingItem.id ? { ...item, status } : item) };
 }
 
+// The status decision control is the shared custom Select (button + portal listbox),
+// not a native <select> — open it, then click the option by its Thai label.
+async function selectStatus(user: ReturnType<typeof userEvent.setup>, label: 'อนุมัติ' | 'ปฏิเสธ') {
+  await user.click(screen.getByRole('button', { name: 'สถานะ สายพานไดชาร์จ' }));
+  await user.click(screen.getByRole('option', { name: label }));
+}
+
 describe('Claim detail item decisions', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -65,24 +72,27 @@ describe('Claim detail item decisions', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
-  it.each(['OWNER', ' admin '])('shows inline decisions only for pending items to %s', async role => {
+  it.each(['OWNER', 'MANAGER', ' admin '])('shows inline decisions only for pending items to %s', async role => {
     mocks.role = role;
-    await openPage();
-    const dropdown = within(itemRow()).getByRole('combobox', { name: 'สถานะ สายพานไดชาร์จ' });
+    const user = await openPage();
+    const dropdown = within(itemRow()).getByRole('button', { name: 'สถานะ สายพานไดชาร์จ' });
     expect(dropdown).toBeEnabled();
-    expect(dropdown).toHaveValue('PENDING');
-    expect(within(dropdown).getByRole('option', { name: 'อนุมัติ' })).toHaveValue('APPROVED');
-    expect(within(dropdown).getByRole('option', { name: 'ปฏิเสธ' })).toHaveValue('REJECTED');
-    expect(within(itemRow('ไฟสปอร์ตไลท์')).queryByRole('combobox')).not.toBeInTheDocument();
-    expect(within(itemRow('ฝาปิดถังน้ำมัน')).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(dropdown).toHaveTextContent('รอดำเนินการ');
+    await user.click(dropdown);
+    const listbox = screen.getByRole('listbox');
+    expect(within(listbox).getByRole('option', { name: 'อนุมัติ' })).toBeInTheDocument();
+    expect(within(listbox).getByRole('option', { name: 'ปฏิเสธ' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(within(itemRow('ไฟสปอร์ตไลท์')).queryByRole('button', { name: /^สถานะ / })).not.toBeInTheDocument();
+    expect(within(itemRow('ฝาปิดถังน้ำมัน')).queryByRole('button', { name: /^สถานะ / })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'แก้ไขข้อมูล' })).toBeInTheDocument();
-    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /^สถานะ / })).toHaveLength(1);
   });
 
   it.each(['EMPLOYEE', 'CUSTOMER', ''])('hides decision and edit controls from role %s, including edit links', async role => {
     mocks.role = role;
     await openPage('/employee/claims/detail/9?edit=1');
-    expect(screen.queryByRole('combobox', { name: /^สถานะ / })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^สถานะ / })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'แก้ไขข้อมูล' })).not.toBeInTheDocument();
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
     expect(mocks.updateStatus).not.toHaveBeenCalled();
@@ -90,22 +100,22 @@ describe('Claim detail item decisions', () => {
 
   it('does not write when the dropdown is opened without selecting a new status', async () => {
     const user = await openPage();
-    await user.click(screen.getByRole('combobox', { name: 'สถานะ สายพานไดชาร์จ' }));
+    await user.click(screen.getByRole('button', { name: 'สถานะ สายพานไดชาร์จ' }));
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(mocks.updateStatus).not.toHaveBeenCalled();
-    expect(screen.getByRole('combobox', { name: 'สถานะ สายพานไดชาร์จ' })).toHaveValue('PENDING');
+    expect(screen.getByRole('button', { name: 'สถานะ สายพานไดชาร์จ' })).toHaveTextContent('รอดำเนินการ');
   });
 
   it.each([
-    { action: 'อนุมัติ', status: 'APPROVED', badge: 'อนุมัติแล้ว' },
-    { action: 'ปฏิเสธ', status: 'REJECTED', badge: 'ปฏิเสธ' },
-  ])('saves $action immediately on selection without a modal and displays the server result', async ({ status, badge }) => {
+    { action: 'อนุมัติ' as const, status: 'APPROVED', badge: 'อนุมัติแล้ว' },
+    { action: 'ปฏิเสธ' as const, status: 'REJECTED', badge: 'ปฏิเสธ' },
+  ])('saves $action immediately on selection without a modal and displays the server result', async ({ action, status, badge }) => {
     const user = await openPage();
     const confirm = vi.spyOn(window, 'confirm');
     mocks.updateStatus.mockResolvedValue({ ...pendingItem, status });
     mocks.getClaim.mockResolvedValue(savedClaim(status));
-    await user.selectOptions(screen.getByRole('combobox', { name: 'สถานะ สายพานไดชาร์จ' }), status);
+    await selectStatus(user, action);
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(confirm).not.toHaveBeenCalled();
@@ -113,7 +123,7 @@ describe('Claim detail item decisions', () => {
     expect(mocks.updateStatus).toHaveBeenCalledExactlyOnceWith(12, status);
     expect(mocks.getClaim).toHaveBeenLastCalledWith(9);
     expect(within(itemRow()).getByText(badge)).toBeInTheDocument();
-    expect(within(itemRow()).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(itemRow()).queryByRole('button', { name: /^สถานะ / })).not.toBeInTheDocument();
     expect(within(itemRow('ไฟสปอร์ตไลท์')).getByText('อนุมัติแล้ว')).toBeInTheDocument();
     expect(within(itemRow('ฝาปิดถังน้ำมัน')).getByText('ปฏิเสธ')).toBeInTheDocument();
     expect(mocks.updateClaim).not.toHaveBeenCalled();
@@ -125,10 +135,12 @@ describe('Claim detail item decisions', () => {
     let finish!: (item: CustomerClaimItem) => void;
     mocks.updateStatus.mockReturnValue(new Promise<CustomerClaimItem>(resolve => { finish = resolve; }));
     mocks.getClaim.mockResolvedValue(savedClaim('APPROVED'));
-    const dropdown = screen.getByRole('combobox', { name: 'สถานะ สายพานไดชาร์จ' });
-    await user.selectOptions(dropdown, 'APPROVED');
+    await selectStatus(user, 'อนุมัติ');
+    const dropdown = screen.getByRole('button', { name: 'สถานะ สายพานไดชาร์จ' });
     expect(dropdown).toBeDisabled();
-    await user.selectOptions(dropdown, 'REJECTED');
+    // Disabled trigger must not open the dropdown again while the write is in flight.
+    await user.click(dropdown);
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'แก้ไขข้อมูล' })).toBeDisabled();
     expect(mocks.updateStatus).toHaveBeenCalledTimes(1);
@@ -140,7 +152,7 @@ describe('Claim detail item decisions', () => {
   it('reports a failed status write without showing an approval or success toast', async () => {
     const user = await openPage();
     mocks.updateStatus.mockRejectedValue(new Error('Request rejected'));
-    await user.selectOptions(screen.getByRole('combobox', { name: 'สถานะ สายพานไดชาร์จ' }), 'APPROVED');
+    await selectStatus(user, 'อนุมัติ');
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'error' })));
     expect(mocks.toast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }));
     expect(within(itemRow()).getByText('รอดำเนินการ')).toBeInTheDocument();
@@ -152,9 +164,9 @@ describe('Claim detail item decisions', () => {
     const user = await openPage();
     mocks.updateStatus.mockRejectedValue(new Error('Connection lost after commit'));
     mocks.getClaim.mockResolvedValue(savedClaim('APPROVED'));
-    await user.selectOptions(screen.getByRole('combobox', { name: 'สถานะ สายพานไดชาร์จ' }), 'APPROVED');
+    await selectStatus(user, 'อนุมัติ');
     await waitFor(() => expect(within(itemRow()).getByText('อนุมัติแล้ว')).toBeInTheDocument());
-    expect(within(itemRow()).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(itemRow()).queryByRole('button', { name: /^สถานะ / })).not.toBeInTheDocument();
     expect(mocks.toast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }));
   });
 
@@ -162,17 +174,17 @@ describe('Claim detail item decisions', () => {
     const user = await openPage();
     mocks.updateStatus.mockResolvedValue({ ...pendingItem, status: 'APPROVED', product_name: '' });
     mocks.getClaim.mockRejectedValue(new Error('Read unavailable'));
-    await user.selectOptions(screen.getByRole('combobox', { name: 'สถานะ สายพานไดชาร์จ' }), 'APPROVED');
+    await selectStatus(user, 'อนุมัติ');
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'warning', message: expect.stringContaining('บันทึกสถานะแล้ว') })));
     expect(within(itemRow()).getByText('อนุมัติแล้ว')).toBeInTheDocument();
-    expect(within(itemRow()).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(itemRow()).queryByRole('button', { name: /^สถานะ / })).not.toBeInTheDocument();
     expect(mocks.toast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }));
   });
 
   it('does not treat an empty status response as confirmed success', async () => {
     const user = await openPage();
     mocks.updateStatus.mockResolvedValue(null);
-    await user.selectOptions(screen.getByRole('combobox', { name: 'สถานะ สายพานไดชาร์จ' }), 'REJECTED');
+    await selectStatus(user, 'ปฏิเสธ');
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'error' })));
     expect(within(itemRow()).getByText('รอดำเนินการ')).toBeInTheDocument();
     expect(mocks.toast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }));

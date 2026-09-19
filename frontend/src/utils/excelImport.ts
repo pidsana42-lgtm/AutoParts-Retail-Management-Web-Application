@@ -253,9 +253,15 @@ export function validateBillItems(items: BillItemDTO[]): Record<number, ItemIssu
     const fields: string[] = [];
     const messages: string[] = [];
 
+    // แถวที่พึ่งกด "เพิ่มรายการสินค้า" มาใหม่ (ยังไม่มีรหัส/ชื่อ/ราคาเลย) ยังไม่นับเป็นข้อผิดพลาด
+    // รอให้ผู้ใช้เริ่มกรอกอย่างน้อย 1 ช่องก่อนถึงจะเตือน ไม่งั้นเตือนทันทีที่กดเพิ่มแถวจะดูเหมือนระบบพัง
+    const isUntouchedBlankRow = !code && !name && price === 0;
+
     if (!code && !name) {
-      fields.push('code', 'name');
-      messages.push('กรอกรหัสหรือชื่อสินค้า');
+      if (!isUntouchedBlankRow) {
+        fields.push('code', 'name');
+        messages.push('กรอกรหัสหรือชื่อสินค้า');
+      }
     } else if (!name) {
       fields.push('name');
       messages.push('กรอกชื่อสินค้า');

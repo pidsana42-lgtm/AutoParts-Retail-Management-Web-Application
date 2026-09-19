@@ -3,6 +3,8 @@ package claim
 import (
 	"backend/internal/app/entity"
 	"errors"
+	"time"
+
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -19,6 +21,9 @@ type CustomerClaimRepository interface {
 	UpdateCustomerClaimItem(item *entity.CustomerClaimItem) error
 	DeleteCustomerClaim(id uint) error
 	GetCompanySetting() (*entity.CompanySetting, error)
+	// AdjustProductStock: ปรับจำนวนสินค้าคงคลัง (delta ติดลบ = ตัดออก, บวก = เติมกลับ)
+	// พร้อมบันทึกประวัติ StockMovement ไว้เป็นหลักฐานในคราวเดียวกันแบบ atomic
+	AdjustProductStock(productID uint, delta int, movementType, note string) error
 }
 
 type customerClaimRepository struct {
@@ -33,6 +38,9 @@ func (r *customerClaimRepository) CreateCustomerClaim(claim *entity.CustomerClai
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var order entity.SaleOrder
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, claim.OriginalOrderID).Error; err != nil {
+			return err
+		}
+		if err := validateClaimQuantities(tx, order.ID, claim.Items); err != nil {
 			return err
 		}
 
@@ -52,12 +60,13 @@ func (r *customerClaimRepository) CreateCustomerClaim(claim *entity.CustomerClai
 			return ErrOrderInProgress
 		}
 
-		return tx.Create(claim).Error
+		// The service saves each item with its stock flags after this validation.
+		return tx.Omit("Items").Create(claim).Error
 	})
 }
 
 func (r *customerClaimRepository) CreateCustomerClaimItem(item *entity.CustomerClaimItem) error {
-	return r.db.Create(item).Error
+	return r.saveValidatedClaimItem(item, true)
 }
 
 func (r *customerClaimRepository) GetCustomerClaimByID(id uint) (*entity.CustomerClaim, error) {
@@ -103,11 +112,38 @@ func (r *customerClaimRepository) UpdateCustomerClaim(claim *entity.CustomerClai
 }
 
 func (r *customerClaimRepository) UpdateCustomerClaimItem(item *entity.CustomerClaimItem) error {
-	return r.db.Save(item).Error
+	return r.saveValidatedClaimItem(item, false)
 }
 
 func (r *customerClaimRepository) DeleteCustomerClaim(id uint) error {
 	return r.db.Delete(&entity.CustomerClaim{}, id).Error
+}
+
+func (r *customerClaimRepository) AdjustProductStock(productID uint, delta int, movementType, note string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&entity.Product{}).
+			Where("id = ?", productID).
+			UpdateColumn("quantity", gorm.Expr("quantity + ?", delta))
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+
+		qty := delta
+		if qty < 0 {
+			qty = -qty
+		}
+		movement := &entity.StockMovement{
+			Movement_Type:     movementType,
+			Quantity:          qty,
+			Movement_DateTime: time.Now(),
+			Note:              note,
+			ProductID:         productID,
+		}
+		return tx.Create(movement).Error
+	})
 }
 
 func (r *customerClaimRepository) GetCompanySetting() (*entity.CompanySetting, error) {
@@ -124,4 +160,3 @@ func (r *customerClaimRepository) GetCompanySetting() (*entity.CompanySetting, e
 	}
 	return &setting, nil
 }
-

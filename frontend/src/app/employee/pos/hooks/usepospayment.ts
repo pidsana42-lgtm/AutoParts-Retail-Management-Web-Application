@@ -20,7 +20,7 @@ interface UsePosPaymentProps {
 
 export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount }: UsePosPaymentProps) {
   const { toast } = useToast();
-  const { calculateProRataWeight, calculateLineDiscountAmount } = useDiscountCalculation();
+  const { calculateProRataWeight } = useDiscountCalculation();
 
   // 1. โครงสร้างการดึง Session เริ่มต้นจาก LocalStorage
   const [posSession, setPosSession] = useState<PosSession>(() => {
@@ -63,7 +63,16 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
   
   // Restore currentOrderId & currentOrderNumber
   const [currentOrderId, setCurrentOrderId] = useState<number | null>(posSession.currentOrderId || null);
-  const [qrCodeData, setQrCodeData] = useState<{ qrCode: string; refNo: string; paymentId: number; orderId: number } | null>(null);
+  const [qrCodeData, setQrCodeData] = useState<{
+    qrCode: string;
+    refNo: string;
+    paymentId: number;
+    orderId: number;
+    promptPayName?: string;
+    bankName?: string;
+    bankAccountNumber?: string;
+    bankAccountName?: string;
+  } | null>(null);
   const [isLoadingQR, setIsLoadingQR] = useState<boolean>(false);
 
   // Ref เก็บ orderNumber & orderId แบบ Persistent (ไม่หลุดตาม Re-render)
@@ -469,6 +478,10 @@ export function usePosPayment({ cart, setCart, totalItemPrice, totalLineDiscount
         refNo: res.reference_number || res.referenceNumber || res.data?.reference_number,
         paymentId: res.payment_id || res.data?.payment_id,
         orderId: orderId,
+        promptPayName: res.promptpay_name || res.data?.promptpay_name,
+        bankName: res.bank_name || res.data?.bank_name,
+        bankAccountNumber: res.bank_account_number || res.data?.bank_account_number,
+        bankAccountName: res.bank_account_name || res.data?.bank_account_name,
       });
     } catch (error: any) {
       console.error("Error generating QR:", error);

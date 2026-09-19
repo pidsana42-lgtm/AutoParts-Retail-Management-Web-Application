@@ -21,13 +21,13 @@ func SetupCustomerDiscountRoutes(r *gin.Engine, db *gorm.DB) {
     {
         // อนุญาตให้ Employee ดึงข้อมูลลูกค้า/ค้นหาได้ด้วย
         customerDiscountGroup.GET("", 
-            middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin), string(enum.RoleEmployee)), 
+            middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleManager), string(enum.RoleEmployee)), 
             customerDiscountCtrl.GetCustomerDiscount,
         )
 
-        // ส่วนการบันทึกแก้ไขวงเงิน/ส่วนลดจำนวนมาก สงวนไว้แค่ Owner/Admin
+        // ส่วนการบันทึกแก้ไขวงเงิน/ส่วนลดจำนวนมาก สงวนไว้แค่ Owner/Manager
         customerDiscountGroup.PUT("", 
-            middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)), 
+            middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleManager)), 
             customerDiscountCtrl.BulkUpdateCustomerDiscounts,
         )
     }

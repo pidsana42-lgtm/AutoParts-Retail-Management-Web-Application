@@ -18,6 +18,7 @@ export function useMenu() {
   return {
     menuItems: allowedMenus,
     role: userRole,
-    isAdminOrOwner: userRole === "OWNER" || userRole === "ADMIN"
+    isAdminOrOwner: userRole === "OWNER" || userRole === "MANAGER" || userRole === "ADMIN",
+    isManagerOrOwner: userRole === "OWNER" || userRole === "MANAGER" || userRole === "ADMIN"
   };
 }

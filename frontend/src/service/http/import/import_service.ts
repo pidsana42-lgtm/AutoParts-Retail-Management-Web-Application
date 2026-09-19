@@ -143,6 +143,7 @@ export async function approveBill(billId: number, bill: SavedBill): Promise<any>
   const payload: ConfirmBillPayload = {
     bill: {
       bill_no: bill.bill_no,
+      po_id: bill.po_id || undefined,
       total_amount: bill.total_amount,
       due_date: bill.due_date,
       credit_term: bill.credit_term,
@@ -170,6 +171,8 @@ export async function approveBill(billId: number, bill: SavedBill): Promise<any>
       is_freebie: item.is_freebie,
       remark: item.remark,
       product_id: item.product_id,
+      po_item_id: item.po_item_id,
+      pre_order_item_id: item.pre_order_item_id,
     })),
   };
   return updateBill(billId, payload);

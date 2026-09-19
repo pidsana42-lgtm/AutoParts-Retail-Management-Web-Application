@@ -62,7 +62,8 @@ export async function printCustomerStatementFromBackend(
     options?.endDate,
     options?.paymentType,
     options?.status,
-    options?.paymentMethod
+    options?.paymentMethod,
+    options?.customerName
   );
 
   const now = new Date();
@@ -71,8 +72,8 @@ export async function printCustomerStatementFromBackend(
   const day = String(now.getDate()).padStart(2, '0');
   const dateStr = `${year}${month}${day}`;
 
-  // กำหนดชื่อไฟล์ให้ตรงกับ Backend: STM-{CustomerID}-{YYYYMMDD}.pdf
-  const fileName = `STM-${customerId}-${dateStr}.pdf`;
+  // กำหนดชื่อไฟล์ให้ตรงกับ Backend: STM-{CustomerID}-{YYYYMMDD}.pdf หรือ STM-General-{YYYYMMDD}.pdf
+  const fileName = customerId === 0 ? `STM-General-${dateStr}.pdf` : `STM-${customerId}-${dateStr}.pdf`;
 
   if (options?.action === 'download') {
     downloadPdfBlob(blob, fileName);
@@ -90,8 +91,8 @@ export async function printCustomerStatementFromBackend(
  * @deprecated แนะนำให้เปลี่ยนไปใช้ `printCustomerStatementFromBackend` เพื่อดึงและพิมพ์ไฟล์ PDF จาก Backend โดยตรง
  */
 export function printCustomerStatement(params: CustomerStatementPrintParams) {
-  const customerId = params.customerId || params.customer?.id;
-  if (!customerId) {
+  const customerId = params.customerId !== undefined ? params.customerId : params.customer?.id;
+  if (customerId === undefined || customerId === null) {
     console.error('Customer ID is required to print customer statement from backend');
     return;
   }

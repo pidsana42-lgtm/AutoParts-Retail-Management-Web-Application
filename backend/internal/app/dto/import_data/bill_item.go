@@ -7,16 +7,19 @@ import (
 )
 
 type CreateBillItemDTO struct {
-	BillID             uint    `json:"bill_id"`
-	ItemSequence       uint    `json:"item_sequence" binding:"required"`
-	CompanyProductCode string  `json:"company_product_code" binding:"required"`
+	POItemID       *uint `json:"po_item_id"`
+	PreOrderItemID *uint `json:"pre_order_item_id"`
+	BillID         uint  `json:"bill_id"`
+	ItemSequence   uint  `json:"item_sequence" binding:"required"`
+	// Manual entries may omit the supplier code and match by product ID or name.
+	CompanyProductCode string  `json:"company_product_code"`
 	CompanyProductName string  `json:"company_product_name" binding:"required"`
-	OrderQuantity      int     `json:"order_quantity" binding:"required"`
+	OrderQuantity      int     `json:"order_quantity" binding:"gt=0"`
 	Unit               string  `json:"unit" binding:"required"`
-	ConversionFactor   float64 `json:"conversion_factor" binding:"required"`
-	PricePerUnit       float64 `json:"price_per_unit"`
-	DiscountAmount     float64 `json:"discount_amount"`
-	NetAmount          float64 `json:"net_amount"`
+	ConversionFactor   float64 `json:"conversion_factor" binding:"gt=0"`
+	PricePerUnit       float64 `json:"price_per_unit" binding:"gte=0"`
+	DiscountAmount     float64 `json:"discount_amount" binding:"gte=0"`
+	NetAmount          float64 `json:"net_amount" binding:"gte=0"`
 	IsFreebie          bool    `json:"is_freebie"`
 	Remark             string  `json:"remark"`
 	AIProductCode      string  `json:"ai_product_code"`
@@ -47,6 +50,8 @@ type UpdateBillItemDTO struct {
 }
 
 type BillItemResponseDTO struct {
+	POItemID           *uint     `json:"po_item_id"`
+	PreOrderItemID     *uint     `json:"pre_order_item_id"`
 	ID                 uint      `json:"id"`
 	BillID             uint      `json:"bill_id"`
 	ItemSequence       uint      `json:"item_sequence"`
@@ -70,6 +75,8 @@ type BillItemResponseDTO struct {
 
 func (d *CreateBillItemDTO) ToEntity() entity.BillItem {
 	return entity.BillItem{
+		POItemID:           d.POItemID,
+		PreOrderItemID:     d.PreOrderItemID,
 		BillID:             d.BillID,
 		ItemSequence:       d.ItemSequence,
 		CompanyProductCode: d.CompanyProductCode,
@@ -145,6 +152,8 @@ func (d *UpdateBillItemDTO) ToEntity(existing entity.BillItem) entity.BillItem {
 
 func ToBillItemResponseDTO(m *entity.BillItem) BillItemResponseDTO {
 	return BillItemResponseDTO{
+		POItemID:           m.POItemID,
+		PreOrderItemID:     m.PreOrderItemID,
 		ID:                 m.ID,
 		BillID:             m.BillID,
 		ItemSequence:       m.ItemSequence,

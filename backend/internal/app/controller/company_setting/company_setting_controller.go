@@ -55,6 +55,15 @@ func (ctrl *CompanySettingController) UpdateCompanySetting(c *gin.Context) {
 	})
 }
 
+func (ctrl *CompanySettingController) RevealPaymentSetting(c *gin.Context) {
+	res, err := ctrl.svc.RevealPaymentSetting(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}
+
 func (ctrl *CompanySettingController) UploadLogo(c *gin.Context) {
 	file, header, err := c.Request.FormFile("logo")
 	if err != nil {

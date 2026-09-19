@@ -7,8 +7,10 @@ import type {
   RegisterCustomerRequest,
   UpdateCustomerRequest,
 } from "../../../../interface/customer/customer_interface";
+import { useToast } from "../../../../components/elements/toast";
 
 export const useCustomerRegistration = () => {
+  const { toast } = useToast();
   const [types, setTypes] = useState<CustomerTypeItem[]>([]);
   const [customers, setCustomers] = useState<CustomerListItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -213,11 +215,14 @@ export const useCustomerRegistration = () => {
       }
 
       await customerApiService.registerCustomer(formDataToSend);
-      alert("ลงทะเบียนสมาชิกสำเร็จ");
+      toast({ variant: "success", message: "ลงทะเบียนสมาชิกสำเร็จ" });
       handleReset();
       fetchInitialData();
     } catch (err: any) {
-      alert("เกิดข้อผิดพลาดในการลงทะเบียน: " + (err.response?.data?.error || err.response?.data?.message || err.message));
+      toast({
+        variant: "error",
+        message: "เกิดข้อผิดพลาดในการลงทะเบียน: " + (err.response?.data?.error || err.response?.data?.message || err.message),
+      });
     } finally {
       setSubmitting(false);
     }
@@ -357,7 +362,7 @@ export const useCustomerRegistration = () => {
       }
 
       await customerApiService.updateCustomer(editingCustomer.id, formDataToSend);
-      alert("แก้ไขข้อมูลลูกค้าสำเร็จ");
+      toast({ variant: "success", message: "แก้ไขข้อมูลลูกค้าสำเร็จ" });
       closeEditModal();
       await fetchInitialData();
       if (selectedCustomer && selectedCustomer.id === editingCustomer.id) {
@@ -377,7 +382,10 @@ export const useCustomerRegistration = () => {
         );
       }
     } catch (err: any) {
-      alert("เกิดข้อผิดพลาดในการแก้ไขข้อมูล: " + (err.response?.data?.error || err.response?.data?.message || err.message));
+      toast({
+        variant: "error",
+        message: "เกิดข้อผิดพลาดในการแก้ไขข้อมูล: " + (err.response?.data?.error || err.response?.data?.message || err.message),
+      });
     } finally {
       setEditSubmitting(false);
     }

@@ -50,8 +50,8 @@ func NewPORepository(db *gorm.DB) PurchaseOrderRepository {
 
 // POHistory Record โครงสร้างข้อมูลสำหรับฝั่ง Database
 type POHistory struct {
-	CreatedAt  time.Time
-	ReceivedAt time.Time `gorm:"-" json:"received_at"`
+	ApprovedAt time.Time `gorm:"column:approved_at"`
+	ReceivedAt time.Time `gorm:"column:receive_date"`
 }
 
 // Save บันทึกใบสั่งซื้อพร้อมไอเทมลูกทั้งหมดลง Database (มีระบบ Transaction ป้องกันข้อมูลพัง)
@@ -383,6 +383,7 @@ func (r *purchaseOrderRepository) SyncItems(ctx context.Context, poID uint, inco
 					Updates(map[string]interface{}{
 						"product_id":                   item.ProductID,
 						"product_name_snapshot":        item.Product_name_snapshot,
+						"product_code_snapshot":        item.Product_code_snapshot,
 						"supply_product_code_snapshot": item.Supply_product_code_snapshot,
 						"quantity":                     item.Quantity,
 						"unit":                         item.Unit,
@@ -447,12 +448,14 @@ func (r *purchaseOrderRepository) GetSupplierDeliveryHistory(ctx context.Context
 
 	err := r.db.WithContext(ctx).
 		Table("purchase_orders").
-		Select("purchase_orders.created_at, bills.receive_date").
+		Select("purchase_orders.approved_at, bills.receive_date").
 		Joins("INNER JOIN bills ON bills.po_id = purchase_orders.id").
 		Where("purchase_orders.supplier_id = ?", supplierID).
 		Where("purchase_orders.status = ?", "APPROVED").
+		Where("purchase_orders.approved_at IS NOT NULL").
 		Where("bills.receive_date IS NOT NULL").
-		Order("purchase_orders.created_at DESC").
+		Order("purchase_orders.approved_at DESC").
+		Limit(20).
 		Scan(&history).Error
 
 	if err != nil {

@@ -20,7 +20,7 @@ func SetupPaymentRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotif
 	paymentGroup := r.Group("/api/pos/payments")
 	paymentGroup.Use(
 		middleware.AuthMiddleware(),
-		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleAdmin)),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleManager)),
 	)
 	{
 		// กระบวนการชำระเงินหน้าร้าน กับ QR
@@ -52,9 +52,9 @@ func SetupPaymentRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotif
 		// ดูประวัติรายการที่เคยถูกยกเลิกไปแล้ว
 		paymentGroup.GET("/cancellations", paymentCtrl.GetCancelledPaymentHistory)
 
-		// ส่วนการอนุมัติ / ปฏิเสธ / ยกเลิกโดยเจ้าของร้าน (สงวนสิทธิ์เฉพาะ Owner / Admin)
+		// ส่วนการอนุมัติ / ปฏิเสธ / ยกเลิกโดยเจ้าของร้าน (สงวนสิทธิ์เฉพาะ Owner / Manager)
 		ownerOnly := paymentGroup.Group("")
-		ownerOnly.Use(middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleAdmin)))
+		ownerOnly.Use(middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleManager)))
 		{
 			// อนุมัติการยกเลิกใบเสร็จรับเงิน (ทำให้ยอดหนี้กลับมาค้างชำระ)
 			ownerOnly.POST("/history/:id/approve-cancel", paymentCtrl.ApproveCancelPaymentReceipt)

@@ -11,13 +11,13 @@ const DonutChartCard: React.FC<DonutChartCardProps> = ({ title, icon, data, tota
   const chartData = isEmpty ? EMPTY_PLACEHOLDER : data.filter(d => d.value > 0);
 
   return (
-  <Card className='border-2 border-dashed border-red-200 flex flex-col justify-center p-8'>
-    <div className='flex flex-row items-stretch justify-between'>
+  <Card className='flex flex-col justify-center border-2 border-dashed border-red-200 p-4 sm:p-6 lg:p-8'>
+    <div className='flex items-start justify-between gap-3'>
       <Heading level='h4'>{title}</Heading>
       <Heading className='text-gray-400'>{icon}</Heading>
     </div>
 
-    <div className='w-full h-75 relative'>
+    <div className='relative h-64 w-full sm:h-75'>
       {isLoading && (
         <div className='absolute inset-0 flex items-center justify-center'>
           <div className='w-44 h-44 rounded-full border-8 border-gray-100 border-t-red-300 animate-spin' />
@@ -59,9 +59,9 @@ const DonutChartCard: React.FC<DonutChartCardProps> = ({ title, icon, data, tota
       </ResponsiveContainer>
     </div>
 
-    <div className='flex items-center justify-center gap-16 -mt-2.5 min-h-7'>
+    <div className='-mt-2.5 flex min-h-7 flex-wrap items-center justify-center gap-4 sm:gap-8 lg:gap-16'>
       {!isLoading && !isEmpty && data.map((item) => (
-        <div key={item.name} className='flex items-center gap-4'>
+        <div key={item.name} className='flex items-center gap-2 sm:gap-4'>
           <span className='w-5 h-5 rounded-full' style={{ backgroundColor: item.fill }} />
           <Heading level='h6'>{item.name}</Heading>
         </div>

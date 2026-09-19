@@ -51,11 +51,20 @@ func GenerateDebtRepaymentReceiptPDF(
 		}
 	}
 
+	bankName := ""
+	bankAccountNo := ""
+	bankAccountName := ""
+	if companyData != nil {
+		bankName = companyData.BankName
+		bankAccountNo = companyData.BankAccountNumber
+		bankAccountName = companyData.BankAccountName
+	}
+
 	// 3. ตั้งค่าหน้ากระดาษและฟอนต์
 	m := pdf.NewMaroto(consts.Portrait, consts.A4)
 	m.SetPageMargins(10, 15, 10)
-	m.AddUTF8Font("THSarabun", consts.Normal, "assets/fonts/THSarabunNew.ttf")
-	m.AddUTF8Font("THSarabun", consts.Bold, "assets/fonts/THSarabunNew Bold.ttf")
+	m.AddUTF8Font("THSarabun", consts.Normal, ResolveFontPath("assets/fonts/THSarabunNew.ttf"))
+	m.AddUTF8Font("THSarabun", consts.Bold, ResolveFontPath("assets/fonts/THSarabunNew Bold.ttf"))
 	m.SetDefaultFontFamily("THSarabun")
 
 	paidDate := firstRepayment.CreatedAt.Format("02/01/2006 15:04")
@@ -115,12 +124,19 @@ func GenerateDebtRepaymentReceiptPDF(
 		}
 	}
 
+	logoPath, logoBase64, logoExtension, _ := LoadLogo(nil, logoURL)
+
 	// 4. ส่วนหัวเอกสาร (Header)
 	m.RegisterHeader(func() {
 		m.Row(25, func() {
 			m.Col(3, func() {
-				if logoURL != "" {
-					_ = m.FileImage(logoURL, props.Rect{
+				if logoPath != "" {
+					_ = m.FileImage(logoPath, props.Rect{
+						Percent: 400,
+						Center:  false,
+					})
+				} else if logoBase64 != "" {
+					_ = m.Base64Image(logoBase64, logoExtension, props.Rect{
 						Percent: 400,
 						Center:  false,
 					})
@@ -313,12 +329,26 @@ func GenerateDebtRepaymentReceiptPDF(
 	// 8. ส่วนสรุปยอด (ขวา) และ หมายเหตุ + คำอ่านภาษาไทย (ซ้าย)
 	thaiText := ThaiBahtText(totalPaidThisTime)
 
-	m.Row(28, func() {
+	summaryRowHeight := 28.0
+	if bankAccountNo != "" && bankName != "" {
+		summaryRowHeight = 34.0
+	}
+
+	m.Row(summaryRowHeight, func() {
 		// หมายเหตุ (ซ้าย)
 		m.Col(6, func() {
 			m.Text("หมายเหตุ", props.Text{Size: 11, Style: consts.Bold, Color: HexToColor("#E51C23")})
 			m.Text("1. ใบเสร็จรับเงินนี้จะสมบูรณ์เมื่อทางร้านได้รับชำระเงินเรียบร้อยแล้ว", props.Text{Size: 10, Top: 5})
-			m.Text(fmt.Sprintf("จำนวนเงินที่ชำระ (ตัวอักษร): %s", thaiText), props.Text{Size: 10, Style: consts.Bold, Top: 11})
+			currentTop := 11.0
+			if bankAccountNo != "" && bankName != "" {
+				bankLabel := fmt.Sprintf("บัญชีโอนเงิน: %s เลขที่ %s", bankName, bankAccountNo)
+				if bankAccountName != "" {
+					bankLabel += fmt.Sprintf(" (%s)", bankAccountName)
+				}
+				m.Text(bankLabel, props.Text{Size: 9.5, Style: consts.Bold, Top: currentTop, Color: HexToColor("#1F2937")})
+				currentTop += 5.5
+			}
+			m.Text(fmt.Sprintf("จำนวนเงินที่ชำระ (ตัวอักษร): %s", thaiText), props.Text{Size: 10, Style: consts.Bold, Top: currentTop})
 		})
 
 		// สรุปยอดเงิน (ขวา)

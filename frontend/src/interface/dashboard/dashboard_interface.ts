@@ -48,6 +48,7 @@ export interface StockAlertItem {
   po_numbers?: string[];
   product_id: number | null;
   product_code?: string;
+  supply_product_code?: string;
   product_name?: string;
   unit_name?: string;
   cost_price?: number;

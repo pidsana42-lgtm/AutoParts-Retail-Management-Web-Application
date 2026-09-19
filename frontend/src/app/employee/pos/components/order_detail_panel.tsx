@@ -3,7 +3,7 @@
 // (1) แผงเลื่อนจากขวาที่หน้า "ประวัติการขายสินค้า" (variant="drawer", ของเดิม)
 // (2) หน้าเดี่ยวที่กดเข้ามาจากฟีด "การเคลื่อนไหวของคลังสินค้า" (variant="page")
 import { useNavigate } from "react-router-dom";
-import { Printer, X, CopyPlus } from "lucide-react";
+import { X, CopyPlus } from "lucide-react";
 import Heading from "../../../../components/elements/heading";
 import Text from "../../../../components/elements/text";
 import Button from "../../../../components/elements/button";
@@ -33,9 +33,10 @@ export interface OrderDetailPanelProps
     | "handleRevertCancel"
     | "getStatusText"
   > {
-  handlePrintReceipt: (orderId: number | string, orderNumber?: string) => Promise<void>;
-  printingOrderId: number | string | null;
-  isOwnerOrAdmin: boolean;
+  handlePrintReceipt?: (orderId: number | string, orderNumber?: string) => Promise<void>;
+  printingOrderId?: number | string | null;
+  isOwnerOrManager?: boolean;
+  isOwnerOrAdmin?: boolean;
   onClose: () => void;
   // drawer = แผงเลื่อนจากขวา มี backdrop มืด (ของเดิม) / page = การ์ดเต็มพื้นที่ ไม่มี backdrop (ใช้ตอนเป็นหน้าเดี่ยว)
   variant?: "drawer" | "page";
@@ -55,13 +56,15 @@ export default function OrderDetailPanel({
   handleRejectCancelByOwner,
   handleRevertCancel,
   getStatusText,
-  handlePrintReceipt,
-  printingOrderId,
+  handlePrintReceipt: _handlePrintReceipt,
+  printingOrderId: _printingOrderId,
+  isOwnerOrManager,
   isOwnerOrAdmin,
   onClose,
   variant = "drawer",
 }: OrderDetailPanelProps) {
   const navigate = useNavigate();
+  const effectiveIsOwnerOrManager = Boolean(isOwnerOrManager ?? isOwnerOrAdmin);
 
   if (!selectedOrderId) return null;
 
@@ -91,25 +94,13 @@ export default function OrderDetailPanel({
                       </span>
                     </Text>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="solid-red"
-                      onClick={() => handlePrintReceipt(orderDetail.id || orderDetail.order_number, orderDetail.order_number)}
-                      disabled={printingOrderId !== null}
-                      className="text-xs h-8 px-3 font-normal rounded-none flex items-center gap-1.5"
-                    >
-                      <Printer size={14} />
-                      {printingOrderId !== null ? "กำลังดาวน์โหลด..." : "พิมพ์ใบเสร็จ/ใบส่งของ"}
-                    </Button>
-                    <button
-                      type="button"
-                      onClick={() => onClose()}
-                      className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onClose()}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
                 {/* Scrollable Body Content */}
@@ -295,6 +286,7 @@ export default function OrderDetailPanel({
                         </Text>
                       </div>
 
+
                       {/* แถววิธีชำระเงิน */}
                       <div className="pt-2 flex justify-end items-center gap-2">
                         <Badge
@@ -308,6 +300,29 @@ export default function OrderDetailPanel({
                     </CardContent>
                   </Card>
 
+                  {/* ปุ่มพิมพ์ใบเสร็จ/ใบส่งของ (PDF) */}
+                  {/* <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() =>
+                      handlePrintReceipt(
+                        orderDetail.id || orderDetail.order_number,
+                        orderDetail.order_number
+                      )
+                    }
+                    disabled={printingOrderId !== null}
+                    className="w-full text-xs h-10 font-normal flex items-center justify-center gap-1.5 shadow-sm bg-[#1C1B1B] hover:bg-zinc-800 text-white cursor-pointer rounded-none"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>
+                      {printingOrderId !== null
+                        ? "กำลังดาวน์โหลด..."
+                        : (orderDetail.status || "").toUpperCase() === "CANCELLED"
+                        ? "พิมพ์ใบเสร็จที่ยกเลิก (Void Receipt)"
+                        : "พิมพ์ใบเสร็จ/ใบส่งของ (PDF)"}
+                    </span>
+                  </Button> */}
+
                   {/* ==================== ส่วนจัดการการขอยกเลิก (DYNAMIC UI) ==================== */}
                   {(() => {
                     const status = (orderDetail.status || "")
@@ -317,8 +332,8 @@ export default function OrderDetailPanel({
 
                     // 1. เคสรายการอยู่ระหว่างรออนุมัติการยกเลิก (PENDING_CANCEL)
                     if (status === "PENDING_CANCEL") {
-                      // 1.1 ถ้าผู้ใช้เป็น OWNER / ADMIN: แยกเป็น 2 ส่วน (กล่องสรุปข้อมูล + ฟอร์มการดำเนินการ)
-                      if (isOwnerOrAdmin) {
+                      // 1.1 ถ้าผู้ใช้เป็น OWNER / MANAGER: แยกเป็น 2 ส่วน (กล่องสรุปข้อมูล + ฟอร์มการดำเนินการ)
+                      if (effectiveIsOwnerOrManager) {
                         return (
                           <div className="space-y-4">
                             {/* ส่วนที่ 1: กล่องสรุปคำขอจากพนักงาน */}
@@ -498,21 +513,10 @@ export default function OrderDetailPanel({
 
                           <Button
                             type="button"
-                            variant="outline-cancel"
-                            onClick={() => handlePrintReceipt(orderDetail.id, orderDetail.order_number)}
-                            disabled={printingOrderId !== null}
-                            className="w-full text-xs h-10 font-normal rounded-none flex items-center justify-center gap-2 cursor-pointer shadow-sm border border-gray-300 hover:bg-gray-50"
-                          >
-                            <Printer className={cn("w-4 h-4 text-[#E51C23]", printingOrderId === orderDetail.id && "animate-pulse")} />
-                            <span>พิมพ์ใบเสร็จที่ยกเลิก (เอกสารหลักฐาน)</span>
-                          </Button>
-
-                          <Button
-                            type="button"
                             variant="solid-red"
                             onClick={() => {
                               navigate(
-                                (isOwnerOrAdmin ? "/owner/pos/pos" : "/employee/pos/pos") +
+                                (effectiveIsOwnerOrManager ? "/owner/pos/pos" : "/employee/pos/pos") +
                                   `?recover_order_id=${orderDetail.id}`,
                                 { state: { recoverOrderId: orderDetail.id } }
                               );
@@ -591,7 +595,7 @@ export default function OrderDetailPanel({
                               type="button"
                               variant="solid-red"
                               onClick={
-                                isOwnerOrAdmin
+                                effectiveIsOwnerOrManager
                                   ? handleDirectCancelByOwner
                                   : handleRequestCancel
                               }
@@ -603,7 +607,7 @@ export default function OrderDetailPanel({
                             >
                               {isCancelling
                                 ? "กำลังดำเนินการ..."
-                                : isOwnerOrAdmin
+                                : effectiveIsOwnerOrManager
                                   ? "อนุมัติยกเลิกรายการ (คืนสต็อก)"
                                   : "ยืนยันการขออนุมัติยกเลิก"}
                             </Button>

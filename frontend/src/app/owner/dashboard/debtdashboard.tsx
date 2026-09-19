@@ -16,7 +16,7 @@ import { dashboardService } from '../../../service/http/dashboard/dashboard_serv
 import type { SummaryQuery, DebtAgingQuery } from '../../../interface/dashboard/dashboard_interface';
 // Utils
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
-import { formatDateThai, getTodayDateString } from '../../../utils/formatdate';
+import { formatDateThai, getDashboardPeriodDateRange, getTodayDateString } from '../../../utils/formatdate';
 import { exportDebtAgingPdf } from '../../../utils/print';
 import { cn } from '../../../utils/component';
 
@@ -183,17 +183,30 @@ const DebtDashboard: React.FC = () => {
     }
   }, [agingBucket, customMinAgeDays]);
 
+  const debtDateRange = useMemo(() => {
+    if (startDate) {
+      return {
+        start_date: startDate,
+        end_date: endDate || startDate,
+      };
+    }
+    const period = getDashboardPeriodDateRange(selectedFilter);
+    return {
+      start_date: period.startDate,
+      end_date: period.endDate,
+    };
+  }, [selectedFilter, startDate, endDate]);
+
   const agingQuery = useMemo<DebtAgingQuery>(() => ({
-    ...(startDate && { start_date: startDate }),
-    ...(endDate && { end_date: endDate }),
+    ...debtDateRange,
     ...(statusFilter && { status: statusFilter }),
     ...agingBucketParams,
     page: currentPage,
     page_size: PAGE_SIZE,
-  }), [startDate, endDate, statusFilter, agingBucketParams, currentPage]);
+  }), [debtDateRange, statusFilter, agingBucketParams, currentPage]);
 
   const {
-    kpi, yearlyCollected, yearlyOutstanding, yearlyCollectedLoading, totalDebtors,
+    kpi, currentOutstanding, currentOutstandingLoading, totalDebtors,
     summaryLoading, summaryError,
     agingData, agingTotal, agingLoading, agingError,
   } = useDebtDashboard(summaryQuery, agingQuery);
@@ -220,22 +233,32 @@ const DebtDashboard: React.FC = () => {
   };
 
   const exportQuery = useMemo<DebtAgingQuery>(() => ({
-    ...(startDate && { start_date: startDate }),
-    ...(endDate && { end_date: endDate }),
+    ...debtDateRange,
     ...(statusFilter && { status: statusFilter }),
     ...agingBucketParams,
-  }), [startDate, endDate, statusFilter, agingBucketParams]);
+  }), [debtDateRange, statusFilter, agingBucketParams]);
+
+  const exportDateLabel = useMemo(() => {
+    const from = formatDateThai(debtDateRange.start_date, '-');
+    const to = formatDateThai(debtDateRange.end_date, '-');
+    return debtDateRange.start_date === debtDateRange.end_date ? from : `${from} – ${to}`;
+  }, [debtDateRange]);
+
+  const exportDateSlug = useMemo(() => {
+    const from = formatDateThai(debtDateRange.start_date, '-');
+    const to = formatDateThai(debtDateRange.end_date, '-');
+    return debtDateRange.start_date === debtDateRange.end_date ? from : `${from}_to_${to}`;
+  }, [debtDateRange]);
 
   const handleExportPdf = async () => {
     setExportingPdf(true);
     try {
       const res = await dashboardService.getAllDebtAging(exportQuery);
-      const dateLabel = startDate && endDate
-        ? `${formatDateThai(startDate)} – ${formatDateThai(endDate)}`
-        : startDate
-        ? formatDateThai(startDate)
-        : 'ทั้งหมด';
-      exportDebtAgingPdf(res.data.data ?? [], dateLabel);
+      await exportDebtAgingPdf(
+        res.data.data ?? [],
+        exportDateLabel,
+        `debt-aging-${exportDateSlug}.pdf`,
+      );
     } catch { /* silently ignore */ }
     finally { setExportingPdf(false); }
   };
@@ -244,7 +267,7 @@ const DebtDashboard: React.FC = () => {
     setExportingExcel(true);
     try {
       const res = await dashboardService.exportDebtAgingExcel(exportQuery);
-      triggerDownload(res.data as Blob, `debt-aging-${startDate || 'all'}-${endDate || 'all'}.csv`);
+      triggerDownload(res.data as Blob, `debt-aging-${exportDateSlug}.csv`);
     } catch { /* silently ignore */ }
     finally { setExportingExcel(false); }
   };
@@ -253,10 +276,10 @@ const DebtDashboard: React.FC = () => {
     summaryLoading ? <span className='text-gray-400 animate-pulse'>...</span> : v;
 
   return (
-    <div className='p-8 space-y-8 bg-white min-h-screen font-sans'>
+    <div className='min-h-screen space-y-6 bg-white p-4 font-sans sm:p-6 lg:space-y-8 lg:p-8'>
       {/* Page tab */}
-      <div>
-        <div className='bg-[#F6F3F2] inline-flex items-center p-1'>
+      <div className='overflow-x-auto pb-1'>
+        <div className='inline-flex min-w-max items-center bg-[#F6F3F2] p-1'>
           {PAGE_FILTER.map((tab) => {
             const isActive = location.pathname.includes(tab.value);
             return (
@@ -273,7 +296,7 @@ const DebtDashboard: React.FC = () => {
       </div>
 
       {/* Header + Period filter */}
-      <div className='flex items-end justify-between'>
+      <div className='relative z-20 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between'>
         <div>
           <Heading level='h1' weight='semibold' className='m-0 text-black'>
             กระดานสรุปยอดหนี้
@@ -282,7 +305,7 @@ const DebtDashboard: React.FC = () => {
             ติดตามความเคลื่อนไหวของยอดหนี้ลูกค้าผ่านแดชบอร์ดเดียว
           </Heading>
         </div>
-        <div className='bg-[#F6F3F2] flex items-center p-1'>
+        <div className='flex max-w-full items-center overflow-visible bg-[#F6F3F2] p-1'>
           {PERIOD_FILTER.map((f) => (
             <button key={f.value} onClick={() => handlePeriodClick(f.value)}
               className={`w-20 py-2.5 text-sm transition cursor-pointer ${
@@ -309,7 +332,7 @@ const DebtDashboard: React.FC = () => {
       )}
 
       {/* KPI Cards */}
-      <div className='grid grid-cols-4 gap-6 items-stretch'>
+      <div className='grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-6'>
         {/* ลูกหนี้ทั้งหมด */}
         <Card className='border-l-[5px] border-l-gray-300 flex flex-col justify-center p-5'>
           <Heading level='h6' className='text-gray-500'>ลูกหนี้ทั้งหมด</Heading>
@@ -324,26 +347,28 @@ const DebtDashboard: React.FC = () => {
         {/* ยอดหนี้ค้างชำระทั้งหมด */}
         <Card className='border-l-[5px] border-l-sky-700 flex flex-col justify-center p-5'>
           <Heading level='h6' className='text-gray-500'>ยอดหนี้ค้างชำระทั้งหมด</Heading>
-          <Heading level='h3'>฿ {kpiVal(fmt(kpi.totalOutstanding))}</Heading>
+          <Heading level='h3'>
+            {currentOutstandingLoading
+              ? <span className='text-gray-400 animate-pulse'>...</span>
+              : `฿ ${fmt(currentOutstanding)}`}
+          </Heading>
           <Heading level='p' className='mt-1 invisible' aria-hidden>.</Heading>
         </Card>
 
-        {/* รายรับจากการเก็บหนี้ (ปีนี้) */}
+        {/* รายรับจากการเก็บหนี้ตามช่วงเวลาที่เลือก */}
         <Card className='border-l-[5px] border-l-emerald-500 flex flex-col justify-center p-5'>
-          <Heading level='h6' className='text-gray-500'>รายรับจากการเก็บหนี้ (ปีนี้)</Heading>
+          <Heading level='h6' className='text-gray-500'>รายรับจากการเก็บหนี้</Heading>
           <Heading level='h3'>
-            {yearlyCollectedLoading
-              ? <span className='text-gray-400 animate-pulse'>...</span>
-              : `฿ ${fmt(yearlyCollected)}`}
+            {kpiVal(`฿ ${fmt(kpi.collectedAmount)}`)}
           </Heading>
           <Heading level='p' className='text-gray-400'>
-            {yearlyCollectedLoading ? '...' : `เป้าหมาย: ฿ ${fmt(yearlyOutstanding)}`}
+            {currentOutstandingLoading ? '...' : `เป้าหมาย: ฿ ${fmt(currentOutstanding)}`}
           </Heading>
         </Card>
 
         {/* ลูกหนี้ค้างชำระเกินกำหนด */}
         <Card className='border-l-[5px] border-l-red-500 flex flex-col justify-between p-5 relative overflow-visible'>
-          <div className='flex items-center justify-between'>
+          <div className='flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center'>
             <Heading level='h6' className='text-gray-500 font-medium'>ลูกหนี้ค้างชำระ</Heading>
 
             {/* Day Selector Button on Card with exact same secondary button variant */}
@@ -440,9 +465,9 @@ const DebtDashboard: React.FC = () => {
 
       {/* Debt Aging Table */}
       <Card noPadding>
-        <CardHeader className='flex items-center justify-between bg-white px-6 py-4'>
+        <CardHeader className='flex flex-col items-start gap-3 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6'>
           <Heading level='h4' weight='bold' className='m-0'>รายงานการวิเคราะห์อายุหนี้</Heading>
-          <div className='flex items-center gap-2'>
+          <div className='flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end'>
             <Button
               variant='outline'
               size='sm'
@@ -676,9 +701,9 @@ const DebtDashboard: React.FC = () => {
         </div>
 
         {/* Pagination */}
-        <div className='bg-[#fcfbfa] px-6 py-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500'>
+        <div className='flex flex-col gap-3 border-t border-gray-100 bg-[#fcfbfa] px-4 py-4 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between sm:px-6'>
           <span>แสดง {agingTotal === 0 ? 0 : Math.min((currentPage - 1) * PAGE_SIZE + 1, agingTotal)} ถึง {Math.min(currentPage * PAGE_SIZE, agingTotal)} จาก {agingTotal.toLocaleString('th-TH')} รายการ</span>
-          <div className='flex items-center gap-1'>
+          <div className='flex max-w-full items-center gap-1 overflow-x-auto pb-1 sm:pb-0'>
             <button disabled={currentPage === 1} onClick={() => setCurrentPage(1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsLeft size={16} /></button>
             <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronLeft size={16} /></button>
             {getPageNumbers(currentPage, totalPages).map((p, idx) =>

@@ -63,7 +63,7 @@ print("==================================================================")
 MOCK_MODE = os.getenv("MOCK_LLM", "false").lower() == "true"
 # Retrieve API key (check GOOGLE_STUDIO first, and strip any leading/trailing spaces)
 GEMINI_API_KEY = (os.getenv("GOOGLE_STUDIO") or os.getenv("GEMINI_API_KEY") or "").strip()
-raw_model = (os.getenv("GEMINI_MODEL") or "gemini-3.8-flash").strip()
+raw_model = (os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite").strip()
 if "/" in raw_model:
     raw_model = raw_model.split("/")[-1]
 GEMINI_MODEL = raw_model
@@ -849,7 +849,7 @@ Extract every line item. Use null for missing fields. Do not include any thinkin
             genai.configure(api_key=GEMINI_API_KEY)
             preferred_model = GEMINI_MODEL if GEMINI_MODEL.startswith("models/") else f"models/{GEMINI_MODEL}"
             candidate_models = [preferred_model]
-            for fallback_m in ["models/gemini-3.8-flash", "models/gemini-2.5-flash", "models/gemini-flash-latest"]:
+            for fallback_m in ["models/gemini-3.1-flash-lite", "models/gemini-2.5-flash", "models/gemini-flash-latest"]:
                 if fallback_m not in candidate_models:
                     candidate_models.append(fallback_m)
             

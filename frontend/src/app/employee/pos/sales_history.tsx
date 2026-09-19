@@ -2,11 +2,6 @@ import React, { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Eye,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  ScanBarcode,
   Printer,
 } from "lucide-react";
 
@@ -30,20 +25,22 @@ import { cn } from "../../../utils/component";
 import OrderDetailPanel from "./components/order_detail_panel";
 
 // นำเข้า Hook & Helpers
+import { TablePagination } from "../../../components/pos";
 import { useSalesHistory } from "./hooks/useSalesHistory";
-import { getDisplayCustomerName, getPageNumbers, getPaymentVariant } from "../../../utils/poshelpers";
+import { getDisplayCustomerName, getPaymentVariant } from "../../../utils/poshelpers";
 import { SalesStatusBadge } from "../../../components/elements/status_badge";
 import { formatDate } from "../../../utils/date";
-import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
 import { useUserRole } from "../../../hooks/useUserRole";
 import { usePrintReceipt } from "./hooks/usePrintReceipt";
-
+import type { SalesHistoryItemResponse } from "../../../interface/pos/sales_history_interface";
+import OrderCustomerSearchInput from "./components/order_customer_search_input";
+import { posApiService } from "../../../service/http/pos/pos_service";
 
 export default function TransactionHistoryPage() {
   const { printingOrderId, handlePrintReceipt } = usePrintReceipt();
 
   // --- ดึงข้อมูลและ Handlers จริงจาก Custom Hook ---
-  const { isOwnerOrAdmin } = useUserRole();
+  const { isOwnerOrManager } = useUserRole();
 
   // --- ดึงข้อมูลและ Handlers จริงจาก Custom Hook ---
   const {
@@ -107,6 +104,22 @@ export default function TransactionHistoryPage() {
   const kpiValue = (value: React.ReactNode) =>
     isStatsLoading ? <span className="text-gray-400 animate-pulse">...</span> : value;
 
+  const fetchOrderSuggestions = React.useCallback(async (q: string) => {
+    try {
+      const res = await posApiService.getSalesHistory({ search: q, limit: 6, page: 1 });
+      return (res.items || []).map((item) => ({
+        id: item.id,
+        order_number: item.order_number,
+        customer_name: getDisplayCustomerName(item),
+        total_amount: item.total_amount,
+        status: item.status,
+        order_date: item.order_date || item.created_at,
+      }));
+    } catch {
+      return [];
+    }
+  }, []);
+
   return (
     <div className="relative flex min-h-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-x-hidden">
       <div className="flex-1 flex flex-col min-w-0">
@@ -125,32 +138,36 @@ export default function TransactionHistoryPage() {
           </div>
 
           {/* Filter Bar */}
-          <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23] overflow-hidden">
+          <Card className="bg-[#F6F3F2] rounded-none shadow-none border-y border-r border-gray-200 border-l-4 border-l-[#E51C23]">
             <CardContent className="p-5 md:p-6 space-y-4">
               {/* ค้นหาหลัก + ตัวกรองบุคคล */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 {/* ช่องที่ 1: ค้นหาคำ */}
-                <div className={cn("flex flex-col gap-1.5", isOwnerOrAdmin ? "md:col-span-8" : "md:col-span-12")}>
+                <div className={cn("flex flex-col gap-1.5", isOwnerOrManager ? "md:col-span-8" : "md:col-span-12")}>
                   <Text variant="xs" className="text-[#5F5E5E]">
                     ค้นหาเลขคำสั่งซื้อ / ชื่อลูกค้า
                   </Text>
-                  <div className="relative flex-1">
-                    <ScanBarcode
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10"
-                      size={18}
-                    />
-                    <Input
-                      placeholder="สแกนบาร์โค้ด / INV-202X-XXX หรือ ชื่อลูกค้า..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      autoFocus
-                      className="w-full h-10 bg-white border border-gray-200 rounded-none pl-11 pr-4 text-sm text-[#1C1B1B] font-light focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 shadow-sm transition-all placeholder:text-[#6B7280]"
-                    />
-                  </div>
+                  <OrderCustomerSearchInput
+                    value={search}
+                    onChange={setSearch}
+                    onSelectCustomer={(customerName) => {
+                      setSearch(customerName);
+                      handleApplyFilter();
+                    }}
+                    onSelectOrder={(orderNumber) => {
+                      setSearch(orderNumber);
+                      handleApplyFilter();
+                    }}
+                    onSubmit={handleApplyFilter}
+                    fetchOrders={fetchOrderSuggestions}
+                    placeholder="สแกนบาร์โค้ด / INV-202X-XXX หรือ ชื่อลูกค้า..."
+                    inputClassName="h-10"
+                    autoFocus
+                  />
                 </div>
 
                 {/* ช่องที่ 2: พนักงานขาย (เฉพาะเจ้าของร้าน 4/12) */}
-                {isOwnerOrAdmin && (
+                {isOwnerOrManager && (
                   <div className="md:col-span-4 flex flex-col gap-1.5">
                     <Text variant="xs" className="text-[#5F5E5E]">
                       พนักงานขาย
@@ -525,7 +542,7 @@ export default function TransactionHistoryPage() {
                               type="button"
                               disabled={printingOrderId === item.id}
                               className="inline-flex items-center justify-center p-1.5 transition-colors cursor-pointer rounded-full hover:bg-gray-100"
-                              title="พิมพ์/ดาวน์โหลดใบเสร็จ"
+                              title="พิมพ์ใบเสร็จ/ใบส่งของ"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handlePrintReceipt(item.id, item.order_number);
@@ -543,107 +560,16 @@ export default function TransactionHistoryPage() {
             </Table>
 
             {/* Pagination Controls */}
-            {!isLoading && !error && totalRows > 0 && (
-              <div className="bg-[#FCFBFA] px-6 py-4 border-t border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
-                {/* ฝั่งซ้าย: สรุปจำนวนรายการ และ Selector */}
-                <div className="flex items-center gap-4">
-                  <Text variant="xs" className="text-[#5F5E5E] mb-0">
-                    แสดง {Math.min((page - 1) * limit + 1, totalRows)} ถึง{" "}
-                    {Math.min(page * limit, totalRows)} จาก {totalRows}{" "}
-                    ใบสั่งซื้อ
-                  </Text>
-
-                  <div className="flex items-center gap-2">
-                    <Text variant="xs" className="text-[#5F5E5E] mb-0">
-                      รายการต่อหน้า:
-                    </Text>
-                    <select
-                      value={limit}
-                      onChange={(e) => {
-                        setLimit(Number(e.target.value));
-                        setPage(1);
-                      }}
-                      className="border border-gray-200 rounded-none px-2 py-1 text-gray-700 bg-white hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-300 cursor-pointer"
-                    >
-                      <option value={5}>5</option>
-                      <option value={10}>10</option>
-                      <option value={20}>20</option>
-                      <option value={50}>50</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* ฝั่งขวา: Controls Navigation */}
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={page === 1}
-                    onClick={() => setPage(1)}
-                    aria-label="หน้าแรก"
-                    className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronsLeft className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={page === 1}
-                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                    aria-label="หน้าก่อนหน้า"
-                    className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-
-                  {getPageNumbers(page, totalPages).map((p, idx) =>
-                    p === "..." ? (
-                      <span
-                        key={`ellipsis-${idx}`}
-                        className="px-2 text-gray-400 select-none"
-                      >
-                        ...
-                      </span>
-                    ) : (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setPage(Number(p))}
-                        aria-current={page === p ? "page" : undefined}
-                        className={cn(
-                          "px-3 py-1.5 rounded-none font-medium text-xs transition-colors cursor-pointer",
-                          page === p
-                            ? "bg-[#E51C23] text-white"
-                            : "text-gray-600 hover:bg-gray-100 border border-transparent",
-                        )}
-                      >
-                        {p}
-                      </button>
-                    ),
-                  )}
-
-                  <button
-                    type="button"
-                    disabled={page === totalPages}
-                    onClick={() =>
-                      setPage((prev) => Math.min(totalPages, prev + 1))
-                    }
-                    aria-label="หน้าถัดไป"
-                    className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={page === totalPages}
-                    onClick={() => setPage(totalPages)}
-                    aria-label="หน้าสุดท้าย"
-                    className="p-1.5 rounded-none text-gray-500 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronsRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+            {!isLoading && !error && (
+              <TablePagination
+                page={page}
+                totalPages={totalPages}
+                totalRows={totalRows}
+                limit={limit}
+                onPageChange={setPage}
+                onLimitChange={setLimit}
+                unitLabel="ใบสั่งซื้อ"
+              />
             )}
           </Card>
         </main>
@@ -667,7 +593,7 @@ export default function TransactionHistoryPage() {
           getStatusText={getStatusText}
           handlePrintReceipt={handlePrintReceipt}
           printingOrderId={printingOrderId}
-          isOwnerOrAdmin={isOwnerOrAdmin}
+          isOwnerOrManager={isOwnerOrManager}
           onClose={() => setSelectedOrderId(null)}
           variant="drawer"
         />
