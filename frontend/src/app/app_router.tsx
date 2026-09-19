@@ -59,7 +59,6 @@ import { getDashboardRoleGroup } from '../utils/dashboardAccess';
 
 export default function AppRouter(): React.JSX.Element {
   const { role, isLoading } = useAuth();
-  const isOwner = (role || "").toUpperCase() === "OWNER";
 
   const { isOwner, isManagerOrOwner, isEmployeeOrStaff, firstMenuPath } = useMemo(() => {
     const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
@@ -74,7 +73,7 @@ export default function AppRouter(): React.JSX.Element {
     return {
       isOwner,
       isManagerOrOwner: isOwnerOrManager,
-      isEmployeeRole: isEmployee,
+      isEmployeeOrStaff: isEmployee,
       firstMenuPath: firstPath
     };
   }, [role]); 
@@ -255,13 +254,13 @@ export default function AppRouter(): React.JSX.Element {
 
         {/* แดชบอร์ดของฝั่งพนักงาน */}
         <Route path="/employee/dashboard/maindashboard" element={
-          isEmployeeRole ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeOrStaff ? <MainDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
         <Route path="/employee/dashboard/salesdashboard" element={
-          isEmployeeRole ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeOrStaff ? <SaleDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
         <Route path="/employee/dashboard/debtdashboard" element={
-          isEmployeeRole ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
+          isEmployeeOrStaff ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
         } />
 
         <Route path="/employee/orders" element={<PurchaseOrders />} />
