@@ -12,6 +12,7 @@ import { useAuth } from "../../contexts/AuthContexts";
 import { getMenuByRole } from "../../config/menu";
 import { cn } from "../../utils/component";
 import { requestForgotPassword, resetPassword } from "../../service/http/login/login_service";
+import { useAlertDialog } from "../../components/elements/alert_dialog";
 
 // ภาพพื้นหลังฝั่งซ้าย สลับกันแสดงทีละภาพทุก 10 วินาที (ดู useEffect ตั้งเวลาด้านล่าง)
 const BACKGROUND_IMAGES = [loginImage, storeBackgroundImage, autopart3Image];
@@ -48,6 +49,7 @@ const Login: React.FC = () => {
 
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { alertDialog } = useAlertDialog();
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -84,14 +86,16 @@ const Login: React.FC = () => {
         const firstPath = userMenus[0].path; // จะได้เป็น /owner/dashboard หรือ /employee/dashboard
         navigate(firstPath, { replace: true });
       } else {
-        alert("คุณไม่มีสิทธิ์เข้าใช้งานในหน้านี้");
+        await alertDialog("คุณไม่มีสิทธิ์เข้าใช้งานในหน้านี้", "แจ้งเตือน", "warning");
         navigate("/login", { replace: true });
       }
     } catch (error: any) {
       console.error("Login failed:", error);
-      alert(
+      await alertDialog(
         error.message ||
-        "เข้าสู่ระบบไม่สำเร็จ: กรุณาตรวจสอบชื่อผู้ใช้หรือรหัสผ่าน"
+        "เข้าสู่ระบบไม่สำเร็จ: กรุณาตรวจสอบชื่อผู้ใช้หรือรหัสผ่าน",
+        "เข้าสู่ระบบไม่สำเร็จ",
+        "danger"
       );
       setShakeKey((k) => k + 1); // login ไม่ผ่านก็สั่นเตือนเหมือนกัน
     } finally {
@@ -178,8 +182,12 @@ const Login: React.FC = () => {
         otp: forgotOtp.trim(),
         new_password: forgotNewPassword,
       });
-      alert(res.message || "เปลี่ยนรหัสผ่านสำเร็จแล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่");
       handleCloseForgotModal();
+      await alertDialog(
+        res.message || "เปลี่ยนรหัสผ่านสำเร็จแล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่",
+        "เปลี่ยนรหัสผ่านสำเร็จ",
+        "success"
+      );
     } catch (err: any) {
       setForgotError(err.message || "เปลี่ยนรหัสผ่านไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
     } finally {
