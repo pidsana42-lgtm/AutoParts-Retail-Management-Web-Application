@@ -43,7 +43,7 @@ func (r *userRepository) GetByLineUserID(lineUserID string) (*entity.User, error
 
 func (r *userRepository) GetByIdentifier(identifier string) (*entity.User, error) {
     var user entity.User
-    err := r.db.Preload("Role").Where("username = ? OR email = ?", identifier, identifier).First(&user).Error
+    err := r.db.Preload("Role").Where("LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)", identifier, identifier).First(&user).Error
     if err != nil {
         return nil, err
     }
