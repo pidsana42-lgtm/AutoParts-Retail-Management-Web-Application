@@ -184,7 +184,15 @@ func (s *preOrderService) GetPreOrderByID(id uint) (preOrderDTO.PreOrderResponse
 	}
 
 	if len(itemIDs) > 0 {
-		linkedPOs, _ := s.repo.GetLinkedPOsByItemIDs(context.Background(), itemIDs)
+		linkedPOs, linkErr := s.repo.GetLinkedPOsByItemIDs(context.Background(), itemIDs)
+		if linkErr != nil {
+			return preOrderDTO.PreOrderResponseDTO{}, linkErr
+		}
+		for _, po := range linkedPOs {
+			if po.Status == "APPROVED" || po.Approved_at != nil {
+				dto.CanEdit = false
+			}
+		}
 		for _, itID := range itemIDs {
 			if po, ok := linkedPOs[itID]; ok && po.ID != 0 {
 				dto.PONumber = po.PO_number
@@ -192,7 +200,7 @@ func (s *preOrderService) GetPreOrderByID(id uint) (preOrderDTO.PreOrderResponse
 				poID := po.ID
 				dto.POID = &poID
 
-				if dto.Status != "COMPLETED" && dto.Status != "CANCELLED" {
+				if dto.Status != "COMPLETED" && dto.Status != "CANCELLED" && dto.Status != "READY" && dto.Status != "PARTIALLY_RECEIVED" {
 					if po.Status == "APPROVED" {
 						dto.Status = "ORDERED"
 					} else if po.Status == "PENDING" {
@@ -222,11 +230,19 @@ func (s *preOrderService) ListPreOrders() ([]preOrderDTO.PreOrderResponseDTO, er
 		}
 	}
 
-	linkedPOs, _ := s.repo.GetLinkedPOsByItemIDs(context.Background(), allItemIDs)
+	linkedPOs, linkErr := s.repo.GetLinkedPOsByItemIDs(context.Background(), allItemIDs)
+	if linkErr != nil {
+		return nil, linkErr
+	}
 
 	res := make([]preOrderDTO.PreOrderResponseDTO, len(entities))
 	for i := range entities {
 		dto := preOrderDTO.ToPreOrderResponseDTO(&entities[i])
+		for _, item := range entities[i].PreOrderItems {
+			if po, ok := linkedPOs[item.ID]; ok && (po.Status == "APPROVED" || po.Approved_at != nil) {
+				dto.CanEdit = false
+			}
+		}
 
 		for _, it := range entities[i].PreOrderItems {
 			if po, ok := linkedPOs[it.ID]; ok && po.ID != 0 {
@@ -235,7 +251,7 @@ func (s *preOrderService) ListPreOrders() ([]preOrderDTO.PreOrderResponseDTO, er
 				poID := po.ID
 				dto.POID = &poID
 
-				if dto.Status != "COMPLETED" && dto.Status != "CANCELLED" {
+				if dto.Status != "COMPLETED" && dto.Status != "CANCELLED" && dto.Status != "READY" && dto.Status != "PARTIALLY_RECEIVED" {
 					if po.Status == "APPROVED" {
 						dto.Status = "ORDERED"
 					} else if po.Status == "PENDING" {
@@ -257,6 +273,28 @@ func (s *preOrderService) UpdatePreOrder(id uint, input preOrderDTO.UpdatePreOrd
 	existing, err := s.repo.GetPreOrderByID(id)
 	if err != nil {
 		return preOrderDTO.PreOrderResponseDTO{}, err
+	}
+
+	editsDetails := input.PreOrderType != nil || input.CustomerID != nil || input.CustomerName != nil || input.CustomerPhone != nil || input.DepositAmount != nil || input.OrderDate != nil || input.SupplierID != nil || input.PreOrderItems != nil
+	if editsDetails {
+		if !preOrderDTO.ToPreOrderResponseDTO(existing).CanEdit {
+			return preOrderDTO.PreOrderResponseDTO{}, fmt.Errorf("แก้ไขใบสั่งจองได้เฉพาะรายการที่ยังไม่อนุมัติและยังไม่ปิดรายการ")
+		}
+		var itemIDs []uint
+		for _, item := range existing.PreOrderItems {
+			itemIDs = append(itemIDs, item.ID)
+		}
+		if len(itemIDs) > 0 {
+			linkedPOs, err := s.repo.GetLinkedPOsByItemIDs(context.Background(), itemIDs)
+			if err != nil {
+				return preOrderDTO.PreOrderResponseDTO{}, err
+			}
+			for _, po := range linkedPOs {
+				if po.Status == "APPROVED" || po.Approved_at != nil {
+					return preOrderDTO.PreOrderResponseDTO{}, fmt.Errorf("ใบสั่งจองได้รับอนุมัติแล้ว ไม่สามารถแก้ไขได้")
+				}
+			}
+		}
 	}
 
 	// เปลี่ยนชื่อลูกค้าเป็นคนใหม่ที่พิมพ์เองระหว่างแก้ไข (customer_id ถูก reset เป็น 0 ฝั่ง frontend) → หา/สร้างลูกค้าให้ก่อน

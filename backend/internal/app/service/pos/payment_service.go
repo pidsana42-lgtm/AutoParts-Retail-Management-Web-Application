@@ -92,17 +92,24 @@ func (s *paymentService) GeneratePromptPayQR(req posDto.GenerateQRRequest) (*pos
 	}
 
 	// 5. Gen QR Code
-	merchantPromptPayNo := os.Getenv("PromptPayNo") // เบอร์พร้อมเพย์ร้าน
-	// if merchantPromptPayNo == "" {
-	// 	merchantPromptPayNo = "0812345678"
-	// }
+	setting, _ := s.paymentRepo.GetCompanySetting(context.Background())
+	merchantPromptPayNo := ""
+	if setting != nil && setting.PromptPayNumber != "" {
+		merchantPromptPayNo = setting.PromptPayNumber
+	} else if envNo := os.Getenv("PromptPayNo"); envNo != "" {
+		merchantPromptPayNo = envNo
+	}
+	if merchantPromptPayNo == "" {
+		return nil, errors.New("ไม่พบข้อมูลเบอร์พร้อมเพย์ของร้าน กรุณาตั้งค่าข้อมูลการชำระเงินในเมนูตั้งค่าร้านค้า")
+	}
+
 	qrBase64, err := s.paymentRepo.GeneratePromptPayQR(merchantPromptPayNo, amount)
 	if err != nil {
 		return nil, fmt.Errorf("ไม่สามารถสร้าง QR Code ได้: %v", err)
 	}
 
 	// 6. ส่ง Response กลับ
-	return &posDto.GenerateQRResponse{
+	res := &posDto.GenerateQRResponse{
 		Status:          "pending",
 		PaymentID:       payment.ID,
 		OrderID:         payment.OrderID,
@@ -110,7 +117,26 @@ func (s *paymentService) GeneratePromptPayQR(req posDto.GenerateQRRequest) (*pos
 		QRCode:          qrBase64,
 		ReferenceNumber: refNo,
 		CreatedAt:       payment.CreatedAt,
-	}, nil
+	}
+	if setting != nil {
+		res.PromptPayType = setting.PromptPayType
+		res.PromptPayName = setting.PromptPayName
+		res.PromptPayNumber = setting.PromptPayNumber
+		res.BankName = setting.BankName
+		res.BankAccountNumber = setting.BankAccountNumber
+		res.BankAccountName = setting.BankAccountName
+	}
+	return res, nil
+}
+
+func (s *paymentService) getMerchantPromptPayNo() (string, error) {
+	if setting, err := s.paymentRepo.GetCompanySetting(context.Background()); err == nil && setting != nil && setting.PromptPayNumber != "" {
+		return setting.PromptPayNumber, nil
+	}
+	if envNo := os.Getenv("PromptPayNo"); envNo != "" {
+		return envNo, nil
+	}
+	return "", errors.New("ไม่พบข้อมูลเบอร์พร้อมเพย์ของร้าน กรุณาตั้งค่าข้อมูลการชำระเงินในเมนูตั้งค่าร้านค้า")
 }
 
 func (s *paymentService) GenerateSettleQR(req posDto.GenerateSettleQRRequest) (*posDto.GenerateQRResponse, error) {
@@ -118,10 +144,16 @@ func (s *paymentService) GenerateSettleQR(req posDto.GenerateSettleQRRequest) (*
 		return nil, errors.New("ยอดเงินต้องมากกว่า 0 บาท")
 	}
 
-	merchantPromptPayNo := os.Getenv("PromptPayNo")
-	// if merchantPromptPayNo == "" {
-	// 	merchantPromptPayNo = "0812345678"
-	// }
+	setting, _ := s.paymentRepo.GetCompanySetting(context.Background())
+	merchantPromptPayNo := ""
+	if setting != nil && setting.PromptPayNumber != "" {
+		merchantPromptPayNo = setting.PromptPayNumber
+	} else if envNo := os.Getenv("PromptPayNo"); envNo != "" {
+		merchantPromptPayNo = envNo
+	}
+	if merchantPromptPayNo == "" {
+		return nil, errors.New("ไม่พบข้อมูลเบอร์พร้อมเพย์ของร้าน กรุณาตั้งค่าข้อมูลการชำระเงินในเมนูตั้งค่าร้านค้า")
+	}
 
 	qrBase64, err := s.paymentRepo.GeneratePromptPayQR(merchantPromptPayNo, req.Amount)
 	if err != nil {
@@ -130,13 +162,22 @@ func (s *paymentService) GenerateSettleQR(req posDto.GenerateSettleQRRequest) (*
 
 	refNo := fmt.Sprintf("REF-SETTLE-%d", time.Now().Unix())
 
-	return &posDto.GenerateQRResponse{
+	res := &posDto.GenerateQRResponse{
 		Status:          "pending",
 		Amount:          req.Amount,
 		QRCode:          qrBase64,
 		ReferenceNumber: refNo,
 		CreatedAt:       time.Now(),
-	}, nil
+	}
+	if setting != nil {
+		res.PromptPayType = setting.PromptPayType
+		res.PromptPayName = setting.PromptPayName
+		res.PromptPayNumber = setting.PromptPayNumber
+		res.BankName = setting.BankName
+		res.BankAccountNumber = setting.BankAccountNumber
+		res.BankAccountName = setting.BankAccountName
+	}
+	return res, nil
 }
 
 func (s *paymentService) ConfirmPayment(req posDto.ConfirmPaymentRequest) (*posDto.ConfirmPaymentResponse, error) {

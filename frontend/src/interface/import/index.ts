@@ -68,6 +68,7 @@ export interface BillItemDTO {
   remark: string;
   product_id: number | null;
   pre_order_item_id?: number | null;
+  po_item_id?: number | null;
   category_id?: number | null;
   sub_category_id?: number | null;
   sub_sub_category_id?: number | null;
@@ -94,6 +95,7 @@ export interface ScannedBillData {
 }
 
 export interface SavedBill {
+  po_id?: number | null;
   id: number;
   bill_no: string;
   total_amount: number;
@@ -117,6 +119,8 @@ export interface SavedBill {
   bill_items?: {
     id: number;
     bill_id: number;
+    po_item_id?: number | null;
+    pre_order_item_id?: number | null;
     item_sequence: number;
     company_product_code: string;
     company_product_name: string;

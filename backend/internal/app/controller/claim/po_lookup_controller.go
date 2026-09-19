@@ -32,8 +32,12 @@ func (ctrl *POLookupController) GetByPONumber(c *gin.Context) {
 
 	items := make([]claimDto.POItemLookupDTO, 0, len(po.PO_Items))
 	for _, item := range po.PO_Items {
+		// An unlinked preorder has no received WMS product to claim yet.
+		if item.ProductID == nil {
+			continue
+		}
 		items = append(items, claimDto.POItemLookupDTO{
-			ProductID:         item.ProductID,
+			ProductID:         *item.ProductID,
 			ProductName:       item.Product_name_snapshot,
 			SupplyProductCode: item.Supply_product_code_snapshot,
 			Quantity:          item.Quantity,

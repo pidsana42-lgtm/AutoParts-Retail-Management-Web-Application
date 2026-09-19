@@ -25,7 +25,7 @@ load_env()
 
 MOCK_MODE = os.getenv("MOCK_LLM", "false").lower() == "true"
 GEMINI_API_KEY = (os.getenv("GOOGLE_STUDIO") or os.getenv("GEMINI_API_KEY") or "").strip()
-GEMINI_MODEL = (os.getenv("GEMINI_MODEL") or "google/gemini-3.1-pro").strip()
+GEMINI_MODEL = (os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite").strip()
 LIGHTNING_API_KEY = (os.getenv("LIGHTNING_API_KEY") or "").strip()
 print(f"Loaded LIGHTNING_API_KEY: {LIGHTNING_API_KEY[:6]}...{LIGHTNING_API_KEY[-6:] if len(LIGHTNING_API_KEY) > 12 else ''} (Length: {len(LIGHTNING_API_KEY)})")
 

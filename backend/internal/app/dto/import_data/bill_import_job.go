@@ -33,7 +33,7 @@ type BillImportJobResponseDTO struct {
 
 type ConfirmBillImportDTO struct {
 	Bill      CreateBillDTO       `json:"bill" binding:"required"`
-	Items     []CreateBillItemDTO `json:"items" binding:"required"`
+	Items     []CreateBillItemDTO `json:"items" binding:"required,min=1,dive"`
 	DraftJSON string              `json:"draft_json"`
 }
 

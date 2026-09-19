@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import {
   ChevronRight,
-  Calendar, Hash, User, Package, Loader2, SquarePen, Printer, Save, Camera, X,
+  Calendar, User, Package, Loader2, SquarePen, Printer, Save, Camera, X,
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContexts';
 import Heading from '../../../components/elements/heading';
 import Badge from '../../../components/elements/badge';
 import Button from '../../../components/elements/button';
+import Select from '../../../components/elements/select';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import { getCustomerClaimById, updateClaimItemStatus, searchCustomerCreditByPhone, generateCustomerClaimPDF } from '../../../service/http/claim/claim';
 import apiClient from '../../../service/http/apiClient';
@@ -29,10 +30,6 @@ const parseNote = (note: string | undefined, key: string): string => {
 export default function ClaimDetailPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
-  const location = useLocation();
-  // ที่มาของการเข้าหน้านี้ (ถ้ามี) — ใช้ปรับเกล็ดขนมปังให้ตรงกับหน้าที่กดเข้ามาจริงๆ เช่นจากหน้า
-  // "การเคลื่อนไหวของคลังสินค้า" แทน "จัดการเคลมสินค้า" ตามปกติ
-  const cameFromMovement = (location.state as { from?: string } | null)?.from === 'movement';
   const [searchParams, setSearchParams] = useSearchParams();
   const { role } = useAuth();
   const normalizedRole = role?.trim().toUpperCase();
@@ -46,6 +43,10 @@ export default function ClaimDetailPage(): React.JSX.Element {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
+  // Bumped after every decision attempt so the status Select below remounts fresh —
+  // it tracks its own "last clicked" option internally and, unlike a native <select>,
+  // does not snap back to the PENDING placeholder on its own when a write fails.
+  const [statusResetToken, setStatusResetToken] = useState(0);
   const mutationInProgress = useRef(false);
   const [editItems, setEditItems] = useState<EditableItem[]>([]);
   const [activeItemIdx, setActiveItemIdx] = useState<number | null>(null);
@@ -252,6 +253,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
       });
     } finally {
       setSavingStatus(false);
+      setStatusResetToken(t => t + 1);
       mutationInProgress.current = false;
     }
   };
@@ -321,9 +323,6 @@ export default function ClaimDetailPage(): React.JSX.Element {
   const displayItems = isEditing ? editItems : (claim.items ?? []);
   const totalQty = displayItems.reduce((acc, i) => acc + (i.qty || 0), 0);
   const basePath = window.location.pathname.startsWith('/employee') ? '/employee/claims' : '/owner/claims';
-  const breadcrumbRoot = cameFromMovement
-    ? { label: 'การเคลื่อนไหวของคลังสินค้า', path: '/owner/stock/stock-movement' }
-    : { label: 'จัดการเคลมสินค้า', path: basePath };
 
   return (
     <div className="p-8 space-y-6 bg-white min-h-screen font-sans text-slate-800 animate-in fade-in duration-300">
@@ -428,7 +427,6 @@ export default function ClaimDetailPage(): React.JSX.Element {
           </div>
           <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
             <div className="flex items-start gap-3">
-              <Hash size={16} className="text-[#e51c23] mt-0.5 shrink-0" />
               <div>
                 <p className="text-sm text-[#5F5E5E] font-medium">เลขที่ใบเคลม</p>
                 <p className="text-[#1C1B1B] font-normal">{claimNo}</p>
@@ -647,7 +645,8 @@ export default function ClaimDetailPage(): React.JSX.Element {
                       </TableCell>
                       <TableCell className="text-center pr-5">
                         {isManager && !isEditing && !!item.id && itemStatusUp === 'PENDING' ? (
-                          <select
+                          <Select
+                            key={`status-${item.id}-${statusResetToken}`}
                             aria-label={`สถานะ ${item.product_name || `#${item.product_id}`}`}
                             value="PENDING"
                             onChange={e => {
@@ -657,13 +656,14 @@ export default function ClaimDetailPage(): React.JSX.Element {
                               }
                             }}
                             disabled={savingStatus}
-                            aria-busy={savingStatus}
-                            className="w-full min-w-32 border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600"
-                          >
-                            <option value="PENDING" disabled>รอดำเนินการ</option>
-                            <option value="APPROVED">อนุมัติ</option>
-                            <option value="REJECTED">ปฏิเสธ</option>
-                          </select>
+                            options={[
+                              { value: 'PENDING', label: 'รอดำเนินการ', disabled: true },
+                              { value: 'APPROVED', label: 'อนุมัติ' },
+                              { value: 'REJECTED', label: 'ปฏิเสธ' },
+                            ]}
+                            containerClassName="mx-auto w-32"
+                            className="h-9 text-xs"
+                          />
                         ) : itemStatusUp === 'APPROVED' ? (
                           <Badge variant="success" size="sm">อนุมัติแล้ว</Badge>
                         ) : itemStatusUp === 'REJECTED' ? (

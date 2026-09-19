@@ -8,14 +8,16 @@ import (
 )
 
 type CreatePreOrderItemDTO struct {
-	PreOrderID       uint    `json:"pre_order_id" binding:"required"`
+	// Nested items receive their parent ID when the order is saved.
+	// The standalone item endpoint checks that a parent ID is supplied.
+	PreOrderID       uint    `json:"pre_order_id"`
 	ProductID        uint    `json:"product_id"`
 	ProductName      string  `json:"product_name"`
 	ProductCode      string  `json:"product_code"`
 	SupplierPartCode string  `json:"supplier_part_code"`
 	SupplierName     string  `json:"supplier_name"`
-	Quantity         int     `json:"quantity" binding:"required"`
-	UnitPrice        float64 `json:"unit_price"`
+	Quantity         int     `json:"quantity" binding:"gt=0"`
+	UnitPrice        float64 `json:"unit_price" binding:"gte=0"`
 }
 
 type UpdatePreOrderItemDTO struct {
@@ -30,6 +32,7 @@ type UpdatePreOrderItemDTO struct {
 }
 
 type PreOrderItemResponseDTO struct {
+	ReceivedQuantity int       `json:"received_quantity"`
 	ID               uint      `json:"id"`
 	PreOrderID       uint      `json:"pre_order_id"`
 	ProductID        uint      `json:"product_id"`
@@ -130,6 +133,7 @@ func ToPreOrderItemResponseDTO(m *entity.PreOrderItem) PreOrderItemResponseDTO {
 	}
 
 	return PreOrderItemResponseDTO{
+		ReceivedQuantity: m.ReceivedQuantity,
 		ID:               m.ID,
 		PreOrderID:       m.PreOrderID,
 		ProductID:        productID,

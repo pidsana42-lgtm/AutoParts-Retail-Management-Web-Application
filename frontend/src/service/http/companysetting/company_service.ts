@@ -2,6 +2,7 @@ import apiClient from "../apiClient";
 import type {
   CompanySettingReq,
   CompanySettingResponse,
+  PaymentSettingRevealResponse,
 } from "../../../interface/companysetting/company";
 
 export const resolveAssetUrl = (url: string): string => {
@@ -34,6 +35,16 @@ export const companyService = {
       data
     );
     return response.data?.data || (response.data as unknown as CompanySettingResponse);
+  },
+
+  /**
+   * ถอดรหัสดูข้อมูลการชำระเงินฉบับเต็ม (สำหรับเจ้าของร้าน)
+   */
+  revealPaymentSetting: async (): Promise<PaymentSettingRevealResponse> => {
+    const response = await apiClient.get<PaymentSettingRevealResponse>(
+      "/company-setting/payment/reveal"
+    );
+    return response.data;
   },
 
   /**

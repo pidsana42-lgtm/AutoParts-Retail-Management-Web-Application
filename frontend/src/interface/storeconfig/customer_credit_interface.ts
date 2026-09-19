@@ -16,12 +16,15 @@ export interface CustomerCreditItem {
   shipping_address?: string;
   registered_address?: string;
   display_address?: string;
+  max_unpaid_days?: number;
+  has_unpaid_order?: boolean;
+  is_overdue?: boolean;
 }
 
 export interface CustomerCreditFilter {
   search: string;
   customer_type_id: string; // "" or type id string
-  credit_status: "ALL" | "WITH_DEBT" | "NEAR_LIMIT" | "OVER_LIMIT" | "NO_DEBT";
+  credit_status: "ALL" | "WITH_DEBT" | "OVERDUE" | "NEAR_LIMIT" | "OVER_LIMIT" | "NO_DEBT";
   discount_status: "ALL" | "ENABLED" | "DISABLED";
 }
 

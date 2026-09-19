@@ -48,6 +48,22 @@ async function readyForm(role = 'owner') {
 describe('Preorder list and navigation', () => {
   beforeEach(resetMocks);
 
+  it('keeps receipt statuses separate from the approved PO waiting state', async () => {
+    mocks.list.mockResolvedValue([
+      preorder({ id: 51, status: 'READY', po_status: 'APPROVED', po_id: 1 }),
+      preorder({ id: 52, status: 'PARTIALLY_RECEIVED', po_status: 'APPROVED', po_id: 1 }),
+      preorder({ id: 53, status: 'ORDERED', po_status: 'APPROVED', po_id: 1 }),
+    ]);
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText('PRE-00051');
+    expect(screen.getAllByText('พร้อมส่งมอบ')).toHaveLength(2);
+    expect(screen.getAllByText('รับเข้าบางส่วน')).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: 'รอสินค้า' }));
+    expect(screen.getByText('PRE-00053')).toBeInTheDocument();
+    expect(screen.queryByText('PRE-00051')).not.toBeInTheDocument();
+    expect(screen.queryByText('PRE-00052')).not.toBeInTheDocument();
+  });
   it('shows loaded customer, preorder number and channel', async () => {
     mount();
     expect(await screen.findByText('PRE-00051')).toBeInTheDocument();
@@ -119,6 +135,37 @@ describe('Preorder list and navigation', () => {
     expect(save()).toBeEnabled();
     expect(mocks.update).not.toHaveBeenCalled();
   });
+  it.each([
+    { status: 'PENDING', po_status: 'APPROVED' },
+    { status: 'ORDERED' },
+    { status: 'PARTIALLY_RECEIVED' },
+    { status: 'READY' },
+    { status: 'COMPLETED' },
+    { status: 'CANCELLED' },
+    { status: 'PO_PENDING', can_edit: false },
+  ])('blocks direct edit URLs for locked bookings: %j', async overrides => {
+    mocks.detail.mockResolvedValue(preorder(overrides));
+    mount('/owner/pre-orders?edit=51');
+    expect(await screen.findByDisplayValue('สมชาย')).toBeDisabled();
+    expect(screen.getByDisplayValue('กรองน้ำมัน')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'แก้ไขใบสั่งจอง' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'บันทึกใบสั่งจอง' })).not.toBeInTheDocument();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it('keeps an approved employee booking read-only when opened from a row', async () => {
+    mocks.detail.mockResolvedValue(preorder({ po_status: 'APPROVED', po_id: 1 }));
+    const user = userEvent.setup();
+    mount('/employee/pre-orders');
+    await user.click(await screen.findByText('PRE-00051'));
+    expect(await screen.findByDisplayValue('สมชาย')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'แก้ไขใบสั่งจอง' })).not.toBeInTheDocument();
+  });
+  it.each(['PENDING', 'PO_PENDING', 'PO_DRAFT'])('allows editing unapproved bookings in %s', async status => {
+    mocks.detail.mockResolvedValue(preorder({ status, po_status: 'PENDING', can_edit: true }));
+    mount('/owner/pre-orders?edit=51');
+    expect(await screen.findByDisplayValue('สมชาย')).toBeEnabled();
+    expect(save()).toBeEnabled();
+  });
   it('reports detail failures without opening an editable order', async () => {
     mocks.detail.mockRejectedValue(new Error('404'));
     const user = userEvent.setup();
@@ -127,34 +174,30 @@ describe('Preorder list and navigation', () => {
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith({ variant: 'error', message: 'ไม่สามารถดึงข้อมูลรายละเอียดรายการจองนี้ได้' }));
     expect(screen.queryByRole('button', { name: 'บันทึกใบสั่งจอง' })).not.toBeInTheDocument();
   });
-  it('does not delete when confirmation is cancelled', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
-    const user = userEvent.setup();
-    mount();
-    await screen.findByText('PRE-00051');
-    await user.click(screen.getByRole('button', { name: 'ลบ' }));
+  it.each(['owner', 'employee'])('keeps automatic statuses without management controls on the %s list', async role => {
+    mocks.list.mockResolvedValue([
+      preorder({ id: 51, status: 'PENDING' }),
+      preorder({ id: 52, status: 'ORDERED', po_status: 'APPROVED', po_id: 1 }),
+      preorder({ id: 53, status: 'READY', po_status: 'APPROVED', po_id: 1 }),
+      preorder({ id: 54, status: 'PARTIALLY_RECEIVED', po_status: 'APPROVED', po_id: 1 }),
+      preorder({ id: 55, status: 'COMPLETED' }),
+      preorder({ id: 56, status: 'CANCELLED' }),
+    ]);
+    mount(`/${role}/pre-orders`);
+    await screen.findByText('PRE-00056');
+    expect(screen.getByRole('columnheader', { name: 'สถานะ' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'จัดการ' })).not.toBeInTheDocument();
+    for (const label of ['แก้ไข', 'ลบ', 'ส่งมอบสินค้า', 'ยกเลิกจอง']) {
+      expect(screen.queryByRole('button', { name: label, exact: true })).not.toBeInTheDocument();
+    }
+    expect(screen.getAllByText('รออนุมัติสั่งซื้อ')).toHaveLength(2);
+    expect(screen.getAllByText('รอสินค้า')).toHaveLength(2);
+    expect(screen.getAllByText('พร้อมส่งมอบ')).toHaveLength(2);
+    expect(screen.getAllByText('รับเข้าบางส่วน')).toHaveLength(2);
+    expect(screen.getByText('ส่งมอบแล้ว')).toBeInTheDocument();
+    expect(screen.getByText('ยกเลิก')).toBeInTheDocument();
+    expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.remove).not.toHaveBeenCalled();
-    expect(screen.getByText('PRE-00051')).toBeInTheDocument();
-  });
-  it('deletes only the confirmed order and removes it from the list', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const user = userEvent.setup();
-    mount();
-    await screen.findByText('PRE-00051');
-    await user.click(screen.getByRole('button', { name: 'ลบ' }));
-    expect(mocks.remove).toHaveBeenCalledExactlyOnceWith(51);
-    expect(await screen.findByText('ไม่พบข้อมูลรายการจองล่วงหน้า')).toBeInTheDocument();
-    expect(mocks.detail).not.toHaveBeenCalled();
-  });
-  it('preserves the order when deletion fails', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    mocks.remove.mockRejectedValue(new Error('offline'));
-    const user = userEvent.setup();
-    mount();
-    await screen.findByText('PRE-00051');
-    await user.click(screen.getByRole('button', { name: 'ลบ' }));
-    expect(mocks.toast).toHaveBeenCalledWith({ variant: 'error', message: 'ล้มเหลวในการลบรายการสั่งจอง' });
-    expect(screen.getByText('PRE-00051')).toBeInTheDocument();
   });
 });
 
@@ -250,6 +293,7 @@ describe('Preorder form (real owner and employee pages, mocked API)', () => {
     expect(screen.getByText('3 ชิ้น')).toBeInTheDocument();
     expect(searchProduct()).toHaveValue('');
     await user.click(screen.getByRole('button', { name: 'ลบรายการนี้' }));
+    await user.click(screen.getByRole('button', { name: 'ยืนยันการลบ' }));
     expect(screen.queryByDisplayValue('กรองน้ำมัน')).not.toBeInTheDocument();
     expect(screen.getByText('0 ชิ้น')).toBeInTheDocument();
   });
@@ -267,7 +311,7 @@ describe('Preorder form (real owner and employee pages, mocked API)', () => {
     await user.type(firstName(), 'ลูกค้า');
     await user.click(screen.getByRole('button', { name: '+ เพิ่มรายการเอง (ไม่มีในระบบ)' }));
     await user.type(screen.getByPlaceholderText('ระบุชื่อสินค้า...'), 'อะไหล่สั่งพิเศษ');
-    await user.type(screen.getByPlaceholderText('รหัสสินค้า...'), 'CUSTOM-1');
+    await user.type(screen.getByPlaceholderText('-'), 'CUSTOM-1');
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '4' } });
     await user.click(save());
     expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ pre_order_items: [expect.objectContaining({ product_id: 0, product_name: 'อะไหล่สั่งพิเศษ', product_code: 'CUSTOM-1', quantity: 4, unit_price: 0 })] }));

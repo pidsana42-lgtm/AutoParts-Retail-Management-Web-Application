@@ -2,64 +2,89 @@ package seed
 
 import (
 	"backend/internal/app/entity"
+	"errors"
 	"fmt"
+
 	"gorm.io/gorm"
 )
 
 func PurchaseOrdersItems(db *gorm.DB) error {
-    // 1. ดึงข้อมูลสินค้า (เตรียมไว้ใช้)
-    var product entity.Product
-    if err := db.Preload("Unit").First(&product).Error; err != nil {
-        return fmt.Errorf("failed to find product: %w", err)
-    }
-    quantity := float64(20.00)
-    subTotal := quantity * product.Cost_price
+	rows := []struct {
+		PONumber    string
+		ProductCode string
+		Quantity    float64
+	}{
+		{PONumber: "PO-2026-0001", ProductCode: "BR-900X", Quantity: 20},
+		{PONumber: "PO-2026-0002", ProductCode: "GSK-882", Quantity: 20},
+		{PONumber: "PO-2026-0003", ProductCode: "OIL-SYN-5W40-X", Quantity: 20},
+	}
 
-    // 2. สร้างฟังก์ชันช่วยบันทึก (เพื่อลดการเขียนโค้ดซ้ำ)
-    saveItem := func(poNumber string) error {
-        var po entity.PO
-        if err := db.Where("po_number = ?", poNumber).First(&po).Error; err != nil {
-            return fmt.Errorf("failed to find PO %s: %w", poNumber, err)
-        }
+	for _, row := range rows {
+		var po entity.PO
+		if err := db.Where("po_number = ?", row.PONumber).First(&po).Error; err != nil {
+			return fmt.Errorf("failed to find PO %s: %w", row.PONumber, err)
+		}
 
-        // CompanyProductCode ย้ายไปอยู่ที่ Inventory แล้ว (ผูกกับ Supplier แต่ละเจ้า) — หารหัสของ Supplier เจ้าที่ตรงกับ PO ใบนี้
-        companyProductCode := ""
-        var inv entity.Inventory
-        if err := db.Where("product_id = ? AND supplier_id = ?", product.ID, po.SupplierID).First(&inv).Error; err == nil {
-            companyProductCode = inv.CompanyProductCode
-        }
+		var product entity.Product
+		if err := db.Preload("Unit").Where("product_code = ?", row.ProductCode).First(&product).Error; err != nil {
+			return fmt.Errorf("failed to find product %s: %w", row.ProductCode, err)
+		}
 
-        item := entity.POItems{
-            POID:                         po.ID,
-            ProductID:                    product.ID,
-            Product_name_snapshot:        product.Product_Name,
-            Supply_product_code_snapshot: companyProductCode,
-            Quantity:                     quantity,
-            Unit:                         product.Unit.Unit_Name,
-            UnitPrice:                    product.Cost_price,
-            SubTotal:                     subTotal,
-        }
+		var inventory entity.Inventory
+		if err := db.Where(
+			"product_id = ? AND supplier_id = ?",
+			product.ID,
+			po.SupplierID,
+		).First(&inventory).Error; err != nil {
+			return fmt.Errorf("failed to find inventory for PO %s: %w", row.PONumber, err)
+		}
 
-        // บันทึกแบบ FirstOrCreate
-        return db.Where("po_id = ? AND product_id = ?", item.POID, item.ProductID).
-            FirstOrCreate(&entity.POItems{}, item).Error
-    }
+		unitName := ""
+		if product.Unit != nil {
+			unitName = product.Unit.Unit_Name
+		}
 
-    // 3. รันบันทึกแยกบิล
-    if err := saveItem("PO-2026-0001"); err != nil {
-        return err
-    }
-    fmt.Println("Added item to PO-2026-0001")
+		// ใช้ยอดรวมของ PO เป็นฐาน เพื่อให้ยอดรายการ Seed ตรงกับหัว PO เสมอ
+		unitPrice := po.Total_amount / row.Quantity
+		productID := product.ID
+		item := entity.POItems{
+			POID:                         po.ID,
+			ProductID:                    &productID,
+			Product_name_snapshot:        product.Product_Name,
+			Product_code_snapshot:        product.Product_Code,
+			Supply_product_code_snapshot: inventory.CompanyProductCode,
+			Quantity:                     row.Quantity,
+			Unit:                         unitName,
+			UnitPrice:                    unitPrice,
+			SubTotal:                     po.Total_amount,
+		}
 
-    if err := saveItem("PO-2026-0002"); err != nil {
-        return err
-    }
-    fmt.Println("Added item to PO-2026-0002")
+		var existing entity.POItems
+		err := db.Where("po_id = ?", po.ID).First(&existing).Error
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			if err := db.Create(&item).Error; err != nil {
+				return fmt.Errorf("failed to create item for PO %s: %w", row.PONumber, err)
+			}
+		case err != nil:
+			return fmt.Errorf("failed to query item for PO %s: %w", row.PONumber, err)
+		default:
+			if err := db.Model(&existing).Updates(map[string]interface{}{
+				"product_id":                   item.ProductID,
+				"product_name_snapshot":        item.Product_name_snapshot,
+				"product_code_snapshot":        item.Product_code_snapshot,
+				"supply_product_code_snapshot": item.Supply_product_code_snapshot,
+				"quantity":                     item.Quantity,
+				"unit":                         item.Unit,
+				"unit_price":                   item.UnitPrice,
+				"sub_total":                    item.SubTotal,
+			}).Error; err != nil {
+				return fmt.Errorf("failed to update item for PO %s: %w", row.PONumber, err)
+			}
+		}
 
-    if err := saveItem("PO-2026-0003"); err != nil {
-        return err
-    }
-    fmt.Println("Added item to PO-2026-0003")
+		fmt.Printf("Seeded item for %s from inventory %d\n", row.PONumber, inventory.ID)
+	}
 
-    return nil
+	return nil
 }

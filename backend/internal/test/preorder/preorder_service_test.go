@@ -38,6 +38,10 @@ type mockPreOrderRepo struct {
 
 func uintPtr(u uint) *uint { return &u }
 
+func (m *mockPreOrderRepo) GetPreOrderItemByID(context.Context, uint) (*entity.PreOrderItem, error) {
+	panic("unexpected GetPreOrderItemByID call in preorder service test")
+}
+
 // compile-time check: mock ต้อง implement PreOrderRepository ครบทุก method
 var _ preOrderRepo.PreOrderRepository = (*mockPreOrderRepo)(nil)
 

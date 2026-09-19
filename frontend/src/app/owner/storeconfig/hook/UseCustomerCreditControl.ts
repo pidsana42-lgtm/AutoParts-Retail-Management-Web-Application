@@ -116,6 +116,9 @@ export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
             shipping_address: item.shipping_address || "",
             registered_address: item.registered_address || "",
             display_address: item.shipping_address || item.registered_address || "",
+            max_unpaid_days: Number(item.max_unpaid_days) || 0,
+            has_unpaid_order: Boolean(item.has_unpaid_order),
+            is_overdue: Boolean(item.is_overdue),
           };
         }
       );
@@ -227,6 +230,8 @@ export const useCustomerCreditControl = (): UseCustomerCreditControlReturn => {
       // 3. Credit Status Filter
       if (filter.credit_status === "WITH_DEBT") {
         if (c.current_debt_amount <= 0) return false;
+      } else if (filter.credit_status === "OVERDUE") {
+        if (!c.is_overdue) return false;
       } else if (filter.credit_status === "NO_DEBT") {
         if (c.current_debt_amount > 0) return false;
       } else if (filter.credit_status === "NEAR_LIMIT") {

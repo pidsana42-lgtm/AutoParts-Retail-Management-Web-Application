@@ -14,4 +14,9 @@ type CustomerClaimItem struct {
 	Status      string `gorm:"default:'Pending'" json:"status"`
 	ClaimType   string `gorm:"type:varchar(50);default:'INSTANT'" json:"claim_type"`
 	EvidenceURL string `gorm:"type:text" json:"evidence_url"`
+
+	// StockOutIssued/StockInReceived: กันไม่ให้ตัด/เติมสต็อกซ้ำถ้าสถานะ/ผลการดำเนินการถูกสลับไปมา
+	// (เช่น อนุมัติ -> ปฏิเสธ -> อนุมัติใหม่) เพราะของจริงถูกจ่ายให้ลูกค้า/รับกลับมาแค่ครั้งเดียวเท่านั้น
+	StockOutIssued   bool `gorm:"default:false" json:"stock_out_issued"`
+	StockInReceived  bool `gorm:"default:false" json:"stock_in_received"`
 }

@@ -2,7 +2,8 @@ import { Search, Bell, CheckCircle, Info, AlertTriangle, XCircle, Trash2, CheckC
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContexts";
 import { useNotification, type AppNotification } from "../../contexts/NotificationContext";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import StockAlertNotificationModal from './StockAlertNotificationModal';
 import { getProductsList } from "../../service/http/wms/product";
 import type { StockItem } from "../../interface/wms/product";
 import { buildProductSearchIndex, searchProductIndex } from "../../utils/productSearch";
@@ -13,6 +14,8 @@ export default function Navbar(): React.JSX.Element {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotification();
 
   const [showNotif, setShowNotif] = useState(false);
+  const [showStockAlertPO, setShowStockAlertPO] = useState(false);
+  const closeStockAlertPO = useCallback(() => setShowStockAlertPO(false), []);
   const notifRef = useRef<HTMLDivElement>(null);
 
   // ช่องค้นหาสินค้า (ด้วยเลขอะไหล่/รหัสสินค้า หรือรุ่นรถ) — โหลดรายการสินค้าแบบ lazy ตอนโฟกัสช่องค้นหาครั้งแรกเท่านั้น
@@ -65,6 +68,12 @@ export default function Navbar(): React.JSX.Element {
 
   const handleNotifClick = (notif: AppNotification) => {
     markAsRead(notif.id);
+    const eventType = (notif.eventType || notif.type || '').toUpperCase();
+    if (currentRole && (eventType === 'LOW_STOCK' || eventType === 'OUT_OF_STOCK' || notif.link?.includes('stock-alerts=1'))) {
+      setShowNotif(false);
+      setShowStockAlertPO(true);
+      return;
+    }
     if (notif.link) {
       setShowNotif(false);
       navigate(notif.link);
@@ -185,7 +194,7 @@ export default function Navbar(): React.JSX.Element {
       {/* ฝั่งขวา: แจ้งเตือน & โปรไฟล์ */}
       <div className="flex items-center space-x-4 shrink-0">
         <div className="relative" ref={notifRef}>
-          <div
+          <button type="button" aria-label="การแจ้งเตือน"
             className="cursor-pointer text-[#4B5563] hover:text-gray-800 transition-colors p-1"
             onClick={() => setShowNotif(!showNotif)}
           >
@@ -195,7 +204,7 @@ export default function Navbar(): React.JSX.Element {
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
-          </div>
+          </button>
 
           {/* Notification Dropdown */}
           {showNotif && (
@@ -267,6 +276,7 @@ export default function Navbar(): React.JSX.Element {
           </div>
         </div>
       </div>
+      {showStockAlertPO && <StockAlertNotificationModal onClose={closeStockAlertPO} basePath={isOwnerOrAdmin ? '/owner' : '/employee'} />}
     </nav>
   );
 }

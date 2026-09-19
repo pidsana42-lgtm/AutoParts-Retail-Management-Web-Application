@@ -9,33 +9,33 @@ import (
 
 // CreateCustomerClaimDTO ใช้สำหรับรับข้อมูลตอนลูกค้าเปิดบิลเคลมใหม่
 type CreateCustomerClaimDTO struct {
-	OriginalOrderID uint                         `json:"original_order_id" binding:"required"` // อ้างอิงออเดอร์เดิมที่ซื้อไป
-	ReturnID        *uint                        `json:"return_id"`                            // อ้างอิงบิลรับคืน (ถ้ามี/บังคับแล้วแต่ Business Logic)
-	Status          string                       `json:"status"`
-	Notes           string                       `json:"notes"`
-	ClaimDate       *time.Time                   `json:"claim_date"`
-	CustomerName    string                       `json:"customer_name"`
-	CustomerPhone   string                       `json:"customer_phone"`
-	ClaimType       string                       `json:"claim_type"`
-	ClaimAmount     float64                      `json:"claim_amount"`
-	RefundAmount    float64                      `json:"refund_amount"`
-	ReplacementCost float64                      `json:"replacement_cost"`
-	// เปิดให้สามารถสร้างรายการสินค้า (Items) พร้อมกับหัวบิลได้เลย
-	Items []CreateCustomerClaimItemDTO `json:"items" binding:"required,dive"`
-}
-
-// UpdateCustomerClaimDTO ใช้สำหรับแก้ไขข้อมูลหัวบิล หรือเปลี่ยนสถานะ (เช่น พนักงานกดอนุมัติ)
-type UpdateCustomerClaimDTO struct {
-	Status          string     `json:"status"`       // เช่น "Pending", "Approved", "Rejected"
+	OriginalOrderID uint       `json:"original_order_id" binding:"required"` // อ้างอิงออเดอร์เดิมที่ซื้อไป
+	ReturnID        *uint      `json:"return_id"`                            // อ้างอิงบิลรับคืน (ถ้ามี/บังคับแล้วแต่ Business Logic)
+	Status          string     `json:"status"`
 	Notes           string     `json:"notes"`
-	ApprovedBy      *uint      `json:"approved_by"`  // ไอดีพนักงานผู้อนุมัติ
 	ClaimDate       *time.Time `json:"claim_date"`
 	CustomerName    string     `json:"customer_name"`
 	CustomerPhone   string     `json:"customer_phone"`
 	ClaimType       string     `json:"claim_type"`
-	ClaimAmount     float64    `json:"claim_amount"`
-	RefundAmount    float64    `json:"refund_amount"`
-	ReplacementCost float64    `json:"replacement_cost"`
+	ClaimAmount     float64    `json:"claim_amount" binding:"gte=0"`
+	RefundAmount    float64    `json:"refund_amount" binding:"gte=0"`
+	ReplacementCost float64    `json:"replacement_cost" binding:"gte=0"`
+	// เปิดให้สามารถสร้างรายการสินค้า (Items) พร้อมกับหัวบิลได้เลย
+	Items []CreateCustomerClaimItemDTO `json:"items" binding:"required,min=1,dive"`
+}
+
+// UpdateCustomerClaimDTO ใช้สำหรับแก้ไขข้อมูลหัวบิล หรือเปลี่ยนสถานะ (เช่น พนักงานกดอนุมัติ)
+type UpdateCustomerClaimDTO struct {
+	Status          string     `json:"status"` // เช่น "Pending", "Approved", "Rejected"
+	Notes           string     `json:"notes"`
+	ApprovedBy      *uint      `json:"approved_by"` // ไอดีพนักงานผู้อนุมัติ
+	ClaimDate       *time.Time `json:"claim_date"`
+	CustomerName    string     `json:"customer_name"`
+	CustomerPhone   string     `json:"customer_phone"`
+	ClaimType       string     `json:"claim_type"`
+	ClaimAmount     float64    `json:"claim_amount" binding:"gte=0"`
+	RefundAmount    float64    `json:"refund_amount" binding:"gte=0"`
+	ReplacementCost float64    `json:"replacement_cost" binding:"gte=0"`
 	// สถานะการดำเนินงาน
 	SupplierResponseStatus string `json:"supplier_response_status"` // WAITING, APPROVED, REJECTED
 	CustomerReceivedItem   *bool  `json:"customer_received_item"`
@@ -45,22 +45,22 @@ type UpdateCustomerClaimDTO struct {
 
 // CustomerClaimResponseDTO ใช้สำหรับส่งข้อมูล Customer Claim กลับไปแสดงผล
 type CustomerClaimResponseDTO struct {
-	ID              uint                           `json:"id"`
-	ClaimNo         string                         `json:"claim_no"`
-	OriginalOrderID uint                           `json:"original_order_id"`
-	OrderNumber     string                         `json:"order_number"`
-	CustomerName    string                         `json:"customer_name"`
-	CustomerPhone   string                         `json:"customer_phone"`
-	ClaimType       string                         `json:"claim_type"`
-	ClaimAmount     float64                        `json:"claim_amount"`
-	RefundAmount    float64                        `json:"refund_amount"`
-	ReplacementCost float64                        `json:"replacement_cost"`
-	ReturnID        *uint                          `json:"return_id"`
-	Status          string                         `json:"status"`
-	Notes           string                         `json:"notes"`
-	ClaimDate       time.Time                      `json:"claim_date"`
-	CreatedBy       uint                           `json:"created_by"`
-	ApprovedBy      *uint                          `json:"approved_by"`
+	ID              uint      `json:"id"`
+	ClaimNo         string    `json:"claim_no"`
+	OriginalOrderID uint      `json:"original_order_id"`
+	OrderNumber     string    `json:"order_number"`
+	CustomerName    string    `json:"customer_name"`
+	CustomerPhone   string    `json:"customer_phone"`
+	ClaimType       string    `json:"claim_type"`
+	ClaimAmount     float64   `json:"claim_amount"`
+	RefundAmount    float64   `json:"refund_amount"`
+	ReplacementCost float64   `json:"replacement_cost"`
+	ReturnID        *uint     `json:"return_id"`
+	Status          string    `json:"status"`
+	Notes           string    `json:"notes"`
+	ClaimDate       time.Time `json:"claim_date"`
+	CreatedBy       uint      `json:"created_by"`
+	ApprovedBy      *uint     `json:"approved_by"`
 	// สถานะการดำเนินงาน
 	SupplierResponseStatus string `json:"supplier_response_status"`
 	CustomerReceivedItem   *bool  `json:"customer_received_item"`
@@ -79,7 +79,12 @@ func (d *CreateCustomerClaimDTO) ToEntity() entity.CustomerClaim {
 		OriginalOrderID: d.OriginalOrderID,
 		ReturnID:        d.ReturnID,
 		Note:            d.Notes,
-		Status:          func() string { if d.Status != "" { return d.Status }; return "Pending" }(),
+		Status: func() string {
+			if d.Status != "" {
+				return d.Status
+			}
+			return "Pending"
+		}(),
 		ClaimDate:       claimDate,
 		CustomerName:    d.CustomerName,
 		CustomerPhone:   d.CustomerPhone,
@@ -198,26 +203,26 @@ func ToCustomerClaimResponseDTO(m *entity.CustomerClaim) CustomerClaimResponseDT
 	}
 
 	return CustomerClaimResponseDTO{
-		ID:              m.ID,
-		ClaimNo:         m.ClaimNo,
-		OriginalOrderID: m.OriginalOrderID,
-		OrderNumber:     orderNumber,
-		CustomerName:    customerName,
-		CustomerPhone:   m.CustomerPhone,
-		ClaimType:       m.ClaimType,
-		ClaimAmount:     m.ClaimAmount,
-		RefundAmount:    m.RefundAmount,
-		ReplacementCost: m.ReplacementCost,
-		ReturnID:        m.ReturnID,
-		Status:          m.Status,
-		Notes:           cleanNoteText(m.Note), // กรอง metadata ออก
-		ClaimDate:       m.ClaimDate,
-		CreatedBy:       m.CreatedBy,
-		ApprovedBy:      m.ApprovedBy,
+		ID:                     m.ID,
+		ClaimNo:                m.ClaimNo,
+		OriginalOrderID:        m.OriginalOrderID,
+		OrderNumber:            orderNumber,
+		CustomerName:           customerName,
+		CustomerPhone:          m.CustomerPhone,
+		ClaimType:              m.ClaimType,
+		ClaimAmount:            m.ClaimAmount,
+		RefundAmount:           m.RefundAmount,
+		ReplacementCost:        m.ReplacementCost,
+		ReturnID:               m.ReturnID,
+		Status:                 m.Status,
+		Notes:                  cleanNoteText(m.Note), // กรอง metadata ออก
+		ClaimDate:              m.ClaimDate,
+		CreatedBy:              m.CreatedBy,
+		ApprovedBy:             m.ApprovedBy,
 		SupplierResponseStatus: m.SupplierResponseStatus,
 		CustomerReceivedItem:   m.CustomerReceivedItem,
 		CustomerWaiting:        m.CustomerWaiting,
 		OperationNote:          m.OperationNote,
-		Items:           items,
+		Items:                  items,
 	}
 }
