@@ -4,10 +4,10 @@ import { type InputHTMLAttributes, type ReactNode, forwardRef, useId } from "rea
 
 const inputVariants = cva(
   [
-    "h-10 w-full rounded-none bg-[#f6f3f2] px-3 text-sm text-black",
-    "placeholder:text-gray-400 focus:ring-1 ring-red-600",
+    "h-10 w-full rounded-none bg-[#f6f3f2] px-3 text-sm font-normal text-black",
+    "placeholder:text-[#6B7280] placeholder:font-light focus:ring-1 ring-red-600",
     "transition-colors duration-150 ease-out",
-    "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
+    "disabled:cursor-not-allowed disabled:bg-[#f6f3f2] disabled:text-slate-400",
   ],
   {
     variants: {
@@ -91,6 +91,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 hasLeftIcon:  !!leftIcon,
                 hasRightIcon: !!rightIcon,
               }),
+               rest.type === "password" && "[&::-ms-reveal]:hidden [&::-ms-clear]:hidden",
                rest.type === "date" && "[&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60 [&::-webkit-calendar-picker-indicator]:hover:opacity-100",
               className
             )}

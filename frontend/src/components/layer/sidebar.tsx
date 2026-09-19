@@ -38,12 +38,12 @@ export default function Sidebar({
           {collapsed ? <Menu size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        <div className="h-16 border-b border-gray-800 flex items-center justify-center px-4 overflow-hidden">
+        <div className="h-25  flex items-center justify-center px-3 overflow-hidden">
           <img
             src="/LOGO.png"
             alt="AutoParts Logo"
             className={`object-contain transition-all duration-300 filter brightness-0 invert ${
-              collapsed ? "h-8 w-8" : "h-10 max-w-[80%]"
+              collapsed ? "h-15 w-15" : "h-18 max-w-[90%]"
             }`}
           />
         </div>

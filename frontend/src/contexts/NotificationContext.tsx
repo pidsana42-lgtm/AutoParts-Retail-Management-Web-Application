@@ -43,7 +43,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!role) { setNotifications([]); return; }
     if (!loginSequence) return;
-    const basePath = ['OWNER', 'ADMIN'].includes(role.toUpperCase()) ? '/owner' : '/employee';
+    const basePath = ['OWNER', 'MANAGER', 'ADMIN'].includes(role.toUpperCase()) ? '/owner' : '/employee';
     // Reuse the request during StrictMode's effect replay, but attach a live
     // subscriber each time. A new login always starts a new reminder check.
     if (loginReminderRef.current?.sequence !== loginSequence) {
@@ -122,7 +122,10 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     if (!role) return;
     return notificationService.list(role, user?.id)
       .then(res => {
-        const historyItems: AppNotification[] = res.notifications.map(r => ({
+        const visibleNotifications = role.toUpperCase() === 'OWNER'
+          ? res.notifications
+          : res.notifications.filter(r => r.type !== 'PO_PENDING_APPROVAL');
+        const historyItems: AppNotification[] = visibleNotifications.map(r => ({
           id: String(r.id),
           title: r.title,
           message: r.message,
@@ -193,6 +196,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          if (data?.type === 'PO_PENDING_APPROVAL' && role?.toUpperCase() !== 'OWNER') return;
           if (data && data.title) {
             if (data.id) {
               // แจ้งเตือนที่ backend บันทึกลง DB แล้ว (เจาะจงเจ้าของร้าน/พนักงานคนใดคนหนึ่ง) — mark read ได้จริงผ่าน API

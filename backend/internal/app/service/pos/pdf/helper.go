@@ -1,15 +1,177 @@
 package pdf
 
 import (
+	"bytes"
+	"context"
+	"encoding/base64"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	"image/png"
+	"io"
 	"math"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"backend/internal/app/entity"
 
 	"github.com/johnfercher/maroto/pkg/color"
+	"github.com/johnfercher/maroto/pkg/consts"
 )
+
+const maxLogoBytes = 5 * 1024 * 1024
+
+// LoadLogo prepares both local and remote company logos for Maroto. Remote
+// images (such as Supabase public URLs) must be downloaded before PDF rendering.
+func LoadLogo(ctx context.Context, logoURL string) (filePath string, base64Data string, extension consts.Extension, err error) {
+	logoURL = strings.TrimSpace(logoURL)
+	if logoURL == "" {
+		return "", "", consts.Png, nil
+	}
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if !strings.HasPrefix(logoURL, "http://") && !strings.HasPrefix(logoURL, "https://") {
+		filePath = ResolveLogoPath(logoURL)
+		if filePath == "" {
+			return "", "", consts.Png, fmt.Errorf("logo file not found: %s", logoURL)
+		}
+
+		data, readErr := os.ReadFile(filePath)
+		if readErr != nil {
+			return "", "", consts.Png, readErr
+		}
+		prepared, ext, converted, prepareErr := PrepareLogoImage(data)
+		if prepareErr != nil {
+			return "", "", consts.Png, prepareErr
+		}
+		if converted {
+			return "", base64.StdEncoding.EncodeToString(prepared), ext, nil
+		}
+		return filePath, "", ext, nil
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, logoURL, nil)
+	if err != nil {
+		return "", "", consts.Png, err
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", consts.Png, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", consts.Png, fmt.Errorf("logo request returned HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxLogoBytes+1))
+	if err != nil {
+		return "", "", consts.Png, err
+	}
+	if len(data) > maxLogoBytes {
+		return "", "", consts.Png, fmt.Errorf("logo exceeds %d bytes", maxLogoBytes)
+	}
+
+	prepared, ext, _, err := PrepareLogoImage(data)
+	if err != nil {
+		return "", "", consts.Png, err
+	}
+	return "", base64.StdEncoding.EncodeToString(prepared), ext, nil
+}
+
+func loadLogo(ctx context.Context, logoURL string) (filePath string, base64Data string, extension consts.Extension, err error) {
+	return LoadLogo(ctx, logoURL)
+}
+
+// PrepareLogoImage converts supported image formats (PNG, JPEG, GIF) for Maroto. GIF logos are converted to PNG.
+func PrepareLogoImage(data []byte) (prepared []byte, extension consts.Extension, converted bool, err error) {
+	switch http.DetectContentType(data) {
+	case "image/png":
+		return data, consts.Png, false, nil
+	case "image/jpeg":
+		return data, consts.Jpg, false, nil
+	case "image/gif":
+		img, _, decodeErr := image.Decode(bytes.NewReader(data))
+		if decodeErr != nil {
+			return nil, consts.Png, false, decodeErr
+		}
+		var convertedImage bytes.Buffer
+		if encodeErr := png.Encode(&convertedImage, img); encodeErr != nil {
+			return nil, consts.Png, false, encodeErr
+		}
+		return convertedImage.Bytes(), consts.Png, true, nil
+	default:
+		return nil, consts.Png, false, fmt.Errorf("unsupported logo image format")
+	}
+}
+
+func prepareLogoImage(data []byte) (prepared []byte, extension consts.Extension, converted bool, err error) {
+	return PrepareLogoImage(data)
+}
+
+// ResolveLogoPath resolves a local filesystem path for a logo image.
+func ResolveLogoPath(logoURL string) string {
+	logoPath := strings.TrimSpace(logoURL)
+	if logoPath == "" || strings.HasPrefix(logoPath, "http://") || strings.HasPrefix(logoPath, "https://") {
+		return ""
+	}
+
+	// Local upload URLs are stored for browser access as /uploads/<file>.
+	// PDF generation needs the corresponding filesystem path instead.
+	if strings.HasPrefix(filepath.ToSlash(logoPath), "/uploads/") {
+		logoPath = strings.TrimLeft(logoPath, `/\\`)
+	}
+	logoPath = filepath.Clean(filepath.FromSlash(logoPath))
+
+	candidates := []string{logoPath}
+	if !filepath.IsAbs(logoPath) {
+		candidates = append(candidates, filepath.Join("backend", logoPath))
+	}
+
+	for _, candidate := range candidates {
+		info, err := os.Stat(candidate)
+		if err == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func resolveLogoPath(logoURL string) string {
+	return ResolveLogoPath(logoURL)
+}
+
+// ResolveFontPath resolves the font file path regardless of working directory.
+func ResolveFontPath(fontRelPath string) string {
+	candidates := []string{
+		fontRelPath,
+		filepath.Join("backend", fontRelPath),
+		filepath.Join("..", fontRelPath),
+		filepath.Join("..", "..", fontRelPath),
+		filepath.Join("..", "..", "..", fontRelPath),
+		filepath.Join("..", "..", "..", "..", fontRelPath),
+		filepath.Join("..", "..", "..", "..", "..", fontRelPath),
+		filepath.Join("..", "..", "..", "..", "..", "..", fontRelPath),
+	}
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && !info.IsDir() {
+			return c
+		}
+	}
+	return fontRelPath
+}
+
+func resolveFontPath(fontRelPath string) string {
+	return ResolveFontPath(fontRelPath)
+}
+
 
 // ThaiBahtText แปลง float64 เป็นคำอ่านภาษาไทย เช่น 1653.00 -> "หนึ่งพันหกร้อยห้าสิบสามบาทถ้วน"
 func ThaiBahtText(amount float64) string {

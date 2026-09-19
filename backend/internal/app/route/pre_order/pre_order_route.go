@@ -25,7 +25,7 @@ func SetupPreOrderRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNoti
 	preOrderGroup := r.Group("/api/wms/pre-orders")
 	preOrderGroup.Use(
 		middleware.AuthMiddleware(),
-		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleAdmin)),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleManager)),
 	)
 	{
 		preOrderGroup.POST("", ctrl.CreatePreOrder)

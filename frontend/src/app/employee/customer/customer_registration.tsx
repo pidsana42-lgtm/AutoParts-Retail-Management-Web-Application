@@ -7,12 +7,12 @@ import {
   ChevronsRight,
   Eye,
   EyeOff,
-  ScanBarcode,
   X,
   Pencil,
   FileText,
   ExternalLink,
   Trash2,
+  Search,
 } from "lucide-react";
 
 // Components
@@ -34,10 +34,12 @@ import { Card, CardContent } from "../../../components/elements/card";
 import { CustomerTypeBadge } from "../../../components/elements/status_badge";
 import { CustomerCard } from "../pos/components/customercard";
 import ConfirmModal from "../../../components/elements/confirm_modal";
+import OrderCustomerSearchInput from "../pos/components/order_customer_search_input";
 
 // Hook & Types
 import { useCustomerRegistration } from "./hook/useCustomerRegustration";
 import { getCustomerDocumentUrl } from "../../../service/http/customer/customer_service";
+import { posApiService } from "../../../service/http/pos/pos_service";
 import { maskPhoneNumber, maskIdCardNumber } from "../../../utils/customerhelpers";
 
 export default function CustomerRegistration() {
@@ -98,6 +100,44 @@ export default function CustomerRegistration() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editFileInputRef = useRef<HTMLInputElement | null>(null);
   const [showSensitiveInDrawer, setShowSensitiveInDrawer] = useState(false);
+
+  const fetchCustomerSuggestions = async (q: string) => {
+    try {
+      const res = await posApiService.searchCustomerDiscount(q);
+      if (res && res.length > 0) return res;
+    } catch {
+      // ignore
+    }
+    const lowerQ = q.toLowerCase().trim();
+    const rawQ = lowerQ.replace(/[-\s]/g, "");
+    return (customers || [])
+      .filter((c) => {
+        const name = (c.customer_name || "").toLowerCase();
+        const phone = (c.phone_number || "").toLowerCase().replace(/[-\s]/g, "");
+        const idCard = (c.id_card_number_customer || "").toLowerCase().replace(/[-\s]/g, "");
+        return name.includes(lowerQ) || (rawQ && (phone.includes(rawQ) || idCard.includes(rawQ)));
+      })
+      .slice(0, 5)
+      .map((c) => ({
+        id: c.id,
+        customer_id: c.id,
+        customer_name: c.customer_name,
+        phone_number: c.phone_number,
+        id_card_number_customer: c.id_card_number_customer,
+        standard_discount_rate: c.standard_discount_rate || 0,
+        is_discount_enabled: c.is_discount_enabled || false,
+        current_debt_amount: c.current_debt_amount || 0,
+        max_credit_limit: c.max_credit_limit || 0,
+        is_credit_enabled: true,
+        customer_type: c.customer_type
+          ? {
+              id: c.customer_type.id,
+              type_name: c.customer_type.type_name,
+              type_label: c.customer_type_label || c.customer_type.type_label,
+            }
+          : undefined,
+      }));
+  };
 
 
   
@@ -369,15 +409,20 @@ export default function CustomerRegistration() {
                   <Text variant="xs" className="text-[#5F5E5E]">
                     ค้นหาชื่อลูกค้า / หมายเลขโทรศัพท์ / เลขประจำตัวประชาชน
                   </Text>
-                  <div className="relative flex-1">
-                    <ScanBarcode className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={18} />
-                    <Input
-                      value={searchQuery}
-                      onChange={(e) => handleSearchChange(e.target.value)}
-                      placeholder="สแกนบาร์โค้ด / ชื่อลูกค้า / เบอร์โทร หรือ เลขประจำตัวประชาชน"
-                      className="w-full h-11 bg-white border border-gray-200 rounded-none pl-12 pr-4 text-sm text-[#1C1B1B] font-light focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 shadow-sm transition-all placeholder:text-[#6B7280]"
-                    />
-                  </div>
+                  <OrderCustomerSearchInput
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    onSelectCustomer={(customerName) => {
+                      handleSearchChange(customerName);
+                      handleSearch();
+                    }}
+                    onSubmit={handleSearch}
+                    fetchCustomers={fetchCustomerSuggestions}
+                    placeholder="ค้นหา ชื่อลูกค้า / เบอร์โทร หรือ เลขประจำตัวประชาชน"
+                    customerSectionTitle="รายชื่อสมาชิก / ลูกค้า (คลิกเพื่อค้นหาด้วยชื่อนี้)"
+                    inputClassName="h-11"
+                    icon={<Search size={18} className="text-gray-400" />}
+                  />
                 </div>
 
                 {/* ประเภทลูกค้า (col-span-3) */}

@@ -15,6 +15,20 @@ type PurchaseOrderController struct {
 	poService poSvc.PurchaseOrderService
 }
 
+func authenticatedRole(c *gin.Context) (string, bool) {
+	roleValue, exists := c.Get("role")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized: missing role"})
+		return "", false
+	}
+	role, ok := roleValue.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized: invalid role"})
+		return "", false
+	}
+	return role, true
+}
+
 // ตัวทำ Dependency Injection
 func NewPOController(poService poSvc.PurchaseOrderService) *PurchaseOrderController {
 	return &PurchaseOrderController{
@@ -119,14 +133,20 @@ func (ctrl *PurchaseOrderController) UpdateStatus(c *gin.Context) {
 		return
 	}
 	updatedBy := uint(idFloat)
+	role, ok := authenticatedRole(c)
+	if !ok {
+		return
+	}
 
-	err := ctrl.poService.UpdatePOStatus(c.Request.Context(), uri.ID, input.Status, updatedBy)
+	err := ctrl.poService.UpdatePOStatus(c.Request.Context(), uri.ID, input.Status, updatedBy, role)
 	if err != nil {
 		switch {
 		case errors.Is(err, poSvc.ErrPONotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		case errors.Is(err, poSvc.ErrPOCannotUpdate):
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		case errors.Is(err, poSvc.ErrPOForbidden):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
@@ -321,11 +341,24 @@ func (ctrl *PurchaseOrderController) UpdatePO(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id type in token"})
 		return
 	}
+	role, ok := authenticatedRole(c)
+	if !ok {
+		return
+	}
 
 	// เรียกใช้งาน UpdatePO จาก Service
-	res, err := ctrl.poService.UpdatePO(c.Request.Context(), uri.ID, &req, updatedBy)
+	res, err := ctrl.poService.UpdatePO(c.Request.Context(), uri.ID, &req, updatedBy, role)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		switch {
+		case errors.Is(err, poSvc.ErrPONotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, poSvc.ErrPOForbidden):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		case errors.Is(err, poSvc.ErrPOCannotUpdate):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 

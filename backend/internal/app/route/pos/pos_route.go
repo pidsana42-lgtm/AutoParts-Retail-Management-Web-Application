@@ -24,7 +24,7 @@ func SetupPOSRoutes(r *gin.Engine, db *gorm.DB) {
 	posGroup := r.Group("/api/pos")
 	posGroup.Use(
 		middleware.AuthMiddleware(),
-		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleAdmin)),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleManager)),
 	)
 	{
 		posGroup.GET("/products", posProductCtrl.SearchProducts)

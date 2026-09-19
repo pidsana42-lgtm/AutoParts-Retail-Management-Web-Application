@@ -9,10 +9,13 @@ import (
 )
 
 func Role(db *gorm.DB) error {
+	// อัปเดตข้อมูลเดิมในระบบจาก Admin ให้กลายเป็น Manager
+	_ = db.Model(&entity.Role{}).Where("role_name = ?", "Admin").Update("role_name", enum.RoleManager).Error
+
 	roles := []entity.Role{
 		{RoleName: enum.RoleOwner},
 		{RoleName: enum.RoleEmployee},
-		{RoleName: enum.RoleAdmin},
+		{RoleName: enum.RoleManager},
 	}
 
 	for _, r := range roles {
