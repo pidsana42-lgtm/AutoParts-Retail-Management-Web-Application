@@ -340,12 +340,12 @@ export default function ManualEntryView({
                             const prod = products.find(p => p.id === Number(item.product_id));
                             if (prod && (prod.category_name || prod.sub_category_name || prod.sub_sub_category_name)) {
                               return (
-                                <span className="text-sm text-[#1C1B1B]" title={[prod.category_name, prod.sub_category_name, prod.sub_sub_category_name].filter(Boolean).join(' / ')}>
+                                <div className="border border-transparent rounded-none px-3 py-1.5 text-sm text-[#1C1B1B] truncate" title={[prod.category_name, prod.sub_category_name, prod.sub_sub_category_name].filter(Boolean).join(' / ')}>
                                   {[prod.category_name, prod.sub_category_name, prod.sub_sub_category_name].filter(Boolean).join(' / ')}
-                                </span>
+                                </div>
                               );
                             }
-                            return <span className="text-gray-400 text-sm">-</span>;
+                            return <div className="border border-transparent rounded-none px-3 py-1.5 text-gray-400 text-sm">-</div>;
                           })()
                         ) : (
                           <TreeSelect
@@ -406,7 +406,9 @@ export default function ManualEntryView({
                             />
                           </TableCell>
                           <TableCell className="py-2.5 px-4 text-right font-bold text-[#1C1B1B] text-sm">
-                            ฿{((item.order_quantity || 0) * (item.price_per_unit || 0) - (item.discount_amount || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                            <div className="border border-transparent py-1.5">
+                              ฿{((item.order_quantity || 0) * (item.price_per_unit || 0) - (item.discount_amount || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                            </div>
                           </TableCell>
                         </>
                       )}
