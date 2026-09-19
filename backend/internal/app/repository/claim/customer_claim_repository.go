@@ -24,6 +24,9 @@ type CustomerClaimRepository interface {
 	// AdjustProductStock: ปรับจำนวนสินค้าคงคลัง (delta ติดลบ = ตัดออก, บวก = เติมกลับ)
 	// พร้อมบันทึกประวัติ StockMovement ไว้เป็นหลักฐานในคราวเดียวกันแบบ atomic
 	AdjustProductStock(productID uint, delta int, movementType, note string) error
+	// ReduceCustomerDebtForClaim: หักยอดหนี้ค้างชำระ (บัญชีเชื่อ) ของลูกค้าเจ้าของ order ต้นทางของใบเคลม
+	// amount ต้องเป็นค่าบวก และยอดหนี้จะไม่ถูกหักต่ำกว่า 0
+	ReduceCustomerDebtForClaim(claimID uint, amount float64) error
 }
 
 type customerClaimRepository struct {
@@ -143,6 +146,35 @@ func (r *customerClaimRepository) AdjustProductStock(productID uint, delta int, 
 			ProductID:         productID,
 		}
 		return tx.Create(movement).Error
+	})
+}
+
+func (r *customerClaimRepository) ReduceCustomerDebtForClaim(claimID uint, amount float64) error {
+	if amount <= 0 {
+		return nil
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var claim entity.CustomerClaim
+		if err := tx.First(&claim, claimID).Error; err != nil {
+			return err
+		}
+		var order entity.SaleOrder
+		if err := tx.First(&order, claim.OriginalOrderID).Error; err != nil {
+			return err
+		}
+		if order.CustomerID == nil {
+			return nil
+		}
+		result := tx.Model(&entity.Customer{}).
+			Where("id = ?", *order.CustomerID).
+			UpdateColumn("current_debt_amount", gorm.Expr("GREATEST(current_debt_amount - ?, 0)", amount))
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
 	})
 }
 

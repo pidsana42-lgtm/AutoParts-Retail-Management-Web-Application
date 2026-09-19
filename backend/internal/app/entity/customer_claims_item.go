@@ -9,6 +9,7 @@ type CustomerClaimItem struct {
 	ProductID uint `gorm:"not null;index" json:"product_id"`
 	Product   *Product `gorm:"foreignKey:ProductID" json:"product,omitempty"`
 	Qty uint `gorm:"not null" json:"qty"`
+	UnitPrice float64 `gorm:"type:decimal(15,2);default:0" json:"unit_price"`
 	Reason string `gorm:"type:text" json:"reason"`
 	Resolution string `gorm:"type:text" json:"resolution"`
 	Status      string `gorm:"default:'Pending'" json:"status"`
@@ -19,4 +20,8 @@ type CustomerClaimItem struct {
 	// (เช่น อนุมัติ -> ปฏิเสธ -> อนุมัติใหม่) เพราะของจริงถูกจ่ายให้ลูกค้า/รับกลับมาแค่ครั้งเดียวเท่านั้น
 	StockOutIssued   bool `gorm:"default:false" json:"stock_out_issued"`
 	StockInReceived  bool `gorm:"default:false" json:"stock_in_received"`
+
+	// CreditApplied: กันไม่ให้หักยอดหนี้ค้างชำระ (บัญชีเชื่อ) ของลูกค้าซ้ำ ถ้ารายการเคลมประเภท
+	// CREDIT_ACCOUNT ถูกอนุมัติแล้วมีคนสลับสถานะไปมา เพราะยอดหนี้ถูกหักจริงแค่ครั้งเดียวเท่านั้น
+	CreditApplied bool `gorm:"default:false" json:"credit_applied"`
 }

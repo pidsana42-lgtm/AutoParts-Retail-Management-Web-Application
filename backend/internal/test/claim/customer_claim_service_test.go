@@ -26,19 +26,26 @@ type stockAdjustment struct {
 	note         string
 }
 
-type mockClaimRepo struct {
-	createClaimFn  func(*entity.CustomerClaim) error
-	createItemFn   func(*entity.CustomerClaimItem) error
-	getClaimFn     func(id uint) (*entity.CustomerClaim, error)
-	getItemFn      func(id uint) (*entity.CustomerClaimItem, error)
-	listClaimsFn   func() ([]entity.CustomerClaim, error)
-	updateClaimFn  func(*entity.CustomerClaim) error
-	updateItemFn   func(*entity.CustomerClaimItem) error
-	deleteClaimFn  func(id uint) error
-	adjustStockFn  func(productID uint, delta int, movementType, note string) error
+type creditAdjustment struct {
+	claimID uint
+	amount  float64
+}
 
-	called          map[string]int
-	stockAdjustments []stockAdjustment
+type mockClaimRepo struct {
+	createClaimFn      func(*entity.CustomerClaim) error
+	createItemFn       func(*entity.CustomerClaimItem) error
+	getClaimFn         func(id uint) (*entity.CustomerClaim, error)
+	getItemFn          func(id uint) (*entity.CustomerClaimItem, error)
+	listClaimsFn       func() ([]entity.CustomerClaim, error)
+	updateClaimFn      func(*entity.CustomerClaim) error
+	updateItemFn       func(*entity.CustomerClaimItem) error
+	deleteClaimFn      func(id uint) error
+	adjustStockFn      func(productID uint, delta int, movementType, note string) error
+	reduceDebtFn       func(claimID uint, amount float64) error
+
+	called            map[string]int
+	stockAdjustments  []stockAdjustment
+	creditAdjustments []creditAdjustment
 }
 
 func newMockClaimRepo() *mockClaimRepo {
@@ -118,6 +125,15 @@ func (m *mockClaimRepo) AdjustProductStock(productID uint, delta int, movementTy
 	m.stockAdjustments = append(m.stockAdjustments, stockAdjustment{productID: productID, delta: delta, movementType: movementType, note: note})
 	if m.adjustStockFn != nil {
 		return m.adjustStockFn(productID, delta, movementType, note)
+	}
+	return nil
+}
+
+func (m *mockClaimRepo) ReduceCustomerDebtForClaim(claimID uint, amount float64) error {
+	m.track("ReduceCustomerDebtForClaim")
+	m.creditAdjustments = append(m.creditAdjustments, creditAdjustment{claimID: claimID, amount: amount})
+	if m.reduceDebtFn != nil {
+		return m.reduceDebtFn(claimID, amount)
 	}
 	return nil
 }
@@ -804,5 +820,88 @@ func TestUpdateCustomerClaimItem_ReplacementReceived_RestocksOnce(t *testing.T) 
 	}
 	if len(f.repo.stockAdjustments) != 1 {
 		t.Fatalf("re-confirming receipt must not restock again, expected 1 adjustment total, got %+v", f.repo.stockAdjustments)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Credit account: หักยอดหนี้ค้างชำระของลูกค้าเมื่อรายการเคลมประเภท CREDIT_ACCOUNT ได้รับการอนุมัติ
+// -----------------------------------------------------------------------------
+
+func TestUpdateCustomerClaimItemStatus_CreditAccountApproved_ReducesDebtOnce(t *testing.T) {
+	f := newStockFixture(entity.CustomerClaimItem{
+		Model: gorm.Model{ID: 1}, Status: "Pending", ClaimType: "CREDIT_ACCOUNT", ProductID: 55, Qty: 2, UnitPrice: 300,
+	})
+	svc := newService(f.repo, &mockSORepo{}, f.notifier)
+
+	if _, err := svc.UpdateCustomerClaimItemStatus(1, "APPROVED"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.creditAdjustments) != 1 {
+		t.Fatalf("expected exactly one credit adjustment, got %+v", f.repo.creditAdjustments)
+	}
+	adj := f.repo.creditAdjustments[0]
+	if adj.claimID != 10 || adj.amount != 600 {
+		t.Errorf("expected -600 debt reduction for claim 10, got %+v", adj)
+	}
+	if !f.parent.Items[0].CreditApplied {
+		t.Error("CreditApplied should be persisted as true after reducing debt")
+	}
+	// CREDIT_ACCOUNT ไม่ใช่การจ่ายของทดแทนจริง จึงไม่ควรมีการตัดสต็อก
+	if len(f.repo.stockAdjustments) != 0 {
+		t.Errorf("CREDIT_ACCOUNT approval must never move stock, got %+v", f.repo.stockAdjustments)
+	}
+
+	// สลับสถานะไปมา (APPROVED -> REJECTED -> APPROVED ใหม่) ต้องไม่หักหนี้ซ้ำ เพราะยอดหนี้ถูกหักจริงแค่ครั้งเดียว
+	if _, err := svc.UpdateCustomerClaimItemStatus(1, "REJECTED"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := svc.UpdateCustomerClaimItemStatus(1, "APPROVED"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.creditAdjustments) != 1 {
+		t.Fatalf("re-approving must not reduce debt again, expected 1 adjustment total, got %+v", f.repo.creditAdjustments)
+	}
+}
+
+func TestUpdateCustomerClaimItemStatus_CreditAccountStillPending_NoDebtAdjustment(t *testing.T) {
+	f := newStockFixture(entity.CustomerClaimItem{
+		Model: gorm.Model{ID: 1}, Status: "Pending", ClaimType: "CREDIT_ACCOUNT", ProductID: 55, Qty: 2, UnitPrice: 300,
+	})
+	svc := newService(f.repo, &mockSORepo{}, f.notifier)
+
+	if _, err := svc.UpdateCustomerClaimItemStatus(1, "REJECTED"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.creditAdjustments) != 0 {
+		t.Errorf("rejecting a CREDIT_ACCOUNT item must never reduce debt, got %+v", f.repo.creditAdjustments)
+	}
+}
+
+func TestCreateCustomerClaim_OwnerCreatedCreditAccountAutoApproved_ReducesDebtAtCreate(t *testing.T) {
+	repo := newMockClaimRepo()
+	repo.createClaimFn = func(c *entity.CustomerClaim) error { c.ID = 30; return nil }
+	var createdItems []entity.CustomerClaimItem
+	repo.createItemFn = func(i *entity.CustomerClaimItem) error {
+		i.ID = uint(len(createdItems) + 1) //nolint:gosec // test data
+		createdItems = append(createdItems, *i)
+		return nil
+	}
+	svc := newService(repo, &mockSORepo{}, nil)
+
+	_, err := svc.CreateCustomerClaim(claimDTO.CreateCustomerClaimDTO{
+		OriginalOrderID: 1, Status: "APPROVED",
+		Items: []claimDTO.CreateCustomerClaimItemDTO{
+			{ProductID: 9, Qty: 3, UnitPrice: 150, Reason: "ชำรุด", ClaimType: "CREDIT_ACCOUNT"},
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(repo.creditAdjustments) != 1 {
+		t.Fatalf("expected exactly one credit adjustment, got %+v", repo.creditAdjustments)
+	}
+	adj := repo.creditAdjustments[0]
+	if adj.claimID != 30 || adj.amount != 450 {
+		t.Errorf("expected -450 debt reduction for claim 30, got %+v", adj)
 	}
 }
