@@ -10,6 +10,7 @@ type User struct {
 	LastName         string `gorm:"type:varchar(100);not null" json:"last_name" binding:"required"`
 	IdCardNumberUser string `gorm:"type:varchar(20);not null;unique" json:"id_card_number_user" binding:"required"`
 	Username         string `gorm:"type:varchar(100);not null;uniqueIndex" json:"username" binding:"required"`
+	Email            string `gorm:"type:varchar(100);index" json:"email"`
 	Password         string `gorm:"type:varchar(255);not null" json:"password" binding:"required"`
 	LineUserID       string `gorm:"type:varchar(100);uniqueIndex" json:"line_user_id"`
 	ProfileImagePath string `gorm:"type:varchar(255)" json:"profile_image_path"`

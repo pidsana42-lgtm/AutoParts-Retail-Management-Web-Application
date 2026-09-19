@@ -14,6 +14,7 @@ export interface CreateEmployeeRequest {
   last_name: string;
   id_card_number_user: string;
   username: string;
+  email: string;
   password: string;
   line_user_id: string;
   bank_id: number;
@@ -22,7 +23,7 @@ export interface CreateEmployeeRequest {
   bank_account_name: string;
 }
 
-export interface UpdateEmployeeRequest extends Omit<CreateEmployeeRequest, "username"> {}
+export type UpdateEmployeeRequest = Omit<CreateEmployeeRequest, "username" | "email">;
 
 export interface CreatedEmployee {
   id: number;
@@ -67,6 +68,7 @@ export interface FormState {
   lastName: string;
   idCardNumber: string;
   username: string;
+  email: string;
   password: string;
   confirmPassword: string;
   lineUserId: string;

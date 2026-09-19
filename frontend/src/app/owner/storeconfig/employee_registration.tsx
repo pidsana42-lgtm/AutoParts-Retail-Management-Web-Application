@@ -35,6 +35,7 @@ const EMPTY_FORM: FormState = {
   lastName: "",
   idCardNumber: "",
   username: "",
+  email: "",
   password: "",
   confirmPassword: "",
   lineUserId: "",
@@ -74,6 +75,7 @@ export default function RegisterEmployeePage() {
       form.lastName,
       digitsOnly(form.idCardNumber).length === 13 ? form.idCardNumber : "",
       form.username,
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) ? form.email : "",
       passwordRules.every((rule) => rule.passed) ? form.password : "",
       form.confirmPassword === form.password ? form.confirmPassword : "",
       form.bankId,
@@ -97,7 +99,8 @@ export default function RegisterEmployeePage() {
   };
 
   useEffect(() => {
-    void loadMetadata();
+    const timeoutId = window.setTimeout(() => void loadMetadata(), 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   const updateField = (field: keyof FormState, value: string) => {
@@ -119,6 +122,9 @@ export default function RegisterEmployeePage() {
     if (!isValidThaiId(form.idCardNumber)) next.idCardNumber = "เลขบัตรประชาชนไม่ถูกต้อง";
     if (!/^[a-zA-Z0-9._-]{4,100}$/.test(form.username.trim())) {
       next.username = "ใช้ตัวอักษรอังกฤษ ตัวเลข . _ - อย่างน้อย 4 ตัว";
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      next.email = "กรุณากรอกอีเมลให้ถูกต้อง";
     }
     if (!passwordRules.every((rule) => rule.passed)) next.password = "รหัสผ่านยังไม่ผ่านเงื่อนไข";
     if (form.confirmPassword !== form.password || !form.confirmPassword) {
@@ -152,6 +158,7 @@ export default function RegisterEmployeePage() {
         last_name: form.lastName.trim(),
         id_card_number_user: digitsOnly(form.idCardNumber),
         username: form.username.trim().toLowerCase(),
+        email: form.email.trim().toLowerCase(),
         password: form.password,
         line_user_id: form.lineUserId.trim(),
         bank_id: banks.find((bank) => bank.name === form.bankId)?.id || 0,
@@ -241,7 +248,8 @@ export default function RegisterEmployeePage() {
                   </div>
                 </div>
                 <Input label="ยืนยันรหัสผ่าน" required type={showConfirmPassword ? "text" : "password"} autoComplete="new-password" value={form.confirmPassword} error={errors.confirmPassword} onChange={(event) => updateField("confirmPassword", event.target.value)} placeholder="กรอกรหัสผ่านอีกครั้ง" rightIcon={<PasswordToggle visible={showConfirmPassword} onClick={() => setShowConfirmPassword((value) => !value)} />} />
-                <Input label="LINE User ID (ถ้ามี)" value={form.lineUserId} error={errors.lineUserId} onChange={(event) => updateField("lineUserId", event.target.value.trim())} placeholder="เช่น U1234abcd..." helperText="ใช้เชื่อมบัญชีสำหรับเข้าสู่ระบบผ่าน LINE ในอนาคต" containerClassName="sm:col-span-2" />
+                <Input label="อีเมล" required type="email" autoCapitalize="none" autoComplete="email" value={form.email} error={errors.email} onChange={(event) => updateField("email", event.target.value.replace(/\s/g, ""))} placeholder="เช่น somchai@example.com" />
+                <Input label="LINE User ID (ถ้ามี)" value={form.lineUserId} error={errors.lineUserId} onChange={(event) => updateField("lineUserId", event.target.value.trim())} placeholder="เช่น U1234abcd..." helperText="ใช้เชื่อมบัญชีสำหรับเข้าสู่ระบบผ่าน LINE ในอนาคต" />
                 </div>
               </div>
             </FormCard>

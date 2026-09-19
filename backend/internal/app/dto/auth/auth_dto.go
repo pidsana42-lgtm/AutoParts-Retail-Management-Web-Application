@@ -15,3 +15,13 @@ type LoginResponse struct {
     LastName string `json:"last_name"`
     Username string `json:"username"`
 }
+
+type ForgotPasswordRequest struct {
+    Identifier string `json:"identifier" binding:"required"` // Username or Email
+}
+
+type ResetPasswordRequest struct {
+    Identifier  string `json:"identifier" binding:"required"`
+    OTP         string `json:"otp" binding:"required"`
+    NewPassword string `json:"new_password" binding:"required,min=6"`
+}
