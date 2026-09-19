@@ -13,6 +13,10 @@ import (
 	svcNotification "backend/internal/app/service/notification"
 )
 
+// ErrClaimItemAlreadyDelivered: รายการเคลมที่ส่งมอบลูกค้าไปแล้วห้ามแก้ไข/เปลี่ยนสถานะซ้ำอีก
+// (ควรตอบกลับเป็น 409 Conflict ไม่ใช่ 500 เพราะไม่ใช่ error ของระบบ แต่เป็นกฎธุรกิจที่ทำงานถูกต้อง)
+var ErrClaimItemAlreadyDelivered = errors.New("รายการเคลมนี้ถูกส่งมอบลูกค้าแล้ว ไม่สามารถแก้ไขได้อีก")
+
 type CustomerClaimService interface {
 	CreateCustomerClaim(input claimDTO.CreateCustomerClaimDTO, createdBy uint) (claimDTO.CustomerClaimResponseDTO, error)
 	CreateCustomerClaimItem(input claimDTO.CreateCustomerClaimItemDTO) (claimDTO.CustomerClaimItemResponseDTO, error)
@@ -258,7 +262,7 @@ func (s *customerClaimService) UpdateCustomerClaimItem(id uint, input claimDTO.U
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
 	if existing.Resolution == "COMPLETED" || strings.Contains(existing.Resolution, "ส่งมอบ") || strings.Contains(existing.Resolution, "สำเร็จ") {
-		return claimDTO.CustomerClaimItemResponseDTO{}, errors.New("รายการเคลมนี้ถูกส่งมอบลูกค้าแล้ว ไม่สามารถแก้ไขได้อีก")
+		return claimDTO.CustomerClaimItemResponseDTO{}, ErrClaimItemAlreadyDelivered
 	}
 	if input.Qty > 0 {
 		existing.Qty = uint(input.Qty)
@@ -293,7 +297,7 @@ func (s *customerClaimService) UpdateCustomerClaimItemStatus(id uint, status str
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
 	if existing.Resolution == "COMPLETED" || strings.Contains(existing.Resolution, "ส่งมอบ") || strings.Contains(existing.Resolution, "สำเร็จ") {
-		return claimDTO.CustomerClaimItemResponseDTO{}, errors.New("รายการเคลมนี้ถูกส่งมอบลูกค้าแล้ว ไม่สามารถแก้ไขได้อีก")
+		return claimDTO.CustomerClaimItemResponseDTO{}, ErrClaimItemAlreadyDelivered
 	}
 	existing.Status = status
 	issueOut, receiveIn := prepareStockFlags(existing)
