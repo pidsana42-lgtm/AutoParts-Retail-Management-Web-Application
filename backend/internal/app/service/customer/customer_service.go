@@ -52,11 +52,19 @@ func (s *customerService) RegisterNewCustomer(req customerDto.RegisterCustomerRe
 	if err != nil {
 		return errors.New("ประเภทลูกค้าที่เลือกไม่ถูกต้อง")
 	}
-	// กำหนดค่าเริ่มต้นของ CreditLimit ตามนโยบายร้านค้า
-	defaultCreditFromConfig := 50000.00
+	// กำหนดค่าเริ่มต้นของ CreditLimit ตามนโยบายร้านค้า (ถ้ายังไม่ได้ตั้งค่า ให้เป็น 0.00 ไม่ใช่ 50,000)
+	var defaultCreditFromConfig float64 = 0.00
 	var storeConfig entity.StoreConfig
-	if err := s.db.First(&storeConfig).Error; err == nil && storeConfig.MaxCredit > 0 {
+	if err := s.db.First(&storeConfig).Error; err == nil {
 		defaultCreditFromConfig = storeConfig.MaxCredit
+	}
+
+	// ถ้ามีการระบุวงเงินเครดิตมาใน request ให้ใช้ค่านั้น
+	// แต่ถ้าไม่ได้ระบุ และไม่ใช่กลุ่มอู่ซ่อมรถ (GARAGE) วงเงินเริ่มต้นต้องเป็น 0.00
+	if req.CreditLimit != nil && *req.CreditLimit >= 0 {
+		defaultCreditFromConfig = *req.CreditLimit
+	} else if customerType.TypeName != "GARAGE" {
+		defaultCreditFromConfig = 0.00
 	}
 
 	newCustomer := customerDto.ToCustomerEntity(req, idCardImagePath, defaultCreditFromConfig)
