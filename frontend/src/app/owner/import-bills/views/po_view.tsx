@@ -33,7 +33,7 @@ const normalizePOStatus = (status: unknown): Exclude<POStatusFilter, 'ALL'> => {
 function POStatusBadge({ status }: { status: unknown }) {
   const normalized = String(status || '').toUpperCase();
   if (normalized === 'PENDING') return <Badge variant="warning" size="md" dot>รออนุมัติ</Badge>;
-  if (normalized === 'APPROVED') return <Badge variant="success" size="md" dot>อนุมัติแล้ว</Badge>;
+  if (normalized === 'APPROVED') return <span className="text-sm text-[#1C1B1B]">อนุมัติแล้ว</span>;
   if (normalized === 'COMPLETED' || normalized === 'RECEIVED') return <Badge variant="info" size="md" dot>รับสินค้าแล้ว</Badge>;
   if (normalized === 'REJECTED') return <Badge variant="error" size="md" dot>ไม่อนุมัติ</Badge>;
   if (normalized === 'CANCELLED') return <Badge variant="error" size="md" dot>ยกเลิกแล้ว</Badge>;
