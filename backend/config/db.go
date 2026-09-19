@@ -186,44 +186,35 @@ func SetupDatabase() {
 		}
 	}
 
-	// Looktao
-	seed.Supplier(db)
+	// System types & master config
 	seed.Role(db)
 	seed.CustomerType(db)
 	seed.PaymentMethod(db)
+	seed.PurchaseOrdersType(db)
+	seed.CompanySetting(db)
 
-	// Toto WMS
-	seed.Zone(db)
-	seed.Unit(db)
-	seed.Category(db)
-	seed.SubCategory(db)
-	seed.Grade(db)
-	seed.Shelf(db)
-	seed.Brand(db)
-	seed.Models(db)
+	// User auth
 	if err := seed.User(db); err != nil {
 		log.Printf("Warning: failed to seed default user: %v", err)
 	}
 
-	seed.Customer(db)
-	seed.Product(db)
-
-	// Chompoo
-	seed.PurchaseOrdersType(db)
-	seed.PurchaseOrders(db)
-	if err := seed.Inventory(db); err != nil {
-		log.Printf("Warning: failed to seed inventories: %v", err)
-	}
-	if err := seed.PurchaseOrdersItems(db); err != nil {
-		log.Printf("Warning: failed to seed purchase order items: %v", err)
-	}
-
-	// Siri
-	seed.BillImage(db)
-	seed.Bill(db)
-
-	// Company Setting
-	seed.CompanySetting(db)
+	// Mock data seeds disabled (as requested: reset DB, seed only user)
+	// seed.Supplier(db)
+	// seed.Zone(db)
+	// seed.Unit(db)
+	// seed.Category(db)
+	// seed.SubCategory(db)
+	// seed.Grade(db)
+	// seed.Shelf(db)
+	// seed.Brand(db)
+	// seed.Models(db)
+	// seed.Customer(db)
+	// seed.Product(db)
+	// seed.PurchaseOrders(db)
+	// seed.Inventory(db)
+	// seed.PurchaseOrdersItems(db)
+	// seed.BillImage(db)
+	// seed.Bill(db)
 
 	log.Println("Database migration complete! Server Ready.")
 }
