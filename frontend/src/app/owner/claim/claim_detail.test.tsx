@@ -228,6 +228,21 @@ describe('Claim detail item decisions', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
+  it('surfaces the backend\'s specific error message instead of a generic one (e.g. item already delivered)', async () => {
+    const user = await openPage('/owner/claims/detail/9?edit=1');
+    const reason = await within(itemRow()).findByRole('textbox');
+    await user.clear(reason);
+    await user.type(reason, 'พยายามแก้ไขอีกครั้ง');
+    mocks.put.mockRejectedValue({
+      response: { status: 409, data: { error: 'รายการเคลมนี้ถูกส่งมอบลูกค้าแล้ว ไม่สามารถแก้ไขได้อีก' } },
+    });
+    await user.click(screen.getByRole('button', { name: 'บันทึกการแก้ไข' }));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
+      variant: 'error',
+      message: 'รายการเคลมนี้ถูกส่งมอบลูกค้าแล้ว ไม่สามารถแก้ไขได้อีก',
+    })));
+  });
+
   it('stops an edit when evidence upload fails, without a success toast or item write', async () => {
     const user = await openPage();
     await user.click(screen.getByRole('button', { name: 'แก้ไขข้อมูล' }));
