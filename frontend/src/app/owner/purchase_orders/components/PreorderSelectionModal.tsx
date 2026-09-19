@@ -19,12 +19,12 @@ export const PreorderSelectionModal: React.FC<PreorderSelectionModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 backdrop-blur-sm sm:p-4">
       {/* ปรับขนาดให้กว้างขึ้นเพื่อแสดงตารางได้สวยงาม */}
-      <div className="bg-white rounded-none shadow-xl w-full max-w-4xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
+      <div className="flex max-h-[95vh] w-full max-w-4xl animate-in flex-col overflow-hidden rounded-none border border-gray-100 bg-white shadow-xl fade-in zoom-in-95 duration-150 sm:max-h-[85vh]">
         
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 shrink-0">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 sm:items-center sm:px-6 sm:py-4">
           <div>
             <h3 className="text-lg font-semibold text-gray-800">เลือกรายการพรีออเดอร์</h3>
             <p className="text-sm text-gray-500 font-light mt-1">คลิกเพิ่มสินค้าที่ต้องการสั่งซื้อจากรายการที่ลูกค้าสั่งจองไว้</p>
@@ -38,7 +38,7 @@ export const PreorderSelectionModal: React.FC<PreorderSelectionModalProps> = ({
         </div>
 
         {/* Content (Table) */}
-        <div className="overflow-y-auto p-6 flex-1">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6">
           <Table>
             <TableHeader className="bg-gray-100 text-gray-600">
               <TableRow>

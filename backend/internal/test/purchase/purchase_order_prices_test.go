@@ -27,7 +27,7 @@ func (s *priceControllerService) CreatePO(_ context.Context, req *dto.CreatePurc
 	s.calls++
 	return &dto.PurchaseOrderResponse{ID: 1, TotalAmount: float64(req.POItems[0].Quantity) * req.POItems[0].UnitPrice}, nil
 }
-func (s *priceControllerService) UpdatePO(_ context.Context, id uint, _ *dto.UpdatePurchaseOrderRequest, _ uint) (*entity.PO, error) {
+func (s *priceControllerService) UpdatePO(_ context.Context, id uint, _ *dto.UpdatePurchaseOrderRequest, _ uint, _ string) (*entity.PO, error) {
 	s.calls++
 	return &entity.PO{}, nil
 }
@@ -54,11 +54,17 @@ func TestPOPriceHTTPValidation(t *testing.T) {
 				svc := &priceControllerService{}
 				ctrl := controller.NewPOController(svc)
 				router := gin.New()
-				router.Use(func(c *gin.Context) { c.Set("user_id", float64(1)); c.Next() })
+				router.Use(func(c *gin.Context) {
+					c.Set("user_id", float64(1))
+					c.Set("role", string(enum.RoleEmployee))
+					c.Next()
+				})
 				router.POST("/po/1", ctrl.CreatePO)
 				router.PUT("/po/:id", ctrl.UpdatePO)
 				item := map[string]any{"product_id": 3, "quantity": 2, "unit_price": tc.price, "pre_order_item_id": tc.preorder}
-				if tc.name == "manual_preorder" || tc.name == "missing_product" { item["product_id"] = nil }
+				if tc.name == "manual_preorder" || tc.name == "missing_product" {
+					item["product_id"] = nil
+				}
 				key := "po_items"
 				if method == http.MethodPut {
 					key = "items"
@@ -90,7 +96,7 @@ func TestPOServiceRejectsNonfinitePricesBeforeAnyWrites(t *testing.T) {
 	for _, price := range []float64{math.NaN(), math.Inf(1), math.Inf(-1), -1} {
 		_, err := svc.CreatePO(context.Background(), &dto.CreatePurchaseOrderRequest{POItems: []dto.POItemDTO{{UnitPrice: price, PreOrderItemID: ptr(uint(8))}}}, 1)
 		require.Error(t, err)
-		_, err = svc.UpdatePO(context.Background(), 1, &dto.UpdatePurchaseOrderRequest{Items: []dto.UpdatePOItemRequest{{UnitPrice: price, PreOrderItemID: ptr(uint(8))}}}, 1)
+		_, err = svc.UpdatePO(context.Background(), 1, &dto.UpdatePurchaseOrderRequest{Items: []dto.UpdatePOItemRequest{{UnitPrice: price, PreOrderItemID: ptr(uint(8))}}}, 1, string(enum.RoleEmployee))
 		require.Error(t, err)
 	}
 }

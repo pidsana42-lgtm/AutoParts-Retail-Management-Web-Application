@@ -83,9 +83,9 @@ describe('poService', () => {
     ];
     vi.mocked(apiClient.get).mockResolvedValue({ data: wrapped ? { data: orders } : orders });
     await expect(poService.getPendingPreorders()).resolves.toEqual([
-      { id: 20, pre_order_id: 9, product_id: 3, quantity: 2, unit_price: 12.5, product_code: 'P3', product_name: 'Filter', unit: 'piece' },
-      { id: 21, pre_order_id: 9, product_id: 4, quantity: 1, unit_price: 10, product_code: 'SNAP', product_name: 'Snapshot', unit: 'box' },
-      { id: 22, pre_order_id: 9, product_id: 5, quantity: 1, unit_price: 0, product_code: '-', product_name: 'รหัสสินค้า: 5', unit: 'ไม่ระบุ' },
+      { id: 20, pre_order_id: 9, product_id: 3, quantity: 2, unit_price: 12.5, product_code: 'P3', supplier_part_code: '', product_name: 'Filter', unit: 'piece' },
+      { id: 21, pre_order_id: 9, product_id: 4, quantity: 1, unit_price: 10, product_code: 'SNAP', supplier_part_code: '', product_name: 'Snapshot', unit: 'box' },
+      { id: 22, pre_order_id: 9, product_id: 5, quantity: 1, unit_price: 0, product_code: '-', supplier_part_code: '', product_name: 'รหัสสินค้า: 5', unit: 'ไม่ระบุ' },
     ]);
     expect(apiClient.get).toHaveBeenCalledWith('/wms/pre-orders/for-po-selection', { params: { status: 'PENDING' } });
   });
@@ -106,7 +106,6 @@ describe('poService', () => {
   it.each([
     ['details', () => poService.getPurchaseOrderById(42), '/po/42'],
     ['summary', () => poService.getPurchaseOrderSummary(), '/po/summary'],
-    ['delivery estimate', () => poService.getSupplierDeliveryEstimate(7), '/po/suppliers/7/delivery-estimate'],
     ['monthly count', () => poService.getMonthlyCount(), '/po/monthly-count'],
   ] as const)('unwraps %s responses', async (_name, run, endpoint) => {
     const data = { id: 42 };

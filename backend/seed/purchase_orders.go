@@ -13,7 +13,7 @@ func PurchaseOrders(db *gorm.DB) error {
 	// Query users dynamically to avoid hardcoded ID mismatches
 	var owner entity.User
 	var employee entity.User
-	var admin entity.User
+	var manager entity.User
 
 	if err := db.Where("username = ?", "boss").First(&owner).Error; err != nil {
 		return fmt.Errorf("failed to fetch owner user for PO seeding: %w", err)
@@ -21,8 +21,10 @@ func PurchaseOrders(db *gorm.DB) error {
 	if err := db.Where("username = ?", "employee").First(&employee).Error; err != nil {
 		return fmt.Errorf("failed to fetch employee user for PO seeding: %w", err)
 	}
-	if err := db.Where("username = ?", "admin").First(&admin).Error; err != nil {
-		return fmt.Errorf("failed to fetch admin user for PO seeding: %w", err)
+	if err := db.Where("username = ?", "manager").First(&manager).Error; err != nil {
+		if errAdmin := db.Where("username = ?", "admin").First(&manager).Error; errAdmin != nil {
+			return fmt.Errorf("failed to fetch manager user for PO seeding: %w", err)
+		}
 	}
 
 	noteText := "ส่งสินค้าภายในเวลาทำการ 09:00 - 16:00 น. เท่านั้น"
@@ -59,7 +61,7 @@ func PurchaseOrders(db *gorm.DB) error {
 			Status:      enum.StatusApproved,
 			Total_amount: 100000.00,
 			Notes:       &noteText,
-			Created_by:  admin.ID,
+			Created_by:  manager.ID,
 			LastUpdatedBy: &owner.ID,
 			Approved_by: &approvedBy,
 			Approved_at: &approvedAt,

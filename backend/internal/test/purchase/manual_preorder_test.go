@@ -59,7 +59,7 @@ func TestManualPreorderCreateAndEditWithoutWMSProduct(t *testing.T) {
 
 	edited, err := svc.UpdatePO(context.Background(), 42, &dto.UpdatePurchaseOrderRequest{
 		Items: []dto.UpdatePOItemRequest{{ProductID: 0, PreOrderItemID: ptr(uint(8)), Quantity: 3, UnitPrice: 0}},
-	}, 1)
+	}, 1, string(enum.RoleEmployee))
 	require.NoError(t, err)
 	require.Nil(t, edited.PO_Items[0].ProductID)
 	require.Equal(t, float64(3), edited.PO_Items[0].Quantity)
@@ -70,7 +70,7 @@ func TestManualPreorderCreateAndEditWithoutWMSProduct(t *testing.T) {
 	before := writes
 	_, err = svc.UpdatePO(context.Background(), 42, &dto.UpdatePurchaseOrderRequest{
 		Notes: ptr("must not be saved"), Items: []dto.UpdatePOItemRequest{{ProductID: 0, PreOrderItemID: ptr(uint(999)), Quantity: 1}},
-	}, 1)
+	}, 1, string(enum.RoleEmployee))
 	require.Error(t, err)
 	require.Equal(t, before, writes, "invalid preorder must not partially save the header")
 }

@@ -84,10 +84,10 @@ function EmployeeCheckStockExecuteContent() {
 
   // สแกน QR ที่มี token ประจำตารางนี้มาถูกต้อง -> ถือว่าเป็นพนักงานที่ได้รับมอบหมายเลย ไม่ต้องล็อกอินในมือถือก่อน
   const isValidQrToken = !!schedule && !!urlToken && schedule.access_token === urlToken;
-  // เจ้าของร้าน/แอดมินเข้าดูได้ทุกตาราง ไม่ว่าจะมอบหมายให้ใครก็ตาม (ไม่ต้องพึ่ง token ก็เข้าได้)
+  // เจ้าของร้าน/ผู้จัดการเข้าดูได้ทุกตาราง ไม่ว่าจะมอบหมายให้ใครก็ตาม (ไม่ต้องพึ่ง token ก็เข้าได้)
   const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
-  const isOwnerOrAdmin = currentRole === "OWNER" || currentRole === "ADMIN";
-  const isOwnSchedule = !schedule || isValidQrToken || isOwnerOrAdmin || schedule.user_id === Number(user?.id);
+  const isOwnerOrManager = currentRole === "OWNER" || currentRole === "MANAGER" || currentRole === "ADMIN";
+  const isOwnSchedule = !schedule || isValidQrToken || isOwnerOrManager || schedule.user_id === Number(user?.id);
   // ใช้ user_id ของตารางเป็นคนส่งเมื่อเข้าผ่าน QR token, ไม่งั้นใช้คนที่ล็อกอินอยู่ตามปกติ
   const submitterUserId = isValidQrToken ? schedule?.user_id : Number(user?.id);
 

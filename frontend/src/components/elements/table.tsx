@@ -35,7 +35,7 @@ export function Table({ className, children, ...props }: HTMLAttributes<HTMLTabl
 
 export function TableHeader({ className, children, ...props }: HTMLAttributes<HTMLTableSectionElement>) {
   return (
-    <thead className={cn("border-b border-slate-200 bg-slate-50", className)} {...props}>
+    <thead className={cn("border-b border-slate-200 bg-[#f6f3f2]", className)} {...props}>
       {children}
     </thead>
   );
@@ -51,7 +51,7 @@ export function TableBody({ className, children, ...props }: HTMLAttributes<HTML
 
 export function TableFooter({ className, children, ...props }: HTMLAttributes<HTMLTableSectionElement>) {
   return (
-    <tfoot className={cn("border-t border-slate-200 bg-slate-50", className)} {...props}>
+    <tfoot className={cn("border-t border-slate-200 bg-[#f6f3f2]", className)} {...props}>
       {children}
     </tfoot>
   );
@@ -121,7 +121,7 @@ export function GenericTable<T>({
     <div className={cn("overflow-x-auto rounded-none border border-slate-200", className)}>
       <table className="w-full min-w-max text-sm">
         <thead>
-          <tr className="border-b border-slate-200 bg-slate-50">
+          <tr className="border-b border-slate-200 bg-[#f6f3f2]">
             {columns.map((col) => (
               <th
                 key={col.key}
