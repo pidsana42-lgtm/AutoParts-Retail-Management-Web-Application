@@ -1169,15 +1169,11 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
             {/* ข้อมูลใบสั่งซื้อและลูกค้า */}
             <div className="flex gap-6 items-stretch">
               <Card className="flex-1">
-                <CardHeader className="relative pb-4">
-                  <div className="pr-40">
+                <CardHeader className="pb-4">
+                  <div>
                     <CardTitle className="text-xl text-black">ข้อมูลใบสั่งซื้อ</CardTitle>
                     <p className="mt-1 text-base text-gray-600">รายละเอียดสำหรับการเคลมสินค้า</p>
                   </div>
-                  <Badge variant="outline" size="lg" className="absolute right-6 top-6 w-auto px-3 py-1.5 border-gray-200 bg-gray-100 text-sm text-gray-700">
-                    <span className="mr-2 h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0 aspect-square inline-block" />
-                    พร้อมดำเนินการ
-                  </Badge>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="border-t border-t-gray-200 pt-4">
