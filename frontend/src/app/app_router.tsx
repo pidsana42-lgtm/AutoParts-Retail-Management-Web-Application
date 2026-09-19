@@ -2,6 +2,8 @@ import React, { useMemo } from 'react';
 import { Routes, Route, Outlet, Navigate } from 'react-router-dom';
 import MainLayout from '../components/layer/main_layout'; 
 import Login from './login/Login';
+import ProfilePage from './profile/profile';
+import ChangePasswordPage from './profile/change_password';
 import MainDashboard from './owner/dashboard/dashboard'; 
 import SaleDashboard from './owner/dashboard/saledashboard';
 import DebtDashboard from './owner/dashboard/debtdashboard';
@@ -58,7 +60,7 @@ import NewReturnPage from './owner/return/new_return';
 import { getDashboardRoleGroup } from '../utils/dashboardAccess';
 
 export default function AppRouter(): React.JSX.Element {
-  const { role, isLoading } = useAuth();
+  const { role, isLoading, isAuthenticated } = useAuth();
 
   const { isOwner, isManagerOrOwner, isEmployeeOrStaff, firstMenuPath } = useMemo(() => {
     const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
@@ -94,6 +96,12 @@ export default function AppRouter(): React.JSX.Element {
         
         {/* หน้าแรกสุด (/) ดีดส่งไปที่เมนูแรกสุดใน Sidebar ของ Role นั้นๆ */}
         <Route path="/" element={<Navigate to={firstMenuPath} replace />} />
+        <Route path="/profile" element={
+          isAuthenticated ? <ProfilePage /> : <Navigate to="/login" replace />
+        } />
+        <Route path="/change-password" element={
+          isAuthenticated ? <ChangePasswordPage /> : <Navigate to="/login" replace />
+        } />
 
         {/* ตั้งค่าข้อมูลร้านค้า (StoreConfig): ให้สิทธิ์เฉพาะ OWNER เท่านั้น */}
         <Route path="/owner/storeconfig" element={

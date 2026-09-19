@@ -5,6 +5,7 @@ import (
 	"backend/internal/app/entity"
 	"backend/internal/app/enum"
 	"errors"
+	"net/mail"
 	"regexp"
 	"strings"
 
@@ -17,10 +18,12 @@ var (
 	ErrEmployeeRoleMissing = errors.New("ไม่พบสิทธิ์พนักงานในระบบ")
 	ErrBankNotFound        = errors.New("ไม่พบธนาคารที่เลือก")
 	ErrUsernameExists      = errors.New("ชื่อผู้ใช้นี้ถูกใช้งานแล้ว")
+	ErrEmailExists         = errors.New("อีเมลนี้ถูกใช้งานแล้ว")
 	ErrIDCardExists        = errors.New("เลขบัตรประชาชนนี้ถูกลงทะเบียนแล้ว")
 	ErrLineUserIDExists    = errors.New("LINE User ID นี้ถูกเชื่อมกับบัญชีอื่นแล้ว")
 	ErrNameRequired        = errors.New("กรุณากรอกชื่อและนามสกุล")
 	ErrInvalidUsername     = errors.New("ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรภาษาอังกฤษ ตัวเลข จุด ขีดกลาง และขีดล่าง")
+	ErrInvalidEmail        = errors.New("กรุณากรอกอีเมลให้ถูกต้อง")
 	ErrInvalidIDCard       = errors.New("เลขบัตรประชาชนไม่ถูกต้อง")
 	ErrInvalidPassword     = errors.New("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร และประกอบด้วยตัวอักษรภาษาอังกฤษกับตัวเลข")
 	ErrInvalidBankAccount  = errors.New("เลขบัญชีธนาคารต้องมี 6 ถึง 20 หลัก")
@@ -262,6 +265,7 @@ func (s *service) CreateEmployee(ownerID uint, req employeeDTO.CreateEmployeeReq
 	req.LastName = strings.TrimSpace(req.LastName)
 	req.IDCardNumber = digitsOnly(req.IDCardNumber)
 	req.Username = strings.ToLower(strings.TrimSpace(req.Username))
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	req.LineUserID = strings.TrimSpace(req.LineUserID)
 	req.BankAccountNumber = digitsOnly(req.BankAccountNumber)
 	req.BankAccountName = strings.TrimSpace(req.BankAccountName)
@@ -275,6 +279,10 @@ func (s *service) CreateEmployee(ownerID uint, req employeeDTO.CreateEmployeeReq
 	}
 	if !usernamePattern.MatchString(req.Username) {
 		return nil, ErrInvalidUsername
+	}
+	parsedEmail, emailErr := mail.ParseAddress(req.Email)
+	if emailErr != nil || parsedEmail.Address != req.Email {
+		return nil, ErrInvalidEmail
 	}
 	if !validThaiID(req.IDCardNumber) {
 		return nil, ErrInvalidIDCard
@@ -325,6 +333,11 @@ func (s *service) CreateEmployee(ownerID uint, req employeeDTO.CreateEmployeeReq
 	} else if exists {
 		return nil, ErrUsernameExists
 	}
+	if exists, err := s.valueExists("LOWER(email)", req.Email); err != nil {
+		return nil, err
+	} else if exists {
+		return nil, ErrEmailExists
+	}
 	if exists, err := s.valueExists("id_card_number_user", req.IDCardNumber); err != nil {
 		return nil, err
 	} else if exists {
@@ -349,6 +362,7 @@ func (s *service) CreateEmployee(ownerID uint, req employeeDTO.CreateEmployeeReq
 		LastName:          req.LastName,
 		IdCardNumberUser:  req.IDCardNumber,
 		Username:          req.Username,
+		Email:             req.Email,
 		Password:          string(passwordHash),
 		LineUserID:        req.LineUserID,
 		StoreConfigID:     owner.StoreConfigID,
