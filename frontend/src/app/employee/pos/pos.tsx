@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useLocation, useSearchParams, useNavigate } from "react-router-dom";
-import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, ScanBarcode, Building2} from "lucide-react";
+import {Trash2, Percent, QrCode, CreditCard, Coins, Plus, Minus, Printer, ScanBarcode, Building2, Search} from "lucide-react";
 import Button from "../../../components/elements/button";
 import { usePosPayment } from "./hooks/usepospayment";
 import { usePosCart, findMatchedSupplier } from "./hooks/useposcart";
@@ -229,7 +229,11 @@ export default function PosPage(): React.JSX.Element {
             {/* ช่องแสกนบาร์โค้ด / ค้นหา (ช่องเดิมช่องเดียว สลับ Placeholder และผลลัพธ์ตาม Switch) */}
             <form onSubmit={cartHook.handleAddProduct} className="mt-2 flex gap-2 items-center">
               <div className="relative flex-1">
-                <ScanBarcode className="absolute left-4 top-3.5 text-gray-400" size={18} />
+                {isRecoverMode ? (
+                  <Search className="absolute left-4 top-3.5 text-gray-400" size={18} />
+                ) : (
+                  <ScanBarcode className="absolute left-4 top-3.5 text-gray-400" size={18} />
+                )}
                 <input
                   type="text"
                   value={cartHook.searchQuery}
@@ -246,7 +250,7 @@ export default function PosPage(): React.JSX.Element {
                   }}
                   placeholder={
                     isRecoverMode
-                      ? "สแกนบาร์โค้ด / INV-202X-XXX หรือ ชื่อลูกค้า..."
+                      ? "ค้นหา INV-202X-XXX หรือ ชื่อลูกค้า..."
                       : "สแกนบาร์โค้ดสินค้า, พิมพ์เลขบาร์โค้ด, พิมพ์รหัสสินค้า, Part Number หรือชื่อสินค้าเพื่อเพิ่มรายการ..."
                   }
                   className="w-full bg-white border border-gray-200 rounded-none pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-red-500 shadow-sm"

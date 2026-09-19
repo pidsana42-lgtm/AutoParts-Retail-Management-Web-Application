@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { ScanBarcode, User, FileText, Loader2, X } from "lucide-react";
+import { Search, User, FileText, Loader2, X } from "lucide-react";
 import Input from "../../../../components/elements/input";
 import Badge from "../../../../components/elements/badge";
 import Text from "../../../../components/elements/text";
@@ -227,7 +227,7 @@ export default function OrderCustomerSearchInput({
           {icon}
         </div>
       ) : (
-        <ScanBarcode
+        <Search
           className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none"
           size={18}
         />
