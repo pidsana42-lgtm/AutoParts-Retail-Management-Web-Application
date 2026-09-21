@@ -61,6 +61,10 @@ func (s *customerClaimServiceStub) DeleteCustomerClaim(id uint) error {
 	s.calls = append(s.calls, "DeleteCustomerClaim")
 	return s.err
 }
+func (s *customerClaimServiceStub) CancelCustomerClaim(id uint) (claimDTO.CustomerClaimResponseDTO, error) {
+	s.calls = append(s.calls, "CancelCustomerClaim")
+	return claimDTO.CustomerClaimResponseDTO{ID: id, Status: "CANCELLED"}, s.err
+}
 func (s *customerClaimServiceStub) GenerateCustomerClaimPDF(ctx context.Context, claimID uint) ([]byte, error) {
 	s.calls = append(s.calls, "GenerateCustomerClaimPDF")
 	return nil, s.err
@@ -141,6 +145,59 @@ func TestUpdateCustomerClaimItemStatusRoleBoundaries(t *testing.T) {
 			}
 			if payload.Data.ID != 7 || payload.Data.Status != "APPROVED" {
 				t.Fatalf("response data = %+v", payload.Data)
+			}
+		})
+	}
+}
+
+func requestCancelCustomerClaim(service *customerClaimServiceStub, role any) *httptest.ResponseRecorder {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		if role != nil {
+			c.Set("role", role)
+		}
+		c.Next()
+	})
+	controller := claimController.NewCustomerClaimController(service)
+	router.PATCH("/api/claims/customer-claims/:id/cancel", controller.CancelCustomerClaim)
+	request := httptest.NewRequest(http.MethodPatch, "/api/claims/customer-claims/9/cancel", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	return response
+}
+
+// TestCancelCustomerClaimRoleBoundaries: การยกเลิกใบเคลมต้องเป็นสิทธิ์เจ้าของ/แอดมินเท่านั้น เหมือนการอนุมัติ/ตีกลับ
+func TestCancelCustomerClaimRoleBoundaries(t *testing.T) {
+	roles := []struct {
+		name    string
+		role    any
+		allowed bool
+	}{
+		{"owner", "OWNER", true},
+		{"admin", "ADMIN", true},
+		{"employee", "EMPLOYEE", false},
+		{"missing", nil, false},
+	}
+	for _, tt := range roles {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &customerClaimServiceStub{}
+			response := requestCancelCustomerClaim(service, tt.role)
+
+			if !tt.allowed {
+				if response.Code != http.StatusForbidden {
+					t.Fatalf("status = %d, want %d (body = %s)", response.Code, http.StatusForbidden, response.Body.String())
+				}
+				if len(service.calls) != 0 {
+					t.Fatalf("forbidden request reached service: %v", service.calls)
+				}
+				return
+			}
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d (body = %s)", response.Code, http.StatusOK, response.Body.String())
+			}
+			if len(service.calls) != 1 || service.calls[0] != "CancelCustomerClaim" {
+				t.Fatalf("service calls = %v, want exactly one CancelCustomerClaim", service.calls)
 			}
 		})
 	}

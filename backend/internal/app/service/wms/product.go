@@ -86,6 +86,12 @@ func (s *productService) GetProductByID(id uint) (*wmsDto.ProductListResponseDTO
 	}
 	var dto wmsDto.ProductListResponseDTO
 	dto.FromEntity(*product)
+	pending, err := s.repo.GetPendingReceiveQuantity(id)
+	if err != nil {
+		log.Printf("[Product] failed to load pending receive quantity for product %d: %v\n", id, err)
+	} else {
+		dto.PendingReceiveQuantity = pending
+	}
 	return &dto, nil
 }
 

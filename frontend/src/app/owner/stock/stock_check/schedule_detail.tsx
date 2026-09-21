@@ -111,6 +111,14 @@ function ScheduleDetailContent() {
     return map;
   }, [products]);
 
+  // สินค้าที่มีมากกว่า 1 บริษัท พนักงานจะนับแยกเป็นคนละแถว (คนละ record) ต่อบริษัท — ต้องรู้ว่าสินค้าไหนมีหลายแถว
+  // เพื่อโชว์ชื่อบริษัทกำกับไว้ให้แยกแยะได้ (สินค้าที่มีแถวเดียวไม่ต้องโชว์ ไม่งั้นจะรกเกินจำเป็น)
+  const recordCountByProduct = useMemo(() => {
+    const map = new Map<number, number>();
+    reviewRecords.forEach((r) => map.set(r.product_id, (map.get(r.product_id) || 0) + 1));
+    return map;
+  }, [reviewRecords]);
+
   // QR Code พาไปหน้าติ๊กเช็คสต็อกของพนักงานโดยตรง — เป็นหน้าเปล่าไม่มี Sidebar/Navbar ของระบบรวม (/wms/check-stock-scan)
   // แนบ access_token ไปด้วย ให้พนักงานสแกนแล้วเข้าหน้าเช็คสต็อกได้เลยโดยไม่ต้องล็อกอินในมือถือก่อน
   const qrPayload =
@@ -279,6 +287,11 @@ function ScheduleDetailContent() {
                     {reviewRecords.map((rec) => {
                       const p = productById.get(rec.product_id);
                       const diff = rec.diff_quantity;
+                      // สินค้าที่มีมากกว่า 1 บริษัท จะมีหลายแถวต่อสินค้า — ต้องบอกว่าแถวนี้ของบริษัทไหน กันดูปนกัน
+                      const isMultiRow = (recordCountByProduct.get(rec.product_id) || 0) > 1;
+                      const supplierName = rec.supplier_id
+                        ? p?.Suppliers?.find((s) => s.SupplierID === rec.supplier_id)?.SupplierName
+                        : undefined;
                       return (
                         <div
                           key={rec.id}
@@ -293,6 +306,11 @@ function ScheduleDetailContent() {
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-semibold text-slate-800">{p?.Name || `สินค้า #${rec.product_id}`}</p>
                             <p className="text-xs text-slate-400">{p?.ProductCode}</p>
+                            {isMultiRow && (
+                              <p className="text-xs text-slate-400">
+                                {supplierName || (rec.supplier_id ? `บริษัท #${rec.supplier_id}` : "ไม่ทราบบริษัท / อื่นๆ")}
+                              </p>
+                            )}
                             {rec.reason && <p className="mt-0.5 text-xs italic text-slate-500">หมายเหตุ: {rec.reason}</p>}
                           </div>
 
@@ -301,7 +319,8 @@ function ScheduleDetailContent() {
                             <p className="font-semibold text-slate-800">นับได้: {rec.new_quantity}</p>
                           </div>
 
-                          <div className="shrink-0">
+                          <div className="shrink-0 text-right">
+                            <p className="mb-1 text-xs text-slate-500">จำนวนที่แตกต่าง</p>
                             <Badge
                               variant={diff === 0 ? "neutral" : diff > 0 ? "success" : "error"}
                               className={diff === 0 ? "bg-gray-100 text-gray-500" : diff > 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}

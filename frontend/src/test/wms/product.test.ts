@@ -53,6 +53,7 @@ const rawProduct = {
   suppliers: [
     { supplier_id: 1, supplier_name: 'บริษัท เอ', quantity: 7, company_product_code: 'A-5', variant_code: 'V1', barcode: 'B1', qr_code: 'Q1' },
   ],
+  updated_at: '2026-09-01T10:00:00Z',
   deleted_at: null,
 };
 
@@ -91,6 +92,7 @@ describe('product service', () => {
         Suppliers: [
           { SupplierID: 1, SupplierName: 'บริษัท เอ', Quantity: 7, CompanyProductCode: 'A-5', VariantCode: 'V1', Barcode: 'B1', QRCode: 'Q1' },
         ],
+        UpdatedAt: '2026-09-01T10:00:00Z',
         DeletedAt: undefined,
       });
       expect(apiClient.get).toHaveBeenCalledWith('/wms/products');
@@ -122,6 +124,7 @@ describe('product service', () => {
         Zone: '',
         Supplier: '',
         Suppliers: [],
+        UpdatedAt: undefined,
         DeletedAt: undefined,
       });
       expect(apiClient.get).toHaveBeenCalledWith('/wms/products/9');

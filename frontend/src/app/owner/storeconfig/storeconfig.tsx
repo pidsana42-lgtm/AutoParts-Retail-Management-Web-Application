@@ -24,8 +24,7 @@ const StoreConfig: React.FC = () => {
   const isOwner = currentRole === "OWNER";
 
   if (!isOwner) {
-    const redirectPath = currentRole === "MANAGER" ? "/manager/storeconfig/financial-policy" : "/";
-    return <Navigate to={redirectPath} replace />;
+    return <Navigate to="/" replace />;
   }
 
   const { toast } = useToast();

@@ -133,12 +133,12 @@ func (r *returnRepository) SearchReturnableSaleOrders(keyword string) ([]reEntit
 		Preload("Items.Product").
 		Joins("LEFT JOIN customers ON customers.id = sale_orders.customer_id AND customers.deleted_at IS NULL").
 		Where("sale_orders.deleted_at IS NULL").
-		Where("LOWER(TRIM(sale_orders.status)) = ?", string(enum.OrderCompleted)).
+		Where("LOWER(TRIM(sale_orders.status)) IN (?)", []string{string(enum.OrderCompleted), string(enum.OrderReturned)}).
 		Where(`NOT EXISTS (
 			SELECT 1 FROM sales_returns sr
 			WHERE sr.original_order_id = sale_orders.id
 			  AND sr.deleted_at IS NULL
-			  AND LOWER(TRIM(COALESCE(sr.status, ''))) <> 'rejected'
+			  AND LOWER(TRIM(COALESCE(sr.status, ''))) NOT IN ('rejected', 'refunded')
 		)`).
 		Where(`NOT EXISTS (
 			SELECT 1 FROM customer_claims cc
@@ -182,7 +182,7 @@ func (r *returnRepository) CreateReturn(returnItem *reEntity.SalesReturn, items 
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, returnItem.OriginalOrderID).Error; err != nil {
 			return err
 		}
-		if strings.ToLower(strings.TrimSpace(string(order.Status))) != string(enum.OrderCompleted) {
+		if !isOrderReturnable(order.Status) {
 			return ErrOrderNotCompleted
 		}
 
@@ -190,13 +190,34 @@ func (r *returnRepository) CreateReturn(returnItem *reEntity.SalesReturn, items 
 		if err := tx.Where("order_id = ?", order.ID).Find(&orderItems).Error; err != nil {
 			return err
 		}
-		if err := validateReturnItems(items, orderItems); err != nil {
+
+		// หักจำนวนที่เคยคืนไปแล้ว (จากใบคืนอื่นที่ไม่ถูกปฏิเสธของออเดอร์เดียวกัน) ออกจากยอดที่คืนได้
+		// ก่อนตรวจสอบ กันคืนสินค้าตัวเดียวกันซ้ำเกินจำนวนที่ซื้อจริงสะสมข้ามหลายใบคืน
+		var priorReturnedRows []struct {
+			ProductID uint
+			Total     int
+		}
+		if err := tx.Table("sales_return_items sri").
+			Joins("JOIN sales_returns sr ON sr.id = sri.sales_return_id AND sr.deleted_at IS NULL").
+			Where("sr.original_order_id = ? AND LOWER(TRIM(COALESCE(sr.status, ''))) <> 'rejected'", returnItem.OriginalOrderID).
+			Select("sri.product_id, SUM(sri.quantity) AS total").
+			Group("sri.product_id").
+			Scan(&priorReturnedRows).Error; err != nil {
+			return err
+		}
+		alreadyReturned := make(map[uint]int, len(priorReturnedRows))
+		for _, row := range priorReturnedRows {
+			alreadyReturned[row.ProductID] = row.Total
+		}
+		if err := validateReturnItems(items, orderItems, alreadyReturned); err != nil {
 			return err
 		}
 
+		// นับเฉพาะใบคืนที่ยัง "ค้างอยู่จริง" (รอตรวจ/อนุมัติแล้วรอคืนเงิน) — ใบที่คืนเงินสำเร็จแล้ว (REFUNDED)
+		// ถือว่าจบเรื่องแล้ว ต้องไม่บล็อกไม่ให้คืนสินค้าตัวอื่นที่เหลือของออเดอร์เดียวกันอีก
 		var activeReturns int64
 		if err := tx.Model(&reEntity.SalesReturn{}).
-			Where("original_order_id = ? AND deleted_at IS NULL AND LOWER(TRIM(COALESCE(status, ''))) <> 'rejected'", returnItem.OriginalOrderID).
+			Where("original_order_id = ? AND deleted_at IS NULL AND LOWER(TRIM(COALESCE(status, ''))) NOT IN ('rejected', 'refunded')", returnItem.OriginalOrderID).
 			Count(&activeReturns).Error; err != nil {
 			return err
 		}
@@ -250,13 +271,23 @@ func (r *returnRepository) CreateReturn(returnItem *reEntity.SalesReturn, items 
 	})
 }
 
-func validateReturnItems(items []reEntity.SalesReturnItem, orderItems []reEntity.SaleOrderItem) error {
+// isOrderReturnable: ออเดอร์คืนสินค้าได้ทั้งตอน "เสร็จสมบูรณ์" (ยังไม่เคยคืนอะไรเลย) และตอน
+// "เคยคืนไปแล้วบางส่วน" (RETURNED) — เผื่อลูกค้ากลับมาคืนสินค้าตัวอื่นที่เหลือของออเดอร์เดียวกันอีกในภายหลัง
+func isOrderReturnable(status enum.OrderStatus) bool {
+	normalized := strings.ToLower(strings.TrimSpace(string(status)))
+	return normalized == string(enum.OrderCompleted) || normalized == string(enum.OrderReturned)
+}
+
+func validateReturnItems(items []reEntity.SalesReturnItem, orderItems []reEntity.SaleOrderItem, alreadyReturned map[uint]int) error {
 	if len(items) == 0 {
 		return ErrReturnQuantityExceedsOrder
 	}
 	ordered := make(map[uint]int, len(orderItems))
 	for _, item := range orderItems {
 		ordered[item.ProductID] += item.Qty
+	}
+	for productID, qty := range alreadyReturned {
+		ordered[productID] -= qty
 	}
 
 	for _, item := range items {
@@ -460,7 +491,7 @@ func (r *returnRepository) ProcessRefund(id uint, processedBy uint) error {
 		if err := tx.Where("order_id = ?", order.ID).Find(&soldItems).Error; err != nil {
 			return err
 		}
-		if err := validateReturnItems(items, soldItems); err != nil {
+		if err := validateReturnItems(items, soldItems, nil); err != nil {
 			return err
 		}
 		returnedByProduct := make(map[uint]int, len(items))
@@ -552,7 +583,7 @@ func (r *returnRepository) ApproveReturn(id uint, approvedBy uint) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, returnItem.OriginalOrderID).Error; err != nil {
 			return err
 		}
-		if strings.ToLower(strings.TrimSpace(string(order.Status))) != string(enum.OrderCompleted) {
+		if !isOrderReturnable(order.Status) {
 			return ErrOrderNotCompleted
 		}
 
@@ -564,7 +595,7 @@ func (r *returnRepository) ApproveReturn(id uint, approvedBy uint) error {
 		if err := tx.Where("order_id = ?", order.ID).Find(&orderItems).Error; err != nil {
 			return err
 		}
-		if err := validateReturnItems(items, orderItems); err != nil {
+		if err := validateReturnItems(items, orderItems, nil); err != nil {
 			return err
 		}
 
@@ -591,6 +622,13 @@ func (r *returnRepository) UpdateReturn(returnItem *reEntity.SalesReturn) error 
 
 func (r *returnRepository) DeleteReturn(id uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		var returnItem reEntity.SalesReturn
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&returnItem, id).Error; err != nil {
+			return err
+		}
+		if returnItem.Status == enum.ReturnRefunded {
+			return ErrReturnAlreadyProcessed
+		}
 		if err := tx.Where("sales_return_id = ?", id).Delete(&reEntity.SalesReturnItem{}).Error; err != nil {
 			return err
 		}

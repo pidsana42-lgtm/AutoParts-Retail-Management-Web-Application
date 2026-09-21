@@ -26,4 +26,9 @@ type BillItem struct {
 	CategoryID         *uint    `json:"category_id" gorm:"default:null"`
 	SubCategoryID      *uint    `json:"sub_category_id" gorm:"default:null"`
 	SubSubCategoryID   *uint    `json:"sub_sub_category_id" gorm:"default:null"`
+
+	// PendingReceiveQuantity: จำนวนใน OrderQuantity ที่ "ยังไม่ถูกนับเข้าสต็อกจริง" เพราะราคาทุนของรายการนี้
+	// ไม่ตรงกับระบบและยังรอเจ้าของร้านอนุมัติอยู่ (OrderQuantity - PendingReceiveQuantity = จำนวนที่เข้าสต็อกแล้วจริง)
+	// เท่ากับ 0 เสมอสำหรับรายการที่ราคาไม่เปลี่ยน หรืออนุมัติไปแล้ว
+	PendingReceiveQuantity int `gorm:"not null;default:0" json:"pending_receive_quantity"`
 }

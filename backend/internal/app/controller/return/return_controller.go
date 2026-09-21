@@ -218,6 +218,11 @@ func (ctl *ReturnController) ProcessRefund(c *gin.Context) {
 }
 
 func (ctl *ReturnController) DeleteSalesReturn(c *gin.Context) {
+	if !isOwnerOrManager(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only the store owner can delete a return"})
+		return
+	}
+
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -226,6 +231,10 @@ func (ctl *ReturnController) DeleteSalesReturn(c *gin.Context) {
 	}
 
 	if err := ctl.service.DeleteReturn(uint(id)); err != nil {
+		if errors.Is(err, reRepo.ErrReturnAlreadyProcessed) {
+			c.JSON(http.StatusConflict, gin.H{"error": "ไม่สามารถลบรายการคืนสินค้าที่คืนเงินไปแล้วได้ เพราะมีการปรับสต็อกและจ่ายเงินคืนจริงไปแล้ว"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete return: " + err.Error()})
 		return
 	}

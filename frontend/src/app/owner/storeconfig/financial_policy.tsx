@@ -16,9 +16,19 @@ import { Card } from "../../../components/elements/card";
 import Input from "../../../components/elements/input";
 import Badge from "../../../components/elements/badge";
 import { useFinancialPolicy } from "./hook/UseFinancialPolicy";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../../../contexts/AuthContexts";
 import ConfirmModal from "../../../components/elements/confirm_modal";
 
 export default function FinancialPolicyPage() {
+  const { role } = useAuth();
+  const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
+  const isOwner = currentRole === "OWNER";
+
+  if (!isOwner) {
+    return <Navigate to="/" replace />;
+  }
+
   const {
     config,
     isLoading,

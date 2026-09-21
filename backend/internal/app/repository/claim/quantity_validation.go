@@ -55,3 +55,35 @@ func (r *customerClaimRepository) saveValidatedClaimItem(item *entity.CustomerCl
 		return tx.Save(item).Error
 	})
 }
+
+// UpdateCustomerClaimItemWithLock: ล็อกแถว item และ parent claim ไว้ตั้งแต่อ่านจนบันทึกเสร็จในทรานแซกชัน
+// เดียวกัน — mutate จึงเห็นค่า flag (StockOutIssued/StockInReceived/CreditApplied) ที่เป็นปัจจุบันจริงเสมอ
+// ต่อให้มีอีกคำขอกำลังแก้ไขรายการเดียวกันพร้อมกันอยู่ก็ตาม (คำขอที่สองจะรอจนคำขอแรก commit เสร็จก่อน แล้ว
+// เห็นค่าที่คำขอแรกเพิ่งบันทึกไป ไม่ใช่ค่าเก่าก่อนหน้า)
+func (r *customerClaimRepository) UpdateCustomerClaimItemWithLock(id uint, mutate func(item *entity.CustomerClaimItem) error) (*entity.CustomerClaimItem, error) {
+	var item entity.CustomerClaimItem
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Preload("Product").First(&item, id).Error; err != nil {
+			return err
+		}
+		if err := mutate(&item); err != nil {
+			return err
+		}
+		var parent entity.CustomerClaim
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&parent, item.CustomerClaimID).Error; err != nil {
+			return err
+		}
+		var siblings []entity.CustomerClaimItem
+		if err := tx.Where("customer_claim_id = ? AND id <> ?", parent.ID, item.ID).Find(&siblings).Error; err != nil {
+			return err
+		}
+		if err := validateClaimQuantities(tx, parent.OriginalOrderID, append(siblings, item)); err != nil {
+			return err
+		}
+		return tx.Save(&item).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}

@@ -137,6 +137,8 @@ func SetupDatabase() {
 		&entity.Inventory{},
 		&entity.StockAlert{},
 		&entity.CheckStockSchedule{},
+		&entity.CheckStockScheduleTarget{},
+		&entity.CheckStockScheduleExcludedProduct{},
 		&entity.CheckStock{},
 		&entity.StockMovement{},
 
@@ -209,9 +211,6 @@ func SetupDatabase() {
 		log.Printf("Warning: failed to seed default user: %v", err)
 	}
 
-	seed.Customer(db)
-	seed.Product(db)
-
 	// Chompoo
 	seed.PurchaseOrders(db)
 	if err := seed.Inventory(db); err != nil {
@@ -222,8 +221,12 @@ func SetupDatabase() {
 	}
 
 	// Siri
-	seed.BillImage(db)
-	seed.Bill(db)
+	// seed.BillImage(db)
+	// seed.Bill(db)
+
+	// Mock data disabled
+	// seed.Customer(db)
+	// seed.Product(db)
 
 	log.Println("Database migration complete! Server Ready.")
 }
