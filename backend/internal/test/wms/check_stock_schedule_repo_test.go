@@ -246,3 +246,59 @@ func TestApproveSchedule_RecordWithoutSupplier_SkipsInventoryButCountsTowardProd
 		t.Errorf("expected product total to be the sum of both rows (5+3=8), got %d", product.Quantity)
 	}
 }
+
+// กรณีพนักงานกดยื่นซ้ำ หรือมีการ retry ยิง record ซ้ำซ้อนลงตารางเดียวกัน
+// ApproveSchedule ต้องคัดเฉพาะ record ล่าสุดของแต่ละคู่ (ProductID, SupplierID) เท่านั้น
+// ไม่เอาทุกแถวมาบวกสะสม (+=) จนสต็อกพุ่งเกินจริง
+func TestApproveSchedule_DuplicateRecordsDeduplicated(t *testing.T) {
+	db := setupCheckStockScheduleRepoTestDB(t)
+
+	require.NoError(t, db.Create(&entity.Product{Model: gorm.Model{ID: 16}, Product_Code: "P-16", Product_Name: "Oil 5L", Quantity: 30}).Error)
+	require.NoError(t, db.Create(&entity.Inventory{Model: gorm.Model{ID: 5}, ProductID: 16, SupplierID: 3, Inventory_Quantity: 30}).Error)
+
+	scheduleID := uint(2)
+	require.NoError(t, db.Create(&entity.CheckStockSchedule{Model: gorm.Model{ID: scheduleID}, Status: "รอตรวจสอบ"}).Error)
+
+	productID := uint(16)
+	supplierID := uint(3)
+
+	// แถวที่ 1 (ครั้งแรก - สมมตินับได้ 30)
+	require.NoError(t, db.Create(&entity.CheckStock{
+		Model: gorm.Model{ID: 1}, Old_Quantity: 30, New_Quantity: 30, Diff_Quantity: 0,
+		Adjustment_DateTime: time.Now(), ProductID: &productID, SupplierID: &supplierID, CheckStockScheduleID: &scheduleID,
+	}).Error)
+
+	// แถวที่ 2 (กดยื่นซ้ำ/retry - ID สูงกว่า นับได้ 40)
+	require.NoError(t, db.Create(&entity.CheckStock{
+		Model: gorm.Model{ID: 2}, Old_Quantity: 30, New_Quantity: 40, Diff_Quantity: 10,
+		Adjustment_DateTime: time.Now(), ProductID: &productID, SupplierID: &supplierID, CheckStockScheduleID: &scheduleID,
+	}).Error)
+
+	repo := newMockCheckStockScheduleRepo()
+	repo.getByIDFn = func(id uint) (*entity.CheckStockSchedule, error) {
+		return &entity.CheckStockSchedule{Model: gorm.Model{ID: scheduleID}, Status: "รอตรวจสอบ"}, nil
+	}
+
+	svc := wmsService.NewCheckStockScheduleService(repo, db, nil)
+	require.NoError(t, svc.ApproveSchedule(scheduleID))
+
+	var inv entity.Inventory
+	require.NoError(t, db.First(&inv, 5).Error)
+	if inv.Inventory_Quantity != 40 {
+		t.Errorf("expected inventory quantity 40, got %d", inv.Inventory_Quantity)
+	}
+
+	var product entity.Product
+	require.NoError(t, db.First(&product, 16).Error)
+	if product.Quantity != 40 {
+		t.Errorf("expected product quantity 40 (deduplicated), got %d (might have added duplicates)", product.Quantity)
+	}
+
+	// stock_movements ควรมีเพียง 1 รายการ (ของ record ล่าสุดที่ diff != 0)
+	var movements []entity.StockMovement
+	require.NoError(t, db.Where("product_id = ? AND movement_type = ?", 16, "ADJUST").Find(&movements).Error)
+	if len(movements) != 1 {
+		t.Errorf("expected exactly 1 movement record, got %d", len(movements))
+	}
+}
+
