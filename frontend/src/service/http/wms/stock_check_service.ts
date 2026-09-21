@@ -9,14 +9,18 @@ export interface CheckStockSchedule {
   created_at: string;
   
   check_type: "LOCATION" | "CATEGORY" | "PRODUCT";
-  zone_id?: number;
-  shelf_id?: number;
-  shelf_level_id?: number;
-  category_id?: number;
-  sub_category_id?: number;
-  sub_sub_category_id?: number;
-  product_id?: number;
-  
+  // เป้าหมายการตรวจ — เลือกได้หลายจุดพร้อมกันในการมอบหมายครั้งเดียว (ตารางเก่าที่มีแค่เป้าหมายเดียวจะถูก backend
+  // wrap เป็น array 1 ช่องมาให้เหมือนกัน ใช้ตรรกะเดียวกันได้ทั้งตารางเก่า/ใหม่)
+  zone_ids?: number[];
+  shelf_ids?: number[];
+  shelf_level_ids?: number[];
+  category_ids?: number[];
+  sub_category_ids?: number[];
+  sub_sub_category_ids?: number[];
+  product_ids?: number[];
+  // excluded_product_ids: สินค้าที่เจ้าของร้านเอาออกจากรายการที่ระบบหามาให้อัตโนมัติ (เฉพาะ LOCATION/CATEGORY)
+  excluded_product_ids?: number[];
+
   user_id?: number;
   user_full_name: string;
   // รหัสเฉพาะของตารางนี้ ผูกกับ QR Code ให้พนักงานสแกนเข้าหน้าเช็คสต็อกได้เลยโดยไม่ต้องล็อกอินในมือถือก่อน
@@ -31,13 +35,14 @@ export interface CheckStockScheduleCreateInput {
   scheduled_end_datetime: string;
   note: string;
   check_type: "LOCATION" | "CATEGORY" | "PRODUCT";
-  zone_id?: number;
-  shelf_id?: number;
-  shelf_level_id?: number;
-  category_id?: number;
-  sub_category_id?: number;
-  sub_sub_category_id?: number;
-  product_id?: number;
+  zone_ids?: number[];
+  shelf_ids?: number[];
+  shelf_level_ids?: number[];
+  category_ids?: number[];
+  sub_category_ids?: number[];
+  sub_sub_category_ids?: number[];
+  product_ids?: number[];
+  excluded_product_ids?: number[];
   user_id?: number;
 }
 
@@ -69,6 +74,9 @@ export interface CheckStockRecordInput {
   reason?: string;
   adjustment_datetime: string;
   product_id: number;
+  // supplier_id: ระบุเมื่อแถวนี้นับแยกเฉพาะบริษัทใดบริษัทหนึ่ง (สินค้าที่มีมากกว่า 1 บริษัท) — ไม่ระบุ = ปรับแค่
+  // ยอดรวมสินค้าอย่างเดียว ไม่มี Inventory ให้ปรับ (เช่นส่วนต่างที่หาที่มาไม่ได้)
+  supplier_id?: number;
   user_id: number;
   check_stock_schedule_id: number;
 }

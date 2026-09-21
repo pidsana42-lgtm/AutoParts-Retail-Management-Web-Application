@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { X } from "lucide-react";
 
 import Heading from "../../../../components/elements/heading";
 import Breadcrumb from "../../../../components/elements/breadcrumb";
@@ -19,6 +20,44 @@ import CheckDateTimeRangeField, {
 import { useCheckStockOptions } from "./useCheckStockOptions";
 import { buildZoneTree, buildCategoryTree, getRelatedProducts } from "./checkStockTargets";
 import { stockCheckService, type CheckStockScheduleCreateInput } from "../../../../service/http/wms/stock_check_service";
+import { cn } from "../../../../utils/component";
+
+function idsFromPaths(paths: string[], prefix: string): number[] {
+  return paths.filter((p) => p.startsWith(prefix)).map((p) => parseInt(p.replace(prefix, "")));
+}
+
+// ร่างข้อมูลที่กรอกไว้ค้างใน sessionStorage — กันข้อมูลหายตอนกด "ดูรายละเอียดสินค้า" แล้วย้อนกลับมาผ่านเกล็ดขนมปัง
+// (เปลี่ยนหน้าไปหน้ารายละเอียดสินค้าจริงๆ ทำให้ component หน้านี้ unmount ค่าใน useState หายหมด ต้องพักไว้ที่นี่ก่อน)
+// เคลียร์ทิ้งตอนบันทึกสำเร็จ หรือกดยกเลิกเอง — ไม่งั้นจะมีร่างเก่าค้างมาโผล่ตอนเข้าหน้าสร้างใหม่ครั้งต่อไปแบบไม่ได้ตั้งใจ
+const DRAFT_STORAGE_KEY = "check_stock_schedule_draft";
+
+interface ScheduleDraft {
+  dateTimeRange: CheckDateTimeRangeValue;
+  note: string;
+  checkType: "LOCATION" | "CATEGORY" | "PRODUCT";
+  userId: string;
+  selectedZonePaths: string[];
+  categoryPaths: string[];
+  productIds: string[];
+  excludedProductIds: number[];
+}
+
+function loadDraft(): ScheduleDraft | null {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as ScheduleDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft() {
+  try {
+    sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+  } catch {
+    // ignore — เก็บร่างไม่ได้ก็แค่ไม่มีร่างให้กู้ ไม่ใช่ error ที่ต้องบล็อกผู้ใช้
+  }
+}
 
 function AddCheckStockScheduleContent() {
   const navigate = useNavigate();
@@ -28,21 +67,71 @@ function AddCheckStockScheduleContent() {
 
   const [submitting, setSubmitting] = useState(false);
 
-  // Form states
-  const [dateTimeRange, setDateTimeRange] = useState<CheckDateTimeRangeValue>({ date: "", startTime: "", endTime: "" });
-  const [note, setNote] = useState("");
-  const [checkType, setCheckType] = useState<"LOCATION" | "CATEGORY" | "PRODUCT">("LOCATION");
-  const [userId, setUserId] = useState("");
+  const draft = useMemo(() => loadDraft(), []);
 
-  // Targets
-  const [selectedZonePath, setSelectedZonePath] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [productId, setProductId] = useState("");
+  // Form states
+  const [dateTimeRange, setDateTimeRange] = useState<CheckDateTimeRangeValue>(
+    draft?.dateTimeRange || { date: "", startTime: "", endTime: "" }
+  );
+  const [note, setNote] = useState(draft?.note || "");
+  const [checkType, setCheckType] = useState<"LOCATION" | "CATEGORY" | "PRODUCT">(draft?.checkType || "LOCATION");
+  const [userId, setUserId] = useState(draft?.userId || "");
+
+  // Targets — เลือกได้หลายจุดพร้อมกันในการมอบหมายครั้งเดียว (เช่น หลายโซน/หลายหมวดหมู่/หลายสินค้ารายตัว)
+  const [selectedZonePaths, setSelectedZonePaths] = useState<string[]>(draft?.selectedZonePaths || []);
+  const [categoryPaths, setCategoryPaths] = useState<string[]>(draft?.categoryPaths || []);
+  const [productIds, setProductIds] = useState<string[]>(draft?.productIds || []);
+  const [productPickerValue, setProductPickerValue] = useState("");
+  // สินค้าที่เอาออกจากรายการที่ระบบหามาให้อัตโนมัติ (เฉพาะ LOCATION/CATEGORY)
+  const [excludedProductIds, setExcludedProductIds] = useState<Set<number>>(new Set(draft?.excludedProductIds || []));
+
+  // บันทึกร่างทุกครั้งที่กรอก/เลือกอะไรเปลี่ยนไป
+  useEffect(() => {
+    const nextDraft: ScheduleDraft = {
+      dateTimeRange,
+      note,
+      checkType,
+      userId,
+      selectedZonePaths,
+      categoryPaths,
+      productIds,
+      excludedProductIds: Array.from(excludedProductIds),
+    };
+    try {
+      sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(nextDraft));
+    } catch {
+      // ignore
+    }
+  }, [dateTimeRange, note, checkType, userId, selectedZonePaths, categoryPaths, productIds, excludedProductIds]);
 
   const relatedProducts = useMemo(
-    () => getRelatedProducts(checkType, selectedZonePath, categoryId, products, zones, categories),
-    [checkType, selectedZonePath, categoryId, products, zones, categories]
+    () => getRelatedProducts(checkType, selectedZonePaths, categoryPaths, products, zones, categories),
+    [checkType, selectedZonePaths, categoryPaths, products, zones, categories]
   );
+
+  // ตัดสินค้าที่เอาออกไว้ทิ้ง ถ้าไม่อยู่ในรายการที่เกี่ยวข้องแล้ว (เปลี่ยนเป้าหมายใหม่ ไม่ให้ค่าเก่าค้าง)
+  useEffect(() => {
+    setExcludedProductIds((prev) => {
+      if (prev.size === 0) return prev;
+      const relatedIds = new Set(relatedProducts.map((p) => p.ID));
+      const next = new Set([...prev].filter((id) => relatedIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [relatedProducts]);
+
+  const selectedProducts = useMemo(
+    () => productIds.map((id) => products.find((p) => String(p.ID) === id)).filter((p): p is (typeof products)[number] => !!p),
+    [productIds, products]
+  );
+
+  const toggleExcluded = (productId: number) => {
+    setExcludedProductIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,42 +142,50 @@ function AddCheckStockScheduleContent() {
       return;
     }
 
+    if (!userId) {
+      await alertDialog("กรุณาเลือกพนักงานที่รับมอบหมายก่อนบันทึก");
+      return;
+    }
+
     const payload: CheckStockScheduleCreateInput = {
       scheduled_datetime: combineDateTime(dateTimeRange.date, dateTimeRange.startTime).toISOString(),
       scheduled_end_datetime: combineDateTime(dateTimeRange.date, dateTimeRange.endTime).toISOString(),
       note,
       check_type: checkType,
-      user_id: userId ? parseInt(userId) : undefined,
+      user_id: parseInt(userId),
     };
 
     if (checkType === "LOCATION") {
-      if (!selectedZonePath) {
-        await alertDialog("กรุณาเลือกพื้นที่ตรวจสอบ");
+      if (selectedZonePaths.length === 0) {
+        await alertDialog("กรุณาเลือกพื้นที่ตรวจสอบอย่างน้อย 1 จุด");
         return;
       }
-      if (selectedZonePath.startsWith("level-")) payload.shelf_level_id = parseInt(selectedZonePath.replace("level-", ""));
-      if (selectedZonePath.startsWith("shelf-")) payload.shelf_id = parseInt(selectedZonePath.replace("shelf-", ""));
-      if (selectedZonePath.startsWith("zone-")) payload.zone_id = parseInt(selectedZonePath.replace("zone-", ""));
+      payload.shelf_level_ids = idsFromPaths(selectedZonePaths, "level-");
+      payload.shelf_ids = idsFromPaths(selectedZonePaths, "shelf-");
+      payload.zone_ids = idsFromPaths(selectedZonePaths, "zone-");
+      payload.excluded_product_ids = Array.from(excludedProductIds);
     } else if (checkType === "CATEGORY") {
-      if (!categoryId) {
-        await alertDialog("กรุณาเลือกหมวดหมู่สินค้า");
+      if (categoryPaths.length === 0) {
+        await alertDialog("กรุณาเลือกหมวดหมู่สินค้าอย่างน้อย 1 หมวด");
         return;
       }
-      if (categoryId.startsWith("subsubcategory-")) payload.sub_sub_category_id = parseInt(categoryId.replace("subsubcategory-", ""));
-      else if (categoryId.startsWith("subcategory-")) payload.sub_category_id = parseInt(categoryId.replace("subcategory-", ""));
-      else if (categoryId.startsWith("category-")) payload.category_id = parseInt(categoryId.replace("category-", ""));
+      payload.sub_sub_category_ids = idsFromPaths(categoryPaths, "subsubcategory-");
+      payload.sub_category_ids = idsFromPaths(categoryPaths, "subcategory-");
+      payload.category_ids = idsFromPaths(categoryPaths, "category-");
+      payload.excluded_product_ids = Array.from(excludedProductIds);
     } else if (checkType === "PRODUCT") {
-      if (!productId) {
-        await alertDialog("กรุณาเลือกสินค้า");
+      if (productIds.length === 0) {
+        await alertDialog("กรุณาเลือกสินค้าอย่างน้อย 1 รายการ");
         return;
       }
-      payload.product_id = parseInt(productId);
+      payload.product_ids = productIds.map((id) => parseInt(id));
     }
 
     try {
       setSubmitting(true);
       const res = await stockCheckService.createSchedule(payload);
       toast({ variant: "success", message: "สร้างตารางเช็คสต็อกสำเร็จ" });
+      clearDraft();
       // พาไปหน้ารายละเอียดตารางที่เพิ่งสร้างทันที เพื่อให้เห็น QR Code สำหรับสแกนเช็คสต็อกได้เลย
       navigate(`/owner/stock/stock-check/${res.id}`);
     } catch (err: any) {
@@ -133,8 +230,9 @@ function AddCheckStockScheduleContent() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Select
                 label="พนักงานที่รับมอบหมาย"
+                required
                 options={[
-                  { label: "ยังไม่มอบหมาย", value: "" },
+                  { label: "เลือกพนักงาน...", value: "" },
                   ...employees.map((e) => ({ label: e.full_name, value: String(e.id) })),
                 ]}
                 value={userId}
@@ -152,9 +250,10 @@ function AddCheckStockScheduleContent() {
                 value={checkType}
                 onChange={(e) => {
                   setCheckType(e.target.value as "LOCATION" | "CATEGORY" | "PRODUCT");
-                  setSelectedZonePath("");
-                  setCategoryId("");
-                  setProductId("");
+                  setSelectedZonePaths([]);
+                  setCategoryPaths([]);
+                  setProductIds([]);
+                  setExcludedProductIds(new Set());
                 }}
                 disabled={submitting}
               />
@@ -162,39 +261,83 @@ function AddCheckStockScheduleContent() {
 
             {checkType === "LOCATION" && (
               <TreeSelect
-                label="พื้นที่ตรวจสอบ"
+                label="พื้นที่ตรวจสอบ (เลือกได้หลายจุด)"
                 placeholder="เลือกพื้นที่..."
                 options={buildZoneTree(zones)}
-                value={selectedZonePath}
-                onChange={(val) => setSelectedZonePath(val)}
+                multiple
+                values={selectedZonePaths}
+                onChangeValues={setSelectedZonePaths}
               />
             )}
 
             {checkType === "CATEGORY" && (
               <TreeSelect
-                label="หมวดหมู่สินค้า"
+                label="หมวดหมู่สินค้า (เลือกได้หลายหมวด)"
                 placeholder="เลือกหมวดหมู่..."
                 options={buildCategoryTree(categories)}
-                value={categoryId}
-                onChange={(val) => setCategoryId(val)}
+                multiple
+                values={categoryPaths}
+                onChangeValues={setCategoryPaths}
               />
             )}
 
             {checkType === "PRODUCT" && (
-              <SearchableSelect
-                label="สินค้า"
-                options={[
-                  { label: "เลือกสินค้า...", value: "" },
-                  ...products.map((p) => ({
-                    label: `[${p.ProductCode}] ${p.Name}`,
-                    value: String(p.ID),
-                    imageUrl: p.ThumbnailUrl || "",
-                  })),
-                ]}
-                value={productId}
-                onChange={(val) => setProductId(val)}
-                disabled={submitting || loadingOptions}
-              />
+              <div className="space-y-2">
+                <SearchableSelect
+                  label="สินค้า (เลือกได้หลายรายการ)"
+                  options={[
+                    { label: "เลือกสินค้าเพื่อเพิ่ม...", value: "" },
+                    ...products
+                      .filter((p) => !productIds.includes(String(p.ID)))
+                      .map((p) => ({
+                        label: `[${p.ProductCode}] ${p.Name}`,
+                        value: String(p.ID),
+                        imageUrl: p.ThumbnailUrl || "",
+                      })),
+                  ]}
+                  value={productPickerValue}
+                  onChange={(val) => {
+                    if (val) setProductIds((prev) => [...prev, val]);
+                    setProductPickerValue("");
+                  }}
+                  disabled={submitting || loadingOptions}
+                />
+
+                {selectedProducts.length > 0 && (
+                  <div className="flex flex-col gap-1 rounded-sm border border-slate-200 bg-slate-50 p-2">
+                    {selectedProducts.map((p) => (
+                      <div
+                        key={p.ID}
+                        className="flex items-center gap-2 rounded-sm border border-slate-100 bg-white p-1.5 text-xs shadow-sm"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/owner/stock/${p.ID}`, { state: { from: "check_stock_new" } })}
+                          className="flex flex-1 items-center gap-2 overflow-hidden text-left cursor-pointer"
+                          title="ดูรายละเอียดสินค้า"
+                        >
+                          {p.ThumbnailUrl ? (
+                            <img src={p.ThumbnailUrl} alt="" className="h-7 w-7 shrink-0 rounded object-cover" />
+                          ) : (
+                            <div className="h-7 w-7 shrink-0 rounded bg-slate-100" />
+                          )}
+                          <span className="flex-1 truncate">
+                            [{p.ProductCode}] {p.Name}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setProductIds((prev) => prev.filter((id) => id !== String(p.ID)))}
+                          className="shrink-0 rounded p-1 text-slate-400 hover:bg-red-50 hover:text-[#B70011]"
+                          title="เอาออก"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             <Input
@@ -209,37 +352,63 @@ function AddCheckStockScheduleContent() {
               <div className="mt-4 rounded-sm border border-slate-200 bg-slate-50 p-3">
                 <p className="mb-2 text-sm font-medium text-slate-700">
                   สินค้าที่เกี่ยวข้อง ({relatedProducts.length} รายการ)
-                </p>
-                <div className="flex max-h-48 flex-col gap-1 overflow-y-auto text-xs text-slate-600">
-                  {relatedProducts.slice(0, 10).map((p) => (
-                    <div
-                      key={p.ID}
-                      onClick={() => navigate(`/owner/stock/${p.ID}`, { state: { from: "check_stock" } })}
-                      className="flex cursor-pointer items-center gap-2 rounded-sm border border-slate-100 bg-white p-1.5 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-                      title="ดูรายละเอียดสินค้า"
-                    >
-                      {p.ThumbnailUrl ? (
-                        <img src={p.ThumbnailUrl} alt="" className="h-8 w-8 shrink-0 rounded object-cover" />
-                      ) : (
-                        <div className="h-8 w-8 shrink-0 rounded bg-slate-100" />
-                      )}
-                      <span className="flex-1 truncate">
-                        [{p.ProductCode}] {p.Name}
-                      </span>
-                      <span className="shrink-0 font-medium text-[#B70011]">{p.Stock} ชิ้น</span>
-                    </div>
-                  ))}
-                  {relatedProducts.length > 10 && (
-                    <div className="pt-1 text-center text-slate-400">
-                      ... และอีก {relatedProducts.length - 10} รายการ
-                    </div>
+                  {excludedProductIds.size > 0 && (
+                    <span className="ml-1 font-normal text-slate-500">— เอาออก {excludedProductIds.size} รายการ</span>
                   )}
+                </p>
+                <p className="mb-2 text-xs text-slate-500">ติ๊กออกได้ถ้าไม่ต้องการให้ตรวจสินค้ารายการไหน</p>
+                <div className="flex max-h-64 flex-col gap-1 overflow-y-auto text-xs text-slate-600">
+                  {relatedProducts.map((p) => {
+                    const excluded = excludedProductIds.has(p.ID);
+                    return (
+                      <label
+                        key={p.ID}
+                        className={cn(
+                          "flex cursor-pointer items-center gap-2 rounded-sm border border-slate-100 bg-white p-1.5 shadow-sm transition hover:border-slate-300",
+                          excluded && "opacity-50"
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!excluded}
+                          onChange={() => toggleExcluded(p.ID)}
+                          className="h-3.5 w-3.5 shrink-0 accent-[#B70011]"
+                        />
+                        <span
+                          onClick={(ev) => {
+                            ev.preventDefault();
+                            navigate(`/owner/stock/${p.ID}`, { state: { from: "check_stock_new" } });
+                          }}
+                          className="flex flex-1 items-center gap-2 overflow-hidden cursor-pointer"
+                          title="ดูรายละเอียดสินค้า"
+                        >
+                          {p.ThumbnailUrl ? (
+                            <img src={p.ThumbnailUrl} alt="" className="h-8 w-8 shrink-0 rounded object-cover" />
+                          ) : (
+                            <div className="h-8 w-8 shrink-0 rounded bg-slate-100" />
+                          )}
+                          <span className={cn("flex-1 truncate", excluded && "line-through")}>
+                            [{p.ProductCode}] {p.Name}
+                          </span>
+                        </span>
+                        <span className="shrink-0 font-medium text-[#B70011]">{p.Stock} ชิ้น</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-              <Button type="button" variant="outline" onClick={() => navigate("/owner/stock/stock-check")} disabled={submitting}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  clearDraft();
+                  navigate("/owner/stock/stock-check");
+                }}
+                disabled={submitting}
+              >
                 ยกเลิก
               </Button>
               <Button type="submit" variant="primary" isLoading={submitting}>

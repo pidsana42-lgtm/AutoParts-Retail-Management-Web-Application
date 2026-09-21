@@ -26,12 +26,14 @@ import (
 // ---------------------------------------------------------------------------
 
 type mockCheckStockScheduleRepo struct {
-	createFn       func(*entity.CheckStockSchedule) error
-	getByIDFn      func(uint) (*entity.CheckStockSchedule, error)
-	updateStatusFn func(uint, string) error
-	updateFn       func(*entity.CheckStockSchedule) error
-	deleteFn       func(uint) error
-	listFn         func(string) ([]entity.CheckStockSchedule, error)
+	createFn                  func(*entity.CheckStockSchedule) error
+	getByIDFn                 func(uint) (*entity.CheckStockSchedule, error)
+	updateStatusFn            func(uint, string) error
+	updateFn                  func(*entity.CheckStockSchedule) error
+	replaceTargetsFn          func(uint, []entity.CheckStockScheduleTarget) error
+	replaceExcludedProductsFn func(uint, []entity.CheckStockScheduleExcludedProduct) error
+	deleteFn                  func(uint) error
+	listFn                    func(string) ([]entity.CheckStockSchedule, error)
 
 	called map[string]int
 }
@@ -71,6 +73,22 @@ func (m *mockCheckStockScheduleRepo) Update(schedule *entity.CheckStockSchedule)
 	m.track("Update")
 	if m.updateFn != nil {
 		return m.updateFn(schedule)
+	}
+	return nil
+}
+
+func (m *mockCheckStockScheduleRepo) ReplaceTargets(scheduleID uint, targets []entity.CheckStockScheduleTarget) error {
+	m.track("ReplaceTargets")
+	if m.replaceTargetsFn != nil {
+		return m.replaceTargetsFn(scheduleID, targets)
+	}
+	return nil
+}
+
+func (m *mockCheckStockScheduleRepo) ReplaceExcludedProducts(scheduleID uint, excluded []entity.CheckStockScheduleExcludedProduct) error {
+	m.track("ReplaceExcludedProducts")
+	if m.replaceExcludedProductsFn != nil {
+		return m.replaceExcludedProductsFn(scheduleID, excluded)
 	}
 	return nil
 }
@@ -301,6 +319,69 @@ func TestUpdate_RejectsWhenAlreadyStarted(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error when the schedule's start time has already passed")
+	}
+}
+
+func TestUpdate_OverdueSchedule_AllowsEditAndResetsToRodamnoenkarn(t *testing.T) {
+	repo := newMockCheckStockScheduleRepo()
+	repo.getByIDFn = func(id uint) (*entity.CheckStockSchedule, error) {
+		return &entity.CheckStockSchedule{
+			Model:                  modelWithID(id),
+			Status:                 "กำลังเช็ค",
+			Scheduled_DateTime:     time.Now().Add(-3 * time.Hour),
+			Scheduled_End_DateTime: time.Now().Add(-time.Hour), // เลยเวลาสิ้นสุดที่กำหนดไปแล้ว
+		}, nil
+	}
+	var captured entity.CheckStockSchedule
+	repo.updateFn = func(sc *entity.CheckStockSchedule) error {
+		captured = *sc
+		return nil
+	}
+	svc := newCheckStockScheduleServiceForTest(repo, &mockNotificationService{})
+
+	newStart := time.Now().Add(time.Hour)
+	newEnd := time.Now().Add(2 * time.Hour)
+	err := svc.Update(1, &wmsDTO.CheckStockScheduleRequestDTO{
+		Scheduled_DateTime:     newStart,
+		Scheduled_End_DateTime: newEnd,
+		CheckType:              "LOCATION",
+	})
+	if err != nil {
+		t.Fatalf("expected overdue schedule to be editable (owner reviewing/reissuing it), got error: %v", err)
+	}
+	if repo.called["Update"] != 1 {
+		t.Fatalf("expected repo.Update to be called once, got %d", repo.called["Update"])
+	}
+	if captured.Status != "รอดำเนินการ" {
+		t.Errorf("expected reissued schedule status to reset to รอดำเนินการ, got %q", captured.Status)
+	}
+	if !captured.Scheduled_DateTime.Equal(newStart) {
+		t.Errorf("expected new start time to be applied")
+	}
+}
+
+func TestUpdate_NotYetOverdue_StillGuardedByOriginalStartTimeCheck(t *testing.T) {
+	repo := newMockCheckStockScheduleRepo()
+	repo.getByIDFn = func(id uint) (*entity.CheckStockSchedule, error) {
+		return &entity.CheckStockSchedule{
+			Model:                  modelWithID(id),
+			Status:                 "กำลังเช็ค",
+			Scheduled_DateTime:     time.Now().Add(-time.Hour),
+			Scheduled_End_DateTime: time.Now().Add(time.Hour), // ยังไม่ถึงเวลาสิ้นสุด -> ยังไม่เลยกำหนด
+		}, nil
+	}
+	svc := newCheckStockScheduleServiceForTest(repo, &mockNotificationService{})
+
+	err := svc.Update(1, &wmsDTO.CheckStockScheduleRequestDTO{
+		Scheduled_DateTime:     time.Now().Add(time.Hour),
+		Scheduled_End_DateTime: time.Now().Add(2 * time.Hour),
+		CheckType:              "LOCATION",
+	})
+	if err == nil {
+		t.Fatal("expected error editing a schedule that is currently in progress but not yet overdue")
+	}
+	if repo.called["Update"] != 0 {
+		t.Error("expected repo.Update not to be called when the guard rejects the edit")
 	}
 }
 

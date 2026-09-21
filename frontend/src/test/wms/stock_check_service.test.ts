@@ -11,7 +11,7 @@ const scheduleInput: CheckStockScheduleCreateInput = {
   scheduled_end_datetime: '2026-09-10T12:00:00Z',
   note: '',
   check_type: 'LOCATION',
-  zone_id: 1,
+  zone_ids: [1],
 };
 
 describe('stockCheckService', () => {
