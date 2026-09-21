@@ -533,13 +533,28 @@ func (s *checkStockScheduleService) ApproveSchedule(id uint) error {
 	}
 
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		// ยอดรวมใหม่ต่อสินค้า สะสมจากทุกแถวที่นับของสินค้านั้น (ทั้งที่ระบุบริษัทและไม่ระบุ) ไว้ set ทีเดียวหลังวนครบลูป
-		productNewTotal := make(map[uint]int)
-
+		// กรองและเลือกเฉพาะ record ล่าสุดสำหรับแต่ละคู่ (product_id, supplier_id)
+		// เพื่อป้องกันกรณีพนักงานกดยื่นซ้ำหรือ retry จนมี record เบิ้ลในตารางเดียวกัน
+		// ซึ่งจะทำให้ productNewTotal บวกยอดซ้ำซ้อน (+=) หลายเท่า
+		latestRecordMap := make(map[string]entity.CheckStock)
 		for _, rec := range records {
 			if rec.ProductID == nil {
 				continue
 			}
+			supKey := "none"
+			if rec.SupplierID != nil {
+				supKey = fmt.Sprintf("%d", *rec.SupplierID)
+			}
+			key := fmt.Sprintf("%d:%s", *rec.ProductID, supKey)
+			if existing, exists := latestRecordMap[key]; !exists || rec.ID > existing.ID {
+				latestRecordMap[key] = rec
+			}
+		}
+
+		// ยอดรวมใหม่ต่อสินค้า สะสมจากทุกแถวที่นับของสินค้านั้น (ทั้งที่ระบุบริษัทและไม่ระบุ) ไว้ set ทีเดียวหลังวนครบลูป
+		productNewTotal := make(map[uint]int)
+
+		for _, rec := range latestRecordMap {
 			productNewTotal[*rec.ProductID] += rec.New_Quantity
 
 			// แถวที่ระบุบริษัทไว้ -> เซ็ตยอดคงเหลือของบริษัทนั้นตรงๆ ที่ Inventory (แถวที่ไม่ระบุบริษัท เช่นส่วนต่างที่
