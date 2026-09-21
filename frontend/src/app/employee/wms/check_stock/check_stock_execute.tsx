@@ -52,21 +52,49 @@ interface CountRow {
 // สร้างแถวนับของสินค้า 1 ตัว — 1 แถวต่อบริษัทที่สินค้านี้รับมาจาก (ใช้บาร์โค้ด/รหัสล็อตที่แยกไว้ต่อบริษัทอยู่แล้ว
 // เป็นตัวอ้างอิงให้พนักงานรู้ว่าหน่วยที่ถืออยู่เป็นของบริษัทไหน) ถ้ายอดรวมในระบบ (Stock) มากกว่าผลบวกของทุกบริษัท
 // (เช่นยอดเก่าที่ไม่เคยผูกกับ Inventory ไว้) จะมีแถว "ไม่ทราบบริษัท / อื่นๆ" เพิ่มมาดูดซับส่วนต่างนั้นด้วย เพื่อให้
-// ยอดนับรวมของทุกแถวยังเทียบกับยอดในระบบได้ตรง — สินค้าที่มีบริษัทเดียว (หรือไม่มีเลย) จะได้แค่ 1 แถว เหมือนเดิม
 function buildCountRows(p: StockItem): CountRow[] {
   const suppliers = p.Suppliers || [];
+
+  // สินค้าไม่มีข้อมูล supplier เลย -> นับยอดรวมในระบบ
+  if (suppliers.length === 0) {
+    return [
+      {
+        key: `${p.ID}:none`,
+        productId: p.ID,
+        supplierId: null,
+        label: "ไม่ทราบบริษัท / อื่นๆ",
+        systemQty: Math.max(0, p.Stock),
+      },
+    ];
+  }
+
+  // สินค้ามี supplier เจ้าเดียว -> นับเป็นแถวเดียวของ supplier นั้น (ยอดในระบบใช้ของ supplier นั้น หรือ stock รวม)
+  if (suppliers.length === 1) {
+    return [
+      {
+        key: `${p.ID}:${suppliers[0].SupplierID}`,
+        productId: p.ID,
+        supplierId: suppliers[0].SupplierID,
+        label: suppliers[0].SupplierName,
+        code: suppliers[0].VariantCode || suppliers[0].Barcode,
+        systemQty: Math.max(0, suppliers[0].Quantity ?? p.Stock),
+      },
+    ];
+  }
+
   const rows: CountRow[] = suppliers.map((s) => ({
     key: `${p.ID}:${s.SupplierID}`,
     productId: p.ID,
     supplierId: s.SupplierID,
     label: s.SupplierName,
     code: s.VariantCode || s.Barcode,
-    systemQty: s.Quantity,
+    systemQty: Math.max(0, s.Quantity),
   }));
 
   const suppliersTotal = suppliers.reduce((sum, s) => sum + s.Quantity, 0);
   const residual = p.Stock - suppliersTotal;
-  if (residual !== 0 || rows.length === 0) {
+  // มีสต็อกที่มากกว่าผลรวมของ supplier (ยอดลอย) เฉพาะกรณีที่ residual > 0
+  if (residual > 0) {
     rows.push({
       key: `${p.ID}:none`,
       productId: p.ID,
@@ -117,7 +145,11 @@ function CountInput({
           min={0}
           placeholder="นับได้..."
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v.startsWith("-")) return;
+            onChange(v);
+          }}
           containerClassName="flex-1"
         />
         {diff !== null && diff !== 0 && (
@@ -554,8 +586,8 @@ function EmployeeCheckStockExecuteContent() {
       await Promise.all(
         allRows.map((row) =>
           checkStockRecordService.create({
-            old_quantity: row.systemQty,
-            new_quantity: Number(counts[row.key] || 0),
+            old_quantity: Math.max(0, row.systemQty),
+            new_quantity: Math.max(0, Number(counts[row.key] || 0)),
             reason: notes[row.key] || "",
             adjustment_datetime: now,
             product_id: row.productId,
