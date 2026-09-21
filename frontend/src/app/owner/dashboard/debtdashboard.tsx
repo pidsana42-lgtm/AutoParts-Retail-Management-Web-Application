@@ -357,7 +357,7 @@ const DebtDashboard: React.FC = () => {
 
         {/* รายรับจากการเก็บหนี้ตามช่วงเวลาที่เลือก */}
         <Card className='border-l-[5px] border-l-emerald-500 flex flex-col justify-center p-5'>
-          <Heading level='h6' className='text-gray-500'>รายรับจากการเก็บหนี้</Heading>
+          <Heading level='h6' className='text-gray-500'>รายรับจากการเก็บหนี้ (ตามช่วงเวลาที่เลือก)</Heading>
           <Heading level='h3'>
             {kpiVal(`฿ ${fmt(kpi.collectedAmount)}`)}
           </Heading>

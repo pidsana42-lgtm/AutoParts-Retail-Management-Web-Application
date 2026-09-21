@@ -128,8 +128,8 @@ type lastSoldRow struct {
 func (r *dashboardRepository) GetProductsInStock(ctx context.Context) ([]dashEntity.Product, error) {
 	var products []dashEntity.Product
 	err := r.db.WithContext(ctx).
-		Preload("Unit").
-		Where("quantity > 0").
+		Joins("Unit").
+		Where("products.quantity > 0").
 		Find(&products).Error
 	return products, err
 }
@@ -386,10 +386,12 @@ func (r *dashboardRepository) FinalizeDailySummary(ctx context.Context, date tim
 
 func (r *dashboardRepository) GetStockHealth(ctx context.Context) (*dashDto.StockHealthDTO, error) {
 	type healthRow struct {
-		TotalProducts   int64
-		HealthyCount    int64
-		LowStockCount   int64
-		OutOfStockCount int64
+		TotalProducts    int64
+		HealthyCount     int64
+		LowStockCount    int64
+		OutOfStockCount  int64
+		TotalQuantity    int64
+		TotalMinQuantity int64
 	}
 	var row healthRow
 	err := r.db.WithContext(ctx).
@@ -398,7 +400,9 @@ func (r *dashboardRepository) GetStockHealth(ctx context.Context) (*dashDto.Stoc
 			COUNT(*) AS total_products,
 			COUNT(CASE WHEN quantity > limit_quantity THEN 1 END) AS healthy_count,
 			COUNT(CASE WHEN quantity > 0 AND quantity <= limit_quantity THEN 1 END) AS low_stock_count,
-			COUNT(CASE WHEN quantity = 0 THEN 1 END) AS out_of_stock_count
+			COUNT(CASE WHEN quantity = 0 THEN 1 END) AS out_of_stock_count,
+			COALESCE(SUM(quantity), 0) AS total_quantity,
+			COALESCE(SUM(limit_quantity), 0) AS total_min_quantity
 		`).
 		Where("deleted_at IS NULL AND is_active = true").
 		Scan(&row).Error
@@ -406,8 +410,8 @@ func (r *dashboardRepository) GetStockHealth(ctx context.Context) (*dashDto.Stoc
 		return nil, err
 	}
 	healthPct := float64(0)
-	if row.TotalProducts > 0 {
-		healthPct = math.Round(float64(row.HealthyCount) / float64(row.TotalProducts) * 100)
+	if row.TotalMinQuantity > 0 {
+		healthPct = math.Min(100, math.Round(float64(row.TotalQuantity)/float64(row.TotalMinQuantity)*100))
 	}
 	return &dashDto.StockHealthDTO{
 		TotalProducts:   row.TotalProducts,
