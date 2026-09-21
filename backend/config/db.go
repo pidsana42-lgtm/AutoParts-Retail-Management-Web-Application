@@ -137,6 +137,8 @@ func SetupDatabase() {
 		&entity.Inventory{},
 		&entity.StockAlert{},
 		&entity.CheckStockSchedule{},
+		&entity.CheckStockScheduleTarget{},
+		&entity.CheckStockScheduleExcludedProduct{},
 		&entity.CheckStock{},
 		&entity.StockMovement{},
 

@@ -103,6 +103,8 @@ type ProductListResponseDTO struct {
 	SupplierName string                       `json:"supplier_name"`
 	Suppliers    []ProductSupplierResponseDTO `json:"suppliers"`
 	Note         string                       `json:"note"`
+	// UpdatedAt: วันที่ข้อมูลสินค้าถูกแก้ไขล่าสุด — ใช้กรองตามช่วงเวลาที่หน้า "จัดการคลังสินค้า"
+	UpdatedAt time.Time `json:"updated_at"`
 	// DeletedAt: มีค่าเฉพาะตอนดึงรายการ "สินค้าที่ถูกลบ" (ถังขยะ) เท่านั้น ไว้โชว์วันที่ลบให้เจ้าของร้านดู
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
@@ -192,6 +194,7 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 		d.ShelfLevelName = p.ShelfLevel.Level_Name
 	}
 	d.Note = p.Note
+	d.UpdatedAt = p.UpdatedAt
 
 	if p.DeletedAt.Valid {
 		deletedAt := p.DeletedAt.Time

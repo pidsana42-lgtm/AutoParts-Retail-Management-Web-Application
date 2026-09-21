@@ -156,50 +156,60 @@ describe('getRelatedProducts', () => {
   ];
 
   it('matches by shelf level when the path points to a level', () => {
-    const result = getRelatedProducts('LOCATION', 'level-100', '', products, zones, categories);
+    const result = getRelatedProducts('LOCATION', ['level-100'], [], products, zones, categories);
     expect(result.map((p) => p.ID)).toEqual([1]);
   });
 
   it('matches by shelf name when the path points to a shelf (not a level)', () => {
-    const result = getRelatedProducts('LOCATION', 'shelf-11', '', products, zones, categories);
+    const result = getRelatedProducts('LOCATION', ['shelf-11'], [], products, zones, categories);
     expect(result.map((p) => p.ID)).toEqual([2]);
   });
 
   it('matches every shelf under a zone when the path points to a zone', () => {
-    const result = getRelatedProducts('LOCATION', 'zone-1', '', products, zones, categories);
+    const result = getRelatedProducts('LOCATION', ['zone-1'], [], products, zones, categories);
+    expect(result.map((p) => p.ID)).toEqual([1, 2]);
+  });
+
+  it('unions multiple LOCATION paths selected at once (e.g. two separate shelves)', () => {
+    const result = getRelatedProducts('LOCATION', ['level-100', 'shelf-11'], [], products, zones, categories);
     expect(result.map((p) => p.ID)).toEqual([1, 2]);
   });
 
   it('matches by sub-sub-category when the path is the most specific', () => {
-    const result = getRelatedProducts('CATEGORY', '', 'subsubcategory-3', products, zones, categories);
+    const result = getRelatedProducts('CATEGORY', [], ['subsubcategory-3'], products, zones, categories);
     expect(result.map((p) => p.ID)).toEqual([3]);
   });
 
   it('matches by sub-category when the path stops one level short', () => {
-    const result = getRelatedProducts('CATEGORY', '', 'subcategory-2', products, zones, categories);
+    const result = getRelatedProducts('CATEGORY', [], ['subcategory-2'], products, zones, categories);
     expect(result.map((p) => p.ID)).toEqual([3]);
   });
 
   it('matches by top-level category when the path is just a category', () => {
-    const result = getRelatedProducts('CATEGORY', '', 'category-1', products, zones, categories);
+    const result = getRelatedProducts('CATEGORY', [], ['category-1'], products, zones, categories);
+    expect(result.map((p) => p.ID)).toEqual([3, 4]);
+  });
+
+  it('unions multiple CATEGORY paths selected at once, deduplicating shared products', () => {
+    const result = getRelatedProducts('CATEGORY', [], ['subsubcategory-3', 'category-1'], products, zones, categories);
     expect(result.map((p) => p.ID)).toEqual([3, 4]);
   });
 
   it('returns an empty array for check type PRODUCT (not handled by this helper)', () => {
-    expect(getRelatedProducts('PRODUCT', 'zone-1', '', products, zones, categories)).toEqual([]);
+    expect(getRelatedProducts('PRODUCT', ['zone-1'], [], products, zones, categories)).toEqual([]);
   });
 
-  it('returns an empty array when the LOCATION path is blank', () => {
-    expect(getRelatedProducts('LOCATION', '', '', products, zones, categories)).toEqual([]);
+  it('returns an empty array when the LOCATION paths are empty', () => {
+    expect(getRelatedProducts('LOCATION', [], [], products, zones, categories)).toEqual([]);
   });
 
-  it('returns an empty array when the CATEGORY id is blank', () => {
-    expect(getRelatedProducts('CATEGORY', '', '', products, zones, categories)).toEqual([]);
+  it('returns an empty array when the CATEGORY paths are empty', () => {
+    expect(getRelatedProducts('CATEGORY', [], [], products, zones, categories)).toEqual([]);
   });
 
   it('returns an empty array when an id in the path does not resolve to any known zone/category', () => {
     // id ที่ไม่มีจริง -> ชื่อที่ resolve ได้เป็นค่าว่าง -> ไม่ควรไปจับคู่กับสินค้าที่ไม่มี Shelf ตั้งไว้เลยแบบผิดๆ
-    const result = getRelatedProducts('LOCATION', 'shelf-999', '', products, zones, categories);
+    const result = getRelatedProducts('LOCATION', ['shelf-999'], [], products, zones, categories);
     expect(result).toEqual([]);
   });
 });
@@ -213,19 +223,20 @@ describe('getScheduleProducts', () => {
     stockItem({ ID: 3, Name: 'สินค้าเฉพาะชิ้น' }),
   ];
 
-  it('returns just the one product for check type PRODUCT', () => {
+  it('returns the matching products for check type PRODUCT (can be more than one)', () => {
     const result = getScheduleProducts(
-      { check_type: 'PRODUCT', product_id: 3 },
+      { check_type: 'PRODUCT', product_ids: [3, 1] },
       products,
       zones,
       categories
     );
-    expect(result.map((p) => p.ID)).toEqual([3]);
+    // ลำดับผลลัพธ์เรียงตามลำดับใน products ต้นทาง ไม่ใช่ตามลำดับที่ระบุใน product_ids
+    expect(result.map((p) => p.ID)).toEqual([1, 3]);
   });
 
   it('returns an empty array when the referenced product no longer exists', () => {
     const result = getScheduleProducts(
-      { check_type: 'PRODUCT', product_id: 999 },
+      { check_type: 'PRODUCT', product_ids: [999] },
       products,
       zones,
       categories
@@ -233,20 +244,20 @@ describe('getScheduleProducts', () => {
     expect(result).toEqual([]);
   });
 
-  it('prefers shelf_level_id over shelf_id and zone_id when building the LOCATION path', () => {
+  it('unions shelf_level_ids, shelf_ids and zone_ids together when several LOCATION targets are selected at once', () => {
     const result = getScheduleProducts(
-      { check_type: 'LOCATION', shelf_level_id: 100, shelf_id: 10, zone_id: 1 },
+      { check_type: 'LOCATION', shelf_ids: [10], zone_ids: [1] },
       products,
       zones,
       categories
     );
-    // level-100 ไม่มีจริงในต้นไม้ตัวอย่างนี้ -> resolve ชื่อไม่เจอ -> ไม่ควรหลุดไปจับคู่ด้วย shelf_id/zone_id ที่ให้มาด้วย
-    expect(result).toEqual([]);
+    // shelf-10 -> product 1 (ตู้ 1); zone-1 -> ทุกสินค้าใต้ตู้ 1 (ตู้เดียวในโซนนี้) -> union กันแล้วก็ยัง [1]
+    expect(result.map((p) => p.ID)).toEqual([1]);
   });
 
-  it('falls back to shelf_id when shelf_level_id is absent', () => {
+  it('falls back to zone_ids when no shelf-level target is set', () => {
     const result = getScheduleProducts(
-      { check_type: 'LOCATION', shelf_id: 10, zone_id: 1 },
+      { check_type: 'LOCATION', zone_ids: [1] },
       products,
       zones,
       categories
@@ -254,24 +265,24 @@ describe('getScheduleProducts', () => {
     expect(result.map((p) => p.ID)).toEqual([1]);
   });
 
-  it('falls back to zone_id when neither shelf_level_id nor shelf_id is set', () => {
+  it('unions category_ids across multiple selected categories', () => {
     const result = getScheduleProducts(
-      { check_type: 'LOCATION', zone_id: 1 },
-      products,
-      zones,
-      categories
-    );
-    expect(result.map((p) => p.ID)).toEqual([1]);
-  });
-
-  it('prefers sub_sub_category_id over sub_category_id and category_id when building the CATEGORY path', () => {
-    const result = getScheduleProducts(
-      { check_type: 'CATEGORY', category_id: 1 },
+      { check_type: 'CATEGORY', category_ids: [1] },
       products,
       zones,
       categories
     );
     expect(result.map((p) => p.ID)).toEqual([2]);
+  });
+
+  it('excludes products listed in excluded_product_ids from the final list', () => {
+    const result = getScheduleProducts(
+      { check_type: 'CATEGORY', category_ids: [1], excluded_product_ids: [2] },
+      products,
+      zones,
+      categories
+    );
+    expect(result).toEqual([]);
   });
 
   it('returns an empty array when no location/category id is set at all', () => {
