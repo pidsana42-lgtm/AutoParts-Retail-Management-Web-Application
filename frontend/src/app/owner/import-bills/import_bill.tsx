@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import apiClient from '../../../service/http/apiClient';
 import * as XLSX from 'xlsx';
 import heic2any from 'heic2any';
+import { useMobileUploadSession } from '../../../hooks/useMobileUploadSession';
 
 import {
   scanBill,
@@ -269,10 +270,8 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   const batchResultsRef = useRef<(ScannedBillData | null)[]>([]);
   const formDataRef = useRef<ScannedBillData | null>(null);
 
-  // Mobile Upload Session
-  const [mobileSessionId] = useState<string>(
-    () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
-  );
+  // Mobile Upload Session — สุ่มและจดทะเบียนโดย backend (ดู useMobileUploadSession)
+  const { sessionId: mobileSessionId } = useMobileUploadSession();
   const loadedMobileUrlsRef = useRef<Set<string>>(new Set());
   const batchImagesRef = useRef<File[]>([]);
   const batchPreviewUrlsRef = useRef<string[]>([]);
@@ -690,7 +689,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
 
   // Poll for mobile-uploaded images when in scan view
   useEffect(() => {
-    if (currentView !== 'scan' || isMergedBatch || saving) return;
+    if (currentView !== 'scan' || isMergedBatch || saving || !mobileSessionId) return;
     const intervalId = setInterval(async () => {
       try {
         const resp = await apiClient.get(`/mobile/images?session=${mobileSessionId}`);
@@ -2334,7 +2333,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
           handleDismissValidation={handleDismissValidation}
           isDraftMode={isDraftMode}
           isEmployee={isEmployee}
-          mobileSessionId={mobileSessionId}
+          mobileSessionId={mobileSessionId ?? undefined}
         />
       )}
 

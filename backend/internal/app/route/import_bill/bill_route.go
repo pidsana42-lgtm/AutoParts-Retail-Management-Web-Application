@@ -47,6 +47,10 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotifica
 		importDataGroup.GET("/purchase-orders", ctrl.ListPurchaseOrders)
 		importDataGroup.GET("/purchase-orders/:id", ctrl.GetPurchaseOrderById)
 
+		// สร้าง session อัปโหลดรูปผ่านมือถือ (QR) — ต้องล็อกอินก่อนถึงจะขอ session ได้ ตัว session
+		// เองที่มือถือใช้ต่อไม่มีการล็อกอิน (ดู mobileGroup ด้านล่าง) เพราะเป็นแค่ตัวจับคู่ desktop-มือถือ
+		importDataGroup.POST("/mobile-sessions", ctrl.CreateMobileSession)
+
 		// Custom route for WMS Import Bill flow to fetch categories with preloaded subcategories (Keeps friend's files untouched)
 		importDataGroup.GET("/categories-tree", func(c *gin.Context) {
 			var categories []entity.Category
@@ -99,7 +103,8 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotifica
 		})
 	}
 
-	// Mobile image upload routes (no auth — session token acts as access control)
+	// Mobile image upload routes (no auth — but session must have been issued by
+	// POST /import-data/mobile-sessions above and not yet expired; see mobile_session_store.go)
 	mobileGroup := r.Group("/api/mobile")
 	{
 		mobileGroup.POST("/upload-image", ctrl.UploadMobileImage)

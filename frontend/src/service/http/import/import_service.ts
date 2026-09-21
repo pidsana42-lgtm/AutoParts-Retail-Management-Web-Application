@@ -261,6 +261,13 @@ export async function updateImportProduct(productId: number, payload: any): Prom
   }
 }
 
+// 11b. ขอ session สำหรับอัปโหลดรูปผ่านมือถือ (สแกน QR) — ต้องล็อกอินก่อนถึงจะขอได้ backend เป็นคนสุ่ม
+// session ID ให้ (ไม่ใช่ฝั่งเว็บเดาเอง) แล้วหมดอายุอัตโนมัติหลัง 15 นาที
+export async function createMobileSession(): Promise<{ session: string; expires_at: string }> {
+  const response = await apiClient.post('/import-data/mobile-sessions');
+  return response.data;
+}
+
 // 12. Helper สำหรับแปลง path รูปภาพให้โหลดผ่าน static file server / proxy ได้ถูกต้อง
 export function resolveImageUrl(url?: string | null): string | null {
   if (!url) return null;

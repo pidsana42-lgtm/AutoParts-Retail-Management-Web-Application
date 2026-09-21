@@ -20,6 +20,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import apiClient from '../../../service/http/apiClient';
 import { getCatalogs, createCatalog, updateCatalog, deleteCatalog, extractCatalogFromImage } from '../../../service/http/catalog/catalog_service';
 import { getSuppliers } from '../../../service/http/import/import_service';
+import { useMobileUploadSession } from '../../../hooks/useMobileUploadSession';
 import type { Catalog, CatalogItem } from '../../../interface/catalog/catalog';
 import type { Supplier } from '../../../interface/import';
 
@@ -145,10 +146,8 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
     );
   }, [location.search]);
 
-  // Mobile Upload Session
-  const [mobileSessionId] = useState<string>(
-    () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
-  );
+  // Mobile Upload Session — สุ่มและจดทะเบียนโดย backend (ดู useMobileUploadSession)
+  const { sessionId: mobileSessionId } = useMobileUploadSession();
   const [showQR, setShowQR] = useState<boolean>(false);
   const loadedMobileUrlsRef = useRef<Set<string>>(new Set());
 
@@ -159,6 +158,7 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
 
   // Poll for mobile-uploaded images
   useEffect(() => {
+    if (!mobileSessionId) return;
     const intervalId = setInterval(async () => {
       try {
         const resp = await apiClient.get(`/mobile/images?session=${mobileSessionId}`);
@@ -1031,7 +1031,8 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
 
           <button
             onClick={() => setShowQR(true)}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-normal rounded-none transition-colors cursor-pointer"
+            disabled={!mobileSessionId}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-normal rounded-none transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             title="เปิดบนมือถือผ่าน QR Code"
           >
             <Smartphone size={16} />
