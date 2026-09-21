@@ -37,6 +37,7 @@ import type { StockAlertItem } from "../../../interface/dashboard/dashboard_inte
 import { buildProductSearchIndex, searchProductIndex } from "../../../utils/productSearch";
 import { cn } from "../../../utils/component";
 import StockAlertPOModal from "../dashboard/components/StockAlertPOModal";
+import { isWithinTrashRetention } from "./trash_stock/trash_stock";
 
 // คอนฟิก Badge ตามเกรดสินค้า
 const GRADE_BADGE: Record<string, string> = {
@@ -336,9 +337,13 @@ export default function StockPage() {
   }, []);
 
   // เช็คจำนวนสินค้าในถังขยะไว้โชว์ badge เตือนที่ปุ่ม "ถังขยะ" (ไม่กระทบ loading หลักของหน้า แยก fetch ต่างหาก)
+  // กรองเฉพาะสินค้าที่ลบไม่เกิน 14 วัน เพื่อให้ตรงกับที่จะแสดงในหน้าถังขยะจริง
   useEffect(() => {
     getDeletedProductsList()
-      .then((list) => setDeletedCount(list.length))
+      .then((list) => {
+        const recentItems = list.filter((p) => isWithinTrashRetention(p.DeletedAt));
+        setDeletedCount(recentItems.length);
+      })
       .catch((err) => console.error("Failed to load deleted products count:", err));
   }, []);
 
