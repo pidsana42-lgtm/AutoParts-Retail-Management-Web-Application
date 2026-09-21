@@ -199,7 +199,7 @@ export default function ScanView({
               <>
                 <QRCodeSVG value={mobileUrl} size={220} marginSize={2} />
                 <div className="bg-gray-50 border border-gray-200 text-gray-600 text-xs p-3 w-full text-center space-y-1">
-                  <p className="font-bold text-[#1C1B1B]">สแกนด้วยมือถือที่อยู่บน WiFi เดียวกัน</p>
+                  <p className="font-bold text-[#1C1B1B]">สแกนด้วยมือถือ</p>
                   <p>มือถือจะเห็นหน้าส่งรูปอย่างง่าย — ถ่ายหรืออัปรูป แล้วรูปจะขึ้นบนคอมทันที</p>
                 </div>
               </>

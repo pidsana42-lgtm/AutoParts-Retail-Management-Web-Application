@@ -112,7 +112,7 @@ for (const role of ['owner', 'employee'] as const) {
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect.poll(() => preview.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(32);
     await page.getByRole('button', { name: 'เปิดบนมือถือ', exact: true }).click();
-    await expect(page.getByText('สแกนด้วยมือถือที่อยู่บน WiFi เดียวกัน', { exact: true })).toBeVisible();
+    await expect(page.getByText('สแกนด้วยมือถือ', { exact: true })).toBeVisible();
     await expect(page.locator('svg[width="220"][height="220"]')).toBeVisible();
   });
 
