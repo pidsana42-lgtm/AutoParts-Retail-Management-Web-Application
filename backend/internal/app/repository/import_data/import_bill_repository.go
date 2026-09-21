@@ -90,6 +90,19 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 			bill.BillNo = fmt.Sprintf("BILL-%s-%d", time.Now().Format("20060102"), time.Now().UnixNano()%100000)
 		}
 
+		isDraft := strings.EqualFold(bill.PaymentStatus, "draft")
+		isOwner := strings.EqualFold(role, string(enum.RoleOwner)) || strings.EqualFold(role, string(enum.RoleManager)) || strings.EqualFold(role, "Owner") || strings.EqualFold(role, "Manager") || strings.EqualFold(role, "Admin")
+		// priceApprovedContext: บริบทตอนนี้ถือว่าราคาที่เปลี่ยนไปได้รับการอนุมัติแล้วหรือยัง (เจ้าของ/ผู้จัดการนำเข้าเอง
+		// หรือถูก override มาชัดเจนว่า verified=true ตอนกดปุ่มอนุมัติบิล) ใช้ตัดสินว่ารายการที่ราคาเปลี่ยนจะนับสต็อกเข้าเลย
+		// หรือต้องกันไว้ก่อน (PendingReceiveQuantity) — บิลร่าง (draft) ไม่ถือว่าอนุมัติอะไรทั้งนั้น
+		priceApprovedContext := isOwner
+		if verified != nil {
+			priceApprovedContext = *verified
+		}
+		if isDraft {
+			priceApprovedContext = false
+		}
+
 		// upsertSupplierInventory บันทึก/ปรับยอดในตาราง inventories ต่อ (product, supplier)
 		// เพื่อให้ระบบรู้ว่าสินค้าชิ้นนี้รับมาจากบริษัทไหน และรับจากเจ้านั้นไปกี่ชิ้น
 		upsertSupplierInventory := func(productID, supplierID uint, qty int, companyProdCode string) error {
@@ -280,7 +293,6 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 		if err := tx.Model(bill).Update("po_id", bill.POID).Error; err != nil {
 			return err
 		}
-		isDraft := strings.EqualFold(bill.PaymentStatus, "draft")
 		var changedItems []entity.BillItem
 
 		for i := range items {
@@ -353,20 +365,28 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 					return err
 				}
 			} else if err == nil {
-				if err := tx.Model(&prod).Update("quantity", prod.Quantity+receiptQuantity).Error; err != nil {
+				hasPriceChange := items[i].PricePerUnit > 0 && items[i].PricePerUnit != prod.Cost_price
+				itemReceiptQuantity := receiptQuantity
+				if hasPriceChange && !priceApprovedContext {
+					// ราคาทุนไม่ตรงกับระบบและยังไม่ได้รับอนุมัติ -> กันจำนวนนี้ไว้ก่อน ยังไม่นับเข้าสต็อกขายจริง
+					items[i].PendingReceiveQuantity = itemReceiptQuantity
+					itemReceiptQuantity = 0
+				}
+
+				if err := tx.Model(&prod).Update("quantity", prod.Quantity+itemReceiptQuantity).Error; err != nil {
 					return err
 				}
 				// บวกยอดเข้าบริษัทของบิลนี้ — ทำให้สินค้าชื่อเดียวกันจากต่างบริษัทไล่ยอด/ที่มาแยกกันได้
-				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, receiptQuantity, items[i].CompanyProductCode); err != nil {
+				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, itemReceiptQuantity, items[i].CompanyProductCode); err != nil {
 					return err
 				}
 				// สินค้าที่มีอยู่แล้วรับเข้าเพิ่ม -> บันทึกลงฟีดการเคลื่อนไหว (สินค้าใหม่ไม่ต้องซ้ำ เพราะมี PRODUCT_ADDED
 				// ที่โชว์จำนวนเริ่มต้นให้อยู่แล้วตอนสร้างแถวสินค้าด้านบน)
 				billNote := fmt.Sprintf("รับเข้าจากบิลซื้อ %s", bill.BillNo)
-				if err := recordBillStockIn(prod.ID, bill.SupplierID, receiptQuantity, billNote); err != nil {
+				if err := recordBillStockIn(prod.ID, bill.SupplierID, itemReceiptQuantity, billNote); err != nil {
 					return err
 				}
-				if items[i].PricePerUnit > 0 && items[i].PricePerUnit != prod.Cost_price {
+				if hasPriceChange {
 					changed := items[i]
 					changed.ProductID = prod.ID
 					changedItems = append(changedItems, changed)
@@ -405,7 +425,6 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 
 		bill.PriceChangeDetected = len(changedItems) > 0
 
-		isOwner := strings.EqualFold(role, string(enum.RoleOwner)) || strings.EqualFold(role, string(enum.RoleManager)) || strings.EqualFold(role, "Owner") || strings.EqualFold(role, "Manager") || strings.EqualFold(role, "Admin")
 		autoApprove := isOwner || len(changedItems) == 0
 		if verified != nil {
 			autoApprove = *verified

@@ -69,8 +69,10 @@ type BillItemResponseDTO struct {
 	CategoryID         *uint     `json:"category_id,omitempty"`
 	SubCategoryID      *uint     `json:"sub_category_id,omitempty"`
 	SubSubCategoryID   *uint     `json:"sub_sub_category_id,omitempty"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	// PendingReceiveQuantity: จำนวนที่ยังไม่นับเข้าสต็อกจริง เพราะราคาทุนต่างจากระบบและรอเจ้าของอนุมัติอยู่
+	PendingReceiveQuantity int       `json:"pending_receive_quantity"`
+	CreatedAt              time.Time `json:"created_at"`
+	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 func (d *CreateBillItemDTO) ToEntity() entity.BillItem {
@@ -171,7 +173,8 @@ func ToBillItemResponseDTO(m *entity.BillItem) BillItemResponseDTO {
 		CategoryID:         m.CategoryID,
 		SubCategoryID:      m.SubCategoryID,
 		SubSubCategoryID:   m.SubSubCategoryID,
-		CreatedAt:          m.CreatedAt,
-		UpdatedAt:          m.UpdatedAt,
+		PendingReceiveQuantity: m.PendingReceiveQuantity,
+		CreatedAt:              m.CreatedAt,
+		UpdatedAt:              m.UpdatedAt,
 	}
 }

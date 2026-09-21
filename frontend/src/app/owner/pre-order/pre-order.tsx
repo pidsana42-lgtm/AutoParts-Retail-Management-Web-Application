@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import {
   getPreOrders, getPreOrderById, createPreOrder,
-  updatePreOrder
+  updatePreOrder, deletePreOrder
 } from '../../../service/http/pre-order/pre-order';
 import type{ PreOrder, PreOrderItem } from '../../../interface/pre-order/pre-order';
 import Heading from '../../../components/elements/heading';
@@ -74,7 +74,11 @@ export default function PreOrderManager() {
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [removeItemIndex, setRemoveItemIndex] = useState<number | null>(null);
-  
+  const [showCancelBookingConfirm, setShowCancelBookingConfirm] = useState(false);
+  const [cancellingBooking, setCancellingBooking] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [deletingPreOrder, setDeletingPreOrder] = useState(false);
+
   // Catalog Picker Modal
   const [showCatalogModal, setShowCatalogModal] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState('');
@@ -493,6 +497,41 @@ export default function PreOrderManager() {
     }
   };
 
+  const handleCancelBooking = async () => {
+    if (editingId === null) return;
+    setCancellingBooking(true);
+    try {
+      await updatePreOrder(editingId, { status: 'CANCELLED' });
+      toast({ variant: 'success', message: 'ยกเลิกใบสั่งจองเรียบร้อยแล้ว' });
+      setShowCancelBookingConfirm(false);
+      await fetchPreOrders();
+      await handleEdit(editingId, false, 'view');
+    } catch (err: any) {
+      console.error('Error cancelling pre-order:', err);
+      const message = err.response?.data?.error || 'เกิดข้อผิดพลาดในการยกเลิกใบสั่งจอง';
+      toast({ variant: 'error', message });
+    } finally {
+      setCancellingBooking(false);
+    }
+  };
+
+  const handleDeletePreOrder = async () => {
+    if (deleteTargetId === null) return;
+    setDeletingPreOrder(true);
+    try {
+      await deletePreOrder(deleteTargetId);
+      toast({ variant: 'success', message: 'ลบใบสั่งจองเรียบร้อยแล้ว' });
+      setDeleteTargetId(null);
+      await fetchPreOrders();
+    } catch (err: any) {
+      console.error('Error deleting pre-order:', err);
+      const message = err.response?.data?.error || 'เกิดข้อผิดพลาดในการลบใบสั่งจอง';
+      toast({ variant: 'error', message });
+    } finally {
+      setDeletingPreOrder(false);
+    }
+  };
+
   const getCustomerInfo = (po: PreOrder) => {
     if (po.customer_name) {
       return {
@@ -643,6 +682,43 @@ export default function PreOrderManager() {
           </div>
         );
       }
+    },
+    {
+      key: 'actions',
+      header: 'จัดการ',
+      // แก้ไข/ลบ ได้เฉพาะรายการที่ยังไม่ถูกอนุมัติสั่งซื้อเท่านั้น — พออนุมัติ PO แล้วต้องยกเลิกแทน (หน้ารายละเอียด)
+      render: (po: PreOrder) => {
+        const notYetApproved = po.po_status !== 'APPROVED';
+        return (
+          <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+            <div className="w-7 flex items-center justify-center">
+              {notYetApproved && (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => void handleEdit(po.id!, true, 'edit')}
+                  className="p-1.5 text-gray-400 hover:text-[#1C1B1B] transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="แก้ไขใบสั่งจอง"
+                >
+                  <Edit size={16} />
+                </button>
+              )}
+            </div>
+            <div className="w-7 flex items-center justify-center">
+              {notYetApproved && (
+                <button
+                  type="button"
+                  onClick={() => setDeleteTargetId(po.id!)}
+                  className="p-1.5 text-gray-400 hover:text-[#e51c23] transition cursor-pointer"
+                  title="ลบใบสั่งจอง"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      }
     }
   ];
 
@@ -736,7 +812,7 @@ export default function PreOrderManager() {
                   <TableHeader className="bg-[#F6F3F2] text-[#797878]">
                     <TableRow>
                       {columns.map(column => (
-                        <TableHead key={column.key} className="first:pl-6 last:pr-6">
+                        <TableHead key={column.key} className={`first:pl-6 last:pr-6 ${column.key === 'actions' ? 'w-28 text-center' : ''}`}>
                           {column.header}
                         </TableHead>
                       ))}
@@ -746,7 +822,7 @@ export default function PreOrderManager() {
                     {paginatedOrders.map(po => (
                       <TableRow key={po.id} onClick={() => handleEdit(po.id!, true, 'view')} className="bg-white hover:bg-red-50/20">
                         {columns.map(column => (
-                          <TableCell key={column.key} className="first:pl-6 last:pr-6">
+                          <TableCell key={column.key} className={`first:pl-6 last:pr-6 ${column.key === 'actions' ? 'w-28 text-center' : ''}`}>
                             {column.render(po)}
                           </TableCell>
                         ))}
@@ -862,15 +938,31 @@ export default function PreOrderManager() {
                 {isReadOnly ? 'รายละเอียดใบสั่งจองสินค้าล่วงหน้า' : editingId ? 'แก้ไขใบสั่งจองสินค้าล่วงหน้า' : 'สร้างใบสั่งจองสินค้าล่วงหน้า'}
               </Heading>
             </div>
-            {isReadOnly && canEditBooking && (
-              <button
-                type="button"
-                onClick={() => { setFormMode('edit'); navigate(`${basePath}?edit=${editingId}`, { replace: true }); }}
-                className="flex items-center gap-2 bg-[#1C1B1B] hover:bg-black text-white px-4 py-2.5 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer"
-              >
-                <Edit size={16} />
-                แก้ไขใบสั่งจอง
-              </button>
+            {isReadOnly && (
+              <div className="flex items-center gap-2">
+                {!['CANCELLED', 'COMPLETED'].includes(formStatus) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowCancelBookingConfirm(true)}
+                    leftIcon={<X size={16} />}
+                  >
+                    ยกเลิกจอง
+                  </Button>
+                )}
+                {canEditBooking && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => { setFormMode('edit'); navigate(`${basePath}?edit=${editingId}`, { replace: true }); }}
+                    leftIcon={<Edit size={16} />}
+                  >
+                    แก้ไขใบสั่งจอง
+                  </Button>
+                )}
+              </div>
             )}
           </div>
 
@@ -1031,7 +1123,7 @@ export default function PreOrderManager() {
                       className="w-full text-sm text-[#1C1B1B] outline-none bg-transparent placeholder-gray-400"
                     />
                     {quickSearch && (
-                       <button type="button" onClick={() => setQuickSearch('')} className="text-gray-400 hover:text-gray-600">
+                       <button type="button" aria-label="ล้างคำค้นหา" onClick={() => setQuickSearch('')} className="text-gray-400 hover:text-gray-600">
                          <X size={14} />
                        </button>
                     )}
@@ -1260,14 +1352,16 @@ export default function PreOrderManager() {
               </p>
             </div>
             <div className="flex items-center gap-3 self-end sm:self-auto">
-              <button
-                type="button"
-                onClick={() => { setView('list'); setEditingId(null); navigate(basePath); }}
-                disabled={saving}
-                className="bg-white border border-gray-300 text-[#1C1B1B] hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50 h-[42px]"
-              >
-                {isReadOnly ? 'ปิด' : 'ยกเลิก'}
-              </button>
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  onClick={() => { setView('list'); setEditingId(null); navigate(basePath); }}
+                  disabled={saving}
+                  className="bg-white border border-gray-300 text-[#1C1B1B] hover:bg-gray-100 px-5 py-3 rounded-none text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50 h-[42px]"
+                >
+                  ยกเลิก
+                </button>
+              )}
               {!isReadOnly && (
                 <Button
                   type="submit"
@@ -1305,7 +1399,7 @@ export default function PreOrderManager() {
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">เลือกเล่มแคตตาล็อก แล้วคลิกรายการอะไหล่ที่ต้องการเพิ่มลงใบจอง</p>
               </div>
-              <button type="button" onClick={() => setShowCatalogModal(false)} className="text-gray-400 hover:text-black p-1 cursor-pointer">
+              <button type="button" aria-label="ปิด" onClick={() => setShowCatalogModal(false)} className="text-gray-400 hover:text-black p-1 cursor-pointer">
                 <X size={20} />
               </button>
             </div>
@@ -1486,6 +1580,30 @@ export default function PreOrderManager() {
           />
         );
       })()}
+
+      <ConfirmDialog
+        isOpen={showCancelBookingConfirm}
+        onClose={() => setShowCancelBookingConfirm(false)}
+        onConfirm={handleCancelBooking}
+        title="ยกเลิกใบสั่งจองนี้"
+        description="คุณต้องการยกเลิกใบสั่งจองนี้ใช่หรือไม่? หลังยกเลิกแล้วจะไม่สามารถเปิดใบสั่งจองนี้กลับมาใช้งานได้อีก"
+        confirmText="ยืนยันยกเลิกจอง"
+        cancelText="ปิด"
+        variant="danger"
+        isSubmitting={cancellingBooking}
+      />
+
+      <ConfirmDialog
+        isOpen={deleteTargetId !== null}
+        onClose={() => setDeleteTargetId(null)}
+        onConfirm={handleDeletePreOrder}
+        title="ลบใบสั่งจองนี้"
+        description="คุณต้องการลบใบสั่งจองนี้ใช่หรือไม่? ข้อมูลจะถูกลบออกจากระบบถาวร"
+        confirmText="ยืนยันการลบ"
+        cancelText="ยกเลิก"
+        variant="danger"
+        isSubmitting={deletingPreOrder}
+      />
     </div>
   );
 }

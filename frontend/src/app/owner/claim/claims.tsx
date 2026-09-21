@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Plus, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, FileText, Loader2, Camera, X, Printer, Truck, CirclePlus, Check, ReceiptText, PenLine } from 'lucide-react';
+import { Search, Plus, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, FileText, Loader2, Camera, X, Printer, Truck, CirclePlus, Check, ReceiptText, PenLine, Ban } from 'lucide-react';
 import ClaimTrackingTab from './claim_tracking_tab';
 import Heading from '../../../components/elements/heading';
 import Card, { CardHeader, CardTitle, CardContent } from '../../../components/elements/card';
@@ -8,8 +8,9 @@ import Input from '../../../components/elements/input';
 import Button from '../../../components/elements/button';
 import Badge from '../../../components/elements/badge';
 import Select from '../../../components/elements/select';
+import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
-import { getCustomerClaims, searchSaleOrders, deleteCustomerClaim, searchCustomerCreditByPhone, generateCustomerClaimPDF, exportCustomerClaimChecklistPDF } from '../../../service/http/claim/claim';
+import { getCustomerClaims, searchSaleOrders, deleteCustomerClaim, cancelCustomerClaim, searchCustomerCreditByPhone, generateCustomerClaimPDF, exportCustomerClaimChecklistPDF } from '../../../service/http/claim/claim';
 import type { CustomerDiscountResponse } from '../../../interface/pos/customer_interface';
 import apiClient from '../../../service/http/apiClient';
 import type { CustomerClaim, ClaimFormProduct, FlatRow, ClaimsPageProps, ClaimType, TrackingFilter } from '../../../interface/claim/claim';
@@ -106,6 +107,7 @@ const toFlatRows = (claims: CustomerClaim[]): FlatRow[] => {
 function StatusBadge({ status }: { status: string }) {
   if (status === 'APPROVED') return <Badge variant="success" size="sm">อนุมัติแล้ว</Badge>;
   if (status === 'REJECTED') return <Badge variant="error" size="sm">ปฏิเสธ</Badge>;
+  if (status === 'CANCELLED') return <Badge variant="neutral" size="sm">ยกเลิกแล้ว</Badge>;
   return <Badge variant="warning" size="sm">รอดำเนินการ</Badge>;
 }
 
@@ -151,6 +153,10 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
 
   // Tracking state
   const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
+  const [deleteClaimTargetId, setDeleteClaimTargetId] = useState<number | null>(null);
+  const [deletingClaim, setDeletingClaim] = useState(false);
+  const [cancelClaimTargetId, setCancelClaimTargetId] = useState<number | null>(null);
+  const [cancellingClaim, setCancellingClaim] = useState(false);
   const [trackingSearch, setTrackingSearch] = useState('');
   const [trackingFilter, setTrackingFilter] = useState<TrackingFilter>('ALL');
 
@@ -196,7 +202,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
 
 
   useEffect(() => {
-    if (claimCustomerPhone.trim() && claimCustomerPhone.trim() !== '-') {
+    if (claimCustomerPhone.trim()) {
       const fetchCredit = async () => {
         try {
           setLoadingPosCredit(true);
@@ -262,8 +268,8 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
   };
 
   const handleSelectOrder = (order: any) => {
-    const cName = order.customer_name || 'ลูกค้าทั่วไป';
-    const cPhone = order.customer_phone || '-';
+    const cName = order.customer_name || '';
+    const cPhone = order.customer_phone || '';
     setClaimFormInvoice(order.order_number);
     setClaimOrderId(order.id ?? null);
     const parts = cName.split(' ');
@@ -338,7 +344,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
 
   const handleSaveClaim = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!claimCustomerName || !claimCustomerPhone) {
+    if (!claimOrderId) {
       toast({ variant: 'warning', message: 'กรุณาค้นหาใบเสร็จเพื่อโหลดข้อมูลลูกค้าก่อน' });
       return;
     }
@@ -381,6 +387,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
           return {
             product_id: p.product_id,
             qty: p.claim_qty,
+            unit_price: p.price || 0,
             reason: p.reason || 'สินค้าชำรุด/ไม่ได้มาตรฐาน',
             resolution: 'รอการตรวจสอบ',
             claim_type: p.claim_type || claimType,
@@ -394,6 +401,8 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
         claim_type: claimType,
         notes: claimNote.trim(),
         status: canApprove ? 'APPROVED' : 'PENDING',
+        customer_name: `${claimCustomerName} ${claimCustomerSurname}`.trim(),
+        customer_phone: claimCustomerPhone.trim(),
         items: itemsWithUrls,
       });
       await loadClaims();
@@ -473,15 +482,45 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
     }
   };
 
-  const handleDeleteClaim = async (claimId: number) => {
-    if (!window.confirm('ยืนยันการลบใบเคลมนี้?')) return;
+  const handleDeleteClaim = (claimId: number) => {
+    setDeleteClaimTargetId(claimId);
+  };
+
+  const handleConfirmDeleteClaim = async () => {
+    if (deleteClaimTargetId === null) return;
+    setDeletingClaim(true);
     try {
-      await deleteCustomerClaim(claimId);
-      setRawClaims(prev => prev.filter(c => c.id !== claimId));
+      await deleteCustomerClaim(deleteClaimTargetId);
+      setRawClaims(prev => prev.filter(c => c.id !== deleteClaimTargetId));
       toast({ variant: 'success', message: 'ลบใบเคลมเรียบร้อยแล้ว' });
+      setDeleteClaimTargetId(null);
     } catch (err) {
       console.error('Failed to delete claim:', err);
-      toast({ variant: 'error', message: 'เกิดข้อผิดพลาดในการลบ กรุณาลองใหม่' });
+      const serverMessage = (err as any)?.response?.data?.error;
+      toast({ variant: 'error', message: serverMessage || 'เกิดข้อผิดพลาดในการลบ กรุณาลองใหม่' });
+    } finally {
+      setDeletingClaim(false);
+    }
+  };
+
+  const handleCancelClaim = (claimId: number) => {
+    setCancelClaimTargetId(claimId);
+  };
+
+  const handleConfirmCancelClaim = async () => {
+    if (cancelClaimTargetId === null) return;
+    setCancellingClaim(true);
+    try {
+      await cancelCustomerClaim(cancelClaimTargetId);
+      toast({ variant: 'success', message: 'ยกเลิกใบเคลมเรียบร้อยแล้ว' });
+      setCancelClaimTargetId(null);
+      await loadClaims();
+    } catch (err) {
+      console.error('Failed to cancel claim:', err);
+      const serverMessage = (err as any)?.response?.data?.error;
+      toast({ variant: 'error', message: serverMessage || 'เกิดข้อผิดพลาดในการยกเลิก กรุณาลองใหม่' });
+    } finally {
+      setCancellingClaim(false);
     }
   };
 
@@ -885,13 +924,40 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                               >
                                 <PenLine className="w-4 h-4" />
                               </button>
-                              <button
-                                onClick={() => handleDeleteClaim(row.claimId)}
-                                className="p-1.5 text-gray-300 hover:text-[#e51c23] transition cursor-pointer"
-                                title="ลบใบเคลม"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {(() => {
+                                const claimStatusUp = (row.rawClaim.status || '').toUpperCase();
+                                if (claimStatusUp === 'CANCELLED') {
+                                  return null; // ยกเลิกไปแล้ว ไม่มีอะไรให้ทำต่อ (เก็บไว้เป็นประวัติ)
+                                }
+                                const claimItems = row.rawClaim.items ?? [];
+                                const hasAdjustedItem = claimItems.length === 0
+                                  ? row.itemStatus === 'APPROVED'
+                                  : claimItems.some(i => (i.status || row.rawClaim.status || '').toUpperCase() === 'APPROVED');
+
+                                if (hasAdjustedItem) {
+                                  // อนุมัติแล้วจริง (ตัดสต็อก/หักหนี้ไปแล้ว) ลบไม่ได้ ต้องยกเลิกแทนถึงจะย้อนกลับได้
+                                  if (!canApprove) return null;
+                                  return (
+                                    <button
+                                      onClick={() => handleCancelClaim(row.claimId)}
+                                      className="p-1.5 text-gray-400 hover:text-[#e51c23] transition cursor-pointer"
+                                      title="ยกเลิกใบเคลม (คืนสต็อก/หนี้ที่เคยปรับไปแล้ว)"
+                                    >
+                                      <Ban className="w-4 h-4" />
+                                    </button>
+                                  );
+                                }
+
+                                return (
+                                  <button
+                                    onClick={() => handleDeleteClaim(row.claimId)}
+                                    className="p-1.5 text-gray-400 hover:text-[#e51c23] transition cursor-pointer"
+                                    title="ลบใบเคลม"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                );
+                              })()}
                             </div>
                           )}
                         </TableCell>
@@ -925,14 +991,14 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                       </div>
                     </div>
                     <div className='flex items-center gap-1'>
-                      <button disabled={currentPage === 1} onClick={() => setCurrentPage(1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsLeft size={16} /></button>
-                      <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronLeft size={16} /></button>
+                      <button aria-label="หน้าแรก" disabled={currentPage === 1} onClick={() => setCurrentPage(1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsLeft size={16} /></button>
+                      <button aria-label="หน้าก่อนหน้า" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronLeft size={16} /></button>
                       {getPageNumbers(currentPage, totalPages).map((p, idx) =>
                         p === '...' ? <span key={`e-${idx}`} className='px-2 text-gray-400'>...</span>
                         : <button key={p} onClick={() => setCurrentPage(p as number)} className={cn('px-3 py-1.5 rounded-none font-medium transition-colors cursor-pointer', currentPage === p ? 'bg-[#d61c24] text-white' : 'text-gray-600 hover:bg-gray-100')}>{p}</button>
                       )}
-                      <button disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronRight size={16} /></button>
-                      <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsRight size={16} /></button>
+                      <button aria-label="หน้าถัดไป" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronRight size={16} /></button>
+                      <button aria-label="หน้าสุดท้าย" disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)} className='p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed'><ChevronsRight size={16} /></button>
                     </div>
                   </div>
                 );
@@ -1184,11 +1250,29 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                       </div>
                       <div>
                         <Heading level="p" className="mb-0">ลูกค้า</Heading>
-                        <Heading level="h6" className="font-normal mt-1">{claimCustomerName} {claimCustomerSurname}</Heading>
+                        <div className="flex gap-1 mt-1">
+                          <Input
+                            value={claimCustomerName}
+                            onChange={(e) => setClaimCustomerName(e.target.value)}
+                            placeholder="ชื่อ (ลูกค้าทั่วไป)"
+                            className="h-8 text-sm"
+                          />
+                          <Input
+                            value={claimCustomerSurname}
+                            onChange={(e) => setClaimCustomerSurname(e.target.value)}
+                            placeholder="นามสกุล"
+                            className="h-8 text-sm"
+                          />
+                        </div>
                       </div>
                       <div>
                         <Heading level="p" className="mb-0">เบอร์โทรศัพท์</Heading>
-                        <Heading level="h6" className="font-normal mt-1">{claimCustomerPhone || '-'}</Heading>
+                        <Input
+                          value={claimCustomerPhone}
+                          onChange={(e) => setClaimCustomerPhone(e.target.value)}
+                          placeholder="เบอร์โทร (ถ้ามี)"
+                          className="mt-1 h-8 text-sm"
+                        />
                       </div>
                       <div>
                         <Heading level="p" className="mb-0">วันที่เคลม</Heading>
@@ -1202,7 +1286,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                     </div>
 
                     {/* ข้อมูลวงเงินและสถานะสินเชื่อ */}
-                    {claimCustomerPhone && claimCustomerPhone !== '-' && (
+                    {claimCustomerPhone.trim() && (
                       <div className="mt-4 pt-4 border-t border-gray-100">
                         <div className="mb-2">
                           <Heading level="p" className="mb-0 font-medium text-gray-700">ข้อมูลวงเงินและสถานะสินเชื่อ</Heading>
@@ -1450,6 +1534,30 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
           </>
         )}
       </form>
+
+      <ConfirmDialog
+        isOpen={deleteClaimTargetId !== null}
+        onClose={() => setDeleteClaimTargetId(null)}
+        onConfirm={handleConfirmDeleteClaim}
+        title="ลบใบเคลมนี้"
+        description="คุณต้องการลบใบเคลมนี้ใช่หรือไม่? ข้อมูลจะถูกลบออกจากระบบถาวร"
+        confirmText="ยืนยันการลบ"
+        cancelText="ยกเลิก"
+        variant="danger"
+        isSubmitting={deletingClaim}
+      />
+
+      <ConfirmDialog
+        isOpen={cancelClaimTargetId !== null}
+        onClose={() => setCancelClaimTargetId(null)}
+        onConfirm={handleConfirmCancelClaim}
+        title="ยกเลิกใบเคลมนี้"
+        description="คุณต้องการยกเลิกใบเคลมนี้ใช่หรือไม่? ระบบจะคืนสต็อกสินค้า/ยอดหนี้ที่เคยตัด-หักไปจากใบเคลมนี้ทั้งหมด และเปลี่ยนสถานะเป็นยกเลิก (ยังเก็บประวัติไว้ ย้อนกลับไม่ได้)"
+        confirmText="ยืนยันยกเลิก"
+        cancelText="ปิด"
+        variant="danger"
+        isSubmitting={cancellingClaim}
+      />
     </div>
   );
 }

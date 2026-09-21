@@ -136,5 +136,7 @@ export interface SavedBill {
     category_id?: number | null;
     sub_category_id?: number | null;
     sub_sub_category_id?: number | null;
+    // จำนวนที่ยังไม่นับเข้าสต็อกจริง เพราะราคาทุนต่างจากระบบและรอเจ้าของอนุมัติอยู่
+    pending_receive_quantity?: number;
   }[];
 }
