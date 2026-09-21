@@ -11,9 +11,72 @@ import Button from "../../../../components/elements/button";
 import { ToastProvider } from "../../../../components/elements/toast";
 import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 import { useAuth } from "../../../../contexts/AuthContexts";
+import DateRangePicker from "../../../../components/elements/date_range_picker";
+import { cn } from "../../../../utils/component";
 
 import { CHECK_STATUS_BADGE_VARIANT, isValidScheduleDate } from "../../../owner/stock/stock_check/checkStockTargets";
 import { stockCheckService, type CheckStockSchedule } from "../../../../service/http/wms/stock_check_service";
+
+// พรีเซ็ตช่วงเวลาด่วน (แบบเดียวกับหน้าคลังสินค้า) — กรองตามวันที่กำหนดเช็คสต็อก (scheduled_datetime)
+const PERIOD_PRESETS: { label: string; value: string }[] = [
+  { label: "วันนี้", value: "daily" },
+  { label: "สัปดาห์นี้", value: "weekly" },
+  { label: "เดือนนี้", value: "monthly" },
+  { label: "ไตรมาสนี้", value: "quarterly" },
+  { label: "ปีนี้", value: "yearly" },
+];
+
+// คำนวณช่วงวันที่ของพรีเซ็ตฝั่งหน้าเว็บเองตรงๆ — สัปดาห์เริ่มวันจันทร์ตามธรรมเนียมไทย
+function getPeriodRange(period: string): { start: Date; end: Date } | null {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  switch (period) {
+    case "daily":
+      return { start: startOfToday, end: now };
+    case "weekly": {
+      const daysSinceMonday = (now.getDay() + 6) % 7;
+      const start = new Date(startOfToday);
+      start.setDate(start.getDate() - daysSinceMonday);
+      return { start, end: now };
+    }
+    case "monthly":
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
+    case "quarterly": {
+      const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+      return { start: new Date(now.getFullYear(), quarterStartMonth, 1), end: now };
+    }
+    case "yearly":
+      return { start: new Date(now.getFullYear(), 0, 1), end: now };
+    default:
+      return null;
+  }
+}
+
+// เช็คว่าวันที่กำหนดเช็คสต็อกอยู่ในช่วงเวลาที่ตัวกรองกำหนดไว้หรือไม่ (ช่วงวันที่กำหนดเอง หรือพรีเซ็ตด่วน)
+function matchesPeriod(scheduledDatetime: string, startDate: string, endDate: string, selectedPeriod: string): boolean {
+  if (!startDate && !endDate && !selectedPeriod) return true;
+  const scheduled = new Date(scheduledDatetime);
+  if (isNaN(scheduled.getTime())) return false;
+
+  if (startDate || endDate) {
+    if (startDate) {
+      const s = new Date(startDate);
+      s.setHours(0, 0, 0, 0);
+      if (scheduled < s) return false;
+    }
+    if (endDate) {
+      const e = new Date(endDate);
+      e.setHours(23, 59, 59, 999);
+      if (scheduled > e) return false;
+    }
+    return true;
+  }
+
+  const range = getPeriodRange(selectedPeriod);
+  if (!range) return true;
+  return scheduled >= range.start && scheduled <= range.end;
+}
 
 const STATUS_BADGE_STYLE: Record<string, string> = {
   neutral: "bg-gray-100 text-gray-500",
@@ -37,6 +100,11 @@ function EmployeeCheckStockListContent() {
   const [loading, setLoading] = useState(true);
   const [schedules, setSchedules] = useState<CheckStockSchedule[]>([]);
   const [statusTab, setStatusTab] = useState<(typeof STATUS_TABS)[number]>("ทั้งหมด");
+  // ตัวกรองช่วงเวลา — พรีเซ็ตด่วน (selectedPeriod) กับช่วงวันที่กำหนดเอง (startDate/endDate) แยกกันคนละอันเสมอ
+  // เลือกอย่างใดอย่างหนึ่งแล้วอีกอันจะถูกล้างทันที (ดู handlePeriodClick/handleStartDateChange/handleEndDateChange)
+  const [selectedPeriod, setSelectedPeriod] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -63,18 +131,43 @@ function EmployeeCheckStockListContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  const filteredSchedules = useMemo(() => {
-    const list = statusTab === "ทั้งหมด" ? schedules : schedules.filter((sc) => sc.status === statusTab);
-    return [...list].sort((a, b) => new Date(a.scheduled_datetime).getTime() - new Date(b.scheduled_datetime).getTime());
-  }, [schedules, statusTab]);
+  // ตัดตามช่วงเวลาก่อนเสมอ (พรีเซ็ตด่วน/กำหนดเอง) แล้วค่อยแยกตามสถานะที่แท็บเลือกอยู่ต่อ
+  const periodFilteredSchedules = useMemo(
+    () => schedules.filter((sc) => matchesPeriod(sc.scheduled_datetime, startDate, endDate, selectedPeriod)),
+    [schedules, startDate, endDate, selectedPeriod]
+  );
 
+  const filteredSchedules = useMemo(() => {
+    const list = statusTab === "ทั้งหมด" ? periodFilteredSchedules : periodFilteredSchedules.filter((sc) => sc.status === statusTab);
+    return [...list].sort((a, b) => new Date(a.scheduled_datetime).getTime() - new Date(b.scheduled_datetime).getTime());
+  }, [periodFilteredSchedules, statusTab]);
+
+  // จำนวนต่อแท็บสถานะ ยึดตามช่วงเวลาที่เลือกไว้เสมอ ให้กดตัวกรองช่วงเวลาแล้วเห็นจำนวนที่ตรงกับช่วงนั้นทันที
   const counts = useMemo(() => {
-    const c: Record<string, number> = { ทั้งหมด: schedules.length };
+    const c: Record<string, number> = { ทั้งหมด: periodFilteredSchedules.length };
     STATUS_TABS.forEach((t) => {
-      if (t !== "ทั้งหมด") c[t] = schedules.filter((sc) => sc.status === t).length;
+      if (t !== "ทั้งหมด") c[t] = periodFilteredSchedules.filter((sc) => sc.status === t).length;
     });
     return c;
-  }, [schedules]);
+  }, [periodFilteredSchedules]);
+
+  // กดพรีเซ็ตช่วงเวลา -> ล้างช่วงวันที่กำหนดเองทิ้ง (สองอย่างนี้แทนกัน เลือกได้ทีละอย่าง)
+  const handlePeriodClick = (value: string) => {
+    setSelectedPeriod(value);
+    setStartDate("");
+    setEndDate("");
+  };
+
+  // เลือกช่วงวันที่กำหนดเอง -> ล้างพรีเซ็ตทิ้ง
+  const handleStartDateChange = (d: string) => {
+    setStartDate(d);
+    setSelectedPeriod("");
+  };
+
+  const handleEndDateChange = (d: string) => {
+    setEndDate(d);
+    setSelectedPeriod("");
+  };
 
   if (loading) {
     return (
@@ -93,13 +186,54 @@ function EmployeeCheckStockListContent() {
           { label: "เช็คสต็อกสินค้า" },
         ]}
       /> */}
-      <div>
-        <Heading level="h1" className="text-3xl font-bold tracking-tight text-slate-800">
-          งานเช็คสต็อกของฉัน
-        </Heading>
-        <Text variant="muted" className="mt-1 text-sm">
-          รายการตารางเช็คสต็อกที่เจ้าของร้านมอบหมายให้คุณ นับสินค้าตามจริงแล้วส่งให้ตรวจสอบก่อนบันทึกลงระบบ
-        </Text>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <Heading level="h1" className="text-3xl font-bold tracking-tight text-slate-800">
+            งานเช็คสต็อกของฉัน
+          </Heading>
+          <Text variant="muted" className="mt-1 text-sm">
+            รายการตารางเช็คสต็อกที่เจ้าของร้านมอบหมายให้คุณ นับสินค้าตามจริงแล้วส่งให้ตรวจสอบก่อนบันทึกลงระบบ
+          </Text>
+        </div>
+
+        {/* ตัวกรองช่วงเวลา — กรองตามวันที่กำหนดเช็คสต็อก */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="bg-[#F6F3F2] flex items-center p-1">
+            {PERIOD_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                onClick={() => handlePeriodClick(preset.value)}
+                className={cn(
+                  "w-20 py-2.5 text-sm transition-colors cursor-pointer",
+                  selectedPeriod === preset.value
+                    ? "bg-white text-[#B70011] shadow-sm font-medium"
+                    : "text-gray-500 hover:text-[#B70011]"
+                )}
+              >
+                {preset.label}
+              </button>
+            ))}
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              onStartDateChange={handleStartDateChange}
+              onEndDateChange={handleEndDateChange}
+            />
+          </div>
+          {(startDate || endDate || selectedPeriod) && (
+            <button
+              onClick={() => {
+                setStartDate("");
+                setEndDate("");
+                setSelectedPeriod("");
+              }}
+              className="text-xs text-[#B70011] font-semibold px-2 hover:underline whitespace-nowrap"
+            >
+              ล้างตัวกรองช่วงเวลา
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Status tabs */}

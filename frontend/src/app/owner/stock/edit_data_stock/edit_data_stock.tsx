@@ -173,6 +173,7 @@ export default function EditProductPage() {
       if (!formData.grade_id) missingFields.push("เกรดสินค้า");
       if (!formData.unit_id) missingFields.push("หน่วยนับ");
       if (formData.zone_path.length < 2) missingFields.push("ตำแหน่งจัดเก็บ (เลือกอย่างน้อยถึงระดับตู้)");
+      if (!supplierRows.some((r) => r.supplier_id)) missingFields.push("ผู้จำหน่าย (Suppliers)");
 
       if (missingFields.length > 0) {
         await alertDialog("กรุณากรอกข้อมูลหรือเลือกรายการต่อไปนี้ให้ครบถ้วน:\n- " + missingFields.join("\n- "));

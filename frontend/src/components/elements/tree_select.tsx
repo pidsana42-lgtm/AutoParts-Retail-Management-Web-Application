@@ -4,10 +4,21 @@ import { ChevronRight, ChevronDown, Check, Search } from "lucide-react";
 import type { CascaderOption } from "./cascader";
 import { cn } from "../../utils/component";
 
-interface TreeSelectProps {
-  options: CascaderOption[];
+interface TreeSelectSingleProps {
+  multiple?: false;
   value: string;
   onChange: (value: string, path: CascaderOption[]) => void;
+}
+
+interface TreeSelectMultipleProps {
+  multiple: true;
+  // เลือกได้หลายจุดพร้อมกัน (เช่น หลายโซน/หลายหมวดหมู่) — คลิกแล้ว toggle เข้า/ออกจาก values โดยไม่ปิด dropdown
+  values: string[];
+  onChangeValues: (values: string[]) => void;
+}
+
+type TreeSelectProps = (TreeSelectSingleProps | TreeSelectMultipleProps) & {
+  options: CascaderOption[];
   placeholder?: string;
   containerClassName?: string;
   label?: string;
@@ -15,7 +26,7 @@ interface TreeSelectProps {
   // ซ่อนช่องค้นหาได้ถ้าไม่ต้องการ (default เปิด)
   searchable?: boolean;
   searchPlaceholder?: string;
-}
+};
 
 // กรองต้นไม้ตามคำค้น: เก็บ node ที่ label ตรง หรือมีลูกหลานที่ตรง (ถ้า node เองตรงแล้ว โชว์ลูกทั้งหมดแบบเดิม)
 function filterTree(options: CascaderOption[], term: string): CascaderOption[] {
@@ -49,26 +60,40 @@ function collectExpandableIds(options: CascaderOption[]): Set<string> {
   return ids;
 }
 
+// หา label เต็ม (breadcrumb) ของ value หนึ่งจุดในต้นไม้ เช่น "โซน A / ตู้ 1 / ชั้น 2"
+function findPathLabel(opts: CascaderOption[], target: string, path: string[] = []): string[] | null {
+  for (const o of opts) {
+    if (o.value === target) return [...path, o.label];
+    if (o.children) {
+      const res = findPathLabel(o.children, target, [...path, o.label]);
+      if (res) return res;
+    }
+  }
+  return null;
+}
+
 const TreeNode = ({
   option,
   depth,
-  selectedValue,
+  isSelected,
   onSelect,
   expandedIds,
   toggleExpand,
   currentPath,
+  multiple,
 }: {
   option: CascaderOption;
   depth: number;
-  selectedValue: string;
+  isSelected: (val: string) => boolean;
   onSelect: (val: string, path: CascaderOption[]) => void;
   expandedIds: Set<string>;
   toggleExpand: (val: string) => void;
   currentPath: CascaderOption[];
+  multiple: boolean;
 }) => {
   const hasChildren = option.children && option.children.length > 0;
   const isExpanded = expandedIds.has(option.value);
-  const isSelected = selectedValue === option.value;
+  const selected = isSelected(option.value);
   const path = [...currentPath, option];
 
   return (
@@ -77,7 +102,7 @@ const TreeNode = ({
         className={cn(
           "flex items-center justify-between py-2 pr-3 cursor-pointer transition-colors border-b border-slate-50/50",
           // ✅ selected สีแดง เหมือน select.tsx
-          isSelected ? "bg-[#E51C23] text-white font-normal" : "text-slate-800 hover:bg-red-50 hover:text-[#B70011]"
+          selected ? "bg-[#E51C23] text-white font-normal" : "text-slate-800 hover:bg-red-50 hover:text-[#B70011]"
         )}
         style={{ paddingLeft: `${depth * 1.25 + 0.5}rem` }}
         onClick={() => {
@@ -92,7 +117,7 @@ const TreeNode = ({
             <div
               className={cn(
                 "p-1 -ml-1 cursor-pointer rounded hover:bg-black/10",
-                isSelected ? "text-white" : "text-slate-400"
+                selected ? "text-white" : "text-slate-400"
               )}
               onClick={(e) => {
                 e.stopPropagation();
@@ -104,9 +129,19 @@ const TreeNode = ({
           ) : (
             <div className="w-4 ml-1" />
           )}
+          {multiple && (
+            <div
+              className={cn(
+                "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
+                selected ? "border-white bg-white/20" : "border-slate-300 bg-white"
+              )}
+            >
+              {selected && <Check className="h-3 w-3 text-white" />}
+            </div>
+          )}
           <span className="truncate">{option.label}</span>
         </div>
-        {isSelected && <Check className="w-4 h-4 text-white shrink-0" />}
+        {!multiple && selected && <Check className="w-4 h-4 text-white shrink-0" />}
       </div>
       {hasChildren && isExpanded && (
         <div className="flex flex-col">
@@ -115,11 +150,12 @@ const TreeNode = ({
               key={child.value}
               option={child}
               depth={depth + 1}
-              selectedValue={selectedValue}
+              isSelected={isSelected}
               onSelect={onSelect}
               expandedIds={expandedIds}
               toggleExpand={toggleExpand}
               currentPath={path}
+              multiple={multiple}
             />
           ))}
         </div>
@@ -128,17 +164,18 @@ const TreeNode = ({
   );
 };
 
-export default function TreeSelect({
-  options,
-  value,
-  onChange,
-  placeholder = "Select...",
-  containerClassName,
-  label,
-  required,
-  searchable = true,
-  searchPlaceholder = "ค้นหา...",
-}: TreeSelectProps) {
+export default function TreeSelect(props: TreeSelectProps) {
+  const {
+    options,
+    placeholder = "Select...",
+    containerClassName,
+    label,
+    required,
+    searchable = true,
+    searchPlaceholder = "ค้นหา...",
+  } = props;
+  const multiple = props.multiple === true;
+
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -156,7 +193,7 @@ export default function TreeSelect({
     });
   };
 
-  // ปิด dropdown แล้วล้างคำค้นหาทิ้ง
+  // ปิด dropdown แล้วล้างคำค้นหาทิ้ง (โหมดเลือกหลายรายการไม่ปิดตอนเลือกให้เลือกต่อได้ ปิดแค่ตอนคลิกข้างนอก/Esc)
   useEffect(() => {
     if (!isOpen) setSearchTerm("");
   }, [isOpen]);
@@ -210,26 +247,28 @@ export default function TreeSelect({
     }
   }
 
-  const getDisplayLabel = () => {
-    if (!value) return "";
+  const isSelected = (val: string) => (multiple ? props.values.includes(val) : props.value === val);
 
-    // Breadcrumb logic
-    const findPath = (opts: CascaderOption[], target: string, path: string[] = []): string[] | null => {
-      for (const o of opts) {
-        if (o.value === target) return [...path, o.label];
-        if (o.children) {
-          const res = findPath(o.children, target, [...path, o.label]);
-          if (res) return res;
-        }
-      }
-      return null;
-    };
-
-    const path = findPath(options, value);
-    return path ? path.join(" / ") : "";
+  const handleSelect = (val: string, path: CascaderOption[]) => {
+    if (multiple) {
+      const next = props.values.includes(val) ? props.values.filter((v) => v !== val) : [...props.values, val];
+      props.onChangeValues(next);
+      // ไม่ปิด dropdown ให้เลือกต่อได้หลายรายการรวดเดียว
+      return;
+    }
+    props.onChange(val, path);
+    setIsOpen(false);
   };
 
-  const displayLabel = getDisplayLabel();
+  const displayLabel = multiple
+    ? props.values.length === 0
+      ? ""
+      : props.values.length === 1
+        ? (findPathLabel(options, props.values[0]) || []).join(" / ")
+        : `เลือกไว้ ${props.values.length} รายการ`
+    : props.value
+      ? (findPathLabel(options, props.value) || []).join(" / ")
+      : "";
   const isPlaceholder = !displayLabel;
 
   return (
@@ -316,14 +355,12 @@ export default function TreeSelect({
                   key={opt.value}
                   option={opt}
                   depth={0}
-                  selectedValue={value}
-                  onSelect={(val, path) => {
-                    onChange(val, path);
-                    setIsOpen(false);
-                  }}
+                  isSelected={isSelected}
+                  onSelect={handleSelect}
                   expandedIds={visibleExpandedIds}
                   toggleExpand={toggleExpand}
                   currentPath={[]}
+                  multiple={multiple}
                 />
               ))}
               {visibleOptions.length === 0 && (
@@ -332,6 +369,19 @@ export default function TreeSelect({
                 </div>
               )}
             </div>
+
+            {multiple && (
+              <div className="flex items-center justify-between border-t border-slate-100 p-2">
+                <span className="text-xs text-slate-500">เลือกไว้ {props.values.length} รายการ</span>
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="rounded-sm bg-[#B70011] px-3 py-1 text-xs font-medium text-white hover:bg-[#9c000f]"
+                >
+                  เสร็จสิ้น
+                </button>
+              </div>
+            )}
           </div>,
           document.body
         )}

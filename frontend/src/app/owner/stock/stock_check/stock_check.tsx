@@ -11,6 +11,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  TriangleAlert,
 } from "lucide-react";
 import { ToastProvider, useToast } from "../../../../components/elements/toast";
 import { useAlertDialog } from "../../../../components/elements/alert_dialog";
@@ -22,9 +23,10 @@ import Input from "../../../../components/elements/input";
 import TreeSelect from "../../../../components/elements/tree_select";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../../components/elements/table";
 import { cn } from "../../../../utils/component";
+import DateRangePicker from "../../../../components/elements/date_range_picker";
 
 import EditCheckStockScheduleModal from "./EditCheckStockScheduleModal";
-import { buildZoneTree, buildCategoryTree, getRelatedProducts, getScheduleProducts, CHECK_STATUS_BADGE_VARIANT } from "./checkStockTargets";
+import { buildZoneTree, buildCategoryTree, getRelatedProducts, getScheduleProducts, CHECK_STATUS_BADGE_VARIANT, isScheduleOverdue } from "./checkStockTargets";
 import { useCheckStockOptions } from "./useCheckStockOptions";
 import { stockCheckService, type CheckStockSchedule } from "../../../../service/http/wms/stock_check_service";
 import Button from "../../../../components/elements/button";
@@ -45,6 +47,67 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
   return range;
 }
 
+// พรีเซ็ตช่วงเวลาด่วน (แบบเดียวกับหน้าคลังสินค้า) — กรองตามวันที่กำหนดตรวจ (scheduled_datetime)
+const PERIOD_PRESETS: { label: string; value: string }[] = [
+  { label: "วันนี้", value: "daily" },
+  { label: "สัปดาห์นี้", value: "weekly" },
+  { label: "เดือนนี้", value: "monthly" },
+  { label: "ไตรมาสนี้", value: "quarterly" },
+  { label: "ปีนี้", value: "yearly" },
+];
+
+// คำนวณช่วงวันที่ของพรีเซ็ตฝั่งหน้าเว็บเองตรงๆ — สัปดาห์เริ่มวันจันทร์ตามธรรมเนียมไทย
+function getPeriodRange(period: string): { start: Date; end: Date } | null {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  switch (period) {
+    case "daily":
+      return { start: startOfToday, end: now };
+    case "weekly": {
+      const daysSinceMonday = (now.getDay() + 6) % 7;
+      const start = new Date(startOfToday);
+      start.setDate(start.getDate() - daysSinceMonday);
+      return { start, end: now };
+    }
+    case "monthly":
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
+    case "quarterly": {
+      const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+      return { start: new Date(now.getFullYear(), quarterStartMonth, 1), end: now };
+    }
+    case "yearly":
+      return { start: new Date(now.getFullYear(), 0, 1), end: now };
+    default:
+      return null;
+  }
+}
+
+// เช็คว่าวันที่กำหนดตรวจอยู่ในช่วงเวลาที่ตัวกรองกำหนดไว้หรือไม่ (ช่วงวันที่กำหนดเอง หรือพรีเซ็ตด่วน)
+function matchesPeriod(scheduledDatetime: string, startDate: string, endDate: string, selectedPeriod: string): boolean {
+  if (!startDate && !endDate && !selectedPeriod) return true;
+  const scheduled = new Date(scheduledDatetime);
+  if (isNaN(scheduled.getTime())) return false;
+
+  if (startDate || endDate) {
+    if (startDate) {
+      const s = new Date(startDate);
+      s.setHours(0, 0, 0, 0);
+      if (scheduled < s) return false;
+    }
+    if (endDate) {
+      const e = new Date(endDate);
+      e.setHours(23, 59, 59, 999);
+      if (scheduled > e) return false;
+    }
+    return true;
+  }
+
+  const range = getPeriodRange(selectedPeriod);
+  if (!range) return true;
+  return scheduled >= range.start && scheduled <= range.end;
+}
+
 function StockCheckContent() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -56,7 +119,11 @@ function StockCheckContent() {
 
   // Filters
   const [search, setSearch] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
+  // ตัวกรองช่วงเวลา — พรีเซ็ตด่วน (selectedPeriod) กับช่วงวันที่กำหนดเอง (startDate/endDate) แยกกันคนละอันเสมอ
+  // เลือกอย่างใดอย่างหนึ่งแล้วอีกอันจะถูกล้างทันที (ดู handlePeriodClick/handleStartDateChange/handleEndDateChange)
+  const [selectedPeriod, setSelectedPeriod] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [zoneFilter, setZoneFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusQuickFilter, setStatusQuickFilter] = useState<string>("");
@@ -125,20 +192,44 @@ function StockCheckContent() {
   // ต้นไม้ประเภทหลัก > ประเภทย่อย > ประเภทย่อยย่อย สำหรับตัวกรอง (แบบเดียวกับโซนด้านบน)
   const categoryTreeOptions = useMemo(() => buildCategoryTree(categories), [categories]);
 
+  // ตัดตามช่วงเวลาก่อนเสมอ (พรีเซ็ตด่วน/กำหนดเอง) แล้วค่อยคำนวณสรุปสถานะต่อ ให้กดตัวกรองช่วงเวลาแล้วเห็นจำนวนที่ตรงกับช่วงนั้นทันที
+  const periodFilteredSchedules = useMemo(
+    () => schedules.filter((sc) => matchesPeriod(sc.scheduled_datetime, startDate, endDate, selectedPeriod)),
+    [schedules, startDate, endDate, selectedPeriod]
+  );
+
   // Derived Stats
   const stats = useMemo(() => {
-    const pending = schedules.filter((s) => s.status === "รอดำเนินการ").length;
-    const checking = schedules.filter((s) => s.status === "กำลังเช็ค").length;
-    const awaitingReview = schedules.filter((s) => s.status === "รอตรวจสอบ").length;
-    const completed = schedules.filter((s) => s.status === "เสร็จสิ้น").length;
-    return { pending, checking, awaitingReview, completed, total: schedules.length };
-  }, [schedules]);
+    const pending = periodFilteredSchedules.filter((s) => s.status === "รอดำเนินการ").length;
+    const checking = periodFilteredSchedules.filter((s) => s.status === "กำลังเช็ค").length;
+    const awaitingReview = periodFilteredSchedules.filter((s) => s.status === "รอตรวจสอบ").length;
+    const completed = periodFilteredSchedules.filter((s) => s.status === "เสร็จสิ้น").length;
+    return { pending, checking, awaitingReview, completed, total: periodFilteredSchedules.length };
+  }, [periodFilteredSchedules]);
+
+  // กดพรีเซ็ตช่วงเวลา -> ล้างช่วงวันที่กำหนดเองทิ้ง (สองอย่างนี้แทนกัน เลือกได้ทีละอย่าง)
+  const handlePeriodClick = (value: string) => {
+    setSelectedPeriod(value);
+    setStartDate("");
+    setEndDate("");
+  };
+
+  // เลือกช่วงวันที่กำหนดเอง -> ล้างพรีเซ็ตทิ้ง
+  const handleStartDateChange = (d: string) => {
+    setStartDate(d);
+    setSelectedPeriod("");
+  };
+
+  const handleEndDateChange = (d: string) => {
+    setEndDate(d);
+    setSelectedPeriod("");
+  };
 
   // กดการ์ดสรุปสถานะไหนก็กรองตามสถานะนั้นได้เลย (สถานะว่าง = ล้างตัวกรองสถานะ กลับไปดูทั้งหมด) — เคลียร์ตัวกรองอื่น
-  // (ค้นหา/วันที่/โซน/ประเภท) ไปด้วยเสมอ กันกรณีตัวกรองเหล่านั้นค้างอยู่แล้วบังรายการที่ตัวเลขบนการ์ดสัญญาไว้
+  // (ค้นหา/โซน/ประเภท) ไปด้วยเสมอ กันกรณีตัวกรองเหล่านั้นค้างอยู่แล้วบังรายการที่ตัวเลขบนการ์ดสัญญาไว้ (ไม่เคลียร์
+  // ช่วงเวลา เพราะการ์ดพวกนี้คำนวณจาก periodFilteredSchedules อยู่แล้ว ยังตรงกับช่วงเวลาที่เลือกไว้เหมือนเดิม)
   const selectStatusFilter = (status: string) => {
     setSearch("");
-    setDateFilter("");
     setZoneFilter("");
     setCategoryFilter("");
     setStatusQuickFilter(status);
@@ -147,20 +238,20 @@ function StockCheckContent() {
   // สินค้าทั้งหมดที่อยู่ในโซน/ตู้/ชั้นระดับที่เลือกไว้ในตัวกรอง (คำนวณครั้งเดียว ไม่ใช่วนต่อแถวตาราง)
   const zoneFilterProductIds = useMemo(() => {
     if (!zoneFilter) return null;
-    const list = getRelatedProducts("LOCATION", zoneFilter, "", products, zones, categories);
+    const list = getRelatedProducts("LOCATION", [zoneFilter], [], products, zones, categories);
     return new Set(list.map((p) => p.ID));
   }, [zoneFilter, products, zones, categories]);
 
   // สินค้าทั้งหมดที่อยู่ในประเภท/ประเภทย่อยที่เลือกไว้ในตัวกรอง (คำนวณครั้งเดียวเหมือนกับ zoneFilterProductIds ด้านบน)
   const categoryFilterProductIds = useMemo(() => {
     if (!categoryFilter) return null;
-    const list = getRelatedProducts("CATEGORY", "", categoryFilter, products, zones, categories);
+    const list = getRelatedProducts("CATEGORY", [], [categoryFilter], products, zones, categories);
     return new Set(list.map((p) => p.ID));
   }, [categoryFilter, products, zones, categories]);
 
-  // Filtered schedules
+  // Filtered schedules — ตัดตามช่วงเวลาไปแล้วใน periodFilteredSchedules ก่อนหน้านี้
   const filteredSchedules = useMemo(() => {
-    return schedules.filter((sc) => {
+    return periodFilteredSchedules.filter((sc) => {
       let match = true;
 
       if (statusQuickFilter && sc.status !== statusQuickFilter) match = false;
@@ -191,14 +282,6 @@ function StockCheckContent() {
         }
       }
 
-      if (match && dateFilter) {
-        // เทียบวันที่ตามเวลาท้องถิ่น (ให้ตรงกับที่ตารางแสดงด้วย toLocaleDateString) — ห้ามใช้ toISOString()
-        // เพราะมันแปลงเป็น UTC ก่อน ถ้าตารางตั้งเวลาช่วงเช้ามืดจะเพี้ยนไปเป็นวันก่อนหน้า
-        const scDate = new Date(sc.scheduled_datetime);
-        const localDate = `${scDate.getFullYear()}-${String(scDate.getMonth() + 1).padStart(2, "0")}-${String(scDate.getDate()).padStart(2, "0")}`;
-        if (localDate !== dateFilter) match = false;
-      }
-
       return match;
     })
     // รายการที่สร้างล่าสุดอยู่บนสุด (เรียงตาม created_at ใหม่ไปเก่า, ใช้ id เป็นตัวตัดสินสำรองถ้าเวลาสร้างชนกัน)
@@ -206,12 +289,12 @@ function StockCheckContent() {
       const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       return diff !== 0 ? diff : b.id - a.id;
     });
-  }, [schedules, search, dateFilter, zoneFilterProductIds, categoryFilterProductIds, statusQuickFilter, products, zones, categories]);
+  }, [periodFilteredSchedules, search, zoneFilterProductIds, categoryFilterProductIds, statusQuickFilter, products, zones, categories]);
 
   // กลับไปหน้า 1 ทุกครั้งที่ตัวกรองเปลี่ยน กันกรณีหน้าปัจจุบันเกินจำนวนหน้าที่กรองได้แล้ว
   useEffect(() => {
     setPage(1);
-  }, [search, dateFilter, zoneFilter, categoryFilter, statusQuickFilter, itemsPerPage]);
+  }, [search, startDate, endDate, selectedPeriod, zoneFilter, categoryFilter, statusQuickFilter, itemsPerPage]);
 
   const totalItems = filteredSchedules.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
@@ -252,14 +335,55 @@ function StockCheckContent() {
             กำหนดวันเวลาตรวจ เลือกรูปแบบการตรวจสอบ แล้วติดตามรายการที่ต้องตรวจสอบสินค้าได้ในที่เดียว
           </Text>
         </div>
-        <Button
-          onClick={() => handleCreate()}
-          variant="primary"
-          className="flex items-center gap-2 self-start sm:self-auto"
-        >
-          <Plus className="h-4 w-4" />
-          สร้างตารางตรวจสอบสินค้าใหม่
-        </Button>
+        <div className="flex flex-col items-end gap-3 self-start sm:self-auto">
+          <Button
+            onClick={() => handleCreate()}
+            variant="primary"
+            className="flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            สร้างตารางตรวจสอบสินค้าใหม่
+          </Button>
+
+          {/* ตัวกรองช่วงเวลา — กรองตามวันที่กำหนดตรวจ */}
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="bg-[#F6F3F2] flex items-center p-1">
+              {PERIOD_PRESETS.map((preset) => (
+                <button
+                  key={preset.value}
+                  type="button"
+                  onClick={() => handlePeriodClick(preset.value)}
+                  className={cn(
+                    "w-20 py-2.5 text-sm transition-colors cursor-pointer",
+                    selectedPeriod === preset.value
+                      ? "bg-white text-[#B70011] shadow-sm font-medium"
+                      : "text-gray-500 hover:text-[#B70011]"
+                  )}
+                >
+                  {preset.label}
+                </button>
+              ))}
+              <DateRangePicker
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={handleStartDateChange}
+                onEndDateChange={handleEndDateChange}
+              />
+            </div>
+            {(startDate || endDate || selectedPeriod) && (
+              <button
+                onClick={() => {
+                  setStartDate("");
+                  setEndDate("");
+                  setSelectedPeriod("");
+                }}
+                className="text-xs text-[#B70011] font-semibold px-2 hover:underline whitespace-nowrap"
+              >
+                ล้างตัวกรองช่วงเวลา
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Stats Cards — กดได้เลย ทำหน้าที่เป็นตัวกรองสถานะด่วนไปในตัว (แบบเดียวกับหน้าการเคลื่อนไหวของคลังสินค้า) */}
@@ -345,9 +469,6 @@ function StockCheckContent() {
             />
           </div>
           <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-            <div className="w-full sm:w-48">
-              <Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
-            </div>
             <div className="w-full sm:w-56">
               <TreeSelect
                 options={[{ label: "โซนทั้งหมด", value: "" }, ...zoneTreeOptions]}
@@ -366,11 +487,13 @@ function StockCheckContent() {
                 onChange={(val) => setCategoryFilter(val)}
               />
             </div>
-            {(search || dateFilter || zoneFilter || categoryFilter || statusQuickFilter) && (
+            {(search || startDate || endDate || selectedPeriod || zoneFilter || categoryFilter || statusQuickFilter) && (
               <button
                 onClick={() => {
                   setSearch("");
-                  setDateFilter("");
+                  setStartDate("");
+                  setEndDate("");
+                  setSelectedPeriod("");
                   setZoneFilter("");
                   setCategoryFilter("");
                   setStatusQuickFilter("");
@@ -421,7 +544,9 @@ function StockCheckContent() {
                 const dateStr = scDateObj.toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" });
                 const startTimeStr = scDateObj.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
                 const endTimeStr = scEndObj?.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-                const isEditable = sc.status === "รอดำเนินการ";
+                const overdue = isScheduleOverdue(sc);
+                // เลยเวลากำหนดแล้วให้เจ้าของร้านพิจารณาแก้ไข/สั่งงานซ้ำได้ ไม่ใช่แค่ตอนยัง "รอดำเนินการ" เหมือนเดิม
+                const isEditable = sc.status === "รอดำเนินการ" || overdue;
 
                 return (
                   <TableRow key={sc.id} className="hover:bg-gray-50/70">
@@ -434,17 +559,24 @@ function StockCheckContent() {
                     </TableCell>
                     <TableCell>
                       {sc.check_type === "LOCATION" && (
-                        <div className="flex items-center gap-2">
-                          <div className="bg-gray-100 px-2 py-1 rounded text-xs font-bold text-gray-600">
-                            {sc.target_name.split(" ")[1] || "Loc"}
-                          </div>
+                        sc.target_name.startsWith("หลายพื้นที่") ? (
                           <div>
-                            <div className="font-semibold text-gray-800">{sc.target_name.split(" - ")[0]}</div>
-                            <div className="text-[10px] text-gray-400 tracking-wider">
-                              {sc.target_name.split(" - ").slice(1).join(" - ")}
+                            <div className="font-semibold text-gray-800 line-clamp-1">{sc.target_name}</div>
+                            <div className="text-[10px] text-gray-400 tracking-wider">ตรวจสอบหลายพื้นที่พร้อมกัน</div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <div className="bg-gray-100 px-2 py-1 rounded text-xs font-bold text-gray-600">
+                              {sc.target_name.split(" ")[1] || "Loc"}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-gray-800">{sc.target_name.split(" - ")[0]}</div>
+                              <div className="text-[10px] text-gray-400 tracking-wider">
+                                {sc.target_name.split(" - ").slice(1).join(" - ")}
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        )
                       )}
                       {sc.check_type === "CATEGORY" && (
                         <div>
@@ -476,7 +608,17 @@ function StockCheckContent() {
                         <span className="text-sm text-gray-400">ยังไม่มอบหมาย</span>
                       )}
                     </TableCell>
-                    <TableCell>{getStatusBadge(sc.status)}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        {getStatusBadge(sc.status)}
+                        {overdue && (
+                          <div className="flex items-center gap-1 text-[11px] font-semibold text-[#B70011]">
+                            <TriangleAlert className="h-3 w-3" />
+                            เลยเวลาที่กำหนดแล้ว
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-center pr-6">
                       <div className="flex items-center justify-center gap-1">
                         <button
@@ -493,7 +635,7 @@ function StockCheckContent() {
                             "p-1.5 rounded-md transition-colors",
                             isEditable ? "text-[#B70011] hover:bg-red-50 cursor-pointer" : "text-gray-300 cursor-not-allowed"
                           )}
-                          title={isEditable ? "แก้ไข" : "ไม่สามารถแก้ไขได้"}
+                          title={overdue ? "เลยเวลาที่กำหนดแล้ว — พิจารณาแก้ไข/สั่งงานซ้ำ" : isEditable ? "แก้ไข" : "ไม่สามารถแก้ไขได้"}
                         >
                           <SquarePen className="w-4 h-4" />
                         </button>
