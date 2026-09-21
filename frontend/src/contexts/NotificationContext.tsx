@@ -161,8 +161,13 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [role, fetchHistory]);
 
-  // ต่อ websocket รับแจ้งเตือนสด — ส่ง role/user_id ไปด้วยตอนเปิด connection เพื่อให้ backend รู้ว่าควรส่งอะไรมาให้ connection นี้บ้าง
+  // ต่อ websocket รับแจ้งเตือนสด — ส่ง JWT token ไปด้วยตอนเปิด connection ให้ backend ตรวจสอบและดึง
+  // role/user_id จาก token เอง (ไม่ส่ง role/user_id ตรงๆ ผ่าน query string อีกต่อไป เพราะ backend
+  // เคยเชื่อค่าที่ client ส่งมาโดยไม่ตรวจสอบ ทำให้ใครก็อ้างเป็นเจ้าของร้านหรือสวมเป็น user คนอื่นได้)
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
     let ws: WebSocket;
     let reconnectTimeout: ReturnType<typeof setTimeout>;
     let disposed = false;
@@ -188,8 +193,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         }
       }
       const params = new URLSearchParams();
-      if (role) params.set('role', role);
-      if (user?.id != null) params.set('user_id', String(user.id));
+      params.set('token', token);
       const query = params.toString();
       if (query) wsUrl += (wsUrl.includes('?') ? '&' : '?') + query;
 

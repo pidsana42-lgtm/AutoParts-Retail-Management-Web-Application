@@ -17,6 +17,23 @@ func jwtSecret() []byte {
 	return []byte(os.Getenv("JWT_SECRET"))
 }
 
+// ParseToken ตรวจสอบ JWT ด้วยวิธีเดียวกับ AuthMiddleware ทุกประการ แยกออกมาเป็นฟังก์ชันแยกเพื่อให้
+// WebSocket handshake (ซึ่งส่ง Authorization header ปกติไม่ได้ ต้องส่ง token ผ่าน query param แทน)
+// ใช้การตรวจสอบชุดเดียวกันนี้ได้ — ไม่มี logic ตรวจสอบซ้ำสองชุดที่อาจเพี้ยนไปจากกันทีหลัง
+func ParseToken(tokenString string) (jwt.MapClaims, error) {
+	claims := jwt.MapClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
+		if t.Method != jwt.SigningMethodHS256 {
+			return nil, fmt.Errorf("unexpected signing method")
+		}
+		return jwtSecret(), nil
+	})
+	if err != nil || !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+	return claims, nil
+}
+
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var tokenString string
@@ -39,15 +56,8 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		claims := jwt.MapClaims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
-			if t.Method != jwt.SigningMethodHS256 {
-				return nil, fmt.Errorf("unexpected signing method")
-			}
-			return jwtSecret(), nil
-		})
-
-		if err != nil || !token.Valid {
+		claims, err := ParseToken(tokenString)
+		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}

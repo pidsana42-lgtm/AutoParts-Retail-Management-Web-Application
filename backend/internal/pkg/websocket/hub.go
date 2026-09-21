@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
+
+	"backend/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -107,19 +108,50 @@ func (h *Hub) run() {
 	}
 }
 
-// ServeWS: รับ role/user_id มาจาก query string ตอนเปิด connection (?role=Owner&user_id=5)
-// เพื่อให้ hub รู้ว่า connection นี้เป็นของใคร จะได้ส่งแจ้งเตือนแบบเจาะจงได้ถูกคน
+// ServeWS: ต้องมี JWT ที่ตรวจผ่านก่อนถึงจะยอม upgrade เป็น WebSocket ได้ (เดิมรับ role/user_id ตรงๆ
+// จาก query string โดยไม่ตรวจอะไรเลย ใครก็ต่อเข้ามาแล้วอ้างว่าตัวเองเป็นเจ้าของร้าน หรือสวมเป็น user_id
+// คนอื่นเพื่อรับแจ้งเตือนที่ไม่ใช่ของตัวเองได้) — เบราว์เซอร์ส่ง Authorization header กับ WebSocket
+// handshake ไม่ได้ จึงรับ token ผ่าน query param ?token= แทน (แบบเดียวกับที่ AuthMiddleware รองรับ
+// สำหรับ <img> tag อยู่แล้ว) แล้ว derive role/user_id จาก token ที่ตรวจผ่านแล้วเท่านั้น
 func ServeWS(c *gin.Context) {
+	tokenString := c.Query("token")
+	if tokenString == "" {
+		auth := c.GetHeader("Authorization")
+		parts := strings.SplitN(auth, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
+			tokenString = parts[1]
+		}
+	}
+	if tokenString == "" {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	claims, err := middleware.ParseToken(tokenString)
+	if err != nil {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	var userID uint
+	if uidRaw, ok := claims["user_id"]; ok {
+		if f, ok := uidRaw.(float64); ok {
+			userID = uint(f)
+		}
+	}
+	role := ""
+	if r, ok := claims["role"].(string); ok {
+		role = strings.ToUpper(strings.TrimSpace(r))
+	}
+	if role == "" || userID == 0 {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
 	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Println("upgrade error:", err)
 		return
-	}
-
-	role := strings.ToUpper(c.Query("role"))
-	var userID uint
-	if id, err := strconv.ParseUint(c.Query("user_id"), 10, 64); err == nil {
-		userID = uint(id)
 	}
 
 	GlobalHub.register <- &registration{Conn: ws, Info: ClientInfo{Role: role, UserID: userID}}
