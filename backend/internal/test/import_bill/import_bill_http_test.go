@@ -235,4 +235,38 @@ func TestImportBillHTTP(t *testing.T) {
 		status, _ := send(http.MethodPost, confirm, owner, `{"bill":`)
 		assert.Equal(t, http.StatusBadRequest, status)
 	})
+
+	// mobile_upload_session_is_issued_and_enforced: regression test for the mobile QR
+	// upload flow — the session used to be accepted just for "looking" well-formed
+	// (matching a regex), so anyone could guess a valid-looking string and read/clear
+	// another session's images without ever logging in or scanning a real QR code.
+	// Now a session must have actually been issued by the authenticated endpoint below.
+	t.Run("mobile_upload_session_is_issued_and_enforced", func(t *testing.T) {
+		_, _, _, send := newFixture(t)
+
+		status, body := send(http.MethodPost, "/api/import-data/mobile-sessions", owner, nil)
+		require.Equal(t, http.StatusOK, status, string(body))
+		var created struct {
+			Session   string `json:"session"`
+			ExpiresAt string `json:"expires_at"`
+		}
+		require.NoError(t, json.Unmarshal(body, &created))
+		require.NotEmpty(t, created.Session)
+		require.NotEmpty(t, created.ExpiresAt)
+
+		// A well-formed but never-issued session must be rejected — this is the gap that was fixed.
+		status, _ = send(http.MethodGet, "/api/mobile/images?session=guessed-session-1234", "", nil)
+		assert.Equal(t, http.StatusUnauthorized, status)
+
+		// A genuinely issued session is accepted, with no staff login required (the phone has none).
+		status, body = send(http.MethodGet, "/api/mobile/images?session="+created.Session, "", nil)
+		require.Equal(t, http.StatusOK, status, string(body))
+
+		// Clearing the session (desktop is done) must invalidate it for further use.
+		status, _ = send(http.MethodDelete, "/api/mobile/images?session="+created.Session, "", nil)
+		require.Equal(t, http.StatusOK, status)
+
+		status, _ = send(http.MethodGet, "/api/mobile/images?session="+created.Session, "", nil)
+		assert.Equal(t, http.StatusUnauthorized, status, "a cleared session must not be reusable")
+	})
 }

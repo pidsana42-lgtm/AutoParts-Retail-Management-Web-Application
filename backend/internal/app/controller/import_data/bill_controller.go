@@ -249,11 +249,19 @@ func (ctrl *BillController) GetPurchaseOrderById(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
-// UploadMobileImage - no auth, session token acts as access control
+// CreateMobileSession - เรียกจากหน้า desktop ที่ล็อกอินแล้วเท่านั้น (ดู bill_route.go) เพื่อสร้าง session
+// สุ่มจริงๆ ฝั่ง backend ก่อนเอาไปฝังใน QR code ให้มือถือสแกน แทนที่จะให้ฝั่ง client เดารหัสเองแบบเดิม
+func (ctrl *BillController) CreateMobileSession(c *gin.Context) {
+	session, expiresAt := mobileSessions.create()
+	c.JSON(http.StatusOK, gin.H{"session": session, "expires_at": expiresAt})
+}
+
+// UploadMobileImage - no auth (มือถือไม่มีการล็อกอิน) แต่ session ต้องถูกสร้างจริงจาก CreateMobileSession
+// และยังไม่หมดอายุ ไม่ใช่แค่ "หน้าตา" ตรงรูปแบบเหมือนเดิม
 func (ctrl *BillController) UploadMobileImage(c *gin.Context) {
 	session := c.Query("session")
-	if !validSession.MatchString(session) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session"})
+	if !validSession.MatchString(session) || !mobileSessions.valid(session) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired session"})
 		return
 	}
 
@@ -314,8 +322,8 @@ func (ctrl *BillController) UploadMobileImage(c *gin.Context) {
 // GetMobileImages - returns list of image URLs uploaded for a session
 func (ctrl *BillController) GetMobileImages(c *gin.Context) {
 	session := c.Query("session")
-	if !validSession.MatchString(session) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session"})
+	if !validSession.MatchString(session) || !mobileSessions.valid(session) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired session"})
 		return
 	}
 
@@ -354,12 +362,13 @@ func (ctrl *BillController) GetMobileImages(c *gin.Context) {
 // ClearMobileImages - deletes all images for a session (called when desktop is done)
 func (ctrl *BillController) ClearMobileImages(c *gin.Context) {
 	session := c.Query("session")
-	if !validSession.MatchString(session) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session"})
+	if !validSession.MatchString(session) || !mobileSessions.valid(session) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired session"})
 		return
 	}
 
 	os.RemoveAll(filepath.Join("uploads", "mobile-tmp", session))
+	mobileSessions.delete(session)
 	c.JSON(http.StatusOK, gin.H{"message": "cleared"})
 }
 
