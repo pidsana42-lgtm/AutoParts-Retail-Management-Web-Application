@@ -8,6 +8,7 @@ import (
 	"backend/internal/app/route"
 	"backend/internal/middleware"
 	"backend/internal/pkg/monitoring"
+	"backend/internal/pkg/secret"
 	"backend/internal/pkg/websocket"
 
 	"github.com/gin-gonic/gin"
@@ -15,7 +16,14 @@ import (
 
 func main() {
 	// 1. จัดการเรื่องฐานข้อมูลให้เรียบร้อย (ต่อ DB -> สร้างตาราง -> ยัดข้อมูล Seed)
+	// ConnectDB โหลดไฟล์ .env ก่อน (godotenv) — ต้องเรียกก่อนเช็ค secret ด้านล่าง ไม่งั้น
+	// เช็คจะเห็น env ว่างเสมอในเครื่อง dev ที่พึ่งตั้งค่าใน .env ยังไม่ได้ export เข้า shell จริง
 	config.ConnectDB()
+
+	// เช็ค secret ที่จำเป็นทันทีหลังโหลด .env แล้ว — ถ้าไม่ได้ตั้งค่าไว้จะหยุดทันทีตั้งแต่ตอนสตาร์ท
+	// แทนที่จะปล่อยให้รันต่อแล้วเงียบๆ ใช้ค่า default ที่ฝังในซอร์สโค้ด (ใครก็ปลอม JWT ได้ถ้ารู้ค่านั้น)
+	secret.Required("JWT_SECRET")
+
 	config.SetupDatabase()
 
 	// Initialize WebSocket Hub
