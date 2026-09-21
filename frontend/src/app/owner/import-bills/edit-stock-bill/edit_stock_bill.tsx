@@ -10,8 +10,9 @@ import Input from '../../../../components/elements/input';
 import Select from '../../../../components/elements/select';
 import MultiSelect from '../../../../components/elements/multiselect';
 import Button from '../../../../components/elements/button';
+import { useToast } from '../../../../components/elements/toast';
 
-import { 
+import {
   getProductsList, getCategoriesList, 
   getGradesList, getUnitsList, getShelvesList, getBrandsList 
 } from '../../../../service/http/wms/product';
@@ -28,6 +29,7 @@ export default function EditStockBillPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { toast } = useToast();
 
   // Passed state or URL focus or sessionStorage
   const passedMismatches = useMemo(() => {
@@ -243,12 +245,12 @@ export default function EditStockBillPage() {
     fetchData();
   }, []);
   // Submit product update to PostgreSQL DB
-  const handleSaveProduct = async (e?: React.FormEvent, goToNext = false) => {
+  const handleSaveProduct = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!editingProduct) return;
 
     if (!formData.product_name || !formData.category_id || !formData.unit_id) {
-      alert('กรุณากรอกข้อมูลสำคัญ (ชื่อสินค้า, หมวดหมู่, หน่วยนับ) ให้ครบถ้วน');
+      toast({ variant: 'warning', message: 'กรุณากรอกข้อมูลสำคัญ (ชื่อสินค้า, หมวดหมู่, หน่วยนับ) ให้ครบถ้วน' });
       return;
     }
 
@@ -275,21 +277,12 @@ export default function EditStockBillPage() {
       setSaveSuccessMsg(`อัปเดตข้อมูลสินค้า "${formData.product_name}" เรียบร้อยแล้ว`);
       setTimeout(() => setSaveSuccessMsg(null), 3000);
 
-      // If requested, navigate to next item in left list
-      if (goToNext && filteredItems.length > 0) {
-        const currentIdx = filteredItems.findIndex(i => i.ID === editingProduct.ID);
-        if (currentIdx >= 0 && currentIdx < filteredItems.length - 1) {
-          const nextItem = filteredItems[currentIdx + 1];
-          selectProductForEditing(nextItem);
-        }
-      }
-
       // Refresh list in background
       const prodData = await getProductsList();
       setProducts(prodData);
     } catch (err: any) {
       console.error('Error updating product:', err);
-      alert(err.response?.data?.error || 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลสินค้าในฐานข้อมูล');
+      toast({ variant: 'error', message: err.response?.data?.error || 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลสินค้าในฐานข้อมูล' });
     } finally {
       setSubmitting(false);
     }
@@ -437,7 +430,7 @@ export default function EditStockBillPage() {
         {/* RIGHT COLUMN: Detailed Product Editing Form (ฝั่งขวา: รายละเอียดสินค้านั้นๆ) */}
         <div className="flex-1 bg-white p-6 flex flex-col justify-between overflow-y-auto">
           {editingProduct ? (
-            <form onSubmit={(e) => handleSaveProduct(e, false)} className="space-y-5 flex-1 flex flex-col justify-between">
+            <form onSubmit={handleSaveProduct} className="space-y-5 flex-1 flex flex-col justify-between">
               <div className="space-y-5">
                 
                 {/* Product Title Banner */}
@@ -592,25 +585,29 @@ export default function EditStockBillPage() {
 
               {/* Action Buttons Footer */}
               <div className="flex items-center justify-end border-t border-gray-200 pt-4 mt-6">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={submitting}
+                    onClick={() => {
+                      if (location.state?.returnFrom === 'approve' && location.state?.returnBillId) {
+                        navigate('/owner/import-bills', { state: { openApproveForBill: location.state.returnBillId } });
+                      } else {
+                        navigate('/owner/import-bills');
+                      }
+                    }}
+                    className="w-full sm:w-40"
+                  >
+                    ยกเลิก
+                  </Button>
                   <Button
                     type="submit"
                     variant="primary"
                     isLoading={submitting}
-                    className="bg-[#1C1B1B] hover:bg-gray-800 text-white font-bold rounded-none text-xs px-5"
+                    className="w-full sm:w-40"
                   >
-                    บันทึกสินค้ารายการนี้
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={(e) => handleSaveProduct(e, true)}
-                    isLoading={submitting}
-                    className="bg-[#e51c23] hover:bg-[#c9181f] text-white font-bold rounded-none text-xs px-6 flex items-center gap-1"
-                  >
-                    <span>บันทึกและไปรายการถัดไป</span>
-                    <ChevronRight className="w-4 h-4" />
+                    บันทึก
                   </Button>
                 </div>
               </div>

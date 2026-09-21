@@ -1955,6 +1955,22 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   const handleSaveBill = async (isDraft = false, skipCheck = false, skipPriceCheck = false) => {
     if (!formData || scanning || saving) return;
 
+    if (!String(formData.bill_no || '').trim()) {
+      toast({ variant: 'error', message: 'กรุณากรอกเลขที่บิลก่อนบันทึก' });
+      setSaving(false);
+      return;
+    }
+
+    const zeroQtyCount = formData.items.filter(item => Number(item.order_quantity) <= 0).length;
+    if (zeroQtyCount > 0) {
+      toast({
+        variant: 'error',
+        message: `มีรายการสินค้า ${zeroQtyCount} รายการที่จำนวนเป็น 0 กรุณาระบุจำนวนที่รับจริง หรือกดลบรายการนั้นออกก่อนบันทึก`,
+      });
+      setSaving(false);
+      return;
+    }
+
     if (!skipPriceCheck && !isDraft) {
       const mismatches = getPriceMismatchedItems(formData);
       if (mismatches.length > 0) {
@@ -2105,6 +2121,29 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
     const readyBills = batchResults.flatMap((bill, index) => bill ? [{ bill, index }] : []);
     if (readyBills.length === 0) {
       setErrorMsg('ยังไม่มีบิลที่สแกนสำเร็จ กรุณาลองสแกนอีกครั้ง');
+      return;
+    }
+
+    // เช็คก่อนเสมอไม่ว่าจะบันทึกแบบร่างหรือไม่ — backend บังคับเลขที่บิลห้ามว่างและจำนวนต้องมากกว่า 0
+    // เสมอ ถ้าปล่อยให้ยิงไปก่อนจะเจอ error ดิบๆ ต่อบิล และบิลอื่นๆ ที่ถูกต้องอยู่แล้วจะถูกข้ามไปด้วยเปล่าประโยชน์
+    const blockingIssues: string[] = [];
+    readyBills.forEach(({ bill, index: idx }) => {
+      const label = bill.filename || bill.bill_no || `ไฟล์ที่ ${idx + 1}`;
+      if (!String(bill.bill_no || '').trim()) {
+        blockingIssues.push(`บิล "${label}": ยังไม่มีเลขที่บิล`);
+      }
+      const zeroQtyCount = bill.items.filter(item => Number(item.order_quantity) <= 0).length;
+      if (zeroQtyCount > 0) {
+        blockingIssues.push(`บิล "${label}": มีสินค้า ${zeroQtyCount} รายการที่จำนวนเป็น 0`);
+      }
+    });
+    if (blockingIssues.length > 0) {
+      toast({
+        variant: 'error',
+        title: 'มีข้อมูลไม่ครบก่อนบันทึก',
+        message: blockingIssues.join(' / '),
+      });
+      setSaving(false);
       return;
     }
 

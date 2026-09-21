@@ -35,6 +35,7 @@ type mockProductRepo struct {
 	receiveStockFn            func(uint, int, []entity.Inventory) error
 	listDeletedProductsFn     func() ([]entity.Product, error)
 	restoreProductFn          func(uint) error
+	getPendingReceiveQtyFn    func(uint) (int, error)
 
 	called map[string]int
 }
@@ -183,6 +184,14 @@ func (m *mockProductRepo) RestoreProduct(id uint) error {
 		return m.restoreProductFn(id)
 	}
 	return nil
+}
+
+func (m *mockProductRepo) GetPendingReceiveQuantity(productID uint) (int, error) {
+	m.track("GetPendingReceiveQuantity")
+	if m.getPendingReceiveQtyFn != nil {
+		return m.getPendingReceiveQtyFn(productID)
+	}
+	return 0, nil
 }
 
 var _ wmsRepo.ProductRepository = (*mockProductRepo)(nil)

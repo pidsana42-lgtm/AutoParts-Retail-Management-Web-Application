@@ -28,4 +28,7 @@ export interface StockItem {
   Suppliers?: { SupplierID: number; SupplierName: string; Quantity: number; CompanyProductCode?: string; VariantCode?: string; Barcode?: string; QRCode?: string }[];
   // DeletedAt: มีค่าเฉพาะตอนดึงรายการ "สินค้าที่ถูกลบ" (ถังขยะ) เท่านั้น
   DeletedAt?: string;
+  // PendingReceiveQuantity: จำนวนที่มีบิลนำเข้ารอเจ้าของอนุมัติราคาอยู่ (ยังไม่นับเข้า Stock ด้านบน)
+  // มีค่าเฉพาะตอนดึงรายละเอียดสินค้าทีละตัวเท่านั้น
+  PendingReceiveQuantity?: number;
 }

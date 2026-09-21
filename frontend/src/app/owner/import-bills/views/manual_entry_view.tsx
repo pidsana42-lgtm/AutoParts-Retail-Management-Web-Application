@@ -374,44 +374,39 @@ export default function ManualEntryView({
                           />
                         )}
                       </TableCell>
-                      {Number(item.order_quantity) === 0 ? (
-                        <TableCell colSpan={4} className="py-2.5 px-3 text-center font-bold text-[#e51c23] bg-red-50/20">
-                          ไม่มีสินค้า
-                        </TableCell>
-                      ) : (
-                        <>
-                          <TableCell className="py-2.5 px-3 text-right">
-                            <input
-                              type="number"
-                              value={item.order_quantity ?? 0}
-                              onChange={(e) => handleItemChange(idx, 'order_quantity', e.target.value)}
-                              className={`bg-white border rounded-none focus:ring-1 w-16 text-right text-sm text-[#1C1B1B] p-1.5 font-medium ${issueField(idx, 'quantity') ? errInputClass : 'border-gray-300 focus:border-[#e51c23] focus:ring-[#e51c23]'}`}
-                            />
-                          </TableCell>
-                          <TableCell className="py-2.5 px-3 text-center">
-                            <input
-                              type="text"
-                              value={item.unit || ''}
-                              onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
-                              className="bg-white border border-gray-300 rounded-none focus:border-[#e51c23] focus:ring-1 focus:ring-[#e51c23] w-14 text-center text-sm text-[#5F5E5E] p-1.5 font-medium"
-                            />
-                          </TableCell>
-                          <TableCell className="py-2.5 px-3 text-right">
-                            <input 
-                              type="number" 
-                              step="0.01"
-                              value={item.price_per_unit ?? 0}
-                              onChange={(e) => handleItemChange(idx, 'price_per_unit', e.target.value)}
-                              className={`bg-white border rounded-none focus:ring-1 w-20 text-right text-sm text-[#1C1B1B] font-bold p-1.5 ${issueField(idx, 'price') ? errInputClass : 'border-gray-300 focus:border-[#e51c23] focus:ring-[#e51c23]'}`}
-                            />
-                          </TableCell>
-                          <TableCell className="py-2.5 px-4 text-right font-bold text-[#1C1B1B] text-sm">
-                            <div className="border border-transparent py-1.5">
-                              ฿{((item.order_quantity || 0) * (item.price_per_unit || 0) - (item.discount_amount || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                            </div>
-                          </TableCell>
-                        </>
-                      )}
+                      <TableCell className="py-2.5 px-3 text-right">
+                        <input
+                          type="number"
+                          value={item.order_quantity ?? 0}
+                          onChange={(e) => handleItemChange(idx, 'order_quantity', e.target.value)}
+                          className={`bg-white border rounded-none focus:ring-1 w-16 text-right text-sm text-[#1C1B1B] p-1.5 font-medium ${issueField(idx, 'quantity') ? errInputClass : 'border-gray-300 focus:border-[#e51c23] focus:ring-[#e51c23]'}`}
+                        />
+                        {Number(item.order_quantity) === 0 && (
+                          <p className="text-[10px] font-bold text-red-600 mt-0.5">จำนวนเป็น 0</p>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2.5 px-3 text-center">
+                        <input
+                          type="text"
+                          value={item.unit || ''}
+                          onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
+                          className="bg-white border border-gray-300 rounded-none focus:border-[#e51c23] focus:ring-1 focus:ring-[#e51c23] w-14 text-center text-sm text-[#5F5E5E] p-1.5 font-medium"
+                        />
+                      </TableCell>
+                      <TableCell className="py-2.5 px-3 text-right">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={item.price_per_unit ?? 0}
+                          onChange={(e) => handleItemChange(idx, 'price_per_unit', e.target.value)}
+                          className={`bg-white border rounded-none focus:ring-1 w-20 text-right text-sm text-[#1C1B1B] font-bold p-1.5 ${issueField(idx, 'price') ? errInputClass : 'border-gray-300 focus:border-[#e51c23] focus:ring-[#e51c23]'}`}
+                        />
+                      </TableCell>
+                      <TableCell className="py-2.5 px-4 text-right font-bold text-[#1C1B1B] text-sm">
+                        <div className="border border-transparent py-1.5">
+                          ฿{((item.order_quantity || 0) * (item.price_per_unit || 0) - (item.discount_amount || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                        </div>
+                      </TableCell>
                       <TableCell className="py-2.5 px-4 text-center">
                         <button
                           type="button"

@@ -230,3 +230,94 @@ func TestConfirmBillImportTransaction_ResetsStaleVerifiedFlag(t *testing.T) {
 	require.NoError(t, db.Where("bill_no = ?", "BILL-DUP-1").First(&persisted).Error)
 	require.False(t, persisted.IsVerified, "ค่าที่บันทึกจริงใน DB ต้องไม่ค้างเป็น true จากรอบแรก")
 }
+
+// -----------------------------------------------------------------------------
+// PendingReceiveQuantity: กันจำนวนสต็อกไว้ก่อน ไม่นับเข้าคลังจนกว่าราคาที่เปลี่ยนจะได้รับอนุมัติ
+// -----------------------------------------------------------------------------
+
+func TestConfirmBillImportTransaction_EmployeePriceMismatchHoldsBackQuantity(t *testing.T) {
+	db := setupImportBillTestDB(t)
+	repo := billRepo.NewImportBillRepository(db)
+	product, supplier := seedProductForImport(t, db, 100) // เริ่มมีของ 0 ชิ้น ราคาทุน 100
+
+	bill := newTestBill("BILL-HOLD-1", supplier.ID)
+	items := []entity.BillItem{newTestBillItem(product.ID, 150)} // ราคาบิลใหม่ 150 ต่างจากระบบ (100) จำนวน 2 ชิ้น
+
+	require.NoError(t, repo.ConfirmBillImportTransaction(bill, items, nil, "Employee"))
+	require.False(t, bill.IsVerified)
+
+	var updatedProduct entity.Product
+	require.NoError(t, db.First(&updatedProduct, product.ID).Error)
+	require.Equal(t, 0, updatedProduct.Quantity, "จำนวนสินค้าต้องยังไม่เพิ่ม จนกว่าเจ้าของจะอนุมัติราคาก่อน")
+
+	var persistedItem entity.BillItem
+	require.NoError(t, db.Where("bill_id = ?", bill.ID).First(&persistedItem).Error)
+	require.Equal(t, 2, persistedItem.PendingReceiveQuantity, "ต้องบันทึกจำนวนที่ถูกกันไว้รออนุมัติ")
+}
+
+func TestConfirmBillImportTransaction_OwnerPriceChangeCreditsQuantityImmediately(t *testing.T) {
+	db := setupImportBillTestDB(t)
+	repo := billRepo.NewImportBillRepository(db)
+	product, supplier := seedProductForImport(t, db, 100)
+
+	bill := newTestBill("BILL-HOLD-OWNER-1", supplier.ID)
+	items := []entity.BillItem{newTestBillItem(product.ID, 150)}
+
+	require.NoError(t, repo.ConfirmBillImportTransaction(bill, items, nil, "Owner"))
+
+	var updatedProduct entity.Product
+	require.NoError(t, db.First(&updatedProduct, product.ID).Error)
+	require.Equal(t, 2, updatedProduct.Quantity, "เจ้าของนำเข้าเอง ต้องนับสต็อกเข้าทันทีไม่ต้องกันไว้")
+
+	var persistedItem entity.BillItem
+	require.NoError(t, db.Where("bill_id = ?", bill.ID).First(&persistedItem).Error)
+	require.Equal(t, 0, persistedItem.PendingReceiveQuantity)
+}
+
+func TestConfirmBillImportTransaction_NoPriceChangeCreditsQuantityImmediately(t *testing.T) {
+	db := setupImportBillTestDB(t)
+	repo := billRepo.NewImportBillRepository(db)
+	product, supplier := seedProductForImport(t, db, 100)
+
+	bill := newTestBill("BILL-HOLD-SAME-1", supplier.ID)
+	items := []entity.BillItem{newTestBillItem(product.ID, 100)} // ราคาตรงกับระบบเดิม ไม่ถือว่าเปลี่ยน
+
+	require.NoError(t, repo.ConfirmBillImportTransaction(bill, items, nil, "Employee"))
+
+	var updatedProduct entity.Product
+	require.NoError(t, db.First(&updatedProduct, product.ID).Error)
+	require.Equal(t, 2, updatedProduct.Quantity, "ราคาไม่เปลี่ยน ไม่มีเหตุต้องกันสต็อกไว้")
+}
+
+// TestConfirmBillImportTransaction_ApprovalReleasesPendingQuantity: จำลอง flow จริง 2 ขั้นตอน —
+// พนักงานนำเข้าบิลราคาเปลี่ยน (สต็อกถูกกันไว้) แล้วเจ้าของกดอนุมัติผ่าน UpdateBill (is_verified=true) —
+// จำนวนที่กันไว้ต้องถูกปล่อยเข้าสต็อกเต็มจำนวน และราคาทุนต้องอัปเดตเป็นราคาใหม่
+func TestConfirmBillImportTransaction_ApprovalReleasesPendingQuantity(t *testing.T) {
+	db := setupImportBillTestDB(t)
+	repo := billRepo.NewImportBillRepository(db)
+	product, supplier := seedProductForImport(t, db, 100)
+
+	bill := newTestBill("BILL-RELEASE-1", supplier.ID)
+	items := []entity.BillItem{newTestBillItem(product.ID, 150)}
+	require.NoError(t, repo.ConfirmBillImportTransaction(bill, items, nil, "Employee"))
+	require.False(t, bill.IsVerified)
+
+	var afterImport entity.Product
+	require.NoError(t, db.First(&afterImport, product.ID).Error)
+	require.Equal(t, 0, afterImport.Quantity, "ก่อนอนุมัติ ต้องยังไม่นับเข้าสต็อก")
+
+	// เจ้าของกดอนุมัติบิล: ส่ง items เดิมกลับมาพร้อม is_verified=true ผ่าน UpdateBill (เหมือนหน้า approve_view.tsx จริง)
+	approveBill := &entity.Bill{IsVerified: true}
+	approveItems := []entity.BillItem{newTestBillItem(product.ID, 150)}
+	require.NoError(t, repo.UpdateBill(bill.ID, approveBill, approveItems))
+	require.True(t, approveBill.IsVerified)
+
+	var afterApprove entity.Product
+	require.NoError(t, db.First(&afterApprove, product.ID).Error)
+	require.Equal(t, 2, afterApprove.Quantity, "อนุมัติแล้วต้องปล่อยจำนวนที่กันไว้เข้าสต็อกเต็มจำนวน")
+	require.Equal(t, float64(150), afterApprove.Cost_price, "ราคาทุนต้องอัปเดตเป็นราคาใหม่หลังอนุมัติ")
+
+	var persistedItem entity.BillItem
+	require.NoError(t, db.Where("bill_id = ?", bill.ID).First(&persistedItem).Error)
+	require.Equal(t, 0, persistedItem.PendingReceiveQuantity, "หลังอนุมัติต้องไม่มีจำนวนค้างกันไว้อีก")
+}
