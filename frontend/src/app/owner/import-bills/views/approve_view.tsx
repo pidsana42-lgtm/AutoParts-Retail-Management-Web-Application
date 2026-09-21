@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { CheckCircle2, FileImage, ExternalLink, ChevronRight, XCircle } from 'lucide-react';
+import { CheckCircle2, FileImage, ExternalLink, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Heading from '../../../../components/elements/heading';
 import Button from '../../../../components/elements/button';
+import Badge from '../../../../components/elements/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
 import type { SavedBill, Supplier, Product } from '../../../../interface/import';
 import { resolveImageUrl } from '../../../../service/http/import/import_service';
@@ -57,8 +58,16 @@ export default function ApproveView({
   const productCostMap = new Map<number, number>();
   products.forEach(p => { if (p.cost_price != null) productCostMap.set(p.id, p.cost_price); });
 
+  // แสดงเฉพาะรายการที่ราคาทุนต่างจากระบบจริงๆ — ถ้าไม่มีเลย (เช่นบิลที่เจ้าของนำเข้าเองไม่มีราคาเปลี่ยน) ให้ fallback
+  // กลับไปโชว์ทุกรายการ กันตารางว่างเปล่าดูเหมือนหน้าพัง
+  const changedBillItems = (bill.bill_items || []).filter((item) => {
+    const oldCost = item.product_id ? productCostMap.get(item.product_id) : undefined;
+    return item.price_per_unit > 0 && oldCost != null && oldCost !== item.price_per_unit;
+  });
+  const displayItems = changedBillItems.length > 0 ? changedBillItems : (bill.bill_items || []);
+
   const handleViewProduct = (item: NonNullable<SavedBill['bill_items']>[number]) => {
-    const allBillItems = (bill.bill_items || [])
+    const allBillItems = displayItems
       .filter(i => i.product_id)
       .map(i => ({
         productId: i.product_id,
@@ -114,7 +123,12 @@ export default function ApproveView({
         <div className={`flex flex-col gap-6 ${imageUrl && !imgError ? 'xl:col-span-2' : ''}`}>
           {/* Bill metadata card */}
           <div className="bg-white border border-gray-200 rounded-none shadow-sm p-6">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">ข้อมูลบิล</p>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">ข้อมูลบิล</p>
+              {!bill.is_verified && isEmployee && (
+                <Badge variant="warning" size="md">รอเจ้าของร้านอนุมัติ</Badge>
+              )}
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
               <div>
                 <p className="text-xs text-gray-400 mb-0.5">เลขที่บิล</p>
@@ -165,7 +179,7 @@ export default function ApproveView({
           {/* Items table */}
           <div className="bg-white border border-gray-200 rounded-none shadow-sm overflow-hidden">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider px-6 py-4 border-b border-gray-100">
-              รายการสินค้า ({(bill.bill_items || []).length} รายการ)
+              รายการสินค้าที่ราคาเปลี่ยนแปลง ({displayItems.length} รายการ)
             </p>
             <div className="overflow-x-auto">
               <Table>
@@ -182,7 +196,7 @@ export default function ApproveView({
                   </TableRow>
                 </TableHeader>
                 <TableBody className="text-sm text-gray-700">
-                  {(bill.bill_items || []).map((item) => {
+                  {displayItems.map((item) => {
                     const oldCost = item.product_id ? productCostMap.get(item.product_id) : undefined;
                     const newPrice = item.price_per_unit;
                     const hasDiff = oldCost != null && oldCost !== newPrice;
@@ -195,7 +209,9 @@ export default function ApproveView({
                           <p className="font-medium text-[#1C1B1B]">{item.company_product_name}</p>
                           <p className="text-[10px] font-mono text-gray-400">{item.company_product_code || ''}</p>
                         </TableCell>
-                        <TableCell className="text-center">{item.order_quantity} {item.unit}</TableCell>
+                        <TableCell className="text-center">
+                          {item.order_quantity} {item.unit}
+                        </TableCell>
                         <TableCell className="text-right text-gray-500">
                           {oldCost != null ? `฿${oldCost.toLocaleString('th-TH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300 text-xs">ไม่มีข้อมูล</span>}
                         </TableCell>
@@ -231,19 +247,18 @@ export default function ApproveView({
             </div>
           </div>
 
-          {/* Button Actions — เหมือน pattern ของหน้าใบสั่งซื้อ (po_detail.tsx) */}
+          {/* Button Actions */}
           {bill.is_verified ? (
-            <div className="sticky bottom-0 z-20 bg-gray-50 py-4 border-t border-gray-200 flex justify-end">
+            <div className="sticky bottom-0 z-20 flex justify-end border-t border-gray-200 bg-white py-4">
               <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
                 <CheckCircle2 size={16} /> บิลนี้ได้รับการอนุมัติแล้ว
               </span>
             </div>
           ) : !isEmployee ? (
-            <div className="sticky bottom-0 z-20 bg-gray-50 py-4 border-t border-gray-200 flex justify-between">
+            <div className="sticky bottom-0 z-20 flex flex-col gap-2 border-t border-gray-200 bg-white py-4 sm:flex-row sm:justify-end">
               <Button
-                variant="outline"
-                className="w-48"
-                leftIcon={<XCircle size={16} />}
+                variant="secondary"
+                className="w-full sm:w-40"
                 isLoading={rejecting}
                 disabled={loading || rejecting}
                 onClick={handleReject}
@@ -252,8 +267,7 @@ export default function ApproveView({
               </Button>
               <Button
                 variant="primary"
-                className="w-40"
-                leftIcon={<CheckCircle2 size={16} />}
+                className="w-full sm:w-40"
                 isLoading={loading}
                 disabled={loading || rejecting}
                 onClick={handleApprove}
@@ -261,13 +275,7 @@ export default function ApproveView({
                 {loading ? 'กำลังอนุมัติ...' : 'อนุมัติบิล'}
               </Button>
             </div>
-          ) : (
-            <div className="sticky bottom-0 z-20 bg-gray-50 py-4 border-t border-gray-200 flex justify-end">
-              <span className="text-xs font-bold text-amber-600 flex items-center gap-1">
-                รอเจ้าของร้านอนุมัติ
-              </span>
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
 

@@ -308,18 +308,20 @@ export default function HomeView({
                       >
                         <SquarePen size={20} />
                       </button>
-                      {(!isEmployee || needsApproval(row)) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteBill(row.id);
-                          }}
-                          className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
-                          title={isEmployee ? "ลบบิลเฉพาะรายการที่ยังไม่อนุมัติ" : "ลบบิล"}
-                        >
-                          <Trash2 size={20} />
-                        </button>
-                      )}
+                      <div className="w-5 flex items-center justify-center">
+                        {(!isEmployee || needsApproval(row)) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteBill(row.id);
+                            }}
+                            className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                            title={isEmployee ? "ลบบิลเฉพาะรายการที่ยังไม่อนุมัติ" : "ลบบิล"}
+                          >
+                            <Trash2 size={20} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </TableCell>
                 </TableRow>

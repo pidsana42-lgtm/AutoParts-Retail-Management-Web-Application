@@ -107,6 +107,9 @@ type ProductListResponseDTO struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	// DeletedAt: มีค่าเฉพาะตอนดึงรายการ "สินค้าที่ถูกลบ" (ถังขยะ) เท่านั้น ไว้โชว์วันที่ลบให้เจ้าของร้านดู
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	// PendingReceiveQuantity: จำนวนที่มีบิลนำเข้ารอเจ้าของอนุมัติราคาอยู่ (ยังไม่นับเข้า Quantity ด้านบน)
+	// ถูกเติมค่าเฉพาะตอนดึงรายละเอียดสินค้าทีละตัว (GetProductByID) เท่านั้น ไม่ได้คำนวณตอนดึงรายการทั้งหมด
+	PendingReceiveQuantity int `json:"pending_receive_quantity"`
 }
 
 // ProductSupplierResponseDTO: รายละเอียด Supplier แต่ละเจ้าที่สินค้านี้รับมาจาก (จากตาราง Inventory)

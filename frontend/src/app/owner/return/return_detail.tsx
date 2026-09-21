@@ -13,7 +13,6 @@ import { returnService } from '../../../service/http/return/return_service';
 import { formatDateThai } from '../../../utils/formatdate';
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import { useToast } from '../../../components/elements/toast';
-import Modal from '../../../components/elements/modal';
 import ConfirmDialog from '../../../components/elements/confirm_dialog';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -349,54 +348,41 @@ const ReturnDetailPage: React.FC = () => {
           </Card>
         </div>
       </div>
-      <Modal
+      <ConfirmDialog
         isOpen={isRefundModalOpen}
         onClose={() => !isUpdating && setIsRefundModalOpen(false)}
         title="ยืนยันการคืนเงินจริง"
-        description="การดำเนินการนี้จะสร้างรายการ Payment และเพิ่มสินค้าเข้าคลัง"
-        size="sm"
-        footer={(
-          <>
-            <Button
-              type="button"
-              variant="tertiary"
-              disabled={isUpdating}
-              onClick={() => setIsRefundModalOpen(false)}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              type="button"
-              variant="approved"
-              disabled={isUpdating}
-              onClick={async () => {
-                setIsRefundModalOpen(false);
-                await handleProcessRefund();
-              }}
-            >
-              {isUpdating ? <Loader2 size={16} className="animate-spin" /> : <></>}
-              ยืนยันคืนเงินจริง
-            </Button>
-          </>
+        description={(
+          <div className="space-y-3 text-sm text-slate-700 text-left">
+            <p className="text-center text-slate-600">การดำเนินการนี้จะสร้างรายการ Payment และเพิ่มสินค้าเข้าคลัง</p>
+            <div className="bg-[#f6f3f2] p-3 space-y-2 mt-2">
+              <div className="flex justify-between gap-4 text-xs">
+                <span className="text-slate-500">เลขที่ใบคืน</span>
+                <span className="font-semibold text-slate-900">{returnItem.return_number || '-'}</span>
+              </div>
+              <div className="flex justify-between gap-4 text-xs">
+                <span className="text-slate-500">ยอดเงินคืน</span>
+                <span className="font-semibold text-[#e51c23]">
+                  ฿ {returnItem.refund_amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4 text-xs">
+                <span className="text-slate-500">ช่องทางคืนเงิน</span>
+                <span className="font-medium text-slate-900">{returnItem.refund_method || '-'}</span>
+              </div>
+            </div>
+          </div>
         )}
-      >
-        <div className="space-y-3 text-sm text-slate-700">
-          <div className="flex justify-between gap-4">
-            <span className="text-slate-500">เลขที่ใบคืน</span>
-            <span className="font-semibold text-slate-900">{returnItem.return_number || '-'}</span>
-          </div>
-          <div className="flex justify-between gap-4">
-            <span className="text-slate-500">ยอดเงินคืน</span>
-            <span className="font-semibold text-red-600">
-              ฿ {returnItem.refund_amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-          </div>
-          <div className="flex justify-between gap-4">
-            <span className="text-slate-500">ช่องทางคืนเงิน</span>
-            <span className="font-medium text-slate-900">{returnItem.refund_method || '-'}</span>
-          </div>
-        </div>
-      </Modal>
+        onConfirm={async () => {
+          setIsRefundModalOpen(false);
+          await handleProcessRefund();
+        }}
+        confirmText="ยืนยันคืนเงินจริง"
+        cancelText="ยกเลิก"
+        variant="success"
+        icon={CircleCheck}
+        isSubmitting={isUpdating}
+      />
 
       {/* Modal ยืนยันการอนุมัติคืนเงิน */}
       <ConfirmDialog
