@@ -60,7 +60,9 @@ export default function ProductDetailPage() {
     | { from?: string; scheduleId?: number; scheduleName?: string }
     | null;
   const cameFromMovement = navOrigin?.from === "movement";
-  const cameFromCheckStock = navOrigin?.from === "check_stock";
+  // check_stock_new: กดเข้ามาจากหน้า "สร้างตารางตรวจสอบสินค้า" (ยังไม่มีตารางจริงให้ผูก scheduleId เพราะยังไม่ได้กดบันทึก)
+  const cameFromCheckStockCreate = navOrigin?.from === "check_stock_new";
+  const cameFromCheckStock = navOrigin?.from === "check_stock" || cameFromCheckStockCreate;
 
   const [product, setProduct] = useState<StockItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -387,16 +389,19 @@ export default function ProductDetailPage() {
                   cameFromMovement
                     ? { label: "การเคลื่อนไหวของคลังสินค้า", path: "/owner/stock/stock-movement" }
                     : { label: "ตรวจสอบสินค้า", path: "/owner/stock/stock-check" },
-                  // เป้าหมายการตรวจสอบ: ชื่อตารางเช็คสต็อกที่กดเข้ามา (ถ้ามี ไม่ว่าจะไล่มาจากหน้าไหนก็ตาม)
-                  // ให้ย้อนกลับไปหน้ารายละเอียดตารางนั้นได้ — รักษาต้นทางเดิมไว้แม้กดผ่านหน้ารายละเอียดตารางมาอีกที
-                  ...(navOrigin?.scheduleId
-                    ? [
-                        {
-                          label: navOrigin.scheduleName || "เป้าหมายการตรวจสอบ",
-                          path: `/owner/stock/stock-check/${navOrigin.scheduleId}`,
-                        },
-                      ]
-                    : []),
+                  // ถ้ากดเข้ามาจากหน้า "สร้างตารางตรวจสอบสินค้า" (ยังไม่มีตารางจริง) ให้ลิงก์กลับไปหน้าสร้างนั้น
+                  // แทน — ถ้ากดจากตารางที่มีอยู่แล้ว (ไม่ว่าจะไล่มาจากหน้าไหนก็ตาม) ให้ลิงก์กลับไปหน้ารายละเอียด
+                  // ตารางนั้น รักษาต้นทางเดิมไว้แม้กดผ่านหน้ารายละเอียดตารางมาอีกที
+                  ...(cameFromCheckStockCreate
+                    ? [{ label: "สร้างตารางตรวจสอบสินค้า", path: "/owner/stock/stock-check/new" }]
+                    : navOrigin?.scheduleId
+                      ? [
+                          {
+                            label: navOrigin.scheduleName || "เป้าหมายการตรวจสอบ",
+                            path: `/owner/stock/stock-check/${navOrigin.scheduleId}`,
+                          },
+                        ]
+                      : []),
                   { label: product.Name || "รายละเอียดสินค้า" },
                 ]
               : [
@@ -480,6 +485,11 @@ export default function ProductDetailPage() {
                       <span className="font-medium text-slate-700">
                         {product.Stock} {product.Unit || "ชิ้น"}
                       </span>
+                      {!!product.PendingReceiveQuantity && product.PendingReceiveQuantity > 0 && (
+                        <span className="ml-2 text-[11px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 align-middle">
+                          รอรับเข้า {product.PendingReceiveQuantity} {product.Unit || "ชิ้น"}
+                        </span>
+                      )}
                     </div>
                     <div>
                       <span className="text-slate-400">ราคาขาย:</span>{" "}

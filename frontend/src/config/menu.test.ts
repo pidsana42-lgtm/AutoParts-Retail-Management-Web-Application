@@ -48,14 +48,11 @@ describe('getMenuByRole', () => {
     expect(firstMenu.path).toBe('/employee/dashboard/maindashboard');
   });
 
-  it('should restrict storeconfig (company setting) to OWNER only and not in MANAGER menu', () => {
+  it('should restrict all storeconfig features (including financial policy and credit control) to OWNER only and not in MANAGER menu', () => {
     const managerMenus = getMenuByRole('MANAGER');
     const managerSettings = managerMenus.find((m) => m.label === 'การตั้งค่า');
-    expect(managerSettings).toBeDefined();
-    // Manager should land on financial-policy and have no access to storeconfig
-    expect(managerSettings?.path).toBe('/manager/storeconfig/financial-policy');
-    const managerHasStoreConfigSub = managerSettings?.subs?.some((s) => s.path.endsWith('/storeconfig'));
-    expect(managerHasStoreConfigSub).toBe(false);
+    // Manager should have no settings menu at all
+    expect(managerSettings).toBeUndefined();
 
     const ownerMenus = getMenuByRole('OWNER');
     const ownerSettings = ownerMenus.find((m) => m.label === 'การตั้งค่า');
@@ -63,5 +60,9 @@ describe('getMenuByRole', () => {
     expect(ownerSettings?.path).toBe('/owner/storeconfig');
     const ownerHasStoreConfigSub = ownerSettings?.subs?.some((s) => s.path === '/owner/storeconfig');
     expect(ownerHasStoreConfigSub).toBe(true);
+    const ownerHasFinancialPolicySub = ownerSettings?.subs?.some((s) => s.path === '/owner/storeconfig/financial-policy');
+    expect(ownerHasFinancialPolicySub).toBe(true);
+    const ownerHasCreditControlSub = ownerSettings?.subs?.some((s) => s.path === '/owner/storeconfig/customer-credit-control');
+    expect(ownerHasCreditControlSub).toBe(true);
   });
 });

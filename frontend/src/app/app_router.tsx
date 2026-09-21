@@ -103,12 +103,27 @@ export default function AppRouter(): React.JSX.Element {
           isAuthenticated ? <ChangePasswordPage /> : <Navigate to="/login" replace />
         } />
 
-        {/* ตั้งค่าข้อมูลร้านค้า (StoreConfig): ให้สิทธิ์เฉพาะ OWNER เท่านั้น */}
+        {/* ตั้งค่าข้อมูลร้านค้าและการตั้งค่าระบบ (StoreConfig): ให้สิทธิ์เฉพาะ OWNER เท่านั้น */}
         <Route path="/owner/storeconfig" element={
           isOwner ? <StoreConfig /> : <Navigate to={firstMenuPath} replace />
         } />
+        <Route path="/owner/storeconfig/financial-policy" element={
+          isOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/storeconfig/customer-credit-control" element={
+          isOwner ? <CustomerCreditControl /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/storeconfig/register-employee" element={
+          isOwner ? <EmployeeManagementPage /> : <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/owner/storeconfig/register-employee/new" element={
+          isOwner ? <RegisterEmployeePage /> : <Navigate to={firstMenuPath} replace />
+        } />
         <Route path="/manager/storeconfig" element={
-          <Navigate to="/manager/storeconfig/financial-policy" replace />
+          <Navigate to={firstMenuPath} replace />
+        } />
+        <Route path="/manager/storeconfig/*" element={
+          <Navigate to={firstMenuPath} replace />
         } />
 
         {/* เฉพาะ OWNER หรือ MANAGER เท่านั้นที่เข้าได้ (รองรับทั้ง path /owner และ /manager) */}
@@ -123,21 +138,6 @@ export default function AppRouter(): React.JSX.Element {
             <Route path={`${prefix}/dashboard/debtdashboard`} element={
               isManagerOrOwner ? <DebtDashboard /> : <Navigate to={firstMenuPath} replace />
             } />
-
-            {/* -------------------- การตั้งค่า (เฉพาะนโยบายการเงินและการคุมเครดิต) ------------------------ */}
-            <Route path={`${prefix}/storeconfig/financial-policy`} element={
-              isManagerOrOwner ? <FinancialPolicy /> : <Navigate to={firstMenuPath} replace />
-            } />
-            <Route path={`${prefix}/storeconfig/customer-credit-control`} element={
-              isManagerOrOwner ? <CustomerCreditControl /> : <Navigate to={firstMenuPath} replace />
-            } />
-            <Route path={`${prefix}/storeconfig/register-employee`} element={
-              prefix === '/owner' && isOwner ? <EmployeeManagementPage /> : <Navigate to={firstMenuPath} replace />
-            } />
-            <Route path={`${prefix}/storeconfig/register-employee/new`} element={
-              prefix === '/owner' && isOwner ? <RegisterEmployeePage /> : <Navigate to={firstMenuPath} replace />
-            } />
-            {/* ------------------------------------------------------ */}
 
             <Route path={`${prefix}/stock`} element={
               isManagerOrOwner ? <Stock /> : <Navigate to={firstMenuPath} replace />
@@ -283,6 +283,7 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/employee/import/mapping" element={<EmployeeImport />} />
         <Route path="/employee/import/manual" element={<EmployeeImport />} />
         <Route path="/employee/import/po" element={<EmployeeImport />} />
+        <Route path="/employee/import/approve/:id" element={<EmployeeImport />} />
 
         {/* หน้าพรีออเดอร์สำหรับพนักงาน */}
         <Route path="/employee/pre-orders" element={<EmployeePreOrder />} />

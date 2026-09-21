@@ -26,6 +26,11 @@ export interface StockItem {
   // เพราะสินค้า 1 ชื่อในร้านมาได้จากหลายบริษัท แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน)
   // VariantCode: รหัสล็อตต่อบริษัทที่ระบบออกให้อัตโนมัติ (เช่น BP-123-SU3) ใช้พิมพ์ QR/บาร์โค้ดแยกบริษัท
   Suppliers?: { SupplierID: number; SupplierName: string; Quantity: number; CompanyProductCode?: string; VariantCode?: string; Barcode?: string; QRCode?: string }[];
+  // UpdatedAt: วันที่ข้อมูลสินค้าถูกแก้ไขล่าสุด — ใช้กรองตามช่วงเวลาที่หน้า "จัดการคลังสินค้า"
+  UpdatedAt?: string;
   // DeletedAt: มีค่าเฉพาะตอนดึงรายการ "สินค้าที่ถูกลบ" (ถังขยะ) เท่านั้น
   DeletedAt?: string;
+  // PendingReceiveQuantity: จำนวนที่มีบิลนำเข้ารอเจ้าของอนุมัติราคาอยู่ (ยังไม่นับเข้า Stock ด้านบน)
+  // มีค่าเฉพาะตอนดึงรายละเอียดสินค้าทีละตัวเท่านั้น
+  PendingReceiveQuantity?: number;
 }

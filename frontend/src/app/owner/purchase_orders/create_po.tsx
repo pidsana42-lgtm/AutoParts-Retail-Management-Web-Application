@@ -68,6 +68,8 @@ const CreatePurchaseOrders: React.FC = () => {
     };
     // เก็บ supplier ที่รอยืนยันเปลี่ยน (ถ้ามีของในตะกร้าอยู่แล้ว)
     const [pendingSupplierId, setPendingSupplierId] = useState<string | null>(null);
+    // Remount the dropdown on cancel so it displays the previously confirmed supplier.
+    const [supplierSelectKey, setSupplierSelectKey] = useState(0);
     // เก็บ key ของรายการที่รอยืนยันลบเนื่องจากจำนวนเหลือ 0
     const [removeConfirm, setRemoveConfirm] = useState<{ key: number | string } | null>(null);
     const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false);
@@ -180,6 +182,11 @@ const CreatePurchaseOrders: React.FC = () => {
         setItem([]);
         setQtyDrafts({});
         setPendingSupplierId(null);
+    };
+
+    const cancelSupplierChange = () => {
+        setPendingSupplierId(null);
+        setSupplierSelectKey((previousKey) => previousKey + 1);
     };
 
     // 3. ฟังก์ชันสำหรับรับรายการพรีออเดอร์ที่ถูกกด "เพิ่ม" มาแปลงใส่ลงตารางใบสั่งซื้อ (item)
@@ -383,7 +390,8 @@ const CreatePurchaseOrders: React.FC = () => {
                         </CardHeader>
                         <CardContent>
                             <div className='grid grid-rows-2 gap-6 items-end mb-2'>
-                                <Select 
+                                <Select
+                                    key={supplierSelectKey}
                                     label='ชื่อบริษัท/ผู้จัดจำหน่าย'
                                     value={listsSupplier}
                                     onChange={(e) => handleSupplierChange(e.target.value)}
@@ -724,7 +732,7 @@ const CreatePurchaseOrders: React.FC = () => {
 
             <ConfirmDialog
                 isOpen={pendingSupplierId !== null}
-                onClose={() => setPendingSupplierId(null)}
+                onClose={cancelSupplierChange}
                 onConfirm={confirmSupplierChange}
                 title='ยืนยันการเปลี่ยนบริษัท/ผู้จัดจำหน่าย'
                 description='การเปลี่ยนบริษัท/ผู้จัดจำหน่ายจะล้างรายการสินค้าที่เพิ่มไว้ในตะกร้าปัจจุบันทั้งหมด ต้องการดำเนินการต่อหรือไม่?'

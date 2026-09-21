@@ -81,7 +81,10 @@ export default function SupplierRowsField({ rows, onChange, options, disabled, o
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-slate-700">ผู้จำหน่าย (Suppliers)</label>
+        <label className="text-sm font-medium text-slate-700">
+          ผู้จำหน่าย (Suppliers)
+          <span className="ml-0.5 text-red-500">*</span>
+        </label>
         <button
           type="button"
           onClick={handleAddRow}
@@ -94,8 +97,8 @@ export default function SupplierRowsField({ rows, onChange, options, disabled, o
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-sm border border-dashed border-slate-200 bg-slate-50 p-3 text-center text-xs text-slate-400">
-          ยังไม่ได้ระบุว่าสินค้านี้รับมาจาก Supplier ไหน (ไม่บังคับ)
+        <p className="rounded-sm border border-dashed border-red-200 bg-red-50 p-3 text-center text-xs text-red-500">
+          กรุณาระบุอย่างน้อย 1 บริษัทที่สินค้านี้รับมาจาก
         </p>
       ) : (
         <div className="flex flex-col gap-2">

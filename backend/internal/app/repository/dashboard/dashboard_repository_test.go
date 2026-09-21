@@ -125,3 +125,103 @@ func TestGetHistoricalSummariesReplacesStaleCollectedDebt(t *testing.T) {
 		t.Fatalf("collected debt = %.2f, want refreshed value 125.00", got)
 	}
 }
+
+func TestGetStockHealthUsesQuantityComparedWithMinimum(t *testing.T) {
+	db := newDashboardRepositoryTestDB(t)
+	err := db.Exec(`CREATE TABLE products (
+		id INTEGER PRIMARY KEY,
+		quantity INTEGER NOT NULL,
+		limit_quantity INTEGER NOT NULL,
+		is_active BOOLEAN NOT NULL,
+		deleted_at DATETIME
+	)`).Error
+	if err != nil {
+		t.Fatalf(`create products table: %v`, err)
+	}
+	err = db.Exec(`INSERT INTO products (quantity, limit_quantity, is_active) VALUES
+		(1, 5, true), (0, 5, true), (1, 5, true), (1, 5, true),
+		(1, 5, true), (1, 5, true), (3, 5, true)`).Error
+	if err != nil {
+		t.Fatalf(`insert products: %v`, err)
+	}
+
+	result, err := (&dashboardRepository{db: db}).GetStockHealth(context.Background())
+	if err != nil {
+		t.Fatalf(`get stock health: %v`, err)
+	}
+	if result.TotalProducts != 7 {
+		t.Fatalf(`total products = %d, want 7`, result.TotalProducts)
+	}
+	if result.HealthyCount != 0 || result.LowStockCount != 6 || result.OutOfStockCount != 1 {
+		t.Fatalf(`stock buckets = %d/%d/%d, want 0/6/1`,
+			result.HealthyCount, result.LowStockCount, result.OutOfStockCount)
+	}
+	if result.HealthPercent != 23 {
+		t.Fatalf(`health percent = %.0f, want 23`, result.HealthPercent)
+	}
+
+	if err := db.Exec(`UPDATE products SET quantity = 100`).Error; err != nil {
+		t.Fatalf(`update products: %v`, err)
+	}
+	result, err = (&dashboardRepository{db: db}).GetStockHealth(context.Background())
+	if err != nil {
+		t.Fatalf(`get capped stock health: %v`, err)
+	}
+	if result.HealthPercent != 100 {
+		t.Fatalf(`capped health percent = %.0f, want 100`, result.HealthPercent)
+	}
+}
+
+func TestGetProductsInStockLoadsUnitWithJoin(t *testing.T) {
+	db := newDashboardRepositoryTestDB(t)
+	for _, statement := range []string{
+		`CREATE TABLE units (
+			id INTEGER PRIMARY KEY,
+			created_at DATETIME,
+			updated_at DATETIME,
+			deleted_at DATETIME,
+			unit_name TEXT
+		)`,
+		`CREATE TABLE products (
+			id INTEGER PRIMARY KEY,
+			created_at DATETIME,
+			updated_at DATETIME,
+			deleted_at DATETIME,
+			product_code TEXT,
+			part_number TEXT,
+			product_name TEXT,
+			quantity INTEGER NOT NULL,
+			limit_quantity INTEGER,
+			sale_price NUMERIC,
+			cost_price NUMERIC,
+			is_active BOOLEAN,
+			import_date_time DATETIME,
+			note TEXT,
+			unit_id INTEGER,
+			category_id INTEGER,
+			sub_category_id INTEGER,
+			sub_sub_category_id INTEGER,
+			grade_id INTEGER,
+			shelf_id INTEGER,
+			shelf_level_id INTEGER,
+			max_discount_rate NUMERIC
+		)`,
+		`INSERT INTO units (id, unit_name) VALUES (1, 'ชิ้น')`,
+		`INSERT INTO products (id, quantity, unit_id) VALUES (1, 3, 1), (2, 0, 1)`,
+	} {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatalf(`prepare joined product data: %v`, err)
+		}
+	}
+
+	products, err := (&dashboardRepository{db: db}).GetProductsInStock(context.Background())
+	if err != nil {
+		t.Fatalf(`get products in stock: %v`, err)
+	}
+	if len(products) != 1 {
+		t.Fatalf(`products count = %d, want 1`, len(products))
+	}
+	if products[0].Unit == nil || products[0].Unit.Unit_Name != `ชิ้น` {
+		t.Fatalf(`joined unit was not loaded`)
+	}
+}

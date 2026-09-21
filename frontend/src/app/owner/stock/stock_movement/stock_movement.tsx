@@ -65,6 +65,7 @@ const TYPE_ORDER: MovementFeedType[] = [
 
 // พรีเซ็ตช่วงเวลาด่วน (แบบเดียวกับแถบตัวกรองในหน้าแดชบอร์ด) — ใช้ควบคู่กับ DateRangePicker สำหรับเลือกช่วงเอง
 const PERIOD_PRESETS: { label: string; value: string }[] = [
+  { label: "วันนี้", value: "daily" },
   { label: "สัปดาห์นี้", value: "weekly" },
   { label: "เดือนนี้", value: "monthly" },
   { label: "ไตรมาสนี้", value: "quarterly" },
@@ -78,6 +79,8 @@ function getPeriodRange(period: string): { start: Date; end: Date } | null {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   switch (period) {
+    case "daily":
+      return { start: startOfToday, end: now };
     case "weekly": {
       const daysSinceMonday = (now.getDay() + 6) % 7;
       const start = new Date(startOfToday);
@@ -95,6 +98,33 @@ function getPeriodRange(period: string): { start: Date; end: Date } | null {
     default:
       return null;
   }
+}
+
+// เช็คว่า item เกิดขึ้นในช่วงเวลาที่ตัวกรองกำหนดไว้หรือไม่ (ช่วงวันที่กำหนดเอง หรือพรีเซ็ตด่วน) — ใช้ร่วมกันทั้ง
+// ตัวเลขบนการ์ดสรุปด้านบนและรายการที่แสดงในตาราง กันไม่ให้สองจุดนี้คำนวณคนละแบบแล้วเลขไม่ตรงกัน
+function matchesPeriod(item: MovementFeedItem, startDate: string, endDate: string, selectedPeriod: string): boolean {
+  if (startDate || endDate) {
+    const occurredAt = new Date(item.occurred_at);
+    if (startDate) {
+      const s = new Date(startDate);
+      s.setHours(0, 0, 0, 0);
+      if (occurredAt < s) return false;
+    }
+    if (endDate) {
+      const e = new Date(endDate);
+      e.setHours(23, 59, 59, 999);
+      if (occurredAt > e) return false;
+    }
+    return true;
+  }
+  if (selectedPeriod) {
+    const range = getPeriodRange(selectedPeriod);
+    if (range) {
+      const occurredAt = new Date(item.occurred_at);
+      return occurredAt >= range.start && occurredAt <= range.end;
+    }
+  }
+  return true;
 }
 
 const TYPE_META: Record<
@@ -203,39 +233,21 @@ function StockMovementContent() {
     loadData();
   }, []);
 
-  // จำนวนรายการต่อประเภท ใช้ทั้งการ์ดสรุปด้านบนและตัวเลขในตัวกรอง
+  // จำนวนรายการต่อประเภท ใช้ทั้งการ์ดสรุปด้านบนและตัวเลขในตัวกรอง — ยึดตามช่วงเวลาที่เลือกไว้เสมอ (พรีเซ็ต/กำหนดเอง)
+  // แต่ไม่กรองตามประเภท/คำค้นหา เพราะการ์ดต้องโชว์ยอดแยกทุกประเภทของช่วงเวลานั้นให้เห็นภาพรวมพร้อมกัน
   const counts = useMemo(() => {
-    const c: Record<string, number> = { ALL: items.length };
+    const inPeriod = items.filter((item) => matchesPeriod(item, startDate, endDate, selectedPeriod));
+    const c: Record<string, number> = { ALL: inPeriod.length };
     TYPE_ORDER.forEach((t) => {
-      c[t] = items.filter((i) => i.type === t).length;
+      c[t] = inPeriod.filter((i) => i.type === t).length;
     });
     return c;
-  }, [items]);
+  }, [items, startDate, endDate, selectedPeriod]);
 
   const filtered = useMemo(() => {
     return items.filter((item) => {
       if (typeFilter && item.type !== typeFilter) return false;
-
-      if (startDate || endDate) {
-        // ช่วงวันที่กำหนดเองมาก่อนพรีเซ็ตเสมอ (เลือกสองอย่างพร้อมกันไม่ได้อยู่แล้ว แต่กันไว้ให้ชัดเจน)
-        const occurredAt = new Date(item.occurred_at);
-        if (startDate) {
-          const s = new Date(startDate);
-          s.setHours(0, 0, 0, 0);
-          if (occurredAt < s) return false;
-        }
-        if (endDate) {
-          const e = new Date(endDate);
-          e.setHours(23, 59, 59, 999);
-          if (occurredAt > e) return false;
-        }
-      } else if (selectedPeriod) {
-        const range = getPeriodRange(selectedPeriod);
-        if (range) {
-          const occurredAt = new Date(item.occurred_at);
-          if (occurredAt < range.start || occurredAt > range.end) return false;
-        }
-      }
+      if (!matchesPeriod(item, startDate, endDate, selectedPeriod)) return false;
 
       if (search) {
         const q = search.toLowerCase();

@@ -42,10 +42,13 @@ type mockClaimRepo struct {
 	deleteClaimFn      func(id uint) error
 	adjustStockFn      func(productID uint, delta int, movementType, note string) error
 	reduceDebtFn       func(claimID uint, amount float64) error
+	increaseDebtFn     func(claimID uint, amount float64) error
+	cancelClaimFn      func(id uint) ([]entity.CustomerClaimItem, error)
 
 	called            map[string]int
 	stockAdjustments  []stockAdjustment
 	creditAdjustments []creditAdjustment
+	debtIncreases     []creditAdjustment
 }
 
 func newMockClaimRepo() *mockClaimRepo {
@@ -104,6 +107,20 @@ func (m *mockClaimRepo) UpdateCustomerClaim(c *entity.CustomerClaim) error {
 	return nil
 }
 
+func (m *mockClaimRepo) UpdateCustomerClaimItemWithLock(id uint, mutate func(*entity.CustomerClaimItem) error) (*entity.CustomerClaimItem, error) {
+	item, err := m.GetCustomerClaimItemByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if err := mutate(item); err != nil {
+		return nil, err
+	}
+	if err := m.UpdateCustomerClaimItem(item); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
 func (m *mockClaimRepo) UpdateCustomerClaimItem(i *entity.CustomerClaimItem) error {
 	m.track("UpdateCustomerClaimItem")
 	if m.updateItemFn != nil {
@@ -136,6 +153,23 @@ func (m *mockClaimRepo) ReduceCustomerDebtForClaim(claimID uint, amount float64)
 		return m.reduceDebtFn(claimID, amount)
 	}
 	return nil
+}
+
+func (m *mockClaimRepo) IncreaseCustomerDebtForClaim(claimID uint, amount float64) error {
+	m.track("IncreaseCustomerDebtForClaim")
+	m.debtIncreases = append(m.debtIncreases, creditAdjustment{claimID: claimID, amount: amount})
+	if m.increaseDebtFn != nil {
+		return m.increaseDebtFn(claimID, amount)
+	}
+	return nil
+}
+
+func (m *mockClaimRepo) CancelCustomerClaim(id uint) ([]entity.CustomerClaimItem, error) {
+	m.track("CancelCustomerClaim")
+	if m.cancelClaimFn != nil {
+		return m.cancelClaimFn(id)
+	}
+	return nil, nil
 }
 
 func (m *mockClaimRepo) GetCompanySetting() (*entity.CompanySetting, error) {
@@ -697,15 +731,47 @@ func TestUpdateCustomerClaimItemStatus_InstantApproved_DeductsStockOnce(t *testi
 		t.Error("StockOutIssued should be persisted as true after issuing")
 	}
 
-	// เปลี่ยนสถานะไปมา (APPROVED -> REJECTED -> APPROVED ใหม่) ต้องไม่ตัดสต็อกซ้ำ เพราะของจริงจ่ายให้ลูกค้าไปแล้วครั้งเดียว
+	// Rejecting an already-issued INSTANT item must give the stock back immediately
+	// (otherwise the stock stays "gone" forever even though nothing was ever approved).
 	if _, err := svc.UpdateCustomerClaimItemStatus(1, "REJECTED"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if len(f.repo.stockAdjustments) != 2 {
+		t.Fatalf("expected a reversal adjustment after reject, got %+v", f.repo.stockAdjustments)
+	}
+	reverseAdj := f.repo.stockAdjustments[1]
+	if reverseAdj.productID != 55 || reverseAdj.delta != 2 || reverseAdj.movementType != "CLAIM_REVERSE" {
+		t.Errorf("expected +2 CLAIM_REVERSE for product 55, got %+v", reverseAdj)
+	}
+	if f.parent.Items[0].StockOutIssued {
+		t.Error("StockOutIssued should be reset to false after the reversal")
+	}
+
+	// Repeating the same REJECTED status again must not reverse a second time (idempotent).
+	if _, err := svc.UpdateCustomerClaimItemStatus(1, "REJECTED"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.stockAdjustments) != 2 {
+		t.Fatalf("repeating REJECTED must not reverse again, expected 2 adjustments total, got %+v", f.repo.stockAdjustments)
+	}
+
+	// Re-approving after the reversal must issue the stock out again exactly once.
 	if _, err := svc.UpdateCustomerClaimItemStatus(1, "APPROVED"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(f.repo.stockAdjustments) != 1 {
-		t.Fatalf("re-approving must not deduct stock again, expected 1 adjustment total, got %+v", f.repo.stockAdjustments)
+	if len(f.repo.stockAdjustments) != 3 {
+		t.Fatalf("re-approving after reversal must deduct stock once more, expected 3 adjustments total, got %+v", f.repo.stockAdjustments)
+	}
+	if !f.parent.Items[0].StockOutIssued {
+		t.Error("StockOutIssued should be true again after re-approving")
+	}
+
+	// Repeating the same APPROVED status again must not deduct a second time (idempotent).
+	if _, err := svc.UpdateCustomerClaimItemStatus(1, "APPROVED"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.stockAdjustments) != 3 {
+		t.Fatalf("repeating APPROVED must not deduct again, expected 3 adjustments total, got %+v", f.repo.stockAdjustments)
 	}
 }
 
@@ -720,6 +786,48 @@ func TestUpdateCustomerClaimItemStatus_InstantStillPending_NoStockMovement(t *te
 	}
 	if len(f.repo.stockAdjustments) != 0 {
 		t.Errorf("rejecting an INSTANT item must never deduct stock, got %+v", f.repo.stockAdjustments)
+	}
+}
+
+// TestUpdateCustomerClaimItemStatus_SupplierPendingRejected_ReversesStock: SUPPLIER_PENDING จ่ายของสำรอง
+// ออกไปทันทีตั้งแต่สร้าง (ไม่รอการอนุมัติ) ถ้าสุดท้ายเจ้าของกดปฏิเสธ ต้องได้สต็อกที่เคยจ่ายออกคืนกลับมา
+// ไม่งั้นสต็อกจะหายไปฟรีทั้งที่เคลมนี้ไม่ได้รับการอนุมัติเลย
+func TestUpdateCustomerClaimItemStatus_SupplierPendingRejected_ReversesStock(t *testing.T) {
+	f := newStockFixture(entity.CustomerClaimItem{
+		Model: gorm.Model{ID: 1}, Status: "Pending", ClaimType: "SUPPLIER_PENDING", ProductID: 55, Qty: 3,
+		StockOutIssued: true, // จ่ายออกไปแล้วตั้งแต่สร้าง (ตามธรรมชาติของ SUPPLIER_PENDING)
+	})
+	svc := newService(f.repo, &mockSORepo{}, f.notifier)
+
+	if _, err := svc.UpdateCustomerClaimItemStatus(1, "REJECTED"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.stockAdjustments) != 1 {
+		t.Fatalf("expected exactly one reversal adjustment, got %+v", f.repo.stockAdjustments)
+	}
+	adj := f.repo.stockAdjustments[0]
+	if adj.productID != 55 || adj.delta != 3 || adj.movementType != "CLAIM_REVERSE" {
+		t.Errorf("expected +3 CLAIM_REVERSE for product 55, got %+v", adj)
+	}
+	if f.parent.Items[0].StockOutIssued {
+		t.Error("StockOutIssued should be reset to false after the reversal")
+	}
+}
+
+// TestUpdateCustomerClaimItemStatus_SupplierPendingStillPending_NoReversal: แค่ยังไม่ตัดสินใจ (ยัง PENDING)
+// ไม่ใช่การปฏิเสธ ห้ามคืนสต็อก
+func TestUpdateCustomerClaimItemStatus_SupplierPendingStillPending_NoReversal(t *testing.T) {
+	f := newStockFixture(entity.CustomerClaimItem{
+		Model: gorm.Model{ID: 1}, Status: "Pending", ClaimType: "SUPPLIER_PENDING", ProductID: 55, Qty: 3,
+		StockOutIssued: true,
+	})
+	svc := newService(f.repo, &mockSORepo{}, f.notifier)
+
+	if _, err := svc.UpdateCustomerClaimItemStatus(1, "APPROVED"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.stockAdjustments) != 0 {
+		t.Errorf("approving a SUPPLIER_PENDING item must not move stock again, got %+v", f.repo.stockAdjustments)
 	}
 }
 
@@ -824,6 +932,90 @@ func TestUpdateCustomerClaimItem_ReplacementReceived_RestocksOnce(t *testing.T) 
 }
 
 // -----------------------------------------------------------------------------
+// แก้ไขจำนวน/ราคาของรายการที่ตัด/เติมสต็อก+หักหนี้ไปแล้วจริง ต้องปรับส่วนต่างให้สต็อก/หนี้ตรงกับตัวเลขล่าสุด
+// -----------------------------------------------------------------------------
+
+// TestUpdateCustomerClaimItem_QtyIncreasedAfterApproval_DeductsAdditionalStock: แก้จำนวนเพิ่มขึ้นหลังอนุมัติ
+// (สถานะยังเป็น APPROVED เหมือนเดิม) ต้องตัดสต็อกส่วนต่างเพิ่ม ไม่ใช่ปล่อยผ่านเฉยๆ
+func TestUpdateCustomerClaimItem_QtyIncreasedAfterApproval_DeductsAdditionalStock(t *testing.T) {
+	f := newStockFixture(entity.CustomerClaimItem{
+		Model: gorm.Model{ID: 1}, Status: "APPROVED", ClaimType: "INSTANT", ProductID: 55, Qty: 2,
+		StockOutIssued: true,
+	})
+	svc := newService(f.repo, &mockSORepo{}, f.notifier)
+
+	if _, err := svc.UpdateCustomerClaimItem(1, claimDTO.UpdateCustomerClaimItemDTO{Qty: 5}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.stockAdjustments) != 1 {
+		t.Fatalf("expected exactly one delta adjustment, got %+v", f.repo.stockAdjustments)
+	}
+	adj := f.repo.stockAdjustments[0]
+	if adj.productID != 55 || adj.delta != -3 || adj.movementType != "CLAIM_ADJUST" {
+		t.Errorf("expected -3 CLAIM_ADJUST for product 55 (5-2 additional units), got %+v", adj)
+	}
+}
+
+// TestUpdateCustomerClaimItem_QtyDecreasedAfterApproval_RestoresStock: แก้จำนวนลดลงหลังอนุมัติ ต้องคืนสต็อก
+// ส่วนต่างกลับ
+func TestUpdateCustomerClaimItem_QtyDecreasedAfterApproval_RestoresStock(t *testing.T) {
+	f := newStockFixture(entity.CustomerClaimItem{
+		Model: gorm.Model{ID: 1}, Status: "APPROVED", ClaimType: "INSTANT", ProductID: 55, Qty: 5,
+		StockOutIssued: true,
+	})
+	svc := newService(f.repo, &mockSORepo{}, f.notifier)
+
+	if _, err := svc.UpdateCustomerClaimItem(1, claimDTO.UpdateCustomerClaimItemDTO{Qty: 2}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.stockAdjustments) != 1 {
+		t.Fatalf("expected exactly one delta adjustment, got %+v", f.repo.stockAdjustments)
+	}
+	adj := f.repo.stockAdjustments[0]
+	if adj.productID != 55 || adj.delta != 3 || adj.movementType != "CLAIM_ADJUST" {
+		t.Errorf("expected +3 CLAIM_ADJUST for product 55 (5-2 returned units), got %+v", adj)
+	}
+}
+
+// TestUpdateCustomerClaimItem_UnrelatedFieldChangedAfterApproval_NoStockAdjustment: แก้ field อื่นที่ไม่ใช่
+// จำนวน (เช่น สาเหตุ) ต้องไม่ไปยุ่งกับสต็อกที่ตัดไปแล้ว
+func TestUpdateCustomerClaimItem_UnrelatedFieldChangedAfterApproval_NoStockAdjustment(t *testing.T) {
+	f := newStockFixture(entity.CustomerClaimItem{
+		Model: gorm.Model{ID: 1}, Status: "APPROVED", ClaimType: "INSTANT", ProductID: 55, Qty: 2,
+		StockOutIssued: true,
+	})
+	svc := newService(f.repo, &mockSORepo{}, f.notifier)
+
+	if _, err := svc.UpdateCustomerClaimItem(1, claimDTO.UpdateCustomerClaimItemDTO{Reason: "ชำรุดหนัก"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.stockAdjustments) != 0 {
+		t.Errorf("changing an unrelated field must not touch stock, got %+v", f.repo.stockAdjustments)
+	}
+}
+
+// TestUpdateCustomerClaimItem_QtyIncreasedAfterCreditApproval_ReducesAdditionalDebt: แก้จำนวนเพิ่มของ
+// CREDIT_ACCOUNT ที่หักหนี้ไปแล้ว ต้องหักหนี้ส่วนต่างเพิ่ม
+func TestUpdateCustomerClaimItem_QtyIncreasedAfterCreditApproval_ReducesAdditionalDebt(t *testing.T) {
+	f := newStockFixture(entity.CustomerClaimItem{
+		Model: gorm.Model{ID: 1}, Status: "APPROVED", ClaimType: "CREDIT_ACCOUNT", ProductID: 55, Qty: 2, UnitPrice: 300,
+		CreditApplied: true,
+	})
+	svc := newService(f.repo, &mockSORepo{}, f.notifier)
+
+	if _, err := svc.UpdateCustomerClaimItem(1, claimDTO.UpdateCustomerClaimItemDTO{Qty: 5}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.creditAdjustments) != 1 {
+		t.Fatalf("expected exactly one delta debt adjustment, got %+v", f.repo.creditAdjustments)
+	}
+	adj := f.repo.creditAdjustments[0]
+	if adj.claimID != 10 || adj.amount != 900 {
+		t.Errorf("expected -900 additional debt reduction for claim 10 (3 extra units * 300), got %+v", adj)
+	}
+}
+
+// -----------------------------------------------------------------------------
 // Credit account: หักยอดหนี้ค้างชำระของลูกค้าเมื่อรายการเคลมประเภท CREDIT_ACCOUNT ได้รับการอนุมัติ
 // -----------------------------------------------------------------------------
 
@@ -851,15 +1043,30 @@ func TestUpdateCustomerClaimItemStatus_CreditAccountApproved_ReducesDebtOnce(t *
 		t.Errorf("CREDIT_ACCOUNT approval must never move stock, got %+v", f.repo.stockAdjustments)
 	}
 
-	// สลับสถานะไปมา (APPROVED -> REJECTED -> APPROVED ใหม่) ต้องไม่หักหนี้ซ้ำ เพราะยอดหนี้ถูกหักจริงแค่ครั้งเดียว
+	// Rejecting an already-approved CREDIT_ACCOUNT item must restore the debt immediately
+	// (otherwise the customer stays credited forever even though nothing is approved anymore).
 	if _, err := svc.UpdateCustomerClaimItemStatus(1, "REJECTED"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if len(f.repo.debtIncreases) != 1 {
+		t.Fatalf("expected exactly one debt restoration after reject, got %+v", f.repo.debtIncreases)
+	}
+	if restore := f.repo.debtIncreases[0]; restore.claimID != 10 || restore.amount != 600 {
+		t.Errorf("expected +600 debt restoration for claim 10, got %+v", restore)
+	}
+	if f.parent.Items[0].CreditApplied {
+		t.Error("CreditApplied should be reset to false after the reversal")
+	}
+
+	// Re-approving after the reversal must reduce the debt again exactly once.
 	if _, err := svc.UpdateCustomerClaimItemStatus(1, "APPROVED"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(f.repo.creditAdjustments) != 1 {
-		t.Fatalf("re-approving must not reduce debt again, expected 1 adjustment total, got %+v", f.repo.creditAdjustments)
+	if len(f.repo.creditAdjustments) != 2 {
+		t.Fatalf("re-approving after reversal must reduce debt once more, expected 2 adjustments total, got %+v", f.repo.creditAdjustments)
+	}
+	if len(f.repo.debtIncreases) != 1 {
+		t.Fatalf("re-approving must not trigger another restoration, expected 1 restoration total, got %+v", f.repo.debtIncreases)
 	}
 }
 
@@ -903,5 +1110,63 @@ func TestCreateCustomerClaim_OwnerCreatedCreditAccountAutoApproved_ReducesDebtAt
 	adj := repo.creditAdjustments[0]
 	if adj.claimID != 30 || adj.amount != 450 {
 		t.Errorf("expected -450 debt reduction for claim 30, got %+v", adj)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CancelCustomerClaim: ยกเลิกใบเคลมที่อนุมัติแล้ว ต้องคืนสต็อก/หนี้ที่เคยตัด/หักไปจริงกลับทั้งหมด
+// -----------------------------------------------------------------------------
+
+func TestCancelCustomerClaim_ReversesStockAndCredit(t *testing.T) {
+	repo := newMockClaimRepo()
+	repo.cancelClaimFn = func(id uint) ([]entity.CustomerClaimItem, error) {
+		return []entity.CustomerClaimItem{
+			{Model: gorm.Model{ID: 1}, CustomerClaimID: id, ProductID: 55, Qty: 2, UnitPrice: 300, StockOutIssued: true},
+			{Model: gorm.Model{ID: 2}, CustomerClaimID: id, ProductID: 77, Qty: 1, StockInReceived: true},
+			{Model: gorm.Model{ID: 3}, CustomerClaimID: id, ProductID: 88, Qty: 3, UnitPrice: 200, CreditApplied: true},
+		}, nil
+	}
+	repo.getClaimFn = func(id uint) (*entity.CustomerClaim, error) {
+		return &entity.CustomerClaim{Model: gorm.Model{ID: id}, Status: "CANCELLED"}, nil
+	}
+	svc := newService(repo, &mockSORepo{}, nil)
+
+	res, err := svc.CancelCustomerClaim(10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Status != "CANCELLED" {
+		t.Errorf("expected CANCELLED status in response, got %s", res.Status)
+	}
+	if len(repo.stockAdjustments) != 2 {
+		t.Fatalf("expected 2 stock adjustments (reverse issue + reverse receive), got %+v", repo.stockAdjustments)
+	}
+	if out := repo.stockAdjustments[0]; out.productID != 55 || out.delta != 2 || out.movementType != "CLAIM_CANCEL" {
+		t.Errorf("expected +2 CLAIM_CANCEL for product 55, got %+v", out)
+	}
+	if in := repo.stockAdjustments[1]; in.productID != 77 || in.delta != -1 || in.movementType != "CLAIM_CANCEL" {
+		t.Errorf("expected -1 CLAIM_CANCEL for product 77, got %+v", in)
+	}
+	if len(repo.debtIncreases) != 1 {
+		t.Fatalf("expected exactly one debt restoration, got %+v", repo.debtIncreases)
+	}
+	if restore := repo.debtIncreases[0]; restore.claimID != 10 || restore.amount != 600 {
+		t.Errorf("expected +600 debt restoration for claim 10, got %+v", restore)
+	}
+}
+
+func TestCancelCustomerClaim_PropagatesRepoError(t *testing.T) {
+	repo := newMockClaimRepo()
+	repo.cancelClaimFn = func(id uint) ([]entity.CustomerClaimItem, error) {
+		return nil, claimRepo.ErrClaimNotApproved
+	}
+	svc := newService(repo, &mockSORepo{}, nil)
+
+	_, err := svc.CancelCustomerClaim(10)
+	if !errors.Is(err, claimRepo.ErrClaimNotApproved) {
+		t.Fatalf("expected ErrClaimNotApproved, got %v", err)
+	}
+	if len(repo.stockAdjustments) != 0 || len(repo.debtIncreases) != 0 {
+		t.Error("must not apply any reversal when cancel itself failed")
 	}
 }

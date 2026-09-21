@@ -370,3 +370,51 @@ func TestReturnControllerReadAndDeleteErrors(t *testing.T) {
 		})
 	}
 }
+
+// TestReturnControllerDeleteRequiresOwnerOrManager: ลบใบคืนสินค้าเป็นการดำเนินการที่ทำลายประวัติได้
+// จึงต้องจำกัดสิทธิ์เหมือนกับการอนุมัติ/ปฏิเสธ (owner/manager/admin เท่านั้น) — พนักงานทั่วไปห้ามลบเอง
+func TestReturnControllerDeleteRequiresOwnerOrManager(t *testing.T) {
+	for _, role := range []struct {
+		name    string
+		role    any
+		allowed bool
+	}{
+		{"owner", "OWNER", true},
+		{"normalized_manager", " manager ", true},
+		{"normalized_admin", " admin ", true},
+		{"employee", "EMPLOYEE", false},
+		{"customer", "CUSTOMER", false},
+		{"missing", nil, false},
+		{"wrong_type", 1, false},
+	} {
+		t.Run(role.name, func(t *testing.T) {
+			service := &returnHTTPServiceStub{}
+			response := requestReturnController(service, http.MethodDelete, "/api/returns/42", "", uint(23), role.role)
+			if !role.allowed {
+				assertReturnHTTPStatus(t, response, http.StatusForbidden)
+				if len(service.calls) != 0 {
+					t.Fatalf("forbidden delete reached service: %v", service.calls)
+				}
+				return
+			}
+			assertReturnHTTPStatus(t, response, http.StatusOK)
+			if len(service.calls) != 1 || service.calls[0] != "DeleteReturn" || service.id != 42 {
+				t.Fatalf("service call = %+v; want DeleteReturn with ID 42", service)
+			}
+		})
+	}
+}
+
+// TestReturnControllerDeleteAlreadyRefundedIsConflict: ลบใบคืนสินค้าที่คืนเงินไปแล้วต้องตอบ 409
+// ไม่ใช่ 500 เพราะเป็นกฎธุรกิจที่ทำงานถูกต้อง (มีการปรับสต็อก/จ่ายเงินคืนจริงไปแล้ว ลบไม่ได้)
+func TestReturnControllerDeleteAlreadyRefundedIsConflict(t *testing.T) {
+	service := &returnHTTPServiceStub{err: returnRepo.ErrReturnAlreadyProcessed}
+	response := requestReturnController(service, http.MethodDelete, "/api/returns/42", "", uint(23), "OWNER")
+	assertReturnHTTPStatus(t, response, http.StatusConflict)
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil || payload.Error == "" {
+		t.Fatalf("error response = %+v, JSON error = %v", payload, err)
+	}
+}

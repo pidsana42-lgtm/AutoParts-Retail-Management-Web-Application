@@ -63,6 +63,10 @@ type ProductRepository interface {
 	// (แค่ตั้ง deleted_at ไม่ได้ลบแถวจริง) เลยกู้คืนกลับมาได้โดยไม่เสียข้อมูลอะไรเลย
 	ListDeletedProducts() ([]entity.Product, error)
 	RestoreProduct(id uint) error
+
+	// GetPendingReceiveQuantity: รวมจำนวนของสินค้านี้ที่ถูกกันไว้ตามบิลนำเข้าต่างๆ ที่ยังรอเจ้าของอนุมัติราคาอยู่
+	// (ยังไม่นับเข้า Quantity จริง) ไว้โชว์เป็นแบดจ์ "รอรับเข้า X ชิ้น" ในหน้ารายละเอียดสินค้า
+	GetPendingReceiveQuantity(productID uint) (int, error)
 }
 
 type productRepository struct {
@@ -91,6 +95,15 @@ func (r *productRepository) GetProductByID(id uint) (*entity.Product, error) {
 		return nil, err
 	}
 	return &product, nil
+}
+
+func (r *productRepository) GetPendingReceiveQuantity(productID uint) (int, error) {
+	var total int
+	err := r.db.Model(&entity.BillItem{}).
+		Where("product_id = ? AND pending_receive_quantity > 0", productID).
+		Select("COALESCE(SUM(pending_receive_quantity), 0)").
+		Scan(&total).Error
+	return total, err
 }
 
 func (r *productRepository) UpdateProduct(product *entity.Product) error {

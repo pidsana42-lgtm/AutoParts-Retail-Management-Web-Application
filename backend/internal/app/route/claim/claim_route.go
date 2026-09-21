@@ -66,6 +66,7 @@ func SetupClaimRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotific
 		claimsGroup.PUT("/customer-claims/items/:itemId", customerClaimCtrl.UpdateCustomerClaimItem)
 		claimsGroup.PUT("/customer-claims/items/:itemId/status", customerClaimCtrl.UpdateCustomerClaimItemStatus)
 		claimsGroup.DELETE("/customer-claims/:id", customerClaimCtrl.DeleteCustomerClaim)
+		claimsGroup.PATCH("/customer-claims/:id/cancel", customerClaimCtrl.CancelCustomerClaim)
 
 		// Sale Order Lookup (for customer claim form)
 		claimsGroup.GET("/sale-orders/search", saleOrderLookupCtrl.SearchSaleOrders)

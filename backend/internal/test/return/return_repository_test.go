@@ -62,6 +62,8 @@ func setupReturnTestDB(t *testing.T) *gorm.DB {
 		&entity.Customer{},
 		&entity.CustomerType{},
 		&entity.DailySummary{},
+		&entity.CustomerClaim{},
+		&entity.CustomerClaimItem{},
 	))
 
 	// sale_orders.order_date ถูก tag เป็น gorm:"type:timestamptz" (ของ Postgres) ตรงๆ ซึ่ง sqlite
@@ -289,4 +291,54 @@ func TestProcessRefund_NotApproved_ReturnsError(t *testing.T) {
 
 	err := repo.ProcessRefund(salesReturn.ID, 1)
 	require.ErrorIs(t, err, returnRepo.ErrReturnNotApproved)
+}
+
+// TestCreateReturn_AfterPriorReturnRefunded_AllowsReturningRemainingUnits: ออเดอร์ซื้อ 5 ชิ้น
+// คืนไปแล้ว 2 ชิ้นและได้รับเงินคืนสำเร็จ (REFUNDED) ต้องยังคืนอีก 3 ชิ้นที่เหลือของออเดอร์เดียวกันได้
+// (บั๊กเดิม: ใบคืนที่ REFUNDED แล้วถูกนับเป็น "ยังค้างอยู่" บล็อกไม่ให้คืนของที่เหลือได้อีกเลย)
+func TestCreateReturn_AfterPriorReturnRefunded_AllowsReturningRemainingUnits(t *testing.T) {
+	db := setupReturnTestDB(t)
+	repo := returnRepo.NewReturnRepository(db)
+	firstReturn, order, product := seedCompletedOrderWithReturn(t, db, 200, 2, 5)
+	require.NoError(t, repo.ApproveReturn(firstReturn.ID, 1))
+	require.NoError(t, repo.ProcessRefund(firstReturn.ID, 1))
+
+	secondReturn := &entity.SalesReturn{
+		ReturnNumber:    "RTN-TEST-2",
+		OriginalOrderID: order.ID,
+		ReturnDate:      time.Now(),
+		Status:          enum.ReturnPending,
+		Reason:          "สินค้าชำรุดอีกชิ้น",
+		RefundAmount:    100,
+		RefundMethod:    "CASH",
+		RequestedAt:     time.Now(),
+		CreatedBy:       1,
+	}
+	secondItems := []entity.SalesReturnItem{{ProductID: product.ID, Quantity: 1, UnitPrice: 100, Subtotal: 100}}
+	require.NoError(t, repo.CreateReturn(secondReturn, secondItems), "ต้องคืนของที่เหลือของออเดอร์เดียวกันได้ ถึงแม้ใบคืนก่อนหน้าจะคืนเงินสำเร็จไปแล้ว")
+}
+
+// TestCreateReturn_CumulativeQuantityAcrossReturns_ExceedsOrder_ReturnsError: คืนไปแล้ว 2 จาก 5 ชิ้น
+// ถ้าขอคืนอีก 4 ชิ้น (รวมเป็น 6) ต้องถูกปฏิเสธ เพราะเกินจำนวนที่ซื้อจริงสะสมข้ามหลายใบคืน
+func TestCreateReturn_CumulativeQuantityAcrossReturns_ExceedsOrder_ReturnsError(t *testing.T) {
+	db := setupReturnTestDB(t)
+	repo := returnRepo.NewReturnRepository(db)
+	firstReturn, order, product := seedCompletedOrderWithReturn(t, db, 200, 2, 5)
+	require.NoError(t, repo.ApproveReturn(firstReturn.ID, 1))
+	require.NoError(t, repo.ProcessRefund(firstReturn.ID, 1))
+
+	secondReturn := &entity.SalesReturn{
+		ReturnNumber:    "RTN-TEST-3",
+		OriginalOrderID: order.ID,
+		ReturnDate:      time.Now(),
+		Status:          enum.ReturnPending,
+		Reason:          "ขอคืนเกิน",
+		RefundAmount:    400,
+		RefundMethod:    "CASH",
+		RequestedAt:     time.Now(),
+		CreatedBy:       1,
+	}
+	secondItems := []entity.SalesReturnItem{{ProductID: product.ID, Quantity: 4, UnitPrice: 100, Subtotal: 400}}
+	err := repo.CreateReturn(secondReturn, secondItems)
+	require.ErrorIs(t, err, returnRepo.ErrReturnQuantityExceedsOrder)
 }

@@ -7,14 +7,20 @@ type CheckStockScheduleRequestDTO struct {
 	Scheduled_End_DateTime time.Time `json:"scheduled_end_datetime" binding:"required,gtfield=Scheduled_DateTime"`
 	Note                   string    `json:"note"`
 	CheckType              string    `json:"check_type" binding:"required"` // "LOCATION", "CATEGORY", "PRODUCT"
-	ZoneID                 *uint     `json:"zone_id"`
-	ShelfID                *uint     `json:"shelf_id"`
-	ShelfLevelID           *uint     `json:"shelf_level_id"`
-	CategoryID             *uint     `json:"category_id"`
-	SubCategoryID          *uint     `json:"sub_category_id"`
-	SubSubCategoryID       *uint     `json:"sub_sub_category_id"`
-	ProductID              *uint     `json:"product_id"`
-	UserID                 *uint     `json:"user_id"`
+
+	// เป้าหมายการตรวจ — เลือกได้หลายจุดพร้อมกันในการมอบหมายครั้งเดียว (เช่น หลายโซน/หลายหมวดหมู่/หลายสินค้ารายตัว)
+	ZoneIDs           []uint `json:"zone_ids"`
+	ShelfIDs          []uint `json:"shelf_ids"`
+	ShelfLevelIDs     []uint `json:"shelf_level_ids"`
+	CategoryIDs       []uint `json:"category_ids"`
+	SubCategoryIDs    []uint `json:"sub_category_ids"`
+	SubSubCategoryIDs []uint `json:"sub_sub_category_ids"`
+	ProductIDs        []uint `json:"product_ids"`
+
+	// ExcludedProductIDs: สินค้าที่เอาออกจากรายการที่ระบบหามาให้อัตโนมัติ (เฉพาะ LOCATION/CATEGORY)
+	ExcludedProductIDs []uint `json:"excluded_product_ids"`
+
+	UserID *uint `json:"user_id"`
 }
 
 type CheckStockScheduleResponseDTO struct {
@@ -25,20 +31,25 @@ type CheckStockScheduleResponseDTO struct {
 	Note                   string    `json:"note"`
 	CreatedAt              time.Time `json:"created_at"`
 
-	CheckType        string `json:"check_type"`
-	ZoneID           *uint  `json:"zone_id"`
-	ShelfID          *uint  `json:"shelf_id"`
-	ShelfLevelID     *uint  `json:"shelf_level_id"`
-	CategoryID       *uint  `json:"category_id"`
-	SubCategoryID    *uint  `json:"sub_category_id"`
-	SubSubCategoryID *uint  `json:"sub_sub_category_id"`
-	ProductID        *uint  `json:"product_id"`
+	CheckType string `json:"check_type"`
+
+	// เป้าหมายการตรวจของตารางนี้ ในรูปแบบ array เสมอ (ตารางเก่าที่มีแค่เป้าหมายเดียวจะถูก wrap เป็น array 1 ช่อง
+	// ให้หน้าเว็บใช้ตรรกะเดียวกันได้ทั้งตารางเก่า/ใหม่ ดู resolveTargets() ใน service)
+	ZoneIDs           []uint `json:"zone_ids"`
+	ShelfIDs          []uint `json:"shelf_ids"`
+	ShelfLevelIDs     []uint `json:"shelf_level_ids"`
+	CategoryIDs       []uint `json:"category_ids"`
+	SubCategoryIDs    []uint `json:"sub_category_ids"`
+	SubSubCategoryIDs []uint `json:"sub_sub_category_ids"`
+	ProductIDs        []uint `json:"product_ids"`
+
+	ExcludedProductIDs []uint `json:"excluded_product_ids"`
 
 	UserID       *uint  `json:"user_id"`
 	UserFullName string `json:"user_full_name"`
 	AccessToken  string `json:"access_token"`
 
 	// Derived Fields for UI
-	TargetName   string `json:"target_name"`   // e.g., "Zone A (RACK 04 - LEVEL 2)" or "Category: Engine Oil"
-	ProductCount int    `json:"product_count"` // Number of products expected in this check
+	TargetName   string `json:"target_name"`   // e.g., "Zone A (RACK 04 - LEVEL 2)" or "หลายหมวดหมู่ (2): Engine Parts, Brake Parts"
+	ProductCount int    `json:"product_count"` // Number of products expected in this check (หลัง union หลายเป้าหมาย และหักสินค้าที่เอาออกแล้ว)
 }

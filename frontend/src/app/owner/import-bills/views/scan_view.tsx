@@ -181,7 +181,7 @@ export default function ScanView({
               <p className="font-extrabold text-[#1C1B1B] text-base flex items-center gap-2">
                 <Smartphone size={18} /> เปิดบนมือถือ
               </p>
-              <button onClick={() => setShowQR(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
+              <button aria-label="ปิด" onClick={() => setShowQR(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
                 <X size={20} />
               </button>
             </div>

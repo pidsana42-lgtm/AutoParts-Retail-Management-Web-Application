@@ -15,7 +15,15 @@ import { buildProductSearchIndex, searchProductIndex } from "../../../../utils/p
 import { useAlertDialog } from "../../../../components/elements/alert_dialog";
 
 // แสดงเฉพาะสินค้าที่ถูกลบไม่เกิน 14 วัน — เกินกว่านี้ไม่ต้องแสดงในถังขยะแล้ว (ข้อมูลจริงยังอยู่ครบในระบบ แค่ไม่โชว์ในหน้านี้)
-const TRASH_RETENTION_DAYS = 14;
+export const TRASH_RETENTION_DAYS = 14;
+
+export function isWithinTrashRetention(deletedAtIso?: string): boolean {
+  if (!deletedAtIso) return true; // ไม่มีวันที่ลบ (ไม่ควรเกิดขึ้น) ให้แสดงไว้ก่อนเผื่อพลาด
+  const deletedAt = new Date(deletedAtIso).getTime();
+  if (isNaN(deletedAt)) return true;
+  const cutoff = Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  return deletedAt >= cutoff;
+}
 
 // หน้าถังขยะสินค้า — สินค้าที่ลบเป็น soft delete เสมอ (ข้อมูลจริงยังอยู่ครบ) เลยกู้คืนกลับมาได้จากที่นี่
 export default function TrashStockPage() {
@@ -47,12 +55,7 @@ export default function TrashStockPage() {
 
   // ตัดสินค้าที่ลบเกิน 14 วันแล้วออกจากรายการที่แสดง (ข้อมูลจริงยังอยู่ในระบบ แค่ไม่โชว์ในถังขยะอีกต่อไป)
   const recentlyDeleted = useMemo(() => {
-    const cutoff = Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-    return deletedProducts.filter((p) => {
-      if (!p.DeletedAt) return true; // ไม่มีวันที่ลบ (ไม่ควรเกิดขึ้น) ให้แสดงไว้ก่อนเผื่อพลาด
-      const deletedAt = new Date(p.DeletedAt).getTime();
-      return isNaN(deletedAt) || deletedAt >= cutoff;
-    });
+    return deletedProducts.filter((p) => isWithinTrashRetention(p.DeletedAt));
   }, [deletedProducts]);
 
   // สร้าง index ไว้แค่ตอน recentlyDeleted เปลี่ยน แล้วค่อยค้นหาแบบ fuzzy ทุกครั้งที่ query เปลี่ยน

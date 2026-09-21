@@ -25,6 +25,7 @@ import Button from "../../../components/elements/button";
 import TreeSelect from "../../../components/elements/tree_select";
 import type { CascaderOption } from "../../../components/elements/cascader";
 import { useAlertDialog } from "../../../components/elements/alert_dialog";
+import DateRangePicker from "../../../components/elements/date_range_picker";
 
 // นำเข้า API service สำหรับดึงข้อมูลสินค้า
 import { getProductsList, getSuppliersList, deleteProduct, getDeletedProductsList } from "../../../service/http/wms/product";
@@ -36,6 +37,7 @@ import type { StockAlertItem } from "../../../interface/dashboard/dashboard_inte
 import { buildProductSearchIndex, searchProductIndex } from "../../../utils/productSearch";
 import { cn } from "../../../utils/component";
 import StockAlertPOModal from "../dashboard/components/StockAlertPOModal";
+import { isWithinTrashRetention } from "./trash_stock/trash_stock";
 
 // คอนฟิก Badge ตามเกรดสินค้า
 const GRADE_BADGE: Record<string, string> = {
@@ -58,6 +60,68 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
   if (total > 1) range.push(total);
 
   return range;
+}
+
+// พรีเซ็ตช่วงเวลาด่วน (แบบเดียวกับหน้าการเคลื่อนไหวของคลังสินค้า) — กรองตามวันที่ข้อมูลสินค้าถูกแก้ไขล่าสุด (UpdatedAt)
+const PERIOD_PRESETS: { label: string; value: string }[] = [
+  { label: "วันนี้", value: "daily" },
+  { label: "สัปดาห์นี้", value: "weekly" },
+  { label: "เดือนนี้", value: "monthly" },
+  { label: "ไตรมาสนี้", value: "quarterly" },
+  { label: "ปีนี้", value: "yearly" },
+];
+
+// คำนวณช่วงวันที่ของพรีเซ็ตฝั่งหน้าเว็บเองตรงๆ — สัปดาห์เริ่มวันจันทร์ตามธรรมเนียมไทย
+function getPeriodRange(period: string): { start: Date; end: Date } | null {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  switch (period) {
+    case "daily":
+      return { start: startOfToday, end: now };
+    case "weekly": {
+      const daysSinceMonday = (now.getDay() + 6) % 7;
+      const start = new Date(startOfToday);
+      start.setDate(start.getDate() - daysSinceMonday);
+      return { start, end: now };
+    }
+    case "monthly":
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
+    case "quarterly": {
+      const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+      return { start: new Date(now.getFullYear(), quarterStartMonth, 1), end: now };
+    }
+    case "yearly":
+      return { start: new Date(now.getFullYear(), 0, 1), end: now };
+    default:
+      return null;
+  }
+}
+
+// เช็คว่าวันที่แก้ไขล่าสุดของสินค้าอยู่ในช่วงเวลาที่ตัวกรองกำหนดไว้หรือไม่ (ช่วงวันที่กำหนดเอง หรือพรีเซ็ตด่วน)
+function matchesPeriod(updatedAt: string | undefined, startDate: string, endDate: string, selectedPeriod: string): boolean {
+  if (!startDate && !endDate && !selectedPeriod) return true;
+  if (!updatedAt) return false;
+  const updated = new Date(updatedAt);
+  if (isNaN(updated.getTime())) return false;
+
+  if (startDate || endDate) {
+    if (startDate) {
+      const s = new Date(startDate);
+      s.setHours(0, 0, 0, 0);
+      if (updated < s) return false;
+    }
+    if (endDate) {
+      const e = new Date(endDate);
+      e.setHours(23, 59, 59, 999);
+      if (updated > e) return false;
+    }
+    return true;
+  }
+
+  const range = getPeriodRange(selectedPeriod);
+  if (!range) return true;
+  return updated >= range.start && updated <= range.end;
 }
 
 // -----------------------------------------------------------------------------
@@ -146,6 +210,11 @@ export default function StockPage() {
   const [categoryId, setCategoryId] = useState("");
   const [categoryNames, setCategoryNames] = useState<string[]>([]);
   const [supplier, setSupplier] = useState("");
+  // ตัวกรองช่วงเวลา — พรีเซ็ตด่วน (selectedPeriod) กับช่วงวันที่กำหนดเอง (startDate/endDate) แยกกันคนละอันเสมอ
+  // เลือกอย่างใดอย่างหนึ่งแล้วอีกอันจะถูกล้างทันที (ดู handlePeriodClick/handleStartDateChange/handleEndDateChange)
+  const [selectedPeriod, setSelectedPeriod] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -268,9 +337,13 @@ export default function StockPage() {
   }, []);
 
   // เช็คจำนวนสินค้าในถังขยะไว้โชว์ badge เตือนที่ปุ่ม "ถังขยะ" (ไม่กระทบ loading หลักของหน้า แยก fetch ต่างหาก)
+  // กรองเฉพาะสินค้าที่ลบไม่เกิน 14 วัน เพื่อให้ตรงกับที่จะแสดงในหน้าถังขยะจริง
   useEffect(() => {
     getDeletedProductsList()
-      .then((list) => setDeletedCount(list.length))
+      .then((list) => {
+        const recentItems = list.filter((p) => isWithinTrashRetention(p.DeletedAt));
+        setDeletedCount(recentItems.length);
+      })
       .catch((err) => console.error("Failed to load deleted products count:", err));
   }, []);
 
@@ -320,16 +393,36 @@ export default function StockPage() {
         !supplier ||
         (item.Suppliers && item.Suppliers.some((s) => s.SupplierName.toUpperCase() === supplier.toUpperCase()));
 
-      return matchesSearch && matchesCategory && matchesSupplier;
+      const matchesDate = matchesPeriod(item.UpdatedAt, startDate, endDate, selectedPeriod);
+
+      return matchesSearch && matchesCategory && matchesSupplier && matchesDate;
     })
     // สินค้าที่เพิ่มล่าสุดอยู่บนสุด (ID มากกว่า = สร้างทีหลัง เพราะเป็นเลขรันตามลำดับการสร้าง)
     .sort((a, b) => b.ID - a.ID);
-  }, [stockData, search, categoryNames, supplier]);
+  }, [stockData, search, categoryNames, supplier, startDate, endDate, selectedPeriod]);
+
+  // กดพรีเซ็ตช่วงเวลา -> ล้างช่วงวันที่กำหนดเองทิ้ง (สองอย่างนี้แทนกัน เลือกได้ทีละอย่าง)
+  const handlePeriodClick = (value: string) => {
+    setSelectedPeriod(value);
+    setStartDate("");
+    setEndDate("");
+  };
+
+  // เลือกช่วงวันที่กำหนดเอง -> ล้างพรีเซ็ตทิ้ง
+  const handleStartDateChange = (d: string) => {
+    setStartDate(d);
+    setSelectedPeriod("");
+  };
+
+  const handleEndDateChange = (d: string) => {
+    setEndDate(d);
+    setSelectedPeriod("");
+  };
 
   // กลับไปหน้า 1 ทุกครั้งที่ตัวกรองเปลี่ยน กันกรณีหน้าปัจจุบันเกินจำนวนหน้าที่กรองได้แล้ว
   useEffect(() => {
     setPage(1);
-  }, [search, categoryNames, supplier, itemsPerPage]);
+  }, [search, categoryNames, supplier, startDate, endDate, selectedPeriod, itemsPerPage]);
 
   const totalItems = filteredData.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
@@ -338,8 +431,9 @@ export default function StockPage() {
     [filteredData, page, itemsPerPage]
   );
 
-  // คำนวณ Summary การ์ดด้านบนจาก Database จริง
-  const totalSkus = stockData.length;
+  // คำนวณ Summary การ์ดด้านบนจาก Database จริง — ยึดตามตัวกรองที่เลือกไว้เสมอ (ค้นหา/ประเภท/ซัพพลายเออร์/ช่วงเวลา)
+  // เพื่อให้กดตัวกรองช่วงเวลาแล้วเห็นจำนวนสินค้าที่ตรงกับช่วงนั้นทันที ไม่ใช่ยอดรวมทั้งหมดตลอด
+  const totalSkus = filteredData.length;
   // คำนวณมูลค่าสินทรัพย์รวมในคลัง (Stock * Price)
   const totalAssetValue = useMemo(() => {
     const total = stockData.reduce((acc, item) => acc + (item.Stock * (item.Price || 0)), 0);
@@ -388,6 +482,45 @@ export default function StockPage() {
         </div>
       </div>
 
+      {/* ตัวกรองช่วงเวลา — กรองตามวันที่ข้อมูลสินค้าถูกแก้ไขล่าสุด */}
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <div className="bg-[#F6F3F2] flex items-center p-1">
+          {PERIOD_PRESETS.map((preset) => (
+            <button
+              key={preset.value}
+              type="button"
+              onClick={() => handlePeriodClick(preset.value)}
+              className={cn(
+                "w-20 py-2.5 text-sm transition-colors cursor-pointer",
+                selectedPeriod === preset.value
+                  ? "bg-white text-[#B70011] shadow-sm font-medium"
+                  : "text-gray-500 hover:text-[#B70011]"
+              )}
+            >
+              {preset.label}
+            </button>
+          ))}
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={handleStartDateChange}
+            onEndDateChange={handleEndDateChange}
+          />
+        </div>
+        {(startDate || endDate || selectedPeriod) && (
+          <button
+            onClick={() => {
+              setStartDate("");
+              setEndDate("");
+              setSelectedPeriod("");
+            }}
+            className="text-xs text-[#B70011] font-semibold px-2 hover:underline whitespace-nowrap"
+          >
+            ล้างตัวกรองช่วงเวลา
+          </button>
+        )}
+      </div>
+
       {/* Stat cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard icon={ClipboardList} label="Total SKUs" value={totalSkus.toLocaleString()} tone="green" />
@@ -404,8 +537,8 @@ export default function StockPage() {
 
       {/* Filter bar */}
       <Card noPadding>
-        <div className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center">
-          <div className="flex-1">
+        <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+          <div className="min-w-[220px] flex-1">
             <Input
               leftIcon={<Filter className="h-4 w-4" />}
               placeholder="ค้นหาด้วยชื่อสินค้า หรือรหัสสินค้า..."
@@ -413,30 +546,28 @@ export default function StockPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="flex gap-3">
-            <div className="w-full sm:w-56">
-              <TreeSelect
-                options={treeSelectOptions}
-                placeholder="เลือกประเภท"
-                value={categoryId}
-                onChange={(val, path) => {
-                  setCategoryId(val);
-                  if (!val) {
-                    setCategoryNames([]);
-                  } else {
-                    setCategoryNames(path.map(p => p.label));
-                  }
-                }}
-              />
-            </div>
-            <Select
-              options={suppliers}
-              placeholder="เลือกซัพพลายเออร์"
-              value={supplier}
-              onChange={(e) => setSupplier(e.target.value)}
-              containerClassName="w-48"
+          <div className="w-full sm:w-56">
+            <TreeSelect
+              options={treeSelectOptions}
+              placeholder="เลือกประเภท"
+              value={categoryId}
+              onChange={(val, path) => {
+                setCategoryId(val);
+                if (!val) {
+                  setCategoryNames([]);
+                } else {
+                  setCategoryNames(path.map(p => p.label));
+                }
+              }}
             />
           </div>
+          <Select
+            options={suppliers}
+            placeholder="เลือกซัพพลายเออร์"
+            value={supplier}
+            onChange={(e) => setSupplier(e.target.value)}
+            containerClassName="w-48"
+          />
         </div>
       </Card>
 

@@ -24,6 +24,7 @@ import {
   type CheckStockRecord,
 } from "../../../../service/http/wms/stock_check_service";
 import type { StockItem } from "../../../../interface/wms/product";
+import { cn } from "../../../../utils/component";
 
 const STATUS_BADGE_STYLE: Record<string, string> = {
   neutral: "bg-gray-100 text-gray-500",
@@ -35,6 +36,105 @@ const STATUS_BADGE_STYLE: Record<string, string> = {
 function getStatusBadge(status: string) {
   const variant = CHECK_STATUS_BADGE_VARIANT[status] || "neutral";
   return <Badge variant={variant} className={STATUS_BADGE_STYLE[variant]}>• {status}</Badge>;
+}
+
+// แถวนับ 1 แถว = 1 (สินค้า, บริษัท) คู่ — สินค้าที่มีมากกว่า 1 บริษัทต้องนับแยกเป็นคนละแถว เพราะตอนอนุมัติต้องรู้ว่า
+// จะปรับ Inventory ของบริษัทไหน ไม่ใช่เดา/กระจายสัดส่วนเอาเอง
+interface CountRow {
+  key: string;
+  productId: number;
+  supplierId: number | null;
+  label: string;
+  code?: string;
+  systemQty: number;
+}
+
+// สร้างแถวนับของสินค้า 1 ตัว — 1 แถวต่อบริษัทที่สินค้านี้รับมาจาก (ใช้บาร์โค้ด/รหัสล็อตที่แยกไว้ต่อบริษัทอยู่แล้ว
+// เป็นตัวอ้างอิงให้พนักงานรู้ว่าหน่วยที่ถืออยู่เป็นของบริษัทไหน) ถ้ายอดรวมในระบบ (Stock) มากกว่าผลบวกของทุกบริษัท
+// (เช่นยอดเก่าที่ไม่เคยผูกกับ Inventory ไว้) จะมีแถว "ไม่ทราบบริษัท / อื่นๆ" เพิ่มมาดูดซับส่วนต่างนั้นด้วย เพื่อให้
+// ยอดนับรวมของทุกแถวยังเทียบกับยอดในระบบได้ตรง — สินค้าที่มีบริษัทเดียว (หรือไม่มีเลย) จะได้แค่ 1 แถว เหมือนเดิม
+function buildCountRows(p: StockItem): CountRow[] {
+  const suppliers = p.Suppliers || [];
+  const rows: CountRow[] = suppliers.map((s) => ({
+    key: `${p.ID}:${s.SupplierID}`,
+    productId: p.ID,
+    supplierId: s.SupplierID,
+    label: s.SupplierName,
+    code: s.VariantCode || s.Barcode,
+    systemQty: s.Quantity,
+  }));
+
+  const suppliersTotal = suppliers.reduce((sum, s) => sum + s.Quantity, 0);
+  const residual = p.Stock - suppliersTotal;
+  if (residual !== 0 || rows.length === 0) {
+    rows.push({
+      key: `${p.ID}:none`,
+      productId: p.ID,
+      supplierId: null,
+      label: "ไม่ทราบบริษัท / อื่นๆ",
+      systemQty: residual,
+    });
+  }
+  return rows;
+}
+
+// ช่องกรอกจำนวนนับได้ของ 1 แถว — ใช้ทั้งกรณีสินค้าบริษัทเดียว (showLabel=false, โชว์แบบเดิม) และกรณีแตกแถวตามบริษัท
+// (showLabel=true, โชว์ชื่อบริษัท + รหัสล็อต/บาร์โค้ดไว้อ้างอิงกับของจริง)
+function CountInput({
+  row,
+  value,
+  note,
+  onChange,
+  onNoteChange,
+  showLabel,
+  className,
+}: {
+  row: CountRow;
+  value: string;
+  note: string;
+  onChange: (v: string) => void;
+  onNoteChange: (v: string) => void;
+  showLabel?: boolean;
+  className?: string;
+}) {
+  const diff = value.trim() !== "" ? Number(value) - row.systemQty : null;
+
+  return (
+    <div className={cn("flex shrink-0 flex-col gap-2", className)}>
+      {showLabel && (
+        <p className="text-xs font-medium text-slate-600">
+          {row.label}
+          {row.code && <span className="ml-1.5 font-mono text-slate-400">{row.code}</span>}
+        </p>
+      )}
+      <div className="flex items-center gap-2">
+        <div className="text-center text-xs text-slate-400">
+          <p>ในระบบ</p>
+          <p className="text-sm font-semibold text-slate-600">{row.systemQty}</p>
+        </div>
+        <Input
+          type="number"
+          min={0}
+          placeholder="นับได้..."
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          containerClassName="flex-1"
+        />
+        {diff !== null && diff !== 0 && (
+          <span className={`shrink-0 text-xs font-bold ${diff > 0 ? "text-green-600" : "text-red-600"}`}>
+            {diff > 0 ? `+${diff}` : diff}
+          </span>
+        )}
+      </div>
+      {diff !== null && diff !== 0 && (
+        <Input
+          placeholder="หมายเหตุ (ถ้ามี) เช่น สินค้าเสียหาย, นับตก..."
+          value={note}
+          onChange={(e) => onNoteChange(e.target.value)}
+        />
+      )}
+    </div>
+  );
 }
 
 function EmployeeCheckStockExecuteContent() {
@@ -53,9 +153,9 @@ function EmployeeCheckStockExecuteContent() {
   const [submitting, setSubmitting] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
-  // ค่านับได้จริงต่อสินค้า (เก็บเป็น string ไว้เพื่อให้ลบ/พิมพ์ช่องว่างได้ระหว่างพิมพ์)
-  const [counts, setCounts] = useState<Record<number, string>>({});
-  const [notes, setNotes] = useState<Record<number, string>>({});
+  // ค่านับได้จริงต่อแถว (key ของ CountRow — 1 สินค้าอาจมีหลายแถวถ้ามีหลายบริษัท) เก็บเป็น string ไว้เพื่อให้ลบ/พิมพ์ช่องว่างได้ระหว่างพิมพ์
+  const [counts, setCounts] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
 
   // ผลนับที่ส่งไปแล้ว (โหลดมาแสดงตอนตารางถูกล็อกแล้ว: รอตรวจสอบ / เสร็จสิ้น)
   const [submittedRecords, setSubmittedRecords] = useState<CheckStockRecord[]>([]);
@@ -115,25 +215,34 @@ function EmployeeCheckStockExecuteContent() {
   const buildChecklistMarkup = (footerLabel: string): string => {
     if (!schedule) return "";
 
-    const rows = scheduleProducts
-      .map((p, idx) => {
-        const submitted = submittedByProduct.get(p.ID);
+    // สินค้าที่มีมากกว่า 1 บริษัท แตกเป็นคนละแถวในเอกสารด้วย (ต่อท้ายชื่อสินค้าด้วยชื่อบริษัทให้รู้ว่าแถวไหนของใคร)
+    // เพื่อให้เดินนับแยกตามบาร์โค้ด/รหัสล็อตของแต่ละบริษัทแล้วเขียนกำกับได้ตรงแถว
+    const rowsHtml = scheduleProducts
+      .flatMap((p) => {
+        const productRows = rowsByProduct.get(p.ID) || [];
         const location = p.Shelf ? `${p.Shelf}${p.ShelfLevel ? ` (ชั้น ${p.ShelfLevel})` : ""}` : "-";
-        const systemQty = submitted?.old_quantity ?? p.Stock;
-        // มีค่าที่นับ/ส่งไปแล้วก็โชว์เลย ไม่งั้นเว้นช่องว่างไว้ให้เขียนด้วยมือระหว่างเดินนับของจริง
-        const countedVal = submitted?.new_quantity ?? counts[p.ID] ?? "";
-        const noteVal = submitted?.reason ?? notes[p.ID] ?? "";
-        return `
+        return productRows.map((row) => {
+          const submitted = submittedByRow.get(row.key);
+          const systemQty = submitted?.old_quantity ?? row.systemQty;
+          // มีค่าที่นับ/ส่งไปแล้วก็โชว์เลย ไม่งั้นเว้นช่องว่างไว้ให้เขียนด้วยมือระหว่างเดินนับของจริง
+          const countedVal = submitted?.new_quantity ?? counts[row.key] ?? "";
+          const noteVal = submitted?.reason ?? notes[row.key] ?? "";
+          const nameLabel = productRows.length > 1 ? `${p.Name} — ${row.label}` : p.Name;
+          return { productCode: p.ProductCode, nameLabel, location, systemQty, countedVal, noteVal };
+        });
+      })
+      .map(
+        (r, idx) => `
           <tr>
             <td class="center muted">${idx + 1}</td>
-            <td class="mono">${p.ProductCode}</td>
-            <td class="strong">${p.Name}</td>
-            <td class="center"><span class="tag">${location}</span></td>
-            <td class="center muted">${systemQty}</td>
-            <td class="center blank">${countedVal}</td>
-            <td class="blank">${noteVal}</td>
-          </tr>`;
-      })
+            <td class="mono">${r.productCode}</td>
+            <td class="strong">${r.nameLabel}</td>
+            <td class="center"><span class="tag">${r.location}</span></td>
+            <td class="center muted">${r.systemQty}</td>
+            <td class="center blank">${r.countedVal}</td>
+            <td class="blank">${r.noteVal}</td>
+          </tr>`
+      )
       .join("");
 
     const dateStr = new Date(schedule.scheduled_datetime).toLocaleDateString("th-TH", { day: "2-digit", month: "long", year: "numeric" });
@@ -240,7 +349,7 @@ function EmployeeCheckStockExecuteContent() {
             </tr>
           </thead>
           <tbody>
-            ${rows || `<tr><td colspan="7" class="center muted">ไม่พบรายการสินค้า</td></tr>`}
+            ${rowsHtml || `<tr><td colspan="7" class="center muted">ไม่พบรายการสินค้า</td></tr>`}
           </tbody>
         </table>
 
@@ -397,13 +506,31 @@ function EmployeeCheckStockExecuteContent() {
     return getScheduleProducts(schedule, products, zones, categories);
   }, [schedule, products, zones, categories]);
 
-  const submittedByProduct = useMemo(() => {
-    const map = new Map<number, CheckStockRecord>();
-    submittedRecords.forEach((r) => map.set(r.product_id, r));
+  // แถวนับต่อสินค้า — สินค้าที่มีหลายบริษัทจะได้หลายแถว (ดู buildCountRows) เก็บไว้เป็น map กันคำนวณซ้ำหลายที่
+  const rowsByProduct = useMemo(() => {
+    const map = new Map<number, CountRow[]>();
+    scheduleProducts.forEach((p) => map.set(p.ID, buildCountRows(p)));
+    return map;
+  }, [scheduleProducts]);
+
+  // แถวนับของทุกสินค้ารวมกันเป็นลิสต์เดียว ใช้ตอนส่งข้อมูล (1 แถว = 1 record ที่ยิงไป backend)
+  const allRows = useMemo(
+    () => scheduleProducts.flatMap((p) => rowsByProduct.get(p.ID) || []),
+    [scheduleProducts, rowsByProduct]
+  );
+
+  // ผลนับที่ส่งไปแล้ว (โหลดมาแสดงตอนตารางถูกล็อกแล้ว) — key ตาม row.key เดียวกัน (product+supplier) ให้จับคู่ตรงแถว
+  const submittedByRow = useMemo(() => {
+    const map = new Map<string, CheckStockRecord>();
+    submittedRecords.forEach((r) => map.set(`${r.product_id}:${r.supplier_id ?? "none"}`, r));
     return map;
   }, [submittedRecords]);
 
-  const countedItems = Object.values(counts).filter((v) => v.trim() !== "").length;
+  // นับแล้ว = สินค้าที่กรอกครบทุกแถว (สินค้าที่มีหลายบริษัทต้องกรอกครบทุกบริษัทถึงจะถือว่านับสินค้านั้นเสร็จ)
+  const countedItems = scheduleProducts.filter((p) => {
+    const rows = rowsByProduct.get(p.ID) || [];
+    return rows.length > 0 && rows.every((r) => (counts[r.key] ?? "").trim() !== "");
+  }).length;
   const allCounted = scheduleProducts.length > 0 && countedItems === scheduleProducts.length;
 
   const handleSubmit = async () => {
@@ -422,14 +549,17 @@ function EmployeeCheckStockExecuteContent() {
       setSubmitting(true);
       const now = new Date().toISOString();
 
+      // 1 แถว (product+supplier) = 1 record — สินค้าที่มีหลายบริษัทจะส่งหลาย record แยกกัน ให้ backend รู้ว่า
+      // ต้องปรับ Inventory ของบริษัทไหนตรงๆ ตอนอนุมัติ (ดู buildCountRows/allRows)
       await Promise.all(
-        scheduleProducts.map((p) =>
+        allRows.map((row) =>
           checkStockRecordService.create({
-            old_quantity: p.Stock,
-            new_quantity: Number(counts[p.ID] || 0),
-            reason: notes[p.ID] || "",
+            old_quantity: row.systemQty,
+            new_quantity: Number(counts[row.key] || 0),
+            reason: notes[row.key] || "",
             adjustment_datetime: now,
-            product_id: p.ID,
+            product_id: row.productId,
+            supplier_id: row.supplierId ?? undefined,
             user_id: submitterUserId,
             check_stock_schedule_id: Number(id),
           })
@@ -606,64 +736,109 @@ function EmployeeCheckStockExecuteContent() {
           ) : (
             <div className="flex flex-col gap-3">
               {scheduleProducts.map((p) => {
-                const submitted = submittedByProduct.get(p.ID);
-                const countedVal = counts[p.ID] ?? "";
-                const diff = countedVal.trim() !== "" ? Number(countedVal) - p.Stock : null;
+                const rows = rowsByProduct.get(p.ID) || [];
+                const isMultiRow = rows.length > 1;
+
+                // สรุปยอดรวมทุกแถวของสินค้านี้ ไว้โชว์เทียบกับยอดในระบบตอนมีหลายบริษัท (แต่ละแถวกรอกแยกกัน)
+                const totalCounted = rows.reduce((sum, r) => {
+                  const v = counts[r.key] ?? "";
+                  return v.trim() !== "" ? sum + Number(v) : sum;
+                }, 0);
+                const allRowsFilled = rows.every((r) => (counts[r.key] ?? "").trim() !== "");
+                const totalDiff = allRowsFilled ? totalCounted - p.Stock : null;
 
                 return (
                   <div
                     key={p.ID}
-                    className="flex flex-col gap-3 rounded-md border border-slate-100 bg-slate-50 p-3 sm:flex-row sm:items-center"
+                    className="flex flex-col gap-3 rounded-md border border-slate-100 bg-slate-50 p-3"
                   >
-                    <div className="flex flex-1 items-center gap-3">
-                      {p.ThumbnailUrl ? (
-                        <img src={p.ThumbnailUrl} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" />
-                      ) : (
-                        <div className="h-12 w-12 shrink-0 rounded-md bg-slate-200" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-800">{p.Name}</p>
-                        <p className="text-xs text-slate-400">{p.ProductCode}</p>
-                        <div className="mt-0.5 flex items-center gap-1 text-xs text-slate-400">
-                          <MapPin className="h-3 w-3" />
-                          {p.Shelf ? `${p.Shelf}${p.ShelfLevel ? ` (ชั้น ${p.ShelfLevel})` : ""}` : "-"}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <div className="flex flex-1 items-center gap-3">
+                        {p.ThumbnailUrl ? (
+                          <img src={p.ThumbnailUrl} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" />
+                        ) : (
+                          <div className="h-12 w-12 shrink-0 rounded-md bg-slate-200" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-800">{p.Name}</p>
+                          <p className="text-xs text-slate-400">{p.ProductCode}</p>
+                          <div className="mt-0.5 flex items-center gap-1 text-xs text-slate-400">
+                            <MapPin className="h-3 w-3" />
+                            {p.Shelf ? `${p.Shelf}${p.ShelfLevel ? ` (ชั้น ${p.ShelfLevel})` : ""}` : "-"}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {isEditable ? (
-                      <div className="flex shrink-0 flex-col gap-2 sm:w-64">
-                        <div className="flex items-center gap-2">
-                          <div className="text-center text-xs text-slate-400">
-                            <p>ในระบบ</p>
-                            <p className="text-sm font-semibold text-slate-600">{p.Stock}</p>
-                          </div>
-                          <Input
-                            type="number"
-                            min={0}
-                            placeholder="นับได้..."
-                            value={countedVal}
-                            onChange={(e) => setCounts((prev) => ({ ...prev, [p.ID]: e.target.value }))}
-                            containerClassName="flex-1"
+                      {/* สินค้าที่มีบริษัทเดียว (หรือไม่มีเลย) ยังกรอกช่องเดียวแบบเดิม ไม่ต้องแยกแถวให้ดูรกเปล่าๆ */}
+                      {!isMultiRow &&
+                        (isEditable ? (
+                          <CountInput
+                            row={rows[0]}
+                            value={counts[rows[0]?.key] ?? ""}
+                            note={notes[rows[0]?.key] ?? ""}
+                            onChange={(v) => setCounts((prev) => ({ ...prev, [rows[0].key]: v }))}
+                            onNoteChange={(v) => setNotes((prev) => ({ ...prev, [rows[0].key]: v }))}
+                            className="sm:w-64"
                           />
-                          {diff !== null && diff !== 0 && (
-                            <span className={`shrink-0 text-xs font-bold ${diff > 0 ? "text-green-600" : "text-red-600"}`}>
-                              {diff > 0 ? `+${diff}` : diff}
-                            </span>
+                        ) : (
+                          <div className="shrink-0 text-right text-xs text-slate-500">
+                            <p>ระบบเดิม: {submittedByRow.get(rows[0]?.key)?.old_quantity ?? p.Stock}</p>
+                            <p className="font-semibold text-slate-800">นับได้: {submittedByRow.get(rows[0]?.key)?.new_quantity ?? "-"}</p>
+                          </div>
+                        ))}
+
+                      {/* สินค้าที่มีหลายบริษัท โชว์ยอดรวมของทุกแถวเทียบกับยอดในระบบไว้ที่หัวการ์ด ส่วนช่องกรอกแยกไปอยู่ด้านล่าง */}
+                      {isMultiRow && (
+                        <div className="shrink-0 text-right text-xs text-slate-400">
+                          <p>ในระบบ (รวม): <span className="font-semibold text-slate-600">{p.Stock}</span></p>
+                          {isEditable ? (
+                            <p>
+                              นับได้รวม: <span className="font-semibold text-slate-700">{totalCounted}</span>
+                              {totalDiff !== null && totalDiff !== 0 && (
+                                <span className={`ml-1 font-bold ${totalDiff > 0 ? "text-green-600" : "text-red-600"}`}>
+                                  ({totalDiff > 0 ? `+${totalDiff}` : totalDiff})
+                                </span>
+                              )}
+                            </p>
+                          ) : (
+                            <p className="font-semibold text-slate-800">
+                              นับได้:{" "}
+                              {rows.reduce((sum, r) => sum + (submittedByRow.get(r.key)?.new_quantity ?? 0), 0)}
+                            </p>
                           )}
                         </div>
-                        {diff !== null && diff !== 0 && (
-                          <Input
-                            placeholder="หมายเหตุ (ถ้ามี) เช่น สินค้าเสียหาย, นับตก..."
-                            value={notes[p.ID] ?? ""}
-                            onChange={(e) => setNotes((prev) => ({ ...prev, [p.ID]: e.target.value }))}
-                          />
+                      )}
+                    </div>
+
+                    {/* แตกช่องกรอกแยกตามบริษัท — ดูบาร์โค้ด/รหัสล็อตที่ติดอยู่บนของจริงว่าเป็นของบริษัทไหนแล้วนับลงช่องนั้น */}
+                    {isMultiRow && (
+                      <div className="flex flex-col gap-2 border-t border-slate-200 pt-3 sm:pl-15">
+                        {rows.map((row) =>
+                          isEditable ? (
+                            <CountInput
+                              key={row.key}
+                              row={row}
+                              value={counts[row.key] ?? ""}
+                              note={notes[row.key] ?? ""}
+                              onChange={(v) => setCounts((prev) => ({ ...prev, [row.key]: v }))}
+                              onNoteChange={(v) => setNotes((prev) => ({ ...prev, [row.key]: v }))}
+                              showLabel
+                            />
+                          ) : (
+                            <div key={row.key} className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                              <span className="font-medium text-slate-600">
+                                {row.label}
+                                {row.code && <span className="ml-1.5 font-mono text-slate-400">{row.code}</span>}
+                              </span>
+                              <span>
+                                ระบบเดิม: {submittedByRow.get(row.key)?.old_quantity ?? row.systemQty} · นับได้:{" "}
+                                <span className="font-semibold text-slate-800">
+                                  {submittedByRow.get(row.key)?.new_quantity ?? "-"}
+                                </span>
+                              </span>
+                            </div>
+                          )
                         )}
-                      </div>
-                    ) : (
-                      <div className="shrink-0 text-right text-xs text-slate-500">
-                        <p>ระบบเดิม: {submitted?.old_quantity ?? p.Stock}</p>
-                        <p className="font-semibold text-slate-800">นับได้: {submitted?.new_quantity ?? "-"}</p>
                       </div>
                     )}
                   </div>

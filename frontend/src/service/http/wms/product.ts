@@ -44,7 +44,9 @@ const mapProductItem = (item: any): StockItem => ({
     Barcode: s.barcode || "",
     QRCode: s.qr_code || "",
   })),
+  UpdatedAt: item.updated_at || undefined,
   DeletedAt: item.deleted_at || undefined,
+  PendingReceiveQuantity: item.pending_receive_quantity || 0,
 });
 
 export const getProductsList = async (): Promise<StockItem[]> => {

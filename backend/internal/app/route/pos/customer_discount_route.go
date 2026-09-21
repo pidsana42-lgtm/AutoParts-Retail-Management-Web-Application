@@ -25,9 +25,9 @@ func SetupCustomerDiscountRoutes(r *gin.Engine, db *gorm.DB) {
             customerDiscountCtrl.GetCustomerDiscount,
         )
 
-        // ส่วนการบันทึกแก้ไขวงเงิน/ส่วนลดจำนวนมาก สงวนไว้แค่ Owner/Manager
+        // ส่วนการบันทึกแก้ไขวงเงิน/ส่วนลดจำนวนมาก สงวนไว้แค่ Owner เท่านั้น
         customerDiscountGroup.PUT("", 
-            middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleManager)), 
+            middleware.RequireRoles(string(enum.RoleOwner)), 
             customerDiscountCtrl.BulkUpdateCustomerDiscounts,
         )
     }
