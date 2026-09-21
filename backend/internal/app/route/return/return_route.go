@@ -2,6 +2,7 @@ package returns
 
 import (
 	reCtrl "backend/internal/app/controller/return"
+	"backend/internal/app/enum"
 	reRepo "backend/internal/app/repository/return"
 	reSvc "backend/internal/app/service/return"
 	"backend/internal/middleware"
@@ -15,7 +16,10 @@ func SetupReturnRoutes(r *gin.Engine, db *gorm.DB) {
 	ctrl := reCtrl.NewReturnController(svc)
 
 	returnsGroup := r.Group("/api/returns")
-	returnsGroup.Use(middleware.AuthMiddleware())
+	returnsGroup.Use(
+		middleware.AuthMiddleware(),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleManager)),
+	)
 	{
 		returnsGroup.GET("", ctrl.GetReturns)
 		returnsGroup.GET("/sale-orders/search", ctrl.SearchReturnableSaleOrders)

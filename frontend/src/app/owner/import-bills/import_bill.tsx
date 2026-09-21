@@ -2288,6 +2288,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
           setCurrentView={setCurrentView}
           formData={formData}
           previewUrl={previewUrl}
+          previewIsPdf={billImage?.type === 'application/pdf' || !!billImage?.name.toLowerCase().endsWith('.pdf')}
           errorMsg={errorMsg}
           leftWidth={leftWidth}
           setZoom={setZoom}

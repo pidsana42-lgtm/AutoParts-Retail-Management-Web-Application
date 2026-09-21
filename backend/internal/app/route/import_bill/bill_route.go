@@ -151,7 +151,13 @@ func SetupBillRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotifica
 		c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
 	}
 
-	r.POST("/api/ocr/extract-invoice/upload", ocrProxyHandler)
-	r.POST("/api/ocr/api/extract-invoice/upload", ocrProxyHandler)
-	r.POST("/ocr/api/extract-invoice/upload", ocrProxyHandler)
+	// Every compatibility URL must enforce the same staff access as bill import.
+	ocrGroup := r.Group("")
+	ocrGroup.Use(
+		middleware.AuthMiddleware(),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleManager)),
+	)
+	ocrGroup.POST("/api/ocr/extract-invoice/upload", ocrProxyHandler)
+	ocrGroup.POST("/api/ocr/api/extract-invoice/upload", ocrProxyHandler)
+	ocrGroup.POST("/ocr/api/extract-invoice/upload", ocrProxyHandler)
 }

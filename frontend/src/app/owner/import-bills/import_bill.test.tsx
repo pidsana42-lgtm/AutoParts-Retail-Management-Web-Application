@@ -139,6 +139,8 @@ describe.each(['owner', 'employee'] as const)('Import bill workflows for %s (rea
     const form = scannedImport();
     mocks.scan.mockResolvedValue({ ...form, items: [...form.items, { company_product_code: 'product code', company_product_name: 'ชื่อสินค้า' }] });
     await uploadAndScan([new File(['%PDF-1.4'], 'invoice.pdf', { type: 'application/pdf' })]);
+    expect(screen.getByTitle('Invoice PDF Preview')).toHaveAttribute('src', 'blob:test-invoice');
+    expect(screen.queryByAltText('Invoice Preview')).not.toBeInTheDocument();
     expect(await screen.findByDisplayValue('INV-TEST-001')).toBeInTheDocument();
     expect(screen.getAllByPlaceholderText('ชื่อสินค้าในบิล')).toHaveLength(1);
     expect(mocks.scan).toHaveBeenCalledWith(expect.objectContaining({ name: 'invoice.pdf' }));

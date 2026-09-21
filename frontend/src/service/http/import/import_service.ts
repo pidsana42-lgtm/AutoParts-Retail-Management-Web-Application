@@ -1,5 +1,4 @@
 import apiClient from "../apiClient";
-import axios from "axios";
 import type {
   Supplier,
   Product,
@@ -79,27 +78,13 @@ export async function getProducts(): Promise<Product[]> {
   }
 }
 
-// 4. ส่งรูปบิลไปสแกนด้วย AI OCR (รองรับทั้ง Go Backend Proxy และ Vite Dev Proxy)
+// 4. ส่งรูปบิลผ่าน Go proxy ที่ตรวจ JWT/สิทธิ์ก่อนส่งต่อให้ AI เสมอ
 export async function scanBill(file: File): Promise<any> {
   const uploadData = new FormData();
   uploadData.append("file", file);
 
-  // 1. ลองส่งผ่าน Go Backend Proxy (/api/ocr/extract-invoice/upload)
   try {
     const response = await apiClient.post("/ocr/extract-invoice/upload", uploadData, {
-      headers: { "Content-Type": "multipart/form-data" },
-      timeout: 300000,
-    });
-    if (response.data && !response.data.error) {
-      return response.data;
-    }
-  } catch (err) {
-    console.warn("Go backend proxy OCR failed, trying local Vite/FastAPI endpoint...", err);
-  }
-
-  // 2. สำรอง: ยิงผ่าน Vite Dev Proxy (/ocr/api/extract-invoice/upload)
-  try {
-    const response = await axios.post("/ocr/api/extract-invoice/upload", uploadData, {
       headers: { "Content-Type": "multipart/form-data" },
       timeout: 300000,
     });
@@ -290,4 +275,3 @@ export function resolveImageUrl(url?: string | null): string | null {
   // นำหน้าด้วย '/' เสมอเพื่อให้ browser ร้องขอจาก root (/uploads/...) ซึ่งจะผ่าน proxy ของ Vite
   return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
 }
-

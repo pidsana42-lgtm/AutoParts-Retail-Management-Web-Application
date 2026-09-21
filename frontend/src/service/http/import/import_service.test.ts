@@ -42,25 +42,29 @@ describe('Import frontend HTTP service', () => {
     expect(http.post.mock.calls[0][1].get('file')).toBe(file);
     expect(http.fallback).not.toHaveBeenCalled();
   });
-  it.each(['network failure', 'error response'])('uses the OCR fallback after a primary %s', async kind => {
+  it.each(['network failure', 'error response'])('fails closed after a primary OCR %s', async kind => {
     if (kind === 'network failure') http.post.mockRejectedValue(new Error('offline'));
     else http.post.mockResolvedValue({ data: { error: 'OCR unavailable' } });
-    http.fallback.mockResolvedValue({ data: scannedImport() });
-    expect(await service.scanBill(new File(['bill'], 'bill.jpg'))).toEqual(scannedImport());
-    expect(http.fallback).toHaveBeenCalledExactlyOnceWith('/ocr/api/extract-invoice/upload', http.post.mock.calls[0][1], expect.objectContaining({ timeout: 300000 }));
+    await expect(service.scanBill(new File(['bill'], 'bill.jpg'))).rejects.toThrow(kind === 'network failure' ? 'offline' : 'OCR unavailable');
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(http.fallback).not.toHaveBeenCalled();
+  });
+  it.each([401, 403, 500])('does not bypass the backend after HTTP %s', async status => {
+    http.post.mockRejectedValue({ response: { status, data: { error: 'สแกนไม่ได้' } } });
+    await expect(service.scanBill(new File(['bill'], 'bill.jpg'))).rejects.toThrow('สแกนไม่ได้');
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(http.fallback).not.toHaveBeenCalled();
   });
   it.each([
     { response: { data: { detail: 'ไฟล์เสีย' } } },
     { response: { data: { error: 'ไฟล์เสีย' } } },
     new Error('ไฟล์เสีย'),
-  ])('reports OCR fallback failures instead of successful scan data (%#)', async failure => {
-    http.post.mockRejectedValue(new Error('offline'));
-    http.fallback.mockRejectedValue(failure);
+  ])('reports backend OCR failures instead of successful scan data (%#)', async failure => {
+    http.post.mockRejectedValue(failure);
     await expect(service.scanBill(new File(['bill'], 'bill.jpg'))).rejects.toThrow('ไฟล์เสีย');
   });
-  it('rejects an error returned inside a successful fallback HTTP response', async () => {
-    http.post.mockRejectedValue(new Error('offline'));
-    http.fallback.mockResolvedValue({ data: { error: 'อ่านบิลไม่ได้' } });
+  it('rejects an error returned inside a successful backend HTTP response', async () => {
+    http.post.mockResolvedValue({ data: { error: 'อ่านบิลไม่ได้' } });
     await expect(service.scanBill(new File(['bill'], 'bill.jpg'))).rejects.toThrow('อ่านบิลไม่ได้');
   });
 

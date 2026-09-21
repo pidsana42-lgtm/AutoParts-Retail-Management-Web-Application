@@ -8,8 +8,10 @@ import (
 	"time"
 
 	controller "backend/internal/app/controller/catalog"
+	"backend/internal/app/enum"
 	repo "backend/internal/app/repository/catalog"
 	service "backend/internal/app/service/catalog"
+	"backend/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -25,6 +27,10 @@ func SetupCatalogRoutes(r *gin.Engine, db *gorm.DB) {
 	catalogExtractURL := aiServiceURL + "/api/extract-catalog"
 
 	catalogGroup := r.Group("/api/catalogs")
+	catalogGroup.Use(
+		middleware.AuthMiddleware(),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleManager)),
+	)
 	{
 		catalogGroup.GET("", ctrl.ListCatalogs)
 		catalogGroup.GET("/items/search", ctrl.SearchItems)

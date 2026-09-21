@@ -19,6 +19,7 @@ interface ScanViewProps {
   setCurrentView: (view: ViewState) => void;
   formData: ScannedBillData | null;
   previewUrl: string | null;
+  previewIsPdf?: boolean;
   errorMsg: string | null;
   leftWidth: number;
   setZoom: React.Dispatch<React.SetStateAction<number>>;
@@ -78,6 +79,7 @@ export default function ScanView({
   setCurrentView,
   formData,
   previewUrl,
+  previewIsPdf = false,
   errorMsg,
   leftWidth,
   setZoom,
@@ -251,11 +253,11 @@ export default function ScanView({
           {/* Top Bar: Zoom/Rotate and Change Image Button */}
           {previewUrl && (
             <div className="flex items-center justify-between bg-white p-2 rounded-none shadow-sm w-full">
-              <div className="flex gap-1">
+              {!previewIsPdf && <div className="flex gap-1">
                 <button onClick={() => setZoom(prev => Math.min(prev + 0.2, 2.5))} className="bg-gray-100 p-2 rounded-none hover:bg-gray-200 text-gray-700 cursor-pointer" title="ขยาย"><ZoomIn size={18} /></button>
                 <button onClick={() => setZoom(prev => Math.max(prev - 0.2, 0.5))} className="bg-gray-100 p-2 rounded-none hover:bg-gray-200 text-gray-700 cursor-pointer" title="ย่อ"><ZoomOut size={18} /></button>
                 <button onClick={() => setRotate(prev => (prev + 90) % 360)} className="bg-gray-100 p-2 rounded-none hover:bg-gray-200 text-gray-700 cursor-pointer" title="หมุน"><RotateCw size={18} /></button>
-              </div>
+              </div>}
               <label className="cursor-pointer text-sm text-[#e51c23] font-bold hover:underline py-2 px-4 bg-gray-50 rounded-none border border-gray-200">
                 เปลี่ยนไฟล์บิล (ภาพ/PDF)
                 <input type="file" className="hidden" accept="image/*,.heic,.heif,application/pdf" multiple onChange={handleFileChange} />
@@ -330,7 +332,7 @@ export default function ScanView({
 
                 <div
                   className="w-full flex-1 min-h-0 overflow-auto flex items-center justify-center rounded-none shadow-lg bg-white p-2"
-                  style={{ transform: `rotate(${rotate}deg)`, transition: 'transform 0.3s' }}
+                  style={{ transform: previewIsPdf ? undefined : `rotate(${rotate}deg)`, transition: 'transform 0.3s' }}
                 >
                   {previewUrl === 'heic-no-preview' ? (
                     <div className="flex flex-col items-center justify-center gap-3 text-gray-400 p-8">
@@ -338,6 +340,12 @@ export default function ScanView({
                       <p className="text-sm font-bold text-gray-500">ไม่สามารถแสดงตัวอย่าง HEIC ได้</p>
                       <p className="text-xs text-gray-400">ไฟล์ถูกเลือกแล้ว — กด "สแกนข้อมูลบิล" เพื่อประมวลผล</p>
                     </div>
+                  ) : previewIsPdf ? (
+                    <iframe
+                      src={resolveImageUrl(previewUrl) ?? ''}
+                      title="Invoice PDF Preview"
+                      className="w-full min-h-160 border-0"
+                    />
                   ) : (
                     <img
                       src={resolveImageUrl(previewUrl) ?? ''}
