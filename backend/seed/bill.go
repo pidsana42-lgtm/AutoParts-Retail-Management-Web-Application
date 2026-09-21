@@ -46,25 +46,39 @@ func Bill(db *gorm.DB) error {
 			var ownerUser entity.User
 			var po entity.PO
 
-			if err := db.Where("id = ?", 1).First(&supplier).Error; err == nil {
+			if err := db.Where("image_url = ?", "https://storage.googleapis.com/bucket/bill_images/bill_image_001.jpg").First(&billImage).Error; err == nil {
+				b.BillImageID = &billImage.ID
+			} else if err := db.First(&billImage).Error; err == nil {
+				b.BillImageID = &billImage.ID
+			} else {
+				b.BillImageID = nil
+			}
+
+			if err := db.First(&supplier).Error; err == nil {
 				b.SupplierID = supplier.ID
 			}
-			if err := db.Where("id = ?", 1).First(&billImage).Error; err == nil {
-				b.BillImageID = &billImage.ID
-			}
+
 			if err := db.Where("username = ?", "boss").First(&ownerUser).Error; err == nil {
 				b.VerifiedBy = ownerUser.ID
+			} else if err := db.First(&ownerUser).Error; err == nil {
+				b.VerifiedBy = ownerUser.ID
 			}
+
 			if err := db.Where("po_number = ?", "PO-2026-0002").First(&po).Error; err == nil {
 				b.POID = &po.ID
+			} else if err := db.First(&po).Error; err == nil {
+				b.POID = &po.ID
+			} else {
+				b.POID = nil
 			}
 
 			if err := db.Create(&b).Error; err != nil {
-				log.Fatalf("failed to seed bill %s: %v", b.BillNo, err)
+				log.Printf("failed to seed bill %s: %v", b.BillNo, err)
+			} else {
+				log.Printf("Created bill: %s\n", b.BillNo)
 			}
-			log.Printf("Created bill: %s\n", b.BillNo)
 		} else if err != nil {
-			log.Fatalf("failed to query bill %s: %v", b.BillNo, err)
+			log.Printf("failed to query bill %s: %v", b.BillNo, err)
 		} else {
 			log.Printf("Skipped bill (exists): %s\n", b.BillNo)
 		}
