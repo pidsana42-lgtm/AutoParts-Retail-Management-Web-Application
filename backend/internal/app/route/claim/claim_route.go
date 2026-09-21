@@ -6,6 +6,7 @@ import (
 	claimSvc "backend/internal/app/service/claim"
 	svcNotification "backend/internal/app/service/notification"
 
+	"backend/internal/app/enum"
 	"backend/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -32,9 +33,11 @@ func SetupClaimRoutes(r *gin.Engine, db *gorm.DB, notificationService svcNotific
 	poLookupCtrl := claimCtrl.NewPOLookupController(poLookupRepo)
 	evidenceUploadCtrl := claimCtrl.NewEvidenceUploadController()
 
-
 	claimsGroup := r.Group("/api/claims")
-	claimsGroup.Use(middleware.AuthMiddleware())
+	claimsGroup.Use(
+		middleware.AuthMiddleware(),
+		middleware.RequireRoles(string(enum.RoleOwner), string(enum.RoleEmployee), string(enum.RoleManager)),
+	)
 	{
 		// Sales Return Routes
 		claimsGroup.POST("/sales-returns", salesReturnCtrl.CreateSalesReturn)

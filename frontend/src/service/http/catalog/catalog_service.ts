@@ -1,4 +1,3 @@
-import axios from 'axios';
 import apiClient from '../apiClient';
 import type { Catalog, CatalogItem } from '../../../interface/catalog/catalog';
 
@@ -44,19 +43,9 @@ export const extractCatalogFromImage = async (file: File): Promise<any[]> => {
       timeout: 300000,
     });
     return response.data?.data || [];
-  } catch (proxyError) {
-    console.warn('Go catalog AI proxy failed, trying the local AI endpoint...', proxyError);
-    try {
-      const response = await axios.post('/ocr/api/extract-catalog', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        timeout: 300000,
-      });
-      return response.data?.data || [];
-    } catch (localError) {
-      console.error('Failed to extract catalog from image:', localError);
-      throw localError;
-    }
+  } catch (error) {
+    // Do not bypass staff authentication through a direct AI fallback.
+    console.error('Failed to extract catalog from image:', error);
+    throw error;
   }
 };
