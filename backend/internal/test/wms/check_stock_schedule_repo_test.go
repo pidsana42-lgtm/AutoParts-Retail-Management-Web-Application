@@ -28,6 +28,7 @@ func setupCheckStockScheduleRepoTestDB(t *testing.T) *gorm.DB {
 		&entity.CheckStock{},
 		&entity.CheckStockSchedule{},
 		&entity.StockMovement{},
+		&entity.Inventory{},
 	)
 	require.NoError(t, err)
 	return db
@@ -144,5 +145,104 @@ func TestApproveSchedule_ShortageDiff_NoteUsesShortageWording(t *testing.T) {
 	}
 	if movements[0].Quantity != -3 {
 		t.Errorf("expected movement quantity to carry the signed diff (-3), got %d", movements[0].Quantity)
+	}
+}
+
+// สินค้าที่มีหลายบริษัท พนักงานนับแยกเป็นคนละแถว (คนละ record ต่อบริษัท) — แต่ละแถวต้องไปปรับ Inventory ของบริษัท
+// นั้นตรงๆ และ Product.Quantity ต้องเป็นผลรวมของทุกแถว ไม่ใช่แค่ค่าของแถวสุดท้ายทับแถวก่อน
+func TestApproveSchedule_MultipleSupplierRecordsPerProduct_UpdatesEachInventoryAndSumsProductTotal(t *testing.T) {
+	db := setupCheckStockScheduleRepoTestDB(t)
+
+	require.NoError(t, db.Create(&entity.Product{Model: gorm.Model{ID: 7}, Product_Code: "P-7", Product_Name: "Brake Pad", Quantity: 10}).Error)
+	require.NoError(t, db.Create(&entity.Inventory{Model: gorm.Model{ID: 1}, ProductID: 7, SupplierID: 1, Inventory_Quantity: 5}).Error)
+	require.NoError(t, db.Create(&entity.Inventory{Model: gorm.Model{ID: 2}, ProductID: 7, SupplierID: 2, Inventory_Quantity: 5}).Error)
+
+	scheduleID := uint(1)
+	require.NoError(t, db.Create(&entity.CheckStockSchedule{Model: gorm.Model{ID: scheduleID}, Status: "รอตรวจสอบ"}).Error)
+
+	productID := uint(7)
+	supplier1, supplier2 := uint(1), uint(2)
+	require.NoError(t, db.Create(&entity.CheckStock{
+		Old_Quantity: 5, New_Quantity: 6, Diff_Quantity: 1,
+		Adjustment_DateTime: time.Now(), ProductID: &productID, SupplierID: &supplier1, CheckStockScheduleID: &scheduleID,
+	}).Error)
+	require.NoError(t, db.Create(&entity.CheckStock{
+		Old_Quantity: 5, New_Quantity: 4, Diff_Quantity: -1,
+		Adjustment_DateTime: time.Now(), ProductID: &productID, SupplierID: &supplier2, CheckStockScheduleID: &scheduleID,
+	}).Error)
+
+	repo := newMockCheckStockScheduleRepo()
+	repo.getByIDFn = func(id uint) (*entity.CheckStockSchedule, error) {
+		return &entity.CheckStockSchedule{Model: gorm.Model{ID: scheduleID}, Status: "รอตรวจสอบ"}, nil
+	}
+
+	svc := wmsService.NewCheckStockScheduleService(repo, db, nil)
+	require.NoError(t, svc.ApproveSchedule(scheduleID))
+
+	var inv1, inv2 entity.Inventory
+	require.NoError(t, db.First(&inv1, 1).Error)
+	require.NoError(t, db.First(&inv2, 2).Error)
+	if inv1.Inventory_Quantity != 6 {
+		t.Errorf("expected supplier 1's inventory updated to 6, got %d", inv1.Inventory_Quantity)
+	}
+	if inv2.Inventory_Quantity != 4 {
+		t.Errorf("expected supplier 2's inventory updated to 4, got %d", inv2.Inventory_Quantity)
+	}
+
+	var product entity.Product
+	require.NoError(t, db.First(&product, 7).Error)
+	if product.Quantity != 10 {
+		t.Errorf("expected product total to be the sum of both supplier rows (6+4=10), got %d", product.Quantity)
+	}
+
+	var movements []entity.StockMovement
+	require.NoError(t, db.Where("product_id = ? AND movement_type = ?", 7, "ADJUST").Find(&movements).Error)
+	if len(movements) != 2 {
+		t.Fatalf("expected one ADJUST movement per supplier row that differed, got %d", len(movements))
+	}
+}
+
+// แถวที่ไม่ระบุบริษัท (SupplierID เป็น nil เช่นส่วนต่างที่หาที่มาไม่ได้) ต้องไม่ไปแตะ Inventory ของใครเลย
+// แต่ยังต้องถูกรวมเข้ายอด Product.Quantity เหมือนแถวอื่น
+func TestApproveSchedule_RecordWithoutSupplier_SkipsInventoryButCountsTowardProductTotal(t *testing.T) {
+	db := setupCheckStockScheduleRepoTestDB(t)
+
+	require.NoError(t, db.Create(&entity.Product{Model: gorm.Model{ID: 7}, Product_Code: "P-7", Product_Name: "Brake Pad", Quantity: 10}).Error)
+	require.NoError(t, db.Create(&entity.Inventory{Model: gorm.Model{ID: 1}, ProductID: 7, SupplierID: 1, Inventory_Quantity: 5}).Error)
+
+	scheduleID := uint(1)
+	require.NoError(t, db.Create(&entity.CheckStockSchedule{Model: gorm.Model{ID: scheduleID}, Status: "รอตรวจสอบ"}).Error)
+
+	productID := uint(7)
+	supplier1 := uint(1)
+	// แถวของบริษัทที่รู้จัก
+	require.NoError(t, db.Create(&entity.CheckStock{
+		Old_Quantity: 5, New_Quantity: 5, Diff_Quantity: 0,
+		Adjustment_DateTime: time.Now(), ProductID: &productID, SupplierID: &supplier1, CheckStockScheduleID: &scheduleID,
+	}).Error)
+	// แถว "ไม่ทราบบริษัท / อื่นๆ" (ส่วนต่างเดิมที่ยอดรวม 10 ไม่ตรงกับผลบวกบริษัท 5) — ไม่มี SupplierID
+	require.NoError(t, db.Create(&entity.CheckStock{
+		Old_Quantity: 5, New_Quantity: 3, Diff_Quantity: -2,
+		Adjustment_DateTime: time.Now(), ProductID: &productID, CheckStockScheduleID: &scheduleID,
+	}).Error)
+
+	repo := newMockCheckStockScheduleRepo()
+	repo.getByIDFn = func(id uint) (*entity.CheckStockSchedule, error) {
+		return &entity.CheckStockSchedule{Model: gorm.Model{ID: scheduleID}, Status: "รอตรวจสอบ"}, nil
+	}
+
+	svc := wmsService.NewCheckStockScheduleService(repo, db, nil)
+	require.NoError(t, svc.ApproveSchedule(scheduleID))
+
+	var inv1 entity.Inventory
+	require.NoError(t, db.First(&inv1, 1).Error)
+	if inv1.Inventory_Quantity != 5 {
+		t.Errorf("expected supplier 1's inventory left untouched at 5, got %d", inv1.Inventory_Quantity)
+	}
+
+	var product entity.Product
+	require.NoError(t, db.First(&product, 7).Error)
+	if product.Quantity != 8 {
+		t.Errorf("expected product total to be the sum of both rows (5+3=8), got %d", product.Quantity)
 	}
 }

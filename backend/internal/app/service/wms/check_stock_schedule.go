@@ -54,51 +54,286 @@ type CheckStockScheduleService interface {
 	ActivateDueSchedules() error
 }
 
+// resolvedTargets: เป้าหมายการตรวจของตารางเช็คสต็อก 1 ใบ แยกเป็น slice ตามระดับ/ประเภท — ตารางเดียวเลือกได้
+// หลายจุดพร้อมกัน (เช่น หลายโซน หรือหลายหมวดหมู่) ในการมอบหมายครั้งเดียว
+type resolvedTargets struct {
+	zoneIDs           []uint
+	shelfIDs          []uint
+	shelfLevelIDs     []uint
+	categoryIDs       []uint
+	subCategoryIDs    []uint
+	subSubCategoryIDs []uint
+	productIDs        []uint
+}
+
+// resolveTargets: อ่านเป้าหมายการตรวจของตารางนี้จาก sc.Targets (รองรับหลายเป้าหมาย) ถ้ามี ไม่งั้น fallback ไปอ่าน
+// ฟิลด์เดี่ยวแบบเดิม (ตารางเก่าที่สร้างไว้ก่อนรองรับหลายเป้าหมาย ยังไม่มีแถวใน Targets เลย)
+func resolveTargets(sc *entity.CheckStockSchedule) resolvedTargets {
+	var t resolvedTargets
+	if len(sc.Targets) > 0 {
+		for _, target := range sc.Targets {
+			switch target.TargetType {
+			case "ZONE":
+				t.zoneIDs = append(t.zoneIDs, target.TargetID)
+			case "SHELF":
+				t.shelfIDs = append(t.shelfIDs, target.TargetID)
+			case "SHELF_LEVEL":
+				t.shelfLevelIDs = append(t.shelfLevelIDs, target.TargetID)
+			case "CATEGORY":
+				t.categoryIDs = append(t.categoryIDs, target.TargetID)
+			case "SUB_CATEGORY":
+				t.subCategoryIDs = append(t.subCategoryIDs, target.TargetID)
+			case "SUB_SUB_CATEGORY":
+				t.subSubCategoryIDs = append(t.subSubCategoryIDs, target.TargetID)
+			case "PRODUCT":
+				t.productIDs = append(t.productIDs, target.TargetID)
+			}
+		}
+		return t
+	}
+
+	if sc.ZoneID != nil {
+		t.zoneIDs = []uint{*sc.ZoneID}
+	}
+	if sc.ShelfID != nil {
+		t.shelfIDs = []uint{*sc.ShelfID}
+	}
+	if sc.ShelfLevelID != nil {
+		t.shelfLevelIDs = []uint{*sc.ShelfLevelID}
+	}
+	if sc.CategoryID != nil {
+		t.categoryIDs = []uint{*sc.CategoryID}
+	}
+	if sc.SubCategoryID != nil {
+		t.subCategoryIDs = []uint{*sc.SubCategoryID}
+	}
+	if sc.SubSubCategoryID != nil {
+		t.subSubCategoryIDs = []uint{*sc.SubSubCategoryID}
+	}
+	if sc.ProductID != nil {
+		t.productIDs = []uint{*sc.ProductID}
+	}
+	return t
+}
+
+// excludedProductIDs: สินค้าที่เจ้าของร้านเอาออกจากรายการที่ระบบหามาให้อัตโนมัติ (เฉพาะ LOCATION/CATEGORY)
+func excludedProductIDs(sc *entity.CheckStockSchedule) []uint {
+	ids := make([]uint, 0, len(sc.ExcludedProducts))
+	for _, ep := range sc.ExcludedProducts {
+		ids = append(ids, ep.ProductID)
+	}
+	return ids
+}
+
+// buildTargetRows/buildExcludedProductRows: แปลง ID ที่ส่งมาจากหน้าสร้าง/แก้ไขตาราง (แยกเป็น array ตามระดับ/ประเภท)
+// เป็นแถว entity ที่จะเก็บลงตาราง Targets/ExcludedProducts
+func buildTargetRows(req *wmsDto.CheckStockScheduleRequestDTO) []entity.CheckStockScheduleTarget {
+	var rows []entity.CheckStockScheduleTarget
+	appendRows := func(targetType string, ids []uint) {
+		for _, id := range ids {
+			rows = append(rows, entity.CheckStockScheduleTarget{TargetType: targetType, TargetID: id})
+		}
+	}
+	appendRows("ZONE", req.ZoneIDs)
+	appendRows("SHELF", req.ShelfIDs)
+	appendRows("SHELF_LEVEL", req.ShelfLevelIDs)
+	appendRows("CATEGORY", req.CategoryIDs)
+	appendRows("SUB_CATEGORY", req.SubCategoryIDs)
+	appendRows("SUB_SUB_CATEGORY", req.SubSubCategoryIDs)
+	appendRows("PRODUCT", req.ProductIDs)
+	return rows
+}
+
+func buildExcludedProductRows(productIDs []uint) []entity.CheckStockScheduleExcludedProduct {
+	rows := make([]entity.CheckStockScheduleExcludedProduct, 0, len(productIDs))
+	for _, id := range productIDs {
+		rows = append(rows, entity.CheckStockScheduleExcludedProduct{ProductID: id})
+	}
+	return rows
+}
+
 // resolveTargetName: สร้างข้อความอธิบาย "เป้าหมายการตรวจ" แบบสั้นๆ ใช้ในข้อความแจ้งเตือน
 // (แยกจาก toResponse ที่คำนวณ TargetName+ProductCount เต็มรูปแบบสำหรับหน้าตาราง เพื่อไม่ให้ไปกระทบของเดิม)
 func (s *checkStockScheduleService) resolveTargetName(sc *entity.CheckStockSchedule) string {
-	switch sc.CheckType {
-	case "LOCATION":
-		if sc.ShelfLevelID != nil {
-			var level entity.ShelfLevel
-			if err := s.db.Preload("Shelf.Zone").First(&level, sc.ShelfLevelID).Error; err == nil && level.Shelf != nil && level.Shelf.Zone != nil {
-				return fmt.Sprintf("Zone %s - %s - %s", level.Shelf.Zone.Zone_Name, level.Shelf.Shelf_Name, level.Level_Name)
-			}
-		} else if sc.ShelfID != nil {
-			var shelf entity.Shelf
-			if err := s.db.Preload("Zone").First(&shelf, sc.ShelfID).Error; err == nil && shelf.Zone != nil {
-				return fmt.Sprintf("Zone %s - %s", shelf.Zone.Zone_Name, shelf.Shelf_Name)
-			}
-		} else if sc.ZoneID != nil {
-			var zone entity.Zone
-			s.db.First(&zone, sc.ZoneID)
-			return fmt.Sprintf("Zone %s", zone.Zone_Name)
-		}
-		return "พื้นที่จัดเก็บสินค้า"
-	case "CATEGORY":
-		if sc.SubSubCategoryID != nil {
-			var ssc entity.SubSubCategory
-			s.db.First(&ssc, sc.SubSubCategoryID)
-			return fmt.Sprintf("หมวดหมู่ย่อยที่สุด: %s", ssc.Sub_Sub_Category_Name)
-		} else if sc.SubCategoryID != nil {
-			var subcat entity.SubCategory
-			s.db.First(&subcat, sc.SubCategoryID)
-			return fmt.Sprintf("หมวดหมู่ย่อย: %s", subcat.Sub_Category_Name)
-		} else if sc.CategoryID != nil {
-			var cat entity.Category
-			s.db.First(&cat, sc.CategoryID)
-			return fmt.Sprintf("หมวดหมู่: %s", cat.Category_Name)
-		}
-		return "หมวดหมู่สินค้า"
-	case "PRODUCT":
-		if sc.ProductID != nil {
-			var prod entity.Product
-			s.db.First(&prod, sc.ProductID)
-			return fmt.Sprintf("สินค้า [%s] %s", prod.Product_Code, prod.Product_Name)
-		}
-		return "สินค้าชิ้นนี้"
+	name, _ := s.buildTargetNameAndCount(sc.CheckType, resolveTargets(sc), excludedProductIDs(sc))
+	return name
+}
+
+func (s *checkStockScheduleService) describeZone(id uint) string {
+	var zone entity.Zone
+	s.db.First(&zone, id)
+	return fmt.Sprintf("Zone %s", zone.Zone_Name)
+}
+
+func (s *checkStockScheduleService) describeShelf(id uint) string {
+	var shelf entity.Shelf
+	if err := s.db.Preload("Zone").First(&shelf, id).Error; err == nil && shelf.Zone != nil {
+		return fmt.Sprintf("Zone %s - %s", shelf.Zone.Zone_Name, shelf.Shelf_Name)
 	}
-	return "รายการนี้"
+	return "พื้นที่จัดเก็บสินค้า"
+}
+
+func (s *checkStockScheduleService) describeShelfLevel(id uint) string {
+	var level entity.ShelfLevel
+	if err := s.db.Preload("Shelf.Zone").First(&level, id).Error; err == nil && level.Shelf != nil && level.Shelf.Zone != nil {
+		return fmt.Sprintf("Zone %s - %s - %s", level.Shelf.Zone.Zone_Name, level.Shelf.Shelf_Name, level.Level_Name)
+	}
+	return "พื้นที่จัดเก็บสินค้า"
+}
+
+func (s *checkStockScheduleService) describeCategory(id uint) string {
+	var cat entity.Category
+	s.db.First(&cat, id)
+	return fmt.Sprintf("หมวดหมู่: %s", cat.Category_Name)
+}
+
+func (s *checkStockScheduleService) describeSubCategory(id uint) string {
+	var subcat entity.SubCategory
+	s.db.First(&subcat, id)
+	return fmt.Sprintf("หมวดหมู่ย่อย: %s", subcat.Sub_Category_Name)
+}
+
+func (s *checkStockScheduleService) describeSubSubCategory(id uint) string {
+	var ssc entity.SubSubCategory
+	s.db.First(&ssc, id)
+	return fmt.Sprintf("หมวดหมู่ย่อยที่สุด: %s", ssc.Sub_Sub_Category_Name)
+}
+
+// countProductsForLocation/countProductsForCategory: นับสินค้าที่ตรงกับเป้าหมายที่เลือกไว้ "จุดใดจุดหนึ่งก็ได้"
+// (union หลายเป้าหมาย ไม่ใช่ต้องตรงทุกจุด) แล้วหักสินค้าที่เจ้าของร้านเอาออกด้วยตนเองออกไป
+func (s *checkStockScheduleService) countProductsForLocation(t resolvedTargets, excluded []uint) int {
+	var conditions []string
+	var args []interface{}
+	if len(t.shelfLevelIDs) > 0 {
+		conditions = append(conditions, "shelf_level_id IN (?)")
+		args = append(args, t.shelfLevelIDs)
+	}
+	if len(t.shelfIDs) > 0 {
+		conditions = append(conditions, "shelf_id IN (?)")
+		args = append(args, t.shelfIDs)
+	}
+	if len(t.zoneIDs) > 0 {
+		conditions = append(conditions, "shelf_id IN (SELECT id FROM shelves WHERE zone_id IN (?))")
+		args = append(args, t.zoneIDs)
+	}
+	if len(conditions) == 0 {
+		return 0
+	}
+	q := s.db.Model(&entity.Product{}).Where(strings.Join(conditions, " OR "), args...)
+	if len(excluded) > 0 {
+		q = q.Where("id NOT IN (?)", excluded)
+	}
+	var count int64
+	if err := q.Count(&count).Error; err != nil {
+		log.Printf("[CheckStockSchedule] failed to count products for location targets: %v", err)
+	}
+	return int(count)
+}
+
+func (s *checkStockScheduleService) countProductsForCategory(t resolvedTargets, excluded []uint) int {
+	var conditions []string
+	var args []interface{}
+	if len(t.subSubCategoryIDs) > 0 {
+		conditions = append(conditions, "sub_sub_category_id IN (?)")
+		args = append(args, t.subSubCategoryIDs)
+	}
+	if len(t.subCategoryIDs) > 0 {
+		conditions = append(conditions, "sub_category_id IN (?)")
+		args = append(args, t.subCategoryIDs)
+	}
+	if len(t.categoryIDs) > 0 {
+		conditions = append(conditions, "category_id IN (?)")
+		args = append(args, t.categoryIDs)
+	}
+	if len(conditions) == 0 {
+		return 0
+	}
+	q := s.db.Model(&entity.Product{}).Where(strings.Join(conditions, " OR "), args...)
+	if len(excluded) > 0 {
+		q = q.Where("id NOT IN (?)", excluded)
+	}
+	var count int64
+	if err := q.Count(&count).Error; err != nil {
+		log.Printf("[CheckStockSchedule] failed to count products for category targets: %v", err)
+	}
+	return int(count)
+}
+
+func (s *checkStockScheduleService) locationTargetNameAndCount(t resolvedTargets, excluded []uint) (string, int) {
+	var names []string
+	for _, id := range t.shelfLevelIDs {
+		names = append(names, s.describeShelfLevel(id))
+	}
+	for _, id := range t.shelfIDs {
+		names = append(names, s.describeShelf(id))
+	}
+	for _, id := range t.zoneIDs {
+		names = append(names, s.describeZone(id))
+	}
+	if len(names) == 0 {
+		return "พื้นที่จัดเก็บสินค้า", 0
+	}
+	count := s.countProductsForLocation(t, excluded)
+	if len(names) == 1 {
+		return names[0], count
+	}
+	return fmt.Sprintf("หลายพื้นที่ (%d): %s", len(names), strings.Join(names, ", ")), count
+}
+
+func (s *checkStockScheduleService) categoryTargetNameAndCount(t resolvedTargets, excluded []uint) (string, int) {
+	var names []string
+	for _, id := range t.subSubCategoryIDs {
+		names = append(names, s.describeSubSubCategory(id))
+	}
+	for _, id := range t.subCategoryIDs {
+		names = append(names, s.describeSubCategory(id))
+	}
+	for _, id := range t.categoryIDs {
+		names = append(names, s.describeCategory(id))
+	}
+	if len(names) == 0 {
+		return "หมวดหมู่สินค้า", 0
+	}
+	count := s.countProductsForCategory(t, excluded)
+	if len(names) == 1 {
+		return names[0], count
+	}
+	return fmt.Sprintf("หลายหมวดหมู่ (%d): %s", len(names), strings.Join(names, ", ")), count
+}
+
+func (s *checkStockScheduleService) productTargetNameAndCount(t resolvedTargets) (string, int) {
+	if len(t.productIDs) == 0 {
+		return "สินค้าชิ้นนี้", 0
+	}
+	var products []entity.Product
+	s.db.Where("id IN (?)", t.productIDs).Find(&products)
+	names := make([]string, 0, len(products))
+	for _, p := range products {
+		names = append(names, fmt.Sprintf("[%s] %s", p.Product_Code, p.Product_Name))
+	}
+	count := len(t.productIDs)
+	switch len(names) {
+	case 0:
+		return "สินค้าชิ้นนี้", count
+	case 1:
+		return names[0], count
+	default:
+		return fmt.Sprintf("หลายรายการ (%d): %s", len(names), strings.Join(names, ", ")), count
+	}
+}
+
+// buildTargetNameAndCount: คำนวณชื่อเป้าหมาย + จำนวนสินค้าที่คาดว่าต้องนับ ใช้ร่วมกันทั้ง toResponse (แสดงหน้าตาราง)
+// และ resolveTargetName (ข้อความแจ้งเตือน)
+func (s *checkStockScheduleService) buildTargetNameAndCount(checkType string, t resolvedTargets, excluded []uint) (string, int) {
+	switch checkType {
+	case "LOCATION":
+		return s.locationTargetNameAndCount(t, excluded)
+	case "CATEGORY":
+		return s.categoryTargetNameAndCount(t, excluded)
+	case "PRODUCT":
+		return s.productTargetNameAndCount(t)
+	}
+	return "รายการนี้", 0
 }
 
 type checkStockScheduleService struct {
@@ -118,13 +353,8 @@ func (s *checkStockScheduleService) CreateSchedule(req *wmsDto.CheckStockSchedul
 		Status:                 "รอดำเนินการ",
 		Note:                   req.Note,
 		CheckType:              req.CheckType,
-		ZoneID:                 req.ZoneID,
-		ShelfID:                req.ShelfID,
-		ShelfLevelID:           req.ShelfLevelID,
-		CategoryID:             req.CategoryID,
-		SubCategoryID:          req.SubCategoryID,
-		SubSubCategoryID:       req.SubSubCategoryID,
-		ProductID:              req.ProductID,
+		Targets:                buildTargetRows(req),
+		ExcludedProducts:       buildExcludedProductRows(req.ExcludedProductIDs),
 		UserID:                 req.UserID,
 		AccessToken:            generateAccessToken(),
 	}
@@ -164,30 +394,54 @@ func (s *checkStockScheduleService) CreateSchedule(req *wmsDto.CheckStockSchedul
 	return schedule.ID, nil
 }
 
+// isScheduleOverdue: ตารางเลยเวลาสิ้นสุดที่กำหนดไว้แล้ว แต่พนักงานยังไม่ส่งผลนับมา (ค้างอยู่ที่ "กำลังเช็ค")
+// ถ้ายังไม่เคยตั้งเวลาสิ้นสุดไว้จริง (ค่าว่าง/zero value) ถือว่าไม่มีเดดไลน์ ไม่ถือว่าเลยกำหนด
+func isScheduleOverdue(schedule *entity.CheckStockSchedule) bool {
+	return schedule.Status == "กำลังเช็ค" && !schedule.Scheduled_End_DateTime.IsZero() && time.Now().After(schedule.Scheduled_End_DateTime)
+}
+
 func (s *checkStockScheduleService) Update(id uint, req *wmsDto.CheckStockScheduleRequestDTO) error {
 	schedule, err := s.repo.GetByID(id)
 	if err != nil {
 		return err
 	}
-	// Check if editable
-	if schedule.Status != "รอดำเนินการ" || time.Now().After(schedule.Scheduled_DateTime) {
+	// แก้ไขได้ปกติตอนยัง "รอดำเนินการ" และเวลาเริ่มยังไม่มาถึง หรือกรณีเลยเวลากำหนดแล้ว (เจ้าของร้านต้องพิจารณาแก้ไข/สั่งงานซ้ำ)
+	overdue := isScheduleOverdue(schedule)
+	notStartedYet := schedule.Status == "รอดำเนินการ" && !time.Now().After(schedule.Scheduled_DateTime)
+	if !notStartedYet && !overdue {
 		return errors.New("cannot edit schedule that has already started or is completed")
 	}
 
 	previousUserID := schedule.UserID
 
+	// ตารางที่เลยกำหนดแล้วถูกแก้ไข = เจ้าของร้านสั่งงานซ้ำด้วยเวลาใหม่ -> เปิดสถานะกลับไป "รอดำเนินการ"
+	// ให้ cron (ActivateDueSchedules) มาเปลี่ยนเป็น "กำลังเช็ค" เองอีกครั้งตอนถึงเวลาเริ่มใหม่
+	if overdue {
+		schedule.Status = "รอดำเนินการ"
+	}
+
 	schedule.Scheduled_DateTime = req.Scheduled_DateTime
 	schedule.Scheduled_End_DateTime = req.Scheduled_End_DateTime
 	schedule.Note = req.Note
 	schedule.CheckType = req.CheckType
-	schedule.ZoneID = req.ZoneID
-	schedule.ShelfID = req.ShelfID
-	schedule.ShelfLevelID = req.ShelfLevelID
-	schedule.CategoryID = req.CategoryID
-	schedule.ProductID = req.ProductID
 	schedule.UserID = req.UserID
+	// เลิกใช้ฟิลด์เป้าหมายเดี่ยวแบบเดิมแล้ว (ย้ายไปเก็บที่ Targets ทั้งหมด) เคลียร์ทิ้งกันมีค่าเก่าค้างสับสน
+	schedule.ZoneID = nil
+	schedule.ShelfID = nil
+	schedule.ShelfLevelID = nil
+	schedule.CategoryID = nil
+	schedule.SubCategoryID = nil
+	schedule.SubSubCategoryID = nil
+	schedule.ProductID = nil
 
 	if err := s.repo.Update(schedule); err != nil {
+		return err
+	}
+	// แทนที่เป้าหมาย/รายการที่เอาออกทั้งชุดด้วยของใหม่ที่ส่งมา (ลบของเก่าทิ้งหมดแล้วสร้างใหม่ ไม่ใช่ merge)
+	if err := s.repo.ReplaceTargets(id, buildTargetRows(req)); err != nil {
+		return err
+	}
+	if err := s.repo.ReplaceExcludedProducts(id, buildExcludedProductRows(req.ExcludedProductIDs)); err != nil {
 		return err
 	}
 
@@ -257,7 +511,10 @@ func (s *checkStockScheduleService) UpdateStatus(id uint, status string) error {
 }
 
 // ApproveSchedule: เจ้าของร้านอนุมัติผลนับสต็อกที่พนักงานส่งมา (สถานะ "รอตรวจสอบ")
-// นำจำนวนที่นับได้จริง (New_Quantity) ของแต่ละสินค้าไปเซ็ตเป็นสต็อกจริงในตาราง product แล้วปิดตารางเช็คเป็น "เสร็จสิ้น"
+// สินค้าที่มีหลายบริษัท พนักงานจะนับแยกเป็นคนละแถว (คนละ record) ต่อบริษัทมาแล้ว — แถวที่ระบุบริษัทไว้ (SupplierID
+// ไม่ null) จะไปเซ็ตยอดคงเหลือของบริษัทนั้นตรงๆ ที่ Inventory เลย ไม่ต้องเดา/กระจายสัดส่วนอีกต่อไป ส่วน Product.Quantity
+// (ยอดรวมทั้งหมด) จะถูกเซ็ตเป็นผลรวมของทุกแถวของสินค้านั้นหลังวนครบทุกแถวแล้ว (กันไม่ให้แถวหลังทับแถวก่อนจนยอดรวมหาย)
+// ปิดตารางเช็คเป็น "เสร็จสิ้น" เมื่อเสร็จ
 func (s *checkStockScheduleService) ApproveSchedule(id uint) error {
 	schedule, err := s.repo.GetByID(id)
 	if err != nil {
@@ -276,13 +533,26 @@ func (s *checkStockScheduleService) ApproveSchedule(id uint) error {
 	}
 
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		// ยอดรวมใหม่ต่อสินค้า สะสมจากทุกแถวที่นับของสินค้านั้น (ทั้งที่ระบุบริษัทและไม่ระบุ) ไว้ set ทีเดียวหลังวนครบลูป
+		productNewTotal := make(map[uint]int)
+
 		for _, rec := range records {
 			if rec.ProductID == nil {
 				continue
 			}
-			if err := tx.Model(&entity.Product{}).Where("id = ?", *rec.ProductID).
-				Update("quantity", rec.New_Quantity).Error; err != nil {
-				return err
+			productNewTotal[*rec.ProductID] += rec.New_Quantity
+
+			// แถวที่ระบุบริษัทไว้ -> เซ็ตยอดคงเหลือของบริษัทนั้นตรงๆ ที่ Inventory (แถวที่ไม่ระบุบริษัท เช่นส่วนต่างที่
+			// หาที่มาไม่ได้ จะปรับแค่ยอดรวมสินค้าอย่างเดียว ไม่มี Inventory ให้ปรับ)
+			if rec.SupplierID != nil {
+				if err := tx.Model(&entity.Inventory{}).
+					Where("product_id = ? AND supplier_id = ?", *rec.ProductID, *rec.SupplierID).
+					Updates(map[string]interface{}{
+						"inventory_quantity":     rec.New_Quantity,
+						"last_updated_date_time": rec.Adjustment_DateTime,
+					}).Error; err != nil {
+					return err
+				}
 			}
 
 			// บันทึกลง stock_movements (movement_type = "ADJUST") เฉพาะแถวที่นับได้ไม่ตรงกับระบบจริง เพื่อให้หน้า
@@ -313,6 +583,13 @@ func (s *checkStockScheduleService) ApproveSchedule(id uint) error {
 				}
 			}
 		}
+
+		for productID, total := range productNewTotal {
+			if err := tx.Model(&entity.Product{}).Where("id = ?", productID).Update("quantity", total).Error; err != nil {
+				return err
+			}
+		}
+
 		return tx.Model(&entity.CheckStockSchedule{}).Where("id = ?", id).Update("status", "เสร็จสิ้น").Error
 	}); err != nil {
 		return err
@@ -466,6 +743,9 @@ func (s *checkStockScheduleService) GetCategoryTree() ([]entity.Category, error)
 }
 
 func (s *checkStockScheduleService) toResponse(sc *entity.CheckStockSchedule) *wmsDto.CheckStockScheduleResponseDTO {
+	t := resolveTargets(sc)
+	excluded := excludedProductIDs(sc)
+
 	res := &wmsDto.CheckStockScheduleResponseDTO{
 		ID:                     sc.ID,
 		Scheduled_DateTime:     sc.Scheduled_DateTime,
@@ -474,13 +754,14 @@ func (s *checkStockScheduleService) toResponse(sc *entity.CheckStockSchedule) *w
 		Note:                   sc.Note,
 		CreatedAt:              sc.CreatedAt,
 		CheckType:              sc.CheckType,
-		ZoneID:                 sc.ZoneID,
-		ShelfID:                sc.ShelfID,
-		ShelfLevelID:           sc.ShelfLevelID,
-		CategoryID:             sc.CategoryID,
-		SubCategoryID:          sc.SubCategoryID,
-		SubSubCategoryID:       sc.SubSubCategoryID,
-		ProductID:              sc.ProductID,
+		ZoneIDs:                t.zoneIDs,
+		ShelfIDs:               t.shelfIDs,
+		ShelfLevelIDs:          t.shelfLevelIDs,
+		CategoryIDs:            t.categoryIDs,
+		SubCategoryIDs:         t.subCategoryIDs,
+		SubSubCategoryIDs:      t.subSubCategoryIDs,
+		ProductIDs:             t.productIDs,
+		ExcludedProductIDs:     excluded,
 		UserID:                 sc.UserID,
 	}
 
@@ -495,100 +776,7 @@ func (s *checkStockScheduleService) toResponse(sc *entity.CheckStockSchedule) *w
 		// Ideally we should also update the DB, but doing it in presentation is fine for now
 	}
 
-	// Derive TargetName and ProductCount based on CheckType
-	// หมายเหตุ: ของเดิมเช็คแค่ "sc.ZoneID != nil" เป็นเงื่อนไขเข้าบล็อกนี้ทั้งก้อน แต่ตอนสร้าง/แก้ไขตาราง
-	// ถ้าเลือกที่ระดับ "ตู้/ชั้นวาง" (shelf) หรือ "ชั้นระดับ" (shelf level) โดยตรงจาก tree เลือกโซน
-	// หน้าบ้านจะส่งมาแค่ shelf_id หรือ shelf_level_id เท่านั้น ไม่ได้แนบ zone_id มาด้วย (ดู add_check_stock_schedule.tsx)
-	// ทำให้เงื่อนไขนี้ไม่ผ่าน เลยข้ามการคำนวณทั้งชื่อเป้าหมายและจำนวนสินค้าไปเฉยๆ (โชว์ว่างเปล่า/0 ชิ้น)
-	// แก้โดยเช็คแค่ประเภทเป็น LOCATION แล้วไล่หาโซนจากต้นทางที่มีจริง (shelf level -> shelf -> zone) แทน
-	if sc.CheckType == "LOCATION" && (sc.ZoneID != nil || sc.ShelfID != nil || sc.ShelfLevelID != nil) {
-		var zoneName, shelfName, levelName string
-		resolvedZoneID := sc.ZoneID
-
-		if sc.ShelfLevelID != nil {
-			var level entity.ShelfLevel
-			if err := s.db.Preload("Shelf.Zone").First(&level, sc.ShelfLevelID).Error; err == nil {
-				levelName = level.Level_Name
-				if level.Shelf != nil {
-					shelfName = level.Shelf.Shelf_Name
-					if level.Shelf.Zone != nil {
-						zoneName = level.Shelf.Zone.Zone_Name
-					}
-					resolvedZoneID = &level.Shelf.ZoneID
-				}
-			}
-		} else if sc.ShelfID != nil {
-			var shelf entity.Shelf
-			if err := s.db.Preload("Zone").First(&shelf, sc.ShelfID).Error; err == nil {
-				shelfName = shelf.Shelf_Name
-				if shelf.Zone != nil {
-					zoneName = shelf.Zone.Zone_Name
-				}
-				resolvedZoneID = &shelf.ZoneID
-			}
-		} else if sc.ZoneID != nil {
-			var zone entity.Zone
-			s.db.First(&zone, sc.ZoneID)
-			zoneName = zone.Zone_Name
-		}
-
-		target := fmt.Sprintf("Zone %s", zoneName)
-		if shelfName != "" {
-			target += fmt.Sprintf(" - %s", shelfName)
-		}
-		if levelName != "" {
-			target += fmt.Sprintf(" - %s", levelName)
-		}
-		res.TargetName = target
-
-		var count int64
-		q := s.db.Model(&entity.Product{})
-		if sc.ShelfLevelID != nil {
-			q = q.Where("shelf_level_id = ?", sc.ShelfLevelID)
-		} else if sc.ShelfID != nil {
-			q = q.Where("shelf_id = ?", sc.ShelfID)
-		} else if resolvedZoneID != nil {
-			// Product ไม่มีคอลัมน์ zone_id ตรงๆ (โซนเชื่อมผ่าน shelf เท่านั้น) ต้อง join เพื่อกรองที่ระดับโซน
-			// ของเดิม query "zone_id = ?" ตรงๆ ทับกับ column ที่ไม่มีจริงในตาราง products ทำให้ query fail เงียบๆ
-			// แล้ว count ค้างเป็น 0 เสมอ (error จาก .Count() ไม่ได้ถูกเช็ค)
-			q = q.Joins("JOIN shelves ON shelves.id = products.shelf_id").Where("shelves.zone_id = ?", resolvedZoneID)
-		}
-		if err := q.Count(&count).Error; err != nil {
-			log.Printf("[CheckStockSchedule] failed to count products for schedule %d: %v", sc.ID, err)
-		}
-		res.ProductCount = int(count)
-
-	} else if sc.CheckType == "CATEGORY" {
-		if sc.SubSubCategoryID != nil {
-			var ssc entity.SubSubCategory
-			s.db.First(&ssc, sc.SubSubCategoryID)
-			res.TargetName = fmt.Sprintf("หมวดหมู่ย่อยที่สุด: %s", ssc.Sub_Sub_Category_Name)
-			var count int64
-			s.db.Model(&entity.Product{}).Where("sub_sub_category_id = ?", sc.SubSubCategoryID).Count(&count)
-			res.ProductCount = int(count)
-		} else if sc.SubCategoryID != nil {
-			var subcat entity.SubCategory
-			s.db.First(&subcat, sc.SubCategoryID)
-			res.TargetName = fmt.Sprintf("หมวดหมู่ย่อย: %s", subcat.Sub_Category_Name)
-			var count int64
-			s.db.Model(&entity.Product{}).Where("sub_category_id = ?", sc.SubCategoryID).Count(&count)
-			res.ProductCount = int(count)
-		} else if sc.CategoryID != nil {
-			var cat entity.Category
-			s.db.First(&cat, sc.CategoryID)
-			res.TargetName = fmt.Sprintf("หมวดหมู่: %s", cat.Category_Name)
-
-			var count int64
-			s.db.Model(&entity.Product{}).Where("category_id = ?", sc.CategoryID).Count(&count)
-			res.ProductCount = int(count)
-		}
-	} else if sc.CheckType == "PRODUCT" && sc.ProductID != nil {
-		var prod entity.Product
-		s.db.First(&prod, sc.ProductID)
-		// รวมรหัสสินค้าไว้ใน TargetName ด้วย ให้ค้นหาได้ทั้งรหัสและชื่อจากฟิลด์เดียวกัน
-		res.TargetName = fmt.Sprintf("[%s] %s", prod.Product_Code, prod.Product_Name)
-		res.ProductCount = 1
-	}
+	res.TargetName, res.ProductCount = s.buildTargetNameAndCount(sc.CheckType, t, excluded)
 
 	return res
 }
