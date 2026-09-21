@@ -485,6 +485,11 @@ export default function ProductDetailPage() {
                       <span className="font-medium text-slate-700">
                         {product.Stock} {product.Unit || "ชิ้น"}
                       </span>
+                      {!!product.PendingReceiveQuantity && product.PendingReceiveQuantity > 0 && (
+                        <span className="ml-2 text-[11px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 align-middle">
+                          รอรับเข้า {product.PendingReceiveQuantity} {product.Unit || "ชิ้น"}
+                        </span>
+                      )}
                     </div>
                     <div>
                       <span className="text-slate-400">ราคาขาย:</span>{" "}

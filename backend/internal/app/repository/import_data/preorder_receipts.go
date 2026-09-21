@@ -110,7 +110,9 @@ func reverseReceiptStock(tx *gorm.DB, billID, supplierID uint) error {
 		return nil
 	}
 	for _, item := range items {
-		if item.ProductID == 0 || item.OrderQuantity <= 0 {
+		// creditedQty คือจำนวนที่เคยเข้าสต็อกจริง (ไม่รวมส่วนที่ถูกกันไว้รอเจ้าของอนุมัติราคา)
+		creditedQty := item.OrderQuantity - item.PendingReceiveQuantity
+		if item.ProductID == 0 || creditedQty <= 0 {
 			continue
 		}
 		var product entity.Product
@@ -121,10 +123,10 @@ func reverseReceiptStock(tx *gorm.DB, billID, supplierID uint) error {
 		if err != nil {
 			return err
 		}
-		if product.Quantity-item.OrderQuantity < reserved {
+		if product.Quantity-creditedQty < reserved {
 			return fmt.Errorf("ไม่สามารถย้อนรับเข้าได้ ยอดที่เหลือต้องกันไว้ให้พรีออเดอร์อื่น")
 		}
-		result := tx.Model(&entity.Product{}).Where("id = ? AND quantity >= ?", item.ProductID, item.OrderQuantity).UpdateColumn("quantity", gorm.Expr("quantity - ?", item.OrderQuantity))
+		result := tx.Model(&entity.Product{}).Where("id = ? AND quantity >= ?", item.ProductID, creditedQty).UpdateColumn("quantity", gorm.Expr("quantity - ?", creditedQty))
 		if result.Error != nil {
 			return result.Error
 		}
@@ -135,7 +137,7 @@ func reverseReceiptStock(tx *gorm.DB, billID, supplierID uint) error {
 		if err != nil {
 			return err
 		}
-		result = tx.Model(&entity.Inventory{}).Where("product_id = ? AND supplier_id = ? AND inventory_quantity >= ?", item.ProductID, supplierID, item.OrderQuantity+supplierReserved).Updates(map[string]interface{}{"inventory_quantity": gorm.Expr("inventory_quantity - ?", item.OrderQuantity), "last_updated_date_time": time.Now()})
+		result = tx.Model(&entity.Inventory{}).Where("product_id = ? AND supplier_id = ? AND inventory_quantity >= ?", item.ProductID, supplierID, creditedQty+supplierReserved).Updates(map[string]interface{}{"inventory_quantity": gorm.Expr("inventory_quantity - ?", creditedQty), "last_updated_date_time": time.Now()})
 		if result.Error != nil {
 			return result.Error
 		}
@@ -155,6 +157,13 @@ func receiptStockUnchanged(tx *gorm.DB, old, next *entity.Bill, items []entity.B
 	var previous []entity.BillItem
 	if err := tx.Where("bill_id = ?", old.ID).Find(&previous).Error; err != nil {
 		return false, err
+	}
+	for _, item := range previous {
+		// มีรายการที่ยังกันสต็อกรออนุมัติราคาอยู่ -> ต้อง reverse/reapply ใหม่เสมอ เผื่อรอบนี้ได้รับการอนุมัติแล้ว
+		// (เช็คแค่ order_quantity เท่ากันเฉยๆ ไม่พอ เพราะจำนวนที่เข้าสต็อกจริงอาจต้องเปลี่ยนแม้ order_quantity เดิม)
+		if item.PendingReceiveQuantity > 0 {
+			return false, nil
+		}
 	}
 	key := func(item entity.BillItem) string {
 		var poID, preID uint

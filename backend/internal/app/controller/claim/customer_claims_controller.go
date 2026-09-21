@@ -255,11 +255,48 @@ func (ctrl *CustomerClaimController) DeleteCustomerClaim(c *gin.Context) {
 
 	err = ctrl.svc.DeleteCustomerClaim(uint(id))
 	if err != nil {
+		if errors.Is(err, claimRepo.ErrClaimAlreadyAdjusted) {
+			c.JSON(http.StatusConflict, gin.H{"error": "ไม่สามารถลบใบเคลมนี้ได้ เพราะมีการตัด/เติมสต็อกสินค้าหรือหักหนี้บัญชีเชื่อของลูกค้าไปแล้วจริง"})
+			return
+		}
+		if errors.Is(err, claimRepo.ErrClaimAlreadyCancelled) {
+			c.JSON(http.StatusConflict, gin.H{"error": "ไม่สามารถลบใบเคลมที่ถูกยกเลิกไปแล้วได้ เนื่องจากต้องเก็บไว้เป็นประวัติ"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete customer claim: " + err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
+}
+
+func (ctrl *CustomerClaimController) CancelCustomerClaim(c *gin.Context) {
+	if !isOwnerOrAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only the store owner can cancel a customer claim"})
+		return
+	}
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	res, err := ctrl.svc.CancelCustomerClaim(uint(id))
+	if err != nil {
+		if errors.Is(err, claimRepo.ErrClaimAlreadyCancelled) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, claimRepo.ErrClaimNotApproved) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel customer claim: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Cancelled successfully", "data": res})
 }
 
 func (ctrl *CustomerClaimController) GeneratePDF(c *gin.Context) {

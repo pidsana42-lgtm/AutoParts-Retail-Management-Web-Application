@@ -207,22 +207,23 @@ func SetupDatabase() {
 		log.Printf("Warning: failed to seed default user: %v", err)
 	}
 
-	seed.Customer(db)
-	seed.Product(db)
-
 	// Chompoo
 	seed.PurchaseOrdersType(db)
-	seed.PurchaseOrders(db)
-	if err := seed.Inventory(db); err != nil {
-		log.Printf("Warning: failed to seed inventories: %v", err)
-	}
-	if err := seed.PurchaseOrdersItems(db); err != nil {
-		log.Printf("Warning: failed to seed purchase order items: %v", err)
-	}
+	// seed.PurchaseOrders(db)
+	// if err := seed.Inventory(db); err != nil {
+	// 	log.Printf("Warning: failed to seed inventories: %v", err)
+	// }
+	// if err := seed.PurchaseOrdersItems(db); err != nil {
+	// 	log.Printf("Warning: failed to seed purchase order items: %v", err)
+	// }
 
 	// Siri
-	seed.BillImage(db)
-	seed.Bill(db)
+	// seed.BillImage(db)
+	// seed.Bill(db)
+
+	// Mock data disabled
+	// seed.Customer(db)
+	// seed.Product(db)
 
 	// Company Setting
 	seed.CompanySetting(db)

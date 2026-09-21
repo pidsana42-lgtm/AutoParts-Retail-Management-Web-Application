@@ -26,6 +26,7 @@ type CustomerClaimService interface {
 	UpdateCustomerClaimItem(id uint, input claimDTO.UpdateCustomerClaimItemDTO) (claimDTO.CustomerClaimItemResponseDTO, error)
 	UpdateCustomerClaimItemStatus(id uint, status string) (claimDTO.CustomerClaimItemResponseDTO, error)
 	DeleteCustomerClaim(id uint) error
+	CancelCustomerClaim(id uint) (claimDTO.CustomerClaimResponseDTO, error)
 	GenerateCustomerClaimPDF(ctx context.Context, claimID uint) ([]byte, error)
 	GenerateCustomerClaimChecklistPDF(ctx context.Context, status string, search string) ([]byte, error)
 }
@@ -80,13 +81,13 @@ func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomer
 		itemEntity := itemInput.ToEntity()
 		itemEntity.CustomerClaimID = claimEntity.ID
 		itemEntity.Status = claimEntity.Status // ให้สถานะของ Item ล้อตามสถานะของใบเคลม (เช่น APPROVED หรือ PENDING)
-		issueOut, receiveIn := prepareStockFlags(&itemEntity)
-		applyCredit := prepareCreditFlag(&itemEntity)
+		issueOut, receiveIn, reverseOut := prepareStockFlags(&itemEntity)
+		applyCredit, reverseCredit := prepareCreditFlag(&itemEntity)
 		if err := s.repo.CreateCustomerClaimItem(&itemEntity); err != nil {
 			return claimDTO.CustomerClaimResponseDTO{}, err
 		}
-		s.applyStockAdjustments(&itemEntity, issueOut, receiveIn)
-		s.applyCreditAdjustment(&itemEntity, applyCredit)
+		s.applyStockAdjustments(&itemEntity, issueOut, receiveIn, reverseOut, itemEntity.Qty)
+		s.applyCreditAdjustment(&itemEntity, applyCredit, reverseCredit, float64(itemEntity.Qty)*itemEntity.UnitPrice)
 		claimEntity.Items[i] = itemEntity
 	}
 
@@ -112,14 +113,14 @@ func (s *customerClaimService) CreateCustomerClaim(input claimDTO.CreateCustomer
 
 func (s *customerClaimService) CreateCustomerClaimItem(input claimDTO.CreateCustomerClaimItemDTO) (claimDTO.CustomerClaimItemResponseDTO, error) {
 	entity := input.ToEntity()
-	issueOut, receiveIn := prepareStockFlags(&entity)
-	applyCredit := prepareCreditFlag(&entity)
+	issueOut, receiveIn, reverseOut := prepareStockFlags(&entity)
+	applyCredit, reverseCredit := prepareCreditFlag(&entity)
 	err := s.repo.CreateCustomerClaimItem(&entity)
 	if err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
-	s.applyStockAdjustments(&entity, issueOut, receiveIn)
-	s.applyCreditAdjustment(&entity, applyCredit)
+	s.applyStockAdjustments(&entity, issueOut, receiveIn, reverseOut, entity.Qty)
+	s.applyCreditAdjustment(&entity, applyCredit, reverseCredit, float64(entity.Qty)*entity.UnitPrice)
 	return claimDTO.ToCustomerClaimItemResponseDTO(&entity), nil
 }
 
@@ -132,26 +133,41 @@ func (s *customerClaimService) CreateCustomerClaimItem(input claimDTO.CreateCust
 // ถ้าเข้าเงื่อนไขและ "ยังไม่เคยทำมาก่อน" (เช็คจาก flag เดิมของ item) จะ set flag เป็น true ทันที (ให้ถูกบันทึก
 // ไปพร้อมกับการ Save/Create ครั้งนี้เลย) และคืนค่ากลับมาว่าต้องปรับสต็อกจริงหลัง save สำเร็จหรือไม่ — ป้องกันการ
 // ตัด/เติมสต็อกซ้ำเวลามีคนสลับสถานะไปมา (เช่น อนุมัติ -> ปฏิเสธ -> อนุมัติใหม่) เพราะของจริงจ่าย/รับแค่ครั้งเดียว
-func prepareStockFlags(item *entity.CustomerClaimItem) (issueOut, receiveIn bool) {
+//
+// reverseOut: ต้องคืนสต็อกที่เคยจ่ายออกไปแล้ว (StockOutIssued=true) กลับเข้าคลังทันที เพราะไม่มีการอนุมัติ
+// จริงเหลืออยู่แล้ว มี 2 กรณี:
+//   - INSTANT: สถานะถูกเปลี่ยนออกจาก APPROVED (เช่น เจ้าของกดอนุมัติแล้วกดตีกลับทีหลัง)
+//   - SUPPLIER_PENDING: ของถูกจ่ายออกไปตั้งแต่ก่อนอนุมัติ (ระหว่างรอบริษัทตรวจ) แต่สุดท้ายผลออกมาเป็น REJECTED
+//     ต้องคืนสต็อกกลับเช่นกัน ไม่งั้นสต็อกจะหายไปฟรีทั้งที่เคลมนี้ถูกปฏิเสธไปแล้ว
+func prepareStockFlags(item *entity.CustomerClaimItem) (issueOut, receiveIn, reverseOut bool) {
 	if item.ProductID == 0 || item.Qty == 0 {
-		return false, false
+		return false, false, false
 	}
 	claimTypeUp := strings.ToUpper(strings.TrimSpace(item.ClaimType))
 	statusUp := strings.ToUpper(strings.TrimSpace(item.Status))
 	resolutionUp := strings.ToUpper(strings.TrimSpace(item.Resolution))
 
-	if !item.StockOutIssued && (claimTypeUp == "SUPPLIER_PENDING" || (claimTypeUp == "INSTANT" && statusUp == "APPROVED")) {
+	shouldIssueOut := claimTypeUp == "SUPPLIER_PENDING" || (claimTypeUp == "INSTANT" && statusUp == "APPROVED")
+	shouldReverseOut := (claimTypeUp == "INSTANT" && statusUp != "APPROVED") || (claimTypeUp == "SUPPLIER_PENDING" && statusUp == "REJECTED")
+
+	if !item.StockOutIssued && shouldIssueOut {
 		item.StockOutIssued = true
 		issueOut = true
+	} else if item.StockOutIssued && shouldReverseOut {
+		item.StockOutIssued = false
+		reverseOut = true
 	}
 	if !item.StockInReceived && resolutionUp == "REPLACEMENT_RECEIVED" {
 		item.StockInReceived = true
 		receiveIn = true
 	}
-	return issueOut, receiveIn
+	return issueOut, receiveIn, reverseOut
 }
 
-func (s *customerClaimService) applyStockAdjustments(item *entity.CustomerClaimItem, issueOut, receiveIn bool) {
+// applyStockAdjustments: reverseQty คือจำนวนที่ต้อง "คืน" กลับเข้าคลัง ระบุแยกจาก item.Qty เพราะถ้าจำนวนใน
+// ใบเคลมถูกแก้ไขในคำขอเดียวกับที่ทำให้เกิดการ reverse (เช่น แก้จำนวน+เปลี่ยนสถานะพร้อมกัน) ต้องคืนตามจำนวนที่
+// "เคยตัดออกไปจริง" (จำนวนเดิมก่อนแก้ไข) ไม่ใช่จำนวนใหม่ล่าสุดในฟอร์ม
+func (s *customerClaimService) applyStockAdjustments(item *entity.CustomerClaimItem, issueOut, receiveIn, reverseOut bool, reverseQty uint) {
 	if issueOut {
 		s.adjustProductStock(item.ProductID, -int(item.Qty), "CLAIM_OUT",
 			fmt.Sprintf("จ่ายสินค้าทดแทนให้ลูกค้า (รายการเคลม #%d)", item.ID))
@@ -159,6 +175,10 @@ func (s *customerClaimService) applyStockAdjustments(item *entity.CustomerClaimI
 	if receiveIn {
 		s.adjustProductStock(item.ProductID, int(item.Qty), "CLAIM_IN",
 			fmt.Sprintf("รับสินค้าทดแทนจากซัพพลายเออร์ (รายการเคลม #%d)", item.ID))
+	}
+	if reverseOut {
+		s.adjustProductStock(item.ProductID, int(reverseQty), "CLAIM_REVERSE",
+			fmt.Sprintf("คืนสต็อกสินค้าที่เคยจ่ายออก เนื่องจากใบเคลมถูกตีกลับ (รายการเคลม #%d)", item.ID))
 	}
 }
 
@@ -171,29 +191,39 @@ func (s *customerClaimService) adjustProductStock(productID uint, delta int, mov
 // prepareCreditFlag: ตรวจว่าต้อง "หักยอดหนี้ค้างชำระเข้าบัญชีเชื่อ" ของลูกค้าหรือยัง สำหรับรายการเคลม
 // ประเภท CREDIT_ACCOUNT (ลงบัญชีเชื่อ) ที่เพิ่งได้รับการอนุมัติ (APPROVED) โดยเช็ค CreditApplied เดิมของ item
 // กันไม่ให้หักซ้ำเวลาสถานะถูกสลับไปมา (เช่น อนุมัติ -> ปฏิเสธ -> อนุมัติใหม่) เพราะยอดหนี้ถูกหักจริงแค่ครั้งเดียว
-func prepareCreditFlag(item *entity.CustomerClaimItem) (applyCredit bool) {
-	if item.CreditApplied {
-		return false
-	}
+//
+// reverseCredit: เคยหักหนี้ไปแล้ว (CreditApplied=true) แต่สถานะถูกเปลี่ยนออกจาก APPROVED ทีหลัง ต้องคืนยอด
+// หนี้ที่เคยหักกลับให้ลูกค้าทันที ไม่งั้นลูกค้าจะเสียเครดิตฟรีทั้งที่ไม่มีการอนุมัติจริงอยู่แล้ว
+func prepareCreditFlag(item *entity.CustomerClaimItem) (applyCredit, reverseCredit bool) {
 	claimTypeUp := strings.ToUpper(strings.TrimSpace(item.ClaimType))
 	statusUp := strings.ToUpper(strings.TrimSpace(item.Status))
-	if claimTypeUp == "CREDIT_ACCOUNT" && statusUp == "APPROVED" {
+	if !item.CreditApplied && claimTypeUp == "CREDIT_ACCOUNT" && statusUp == "APPROVED" {
 		item.CreditApplied = true
-		return true
+		return true, false
 	}
-	return false
+	if item.CreditApplied && claimTypeUp == "CREDIT_ACCOUNT" && statusUp != "APPROVED" {
+		item.CreditApplied = false
+		return false, true
+	}
+	return false, false
 }
 
-func (s *customerClaimService) applyCreditAdjustment(item *entity.CustomerClaimItem, applyCredit bool) {
-	if !applyCredit {
+// applyCreditAdjustment: reverseAmount คือยอดที่ต้อง "คืน" ให้ลูกค้า ระบุแยกจาก item.Qty*item.UnitPrice
+// ด้วยเหตุผลเดียวกับ applyStockAdjustments — ต้องคืนตามยอดที่เคยหักไปจริง (ก่อนแก้ไข) ไม่ใช่ยอดใหม่ล่าสุด
+func (s *customerClaimService) applyCreditAdjustment(item *entity.CustomerClaimItem, applyCredit, reverseCredit bool, reverseAmount float64) {
+	if applyCredit {
+		amount := float64(item.Qty) * item.UnitPrice
+		if amount > 0 {
+			if err := s.repo.ReduceCustomerDebtForClaim(item.CustomerClaimID, amount); err != nil {
+				fmt.Printf("[Credit] failed to reduce customer debt (claim item %d): %v\n", item.ID, err)
+			}
+		}
 		return
 	}
-	amount := float64(item.Qty) * item.UnitPrice
-	if amount <= 0 {
-		return
-	}
-	if err := s.repo.ReduceCustomerDebtForClaim(item.CustomerClaimID, amount); err != nil {
-		fmt.Printf("[Credit] failed to reduce customer debt (claim item %d): %v\n", item.ID, err)
+	if reverseCredit && reverseAmount > 0 {
+		if err := s.repo.IncreaseCustomerDebtForClaim(item.CustomerClaimID, reverseAmount); err != nil {
+			fmt.Printf("[Credit] failed to restore customer debt (claim item %d): %v\n", item.ID, err)
+		}
 	}
 }
 
@@ -290,65 +320,138 @@ func (s *customerClaimService) syncParentClaimStatus(claimID uint) {
 }
 
 func (s *customerClaimService) UpdateCustomerClaimItem(id uint, input claimDTO.UpdateCustomerClaimItemDTO) (claimDTO.CustomerClaimItemResponseDTO, error) {
-	existing, err := s.repo.GetCustomerClaimItemByID(id)
+	var issueOut, receiveIn, reverseOut, applyCredit, reverseCredit bool
+	var oldQty uint
+	var oldUnitPrice float64
+	var wasStockOutIssued, wasStockInReceived, wasCreditApplied bool
+	updated, err := s.repo.UpdateCustomerClaimItemWithLock(id, func(existing *entity.CustomerClaimItem) error {
+		if existing.Resolution == "COMPLETED" || strings.Contains(existing.Resolution, "ส่งมอบ") || strings.Contains(existing.Resolution, "สำเร็จ") {
+			return ErrClaimItemAlreadyDelivered
+		}
+		oldQty = existing.Qty
+		oldUnitPrice = existing.UnitPrice
+		wasStockOutIssued = existing.StockOutIssued
+		wasStockInReceived = existing.StockInReceived
+		wasCreditApplied = existing.CreditApplied
+
+		if input.Qty > 0 {
+			existing.Qty = uint(input.Qty)
+		}
+		if input.UnitPrice > 0 {
+			existing.UnitPrice = input.UnitPrice
+		}
+		if input.Reason != "" {
+			existing.Reason = input.Reason
+		}
+		if input.Resolution != "" {
+			existing.Resolution = input.Resolution
+		}
+		if input.ClaimType != "" {
+			existing.ClaimType = input.ClaimType
+		}
+		if input.Status != "" {
+			existing.Status = input.Status
+		}
+		if input.EvidenceURL != "" {
+			existing.EvidenceURL = input.EvidenceURL
+		}
+		issueOut, receiveIn, reverseOut = prepareStockFlags(existing)
+		applyCredit, reverseCredit = prepareCreditFlag(existing)
+		return nil
+	})
 	if err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
-	if existing.Resolution == "COMPLETED" || strings.Contains(existing.Resolution, "ส่งมอบ") || strings.Contains(existing.Resolution, "สำเร็จ") {
-		return claimDTO.CustomerClaimItemResponseDTO{}, ErrClaimItemAlreadyDelivered
+	s.applyStockAdjustments(updated, issueOut, receiveIn, reverseOut, oldQty)
+	s.applyCreditAdjustment(updated, applyCredit, reverseCredit, qtyAmount(oldQty, oldUnitPrice))
+
+	// ปรับส่วนต่างจำนวน/ราคา สำหรับรายการที่ตัด/เติมสต็อก+หักหนี้ไปแล้วจริงตั้งแต่ก่อนหน้านี้ (flag ยังเป็น true
+	// เหมือนเดิม ไม่ได้เพิ่งเกิด/ถูกยกเลิกในรอบนี้) แต่ถูกแก้จำนวน/ราคาภายหลัง เพื่อให้สต็อก/หนี้ที่ปรับจริง
+	// ตรงกับตัวเลขล่าสุดในใบเคลมเสมอ — ถ้าไม่ทำ แก้จำนวนหลังอนุมัติแล้วจะไม่กระทบสต็อก/หนี้ที่ตัดไปแล้วเลย
+	if wasStockOutIssued && updated.StockOutIssued && !issueOut && !reverseOut && updated.Qty != oldQty {
+		qtyDelta := int(updated.Qty) - int(oldQty)
+		s.adjustProductStock(updated.ProductID, -qtyDelta, "CLAIM_ADJUST",
+			fmt.Sprintf("ปรับสต็อกตามจำนวนที่แก้ไขใหม่ของรายการเคลม #%d", updated.ID))
 	}
-	if input.Qty > 0 {
-		existing.Qty = uint(input.Qty)
+	if wasStockInReceived && updated.StockInReceived && !receiveIn && updated.Qty != oldQty {
+		qtyDelta := int(updated.Qty) - int(oldQty)
+		s.adjustProductStock(updated.ProductID, qtyDelta, "CLAIM_ADJUST",
+			fmt.Sprintf("ปรับสต็อกรับเข้าตามจำนวนที่แก้ไขใหม่ของรายการเคลม #%d", updated.ID))
 	}
-	if input.UnitPrice > 0 {
-		existing.UnitPrice = input.UnitPrice
+	if wasCreditApplied && updated.CreditApplied && !applyCredit && !reverseCredit {
+		oldAmount := qtyAmount(oldQty, oldUnitPrice)
+		newAmount := float64(updated.Qty) * updated.UnitPrice
+		if amountDelta := newAmount - oldAmount; amountDelta > 0 {
+			if err := s.repo.ReduceCustomerDebtForClaim(updated.CustomerClaimID, amountDelta); err != nil {
+				fmt.Printf("[Credit] failed to adjust customer debt delta (claim item %d): %v\n", updated.ID, err)
+			}
+		} else if amountDelta < 0 {
+			if err := s.repo.IncreaseCustomerDebtForClaim(updated.CustomerClaimID, -amountDelta); err != nil {
+				fmt.Printf("[Credit] failed to restore customer debt delta (claim item %d): %v\n", updated.ID, err)
+			}
+		}
 	}
-	if input.Reason != "" {
-		existing.Reason = input.Reason
-	}
-	if input.Resolution != "" {
-		existing.Resolution = input.Resolution
-	}
-	if input.ClaimType != "" {
-		existing.ClaimType = input.ClaimType
-	}
-	if input.Status != "" {
-		existing.Status = input.Status
-	}
-	if input.EvidenceURL != "" {
-		existing.EvidenceURL = input.EvidenceURL
-	}
-	issueOut, receiveIn := prepareStockFlags(existing)
-	applyCredit := prepareCreditFlag(existing)
-	if err := s.repo.UpdateCustomerClaimItem(existing); err != nil {
-		return claimDTO.CustomerClaimItemResponseDTO{}, err
-	}
-	s.applyStockAdjustments(existing, issueOut, receiveIn)
-	s.applyCreditAdjustment(existing, applyCredit)
-	s.syncParentClaimStatus(existing.CustomerClaimID)
-	return claimDTO.ToCustomerClaimItemResponseDTO(existing), nil
+
+	s.syncParentClaimStatus(updated.CustomerClaimID)
+	return claimDTO.ToCustomerClaimItemResponseDTO(updated), nil
+}
+
+func qtyAmount(qty uint, unitPrice float64) float64 {
+	return float64(qty) * unitPrice
 }
 
 func (s *customerClaimService) UpdateCustomerClaimItemStatus(id uint, status string) (claimDTO.CustomerClaimItemResponseDTO, error) {
-	existing, err := s.repo.GetCustomerClaimItemByID(id)
+	var issueOut, receiveIn, reverseOut, applyCredit, reverseCredit bool
+	updated, err := s.repo.UpdateCustomerClaimItemWithLock(id, func(existing *entity.CustomerClaimItem) error {
+		if existing.Resolution == "COMPLETED" || strings.Contains(existing.Resolution, "ส่งมอบ") || strings.Contains(existing.Resolution, "สำเร็จ") {
+			return ErrClaimItemAlreadyDelivered
+		}
+		existing.Status = status
+		issueOut, receiveIn, reverseOut = prepareStockFlags(existing)
+		applyCredit, reverseCredit = prepareCreditFlag(existing)
+		return nil
+	})
 	if err != nil {
 		return claimDTO.CustomerClaimItemResponseDTO{}, err
 	}
-	if existing.Resolution == "COMPLETED" || strings.Contains(existing.Resolution, "ส่งมอบ") || strings.Contains(existing.Resolution, "สำเร็จ") {
-		return claimDTO.CustomerClaimItemResponseDTO{}, ErrClaimItemAlreadyDelivered
-	}
-	existing.Status = status
-	issueOut, receiveIn := prepareStockFlags(existing)
-	applyCredit := prepareCreditFlag(existing)
-	if err := s.repo.UpdateCustomerClaimItem(existing); err != nil {
-		return claimDTO.CustomerClaimItemResponseDTO{}, err
-	}
-	s.applyStockAdjustments(existing, issueOut, receiveIn)
-	s.applyCreditAdjustment(existing, applyCredit)
-	s.syncParentClaimStatus(existing.CustomerClaimID)
-	return claimDTO.ToCustomerClaimItemResponseDTO(existing), nil
+	s.applyStockAdjustments(updated, issueOut, receiveIn, reverseOut, updated.Qty)
+	s.applyCreditAdjustment(updated, applyCredit, reverseCredit, float64(updated.Qty)*updated.UnitPrice)
+	s.syncParentClaimStatus(updated.CustomerClaimID)
+	return claimDTO.ToCustomerClaimItemResponseDTO(updated), nil
 }
 
 func (s *customerClaimService) DeleteCustomerClaim(id uint) error {
 	return s.repo.DeleteCustomerClaim(id)
+}
+
+// CancelCustomerClaim: ยกเลิกใบเคลมที่อนุมัติแล้ว คืนสต็อก/หนี้ที่เคยตัด/หักไปจริงกลับทั้งหมด
+// แล้วเปลี่ยนสถานะเป็น CANCELLED (เก็บประวัติไว้ ไม่ลบทิ้ง) — ใช้กับกรณีอนุมัติผิดพลาดที่ต้องย้อนกลับ
+func (s *customerClaimService) CancelCustomerClaim(id uint) (claimDTO.CustomerClaimResponseDTO, error) {
+	itemsBefore, err := s.repo.CancelCustomerClaim(id)
+	if err != nil {
+		return claimDTO.CustomerClaimResponseDTO{}, err
+	}
+	for _, item := range itemsBefore {
+		if item.StockOutIssued {
+			s.adjustProductStock(item.ProductID, int(item.Qty), "CLAIM_CANCEL",
+				fmt.Sprintf("ยกเลิกใบเคลม คืนสต็อกสินค้าที่เคยจ่ายออก (รายการเคลม #%d)", item.ID))
+		}
+		if item.StockInReceived {
+			s.adjustProductStock(item.ProductID, -int(item.Qty), "CLAIM_CANCEL",
+				fmt.Sprintf("ยกเลิกใบเคลม ตัดสต็อกสินค้าที่เคยรับเข้า (รายการเคลม #%d)", item.ID))
+		}
+		if item.CreditApplied {
+			amount := float64(item.Qty) * item.UnitPrice
+			if amount > 0 {
+				if err := s.repo.IncreaseCustomerDebtForClaim(item.CustomerClaimID, amount); err != nil {
+					fmt.Printf("[Credit] failed to restore customer debt (claim item %d): %v\n", item.ID, err)
+				}
+			}
+		}
+	}
+	full, err := s.repo.GetCustomerClaimByID(id)
+	if err != nil {
+		return claimDTO.CustomerClaimResponseDTO{}, err
+	}
+	return claimDTO.ToCustomerClaimResponseDTO(full), nil
 }

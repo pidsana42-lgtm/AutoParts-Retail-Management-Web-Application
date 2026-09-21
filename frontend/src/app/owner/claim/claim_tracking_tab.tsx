@@ -286,6 +286,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
 
             <div className="flex items-center gap-1">
               <button
+                aria-label="หน้าแรก"
                 disabled={trackingPage === 1}
                 onClick={() => setTrackingPage(1)}
                 className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
@@ -293,6 +294,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
                 <ChevronsLeft size={16} />
               </button>
               <button
+                aria-label="หน้าก่อนหน้า"
                 disabled={trackingPage === 1}
                 onClick={() => setTrackingPage(p => p - 1)}
                 className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
@@ -318,6 +320,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
               )}
 
               <button
+                aria-label="หน้าถัดไป"
                 disabled={trackingPage === totalTrackingPages}
                 onClick={() => setTrackingPage(p => p + 1)}
                 className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
@@ -325,6 +328,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
                 <ChevronRight size={16} />
               </button>
               <button
+                aria-label="หน้าสุดท้าย"
                 disabled={trackingPage === totalTrackingPages}
                 onClick={() => setTrackingPage(totalTrackingPages)}
                 className="p-1.5 rounded-none text-gray-400 hover:bg-gray-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"

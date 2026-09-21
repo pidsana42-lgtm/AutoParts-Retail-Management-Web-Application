@@ -283,6 +283,7 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/employee/import/mapping" element={<EmployeeImport />} />
         <Route path="/employee/import/manual" element={<EmployeeImport />} />
         <Route path="/employee/import/po" element={<EmployeeImport />} />
+        <Route path="/employee/import/approve/:id" element={<EmployeeImport />} />
 
         {/* หน้าพรีออเดอร์สำหรับพนักงาน */}
         <Route path="/employee/pre-orders" element={<EmployeePreOrder />} />

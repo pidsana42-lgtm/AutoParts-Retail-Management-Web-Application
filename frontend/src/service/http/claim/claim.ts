@@ -62,6 +62,11 @@ export const deleteCustomerClaim = async (id: number) => {
   return response.data;
 };
 
+export const cancelCustomerClaim = async (id: number) => {
+  const response = await apiClient.patch<{ data: CustomerClaim }>(`/claims/customer-claims/${id}/cancel`);
+  return response.data?.data ?? null;
+};
+
 export const updateClaimItemStatus = async (itemId: number, status: string) => {
   const response = await apiClient.put<{ data: CustomerClaimItem }>(`/claims/customer-claims/items/${itemId}/status`, { status });
   return response.data?.data ?? null;
