@@ -12,23 +12,25 @@ import (
 )
 
 const (
-	PrefixV1       = "enc:v1:"
-	FallbackSecret = "autoparts-management-aes-secret-key-32b"
+	PrefixV1 = "enc:v1:"
 )
 
-// getEncryptionKey returns a 32-byte key derived via SHA-256
+// getEncryptionKey returns a 32-byte key derived via SHA-256. Falls back to
+// deriving from JWT_SECRET (so existing deployments that only set JWT_SECRET
+// keep decrypting the same data they always could) but, unlike before, does
+// NOT fall back further to a hardcoded key that's visible in this repository's
+// source. main.go checks at startup that JWT_SECRET is set, so a real running
+// server always has a real secret here; only test/tool code that never calls
+// main() could reach this with everything unset.
 func getEncryptionKey() []byte {
-	secret := os.Getenv("AES_ENCRYPTION_KEY")
-	if secret == "" {
-		secret = os.Getenv("ENCRYPTION_KEY")
+	v := os.Getenv("AES_ENCRYPTION_KEY")
+	if v == "" {
+		v = os.Getenv("ENCRYPTION_KEY")
 	}
-	if secret == "" {
-		secret = os.Getenv("JWT_SECRET")
+	if v == "" {
+		v = os.Getenv("JWT_SECRET")
 	}
-	if secret == "" {
-		secret = FallbackSecret
-	}
-	hash := sha256.Sum256([]byte(secret))
+	hash := sha256.Sum256([]byte(v))
 	return hash[:]
 }
 

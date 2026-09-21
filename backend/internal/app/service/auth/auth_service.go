@@ -183,13 +183,9 @@ func (s *authService) Login(req *authDTO.LoginRequest) (*authDTO.LoginResponse, 
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	// ดึงรหัสลับสำหรับล็อก Token (ให้ล้อตามฟังก์ชัน jwtSecret ใน Middleware ของโบว์)
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		secret = "replace-with-secure-secret"
-	}
-
-	tokenString, err := token.SignedString([]byte(secret))
+	// ดึงรหัสลับสำหรับล็อก Token (ให้ล้อตามฟังก์ชัน jwtSecret ใน Middleware ของโบว์ — main.go เช็คตั้งแต่
+	// ตอนสตาร์ทแล้วว่า JWT_SECRET ต้องถูกตั้งค่าไว้ ไม่มี fallback เป็นค่า default ในซอร์สโค้ดอีกต่อไป)
+	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
 	if err != nil {
 		return nil, errors.New("ไม่สามารถสร้างรหัสเข้าสู่ระบบได้")
 	}
@@ -221,12 +217,7 @@ func (s *authService) LoginWithLine(lineUserID string) (*authDTO.LoginResponse, 
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		secret = "replace-with-secure-secret"
-	}
-
-	tokenString, err := token.SignedString([]byte(secret))
+	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
 	if err != nil {
 		return nil, errors.New("ไม่สามารถสร้างรหัสเข้าสู่ระบบได้")
 	}

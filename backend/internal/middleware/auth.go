@@ -10,12 +10,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// jwtSecret: main.go เช็คตั้งแต่ตอนสตาร์ทแล้วว่า JWT_SECRET ต้องถูกตั้งค่าไว้ (ไม่งั้นโปรแกรมจะไม่ขึ้นเลย)
+// ที่นี่แค่อ่านค่ามาใช้เฉยๆ ไม่มี fallback เป็นค่า default ที่ฝังในซอร์สโค้ดอีกต่อไป (ของเดิมเงียบๆ ใช้ค่า
+// default ถ้าไม่ได้ตั้งค่า ทำให้ใครก็ปลอม JWT ได้ถ้ารู้ค่านั้นจาก GitHub)
 func jwtSecret() []byte {
-	s := os.Getenv("JWT_SECRET")
-	if s == "" {
-		s = "replace-with-secure-secret" // แนะนำให้ไปตั้งค่าใน .env
-	}
-	return []byte(s)
+	return []byte(os.Getenv("JWT_SECRET"))
 }
 
 func AuthMiddleware() gin.HandlerFunc {
