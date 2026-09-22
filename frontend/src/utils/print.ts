@@ -136,13 +136,13 @@ export async function exportDebtAgingPdf(
   dateLabel: string,
   fileName = 'debt-aging-report.pdf',
 ) {
-  if (rows.length === 0) return;
-
   const rowsPerPage = 20;
-  const totalPages = Math.ceil(rows.length / rowsPerPage);
+  const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
   const pages = Array.from({ length: totalPages }, (_, pageIndex) => {
     const pageRows = rows.slice(pageIndex * rowsPerPage, (pageIndex + 1) * rowsPerPage);
-    const trs = pageRows.map((r) => `<tr>
+    const trs = pageRows.length === 0
+      ? '<tr><td colspan=7 class=center>ไม่พบข้อมูลลูกหนี้ในช่วงเวลาที่เลือก</td></tr>'
+      : pageRows.map((r) => `<tr>
       <td>${escapeHtml(r.customer_code)}</td>
       <td>${escapeHtml(r.customer_name)}</td>
       <td class="num">฿${r.total_debt.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>

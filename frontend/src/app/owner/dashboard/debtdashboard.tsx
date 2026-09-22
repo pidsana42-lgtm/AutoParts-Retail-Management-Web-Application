@@ -31,8 +31,6 @@ const getStatusVariant = (status: string) => {
   switch (status) {
     case 'เกินกำหนด':
       return 'destructive';
-    case 'ชำระหมดแล้ว':
-      return 'success';
     default:
       return 'cash';
   }
@@ -56,7 +54,6 @@ const STATUS_FILTER = [
   { label: 'ทั้งหมด', value: '' },
   { label: 'เกินกำหนด', value: 'เกินกำหนด' },
   { label: 'ทยอยชำระ',  value: 'ทยอยชำระ' },
-  { label: 'ชำระหมดแล้ว', value: 'ชำระหมดแล้ว' }
 ];
 
 const AGING_BUCKET_FILTER = [
@@ -87,7 +84,7 @@ const DebtDashboard: React.FC = () => {
   const location = useLocation();
   const basePath = usePathBasePrefix();
 
-  // Period filter (คุมทั้ง KPI summary และ ตารางวิเคราะห์อายุหนี้)
+  // Period filter controls KPI summary only. The debt table always shows all outstanding debt.
   const [selectedFilter, setSelectedFilter] = useState('daily');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -126,7 +123,8 @@ const DebtDashboard: React.FC = () => {
       setOverdueCountLoading(true);
       try {
         const res = await dashboardService.getDebtAging({
-          min_age_days: overdueDays,
+          status: 'เกินกำหนด',
+          min_age_days: overdueDays + 1,
           page: 1,
           page_size: 1,
         });
@@ -152,6 +150,7 @@ const DebtDashboard: React.FC = () => {
   // Export loading
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const summaryQuery = useMemo<SummaryQuery>(() => {
     if (startDate && endDate) {
       if (startDate === endDate) {
@@ -183,27 +182,12 @@ const DebtDashboard: React.FC = () => {
     }
   }, [agingBucket, customMinAgeDays]);
 
-  const debtDateRange = useMemo(() => {
-    if (startDate) {
-      return {
-        start_date: startDate,
-        end_date: endDate || startDate,
-      };
-    }
-    const period = getDashboardPeriodDateRange(selectedFilter);
-    return {
-      start_date: period.startDate,
-      end_date: period.endDate,
-    };
-  }, [selectedFilter, startDate, endDate]);
-
   const agingQuery = useMemo<DebtAgingQuery>(() => ({
-    ...debtDateRange,
     ...(statusFilter && { status: statusFilter }),
     ...agingBucketParams,
     page: currentPage,
     page_size: PAGE_SIZE,
-  }), [debtDateRange, statusFilter, agingBucketParams, currentPage]);
+  }), [statusFilter, agingBucketParams, currentPage]);
 
   const {
     kpi, currentOutstanding, currentOutstandingLoading, totalDebtors,
@@ -217,41 +201,52 @@ const DebtDashboard: React.FC = () => {
     setSelectedFilter(value);
     setStartDate('');
     setEndDate('');
-    setCurrentPage(1);
   };
 
   const handleStartDateChange = (d: string) => {
     setStartDate(d);
-    setSelectedFilter('');
-    setCurrentPage(1);
+    setSelectedFilter(d || endDate ? '' : 'daily');
   };
 
   const handleEndDateChange = (d: string) => {
     setEndDate(d);
-    setSelectedFilter('');
-    setCurrentPage(1);
+    setSelectedFilter(startDate || d ? '' : 'daily');
   };
 
+  // Date range is used only for PDF/Excel exports. The live table remains an all-outstanding snapshot.
+  const exportDateRange = useMemo<Pick<DebtAgingQuery, 'start_date' | 'end_date'>>(() => {
+    if (startDate && endDate) {
+      return { start_date: startDate, end_date: endDate };
+    }
+    if (startDate) return { start_date: startDate, end_date: startDate };
+    if (!selectedFilter) return {};
+    const period = getDashboardPeriodDateRange(selectedFilter);
+    return { start_date: period.startDate, end_date: period.endDate };
+  }, [selectedFilter, startDate, endDate]);
+
   const exportQuery = useMemo<DebtAgingQuery>(() => ({
-    ...debtDateRange,
+    ...exportDateRange,
     ...(statusFilter && { status: statusFilter }),
     ...agingBucketParams,
-  }), [debtDateRange, statusFilter, agingBucketParams]);
+  }), [exportDateRange, statusFilter, agingBucketParams]);
 
   const exportDateLabel = useMemo(() => {
-    const from = formatDateThai(debtDateRange.start_date, '-');
-    const to = formatDateThai(debtDateRange.end_date, '-');
-    return debtDateRange.start_date === debtDateRange.end_date ? from : `${from} – ${to}`;
-  }, [debtDateRange]);
+    if (!exportDateRange.start_date || !exportDateRange.end_date) return 'ทั้งหมด';
+    const from = formatDateThai(exportDateRange.start_date, '-');
+    const to = formatDateThai(exportDateRange.end_date, '-');
+    return exportDateRange.start_date === exportDateRange.end_date ? from : `${from} – ${to}`;
+  }, [exportDateRange]);
 
   const exportDateSlug = useMemo(() => {
-    const from = formatDateThai(debtDateRange.start_date, '-');
-    const to = formatDateThai(debtDateRange.end_date, '-');
-    return debtDateRange.start_date === debtDateRange.end_date ? from : `${from}_to_${to}`;
-  }, [debtDateRange]);
+    if (!exportDateRange.start_date || !exportDateRange.end_date) return 'all';
+    const from = formatDateThai(exportDateRange.start_date, '-');
+    const to = formatDateThai(exportDateRange.end_date, '-');
+    return exportDateRange.start_date === exportDateRange.end_date ? from : `${from}_to_${to}`;
+  }, [exportDateRange]);
 
   const handleExportPdf = async () => {
     setExportingPdf(true);
+    setExportError(null);
     try {
       const res = await dashboardService.getAllDebtAging(exportQuery);
       await exportDebtAgingPdf(
@@ -259,16 +254,21 @@ const DebtDashboard: React.FC = () => {
         exportDateLabel,
         `debt-aging-${exportDateSlug}.pdf`,
       );
-    } catch { /* silently ignore */ }
+    } catch {
+      setExportError('ส่งออก PDF ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+    }
     finally { setExportingPdf(false); }
   };
 
   const handleExportExcel = async () => {
     setExportingExcel(true);
+    setExportError(null);
     try {
       const res = await dashboardService.exportDebtAgingExcel(exportQuery);
       triggerDownload(res.data as Blob, `debt-aging-${exportDateSlug}.csv`);
-    } catch { /* silently ignore */ }
+    } catch {
+      setExportError('ส่งออก Excel ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+    }
     finally { setExportingExcel(false); }
   };
 
@@ -305,29 +305,42 @@ const DebtDashboard: React.FC = () => {
             ติดตามความเคลื่อนไหวของยอดหนี้ลูกค้าผ่านแดชบอร์ดเดียว
           </Heading>
         </div>
-        <div className='flex max-w-full items-center overflow-visible bg-[#F6F3F2] p-1'>
-          {PERIOD_FILTER.map((f) => (
-            <button key={f.value} onClick={() => handlePeriodClick(f.value)}
-              className={`w-20 py-2.5 text-sm transition cursor-pointer ${
-                selectedFilter === f.value
-                  ? 'bg-white text-red-500 shadow-sm font-medium'
-                  : 'text-gray-500 hover:text-red-500'
-              }`}>
-              {f.label}
-            </button>
-          ))}
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onStartDateChange={handleStartDateChange}
-            onEndDateChange={handleEndDateChange}
-          />
+        <div className='relative flex max-w-full flex-col items-end'>
+          <div className='flex max-w-full items-center overflow-visible bg-[#F6F3F2] p-1'>
+            {PERIOD_FILTER.map((f) => (
+              <button key={f.value} onClick={() => handlePeriodClick(f.value)}
+                className={`w-20 py-2.5 text-sm transition cursor-pointer ${
+                  selectedFilter === f.value
+                    ? 'bg-white text-red-500 shadow-sm font-medium'
+                    : 'text-gray-500 hover:text-red-500'
+                }`}>
+                {f.label}
+              </button>
+            ))}
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              onStartDateChange={handleStartDateChange}
+              onEndDateChange={handleEndDateChange}
+            />
+          </div>
+          <div className='mt-1 flex w-full justify-end'>
+            <p className='m-0 text-right text-[10px] text-gray-500'>
+              ช่วงเวลามีผลต่อรายรับจากการเก็บหนี้และ PDF/Excel เท่านั้น ตารางด้านล่างแสดงลูกหนี้คงค้างทั้งหมด
+            </p>
+          </div>
         </div>
       </div>
 
       {summaryError && (
         <div className='flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600'>
           <AlertCircle size={16} /> {summaryError}
+        </div>
+      )}
+
+      {exportError && (
+        <div className='flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600'>
+          <AlertCircle size={16} /> {exportError}
         </div>
       )}
 
@@ -355,9 +368,9 @@ const DebtDashboard: React.FC = () => {
           <Heading level='p' className='mt-1 invisible' aria-hidden>.</Heading>
         </Card>
 
-        {/* รายรับจากการเก็บหนี้ตามช่วงเวลาที่เลือก */}
+        {/* รายรับจากการเก็บหนี้ */}
         <Card className='border-l-[5px] border-l-emerald-500 flex flex-col justify-center p-5'>
-          <Heading level='h6' className='text-gray-500'>รายรับจากการเก็บหนี้ (ตามช่วงเวลาที่เลือก)</Heading>
+          <Heading level='h6' className='text-gray-500'>รายรับจากการเก็บหนี้</Heading>
           <Heading level='h3'>
             {kpiVal(`฿ ${fmt(kpi.collectedAmount)}`)}
           </Heading>
@@ -616,21 +629,6 @@ const DebtDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* ล้างตัวกรอง */}
-                  {(statusFilter || agingBucket || customMinAgeDays !== null) && (
-                    <button
-                      onClick={() => {
-                        setStatusFilter('');
-                        setAgingBucket('');
-                        setCustomMinAgeDays(null);
-                        setCustomMinAgeInput('');
-                        setCurrentPage(1);
-                      }}
-                      className='w-full text-xs text-gray-400 hover:text-red-500 text-left pt-2 border-t border-gray-100 transition cursor-pointer'
-                    >
-                      ล้างตัวกรองทั้งหมด
-                    </button>
-                  )}
                 </div>
               )}
             </div>
