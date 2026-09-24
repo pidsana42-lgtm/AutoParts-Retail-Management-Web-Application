@@ -664,6 +664,22 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string, em
 			}
 		}
 
+		rStatus := r.Status
+		rOrderStatus := strings.ToLower(strings.TrimSpace(string(r.Order.Status)))
+		if rStatus != "cancelled" && rStatus != "pending_cancel" {
+			if rOrderStatus == "returned" || rOrderStatus == "refunded" {
+				rStatus = "refunded"
+			} else if rOrderStatus == "partial_returned" {
+				rStatus = "partial_returned"
+			} else if rOrderStatus == "claimed" {
+				rStatus = "claimed"
+			} else if rOrderStatus == "claim_in_progress" {
+				rStatus = "claim_in_progress"
+			} else if rOrderStatus == "pending_return" {
+				rStatus = "pending_return"
+			}
+		}
+
 		list = append(list, posDto.PaymentHistoryItem{
 			ReceiptID:             r.ID,
 			ReceiptNumber:         r.ReceiptNumber,
@@ -672,7 +688,7 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string, em
 			PaymentMethod:         r.PaymentMethod.MethodName,
 			OrderNumbers:          r.Order.OrderNumber,
 			TotalReceived:         r.AmountPaid,
-			Status:                r.Status,
+			Status:                rStatus,
 			ReceivedByID:          r.RecordedByID,
 			ReceivedByName:        recName,
 			PaymentType:           "repayment",
@@ -714,6 +730,9 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string, em
 		}
 
 		status := "completed"
+		paymentType := "payment"
+		isRefund := p.ReturnID != nil || p.Amount < 0 || strings.HasPrefix(p.ReferenceNumber, "REFUND-")
+
 		var cancelReason string
 		var cancelRemark string
 		var cancelReqByName string
@@ -721,7 +740,12 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string, em
 		var cancelReqByID *uint
 		var cancelAt *time.Time
 
-		if p.Order.Status == "cancelled" {
+		pOrderStatus := strings.ToLower(strings.TrimSpace(string(p.Order.Status)))
+
+		if isRefund {
+			status = "refunded"
+			paymentType = "refund"
+		} else if pOrderStatus == "cancelled" {
 			status = "cancelled"
 			if p.Order.CancelReason != nil {
 				cancelReason = *p.Order.CancelReason
@@ -740,6 +764,16 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string, em
 					cancelReqByName = p.Order.CancelRequestedBy.Username
 				}
 			}
+		} else if pOrderStatus == "returned" || pOrderStatus == "refunded" {
+			status = "refunded"
+		} else if pOrderStatus == "partial_returned" {
+			status = "partial_returned"
+		} else if pOrderStatus == "claimed" {
+			status = "claimed"
+		} else if pOrderStatus == "claim_in_progress" {
+			status = "claim_in_progress"
+		} else if pOrderStatus == "pending_return" {
+			status = "pending_return"
 		}
 
 		list = append(list, posDto.PaymentHistoryItem{
@@ -753,7 +787,7 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string, em
 			Status:                status,
 			ReceivedByID:          p.ReceivedByID,
 			ReceivedByName:        recName,
-			PaymentType:           "payment",
+			PaymentType:           paymentType,
 			CancelReason:          cancelReason,
 			CancelRequestedByID:   cancelReqByID,
 			CancelRequestedByName: cancelReqByName,
@@ -811,6 +845,22 @@ func (s *paymentService) GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentH
 			}
 		}
 
+		rStatus := r.Status
+		rOrderStatus := strings.ToLower(strings.TrimSpace(string(r.Order.Status)))
+		if rStatus != "cancelled" && rStatus != "pending_cancel" {
+			if rOrderStatus == "returned" || rOrderStatus == "refunded" {
+				rStatus = "refunded"
+			} else if rOrderStatus == "partial_returned" {
+				rStatus = "partial_returned"
+			} else if rOrderStatus == "claimed" {
+				rStatus = "claimed"
+			} else if rOrderStatus == "claim_in_progress" {
+				rStatus = "claim_in_progress"
+			} else if rOrderStatus == "pending_return" {
+				rStatus = "pending_return"
+			}
+		}
+
 		return &posDto.PaymentHistoryItem{
 			ReceiptID:             r.ID,
 			ReceiptNumber:         r.ReceiptNumber,
@@ -819,7 +869,7 @@ func (s *paymentService) GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentH
 			PaymentMethod:         r.PaymentMethod.MethodName,
 			OrderNumbers:          r.Order.OrderNumber,
 			TotalReceived:         r.AmountPaid,
-			Status:                r.Status,
+			Status:                rStatus,
 			ReceivedByID:          r.RecordedByID,
 			ReceivedByName:        recName,
 			PaymentType:           "repayment",
@@ -865,6 +915,9 @@ func (s *paymentService) GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentH
 	}
 
 	status := "completed"
+	paymentType := "payment"
+	isRefund := p.ReturnID != nil || p.Amount < 0 || strings.HasPrefix(p.ReferenceNumber, "REFUND-")
+
 	var cancelReason string
 	var cancelRemark string
 	var cancelReqByName string
@@ -872,7 +925,12 @@ func (s *paymentService) GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentH
 	var cancelReqByID *uint
 	var cancelAt *time.Time
 
-	if p.Order.Status == "cancelled" {
+	pOrderStatus := strings.ToLower(strings.TrimSpace(string(p.Order.Status)))
+
+	if isRefund {
+		status = "refunded"
+		paymentType = "refund"
+	} else if pOrderStatus == "cancelled" {
 		status = "cancelled"
 		if p.Order.CancelReason != nil {
 			cancelReason = *p.Order.CancelReason
@@ -891,6 +949,16 @@ func (s *paymentService) GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentH
 				cancelReqByName = p.Order.CancelRequestedBy.Username
 			}
 		}
+	} else if pOrderStatus == "returned" || pOrderStatus == "refunded" {
+		status = "refunded"
+	} else if pOrderStatus == "partial_returned" {
+		status = "partial_returned"
+	} else if pOrderStatus == "claimed" {
+		status = "claimed"
+	} else if pOrderStatus == "claim_in_progress" {
+		status = "claim_in_progress"
+	} else if pOrderStatus == "pending_return" {
+		status = "pending_return"
 	}
 
 	return &posDto.PaymentHistoryItem{
@@ -904,7 +972,7 @@ func (s *paymentService) GetPaymentHistoryByID(receiptID uint) (*posDto.PaymentH
 		Status:                status,
 		ReceivedByID:          p.ReceivedByID,
 		ReceivedByName:        recName,
-		PaymentType:           "payment",
+		PaymentType:           paymentType,
 		CancelReason:          cancelReason,
 		CancelRequestedByID:   cancelReqByID,
 		CancelRequestedByName: cancelReqByName,
