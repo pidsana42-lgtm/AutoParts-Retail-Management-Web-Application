@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateThai, getDashboardPeriodDateRange } from './formatdate';
+import {
+  formatDateThai,
+  getDashboardPeriodDateRange,
+  getDashboardPreviousPeriodDateRange,
+} from './formatdate';
 
 describe('dashboard date formatting', () => {
   const today = new Date(2026, 8, 18, 12, 0, 0);
@@ -28,6 +32,37 @@ describe('dashboard date formatting', () => {
     expect(getDashboardPeriodDateRange('yearly', today)).toEqual({
       startDate: '2026-01-01',
       endDate: '2026-12-31',
+    });
+  });
+
+  it('uses an equally long elapsed window for the previous dashboard period', () => {
+    expect(getDashboardPreviousPeriodDateRange('daily', today)).toEqual({
+      startDate: '2026-09-17',
+      endDate: '2026-09-17',
+    });
+    expect(getDashboardPreviousPeriodDateRange('weekly', today)).toEqual({
+      startDate: '2026-09-06',
+      endDate: '2026-09-11',
+    });
+    expect(getDashboardPreviousPeriodDateRange('monthly', today)).toEqual({
+      startDate: '2026-08-01',
+      endDate: '2026-08-18',
+    });
+    expect(getDashboardPreviousPeriodDateRange('quarterly', today)).toEqual({
+      startDate: '2026-04-01',
+      endDate: '2026-06-19',
+    });
+    expect(getDashboardPreviousPeriodDateRange('yearly', today)).toEqual({
+      startDate: '2025-01-01',
+      endDate: '2025-09-18',
+    });
+  });
+
+  it('keeps the duration equal when the previous calendar period is shorter', () => {
+    const marchEnd = new Date(2025, 2, 31, 12, 0, 0);
+    expect(getDashboardPreviousPeriodDateRange('monthly', marchEnd)).toEqual({
+      startDate: '2025-01-29',
+      endDate: '2025-02-28',
     });
   });
 });

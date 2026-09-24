@@ -34,9 +34,19 @@ async function mockDashboardApis(page: Page, requests: DashboardRequestLog) {
   await page.route('**/api/dashboard/summary*', async route => {
     requests.summaryUrls.push(route.request().url());
     const url = new URL(route.request().url());
+    const now = new Date();
+    const today = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-');
+    const requestedDate = url.searchParams.get('summary_date');
+    const isPreviousSingleDay = requestedDate !== null && requestedDate !== today;
     const responseItem = url.searchParams.get('monthly_summary') === '1'
       ? { ...summaryItem, collected_debt_amount: 2_400 }
-      : summaryItem;
+      : isPreviousSingleDay
+        ? { ...summaryItem, net_revenue: 0, total_orders: 0 }
+        : summaryItem;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -197,7 +207,9 @@ test.describe('Dashboard', () => {
   test('แสดง KPI รายการขาย สินค้าค้างสต็อก และสินค้าใกล้หมดจาก API', async ({ authenticatedPage }) => {
     await dashboard.gotoMain();
 
+    await expect(authenticatedPage.getByText('รายได้สุทธิ', { exact: true })).toBeVisible();
     await expect(authenticatedPage.getByText('฿ 12,000.00', { exact: true })).toBeVisible();
+    await expect(authenticatedPage.getByText('ไม่มีฐานเปรียบเทียบช่วงก่อนหน้า', { exact: true }).first()).toBeVisible();
     await expect(authenticatedPage.getByText('สามารถทำอัตรากำไรได้ 42%')).toBeVisible();
     await expect(authenticatedPage.getByText('SO-E2E-0001')).toBeVisible();
     await expect(authenticatedPage.getByText('ไส้กรองค้างสต็อกสำหรับทดสอบ')).toBeVisible();
@@ -242,20 +254,58 @@ test.describe('Dashboard', () => {
     ))).toBe(true);
   });
 
-  test('แสดง KPI และตารางอายุหนี้ พร้อมกรองสถานะเกินกำหนด', async ({ authenticatedPage }) => {
+  test('แสดงลูกหนี้ทั้งหมดก่อนเลือกช่วงเวลา และกรองสถานะเกินกำหนดได้', async ({ authenticatedPage }) => {
     await dashboard.gotoDebt();
 
+    await expect.poll(() => requests.debtAgingUrls.some(requestUrl => {
+      const url = new URL(requestUrl);
+      return url.searchParams.get('page_size') === '25'
+        && !url.searchParams.has('start_date')
+        && !url.searchParams.has('end_date')
+        && !url.searchParams.has('status')
+        && !url.searchParams.has('min_age_days')
+        && !url.searchParams.has('max_age_days');
+    })).toBe(true);
+
+    await expect.poll(() => requests.debtAgingUrls.some(requestUrl => {
+      const url = new URL(requestUrl);
+      return url.searchParams.get('status') === 'เกินกำหนด'
+        && url.searchParams.get('min_age_days') === '31'
+        && url.searchParams.get('page_size') === '1';
+    })).toBe(true);
     await expect(authenticatedPage.getByText('ลูกค้าทดสอบอายุหนี้')).toBeVisible();
     await expect(authenticatedPage.getByText('CUS-E2E-001')).toBeVisible();
+    await expect(authenticatedPage.getByText('รายรับจากการเก็บหนี้', { exact: true })).toBeVisible();
     await expect(authenticatedPage.getByText('฿ 3,500.00', { exact: true }).first()).toBeVisible();
     await expect(authenticatedPage.getByText('฿ 1,200.00', { exact: true })).toBeVisible();
     await expect(authenticatedPage.getByText('เป้าหมาย: ฿ 3,500.00', { exact: true })).toBeVisible();
 
-    await dashboard.periodButton('เดือนนี้').click();
+    const monthlyPeriodButton = dashboard.periodButton('เดือนนี้');
+    const tableRequestCountBeforePeriod = requests.debtAgingUrls.filter(requestUrl => (
+      new URL(requestUrl).searchParams.get('page_size') === '25'
+    )).length;
+    const periodButtonPositionBefore = await monthlyPeriodButton.boundingBox();
+    await monthlyPeriodButton.click();
     await expect(authenticatedPage.getByText('฿ 2,400.00', { exact: true })).toBeVisible();
     await expect(authenticatedPage.getByText('เป้าหมาย: ฿ 3,500.00', { exact: true })).toBeVisible();
+    await expect(authenticatedPage.getByText('รายรับจากการเก็บหนี้', { exact: true })).toBeVisible();
+    const periodButtonPositionAfter = await monthlyPeriodButton.boundingBox();
+    expect(periodButtonPositionAfter?.y).toBe(periodButtonPositionBefore?.y);
+    await expect(authenticatedPage.getByText('ลูกค้าทดสอบอายุหนี้')).toBeVisible();
+    await expect.poll(() => requests.debtAgingUrls.filter(requestUrl => (
+      new URL(requestUrl).searchParams.get('page_size') === '25'
+    )).length).toBe(tableRequestCountBeforePeriod);
+    expect(requests.debtAgingUrls
+      .filter(requestUrl => new URL(requestUrl).searchParams.get('page_size') === '25')
+      .every(requestUrl => {
+        const url = new URL(requestUrl);
+        return !url.searchParams.has('start_date') && !url.searchParams.has('end_date');
+      })).toBe(true);
+
+    await expect(authenticatedPage.getByRole('button', { name: 'ล้างตัวกรอง', exact: true })).toHaveCount(0);
 
     await authenticatedPage.getByRole('button', { name: 'ตัวกรอง', exact: true }).click();
+    await expect(authenticatedPage.getByRole('button', { name: 'ชำระหมดแล้ว', exact: true })).toHaveCount(0);
     await authenticatedPage.getByRole('button', { name: 'เกินกำหนด', exact: true }).click();
 
     await expect.poll(() => requests.debtAgingUrls.some(requestUrl => {

@@ -169,6 +169,34 @@ var debtExcludedStatuses = []string{
 	string(enum.OrderRefunded),
 }
 
+type returnedInventoryMetrics struct {
+	TotalQty  int
+	TotalCost float64
+}
+
+func getReturnedInventoryMetrics(db *gorm.DB, start, end time.Time) (returnedInventoryMetrics, error) {
+	const costExpression = `
+		COALESCE(SUM(
+			sri.quantity * COALESCE((
+				SELECT SUM(soi.cost_price * soi.qty) / NULLIF(SUM(soi.qty), 0)
+				FROM sale_order_items soi
+				WHERE soi.order_id = sr.original_order_id
+					AND soi.product_id = sri.product_id
+					AND soi.deleted_at IS NULL
+			), 0)
+		), 0)
+	`
+	var metrics returnedInventoryMetrics
+	err := db.Table("sales_return_items AS sri").
+		Select("COALESCE(SUM(sri.quantity), 0) AS total_qty, "+costExpression+" AS total_cost").
+		Joins("JOIN sales_returns sr ON sr.id = sri.sales_return_id AND sr.deleted_at IS NULL").
+		Joins("JOIN sale_orders so ON so.id = sr.original_order_id AND so.deleted_at IS NULL").
+		Where("sri.deleted_at IS NULL AND sr.refunded_at IS NOT NULL").
+		Where("so.order_date >= ? AND so.order_date < ?", start, end).
+		Scan(&metrics).Error
+	return metrics, err
+}
+
 // calculateSummaryForDate คือ core logic เดียวที่ใช้ทั้งตอนอ่านสด (วันนี้) และตอน cron finalize (เมื่อวาน)
 func (r *dashboardRepository) calculateSummaryForDate(ctx context.Context, date time.Time) (*dashEntity.DailySummary, error) {
 	start := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
@@ -205,8 +233,13 @@ func (r *dashboardRepository) calculateSummaryForDate(ctx context.Context, date 
 		Scan(&ia).Error; err != nil {
 		return nil, err
 	}
-	summary.TotalItemsSold = ia.TotalQty
-	summary.TotalCost = ia.TotalCost
+	returnedInventory, err := getReturnedInventoryMetrics(db, start, end)
+	if err != nil {
+		return nil, err
+	}
+	// Refunded items were restored to stock, so reverse both their quantity and original sale cost.
+	summary.TotalItemsSold = max(0, ia.TotalQty-returnedInventory.TotalQty)
+	summary.TotalCost = math.Max(0, ia.TotalCost-returnedInventory.TotalCost)
 	summary.GrossProfit = summary.TotalRevenue - summary.TotalCost
 	if summary.TotalRevenue > 0 {
 		summary.MarginPercent = summary.GrossProfit / summary.TotalRevenue * 100
@@ -386,12 +419,10 @@ func (r *dashboardRepository) FinalizeDailySummary(ctx context.Context, date tim
 
 func (r *dashboardRepository) GetStockHealth(ctx context.Context) (*dashDto.StockHealthDTO, error) {
 	type healthRow struct {
-		TotalProducts    int64
-		HealthyCount     int64
-		LowStockCount    int64
-		OutOfStockCount  int64
-		TotalQuantity    int64
-		TotalMinQuantity int64
+		TotalProducts   int64
+		HealthyCount    int64
+		LowStockCount   int64
+		OutOfStockCount int64
 	}
 	var row healthRow
 	err := r.db.WithContext(ctx).
@@ -400,9 +431,7 @@ func (r *dashboardRepository) GetStockHealth(ctx context.Context) (*dashDto.Stoc
 			COUNT(*) AS total_products,
 			COUNT(CASE WHEN quantity > limit_quantity THEN 1 END) AS healthy_count,
 			COUNT(CASE WHEN quantity > 0 AND quantity <= limit_quantity THEN 1 END) AS low_stock_count,
-			COUNT(CASE WHEN quantity = 0 THEN 1 END) AS out_of_stock_count,
-			COALESCE(SUM(quantity), 0) AS total_quantity,
-			COALESCE(SUM(limit_quantity), 0) AS total_min_quantity
+			COUNT(CASE WHEN quantity = 0 THEN 1 END) AS out_of_stock_count
 		`).
 		Where("deleted_at IS NULL AND is_active = true").
 		Scan(&row).Error
@@ -410,8 +439,8 @@ func (r *dashboardRepository) GetStockHealth(ctx context.Context) (*dashDto.Stoc
 		return nil, err
 	}
 	healthPct := float64(0)
-	if row.TotalMinQuantity > 0 {
-		healthPct = math.Min(100, math.Round(float64(row.TotalQuantity)/float64(row.TotalMinQuantity)*100))
+	if row.TotalProducts > 0 {
+		healthPct = math.Round(float64(row.HealthyCount) / float64(row.TotalProducts) * 100)
 	}
 	return &dashDto.StockHealthDTO{
 		TotalProducts:   row.TotalProducts,
@@ -431,23 +460,67 @@ func (r *dashboardRepository) GetTopSellers(ctx context.Context, start, end time
 		TotalRevenue float64
 	}
 	var rows []row
-	err := r.db.WithContext(ctx).
-		Table("sale_order_items").
-		Select(`
-			products.id AS id,
-			products.product_name AS product_name,
-			COALESCE(categories.category_name, '-') AS category,
-			COALESCE(SUM(sale_order_items.qty), 0) AS total_sold,
-			COALESCE(SUM(sale_order_items.unit_price * sale_order_items.qty), 0) AS total_revenue
-		`).
-		Joins("JOIN sale_orders ON sale_orders.id = sale_order_items.order_id AND sale_orders.deleted_at IS NULL").
-		Joins("JOIN products ON products.id = sale_order_items.product_id AND products.deleted_at IS NULL").
-		Joins("LEFT JOIN categories ON categories.id = products.category_id AND categories.deleted_at IS NULL").
-		Where("sale_order_items.deleted_at IS NULL AND sale_orders.order_date >= ? AND sale_orders.order_date < ? AND sale_orders.status IN ?", start, end, revenueCountedStatuses).
-		Group("products.id, products.product_name, categories.category_name").
-		Order("total_sold DESC").
-		Limit(limit).
-		Scan(&rows).Error
+	const query = `
+		WITH sold AS (
+			SELECT
+				p.id,
+				p.product_name,
+				COALESCE(c.category_name, '-') AS category,
+				SUM(soi.qty) AS gross_sold,
+				SUM(soi.unit_price * soi.qty) AS gross_revenue
+			FROM sale_order_items soi
+			JOIN sale_orders so ON so.id = soi.order_id AND so.deleted_at IS NULL
+			JOIN products p ON p.id = soi.product_id AND p.deleted_at IS NULL
+			LEFT JOIN categories c ON c.id = p.category_id AND c.deleted_at IS NULL
+			WHERE soi.deleted_at IS NULL
+				AND so.order_date >= ? AND so.order_date < ?
+				AND so.status IN ?
+			GROUP BY p.id, p.product_name, c.category_name
+		), returned AS (
+			SELECT
+				sri.product_id,
+				SUM(sri.quantity) AS returned_qty,
+				SUM(
+					sri.quantity * COALESCE((
+						SELECT SUM(soi.unit_price * soi.qty) / NULLIF(SUM(soi.qty), 0)
+						FROM sale_order_items soi
+						WHERE soi.order_id = sr.original_order_id
+							AND soi.product_id = sri.product_id
+							AND soi.deleted_at IS NULL
+					), 0)
+				) AS returned_revenue
+			FROM sales_return_items sri
+			JOIN sales_returns sr ON sr.id = sri.sales_return_id AND sr.deleted_at IS NULL
+			JOIN sale_orders so ON so.id = sr.original_order_id AND so.deleted_at IS NULL
+			WHERE sri.deleted_at IS NULL AND sr.refunded_at IS NOT NULL
+				AND so.order_date >= ? AND so.order_date < ?
+			GROUP BY sri.product_id
+		)
+		SELECT
+			sold.id,
+			sold.product_name,
+			sold.category,
+			CASE
+				WHEN sold.gross_sold - COALESCE(returned.returned_qty, 0) > 0
+				THEN sold.gross_sold - COALESCE(returned.returned_qty, 0)
+				ELSE 0
+			END AS total_sold,
+			CASE
+				WHEN sold.gross_revenue - COALESCE(returned.returned_revenue, 0) > 0
+				THEN sold.gross_revenue - COALESCE(returned.returned_revenue, 0)
+				ELSE 0
+			END AS total_revenue
+		FROM sold
+		LEFT JOIN returned ON returned.product_id = sold.id
+		WHERE sold.gross_sold - COALESCE(returned.returned_qty, 0) > 0
+		ORDER BY total_sold DESC, total_revenue DESC
+		LIMIT ?`
+	err := r.db.WithContext(ctx).Raw(
+		query,
+		start, end, revenueCountedStatuses,
+		start, end,
+		limit,
+	).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -494,8 +567,8 @@ func (r *dashboardRepository) GetDebtAging(ctx context.Context, query dashDto.De
 	}
 
 	// Build HAVING clause for status and age-day filters (aggregates — cannot go in WHERE)
-	statusExpr := `CASE WHEN BOOL_OR(so.due_date IS NOT NULL AND so.due_date < NOW()) THEN 'เกินกำหนด' ELSE 'ทยอยชำระ' END`
-	ageExpr := `(CURRENT_DATE - MIN(so.order_date::DATE))`
+	statusExpr := `CASE WHEN BOOL_OR(so.due_date IS NOT NULL AND so.due_date < CURRENT_DATE) THEN 'เกินกำหนด' ELSE 'ทยอยชำระ' END`
+	ageExpr := `COALESCE(GREATEST(CURRENT_DATE - MIN(so.due_date::DATE), 0), 0)`
 
 	var havingParts []string
 	var havingArgs []interface{}
@@ -540,17 +613,17 @@ func (r *dashboardRepository) GetDebtAging(ctx context.Context, query dashDto.De
 			SUM(so.total_amount) AS total_debt,
 			SUM(so.balance_due)  AS remaining_balance,
 			TO_CHAR(MAX(so.order_date), 'YYYY-MM-DD') AS last_purchase_date,
-			(CURRENT_DATE - MIN(so.order_date::DATE)) AS age_days,
-			CASE WHEN BOOL_OR(so.due_date IS NOT NULL AND so.due_date < NOW()) THEN 'เกินกำหนด' ELSE 'ทยอยชำระ' END AS status
+			%s AS age_days,
+			%s AS status
 		FROM sale_orders so
 		JOIN customers c ON c.id = so.customer_id AND c.deleted_at IS NULL
 		WHERE %s%s
 		GROUP BY c.id, c.customer_name
 		%s
 		ORDER BY
-			CASE WHEN BOOL_OR(so.due_date IS NOT NULL AND so.due_date < NOW()) THEN 0 ELSE 1 END ASC,
+			CASE WHEN BOOL_OR(so.due_date IS NOT NULL AND so.due_date < CURRENT_DATE) THEN 0 ELSE 1 END ASC,
 			SUM(so.balance_due) DESC
-		LIMIT ? OFFSET ?`, baseWhere, dateFilter, havingSQL)
+		LIMIT ? OFFSET ?`, ageExpr, statusExpr, baseWhere, dateFilter, havingSQL)
 
 	dataArgs := append(append(dateArgs, havingArgs...), pageSize, offset)
 	type row struct {

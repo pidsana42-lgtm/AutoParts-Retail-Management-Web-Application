@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { isAxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import { ShoppingBasket, CircleCheck, PenLine, Eye, Printer, Trash2, Info, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   TrendingUp, TrendingDown, ReceiptText, } from "lucide-react";
@@ -299,8 +300,12 @@ const PurchaseOrders: React.FC = () => {
         setOrders(response.data || []);
         setTotalItems(response.total || 0);
         
-      } catch (err: any) {
-        const errorMessage = err.response?.data?.message || err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ";
+      } catch (err: unknown) {
+        const errorMessage = isAxiosError<{ message?: string }>(err)
+          ? err.response?.data?.message || err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ"
+          : err instanceof Error
+            ? err.message
+            : "เกิดข้อผิดพลาดในการเชื่อมต่อ";
         setError(errorMessage);
       } finally {
         setIsLoading(false);

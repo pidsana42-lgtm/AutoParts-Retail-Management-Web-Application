@@ -16,7 +16,11 @@ import { dashboardService } from '../../../service/http/dashboard/dashboard_serv
 import type { DashboardSummaryItem, SummaryQuery, StockAlertItem, RecentSaleItem, StockHealthStats } from '../../../interface/dashboard/dashboard_interface';
 // Utils
 import { cn } from '../../../utils/component';
-import { formatDateThai, getTodayDateString } from '../../../utils/formatdate';
+import {
+  formatDateThai,
+  getDashboardPreviousPeriodDateRange,
+  getTodayDateString,
+} from '../../../utils/formatdate';
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import { getDashboardRoleGroup } from '../../../utils/dashboardAccess';
 import { useAuth } from '../../../contexts/AuthContexts';
@@ -85,6 +89,8 @@ const MainDashboard: React.FC = () => {
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [revenueTrend, setRevenueTrend] = useState<number | null>(null);
   const [orderTrend, setOrderTrend] = useState<number | null>(null);
+  const [trendLoading, setTrendLoading] = useState(true);
+  const [trendError, setTrendError] = useState(false);
   // State รายการขายล่าสุด
   const [recentSale, setRecentSale] = useState<RecentSaleItem[]>([]);
   const [recentSaleTotal, setRecentSaleTotal] = useState(0);
@@ -167,29 +173,12 @@ const MainDashboard: React.FC = () => {
       d.setDate(d.getDate() - 1);
       return { summary_date: dateStr(d) };
     }
-    const now = new Date();
-    switch (selectedFilter) {
-      case 'daily': {
-        const y = new Date(now); y.setDate(y.getDate() - 1);
-        return { summary_date: dateStr(y) };
-      }
-      case 'weekly': {
-        const r = new Date(now); r.setDate(r.getDate() - 7);
-        return { weekly_summary: '1', ref_date: dateStr(r) };
-      }
-      case 'monthly': {
-        const r = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        return { monthly_summary: '1', ref_date: dateStr(r) };
-      }
-      case 'quarterly': {
-        const r = new Date(now); r.setMonth(r.getMonth() - 3);
-        return { quarterly_summary: '1', ref_date: dateStr(r) };
-      }
-      case 'yearly': {
-        return { yearly_summary: '1', ref_date: `${now.getFullYear() - 1}-01-01` };
-      }
-      default: return null;
+    if (!selectedFilter) return null;
+    const previous = getDashboardPreviousPeriodDateRange(selectedFilter);
+    if (previous.startDate === previous.endDate) {
+      return { summary_date: previous.startDate };
     }
+    return { start_date: previous.startDate, end_date: previous.endDate };
   }, [endDate, selectedFilter, startDate]);
 
   const getTrendLabel = () => {
@@ -200,23 +189,34 @@ const MainDashboard: React.FC = () => {
     if (startDate) return 'เทียบกับเมื่อวาน';
     switch (selectedFilter) {
       case 'daily':     return 'เทียบกับเมื่อวาน';
-      case 'weekly':    return 'เทียบกับสัปดาห์ที่แล้ว';
-      case 'monthly':   return 'เทียบกับเดือนที่แล้ว';
-      case 'quarterly': return 'เทียบกับไตรมาสที่แล้ว';
-      case 'yearly':    return 'เทียบกับปีที่แล้ว';
+      case 'weekly':
+      case 'monthly':
+      case 'quarterly':
+      case 'yearly':    return 'เทียบกับช่วงก่อนหน้าที่มีจำนวนวันเท่ากัน';
       default:          return 'เทียบกับเมื่อวาน';
     }
+  };
+
+  const getTrendFallbackLabel = () => {
+    if (trendLoading) return 'กำลังคำนวณข้อมูลเปรียบเทียบ...';
+    if (trendError) return 'ไม่สามารถโหลดข้อมูลเปรียบเทียบได้';
+    return 'ไม่มีฐานเปรียบเทียบช่วงก่อนหน้า';
   };
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchTrend = async () => {
+      if (!cancelled) {
+        setTrendLoading(true);
+        setTrendError(false);
+      }
       const prevQuery = buildPrevQuery();
       if (!prevQuery) {
         if (!cancelled) {
           setRevenueTrend(null);
           setOrderTrend(null);
+          setTrendLoading(false);
         }
         return;
       }
@@ -225,16 +225,19 @@ const MainDashboard: React.FC = () => {
         const prevData = res.data.summary_data ?? [];
         const prevRevenue = prevData.reduce((s, d) => s + d.net_revenue, 0);
         const prevOrders  = prevData.reduce((s, d) => s + d.total_orders,  0);
-        const pct = (curr: number, prev: number) =>
-          prev === 0 ? (curr === 0 ? 0 : 100) : ((curr - prev) / prev) * 100;
+        const pct = (curr: number, prev: number): number | null =>
+          prev === 0 ? null : ((curr - prev) / prev) * 100;
         if (!cancelled) {
           setRevenueTrend(pct(aggr.totalRevenue, prevRevenue));
           setOrderTrend(pct(aggr.totalOrders,   prevOrders));
+          setTrendLoading(false);
         }
       } catch {
         if (!cancelled) {
           setRevenueTrend(null);
           setOrderTrend(null);
+          setTrendError(true);
+          setTrendLoading(false);
         }
       }
     };
@@ -492,7 +495,7 @@ const MainDashboard: React.FC = () => {
                 </span>
               </Heading>
             ) : (
-              <Heading level='p' className='mt-1 invisible' aria-hidden>.</Heading>
+              <Heading level='p' className='mt-1 text-gray-400'>{getTrendFallbackLabel()}</Heading>
             )}
           </Card>
 
@@ -524,7 +527,7 @@ const MainDashboard: React.FC = () => {
                 </span>
               </Heading>
             ) : (
-              <Heading level='p' className='mt-1 invisible' aria-hidden>.</Heading>
+              <Heading level='p' className='mt-1 text-gray-400'>{getTrendFallbackLabel()}</Heading>
             )}
           </Card>
 
@@ -562,7 +565,7 @@ const MainDashboard: React.FC = () => {
                 </span>
               </Heading>
             ) : (
-              <Heading level='p' className='mt-1 invisible' aria-hidden>.</Heading>
+              <Heading level='p' className='mt-1 text-gray-400'>{getTrendFallbackLabel()}</Heading>
             )}
           </Card>
  
@@ -578,7 +581,7 @@ const MainDashboard: React.FC = () => {
                 </span>
               </Heading>
             ) : (
-              <Heading level='p' className='mt-1 invisible' aria-hidden>.</Heading>
+              <Heading level='p' className='mt-1 text-gray-400'>{getTrendFallbackLabel()}</Heading>
             )}
           </Card>
  

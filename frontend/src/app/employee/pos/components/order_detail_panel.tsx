@@ -533,6 +533,115 @@ export default function OrderDetailPanel({
                       );
                     }
 
+                    // 2.4 ถ้ารายการอยู่ระหว่างรออนุมัติการคืนสินค้า (PENDING_RETURN)
+                    if (
+                      status === "PENDING_RETURN" ||
+                      status === "รออนุมัติคืน" ||
+                      status === "รอคืนสินค้า"
+                    ) {
+                      return (
+                        <div className="space-y-3 pt-2">
+                          <Card className="p-4 rounded-none shadow-none space-y-2 border bg-amber-50/70 border-amber-200">
+                            <div className="flex items-center justify-between">
+                              <Text variant="small" className="font-medium mb-0 text-amber-800">
+                                รายการนี้อยู่ระหว่างรออนุมัติการคืนสินค้า
+                              </Text>
+                              <Badge
+                                variant="warning"
+                                size="auto"
+                                className="border-none text-[10px] font-normal rounded-none py-0.5 px-2 bg-amber-100 text-amber-800"
+                              >
+                                {getStatusText(orderDetail.status)}
+                              </Badge>
+                            </div>
+                            <Text variant="xs" className="mb-0 text-amber-700">
+                              ออเดอร์นี้มีคำขอคืนสินค้าที่กำลังรอการตรวจสอบและอนุมัติ ไม่สามารถขอยกเลิกบิลทั้งใบได้
+                            </Text>
+                          </Card>
+                        </div>
+                      );
+                    }
+
+                    // 2.5 ถ้ารายการถูกคืนสินค้าแล้ว (RETURNED / PARTIAL_RETURNED)
+                    if (
+                      status === "RETURNED" ||
+                      status === "REFUNDED" ||
+                      status === "คืนสินค้าแล้ว" ||
+                      status === "PARTIAL_RETURNED" ||
+                      status === "คืนบางส่วน"
+                    ) {
+                      const isPartial = status === "PARTIAL_RETURNED" || status === "คืนบางส่วน";
+                      return (
+                        <div className="space-y-3 pt-2">
+                          <Card className={cn(
+                            "p-4 rounded-none shadow-none space-y-2 border",
+                            isPartial ? "bg-orange-50/70 border-orange-200" : "bg-amber-50/70 border-amber-200"
+                          )}>
+                            <div className="flex items-center justify-between">
+                              <Text variant="small" className={cn("font-medium mb-0", isPartial ? "text-orange-800" : "text-amber-800")}>
+                                {isPartial ? "รายการนี้มีการคืนสินค้าบางส่วน" : "รายการนี้ทำการคืนสินค้าแล้ว"}
+                              </Text>
+                              <Badge
+                                variant="warning"
+                                size="auto"
+                                className={cn(
+                                  "border-none text-[10px] font-normal rounded-none py-0.5 px-2",
+                                  isPartial ? "bg-orange-100 text-orange-800" : "bg-amber-100 text-amber-800"
+                                )}
+                              >
+                                {getStatusText(orderDetail.status)}
+                              </Badge>
+                            </div>
+                            <Text variant="xs" className={cn("mb-0", isPartial ? "text-orange-700" : "text-amber-700")}>
+                              {isPartial
+                                ? "ออเดอร์นี้ได้ผ่านการรับคืนสินค้าบางรายการและปรับสต็อก/คืนเงินเรียบร้อยแล้ว ไม่สามารถขอยกเลิกบิลทั้งใบได้"
+                                : "ออเดอร์นี้ได้ผ่านขั้นตอนการคืนสินค้าและปรับสต็อก/คืนเงินเรียบร้อยแล้ว ไม่สามารถขอยกเลิกบิลได้"}
+                            </Text>
+                          </Card>
+                        </div>
+                      );
+                    }
+
+                    // 2.6 ถ้ารายการมีการเคลมสินค้า (CLAIMED / CLAIM_IN_PROGRESS)
+                    if (
+                      status === "CLAIMED" ||
+                      status === "เคลมสินค้าแล้ว" ||
+                      status === "CLAIM_IN_PROGRESS" ||
+                      status === "PENDING_CLAIM" ||
+                      status === "อยู่ระหว่างเคลม"
+                    ) {
+                      const isPending = status === "CLAIM_IN_PROGRESS" || status === "PENDING_CLAIM" || status === "อยู่ระหว่างเคลม";
+                      return (
+                        <div className="space-y-3 pt-2">
+                          <Card className={cn(
+                            "p-4 rounded-none shadow-none space-y-2 border",
+                            isPending ? "bg-indigo-50/70 border-indigo-200" : "bg-purple-50/70 border-purple-200"
+                          )}>
+                            <div className="flex items-center justify-between">
+                              <Text variant="small" className={cn("font-medium mb-0", isPending ? "text-indigo-800" : "text-purple-800")}>
+                                {isPending ? "รายการนี้อยู่ระหว่างกระบวนการเคลมสินค้า" : "รายการนี้ผ่านการเคลมสินค้าแล้ว"}
+                              </Text>
+                              <Badge
+                                variant="info"
+                                size="auto"
+                                className={cn(
+                                  "border-none text-[10px] font-normal rounded-none py-0.5 px-2",
+                                  isPending ? "bg-indigo-100 text-indigo-800" : "bg-purple-100 text-purple-800"
+                                )}
+                              >
+                                {getStatusText(orderDetail.status)}
+                              </Badge>
+                            </div>
+                            <Text variant="xs" className={cn("mb-0", isPending ? "text-indigo-700" : "text-purple-700")}>
+                              {isPending
+                                ? "ออเดอร์นี้มีสินค้าที่อยู่ระหว่างส่งตรวจสอบหรือรอเปลี่ยนสินค้าเคลม ไม่สามารถขอยกเลิกบิลได้"
+                                : "ออเดอร์นี้มีรายการสินค้าที่ดำเนินการเคลมเสร็จสิ้นแล้ว ไม่สามารถขอยกเลิกบิลได้"}
+                            </Text>
+                          </Card>
+                        </div>
+                      );
+                    }
+
                     // 3. เคสบิลปกติ หรือ บิลที่เคยโดนปฏิเสธคำขอ
                     return (
                       <div className="space-y-4 pt-2">

@@ -84,7 +84,16 @@ func (r *customerClaimRepository) CreateCustomerClaim(claim *entity.CustomerClai
 		}
 
 		// The service saves each item with its stock flags after this validation.
-		return tx.Omit("Items").Create(claim).Error
+		if err := tx.Omit("Items").Create(claim).Error; err != nil {
+			return err
+		}
+
+		claimStatus := strings.ToUpper(strings.TrimSpace(claim.Status))
+		orderStatus := "CLAIM_IN_PROGRESS"
+		if claimStatus == "APPROVED" {
+			orderStatus = "CLAIMED"
+		}
+		return tx.Model(&entity.SaleOrder{}).Where("id = ?", claim.OriginalOrderID).Update("status", orderStatus).Error
 	})
 }
 
@@ -131,7 +140,18 @@ func (r *customerClaimRepository) GetCustomerClaimItemByID(id uint) (*entity.Cus
 }
 
 func (r *customerClaimRepository) UpdateCustomerClaim(claim *entity.CustomerClaim) error {
-	return r.db.Save(claim).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(claim).Error; err != nil {
+			return err
+		}
+		claimStatus := strings.ToUpper(strings.TrimSpace(claim.Status))
+		if claimStatus == "APPROVED" {
+			_ = tx.Model(&entity.SaleOrder{}).Where("id = ?", claim.OriginalOrderID).Update("status", "CLAIMED").Error
+		} else if claimStatus == "REJECTED" || claimStatus == "CANCELLED" {
+			_ = tx.Model(&entity.SaleOrder{}).Where("id = ?", claim.OriginalOrderID).Update("status", "completed").Error
+		}
+		return nil
+	})
 }
 
 func (r *customerClaimRepository) UpdateCustomerClaimItem(item *entity.CustomerClaimItem) error {
@@ -157,7 +177,11 @@ func (r *customerClaimRepository) DeleteCustomerClaim(id uint) error {
 	if adjustedCount > 0 {
 		return ErrClaimAlreadyAdjusted
 	}
-	return r.db.Delete(&entity.CustomerClaim{}, id).Error
+	if err := r.db.Delete(&entity.CustomerClaim{}, id).Error; err != nil {
+		return err
+	}
+	// คืนสถานะบิลขายกลับเป็น completed
+	return r.db.Model(&entity.SaleOrder{}).Where("id = ?", claim.OriginalOrderID).Update("status", "completed").Error
 }
 
 func (r *customerClaimRepository) CancelCustomerClaim(id uint) ([]entity.CustomerClaimItem, error) {
@@ -192,7 +216,11 @@ func (r *customerClaimRepository) CancelCustomerClaim(id uint) ([]entity.Custome
 			}
 		}
 		claim.Status = "CANCELLED"
-		return tx.Save(&claim).Error
+		if err := tx.Save(&claim).Error; err != nil {
+			return err
+		}
+		// คืนสถานะบิลขายกลับเป็น completed
+		return tx.Model(&entity.SaleOrder{}).Where("id = ?", claim.OriginalOrderID).Update("status", "completed").Error
 	})
 	if err != nil {
 		return nil, err
