@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"backend/internal/app/entity"
+	"backend/internal/pkg/crypto"
 
 	"github.com/johnfercher/maroto/pkg/consts"
 	"github.com/johnfercher/maroto/pkg/pdf"
@@ -58,6 +59,11 @@ func GenerateDebtRepaymentReceiptPDF(
 		bankName = companyData.BankName
 		bankAccountNo = companyData.BankAccountNumber
 		bankAccountName = companyData.BankAccountName
+	}
+	if crypto.IsEncrypted(bankAccountNo) {
+		if dec, err := crypto.DecryptAES256(bankAccountNo); err == nil {
+			bankAccountNo = dec
+		}
 	}
 
 	// 3. ตั้งค่าหน้ากระดาษและฟอนต์
@@ -346,7 +352,11 @@ func GenerateDebtRepaymentReceiptPDF(
 					bankLabel += fmt.Sprintf(" (%s)", bankAccountName)
 				}
 				m.Text(bankLabel, props.Text{Size: 9.5, Style: consts.Bold, Top: currentTop, Color: HexToColor("#1F2937")})
-				currentTop += 5.5
+				if len([]rune(bankLabel)) > 55 {
+					currentTop += 9.0
+				} else {
+					currentTop += 5.5
+				}
 			}
 			m.Text(fmt.Sprintf("จำนวนเงินที่ชำระ (ตัวอักษร): %s", thaiText), props.Text{Size: 10, Style: consts.Bold, Top: currentTop})
 		})

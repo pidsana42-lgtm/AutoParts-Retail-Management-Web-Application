@@ -133,7 +133,7 @@ func (r *returnRepository) SearchReturnableSaleOrders(keyword string) ([]reEntit
 		Preload("Items.Product").
 		Joins("LEFT JOIN customers ON customers.id = sale_orders.customer_id AND customers.deleted_at IS NULL").
 		Where("sale_orders.deleted_at IS NULL").
-		Where("LOWER(TRIM(sale_orders.status)) IN (?)", []string{string(enum.OrderCompleted), string(enum.OrderReturned)}).
+		Where("LOWER(TRIM(sale_orders.status)) IN (?)", []string{string(enum.OrderCompleted), string(enum.OrderReturned), "partial_returned"}).
 		Where(`NOT EXISTS (
 			SELECT 1 FROM sales_returns sr
 			WHERE sr.original_order_id = sale_orders.id
@@ -265,6 +265,10 @@ func (r *returnRepository) CreateReturn(returnItem *reEntity.SalesReturn, items 
 			if err := r.applyApprovedReturn(tx, returnItem, &order, items, approvedBy); err != nil {
 				return err
 			}
+		} else if returnItem.Status == enum.ReturnPending {
+			if err := tx.Model(&reEntity.SaleOrder{}).Where("id = ?", order.ID).Update("status", "PENDING_RETURN").Error; err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -272,10 +276,10 @@ func (r *returnRepository) CreateReturn(returnItem *reEntity.SalesReturn, items 
 }
 
 // isOrderReturnable: ออเดอร์คืนสินค้าได้ทั้งตอน "เสร็จสมบูรณ์" (ยังไม่เคยคืนอะไรเลย) และตอน
-// "เคยคืนไปแล้วบางส่วน" (RETURNED) — เผื่อลูกค้ากลับมาคืนสินค้าตัวอื่นที่เหลือของออเดอร์เดียวกันอีกในภายหลัง
+// "เคยคืนไปแล้วบางส่วน" (RETURNED / PARTIAL_RETURNED) — เผื่อลูกค้ากลับมาคืนสินค้าตัวอื่นที่เหลือของออเดอร์เดียวกันอีกในภายหลัง
 func isOrderReturnable(status enum.OrderStatus) bool {
 	normalized := strings.ToLower(strings.TrimSpace(string(status)))
-	return normalized == string(enum.OrderCompleted) || normalized == string(enum.OrderReturned)
+	return normalized == string(enum.OrderCompleted) || normalized == string(enum.OrderReturned) || normalized == "partial_returned"
 }
 
 func validateReturnItems(items []reEntity.SalesReturnItem, orderItems []reEntity.SaleOrderItem, alreadyReturned map[uint]int) error {
@@ -337,8 +341,44 @@ func (r *returnRepository) applyApprovedReturn(tx *gorm.DB, returnItem *reEntity
 		return err
 	}
 
+	// คำนวณว่าเป็นการคืนสินค้าทั้งหมด (RETURNED) หรือคืนบางส่วน (PARTIAL_RETURNED)
+	var orderItems []reEntity.SaleOrderItem
+	if err := tx.Where("order_id = ?", order.ID).Find(&orderItems).Error; err != nil {
+		return err
+	}
+	totalOrderedQty := 0
+	for _, it := range orderItems {
+		totalOrderedQty += it.Qty
+	}
+
+	var priorReturnedRows []struct {
+		ProductID uint
+		Total     int
+	}
+	if err := tx.Table("sales_return_items sri").
+		Joins("JOIN sales_returns sr ON sr.id = sri.sales_return_id AND sr.deleted_at IS NULL").
+		Where("sr.original_order_id = ? AND sr.id <> ? AND LOWER(TRIM(COALESCE(sr.status, ''))) <> 'rejected'", returnItem.OriginalOrderID, returnItem.ID).
+		Select("sri.product_id, SUM(sri.quantity) AS total").
+		Group("sri.product_id").
+		Scan(&priorReturnedRows).Error; err != nil {
+		return err
+	}
+
+	totalReturnedQty := 0
+	for _, row := range priorReturnedRows {
+		totalReturnedQty += row.Total
+	}
+	for _, item := range items {
+		totalReturnedQty += item.Quantity
+	}
+
+	orderStatus := enum.OrderReturned
+	if totalReturnedQty < totalOrderedQty {
+		orderStatus = enum.OrderStatus("PARTIAL_RETURNED")
+	}
+
 	if err := tx.Model(&reEntity.SaleOrder{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
-		"status": enum.OrderReturned,
+		"status": orderStatus,
 	}).Error; err != nil {
 		return err
 	}
@@ -552,6 +592,21 @@ func (r *returnRepository) ProcessRefund(id uint, processedBy uint) error {
 					UpdateColumn("current_debt_amount", gorm.Expr("GREATEST(current_debt_amount - ?, 0)", returnItem.RefundAmount)).Error; err != nil {
 					return err
 				}
+
+				// อัปเดตยอดคงค้าง (balance_due) ของบิลนี้ด้วย เพื่อไม่ให้ยังค้างในหน้า Settle Bills
+				newBalanceDue := order.BalanceDue - returnItem.RefundAmount
+				if newBalanceDue < 0 {
+					newBalanceDue = 0
+				}
+				orderUpdates := map[string]interface{}{
+					"balance_due": newBalanceDue,
+				}
+				if newBalanceDue <= 0 && (order.PaymentStatus == "unpaid" || order.PaymentStatus == "partial") {
+					orderUpdates["payment_status"] = "paid"
+				}
+				if err := tx.Model(&reEntity.SaleOrder{}).Where("id = ?", order.ID).Updates(orderUpdates).Error; err != nil {
+					return err
+				}
 			}
 		}
 
@@ -616,7 +671,21 @@ func (r *returnRepository) UpdateReturn(returnItem *reEntity.SalesReturn) error 
 			(returnItem.Status != current.Status && returnItem.Status != enum.ReturnRejected) {
 			return ErrReturnAlreadyProcessed
 		}
-		return tx.Save(returnItem).Error
+		if err := tx.Save(returnItem).Error; err != nil {
+			return err
+		}
+		if returnItem.Status == enum.ReturnRejected {
+			var countApproved int64
+			tx.Model(&reEntity.SalesReturn{}).
+				Where("original_order_id = ? AND id <> ? AND status IN ('APPROVED', 'REFUNDED') AND deleted_at IS NULL", returnItem.OriginalOrderID, returnItem.ID).
+				Count(&countApproved)
+			if countApproved > 0 {
+				_ = tx.Model(&reEntity.SaleOrder{}).Where("id = ?", returnItem.OriginalOrderID).Update("status", "PARTIAL_RETURNED").Error
+			} else {
+				_ = tx.Model(&reEntity.SaleOrder{}).Where("id = ?", returnItem.OriginalOrderID).Update("status", "completed").Error
+			}
+		}
+		return nil
 	})
 }
 
@@ -632,6 +701,18 @@ func (r *returnRepository) DeleteReturn(id uint) error {
 		if err := tx.Where("sales_return_id = ?", id).Delete(&reEntity.SalesReturnItem{}).Error; err != nil {
 			return err
 		}
-		return tx.Delete(&reEntity.SalesReturn{}, id).Error
+		if err := tx.Delete(&reEntity.SalesReturn{}, id).Error; err != nil {
+			return err
+		}
+		var countApproved int64
+		tx.Model(&reEntity.SalesReturn{}).
+			Where("original_order_id = ? AND status IN ('APPROVED', 'REFUNDED') AND deleted_at IS NULL", returnItem.OriginalOrderID).
+			Count(&countApproved)
+		if countApproved > 0 {
+			_ = tx.Model(&reEntity.SaleOrder{}).Where("id = ?", returnItem.OriginalOrderID).Update("status", "PARTIAL_RETURNED").Error
+		} else {
+			_ = tx.Model(&reEntity.SaleOrder{}).Where("id = ?", returnItem.OriginalOrderID).Update("status", "completed").Error
+		}
+		return nil
 	})
 }
