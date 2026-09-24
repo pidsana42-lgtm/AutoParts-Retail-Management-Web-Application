@@ -167,6 +167,8 @@ func (r *salesHistoryRepository) GetSalesHistory(req pos.SalesHistoryFilterReque
         return nil, 0, err
     }
 
+    orders = r.resolveAndSyncOrderStatus(orders)
+
     return orders, totalRows, nil
 }
 
@@ -200,6 +202,11 @@ func (r *salesHistoryRepository) GetSaleHistoryByID(identifier string) (*entity.
 
 	if err != nil {
 		return nil, err
+	}
+
+	orderSlice := r.resolveAndSyncOrderStatus([]entity.SaleOrder{order})
+	if len(orderSlice) > 0 {
+		order = orderSlice[0]
 	}
 
 	return &order, nil
@@ -491,4 +498,127 @@ func (r *salesHistoryRepository) GetCompanySetting(ctx context.Context) (*entity
 		return nil, err
 	}
 	return &setting, nil
+}
+
+func (r *salesHistoryRepository) resolveAndSyncOrderStatus(orders []entity.SaleOrder) []entity.SaleOrder {
+	if len(orders) == 0 {
+		return orders
+	}
+
+	orderIDs := make([]uint, len(orders))
+	for i, o := range orders {
+		orderIDs[i] = o.ID
+	}
+
+	// 1. ดึงข้อมูลการคืนสินค้า (sales_returns) ที่ยังไม่ถูกปฏิเสธ
+	type returnInfo struct {
+		OriginalOrderID uint
+		Status          string
+		TotalQty        int
+	}
+	var returnRows []returnInfo
+	_ = r.db.Table("sales_returns sr").
+		Select("sr.original_order_id, UPPER(TRIM(sr.status)) AS status, COALESCE(SUM(sri.quantity), 0) AS total_qty").
+		Joins("LEFT JOIN sales_return_items sri ON sri.sales_return_id = sr.id AND sri.deleted_at IS NULL").
+		Where("sr.original_order_id IN ? AND sr.deleted_at IS NULL AND LOWER(TRIM(sr.status)) <> 'rejected'", orderIDs).
+		Group("sr.id, sr.original_order_id, sr.status").
+		Scan(&returnRows).Error
+
+	// 2. ดึงข้อมูลการเคลมสินค้า (customer_claims) ที่ยังไม่อยู่ในสถานะยกเลิกหรือปฏิเสธ
+	type claimInfo struct {
+		OriginalOrderID uint
+		Status          string
+	}
+	var claimRows []claimInfo
+	_ = r.db.Table("customer_claims").
+		Select("original_order_id, UPPER(TRIM(status)) AS status").
+		Where("original_order_id IN ? AND deleted_at IS NULL AND LOWER(TRIM(status)) NOT IN ('rejected', 'cancelled')", orderIDs).
+		Scan(&claimRows).Error
+
+	// 3. ดึงจำนวนสินค้าทั้งหมดในแต่ละออเดอร์
+	var itemCounts []struct {
+		OrderID  uint
+		TotalQty int
+	}
+	_ = r.db.Table("sale_order_items").
+		Select("order_id, COALESCE(SUM(qty), 0) AS total_qty").
+		Where("order_id IN ? AND deleted_at IS NULL", orderIDs).
+		Group("order_id").
+		Scan(&itemCounts).Error
+
+	totalQtyByOrder := make(map[uint]int)
+	for _, it := range itemCounts {
+		totalQtyByOrder[it.OrderID] = it.TotalQty
+	}
+
+	returnsByOrder := make(map[uint][]returnInfo)
+	for _, ret := range returnRows {
+		returnsByOrder[ret.OriginalOrderID] = append(returnsByOrder[ret.OriginalOrderID], ret)
+	}
+
+	claimsByOrder := make(map[uint][]claimInfo)
+	for _, clm := range claimRows {
+		claimsByOrder[clm.OriginalOrderID] = append(claimsByOrder[clm.OriginalOrderID], clm)
+	}
+
+	for i := range orders {
+		order := &orders[i]
+		currentStatus := strings.ToUpper(strings.TrimSpace(string(order.Status)))
+
+		if currentStatus == "CANCELLED" || currentStatus == "PENDING_CANCEL" || currentStatus == "ยกเลิก" {
+			continue
+		}
+
+		retList := returnsByOrder[order.ID]
+		clmList := claimsByOrder[order.ID]
+
+		var targetStatus enum.OrderStatus
+
+		if len(retList) > 0 {
+			hasPending := false
+			approvedQty := 0
+			hasApproved := false
+			for _, ret := range retList {
+				if ret.Status == "PENDING" {
+					hasPending = true
+				} else if ret.Status == "APPROVED" || ret.Status == "REFUNDED" {
+					hasApproved = true
+					approvedQty += ret.TotalQty
+				}
+			}
+
+			if hasPending {
+				targetStatus = enum.OrderStatus("PENDING_RETURN")
+			} else if hasApproved {
+				orderTotal := totalQtyByOrder[order.ID]
+				if orderTotal > 0 && approvedQty >= orderTotal {
+					targetStatus = enum.OrderReturned
+				} else {
+					targetStatus = enum.OrderStatus("PARTIAL_RETURNED")
+				}
+			}
+		} else if len(clmList) > 0 {
+			hasPending := false
+			hasApproved := false
+			for _, clm := range clmList {
+				if clm.Status == "PENDING" {
+					hasPending = true
+				} else if clm.Status == "APPROVED" {
+					hasApproved = true
+				}
+			}
+			if hasPending {
+				targetStatus = enum.OrderStatus("CLAIM_IN_PROGRESS")
+			} else if hasApproved {
+				targetStatus = enum.OrderStatus("CLAIMED")
+			}
+		}
+
+		if targetStatus != "" && string(targetStatus) != string(order.Status) {
+			order.Status = targetStatus
+			_ = r.db.Model(&entity.SaleOrder{}).Where("id = ?", order.ID).Update("status", targetStatus).Error
+		}
+	}
+
+	return orders
 }
