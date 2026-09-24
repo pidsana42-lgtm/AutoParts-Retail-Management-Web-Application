@@ -73,7 +73,49 @@ export const SalesStatusBadge: React.FC<SalesStatusBadgeProps> = ({
     );
   }
 
-  // 2. ถ้าชำระเงินครบถ้วนแล้ว (paid) -> แสดง "ชำระแล้ว"
+  // 2. เช็กสถานะการคืนสินค้า (Return) - ต้องเช็กก่อนสถานะการชำระเงิน เพราะบิลที่คืนเงินมักมีสถานะ PAID มาก่อน
+  if (billStatus === "PENDING_RETURN" || billStatus === "รออนุมัติคืน" || billStatus === "รอคืนสินค้า") {
+    return (
+      <Badge variant="warning" className={cn("rounded-none whitespace-nowrap bg-amber-100 text-amber-800 font-normal", className)}>
+        รออนุมัติคืน
+      </Badge>
+    );
+  }
+
+  if (billStatus === "RETURNED" || billStatus === "REFUNDED" || billStatus === "คืนสินค้าแล้ว") {
+    return (
+      <Badge variant="error" className={cn("rounded-none whitespace-nowrap bg-amber-100 text-amber-800  font-normal", className)}>
+        คืนสินค้าแล้ว
+      </Badge>
+    );
+  }
+
+  if (billStatus === "PARTIAL_RETURNED" || billStatus === "คืนบางส่วน") {
+    return (
+      <Badge variant="warning" className={cn("rounded-none whitespace-nowrap bg-orange-100 text-orange-800 font-normal", className)}>
+        คืนบางส่วน
+      </Badge>
+    );
+  }
+
+  // 3. เช็กสถานะการเคลมสินค้า (Claim)
+  if (billStatus === "CLAIMED" || billStatus === "เคลมสินค้าแล้ว") {
+    return (
+      <Badge variant="info" className={cn("rounded-none whitespace-nowrap bg-purple-100 text-purple-800 font-normal", className)}>
+        เคลมสินค้าแล้ว
+      </Badge>
+    );
+  }
+
+  if (billStatus === "CLAIM_IN_PROGRESS" || billStatus === "PENDING_CLAIM" || billStatus === "อยู่ระหว่างเคลม" || billStatus === "รอเคลม") {
+    return (
+      <Badge variant="warning" className={cn("rounded-none whitespace-nowrap bg-indigo-100 text-indigo-800 border border-indigo-300 font-medium", className)}>
+        อยู่ระหว่างเคลม
+      </Badge>
+    );
+  }
+
+  // 4. ถ้าชำระเงินครบถ้วนแล้ว (paid) -> แสดง "ชำระแล้ว"
   if (payStatus === "PAID" || payStatus === "ชำระแล้ว") {
     return (
       <Badge variant="success" className={cn("rounded-none whitespace-nowrap", className)}>
@@ -82,7 +124,7 @@ export const SalesStatusBadge: React.FC<SalesStatusBadgeProps> = ({
     );
   }
 
-  // 3. ถ้าเป็นบิลเงินเชื่อที่ทำรายการเสร็จแล้ว แต่ยังไม่ชำระ (completed + unpaid/partial)
+  // 5. ถ้าเป็นบิลเงินเชื่อที่ทำรายการเสร็จแล้ว แต่ยังไม่ชำระ (completed + unpaid/partial)
   if (billStatus === "COMPLETED") {
     return (
       <Badge variant="info" className={cn("rounded-none whitespace-nowrap", className)}>
@@ -91,7 +133,7 @@ export const SalesStatusBadge: React.FC<SalesStatusBadgeProps> = ({
     );
   }
 
-  // 4. สถานะรอดำเนินการ / รอตอบรับ
+  // 6. สถานะรอดำเนินการ / รอตอบรับ
   if (billStatus === "PENDING") {
     return (
       <Badge variant="neutral" className={cn("rounded-none whitespace-nowrap", className)}>
@@ -173,7 +215,15 @@ export const PaymentTypeBadge: React.FC<PaymentTypeBadgeProps> = ({
   type = "",
   className,
 }) => {
-  const isPayment = (type || "").toLowerCase() === "payment";
+  const t = (type || "").toLowerCase();
+  if (t === "refund" || t.includes("refund") || t.includes("คืน")) {
+    return (
+      <Badge variant="warning" className={cn("bg-amber-100 text-amber-800 font-normal", className)}>
+        คืนเงิน
+      </Badge>
+    );
+  }
+  const isPayment = t === "payment";
   return (
     <Badge variant={isPayment ? "payment" : "repayment"} className={className}>
       {isPayment ? "ชำระสดหน้าร้าน" : "เคลียร์หนี้เงินเชื่อ"}
@@ -201,6 +251,21 @@ export const PaymentStatusBadge: React.FC<PaymentStatusBadgeProps> = ({
   }
   if (s === "cancelled") {
     return <Badge variant="error" className={className}>ยกเลิกแล้ว</Badge>;
+  }
+  if (s === "pending_return" || s === "รออนุมัติคืน" || s === "รอคืนสินค้า") {
+    return <Badge variant="warning" className={cn("bg-amber-100 text-amber-800 font-normal", className)}>รออนุมัติคืน</Badge>;
+  }
+  if (s === "refunded" || s === "refund" || s === "returned" || s === "คืนเงินแล้ว" || s === "คืนสินค้าแล้ว") {
+    return <Badge variant="warning" className={cn("bg-amber-100 text-amber-800 font-normal", className)}>คืนเงินแล้ว</Badge>;
+  }
+  if (s === "partial_returned" || s === "คืนบางส่วน") {
+    return <Badge variant="warning" className={cn("bg-orange-100 text-orange-800 font-normal", className)}>คืนบางส่วน</Badge>;
+  }
+  if (s === "claim_in_progress" || s === "pending_claim" || s === "อยู่ระหว่างเคลม" || s === "รอเคลม") {
+    return <Badge variant="warning" className={cn("bg-indigo-100 text-indigo-800 font-normal", className)}>อยู่ระหว่างเคลม</Badge>;
+  }
+  if (s === "claimed" || s === "เคลมสินค้าแล้ว" || s === "เคลมแล้ว") {
+    return <Badge variant="info" className={cn("bg-purple-100 text-purple-800 font-normal", className)}>เคลมแล้ว</Badge>;
   }
   if (s === "rejected" || (s === "completed" && Boolean(cancelRemark && cancelRemark.trim() !== ""))) {
     return <Badge variant="neutral" className={className}>ไม่อนุมัติยกเลิก</Badge>;
