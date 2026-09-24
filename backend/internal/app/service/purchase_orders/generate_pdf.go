@@ -22,6 +22,13 @@ import (
 	"github.com/johnfercher/maroto/pkg/props"
 )
 
+const (
+	poPDFGridColumns       = 12.0
+	poPDFItemBaseRowHeight = 7.0
+	poPDFItemLineHeight    = 4.5
+	poPDFItemFontSize      = 11.0
+)
+
 func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, includeCode bool, printedBy uint) ([]byte, error) {
 	// 1. ดึงข้อมูลจริงจาก Database
 	poData, err := s.poRepository.GetPOForPDF(ctx, poID)
@@ -171,17 +178,19 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 			poType = "พรีออเดอร์"
 		}
 
-		m.Row(7, func() {
+		productNameCol := uint(4)
+		if includeCode {
+			productNameCol = 2
+		}
+		rowHeight := poPDFItemRowHeight(m, item.Product_name_snapshot, productNameCol)
+
+		m.Row(rowHeight, func() {
 			m.Col(1, func() { m.Text(fmt.Sprintf("%d", i+1), props.Text{Size: 11, Align: consts.Center}) })
 			m.Col(1, func() { m.Text(poType, props.Text{Size: 11, Align: consts.Left}) })
 			if includeCode {
 				m.Col(2, func() { m.Text(supplierProductCode, props.Text{Size: 10, Align: consts.Left}) })
 			}
 			m.Col(2, func() { m.Text(partNumber, props.Text{Size: 10, Align: consts.Left}) })
-			productNameCol := uint(4)
-			if includeCode {
-				productNameCol = 2
-			}
 			m.Col(productNameCol, func() { m.Text(item.Product_name_snapshot, props.Text{Size: 11}) })
 			m.Col(2, func() { m.Text(fmt.Sprintf("%d  ", int(item.Quantity)), props.Text{Size: 11, Align: consts.Right}) })
 			m.Col(2, func() { m.Text(fmt.Sprintf("%s  ", item.Unit), props.Text{Size: 11, Align: consts.Right}) })
@@ -209,6 +218,28 @@ func (s *purchaseOrderService) GeneratePOPDF(ctx context.Context, poID uint, inc
 	}
 
 	return buf.Bytes(), nil
+}
+
+func poPDFItemRowHeight(m pdf.Maroto, productName string, productNameCol uint) float64 {
+	document, ok := m.(*pdf.PdfMaroto)
+	if !ok || productNameCol == 0 {
+		return poPDFItemBaseRowHeight
+	}
+
+	pageWidth, _ := m.GetPageSize()
+	leftMargin, _, rightMargin, _ := m.GetPageMargins()
+	columnWidth := (pageWidth - leftMargin - rightMargin) * float64(productNameCol) / poPDFGridColumns
+	textProps := props.Text{
+		Family: "THSarabun",
+		Style:  consts.Normal,
+		Size:   poPDFItemFontSize,
+	}
+	lineCount := document.TextHelper.GetLinesQuantity(strings.TrimSpace(productName), textProps, columnWidth)
+	if lineCount <= 1 {
+		return poPDFItemBaseRowHeight
+	}
+
+	return poPDFItemBaseRowHeight + float64(lineCount-1)*poPDFItemLineHeight
 }
 
 // --------------------------------------------------------

@@ -423,6 +423,25 @@ export const useSalesHistory = () => {
       case "CANCELLED":
       case "ยกเลิก":
         return "ยกเลิกแล้ว";
+      case "PENDING_RETURN":
+      case "รออนุมัติคืน":
+      case "รอคืนสินค้า":
+        return "รออนุมัติคืน";
+      case "RETURNED":
+      case "REFUNDED":
+      case "คืนสินค้าแล้ว":
+        return "คืนสินค้าแล้ว";
+      case "PARTIAL_RETURNED":
+      case "คืนบางส่วน":
+        return "คืนบางส่วน";
+      case "CLAIMED":
+      case "เคลมสินค้าแล้ว":
+        return "เคลมสินค้าแล้ว";
+      case "CLAIM_IN_PROGRESS":
+      case "PENDING_CLAIM":
+      case "รอเคลม":
+      case "อยู่ระหว่างเคลม":
+        return "อยู่ระหว่างเคลม";
       case "COMPLETED":
         return "ทำรายการสำเร็จ";
       case "PENDING":

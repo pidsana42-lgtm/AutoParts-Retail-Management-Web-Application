@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"backend/internal/app/entity"
+	"backend/internal/pkg/crypto"
 
 	"github.com/johnfercher/maroto/pkg/consts"
 	"github.com/johnfercher/maroto/pkg/pdf"
@@ -53,9 +54,21 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 		bankAccountNo = companyData.BankAccountNumber
 		bankAccountName = companyData.BankAccountName
 	}
+	if crypto.IsEncrypted(bankAccountNo) {
+		if dec, err := crypto.DecryptAES256(bankAccountNo); err == nil {
+			bankAccountNo = dec
+		}
+	}
 
 	// 2. กำหนดหัวข้อเอกสาร (Document Title)
-	isCancelled := strings.EqualFold(string(order.Status), "cancelled")
+	statusLower := strings.ToLower(strings.TrimSpace(string(order.Status)))
+	isCancelled := statusLower == "cancelled" || statusLower == "ยกเลิก"
+	isReturned := statusLower == "returned" || statusLower == "refunded" || statusLower == "คืนสินค้าแล้ว"
+	isPartialReturned := statusLower == "partial_returned" || statusLower == "คืนบางส่วน"
+	isClaimed := statusLower == "claimed" || statusLower == "เคลมสินค้าแล้ว"
+	isClaimInProgress := statusLower == "claim_in_progress" || statusLower == "pending_claim" || statusLower == "อยู่ระหว่างเคลม"
+	isPendingReturn := statusLower == "pending_return" || statusLower == "รออนุมัติคืน"
+
 	docTitle := customTitle
 	if docTitle == "" {
 		if order.PaymentMethodID != nil && *order.PaymentMethodID == 3 {
@@ -69,6 +82,16 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 
 	if isCancelled {
 		docTitle = docTitle + "\n(ยกเลิกแล้ว / CANCELLED)"
+	} else if isReturned {
+		docTitle = docTitle + "\n(คืนสินค้าแล้ว / RETURNED)"
+	} else if isPartialReturned {
+		docTitle = docTitle + "\n(คืนสินค้าบางส่วน / PARTIAL RETURNED)"
+	} else if isClaimed {
+		docTitle = docTitle + "\n(เคลมสินค้าแล้ว / CLAIMED)"
+	} else if isClaimInProgress {
+		docTitle = docTitle + "\n(อยู่ระหว่างเคลม / IN PROGRESS)"
+	} else if isPendingReturn {
+		docTitle = docTitle + "\n(รออนุมัติคืน / PENDING RETURN)"
 	}
 
 	// 3. ตั้งค่าหน้ากระดาษและฟอนต์
@@ -255,8 +278,18 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 				m.Text("กำหนดชำระ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: currentTop, Color: HexToColor("#E51C23")})
 				currentTop += 5.0
 			}
-			if isCancelled {
-				m.Text("สถานะ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: currentTop, Color: HexToColor("#E51C23")})
+			if isCancelled || isReturned || isPartialReturned || isClaimed || isClaimInProgress || isPendingReturn {
+				statusColor := "#E51C23"
+				if isReturned || isPendingReturn {
+					statusColor = "#D97706"
+				} else if isPartialReturned {
+					statusColor = "#EA580C"
+				} else if isClaimed {
+					statusColor = "#7C3AED"
+				} else if isClaimInProgress {
+					statusColor = "#4F46E5"
+				}
+				m.Text("สถานะ", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: currentTop, Color: HexToColor(statusColor)})
 			}
 		})
 		m.Col(3, func() {
@@ -271,6 +304,16 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 			}
 			if isCancelled {
 				m.Text("ยกเลิกแล้ว (CANCELLED)", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: currentTop, Color: HexToColor("#E51C23")})
+			} else if isReturned {
+				m.Text("คืนสินค้าแล้ว (RETURNED)", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: currentTop, Color: HexToColor("#D97706")})
+			} else if isPartialReturned {
+				m.Text("คืนสินค้าบางส่วน (PARTIAL RETURNED)", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: currentTop, Color: HexToColor("#EA580C")})
+			} else if isClaimed {
+				m.Text("เคลมสินค้าแล้ว (CLAIMED)", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: currentTop, Color: HexToColor("#7C3AED")})
+			} else if isClaimInProgress {
+				m.Text("อยู่ระหว่างเคลม (IN PROGRESS)", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: currentTop, Color: HexToColor("#4F46E5")})
+			} else if isPendingReturn {
+				m.Text("รออนุมัติคืน (PENDING RETURN)", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: currentTop, Color: HexToColor("#D97706")})
 			}
 		})
 	})
@@ -436,7 +479,12 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 					Top:   thaiTextTop,
 					Color: HexToColor("#1F2937"),
 				})
-				thaiTextTop += 5.0
+				// ปรับระยะห่างตามความยาวข้อความ หากข้อความยาวและถูกตัดบรรทัด ป้องกันข้อความทับกัน
+				if len([]rune(bankLabel)) > 55 {
+					thaiTextTop += 9.0
+				} else {
+					thaiTextTop += 5.0
+				}
 			}
 			m.Text(fmt.Sprintf("จำนวนเงินทั้งสิ้น (ตัวอักษร): %s", thaiText), props.Text{
 				Size:  9.5,
