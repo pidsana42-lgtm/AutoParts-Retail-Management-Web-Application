@@ -8,7 +8,7 @@ export const poService = {
   // 1. ดึงข้อมูลใบสั่งซื้อทั้งหมดพร้อม Filter
   getPurchaseOrders: async (params: GetPOsParams): Promise<GetPOsResponse> => {
     try {
-      const queryParams: Record<string, any> = { page: params.page, limit: params.limit };
+      const queryParams: Record<string, string | number> = { page: params.page, limit: params.limit };
       if (params.status && params.status !== "all") queryParams.status = params.status;
       if (params.search) queryParams.search = params.search;
       if (params.month) queryParams.month = params.month;

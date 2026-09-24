@@ -18,15 +18,7 @@ const PROMPTPAY_TYPE_OPTIONS: SelectOption[] = [
   { label: "เลขประจำตัวผู้เสียภาษี / บัตรประชาชน (13 หลัก)", value: "tax_id" },
 ];
 
-const StoreConfig: React.FC = () => {
-  const { role } = useAuth();
-  const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
-  const isOwner = currentRole === "OWNER";
-
-  if (!isOwner) {
-    return <Navigate to="/" replace />;
-  }
-
+const StoreConfigContent: React.FC = () => {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     company_name: "",
@@ -647,6 +639,17 @@ const StoreConfig: React.FC = () => {
       </form>
     </div>
   );
+};
+
+const StoreConfig: React.FC = () => {
+  const { role } = useAuth();
+  const currentRole = (role || localStorage.getItem("role") || "").toUpperCase();
+
+  if (currentRole !== "OWNER") {
+    return <Navigate to="/" replace />;
+  }
+
+  return <StoreConfigContent />;
 };
 
 export default StoreConfig;

@@ -1,4 +1,5 @@
 import { isValidQuantity, validatePurchaseOrder } from './validation';
+import { isAxiosError } from 'axios';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useParams } from 'react-router-dom';
 import { Building2, ChevronRight, ClipboardClock, Clock, FileText, User, Trash2, Minus, Plus, Search, ChevronDown, MessageSquareWarning } from 'lucide-react';
@@ -310,8 +311,8 @@ function OrderDetail() {
         try {
             await savePOChanges();
             toast({ title: 'ดำเนินการสำเร็จ', message: 'บันทึกการแก้ไขข้อมูลสำเร็จ', variant: 'success' });
-        } catch (err: any) {
-            console.error("Update Error:", err.response?.data || err);
+        } catch (err: unknown) {
+            console.error("Update Error:", isAxiosError(err) ? (err.response?.data || err) : err);
             toast({ title: 'เกิดข้อผิดพลาด', message: 'บันทึกการแก้ไขไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', variant: 'error' });
         } finally {
             setActiveAction(null);
@@ -331,8 +332,8 @@ function OrderDetail() {
                 variant: 'success'
             });
             navigate(`${basePath}/orders`);
-        } catch (err: any) {
-            console.error("Submit Error:", err.response?.data || err);
+        } catch (err: unknown) {
+            console.error("Submit Error:", isAxiosError(err) ? (err.response?.data || err) : err);
             toast({
                 title: 'เกิดข้อผิดพลาด',
                 message: isOwner ? 'อนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง' : 'ส่งอนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
