@@ -95,7 +95,6 @@ describe('product service', () => {
         ],
         UpdatedAt: '2026-09-01T10:00:00Z',
         DeletedAt: undefined,
-        PendingReceiveQuantity: 0,
       });
       expect(apiClient.get).toHaveBeenCalledWith('/wms/products');
     });
@@ -129,7 +128,6 @@ describe('product service', () => {
         Suppliers: [],
         UpdatedAt: undefined,
         DeletedAt: undefined,
-        PendingReceiveQuantity: 0,
       });
       expect(apiClient.get).toHaveBeenCalledWith('/wms/products/9');
     });
