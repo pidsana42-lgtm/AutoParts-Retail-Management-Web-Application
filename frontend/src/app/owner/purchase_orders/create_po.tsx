@@ -1,8 +1,9 @@
 import { isValidQuantity, validatePurchaseOrder } from './validation';
+import { isAxiosError } from 'axios';
 // React Libraries
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { Building2, ScanBarcode, ShoppingBag, ChevronRight, ShoppingCart, Plus, Minus, Trash2, MessageSquareMore, Clock } from 'lucide-react';
+import { Building2, ScanBarcode, ShoppingBag, ChevronRight, ShoppingCart, Plus, Minus, Trash2, MessageSquareMore, Clock, TriangleAlert } from 'lucide-react';
 // Components
 import Heading from '../../../components/elements/heading';
 import Button from '../../../components/elements/button';
@@ -13,11 +14,14 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableFoo
 import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { useToast } from '../../../components/elements/toast';
 import { PreorderSelectionModal } from './components/PreorderSelectionModal';
+import StockAlertSelectionModal from './components/StockAlertSelectionModal';
 // Interface
 import type { CreatePORequest, LocalPOItem, PreorderItem, POAnalyticsResponse } from '../../../interface/purchase_orders/po_interface';
 // Service & Utils
 import { poService } from '../../../service/http/purchase_orders/po_service';
 import { getSuppliersList } from '../../../service/http/wms/product';
+import { dashboardService } from '../../../service/http/dashboard/dashboard_service';
+import type { StockAlertItem } from '../../../interface/dashboard/dashboard_interface';
 import { getTodayDateString } from '../../../utils/formatdate';
 import { generateLocalId } from '../../../utils/generateId';
 // Hooks
@@ -56,6 +60,10 @@ const CreatePurchaseOrders: React.FC = () => {
     // สำหรับดึงข้อมูลคาดการณ์ระยะเวลาจัดส่ง
     const [deliveryEstimate, setDeliveryEstimate] = useState<POAnalyticsResponse | null>(null);
     const [isEstimateLoading, setIsEstimateLoading] = useState(false);
+    // สำหรับ Stock Alert แนะนำสินค้าใกล้หมดสต็อก
+    const [supplierAlerts, setSupplierAlerts] = useState<StockAlertItem[]>([]);
+    const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
+    const isFromNavStateRef = useRef(Boolean((location.state as { preselectedItems?: LocalPOItem[] } | null)?.preselectedItems?.length));
     // เก็บค่าที่ผู้ใช้กำลังพิมพ์อยู่ (ระหว่างลบเลขเดิมทิ้งแล้วยังพิมพ์ไม่เสร็จ) แยกจาก items จริง
     const [qtyDrafts, setQtyDrafts] = useState<Record<string | number, string>>({});
     const [showValidation, setShowValidation] = useState(false);
@@ -143,6 +151,54 @@ const CreatePurchaseOrders: React.FC = () => {
 
         void fetchDeliveryEstimate();
     }, [listsSupplier]);
+
+    // ดึง Stock Alert ของ Supplier ที่เลือก เพื่อแนะนำสินค้าใกล้หมดสต็อก
+    useEffect(() => {
+        if (!listsSupplier) {
+            setSupplierAlerts([]);
+            return;
+        }
+
+        let cancelled = false;
+        const fetchAlerts = async () => {
+            try {
+                const res = await dashboardService.getStockAlerts();
+                if (cancelled) return;
+                const filtered = (res.data ?? [])
+                    .filter((alert) =>
+                        alert.is_resolved === 'false' &&
+                        !alert.has_po &&
+                        !alert.po_id &&
+                        !alert.po_number &&
+                        alert.supplier_id != null &&
+                        String(alert.supplier_id) === listsSupplier
+                    );
+                setSupplierAlerts(filtered);
+                if (filtered.length > 0) {
+                    if (isFromNavStateRef.current) {
+                        isFromNavStateRef.current = false;
+                    } else {
+                        setIsAlertModalOpen(true);
+                    }
+                }
+            } catch {
+                if (!cancelled) setSupplierAlerts([]);
+            }
+        };
+
+        void fetchAlerts();
+        return () => { cancelled = true; };
+    }, [listsSupplier]);
+
+    // ฟังก์ชัน: เพิ่มรายการจาก Stock Alert Modal ลงตะกร้าใบสั่งซื้อ (หลายรายการพร้อมกัน)
+    const handleAddAlertItems = (newItems: LocalPOItem[]) => {
+        setItem((prev) => [...prev, ...newItems]);
+        toast({
+            title: 'เพิ่มสินค้าสำเร็จ',
+            message: `เพิ่ม ${newItems.length} รายการจากสินค้าใกล้หมดสต็อกลงใบสั่งซื้อแล้ว`,
+            variant: 'success',
+        });
+    };
 
     // Pre-fill จาก stock alert modal ของ dashboard (navigate state)
     useEffect(() => {
@@ -302,9 +358,13 @@ const CreatePurchaseOrders: React.FC = () => {
                         await poService.updatePOStatus(response.id, 'APPROVED');
                     }
                     message = `อนุมัติใบสั่งซื้อ ${createdPoNumber} เรียบร้อยแล้ว`;
-                } catch (approveError: any) {
+                } catch (approveError: unknown) {
                     // สร้าง PO สำเร็จแล้ว แต่อนุมัติอัตโนมัติไม่สำเร็จ -> แจ้งเตือนแยก ไม่บล็อกการสร้าง
-                    const approveMessage = approveError?.response?.data?.message || approveError?.message;
+                    const approveMessage = isAxiosError<{ message?: string }>(approveError)
+                        ? approveError.response?.data?.message || approveError.message
+                        : approveError instanceof Error
+                          ? approveError.message
+                          : undefined;
                     toast({ title: 'สร้างใบสั่งซื้อสำเร็จ แต่อนุมัติอัตโนมัติไม่สำเร็จ', message: approveMessage || 'กรุณาเข้าไปอนุมัติที่รายละเอียดใบสั่งซื้อ', variant: 'warning' });
                     navigate(`${basePath}/orders`);
                     return;
@@ -313,8 +373,12 @@ const CreatePurchaseOrders: React.FC = () => {
 
             toast({ title: 'ดำเนินการสำเร็จ', message, variant: 'success' });
             navigate(`${basePath}/orders`); // กลับไปหน้ารวม
-        } catch (error: any) {
-            const backendMessage = error?.response?.data?.message || error?.message;
+        } catch (error: unknown) {
+            const backendMessage = isAxiosError<{ message?: string }>(error)
+                ? error.response?.data?.message || error.message
+                : error instanceof Error
+                  ? error.message
+                  : undefined;
             toast({ title: 'เกิดข้อผิดพลาด', message: backendMessage || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง', variant: 'error' });
         } finally {
             setIsSaving(false);
@@ -423,6 +487,21 @@ const CreatePurchaseOrders: React.FC = () => {
                                             <span className='text-gray-400'>ประวัติการส่งของยังไม่เพียงพอต่อการประเมิน</span>
                                         )}
                                     </div>
+                                </div>
+                            )}
+                            {listsSupplier && supplierAlerts.length > 0 && (
+                                <div className='mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs'>
+                                    <div className='flex items-center gap-1.5 text-gray-700'>
+                                        <TriangleAlert size={14} className='text-amber-500 shrink-0' />
+                                        <span>สินค้าใกล้หมดสต็อก <strong className='font-semibold text-red-600'>{supplierAlerts.length}</strong> รายการ</span>
+                                    </div>
+                                    <button
+                                        type='button'
+                                        onClick={() => setIsAlertModalOpen(true)}
+                                        className='text-xs font-medium text-red-700 hover:text-red-900 underline underline-offset-2 cursor-pointer transition-colors shrink-0'
+                                    >
+                                        เลือกสินค้า
+                                    </button>
                                 </div>
                             )}
                         </CardContent>
@@ -717,6 +796,13 @@ const CreatePurchaseOrders: React.FC = () => {
                 onClose={() => setIsPreorderModalOpen(false)}
                 preorders={preorders}
                 onSelectPreorder={handleAddPreorderToPO}
+            />
+            <StockAlertSelectionModal
+                isOpen={isAlertModalOpen}
+                onClose={() => setIsAlertModalOpen(false)}
+                stockAlerts={supplierAlerts}
+                existingItems={item}
+                onAddItems={handleAddAlertItems}
             />
 
             <ConfirmDialog

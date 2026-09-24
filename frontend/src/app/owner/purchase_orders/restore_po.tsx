@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { isAxiosError } from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Eye, ReceiptText, AlertTriangle } from 'lucide-react';
 // Components
@@ -92,8 +93,12 @@ const DeletedPoHistory: React.FC = () => {
       });
       setOrders(response.data || []);
       setTotalItems(response.total || 0);
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.message || err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ";
+    } catch (err: unknown) {
+      const errorMessage = isAxiosError<{ message?: string }>(err)
+        ? err.response?.data?.message || err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ"
+        : err instanceof Error
+          ? err.message
+          : "เกิดข้อผิดพลาดในการเชื่อมต่อ";
       setError(errorMessage);
     } finally {
       setIsLoading(false);
