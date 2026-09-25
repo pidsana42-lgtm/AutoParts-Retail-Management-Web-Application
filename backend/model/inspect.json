@@ -1,0 +1,283 @@
+[
+    {
+        "Id": "efc1d98cf0398f7795dab99ae0791636639ad2de9e19339ab47f753b01ed43a4",
+        "Created": "2026-09-21T15:54:57.918604594Z",
+        "Path": "python",
+        "Args": [
+            "server.py",
+            "--port",
+            "8000"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 1093480,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-09-21T15:55:00.249929152Z",
+            "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "Image": "sha256:eb2ded01ff93ac3c300bcf4ee994e62e9cb8e4dbd8451042a84c41205f8ab735",
+        "ResolvConfPath": "/var/lib/docker/containers/efc1d98cf0398f7795dab99ae0791636639ad2de9e19339ab47f753b01ed43a4/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/efc1d98cf0398f7795dab99ae0791636639ad2de9e19339ab47f753b01ed43a4/hostname",
+        "HostsPath": "/var/lib/docker/containers/efc1d98cf0398f7795dab99ae0791636639ad2de9e19339ab47f753b01ed43a4/hosts",
+        "LogPath": "/var/lib/docker/containers/efc1d98cf0398f7795dab99ae0791636639ad2de9e19339ab47f753b01ed43a4/efc1d98cf0398f7795dab99ae0791636639ad2de9e19339ab47f753b01ed43a4-json.log",
+        "Name": "/autoparts-ai-service",
+        "RestartCount": 0,
+        "Driver": "overlayfs",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "docker-default",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [
+                "autoparts-retail-management-web-application_backend_uploads:/uploads:rw"
+            ],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "autoparts-retail-management-web-application_app-network",
+            "PortBindings": {
+                "8000/tcp": [
+                    {
+                        "HostIp": "127.0.0.1",
+                        "HostPort": "8000"
+                    }
+                ]
+            },
+            "RestartPolicy": {
+                "Name": "unless-stopped",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "Storage": {
+            "RootFS": {
+                "Snapshot": {
+                    "Name": "overlayfs"
+                }
+            }
+        },
+        "Mounts": [
+            {
+                "Type": "volume",
+                "Name": "autoparts-retail-management-web-application_backend_uploads",
+                "Source": "/var/lib/docker/volumes/autoparts-retail-management-web-application_backend_uploads/_data",
+                "Destination": "/uploads",
+                "Driver": "local",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "efc1d98cf039",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "8000/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "SMTP_PASSWORD=euezjgpiackhvwio",
+                "DB_USER=postgres",
+                "SMTP_HOST=smtp.gmail.com",
+                "MOCK_LLM=false",
+                "Channel_secret=28f98df8063b0f5bebfc956bcfc2b7a9",
+                "SUPABASE_JWKS_URL=https://zbiguaavklbouspotfsa.supabase.co/auth/v1/.well-known/jwks.json",
+                "SUPABASE_SECRET_KEY=sb_secret_mnWDOOJY7Wn9GA31YTnBug_C54NHs8d",
+                "LINE_RICH_MENU_CUSTOMER=richmenu-customer-mock-id",
+                "api_key=sk-vh0x2ClqhzKOvspZpT5CcmofWuhSbQwtRfedpZWrrji5jSPy",
+                "DB_NAME=Autopartsdb",
+                "USE_LIGHTNING_CLOUD=true",
+                "LINE_RICH_MENU_OWNER=richmenu-owner-mock-id",
+                "SMTP_PORT=587",
+                "DB_PORT=5432",
+                "GEMINI_MODEL=google/gemini-3.1-pro-preview",
+                "SUPABASE_URL=https://zbiguaavklbouspotfsa.supabase.co",
+                "LIGHTNING_API_KEY=1af2fbf0-c60f-49ae-b5b9-e95d19535de5/jommarn225-cm5ae-g4a19/deploy-model-project",
+                "SMTP_USER=jjautopartpakchong@gmail.com",
+                "PromptPayNo=0967985115",
+                "DB_HOST=postgres",
+                "LINE_CHANNEL_ACCESS_TOKEN=CeisjXe3UhkhExWGhGtCDnCt7wlzRY0z2K4bzO5AQXlv3CMyflpKwWzLaf0amwSk0wO0ypeHbXqeVg5vaOHrSvAUt3Xkwo+0o9rql0yZvCwG2tf0MUAB49CAlhlYkiZrmy9M+Q0qTZ9YFNutXECQogdB04t89/1O/w1cDnyilFU=",
+                "GEMINI_API_KEY=",
+                "SMTP_FROM_NAME=JJ AutoParts",
+                "HF_TOKEN=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",
+                "Channel_ID=2010559477",
+                "USE_TFIDF_ONLY=1",
+                "SUPABASE_PUBLISHABLE_KEY=sb_publishable_nkmtS57K29mvpoLK2pAAww_tM7KG8m3",
+                "LINE_RICH_MENU_EMPLOYEE=richmenu-employee-mock-id",
+                "DB_PASSWORD=1234",
+                "GOOGLE_STUDIO=AIzaSyCumOdk3LX94cK4VVAuemMesigjeU5engk",
+                "JWT_SECRET=t5YnR/JUHbr7U7pSPSdQstIpLtJ+VKOdfvXn/38t1oWNHRt0gDNTLiHsNhCrZFi/",
+                "OCR_PORT=8000",
+                "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "LANG=C.UTF-8",
+                "GPG_KEY=A035C8C19219BA821ECEA86B64E628F8D684696D",
+                "PYTHON_VERSION=3.11.16",
+                "PYTHON_SHA256=91bcdebfdde239a003ae93738a7fce0f9230fee5c4bc2b86f6e6e8c6f98aabe8",
+                "PYTHONUNBUFFERED=1"
+            ],
+            "Cmd": [
+                "python",
+                "server.py",
+                "--port",
+                "8000"
+            ],
+            "Image": "autoparts-retail-management-web-application-ai-service",
+            "Volumes": null,
+            "WorkingDir": "/app",
+            "Entrypoint": null,
+            "Labels": {
+                "com.docker.compose.config-hash": "43f6e1ae1d285ce0dba86b2f69c6d22de878ebf9cad420c09312bbfb6e5b69e2",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "postgres:service_healthy:false",
+                "com.docker.compose.image": "sha256:eb2ded01ff93ac3c300bcf4ee994e62e9cb8e4dbd8451042a84c41205f8ab735",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "autoparts-retail-management-web-application",
+                "com.docker.compose.project.config_files": "/var/www/AutoParts-Retail-Management-Web-Application/docker-compose.yml",
+                "com.docker.compose.project.working_dir": "/var/www/AutoParts-Retail-Management-Web-Application",
+                "com.docker.compose.replace": "autoparts-ai-service",
+                "com.docker.compose.service": "ai-service",
+                "com.docker.compose.version": "5.3.1"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "1035d69b499841dd82fd688ada8c4cf72b5a83fc44bd28b3705a6b34de22f9fc",
+            "SandboxKey": "/var/run/docker/netns/1035d69b4998",
+            "Ports": {
+                "8000/tcp": [
+                    {
+                        "HostIp": "127.0.0.1",
+                        "HostPort": "8000"
+                    }
+                ]
+            },
+            "Networks": {
+                "autoparts-retail-management-web-application_app-network": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "autoparts-ai-service",
+                        "ai-service"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "93ef9041692d9184ad781a4ae019cf2e19b9f259af5b45437b7091c4c1ae1fb7",
+                    "EndpointID": "a3d6ca753aa54f6d27ae08feba5a0f6109fd4b94687cd85221238addf1ba148c",
+                    "Gateway": "172.19.0.1",
+                    "IPAddress": "172.19.0.2",
+                    "MacAddress": "a2:e8:8e:59:01:a3",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "autoparts-ai-service",
+                        "ai-service",
+                        "efc1d98cf039"
+                    ]
+                }
+            }
+        },
+        "ImageManifestDescriptor": {
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "digest": "sha256:8fe0e33f4b3b82c45c6cc5baafc72b43b65ec25d87c9744ca5a56fd3bce70a99",
+            "size": 2009,
+            "platform": {
+                "architecture": "amd64",
+                "os": "linux"
+            }
+        }
+    }
+]
