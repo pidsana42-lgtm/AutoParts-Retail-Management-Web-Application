@@ -202,6 +202,35 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 		})
 	})
 
+	// ส่วนท้ายเอกสาร (Footer) - วาง Barcode ตรงกลางด้านล่างติดขอบ
+	m.RegisterFooter(func() {
+		if order.OrderNumber != "" {
+			m.Row(10, func() {
+				m.Col(12, func() {
+					_ = m.Barcode(order.OrderNumber, props.Barcode{
+						Center:  true,
+						Percent: 95,
+						Proportion: props.Proportion{
+							Width:  20,
+							Height: 3.5,
+						},
+					})
+				})
+			})
+			// Barcode Text
+			m.Row(4, func() {
+				m.Col(12, func() {
+					m.Text(order.OrderNumber, props.Text{
+						Size:  8.0,
+						Align: consts.Center,
+						Top:   0.5,
+						Color: HexToColor("#4B5563"),
+					})
+				})
+			})
+		}
+	})
+
 	m.Row(5, func() {}) // เว้นบรรทัด
 
 	// แถบแจ้งเตือนเอกสารถูกยกเลิก (Void / Cancelled Banner)

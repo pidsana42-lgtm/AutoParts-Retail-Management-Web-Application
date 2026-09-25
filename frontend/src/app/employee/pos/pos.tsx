@@ -150,7 +150,7 @@ export default function PosPage(): React.JSX.Element {
     <div className="flex flex-col lg:flex-row bg-white min-h-[calc(100vh-4rem)] text-gray-800 antialiased overflow-x-hidden">
       
       {/* ─── [โซนฝั่งซ้าย] : ตะกร้าสินค้า ตารางรายการขาย และส่วนลดท้ายบิล ─── */}
-      <div className="w-full lg:w-[73%] bg-white p-6 flex flex-col justify-between">
+      <div className="w-full lg:w-[73%] min-w-0 bg-white p-6 flex flex-col justify-between">
         <div>
           
           {/* 1. ส่วนหัวบิล (Header - ชื่อหน้าย่อ POS, สวิตช์โหมด & ปุ่มล้างตะกร้าทั้งหมด) */}
@@ -545,18 +545,18 @@ export default function PosPage(): React.JSX.Element {
           </div>
 
           {/* 3. ตารางตระกร้าแสดงผลสินค้า */}
-          <div className="bg-white rounded-none shadow-sm overflow-hidden border border-gray-200">
-            <table className="w-full text-left border-collapse">
+          <div className="bg-white rounded-none shadow-sm overflow-x-auto border border-gray-200">
+            <table className="w-full min-w-212.5 text-left border-collapse">
               <TableHeader className="bg-[#F6F3F2] rounded-none border-b border-gray-200 text-[11px] text-[#6B7280] uppercase tracking-wider">
                 <TableRow>
-                  <TableHead className="py-3 px-4 w-[15%]">SKU</TableHead>
-                  <TableHead className="py-3 px-4 w-[32%]">คำอธิบายสินค้า</TableHead>
-                  <TableHead className="py-3 px-4 text-right w-[12%]">หน่วยราคา</TableHead>
-                  <TableHead className="py-3 px-4 text-center w-[12%]">QTY</TableHead>
-                  <TableHead className="py-3 px-4 text-center w-[8%]">DISC?</TableHead>
-                  <TableHead className="py-3 px-4 text-center w-[12%]">ประเภทส่วนลด</TableHead>
-                  <TableHead className="py-3 px-4 text-center w-[10%]">ลดราคา</TableHead>
-                  <TableHead className="py-3 px-4 text-right pr-6 w-[11%]">LINE TOTAL</TableHead>
+                  <TableHead className="py-3 px-4 w-[14%] whitespace-nowrap">SKU</TableHead>
+                  <TableHead className="py-3 px-4 w-[32%] min-w-55">คำอธิบายสินค้า</TableHead>
+                  <TableHead className="py-3 px-4 text-right w-[11%] whitespace-nowrap">หน่วยราคา</TableHead>
+                  <TableHead className="py-3 px-4 text-center w-[11%] whitespace-nowrap">QTY</TableHead>
+                  <TableHead className="py-3 px-4 text-center w-[7%] whitespace-nowrap">DISC?</TableHead>
+                  <TableHead className="py-3 px-4 text-center w-[11%] whitespace-nowrap">ประเภทส่วนลด</TableHead>
+                  <TableHead className="py-3 px-4 text-center w-[12%] whitespace-nowrap">ลดราคา</TableHead>
+                  <TableHead className="py-3 px-4 text-right pr-6 w-[13%] whitespace-nowrap">LINE TOTAL</TableHead>
                 </TableRow>
               </TableHeader>
               <tbody className="divide-y divide-gray-100 text-sm">
@@ -580,11 +580,11 @@ export default function PosPage(): React.JSX.Element {
                     return (
                       <tr key={index} className="hover:bg-gray-50/80 transition-colors">
                         {/* column1 Product Code */}
-                        <td className="py-4 px-4 text-xs text-[#1C1B1B]">{item.product_code || "—"}</td>
+                        <td className="py-4 px-4 text-xs text-[#1C1B1B] whitespace-nowrap">{item.product_code || "—"}</td>
                         {/* column2 Product Name */}
-                        <td className="py-4 px-4">
+                        <td className="py-4 px-4 min-w-55">
                           <div className="flex flex-col gap-1">
-                            <span className="text-sm font-medium text-[#1C1B1B] leading-tight">
+                            <span className="text-sm font-medium text-[#1C1B1B] leading-tight wrap-break-word">
                               {item.product_name}
                             </span>
 
@@ -593,29 +593,29 @@ export default function PosPage(): React.JSX.Element {
                               <div>
                                 <span
                                   title={`ตัดสต็อกจากบริษัท: ${item.supplier_name}`}
-                                  className="inline-flex shrink-0 items-center gap-1 rounded-none bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-[#E51C23] leading-none"
+                                  className="inline-flex shrink-0 items-center gap-1 rounded-none bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-[#E51C23] leading-none whitespace-normal wrap-break-word"
                                 >
-                                  <Building2 size={10} />
-                                  {item.supplier_name}
+                                  <Building2 size={10} className="shrink-0" />
+                                  <span>{item.supplier_name}</span>
                                 </span>
                               </div>
                             )}
 
-                            <span className="text-[11px] text-[#6B7280] leading-tight">
+                            <span className="text-[11px] text-[#6B7280] leading-tight wrap-break-word">
                               PN: {item.part_number || "—"}
                             </span>
                             {(item.brand_name || item.grade_name || item.model_name) && (
-                              <span className="text-[11px] text-[#6B7280] leading-tight">
+                              <span className="text-[11px] text-[#6B7280] leading-tight wrap-break-word">
                                 แบรนด์: {item.brand_name || "ไม่ระบุ"} | เกรด: {item.grade_name || "ทั่วไป"} | รุ่นรถที่รองรับ: {item.model_name || "ทุกรุ่น"}
                               </span>
                             )}
                           </div>
                         </td>
                         {/* column3 Unit Price */}
-                        <td className="py-4 px-4 text-right text-[#1C1B1B]">{item.unit_price.toFixed(2)}</td>
+                        <td className="py-4 px-4 text-right text-[#1C1B1B] whitespace-nowrap">{item.unit_price.toFixed(2)}</td>
                         
                         {/* column4 Quantity */}
-                        <td className="py-4 px-4 text-center">
+                        <td className="py-4 px-4 text-center whitespace-nowrap">
                           <div className="inline-flex items-center border border-gray-300 rounded-none bg-[#F6F3F2]">
                             <button type="button" onClick={() => cartHook.updateQty(index, -1)} className="p-1 px-2 cursor-pointer text-gray-600 hover:text-black"><Minus size={12} /></button>
                             <input
@@ -631,7 +631,7 @@ export default function PosPage(): React.JSX.Element {
                           </div>
                         </td>
                         {/* column5 Discount Toggle */}
-                        <td className="py-4 px-4 text-center">
+                        <td className="py-4 px-4 text-center whitespace-nowrap">
                           <input
                             type="checkbox"
                             disabled={isCompanyCustomer}
@@ -642,7 +642,7 @@ export default function PosPage(): React.JSX.Element {
                           />
                         </td>
                         {/* column6 Discount Type */}
-                        <td className="py-4 px-4 text-center">
+                        <td className="py-4 px-4 text-center whitespace-nowrap">
                           {!isCompanyCustomer && item.discount_type !== "none" ? (
                             <div className="inline-flex bg-[#F6F3F2] p-0.5 rounded-none text-xs">
                               <button type="button" onClick={() => cartHook.handleDiscountTypeChange(index, "amount")} className={`px-2 py-1 transition-all cursor-pointer ${item.discount_type === "amount" ? "bg-[#E51C23] text-white" : "text-[#6B7280] hover:text-gray-600"}`}>฿</button>
@@ -651,7 +651,7 @@ export default function PosPage(): React.JSX.Element {
                           ) : <span className="text-gray-400">—</span>}
                         </td>
                         {/* column7 Discount Value */}
-                        <td className="py-4 px-4 text-center">
+                        <td className="py-4 px-4 text-center whitespace-nowrap">
                           {!isCompanyCustomer && item.discount_type !== "none" ? (
                             <div className="flex flex-col items-center gap-1">
                               <div className="relative inline-flex items-center justify-center px-2 py-1 min-w-18.75 transition-all border bg-gray-100 text-gray-700 border-gray-300 rounded-none">
@@ -670,7 +670,7 @@ export default function PosPage(): React.JSX.Element {
                           ) : <span className="text-gray-400">—</span>}
                         </td>
                         {/* column8 Total */}
-                        <td className="py-4 px-4 text-right pr-6 text-zinc-900 ">
+                        <td className="py-4 px-4 text-right pr-6 text-zinc-900 whitespace-nowrap">
                           <div className="flex justify-end items-center gap-3">
                             <div className="text-right">
                               {itemDiscount + allocatedDiscount > 0 && <span className="text-[11px] text-zinc-400 line-through block ">฿{lineTotal.toFixed(2)}</span>}

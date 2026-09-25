@@ -187,4 +187,29 @@ func TestGenerateSaleOrderPDFWithLogo(t *testing.T) {
 	}
 }
 
+func TestGenerateDebtRepaymentReceiptPDFWithBarcode(t *testing.T) {
+	repayment := entity.PaymentRepayment{
+		ReceiptNumber: "RCP-TEST-001",
+		AmountPaid:    500,
+	}
+	repayment.CreatedAt = time.Now()
+	repayment.Order.OrderNumber = "SO-TEST-001"
+	repayment.Order.Customer.CustomerName = "ลูกค้าทดสอบ"
+	repayments := []entity.PaymentRepayment{repayment}
+
+	companySetting := &entity.CompanySetting{
+		CompanyName: "Test Company",
+	}
+
+	pdfBytes, err := GenerateDebtRepaymentReceiptPDF(repayments, companySetting, func(orderID, repaymentID uint) (float64, error) {
+		return 0, nil
+	})
+	if err != nil {
+		t.Fatalf("GenerateDebtRepaymentReceiptPDF error: %v", err)
+	}
+	if len(pdfBytes) == 0 {
+		t.Fatalf("GenerateDebtRepaymentReceiptPDF returned empty bytes")
+	}
+}
+
 
