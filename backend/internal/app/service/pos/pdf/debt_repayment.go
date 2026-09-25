@@ -176,6 +176,39 @@ func GenerateDebtRepaymentReceiptPDF(
 		})
 	})
 
+	// ส่วนท้ายเอกสาร (Footer) - วาง Barcode ตรงกลางด้านล่างติดขอบ
+	m.RegisterFooter(func() {
+		barcodeVal := firstRepayment.ReceiptNumber
+		if barcodeVal == "" && firstRepayment.Order.OrderNumber != "" {
+			barcodeVal = firstRepayment.Order.OrderNumber
+		}
+		if barcodeVal != "" {
+			m.Row(10, func() {
+				m.Col(12, func() {
+					_ = m.Barcode(barcodeVal, props.Barcode{
+						Center:  true,
+						Percent: 95,
+						Proportion: props.Proportion{
+							Width:  20,
+							Height: 3.5,
+						},
+					})
+				})
+			})
+			// Barcode Text
+			m.Row(4, func() {
+				m.Col(12, func() {
+					m.Text(barcodeVal, props.Text{
+						Size:  8.0,
+						Align: consts.Center,
+						Top:   0.5,
+						Color: HexToColor("#4B5563"),
+					})
+				})
+			})
+		}
+	})
+
 	m.Row(5, func() {})
 
 	// แถบแจ้งเตือนเอกสารถูกยกเลิก (Void / Cancelled Banner)
