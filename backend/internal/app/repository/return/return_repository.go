@@ -374,7 +374,7 @@ func (r *returnRepository) applyApprovedReturn(tx *gorm.DB, returnItem *reEntity
 
 	orderStatus := enum.OrderReturned
 	if totalReturnedQty < totalOrderedQty {
-		orderStatus = enum.OrderStatus("PARTIAL_RETURNED")
+		orderStatus = enum.OrderPartialReturned
 	}
 
 	if err := tx.Model(&reEntity.SaleOrder{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
@@ -680,7 +680,7 @@ func (r *returnRepository) UpdateReturn(returnItem *reEntity.SalesReturn) error 
 				Where("original_order_id = ? AND id <> ? AND status IN ('APPROVED', 'REFUNDED') AND deleted_at IS NULL", returnItem.OriginalOrderID, returnItem.ID).
 				Count(&countApproved)
 			if countApproved > 0 {
-				_ = tx.Model(&reEntity.SaleOrder{}).Where("id = ?", returnItem.OriginalOrderID).Update("status", "PARTIAL_RETURNED").Error
+				_ = tx.Model(&reEntity.SaleOrder{}).Where("id = ?", returnItem.OriginalOrderID).Update("status", enum.OrderPartialReturned).Error
 			} else {
 				_ = tx.Model(&reEntity.SaleOrder{}).Where("id = ?", returnItem.OriginalOrderID).Update("status", "completed").Error
 			}
@@ -709,7 +709,7 @@ func (r *returnRepository) DeleteReturn(id uint) error {
 			Where("original_order_id = ? AND status IN ('APPROVED', 'REFUNDED') AND deleted_at IS NULL", returnItem.OriginalOrderID).
 			Count(&countApproved)
 		if countApproved > 0 {
-			_ = tx.Model(&reEntity.SaleOrder{}).Where("id = ?", returnItem.OriginalOrderID).Update("status", "PARTIAL_RETURNED").Error
+			_ = tx.Model(&reEntity.SaleOrder{}).Where("id = ?", returnItem.OriginalOrderID).Update("status", enum.OrderPartialReturned).Error
 		} else {
 			_ = tx.Model(&reEntity.SaleOrder{}).Where("id = ?", returnItem.OriginalOrderID).Update("status", "completed").Error
 		}

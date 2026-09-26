@@ -594,7 +594,7 @@ func (r *salesHistoryRepository) resolveAndSyncOrderStatus(orders []entity.SaleO
 				if orderTotal > 0 && approvedQty >= orderTotal {
 					targetStatus = enum.OrderReturned
 				} else {
-					targetStatus = enum.OrderStatus("PARTIAL_RETURNED")
+					targetStatus = enum.OrderPartialReturned
 				}
 			}
 		} else if len(clmList) > 0 {
