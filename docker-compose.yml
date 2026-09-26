@@ -45,6 +45,9 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - backend_uploads:/uploads
+      # โมเดล embedding 1.2GB ไม่ได้อยู่ใน git (backend/.gitignore) เก็บใน volume เพื่อให้
+      # ดาวน์โหลดครั้งเดียว แล้วอยู่รอดข้ามการ rebuild อิมเมจ
+      - ai_model_cache:/app/embeddinggemma-300m-ONNX
     networks:
       - app-network
 
@@ -101,6 +104,7 @@ networks:
 
 volumes:
   postgres_data:
+  ai_model_cache:
   backend_uploads:
   backend_barcode:
   backend_qrcode:
