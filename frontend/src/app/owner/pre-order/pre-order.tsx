@@ -687,8 +687,12 @@ export default function PreOrderManager() {
       key: 'actions',
       header: 'จัดการ',
       // แก้ไข/ลบ ได้เฉพาะรายการที่ยังไม่ถูกอนุมัติสั่งซื้อเท่านั้น — พออนุมัติ PO แล้วต้องยกเลิกแทน (หน้ารายละเอียด)
+      // เดิมเช็คแค่ po_status ทำให้ใบที่ถูกยกเลิกแล้ว (status === 'CANCELLED') ยังโชว์ไอคอนแก้ไข/ลบ
+      // ให้กดได้ทั้งที่กดแล้วไม่มีทางแก้ไขจริง (หน้ารายละเอียดจะบังคับเป็นโหมดดูอย่างเดียวเสมอ)
+      // ต้องกันสถานะยกเลิก/เสร็จสิ้นออกจากเงื่อนไขนี้ด้วย ไม่ให้ปุ่มสัญญาว่าทำสิ่งที่ทำไม่ได้จริง
       render: (po: PreOrder) => {
-        const notYetApproved = po.po_status !== 'APPROVED';
+        const notYetApproved = po.po_status !== 'APPROVED'
+          && ['PENDING', 'PO_PENDING', 'PO_DRAFT'].includes(po.status); // เกณฑ์เดียวกับ "editable" ในหน้ารายละเอียด
         return (
           <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
             <div className="w-7 flex items-center justify-center">

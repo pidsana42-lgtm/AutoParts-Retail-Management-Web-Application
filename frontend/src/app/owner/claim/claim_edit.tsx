@@ -12,6 +12,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { getCustomerClaimById, updateCustomerClaim } from '../../../service/http/claim/claim';
 import apiClient from '../../../service/http/apiClient';
 import type { CustomerClaim, CustomerClaimItem } from '../../../interface/claim/claim';
+import { CLAIM_TYPE_LABEL } from '../../../interface/claim/claim';
 import { useToast } from '../../../components/elements/toast';
 
 interface ClaimEditPageProps {
@@ -30,9 +31,9 @@ const parseNote = (note: string | undefined, key: string): string => {
 };
 
 const CLAIM_TYPE_OPTIONS = [
-  { value: 'INSTANT', label: 'เปลี่ยนทันที' },
-  { value: 'SUPPLIER_PENDING', label: 'ส่งบริษัท' },
-  { value: 'CREDIT_ACCOUNT', label: 'ลงบัญชีเชื่อ' },
+  { value: 'INSTANT', label: CLAIM_TYPE_LABEL.INSTANT },
+  { value: 'SUPPLIER_PENDING', label: CLAIM_TYPE_LABEL.SUPPLIER_PENDING },
+  { value: 'CREDIT_ACCOUNT', label: CLAIM_TYPE_LABEL.CREDIT_ACCOUNT },
 ];
 
 const ITEM_STATUS_OPTIONS = [
@@ -333,11 +334,11 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
                         ) : (
                           <div className="text-center">
                             {itemClaimType === 'SUPPLIER_PENDING' ? (
-                              <Badge variant="neutral" size="md">ส่งบริษัท</Badge>
+                              <Badge variant="neutral" size="md">{CLAIM_TYPE_LABEL.SUPPLIER_PENDING}</Badge>
                             ) : itemClaimType === 'CREDIT_ACCOUNT' ? (
-                              <Badge variant="info" size="md">ลงบัญชีเชื่อ</Badge>
+                              <Badge variant="info" size="md">{CLAIM_TYPE_LABEL.CREDIT_ACCOUNT}</Badge>
                             ) : (
-                              <Badge variant="primary" size="md">เปลี่ยนทันที</Badge>
+                              <Badge variant="primary" size="md">{CLAIM_TYPE_LABEL.INSTANT}</Badge>
                             )}
                           </div>
                         )}

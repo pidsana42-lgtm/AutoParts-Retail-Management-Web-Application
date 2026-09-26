@@ -1716,7 +1716,13 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
       );
 
       setFormData({
-        bill_no: `PO-IMPORT-${poData.po_number || poData.order_number || poId}-${Date.now()}`,
+        // เลขบิลปริยายตอนรับของจากใบสั่งซื้อ — po_number มีคำว่า "PO-" นำหน้าอยู่แล้ว
+        // (เช่น "PO-2026-0009") การเติม "PO-IMPORT-" ซ้ำไปข้างหน้าและต่อท้ายด้วย
+        // timestamp เต็ม 13 หลักทำให้ได้เลขบิลที่ยาวจนล้นตาราง (สี่บรรทัด) และอ่านไม่รู้เรื่อง
+        // ตัด prefix "PO-" ที่ซ้ำออก แล้วต่อท้ายด้วยเลขสุ่ม 4 หลักพอกันชนกัน (สไตล์เดียวกับ
+        // เลขบิลปริยายจุดอื่นในไฟล์นี้ที่ใช้ "IMPORT-" + เลขสุ่ม 4 หลัก) — ผู้ใช้แก้เป็นเลขที่บิล
+        // จริงบนเอกสารได้ก่อนกดบันทึกอยู่แล้ว ค่านี้เป็นแค่ค่าเริ่มต้น
+        bill_no: `${String(poData.po_number || poData.order_number || poId).replace(/^PO-/i, '')}-RCV-${Math.floor(1000 + Math.random() * 9000)}`,
         total_amount: subtotal,
         due_date: new Date().toISOString().split('T')[0],
         transport_by: '',
