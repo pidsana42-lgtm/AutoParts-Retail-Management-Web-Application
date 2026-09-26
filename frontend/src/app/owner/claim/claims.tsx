@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, Plus, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, FileText, Loader2, Camera, X, Printer, Truck, CirclePlus, Check, ReceiptText, PenLine, Ban } from 'lucide-react';
-import ClaimTrackingTab from './claim_tracking_tab';
+import ClaimTrackingTab, { isTrackingFinished, resolveTrackingStage } from './claim_tracking_tab';
 import Heading from '../../../components/elements/heading';
 import Card, { CardHeader, CardTitle, CardContent } from '../../../components/elements/card';
 import Input from '../../../components/elements/input';
@@ -543,25 +543,19 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
     const approvedCount = flatRows.filter(r => r.itemStatus === 'APPROVED').length;
     const rejectedCount = flatRows.filter(r => r.itemStatus === 'REJECTED').length;
 
-    // Tracking counts (same logic as ClaimTrackingTab)
+    // Tracking counts (ต้องใช้เกณฑ์เดียวกับตัวกรองใน ClaimTrackingTab)
     const allTrackingItems = rawClaims.flatMap(claim =>
-      (claim.items ?? []).map(item => {
-        const resolution = (item.resolution || '').trim();
-        let stage: 'WAITING_SEND' | 'SENT_TO_SUPPLIER' | 'REPLACEMENT_RECEIVED' | 'COMPLETED' = 'WAITING_SEND';
-        if (resolution === 'COMPLETED' || resolution.includes('ส่งมอบ') || resolution.includes('สำเร็จ')) {
-          stage = 'COMPLETED';
-        } else if (resolution === 'REPLACEMENT_RECEIVED' || resolution.includes('ได้รับของ') || resolution.includes('รับสินค้าทดแทน')) {
-          stage = 'REPLACEMENT_RECEIVED';
-        } else if (resolution === 'SENT_TO_SUPPLIER' || resolution.includes('ส่งบริษัท') || resolution.includes('ส่งโรงงาน')) {
-          stage = 'SENT_TO_SUPPLIER';
-        }
-        return { stage, itemStatus: (item.status ?? 'PENDING').toUpperCase() };
-      })
+      (claim.items ?? [])
+        .filter(item => (item.status ?? 'PENDING').toUpperCase() === 'APPROVED')
+        .map(item => ({
+          stage: resolveTrackingStage(item.resolution),
+          claimType: item.claim_type || claim.claim_type || 'INSTANT',
+        }))
     );
-    const trackingTotalCount = allTrackingItems.filter(i => i.itemStatus !== 'REJECTED').length;
-    const trackingWaitingCount = allTrackingItems.filter(i => i.stage === 'WAITING_SEND' && i.itemStatus !== 'REJECTED').length;
+    const trackingTotalCount = allTrackingItems.length;
+    const trackingWaitingCount = allTrackingItems.filter(i => i.stage === 'WAITING_SEND').length;
     const trackingSentCount = allTrackingItems.filter(i => i.stage === 'SENT_TO_SUPPLIER').length;
-    const trackingCompletedCount = allTrackingItems.filter(i => i.stage === 'COMPLETED').length;
+    const trackingCompletedCount = allTrackingItems.filter(i => isTrackingFinished(i.stage, i.claimType)).length;
 
     const filteredRows = flatRows.filter(row => {
       const q = claimSearch.toLowerCase();
