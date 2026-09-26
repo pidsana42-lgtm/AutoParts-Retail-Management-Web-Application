@@ -10,6 +10,18 @@ import traceback
 EMBEDDING_DIM = 768
 
 
+def resolve_onnx_file(base_dir):
+    """
+    หาไฟล์ .onnx ในโฟลเดอร์โมเดล — คลังบน Hugging Face วางไฟล์ไว้ใต้ onnx/ แต่โฟลเดอร์ที่
+    คัดลอกมาเองมักวางไว้ที่ราก จึงต้องรองรับทั้งสองแบบ คืน None ถ้าไม่พบ
+    """
+    for candidate in (os.path.join(base_dir, "model.onnx"),
+                      os.path.join(base_dir, "onnx", "model.onnx")):
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
 def embedding_text(name, code):
     """
     ข้อความที่นำไปสร้างเวกเตอร์ — ใช้ "ชื่อสินค้า" อย่างเดียว ไม่รวมรหัสสินค้า
@@ -96,7 +108,8 @@ class ProductMatcher:
             from transformers import AutoTokenizer
 
             # Check if model exists locally
-            if not os.path.exists(os.path.join(local_model_path, "model.onnx")):
+            onnx_file = resolve_onnx_file(local_model_path)
+            if onnx_file is None:
                 print(f"ONNX model not found locally in {local_model_path}. Downloading from Hugging Face Hub and saving locally...")
                 from huggingface_hub import snapshot_download
                 snapshot_download(
@@ -104,12 +117,16 @@ class ProductMatcher:
                     local_dir=local_model_path,
                     allow_patterns=["*.json", "*.txt", "*.model", "model.onnx*", "onnx/model.onnx*"],
                 )
+                onnx_file = resolve_onnx_file(local_model_path)
+                if onnx_file is None:
+                    raise FileNotFoundError(
+                        f"ดาวน์โหลดเสร็จแล้วแต่ยังหา model.onnx ไม่เจอใน {local_model_path}")
                 print(f"ONNX model saved successfully to: {local_model_path}")
             else:
-                print(f"ONNX model found locally at: {local_model_path}")
+                print(f"ONNX model found locally at: {onnx_file}")
 
             self.model_id = local_model_path
-            print(f"Attempting to load ONNX embedding model from: {self.model_id}...")
+            print(f"Attempting to load ONNX embedding model from: {onnx_file}...")
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
 
             # โหลดไฟล์ .onnx เข้า onnxruntime โดยตรง แทนการผ่าน optimum เพราะ
@@ -117,10 +134,7 @@ class ProductMatcher:
             #      ทำให้ระบบเงียบ ๆ ตกไปใช้ TF-IDF ทั้งที่ควรใช้ embedding
             #   2. ตัด optimum และ torch ออกจากเส้นทางอนุมานผลได้ทั้งคู่ เหลือแค่ onnxruntime + numpy
             #      ใช้หน่วยความจำประมาณ 1.2 GB ซึ่งรันบนเครื่องสเปกต่ำได้
-            self.model = ort.InferenceSession(
-                os.path.join(self.model_id, "model.onnx"),
-                providers=["CPUExecutionProvider"],
-            )
+            self.model = ort.InferenceSession(onnx_file, providers=["CPUExecutionProvider"])
             self._onnx_input_names = [i.name for i in self.model.get_inputs()]
             self._onnx_output_names = [o.name for o in self.model.get_outputs()]
             self.use_onnx = True
