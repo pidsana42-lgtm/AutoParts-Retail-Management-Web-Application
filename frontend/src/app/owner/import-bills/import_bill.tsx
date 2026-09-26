@@ -1482,7 +1482,12 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
             extractedSupplierName = val;
           } else if (label.includes('ครบกำหนด') || label.includes('due date')) {
             extractedDueDate = normalizeDateValue(row[1] || row[2]);
-          } else if (label.includes('วันที่รับ') || label.includes('bill date') || label.includes('date')) {
+          } else if (
+            // ซัพพลายเออร์แต่ละเจ้าเรียกวันที่บิลไม่เหมือนกัน และคำไทยไม่มีคำว่า "date" อยู่ในนั้น
+            // การเช็คแค่ 'วันที่รับ' กับ 'date' ทำให้ไฟล์ที่ใช้ 'วันที่บิล' ดึงวันที่ไม่ได้เลย
+            // เช็ค 'ครบกำหนด' ไปก่อนหน้านี้แล้ว จึงเหลือเฉพาะวันที่ของตัวบิลตรงนี้
+            label.includes('วันที่') || label.includes('ลงวันที่') || label.includes('date')
+          ) {
             extractedReceiveDate = normalizeDateValue(row[1] || row[2]);
           }
         }
