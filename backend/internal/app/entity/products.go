@@ -2,6 +2,7 @@ package entity
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -117,29 +118,41 @@ func (p *Product) BeforeCreate(tx *gorm.DB) error {
 		}
 	}
 
-	// 4. Count products in the same category & subcategory to get the sequential index
-	var count int64
-	query := tx.Model(&Product{}).Where("category_id = ?", p.CategoryID)
-	if p.SubCategoryID != nil && *p.SubCategoryID > 0 {
-		query = query.Where("sub_category_id = ?", *p.SubCategoryID)
-	} else {
-		query = query.Where("sub_category_id IS NULL OR sub_category_id = 0")
-	}
-	if p.SubSubCategoryID != nil && *p.SubSubCategoryID > 0 {
-		query = query.Where("sub_sub_category_id = ?", *p.SubSubCategoryID)
-	} else {
-		query = query.Where("sub_sub_category_id IS NULL OR sub_sub_category_id = 0")
-	}
+	// 4. หาเลขรันถัดไปจาก "เลขสูงสุดที่เคยใช้กับ prefix นี้" ไม่ใช่จากจำนวนสินค้าในหมวดหมู่
+	//
+	// ของเดิมนับจำนวนแถวในชุด (category, sub_category, sub_sub_category) แล้วบวกหนึ่ง ซึ่งพังสองทาง:
+	//   - คนละชุดหมวดหมู่ให้ prefix เดียวกันได้ (เช่นตอนสร้างสินค้า lookup หมวดย่อยไม่เจอ prefix
+	//     ของหมวดย่อยจะว่าง) แต่ละชุดนับเลขของตัวเองแยกกันแล้วออกรหัสชนกัน — เกิดขึ้นจริงแล้วกับ
+	//     ENG-00043/44/45 ที่ไปซ้ำกับสินค้าคนละตัว ทำให้การจับคู่ด้วยรหัสคืนสินค้าผิดได้
+	//   - ถ้ามีสินค้าถูกลบ จำนวนแถวลดลง เลขรันถอยกลับไปทับรหัสที่เคยใช้
+	//
+	// การอ้างเลขสูงสุดของ prefix ตรง ๆ แก้ได้ทั้งสองกรณี และใช้ Unscoped นับรวมแถวที่ถูกลบแบบ
+	// soft delete ด้วย เพื่อไม่ให้รหัสเดิมถูกนำกลับมาใช้ซ้ำ
+	prefix := catPrefix + subPrefix + subSubPrefix
 
-	if err := query.Count(&count).Error; err != nil {
+	// อ่านรหัสที่ใช้ไปแล้วของ prefix นี้มาหาเลขสูงสุดฝั่ง Go แทนการใช้ฟังก์ชันสตริงของฐานข้อมูล
+	// เพราะไวยากรณ์ substring/regex ต่างกันระหว่าง PostgreSQL กับ SQLite ที่ชุดทดสอบใช้
+	var existingCodes []string
+	if err := tx.Unscoped().Model(&Product{}).
+		Where("product_code LIKE ?", prefix+"-%").
+		Pluck("product_code", &existingCodes).Error; err != nil {
 		return err
 	}
 
-	// Next sequential running number
-	runningNumber := count + 1
+	var maxSuffix int64
+	for _, code := range existingCodes {
+		digits := code[strings.LastIndex(code, "-")+1:]
+		n, err := strconv.ParseInt(digits, 10, 64)
+		if err != nil {
+			continue // รหัสรูปแบบแปลกปลอม ข้ามไปไม่ให้ทำให้เลขรันเพี้ยน
+		}
+		if n > maxSuffix {
+			maxSuffix = n
+		}
+	}
 
-	// 5. Combine into final product code
-	p.Product_Code = fmt.Sprintf("%s%s%s-%05d", catPrefix, subPrefix, subSubPrefix, runningNumber)
+	// 5. รหัสสุดท้าย — เลขถัดจากสูงสุดจึงไม่มีทางชนของเดิม
+	p.Product_Code = fmt.Sprintf("%s-%05d", prefix, maxSuffix+1)
 
 	return nil
 }
