@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	reDto "backend/internal/app/dto/return"
+	reEnum "backend/internal/app/enum"
 	reRepo "backend/internal/app/repository/return"
 	reSvc "backend/internal/app/service/return"
 
@@ -45,6 +46,17 @@ func getRoleFromContext(c *gin.Context) string {
 		}
 	}
 	return ""
+}
+
+// isStoreStaff: เป็นคนของร้านหรือไม่ ใช้เป็นยามชั้นนอกก่อนพิจารณาสิทธิ์ละเอียดรายกรณี
+// ไม่พึ่ง middleware อย่างเดียว เพราะ handler อาจถูกผูกเข้ากับ route กลุ่มอื่นในอนาคต
+func isStoreStaff(c *gin.Context) bool {
+	switch getRoleFromContext(c) {
+	case "OWNER", "MANAGER", "ADMIN", "EMPLOYEE":
+		return true
+	default:
+		return false
+	}
 }
 
 func isOwnerOrManager(c *gin.Context) bool {
@@ -218,16 +230,31 @@ func (ctl *ReturnController) ProcessRefund(c *gin.Context) {
 }
 
 func (ctl *ReturnController) DeleteSalesReturn(c *gin.Context) {
-	if !isOwnerOrManager(c) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "only the store owner can delete a return"})
-		return
-	}
-
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 		return
+	}
+
+	if !isStoreStaff(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only store staff can delete a return"})
+		return
+	}
+
+	// เจ้าของและผู้จัดการลบได้เสมอ ส่วนพนักงานลบได้เฉพาะใบที่ยังไม่ผ่านการพิจารณา
+	// (กรอกผิดแล้วลบเองได้ ไม่ต้องรอผู้บริหารร้าน) ใบที่อนุมัติหรือคืนเงินไปแล้วยังถูกกัน
+	// ด้วย ErrReturnAlreadyProcessed ที่ชั้นข้อมูลอีกชั้นหนึ่ง
+	if !isOwnerOrManager(c) {
+		existing, errGet := ctl.service.GetReturnByID(uint(id))
+		if errGet != nil || existing == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบรายการคืนสินค้านี้"})
+			return
+		}
+		if !strings.EqualFold(strings.TrimSpace(string(existing.Status)), string(reEnum.ReturnPending)) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "รายการคืนสินค้าที่ผ่านการพิจารณาแล้ว ต้องให้เจ้าของร้านหรือผู้จัดการเป็นผู้ลบ"})
+			return
+		}
 	}
 
 	if err := ctl.service.DeleteReturn(uint(id)); err != nil {

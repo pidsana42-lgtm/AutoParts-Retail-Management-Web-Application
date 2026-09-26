@@ -1,9 +1,17 @@
 package claim
 
 import (
+	"errors"
+	"strings"
+
 	"backend/internal/app/entity"
+	"backend/internal/app/enum"
 	"gorm.io/gorm"
 )
+
+// ErrSalesReturnAlreadyRefunded: ใบคืนที่จ่ายเงินคืนลูกค้าไปแล้วห้ามลบ เพราะเงินออกจากร้านจริง
+// และสต็อกถูกปรับไปแล้ว ถ้าลบเอกสารทิ้งยอดในรายงานจะไม่ตรงกับเงินที่จ่ายออกไป
+var ErrSalesReturnAlreadyRefunded = errors.New("ไม่สามารถลบรายการคืนสินค้าที่คืนเงินไปแล้วได้")
 
 // 1. กำหนด Interface สำหรับ SalesReturn Repository
 type SalesReturnRepository interface {
@@ -37,13 +45,13 @@ func (r *salesReturnRepository) CreateSalesReturnItem(item *entity.SalesReturnIt
 // 5. Implement Method: ดึงข้อมูลการเคลมของลูกค้าตาม ID
 func (r *salesReturnRepository) GetSalesReturnByID(id uint) (*entity.SalesReturn, error) {
 	var returnItem entity.SalesReturn
-	
+
 	// ใช้ Preload อ้างอิงจาก Foreign Key ที่มีใน entity.CustomerClaim
 	err := r.db.Preload("OriginalOrder").
 		Preload("CreatedByUser").
 		Preload("ApprovedByUser").
 		First(&returnItem, id).Error
-		
+
 	if err != nil {
 		return nil, err
 	}
@@ -53,13 +61,13 @@ func (r *salesReturnRepository) GetSalesReturnByID(id uint) (*entity.SalesReturn
 // 6. Implement Method: ดึงรายการเคลมของลูกค้าทั้งหมด
 func (r *salesReturnRepository) ListSalesReturns() ([]entity.SalesReturn, error) {
 	returnItems := make([]entity.SalesReturn, 0)
-	
+
 	// ใช้ Preload เพื่อให้ข้อมูลที่เกี่ยวข้องทั้งหมดแนบมาด้วย
 	err := r.db.Preload("OriginalOrder").
 		Preload("CreatedByUser").
 		Preload("ApprovedByUser").
 		Find(&returnItems).Error
-		
+
 	return returnItems, err
 }
 
@@ -70,5 +78,14 @@ func (r *salesReturnRepository) UpdateSalesReturn(returnItem *entity.SalesReturn
 
 // 8. Implement Method: ลบข้อมูลการเคลมของลูกค้า (Soft Delete)
 func (r *salesReturnRepository) DeleteSalesReturn(id uint) error {
+	// เส้นทางนี้เคยลบตรง ๆ โดยไม่ตรวจอะไรเลย ต่างจาก repository/return ที่กันใบซึ่งคืนเงินแล้วไว้
+	// ทำให้กลายเป็นทางลัดข้ามการป้องกัน จึงใส่การ์ดชุดเดียวกันไว้ที่ชั้นข้อมูล
+	var existing entity.SalesReturn
+	if err := r.db.First(&existing, id).Error; err != nil {
+		return err
+	}
+	if strings.EqualFold(strings.TrimSpace(string(existing.Status)), string(enum.ReturnRefunded)) {
+		return ErrSalesReturnAlreadyRefunded
+	}
 	return r.db.Delete(&entity.SalesReturn{}, id).Error
 }
