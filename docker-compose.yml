@@ -1,6 +1,9 @@
 services:
   postgres:
-    image: postgres:15-alpine
+    # pgvector/pgvector:pg15 คือ PostgreSQL 15 ที่มี extension vector ติดตั้งมาให้แล้ว
+    # ใช้แทน postgres:15-alpine เพราะตาราง product_embeddings เก็บคอลัมน์ชนิด vector(768)
+    # และค้นหาความคล้ายด้วยตัวดำเนินการ <=> ผ่าน HNSW index
+    image: pgvector/pgvector:pg15
     container_name: autoparts-postgres
     restart: unless-stopped
     environment:
@@ -29,7 +32,7 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-1234}
       DB_NAME: ${DB_NAME:-Autopartsdb}
-      USE_TFIDF_ONLY: 1
+      # USE_TFIDF_ONLY: 1   # เปิดบรรทัดนี้เฉพาะเมื่อเครื่องแรมไม่พอโหลดโมเดล embedding (~1.2GB)
       OCR_PORT: 8000
     env_file:
       - path: ./backend/.env

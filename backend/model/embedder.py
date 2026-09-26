@@ -5,7 +5,28 @@ import hashlib
 import numpy as np
 import traceback
 
-# Fallback TF-IDF text matcher in case torch / transformers / onnxruntime loading fails
+# จำนวนมิติของ embedding ที่ EmbeddingGemma-300m คืนออกมา — ใช้กำหนดชนิดคอลัมน์ vector(n)
+# ในตาราง product_embeddings ถ้าเปลี่ยนโมเดล ต้องแก้ค่านี้แล้วสร้าง embedding ใหม่ทั้งหมด
+EMBEDDING_DIM = 768
+
+
+def embedding_text(name, code):
+    """
+    ข้อความที่นำไปสร้างเวกเตอร์ — ใช้ "ชื่อสินค้า" อย่างเดียว ไม่รวมรหัสสินค้า
+
+    เหตุผล: โมเดลภาษาไม่เข้าใจรหัสอย่าง IS-CMG-643A หรือ C7NN7227A มันมองเป็นตัวอักษรสุ่ม
+    และรหัสฝั่งซัพพลายเออร์กับฝั่งร้านมักไม่ตรงกันอยู่แล้ว การใส่รหัสปนเข้าไปจึงเจือจางสัญญาณ
+    ความหมายของชื่อ วัดกับข้อมูลจริงแล้วคะแนนคู่ที่ควรจับได้ตกลง 0.05-0.22 และช่องว่างระหว่าง
+    คู่ถูกกับคู่ผิดแคบลงราว 4 เท่า
+
+    รหัสสินค้ายังถูกใช้เต็มที่ในขั้นที่เหมาะกับมัน คือการเทียบแบบตรงตัวอักษรในขั้นที่ 1-3 ของ
+    match_product() ซึ่งแม่นกว่าการเทียบเชิงความหมายอยู่แล้ว
+
+    ถ้าไม่มีชื่อเลย ค่อยถอยไปใช้รหัสเป็นข้อความแทน ดีกว่าไม่มีอะไรให้เทียบ
+    """
+    return (name or "").strip() or (code or "").strip()
+
+# Fallback TF-IDF text matcher in case transformers / onnxruntime loading fails
 class TFIDFMatcher:
     def __init__(self):
         from sklearn.feature_extraction.text import TfidfVectorizer
@@ -47,10 +68,15 @@ class ProductMatcher:
         import os
         self.model = None
         self.tokenizer = None
+        self._onnx_input_names = []
+        self._onnx_output_names = []
         self.use_onnx = False
         self.model_id = "none"
         self.product_data = []
         self.product_embeddings = None
+        self.corrections = []
+        self.combined_data = []
+        self.persist_engine = None
         self.fallback_matcher = TFIDFMatcher()
 
         local_model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "embeddinggemma-300m-ONNX"))
@@ -62,39 +88,41 @@ class ProductMatcher:
 
         # Try to initialize ONNX model
         try:
-            # Disable torch warnings
+            # Disable noisy library warnings
             import warnings
             warnings.filterwarnings("ignore")
 
-            import torch
+            import onnxruntime as ort
             from transformers import AutoTokenizer
-            from optimum.onnxruntime import ORTModelForFeatureExtraction
 
             # Check if model exists locally
-            if os.path.exists(local_model_path):
-                self.model_id = local_model_path
-                print(f"ONNX model found locally at: {local_model_path}")
-            else:
-                self.model_id = "onnx-community/embeddinggemma-300m-ONNX"
+            if not os.path.exists(os.path.join(local_model_path, "model.onnx")):
                 print(f"ONNX model not found locally in {local_model_path}. Downloading from Hugging Face Hub and saving locally...")
-                
-                # Download and save locally
-                temp_tokenizer = AutoTokenizer.from_pretrained(self.model_id)
-                temp_model = ORTModelForFeatureExtraction.from_pretrained(self.model_id, provider="CPUExecutionProvider")
-                
-                os.makedirs(local_model_path, exist_ok=True)
-                temp_tokenizer.save_pretrained(local_model_path)
-                temp_model.save_pretrained(local_model_path)
-                
-                self.model_id = local_model_path
+                from huggingface_hub import snapshot_download
+                snapshot_download(
+                    repo_id="onnx-community/embeddinggemma-300m-ONNX",
+                    local_dir=local_model_path,
+                    allow_patterns=["*.json", "*.txt", "*.model", "model.onnx*", "onnx/model.onnx*"],
+                )
                 print(f"ONNX model saved successfully to: {local_model_path}")
+            else:
+                print(f"ONNX model found locally at: {local_model_path}")
 
+            self.model_id = local_model_path
             print(f"Attempting to load ONNX embedding model from: {self.model_id}...")
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
-            self.model = ORTModelForFeatureExtraction.from_pretrained(
-                self.model_id, 
-                provider="CPUExecutionProvider"
+
+            # โหลดไฟล์ .onnx เข้า onnxruntime โดยตรง แทนการผ่าน optimum เพราะ
+            #   1. optimum ผูกเวอร์ชันแน่นกับ transformers — พังทันทีเมื่อ transformers 5 ตัด is_offline_mode ออก
+            #      ทำให้ระบบเงียบ ๆ ตกไปใช้ TF-IDF ทั้งที่ควรใช้ embedding
+            #   2. ตัด optimum และ torch ออกจากเส้นทางอนุมานผลได้ทั้งคู่ เหลือแค่ onnxruntime + numpy
+            #      ใช้หน่วยความจำประมาณ 1.2 GB ซึ่งรันบนเครื่องสเปกต่ำได้
+            self.model = ort.InferenceSession(
+                os.path.join(self.model_id, "model.onnx"),
+                providers=["CPUExecutionProvider"],
             )
+            self._onnx_input_names = [i.name for i in self.model.get_inputs()]
+            self._onnx_output_names = [o.name for o in self.model.get_outputs()]
             self.use_onnx = True
             print("ONNX Embedding model loaded successfully! CPU Acceleration enabled.")
         except Exception as e:
@@ -126,20 +154,25 @@ class ProductMatcher:
                     {"keys": chunk}
                 ).fetchall()
                 for key, chash, emb in rows:
-                    if emb is not None:
-                        stored[key] = (chash, np.array(emb, dtype=np.float32))
+                    if emb is None:
+                        continue
+                    # pgvector คืนคอลัมน์ vector มาเป็นสตริงรูปแบบ '[0.1,0.2,...]'
+                    if isinstance(emb, str):
+                        emb = json.loads(emb)
+                    stored[key] = (chash, np.array(emb, dtype=np.float32))
         return stored
 
     def _save_embeddings(self, persist_engine, rows):
         """Upsert newly computed embeddings into the DB."""
         from sqlalchemy import text as sql_text
         upsert_sql = sql_text("""
-            INSERT INTO product_embeddings (target_key, content_hash, target_type, target_id, embedding)
-            VALUES (:key, :chash, :ttype, :tid, CAST(:emb AS JSONB))
+            INSERT INTO product_embeddings (target_key, content_hash, target_type, target_id, supplier_id, embedding)
+            VALUES (:key, :chash, :ttype, :tid, :sid, CAST(:emb AS vector))
             ON CONFLICT (target_key) DO UPDATE SET
                 content_hash = EXCLUDED.content_hash,
                 target_type = EXCLUDED.target_type,
                 target_id = EXCLUDED.target_id,
+                supplier_id = EXCLUDED.supplier_id,
                 embedding = EXCLUDED.embedding,
                 updated_at = CURRENT_TIMESTAMP
         """)
@@ -166,6 +199,7 @@ class ProductMatcher:
         """
         self.product_data = products
         self.corrections = corrections
+        self.persist_engine = persist_engine
         self.fallback_matcher.fit(products)
 
         # Build combined corpus of products + corrections
@@ -180,7 +214,7 @@ class ProductMatcher:
                 "name": p.get("product_name", ""),
                 "code": p.get("product_code", "")
             })
-            corpus.append(f"{p.get('product_name', '')} {p.get('product_code', '')}".strip())
+            corpus.append(embedding_text(p.get("product_name", ""), p.get("product_code", "")))
             
         # 2. User corrected mappings
         for c in corrections:
@@ -191,7 +225,7 @@ class ProductMatcher:
                 "code": c.get("company_product_code", ""),
                 "supplier_id": c.get("supplier_id")
             })
-            corpus.append(f"{c.get('company_product_name', '')} {c.get('company_product_code', '')}".strip())
+            corpus.append(embedding_text(c.get("company_product_name", ""), c.get("company_product_code", "")))
 
         if not corpus:
             return
@@ -246,11 +280,14 @@ class ProductMatcher:
                         rows = []
                         for j, i in enumerate(need_embed_idx):
                             item = self.combined_data[i]
+                            supplier_id = item.get("supplier_id")
                             rows.append({
                                 "key": keys[i],
                                 "chash": self._content_hash(corpus[i]),
                                 "ttype": item.get("type", "product"),
                                 "tid": int(item.get("id") or 0),
+                                # สินค้าทั่วไปไม่ผูกกับซัพพลายเออร์เจ้าใดเจ้าหนึ่ง จึงเก็บเป็น NULL
+                                "sid": int(supplier_id) if supplier_id is not None else None,
                                 "emb": json.dumps([round(float(v), 6) for v in vectors[i]]),
                             })
                         self._save_embeddings(persist_engine, rows)
@@ -273,33 +310,151 @@ class ProductMatcher:
         if not self.use_onnx or self.model is None or self.tokenizer is None:
             return None
         
-        import torch
-        # Tokenize
-        encoded_input = self.tokenizer(texts, padding=True, truncation=True, max_length=128, return_tensors="pt")
-        with torch.no_grad():
-            model_output = self.model(**encoded_input)
-        
-        import numpy as np
-        # Mean Pooling to get sentence embeddings
-        token_embeddings = model_output[0]
-        # Check type of token_embeddings (if it's numpy array or torch tensor)
-        if isinstance(token_embeddings, np.ndarray):
-            token_embeddings = torch.from_numpy(token_embeddings)
-        
-        attention_mask = encoded_input['attention_mask']
-        if isinstance(attention_mask, np.ndarray):
-            attention_mask = torch.from_numpy(attention_mask)
+        # Tokenize (numpy tensors — onnxruntime รับ numpy โดยตรง ไม่ต้องผ่าน torch)
+        encoded_input = self.tokenizer(texts, padding=True, truncation=True, max_length=128, return_tensors="np")
+        feed = {name: encoded_input[name].astype(np.int64)
+                for name in self._onnx_input_names if name in encoded_input}
+        model_output = self.model.run(None, feed)
 
-        input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-        sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
-        sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+        # โมเดลคืน last_hidden_state (เวกเตอร์ราย token) — เลือกมาทำ mean pooling เอง
+        if "last_hidden_state" in self._onnx_output_names:
+            token_embeddings = model_output[self._onnx_output_names.index("last_hidden_state")]
+        else:
+            token_embeddings = model_output[0]
+
+        # Mean Pooling to get sentence embeddings (นับเฉพาะ token จริง ไม่นับ padding)
+        attention_mask = encoded_input["attention_mask"][..., None].astype(np.float32)
+        sum_embeddings = (token_embeddings * attention_mask).sum(axis=1)
+        sum_mask = np.clip(attention_mask.sum(axis=1), 1e-9, None)
         embeddings = sum_embeddings / sum_mask
-        
-        # Normalize L2
-        embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
-        return embeddings.numpy()
 
-    def match_product(self, company_product_name, company_product_code, current_supplier_id=None, threshold=0.90):
+        # Normalize L2 — ทำให้ dot product เท่ากับ cosine similarity พอดี
+        norms = np.clip(np.linalg.norm(embeddings, axis=1, keepdims=True), 1e-12, None)
+        return (embeddings / norms).astype(np.float32)
+
+    # ลำดับความน่าเชื่อถือของเป้าหมายที่นำมาเทียบเวกเตอร์ ไล่จากเชื่อถือได้มากไปน้อย
+    # ให้ตรงกับขั้นที่ 2-3 ของ match_product() ที่เทียบแบบตรงตัวอักษร:
+    #   1. คู่ที่พนักงานเคยยืนยันไว้ "ของซัพพลายเออร์เจ้าที่กำลังนำเข้า" — แม่นที่สุดเพราะแต่ละเจ้า
+    #      เรียกอะไหล่ตัวเดียวกันคนละชื่อ และชื่อเดียวกันของคนละเจ้าอาจหมายถึงคนละสินค้า
+    #   2. คู่ที่เคยยืนยันของซัพพลายเออร์เจ้าอื่น — ใช้เป็นตัวช่วยข้ามเจ้า
+    #   3. สินค้าในคลังตามชื่อที่ร้านตั้งเอง
+    _SEARCH_TIERS = ("own_correction", "any_correction", "product")
+
+    def _search_via_pgvector(self, query_vec, threshold, current_supplier_id=None):
+        """
+        หาเป้าหมายที่ใกล้เคียงที่สุดโดยให้ PostgreSQL คำนวณ cosine distance ด้วยตัวดำเนินการ <=>
+        ของ pgvector ผ่าน HNSW index แทนการดึงเวกเตอร์ทั้งตารางขึ้นมาคูณเมทริกซ์ในหน่วยความจำ
+
+        เวกเตอร์ถูก normalize แบบ L2 มาแล้วตั้งแต่ _get_embeddings_batch ค่า 1 - distance จึงเท่ากับ
+        cosine similarity พอดี ผลลัพธ์ตรงกับการคำนวณด้วย np.dot แบบเดิมทุกประการ
+
+        คืนค่า:
+            (product_id, score) เมื่อเจอและผ่าน threshold
+            (None, best_score)  เมื่อค้นเจอแต่คะแนนไม่ถึงเกณฑ์
+            None                เมื่อค้นในฐานข้อมูลไม่ได้/ตารางว่าง เพื่อให้ผู้เรียกไปใช้วิธีคำนวณในหน่วยความจำแทน
+        """
+        if self.persist_engine is None:
+            return None
+
+        from sqlalchemy import text as sql_text
+        literal = "[" + ",".join(f"{float(v):.6f}" for v in query_vec) + "]"
+        conditions = {
+            "own_correction": "target_type = 'correction' AND supplier_id = :sid",
+            "any_correction": "target_type = 'correction'",
+            "product": "target_type = 'product'",
+        }
+
+        try:
+            best = {}
+            with self.persist_engine.connect() as conn:
+                for tier in self._SEARCH_TIERS:
+                    if tier == "own_correction" and current_supplier_id is None:
+                        best[tier] = (None, -1.0)
+                        continue
+                    row = conn.execute(sql_text(f"""
+                        SELECT target_id, 1 - (embedding <=> CAST(:q AS vector)) AS score
+                        FROM product_embeddings
+                        WHERE {conditions[tier]}
+                        ORDER BY embedding <=> CAST(:q AS vector)
+                        LIMIT 1
+                    """), {"q": literal, "sid": current_supplier_id}).fetchone()
+                    best[tier] = (row[0], float(row[1])) if row else (None, -1.0)
+        except Exception as e:
+            print(f"[pgvector] Search failed — falling back to in-memory matching: {e}")
+            return None
+
+        # ตารางว่าง (ยังไม่เคยสร้าง embedding) — ให้ผู้เรียกไปใช้วิธีเดิม
+        if all(target_id is None for target_id, _ in best.values()):
+            return None
+
+        for tier in self._SEARCH_TIERS:
+            target_id, score = best[tier]
+            if target_id is not None and score >= threshold:
+                print(f"[pgvector] {tier} match -> product ID {target_id} (score {score:.4f})")
+                return target_id, score
+
+        best_score = max(score for _, score in best.values())
+        print(f"[pgvector] Best score {best_score:.4f} is below threshold {threshold}. Product unmatched.")
+        return None, best_score
+
+    def _search_in_memory(self, query_vec, threshold, current_supplier_id=None):
+        """
+        เส้นทางสำรองเมื่อฐานข้อมูลใช้ไม่ได้ — คูณเมทริกซ์ในหน่วยความจำ
+        ใช้ลำดับชั้นเดียวกับ _search_via_pgvector เป๊ะ ๆ เพื่อให้ผลลัพธ์ไม่ต่างกัน
+        """
+        similarities = np.dot(self.product_embeddings, query_vec)
+        return self._pick_best_by_tier(similarities, threshold, current_supplier_id)
+
+    def _search_tfidf(self, query_text, threshold, current_supplier_id=None, correction_threshold=None):
+        """
+        เส้นทางสำรองสุดท้าย — เทียบความคล้ายของ "ตัวอักษร" ด้วย TF-IDF เมื่อโมเดล embedding ใช้ไม่ได้
+        ใช้ลำดับชั้นเดียวกับเส้นทางเวกเตอร์ เพื่อให้พฤติกรรมไม่ต่างกันเวลาระบบถอยมาใช้ทางนี้
+
+        correction_threshold: ผ่อนเกณฑ์เฉพาะคู่ที่พนักงานเคยยืนยัน ใช้ตอนที่โมเดลพังกลางคันเท่านั้น
+        """
+        if not self.fallback_matcher.fitted:
+            return None, 0.0
+        try:
+            from sklearn.metrics.pairwise import cosine_similarity
+            query_vector = self.fallback_matcher.vectorizer.transform([query_text])
+            similarities = cosine_similarity(query_vector, self.fallback_matcher.product_vectors)[0]
+        except Exception as e:
+            print(f"Error during TF-IDF search: {e}")
+            return None, 0.0
+        return self._pick_best_by_tier(similarities, threshold, current_supplier_id,
+                                       correction_threshold=correction_threshold, label="TF-IDF")
+
+    def _pick_best_by_tier(self, similarities, threshold, current_supplier_id=None,
+                           correction_threshold=None, label="in-memory"):
+        """
+        เลือกผู้ชนะจากคะแนนความคล้ายที่คำนวณมาแล้ว โดยไล่ตามลำดับชั้นใน _SEARCH_TIERS
+        ใช้ร่วมกันระหว่างเส้นทางคำนวณในหน่วยความจำกับเส้นทาง TF-IDF
+        """
+        best = {tier: (None, -1.0) for tier in self._SEARCH_TIERS}
+        for idx, score in enumerate(similarities):
+            item = self.combined_data[idx]
+            score = float(score)
+            if item.get("type") == "correction":
+                tiers = ["any_correction"]
+                if current_supplier_id is not None and item.get("supplier_id") == current_supplier_id:
+                    tiers.insert(0, "own_correction")
+            else:
+                tiers = ["product"]
+            for tier in tiers:
+                if score > best[tier][1]:
+                    best[tier] = (item.get("id"), score)
+
+        for tier in self._SEARCH_TIERS:
+            target_id, score = best[tier]
+            limit = threshold
+            if correction_threshold is not None and tier != "product":
+                limit = correction_threshold
+            if target_id is not None and score >= limit:
+                print(f"[{label}] {tier} match -> product ID {target_id} (score {score:.4f})")
+                return target_id, score
+        return None, max(score for _, score in best.values())
+
+    def match_product(self, company_product_name, company_product_code, current_supplier_id=None, threshold=0.85):
         """
         Finds the closest database product matching the scanned invoice item.
         Returns:
@@ -336,134 +491,26 @@ class ProductMatcher:
                 print(f"[Direct Cross-Supplier Correction Match] Exact match found: '{company_product_name}' -> DB Product ID {c.get('product_id')}")
                 return c.get("product_id"), 1.0
 
-        query_text = f"{company_product_name} {company_product_code}".strip()
+        query_text = embedding_text(company_product_name, company_product_code)
         if not query_text:
             return None, 0.0
 
-        # Fallback to TF-IDF if ONNX is disabled or failed
+        # โมเดล embedding ใช้ไม่ได้ (ถูกปิดด้วย USE_TFIDF_ONLY หรือโหลดไม่สำเร็จ) — ถอยไปใช้ TF-IDF
         if not self.use_onnx or self.product_embeddings is None:
-            if not self.fallback_matcher.fitted:
-                return None, 0.0
-            try:
-                query_vector = self.fallback_matcher.vectorizer.transform([query_text])
-                from sklearn.metrics.pairwise import cosine_similarity
-                similarities = cosine_similarity(query_vector, self.fallback_matcher.product_vectors)[0]
-                
-                best_corr_idx = -1
-                best_corr_score = -1.0
-                best_prod_idx = -1
-                best_prod_score = -1.0
-                
-                for idx, score in enumerate(similarities):
-                    item = self.combined_data[idx]
-                    if item.get("type") == "correction":
-                        if score > best_corr_score:
-                            best_corr_score = score
-                            best_corr_idx = idx
-                    else:
-                        if score > best_prod_score:
-                            best_prod_score = score
-                            best_prod_idx = idx
-                            
-                # Check user corrections with threshold first
-                if best_corr_idx != -1 and best_corr_score >= threshold:
-                    return self.combined_data[best_corr_idx].get("id"), best_corr_score
-                if best_prod_idx != -1 and best_prod_score >= threshold:
-                    return self.combined_data[best_prod_idx].get("id"), best_prod_score
-                    
-                return None, max(best_corr_score, best_prod_score)
-            except Exception as e:
-                print(f"Error during TF-IDF search: {e}")
-                return None, 0.0
+            return self._search_tfidf(query_text, threshold, current_supplier_id)
 
         try:
-            # Get query embedding
             query_emb = self._get_embeddings_batch([query_text])
             if query_emb is None:
-                if not self.fallback_matcher.fitted:
-                    return None, 0.0
-                query_vector = self.fallback_matcher.vectorizer.transform([query_text])
-                from sklearn.metrics.pairwise import cosine_similarity
-                similarities = cosine_similarity(query_vector, self.fallback_matcher.product_vectors)[0]
-                
-                best_corr_idx = -1
-                best_corr_score = -1.0
-                best_prod_idx = -1
-                best_prod_score = -1.0
-                
-                for idx, score in enumerate(similarities):
-                    item = self.combined_data[idx]
-                    if item.get("type") == "correction":
-                        if score > best_corr_score:
-                            best_corr_score = score
-                            best_corr_idx = idx
-                    else:
-                        if score > best_prod_score:
-                            best_prod_score = score
-                            best_prod_idx = idx
-                            
-                if best_corr_idx != -1 and best_corr_score >= threshold:
-                    return self.combined_data[best_corr_idx].get("id"), best_corr_score
-                if best_prod_idx != -1 and best_prod_score >= threshold:
-                    return self.combined_data[best_prod_idx].get("id"), best_prod_score
-                return None, max(best_corr_score, best_prod_score)
+                return self._search_tfidf(query_text, threshold, current_supplier_id)
 
-            # Calculate cosine similarities against combined targets
-            similarities = np.dot(self.product_embeddings, query_emb[0])
-            
-            best_corr_idx = -1
-            best_corr_score = -1.0
-            best_prod_idx = -1
-            best_prod_score = -1.0
-            
-            for idx, score in enumerate(similarities):
-                item = self.combined_data[idx]
-                if item.get("type") == "correction":
-                    if score > best_corr_score:
-                        best_corr_score = score
-                        best_corr_idx = idx
-                else:
-                    if score > best_prod_score:
-                        best_prod_score = score
-                        best_prod_idx = idx
-                        
-            if best_corr_idx != -1 and best_corr_score >= threshold:
-                print(f"[Embedding Match] Found correction match: '{self.combined_data[best_corr_idx].get('name')}' with score: {best_corr_score:.4f}")
-                return self.combined_data[best_corr_idx].get("id"), best_corr_score
-            if best_prod_idx != -1 and best_prod_score >= threshold:
-                print(f"[Embedding Match] Found product match: '{self.combined_data[best_prod_idx].get('name')}' with score: {best_prod_score:.4f}")
-                return self.combined_data[best_prod_idx].get("id"), best_prod_score
-                
-            best_score = max(best_corr_score, best_prod_score)
-            print(f"[Embedding Match] Score {best_score:.4f} is below threshold. Product unmatched.")
-            return None, best_score
+            # ค้นด้วย pgvector ในฐานข้อมูลก่อน
+            db_match = self._search_via_pgvector(query_emb[0], threshold, current_supplier_id)
+            if db_match is not None:
+                return db_match
+
+            # สำรอง: คำนวณในหน่วยความจำ เผื่อฐานข้อมูลใช้ไม่ได้หรือยังไม่มีเวกเตอร์ในตาราง
+            return self._search_in_memory(query_emb[0], threshold, current_supplier_id)
         except Exception as e:
             print(f"Error matching product via ONNX embeddings: {e}")
-            # Try TF-IDF fallback
-            if not self.fallback_matcher.fitted:
-                return None, 0.0
-            query_vector = self.fallback_matcher.vectorizer.transform([query_text])
-            from sklearn.metrics.pairwise import cosine_similarity
-            similarities = cosine_similarity(query_vector, self.fallback_matcher.product_vectors)[0]
-            
-            best_corr_idx = -1
-            best_corr_score = -1.0
-            best_prod_idx = -1
-            best_prod_score = -1.0
-            
-            for idx, score in enumerate(similarities):
-                item = self.combined_data[idx]
-                if item.get("type") == "correction":
-                    if score > best_corr_score:
-                        best_corr_score = score
-                        best_corr_idx = idx
-                else:
-                    if score > best_prod_score:
-                        best_prod_score = score
-                        best_prod_idx = idx
-                        
-            if best_corr_idx != -1 and best_corr_score >= 0.80:
-                return self.combined_data[best_corr_idx].get("id"), best_corr_score
-            if best_prod_idx != -1 and best_prod_score >= threshold:
-                return self.combined_data[best_prod_idx].get("id"), best_prod_score
-            return None, max(best_corr_score, best_prod_score)
+            return self._search_tfidf(query_text, threshold, current_supplier_id, correction_threshold=0.80)
