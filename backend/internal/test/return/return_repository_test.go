@@ -139,7 +139,9 @@ func seedCompletedOrderWithReturn(t *testing.T, db *gorm.DB, refundAmount float6
 	return &salesReturn, &order, &product
 }
 
-func TestApproveReturn_Success_UpdatesReturnAndOrderStatus(t *testing.T) {
+// คืนบางส่วน: สั่ง 5 คืน 2 -> ออเดอร์ต้องเป็น PARTIAL_RETURNED ไม่ใช่คืนครบ
+// (เทสต์เดิมใช้ข้อมูลชุดนี้แต่คาดหวัง OrderReturned จึงตกมาตลอด — ตัวโค้ดถูกอยู่แล้ว)
+func TestApproveReturn_PartialQty_MarksOrderPartialReturned(t *testing.T) {
 	db := setupReturnTestDB(t)
 	repo := returnRepo.NewReturnRepository(db)
 	salesReturn, order, _ := seedCompletedOrderWithReturn(t, db, 200, 2, 5)
@@ -156,7 +158,22 @@ func TestApproveReturn_Success_UpdatesReturnAndOrderStatus(t *testing.T) {
 
 	var updatedOrder entity.SaleOrder
 	require.NoError(t, db.First(&updatedOrder, order.ID).Error)
-	require.Equal(t, enum.OrderReturned, updatedOrder.Status)
+	require.Equalf(t, enum.OrderPartialReturned, updatedOrder.Status,
+		"คืน 2 จาก 5 ชิ้น ออเดอร์ต้องเป็นคืนบางส่วน")
+}
+
+// คืนครบทุกชิ้น: สั่ง 5 คืน 5 -> ออเดอร์ต้องเป็น returned
+func TestApproveReturn_FullQty_MarksOrderReturned(t *testing.T) {
+	db := setupReturnTestDB(t)
+	repo := returnRepo.NewReturnRepository(db)
+	salesReturn, order, _ := seedCompletedOrderWithReturn(t, db, 200, 5, 5)
+
+	require.NoError(t, repo.ApproveReturn(salesReturn.ID, 42))
+
+	var updatedOrder entity.SaleOrder
+	require.NoError(t, db.First(&updatedOrder, order.ID).Error)
+	require.Equalf(t, enum.OrderReturned, updatedOrder.Status,
+		"คืนครบทั้ง 5 ชิ้น ออเดอร์ต้องเป็นคืนครบ")
 }
 
 func TestApproveReturn_RefundExceedsOrderTotal_RollsBackWithoutChanges(t *testing.T) {
