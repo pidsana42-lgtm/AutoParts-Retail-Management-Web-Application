@@ -85,13 +85,13 @@ export default function POView({
           นำเข้าสินค้าจากบิล
         </button>
         <ChevronRight size={14} className="text-gray-400" />
-        <span className="text-[#1C1B1B] font-bold">อ้างอิงใบสั่งซื้อ (PO)</span>
+        <span className="text-[#1C1B1B] font-bold">อ้างอิงใบสั่งซื้อ</span>
       </nav>
 
       {/* Header Bar */}
       <div className="mb-8">
         <Heading level="h1" className="mb-0 font-extrabold text-[#1C1B1B]">
-          นำเข้าบิลโดยอ้างอิงใบสั่งซื้อ (PO)
+          นำเข้าบิลโดยอ้างอิงใบสั่งซื้อ
         </Heading>
       </div>
 
@@ -103,7 +103,7 @@ export default function POView({
           <div className="flex gap-2">
             <input 
               type="text"
-              placeholder="พิมพ์เลขที่ PO (เช่น PO-202607-001) หรือชื่อผู้จัดจำหน่าย"
+              placeholder="พิมพ์เลขที่ใบสั่งซื้อ (เช่น PO-202607-001) หรือชื่อผู้จัดจำหน่าย"
               value={poSearchQuery}
               onChange={(e) => setPoSearchQuery(e.target.value)}
               className="w-full bg-white border border-gray-300 rounded-none p-3 text-sm focus:border-[#e51c23] focus:ring-1 focus:ring-[#e51c23] text-gray-800 font-medium shadow-2xs"
@@ -166,7 +166,7 @@ export default function POView({
             <div className="flex flex-col items-center justify-center py-12 text-gray-400">
               <FileText size={48} className="text-gray-300 mb-2" />
               <span className="text-sm font-bold text-gray-500">ไม่พบรายการใบสั่งซื้อที่ตรงกับเงื่อนไข</span>
-              <span className="text-xs text-gray-400 mt-1">กรุณาตรวจสอบชื่อค้นหา หรือสร้างใบสั่งซื้อ (PO) ก่อนในหน้าระบบสั่งซื้อ</span>
+              <span className="text-xs text-gray-400 mt-1">กรุณาตรวจสอบชื่อค้นหา หรือสร้างใบสั่งซื้อก่อนในหน้าระบบสั่งซื้อ</span>
             </div>
           ) : (
             <Card className="overflow-hidden" noPadding>
@@ -178,7 +178,7 @@ export default function POView({
                     <TableHead>ประเภทสินค้า</TableHead>
                     <TableHead>วันที่ออกเอกสาร</TableHead>
                     <TableHead className="text-right">ยอดเงินรวม</TableHead>
-                    <TableHead className="text-center">สถานะ PO</TableHead>
+                    <TableHead className="text-center">สถานะใบสั่งซื้อ</TableHead>
                     <TableHead className="text-center pr-6">ดำเนินการ</TableHead>
                   </TableRow>
                 </TableHeader>
