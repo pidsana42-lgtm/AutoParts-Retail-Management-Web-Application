@@ -148,3 +148,81 @@ func TestImportEdge_EmptyProductNameDoesNotCollide(t *testing.T) {
 	require.NotEqual(t, saved[0].ProductID, saved[1].ProductID,
 		"สองบรรทัดที่ไม่มีชื่อถูกยุบเป็นสินค้าตัวเดียวกัน จำนวนจะรวมผิด")
 }
+
+// ── F. การปรับราคาทุนเป็นอำนาจของเจ้าของร้านคนเดียว ──────────────────────────
+//
+// ผู้จัดการนำเข้าบิลได้ตามปกติ แต่ถ้าบิลมีรายการที่ราคาทุนต่างจากในระบบ รายการนั้นต้องถูก
+// กันไว้รอเจ้าของอนุมัติ ไม่นับเข้าสต็อกทันที (PendingReceiveQuantity) และบิลต้องยังไม่ verified
+// เดิม repository นับผู้จัดการเป็นผู้มีสิทธิ์ จึงขัดกับ bill_controller ที่ห้ามผู้จัดการกดอนุมัติ
+func TestImportEdge_PriceChangeApprovalIsOwnerOnly(t *testing.T) {
+	for _, tc := range []struct {
+		role           string
+		wantVerified   bool
+		wantPendingQty int
+		wantStockAdded int
+	}{
+		{"Owner", true, 0, 10},
+		{"Manager", false, 10, 0},
+		{"Employee", false, 10, 0},
+	} {
+		t.Run(tc.role, func(t *testing.T) {
+			db := setupImportBillTestDB(t)
+			repo := billRepo.NewImportBillRepository(db)
+			product, supplier := seedProductForImport(t, db, 100) // ราคาทุนเดิม 100
+			require.NoError(t, db.Model(product).Update("quantity", 0).Error)
+
+			bill := newTestBill("BUG-F-"+tc.role, supplier.ID)
+			items := []entity.BillItem{{
+				ItemSequence: 1, ProductID: product.ID,
+				CompanyProductName: product.Product_Name, CompanyProductCode: "SUP-1",
+				OrderQuantity: 10, Unit: "ชิ้น", ConversionFactor: 1,
+				PricePerUnit: 250, NetAmount: 2500, // ราคาทุนเปลี่ยนจาก 100 -> 250
+			}}
+			require.NoError(t, repo.ConfirmBillImportTransaction(bill, items, nil, tc.role))
+
+			var savedBill entity.Bill
+			require.NoError(t, db.First(&savedBill, bill.ID).Error)
+			require.Equalf(t, tc.wantVerified, savedBill.IsVerified,
+				"%s: สถานะอนุมัติบิลไม่ตรงกับที่ควรเป็น", tc.role)
+
+			var savedItem entity.BillItem
+			require.NoError(t, db.Where("bill_id = ?", bill.ID).First(&savedItem).Error)
+			require.Equalf(t, tc.wantPendingQty, savedItem.PendingReceiveQuantity,
+				"%s: จำนวนที่กันไว้รออนุมัติไม่ตรง", tc.role)
+
+			var after entity.Product
+			require.NoError(t, db.First(&after, product.ID).Error)
+			require.Equalf(t, tc.wantStockAdded, after.Quantity,
+				"%s: จำนวนที่เข้าสต็อกจริงไม่ตรง", tc.role)
+		})
+	}
+}
+
+// บิลที่ราคาทุนไม่เปลี่ยน ใครนำเข้าก็ผ่านได้ทันที ไม่ต้องรอเจ้าของ
+func TestImportEdge_NoPriceChangeAutoApprovesForAnyRole(t *testing.T) {
+	for _, role := range []string{"Owner", "Manager", "Employee"} {
+		t.Run(role, func(t *testing.T) {
+			db := setupImportBillTestDB(t)
+			repo := billRepo.NewImportBillRepository(db)
+			product, supplier := seedProductForImport(t, db, 100)
+			require.NoError(t, db.Model(product).Update("quantity", 0).Error)
+
+			bill := newTestBill("BUG-G-"+role, supplier.ID)
+			items := []entity.BillItem{{
+				ItemSequence: 1, ProductID: product.ID,
+				CompanyProductName: product.Product_Name, CompanyProductCode: "SUP-1",
+				OrderQuantity: 7, Unit: "ชิ้น", ConversionFactor: 1,
+				PricePerUnit: 100, NetAmount: 700, // ราคาทุนเท่าเดิม
+			}}
+			require.NoError(t, repo.ConfirmBillImportTransaction(bill, items, nil, role))
+
+			var savedBill entity.Bill
+			require.NoError(t, db.First(&savedBill, bill.ID).Error)
+			require.Truef(t, savedBill.IsVerified, "%s: บิลที่ราคาไม่เปลี่ยนควรผ่านทันที", role)
+
+			var after entity.Product
+			require.NoError(t, db.First(&after, product.ID).Error)
+			require.Equalf(t, 7, after.Quantity, "%s: ของต้องเข้าสต็อกครบ", role)
+		})
+	}
+}
