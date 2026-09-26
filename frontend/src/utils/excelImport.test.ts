@@ -69,3 +69,29 @@ describe('Import item validation', () => {
     expect(issues[0].fields).toEqual(['quantity']);
   });
 });
+
+// วันที่ที่มาจากไฟล์ CSV/Excel ต้องไม่เพี้ยนเพราะเขตเวลา — ก่อนหน้านี้ใช้ toISOString()
+// ซึ่งแปลงเป็น UTC ทำให้วันที่ที่ถูกตีความเป็นเที่ยงคืนเวลาไทย (UTC+7) ถอยไป 1 วัน
+describe('normalizeDateValue — รูปแบบวันที่ที่พบในบิลจริง', () => {
+  it.each([
+    ['ISO', '2025-08-01', '2025-08-01'],
+    ['dd/mm/yyyy ค.ศ.', '01/08/2025', '2025-08-01'],
+    ['dd/mm/yyyy พ.ศ.', '26/07/2568', '2025-07-26'],
+    ['dd/mm/yy พ.ศ.', '26/07/68', '2025-07-26'],
+    ['มีเว้นวรรคหน้าหลัง', ' 2025-08-01 ', '2025-08-01'],
+    ['ข้อความอังกฤษย่อ', 'Aug 1 2025', '2025-08-01'],
+    ['ข้อความอังกฤษเต็ม', 'August 1, 2025', '2025-08-01'],
+  ])('%s: %s', (_label, input, want) => {
+    expect(normalizeDateValue(input)).toBe(want);
+  });
+
+  it('รับ Date object ตามเขตเวลาเครื่อง ไม่ถอยวัน', () => {
+    expect(normalizeDateValue(new Date(2025, 7, 1))).toBe('2025-08-01');
+  });
+
+  it('ค่าที่ไม่ใช่วันที่คืนค่าว่าง', () => {
+    expect(normalizeDateValue('ไม่ใช่วันที่')).toBe('');
+    expect(normalizeDateValue('')).toBe('');
+    expect(normalizeDateValue(null)).toBe('');
+  });
+});
