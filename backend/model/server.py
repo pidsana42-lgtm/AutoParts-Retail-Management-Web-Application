@@ -85,7 +85,10 @@ def init_db():
     db_password = os.getenv("DB_PASSWORD", "1234")
     db_name = os.getenv("DB_NAME", "Autopartsdb")
     
-    url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    # ระบุไดรเวอร์ให้ชัดเจน อย่าปล่อยให้ SQLAlchemy เลือกเอง — ตั้งแต่ SQLAlchemy 2.1
+    # ค่าปริยายของ postgresql:// เปลี่ยนจาก psycopg2 เป็น psycopg v3 ซึ่งไม่ได้ติดตั้งไว้
+    # ทำให้ต่อฐานข้อมูลไม่ได้ (No module named 'psycopg') ทันทีที่ build อิมเมจใหม่
+    url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
     try:
         print(f"Connecting to database at {db_host}:{db_port}/{db_name}...")
         engine = create_engine(url)
