@@ -91,11 +91,18 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 		}
 
 		isDraft := strings.EqualFold(bill.PaymentStatus, "draft")
-		isOwner := strings.EqualFold(role, string(enum.RoleOwner)) || strings.EqualFold(role, string(enum.RoleManager)) || strings.EqualFold(role, "Owner") || strings.EqualFold(role, "Manager") || strings.EqualFold(role, "Admin")
-		// priceApprovedContext: บริบทตอนนี้ถือว่าราคาที่เปลี่ยนไปได้รับการอนุมัติแล้วหรือยัง (เจ้าของ/ผู้จัดการนำเข้าเอง
+		// canApprovePriceChange: ราคาทุนที่เปลี่ยนไปจากเดิมถือเป็นการปรับราคาสินค้า ซึ่งเป็นอำนาจของ
+		// เจ้าของร้านคนเดียวเท่านั้น ผู้จัดการนำเข้าบิลได้ตามปกติ แต่ถ้าบิลมีรายการที่ราคาเปลี่ยน
+		// รายการนั้นจะถูกกันไว้รอเจ้าของอนุมัติ ไม่นับเข้าสต็อกทันที
+		//
+		// เดิมตัวแปรนี้รวมผู้จัดการไว้ด้วย จึงขัดกับ controller/import_data/bill_controller.go ที่
+		// ห้ามผู้จัดการกดอนุมัติบิลตรง ๆ อยู่แล้ว กลายเป็นว่าอนุมัติโดยปริยายได้แต่กดปุ่มไม่ได้
+		canApprovePriceChange := strings.EqualFold(strings.TrimSpace(role), string(enum.RoleOwner))
+
+		// priceApprovedContext: บริบทตอนนี้ถือว่าราคาที่เปลี่ยนไปได้รับการอนุมัติแล้วหรือยัง (เจ้าของนำเข้าเอง
 		// หรือถูก override มาชัดเจนว่า verified=true ตอนกดปุ่มอนุมัติบิล) ใช้ตัดสินว่ารายการที่ราคาเปลี่ยนจะนับสต็อกเข้าเลย
 		// หรือต้องกันไว้ก่อน (PendingReceiveQuantity) — บิลร่าง (draft) ไม่ถือว่าอนุมัติอะไรทั้งนั้น
-		priceApprovedContext := isOwner
+		priceApprovedContext := canApprovePriceChange
 		if verified != nil {
 			priceApprovedContext = *verified
 		}
@@ -454,7 +461,9 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 
 		bill.PriceChangeDetected = len(changedItems) > 0
 
-		autoApprove := isOwner || len(changedItems) == 0
+		// บิลที่ไม่มีรายการราคาเปลี่ยนเลย ผ่านได้ทันทีไม่ว่าใครนำเข้า ส่วนบิลที่มีราคาเปลี่ยน
+		// ต้องเป็นเจ้าของร้านเท่านั้นจึงจะอนุมัติให้ผ่านในคราวเดียวได้
+		autoApprove := canApprovePriceChange || len(changedItems) == 0
 		if verified != nil {
 			autoApprove = *verified
 		}
