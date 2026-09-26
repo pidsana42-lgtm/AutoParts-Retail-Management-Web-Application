@@ -9,7 +9,9 @@ import (
 
 func requireClaimStaff(c *gin.Context) bool {
 	switch getRoleFromContext(c) {
-	case "OWNER", "ADMIN", "EMPLOYEE":
+	// MANAGER เคยตกหล่นจากรายการนี้ ทำให้ผู้จัดการร้านสร้าง แก้ไข หรือลบใบเคลมไม่ได้เลย
+	// ทั้งที่เมนูฝั่งหน้าจอเปิดให้เข้าถึงหน้าเคลมได้ปกติ
+	case "OWNER", "ADMIN", "MANAGER", "EMPLOYEE":
 		return true
 	default:
 		c.JSON(http.StatusForbidden, gin.H{"error": "only store staff can change customer claims"})
@@ -33,9 +35,9 @@ func prepareClaimStatus(c *gin.Context, status *string, creating bool) bool {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid customer claim status"})
 		return false
 	}
-	if !isOwnerOrAdmin(c) {
+	if !isOwnerOrManager(c) {
 		if *status != "PENDING" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "only the store owner can approve or reject a claim"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "only the store owner or manager can approve or reject a claim"})
 			return false
 		}
 		if !creating {
@@ -43,4 +45,11 @@ func prepareClaimStatus(c *gin.Context, status *string, creating bool) bool {
 		}
 	}
 	return true
+}
+
+// isPendingClaimStatus: ใบเคลมยังไม่ผ่านการพิจารณา (ค่าว่างถือเป็นรอพิจารณา เพราะใบเก่า
+// บางใบไม่ได้บันทึกสถานะไว้) ใช้ตัดสินว่าพนักงานลบใบนี้เองได้หรือไม่
+func isPendingClaimStatus(status string) bool {
+	normalized := strings.ToUpper(strings.TrimSpace(status))
+	return normalized == "" || normalized == "PENDING"
 }

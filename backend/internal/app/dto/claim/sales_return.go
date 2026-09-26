@@ -1,6 +1,7 @@
 package claim
 
 import (
+	"backend/internal/app/enum"
 	"time"
 
 	"backend/internal/app/entity"
@@ -31,20 +32,22 @@ type UpdateSalesReturnDTO struct {
 }
 
 type SalesReturnResponseDTO struct {
-	ID              uint       `json:"id"`
-	ReturnNumber    string     `json:"return_number"`
-	OriginalOrderID uint       `json:"original_order_id"`
-	ReturnDate      time.Time  `json:"return_date"`
-	Reason          string     `json:"reason"`
-	RefundAmount    float64    `json:"refund_amount"`
-	RefundMethod    string     `json:"refund_method"`
-	RequestedAt     time.Time  `json:"requested_at"`
-	ApprovedAt      *time.Time `json:"approved_at,omitempty"`
-	Note            string     `json:"note,omitempty"`
-	CreatedBy       uint       `json:"created_by"`
-	ApprovedBy      *uint      `json:"approved_by,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID              uint      `json:"id"`
+	ReturnNumber    string    `json:"return_number"`
+	OriginalOrderID uint      `json:"original_order_id"`
+	ReturnDate      time.Time `json:"return_date"`
+	// Status เคยไม่ถูกส่งออกมาเลย ทำให้ฝั่งที่เรียกใช้ไม่รู้ว่าใบคืนผ่านการพิจารณาหรือยัง
+	Status       enum.ReturnStatus `json:"status"`
+	Reason       string            `json:"reason"`
+	RefundAmount float64           `json:"refund_amount"`
+	RefundMethod string            `json:"refund_method"`
+	RequestedAt  time.Time         `json:"requested_at"`
+	ApprovedAt   *time.Time        `json:"approved_at,omitempty"`
+	Note         string            `json:"note,omitempty"`
+	CreatedBy    uint              `json:"created_by"`
+	ApprovedBy   *uint             `json:"approved_by,omitempty"`
+	CreatedAt    time.Time         `json:"created_at"`
+	UpdatedAt    time.Time         `json:"updated_at"`
 }
 
 func (d *CreateSalesReturnDTO) ToEntity() entity.SalesReturn {
@@ -90,6 +93,7 @@ func ToSalesReturnResponseDTO(m *entity.SalesReturn) SalesReturnResponseDTO {
 		ReturnNumber:    m.ReturnNumber,
 		OriginalOrderID: m.OriginalOrderID,
 		ReturnDate:      m.ReturnDate,
+		Status:          m.Status,
 		Reason:          m.Reason,
 		RefundAmount:    m.RefundAmount,
 		RefundMethod:    m.RefundMethod,

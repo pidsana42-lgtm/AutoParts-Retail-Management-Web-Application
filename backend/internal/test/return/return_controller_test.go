@@ -11,6 +11,7 @@ import (
 
 	returnController "backend/internal/app/controller/return"
 	returnDTO "backend/internal/app/dto/return"
+	returnEnum "backend/internal/app/enum"
 	returnRepo "backend/internal/app/repository/return"
 	returnService "backend/internal/app/service/return"
 
@@ -29,6 +30,8 @@ type returnHTTPServiceStub struct {
 	updateInput   returnDTO.UpdateReturnDTO
 	listInput     returnDTO.GetReturnsRequest
 	searchKeyword string
+	// status: สถานะของใบคืนที่ stub จะคืนกลับมา ใช้ทดสอบกฎสิทธิ์การลบของพนักงาน
+	status returnEnum.ReturnStatus
 }
 
 var _ returnService.ReturnService = (*returnHTTPServiceStub)(nil)
@@ -39,7 +42,7 @@ func (s *returnHTTPServiceStub) record(method string, id, actorID uint) (*return
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &returnDTO.ReturnDetailResponseDTO{ID: 42, ReturnNumber: "RTN-TEST-0042"}, nil
+	return &returnDTO.ReturnDetailResponseDTO{ID: 42, ReturnNumber: "RTN-TEST-0042", Status: s.status}, nil
 }
 
 func (s *returnHTTPServiceStub) GetReturns(input returnDTO.GetReturnsRequest) (*returnDTO.GetReturnsResponse, error) {
@@ -371,35 +374,53 @@ func TestReturnControllerReadAndDeleteErrors(t *testing.T) {
 	}
 }
 
-// TestReturnControllerDeleteRequiresOwnerOrManager: ลบใบคืนสินค้าเป็นการดำเนินการที่ทำลายประวัติได้
-// จึงต้องจำกัดสิทธิ์เหมือนกับการอนุมัติ/ปฏิเสธ (owner/manager/admin เท่านั้น) — พนักงานทั่วไปห้ามลบเอง
-func TestReturnControllerDeleteRequiresOwnerOrManager(t *testing.T) {
-	for _, role := range []struct {
+// TestReturnControllerDelete_RolePolicy: กฎสิทธิ์การลบใบคืนสินค้า
+//
+// เจ้าของและผู้จัดการลบได้เสมอ ส่วนพนักงานลบได้เฉพาะใบที่ยังไม่ผ่านการพิจารณา (PENDING)
+// เพื่อให้แก้ใบที่ตัวเองกรอกผิดได้โดยไม่ต้องรอผู้บริหารร้าน แต่ห้ามแตะใบที่ถูกตัดสินไปแล้ว
+// ส่วนใบที่คืนเงินไปแล้วยังถูกกันอีกชั้นที่ระดับข้อมูลด้วย ErrReturnAlreadyProcessed
+func TestReturnControllerDelete_RolePolicy(t *testing.T) {
+	for _, tc := range []struct {
 		name    string
 		role    any
+		status  returnEnum.ReturnStatus
 		allowed bool
 	}{
-		{"owner", "OWNER", true},
-		{"normalized_manager", " manager ", true},
-		{"normalized_admin", " admin ", true},
-		{"employee", "EMPLOYEE", false},
-		{"customer", "CUSTOMER", false},
-		{"missing", nil, false},
-		{"wrong_type", 1, false},
+		{"owner", "OWNER", returnEnum.ReturnApproved, true},
+		{"normalized_manager", " manager ", returnEnum.ReturnApproved, true},
+		{"normalized_admin", " admin ", returnEnum.ReturnApproved, true},
+		{"employee_pending", "EMPLOYEE", returnEnum.ReturnPending, true},
+		{"employee_approved", "EMPLOYEE", returnEnum.ReturnApproved, false},
+		{"employee_refunded", "EMPLOYEE", returnEnum.ReturnRefunded, false},
+		{"employee_rejected", "EMPLOYEE", returnEnum.ReturnRejected, false},
+		{"customer", "CUSTOMER", returnEnum.ReturnPending, false},
+		{"missing", nil, returnEnum.ReturnPending, false},
+		{"wrong_type", 1, returnEnum.ReturnPending, false},
 	} {
-		t.Run(role.name, func(t *testing.T) {
-			service := &returnHTTPServiceStub{}
-			response := requestReturnController(service, http.MethodDelete, "/api/returns/42", "", uint(23), role.role)
-			if !role.allowed {
+		t.Run(tc.name, func(t *testing.T) {
+			service := &returnHTTPServiceStub{status: tc.status}
+			response := requestReturnController(service, http.MethodDelete, "/api/returns/42", "", uint(23), tc.role)
+			if !tc.allowed {
 				assertReturnHTTPStatus(t, response, http.StatusForbidden)
-				if len(service.calls) != 0 {
-					t.Fatalf("forbidden delete reached service: %v", service.calls)
+				for _, call := range service.calls {
+					if call == "DeleteReturn" {
+						t.Fatalf("forbidden delete reached service: %v", service.calls)
+					}
 				}
 				return
 			}
 			assertReturnHTTPStatus(t, response, http.StatusOK)
-			if len(service.calls) != 1 || service.calls[0] != "DeleteReturn" || service.id != 42 {
-				t.Fatalf("service call = %+v; want DeleteReturn with ID 42", service)
+			if service.id != 42 {
+				t.Fatalf("service id = %d; want 42", service.id)
+			}
+			deleted := false
+			for _, call := range service.calls {
+				if call == "DeleteReturn" {
+					deleted = true
+				}
+			}
+			if !deleted {
+				t.Fatalf("service calls = %v; want DeleteReturn", service.calls)
 			}
 		})
 	}

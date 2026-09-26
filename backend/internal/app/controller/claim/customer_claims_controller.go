@@ -31,9 +31,18 @@ func getRoleFromContext(c *gin.Context) string {
 	return ""
 }
 
-func isOwnerOrAdmin(c *gin.Context) bool {
-	role := getRoleFromContext(c)
-	return role == "OWNER" || role == "ADMIN"
+// isOwnerOrManager: สิทธิ์ระดับผู้บริหารร้าน ใช้กับการอนุมัติ ยกเลิก และลบใบเคลม
+//
+// "ADMIN" เก็บไว้เพราะ enum.RoleAdmin เป็นชื่อพ้องของ enum.RoleManager ในโค้ดเดิม แต่บทบาท
+// ที่มีอยู่จริงในตาราง roles มีแค่ Owner / Manager / Employee — เงื่อนไขเดิมที่เช็คแค่
+// OWNER กับ ADMIN จึงไม่มีทางเป็นจริงสำหรับผู้จัดการ ทำให้ปุ่มอนุมัติบนหน้าจอกดแล้วโดนปฏิเสธ
+func isOwnerOrManager(c *gin.Context) bool {
+	switch getRoleFromContext(c) {
+	case "OWNER", "MANAGER", "ADMIN":
+		return true
+	default:
+		return false
+	}
 }
 
 func (ctrl *CustomerClaimController) CreateCustomerClaim(c *gin.Context) {
@@ -207,7 +216,7 @@ func (ctrl *CustomerClaimController) UpdateCustomerClaimItem(c *gin.Context) {
 }
 
 func (ctrl *CustomerClaimController) UpdateCustomerClaimItemStatus(c *gin.Context) {
-	if !isOwnerOrAdmin(c) {
+	if !isOwnerOrManager(c) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "only the store owner can approve or reject a claim"})
 		return
 	}
@@ -253,6 +262,22 @@ func (ctrl *CustomerClaimController) DeleteCustomerClaim(c *gin.Context) {
 		return
 	}
 
+	// พนักงานลบได้เฉพาะใบที่ยังไม่ผ่านการพิจารณา (กรอกผิดแล้วลบทิ้งเองได้ ไม่ต้องรอเจ้าของ)
+	// ส่วนใบที่อนุมัติหรือปฏิเสธไปแล้วถือเป็นผลการตัดสินใจของผู้บริหารร้าน ต้องเป็น
+	// เจ้าของหรือผู้จัดการเท่านั้นที่ลบได้ (ชั้นนี้เสริมจากการ์ดในฐานข้อมูลที่ห้ามลบใบซึ่ง
+	// ตัดสต็อกหรือหักหนี้ไปแล้วอยู่แล้ว)
+	if !isOwnerOrManager(c) {
+		existing, errGet := ctrl.svc.GetCustomerClaimByID(uint(id))
+		if errGet != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบใบเคลมนี้"})
+			return
+		}
+		if !isPendingClaimStatus(existing.Status) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "ใบเคลมที่ผ่านการพิจารณาแล้ว ต้องให้เจ้าของร้านหรือผู้จัดการเป็นผู้ลบ"})
+			return
+		}
+	}
+
 	err = ctrl.svc.DeleteCustomerClaim(uint(id))
 	if err != nil {
 		if errors.Is(err, claimRepo.ErrClaimAlreadyAdjusted) {
@@ -271,7 +296,7 @@ func (ctrl *CustomerClaimController) DeleteCustomerClaim(c *gin.Context) {
 }
 
 func (ctrl *CustomerClaimController) CancelCustomerClaim(c *gin.Context) {
-	if !isOwnerOrAdmin(c) {
+	if !isOwnerOrManager(c) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "only the store owner can cancel a customer claim"})
 		return
 	}

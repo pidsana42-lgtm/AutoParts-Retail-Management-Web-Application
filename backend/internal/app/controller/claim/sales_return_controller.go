@@ -1,10 +1,14 @@
 package claim
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	claimDTO "backend/internal/app/dto/claim"
+	"backend/internal/app/enum"
+	claimRepo "backend/internal/app/repository/claim"
 	claimSvc "backend/internal/app/service/claim"
 	"github.com/gin-gonic/gin"
 )
@@ -111,6 +115,9 @@ func (ctrl *SalesReturnController) UpdateSalesReturn(c *gin.Context) {
 }
 
 func (ctrl *SalesReturnController) DeleteSalesReturn(c *gin.Context) {
+	if !requireClaimStaff(c) {
+		return
+	}
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -118,8 +125,27 @@ func (ctrl *SalesReturnController) DeleteSalesReturn(c *gin.Context) {
 		return
 	}
 
+	// เส้นทางนี้เคยไม่ตรวจสิทธิ์อะไรเลย ต่างจาก DELETE /api/returns/:id ที่ทำงานเดียวกัน
+	// กลายเป็นทางลัดข้ามการป้องกัน จึงใช้กฎชุดเดียวกัน: เจ้าของกับผู้จัดการลบได้เสมอ
+	// ส่วนพนักงานลบได้เฉพาะใบที่ยังไม่ผ่านการพิจารณา
+	if !isOwnerOrManager(c) {
+		existing, errGet := ctrl.svc.GetSalesReturnByID(uint(id))
+		if errGet != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบรายการคืนสินค้านี้"})
+			return
+		}
+		if !strings.EqualFold(strings.TrimSpace(string(existing.Status)), string(enum.ReturnPending)) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "รายการคืนสินค้าที่ผ่านการพิจารณาแล้ว ต้องให้เจ้าของร้านหรือผู้จัดการเป็นผู้ลบ"})
+			return
+		}
+	}
+
 	err = ctrl.svc.DeleteSalesReturn(uint(id))
 	if err != nil {
+		if errors.Is(err, claimRepo.ErrSalesReturnAlreadyRefunded) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete sales return: " + err.Error()})
 		return
 	}
