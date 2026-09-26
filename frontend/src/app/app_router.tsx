@@ -186,36 +186,81 @@ export default function AppRouter(): React.JSX.Element {
             <Route path={`${prefix}/stock/stock-data`} element={
               isManagerOrOwner ? <Stockdata /> : <Navigate to={firstMenuPath} replace />
             } />
-            {/* -------- เพิ่ม Route สำหรับหน้านำเข้าบิลและจัดการราคาสินค้า -------- */}
-            <Route path={`${prefix}/import-bills`} element={<ImportBill />} />
-            <Route path={`${prefix}/import-bills/scan`} element={<ImportBill />} />
-            <Route path={`${prefix}/import-bills/excel`} element={<ImportBill />} />
-            <Route path={`${prefix}/import-bills/mapping`} element={<ImportBill />} />
-            <Route path={`${prefix}/import-bills/manual`} element={<ImportBill />} />
-            <Route path={`${prefix}/import-bills/po`} element={<ImportBill />} />
-            <Route path={`${prefix}/import-bills/approve/:id`} element={<ImportBill />} />
+            {/* -------- เพิ่ม Route สำหรับหน้านำเข้าบิลและจัดการราคาสินค้า --------
+                หน้านี้และอีก 4 กลุ่มด้านล่าง (พรีออเดอร์, เคลม, คืนสินค้า, สั่งซื้อ) เดิมไม่มี
+                isManagerOrOwner gate เหมือนทุก route อื่นในลูปนี้ พนักงานที่พิมพ์ URL prefix
+                /owner หรือ /manager ตรงๆ (แทนที่จะใช้ /employee ตามเมนูของตัวเอง) จะเห็นหน้า
+                เวอร์ชันเจ้าของร้าน/ผู้จัดการเรนเดอร์ขึ้นมาเฉยๆ ปุ่มที่สงวนไว้ (อนุมัติ/แก้ราคาทุน ฯลฯ)
+                ยังโดน backend ปฏิเสธอยู่ (ตรวจสอบแล้วว่า RequireRoles ฝั่ง Go ครอบไว้ถูกต้อง) แต่
+                ผู้ใช้จะเห็นปุ่มที่กดแล้วมีแต่ error ทั้งที่ไม่ควรเห็นตั้งแต่แรก จึงเติม gate ให้ครบ
+                ให้ตรงกับแพทเทิร์นเดียวกับ route อื่นทั้งหมดในลูปนี้ */}
+            <Route path={`${prefix}/import-bills`} element={
+              isManagerOrOwner ? <ImportBill /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/import-bills/scan`} element={
+              isManagerOrOwner ? <ImportBill /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/import-bills/excel`} element={
+              isManagerOrOwner ? <ImportBill /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/import-bills/mapping`} element={
+              isManagerOrOwner ? <ImportBill /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/import-bills/manual`} element={
+              isManagerOrOwner ? <ImportBill /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/import-bills/po`} element={
+              isManagerOrOwner ? <ImportBill /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/import-bills/approve/:id`} element={
+              isManagerOrOwner ? <ImportBill /> : <Navigate to={firstMenuPath} replace />
+            } />
             <Route path={`${prefix}/import-bills/edit-stock-bill`} element={
               isManagerOrOwner ? <EditStockBillPage /> : <Navigate to={firstMenuPath} replace />
             } />
             {/* -------------------------------------------------- */}
             
             {/* -------- เพิ่ม Route สำหรับหน้าพรีออเดอร์ตรงนี้ครับ -------- */}
-            <Route path={`${prefix}/pre-orders`} element={<PreOrder />} />
-            <Route path={`${prefix}/pre-orders/catalog`} element={<CatalogPage />} />
-            <Route path={`${prefix}/pre-order`} element={<PreOrder />} />
-            <Route path={`${prefix}/pre-order/catalog`} element={<CatalogPage />} />
+            <Route path={`${prefix}/pre-orders`} element={
+              isManagerOrOwner ? <PreOrder /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/pre-orders/catalog`} element={
+              isManagerOrOwner ? <CatalogPage /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/pre-order`} element={
+              isManagerOrOwner ? <PreOrder /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/pre-order/catalog`} element={
+              isManagerOrOwner ? <CatalogPage /> : <Navigate to={firstMenuPath} replace />
+            } />
             {/* --------------------------------------------------- */}
 
             {/* -------- เพิ่ม Route สำหรับหน้าคืนเเละเคลมสินค้าตรงนี้ครับ -------- */}
-            <Route path={`${prefix}/claims`} element={<ClaimsPage />} />
-            <Route path={`${prefix}/claims/detail/:id`} element={<ClaimDetailPage />} />
-            <Route path={`${prefix}/claims/edit/:id`} element={<ClaimEditPage canApprove={true} />} />
-            <Route path={`${prefix}/claims/approve/:id`} element={<ClaimApprovePage />} />
+            <Route path={`${prefix}/claims`} element={
+              isManagerOrOwner ? <ClaimsPage /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/claims/detail/:id`} element={
+              isManagerOrOwner ? <ClaimDetailPage /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/claims/edit/:id`} element={
+              isManagerOrOwner ? <ClaimEditPage canApprove={true} /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/claims/approve/:id`} element={
+              isManagerOrOwner ? <ClaimApprovePage /> : <Navigate to={firstMenuPath} replace />
+            } />
             <Route path={`${prefix}/claims/status/:id`} element={<Navigate to={`${prefix}/claims/detail/:id`} replace />} />
-            <Route path={`${prefix}/returns`} element={<ReturnsPage />} />
-            <Route path={`${prefix}/returns/new-return`} element={<NewReturnPage />} />
-            <Route path={`${prefix}/returns/:id`} element={<ReturnDetailPage />} />
-            <Route path={`${prefix}/returns/detail/:id`} element={<ReturnDetailPage />} />
+            <Route path={`${prefix}/returns`} element={
+              isManagerOrOwner ? <ReturnsPage /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/returns/new-return`} element={
+              isManagerOrOwner ? <NewReturnPage /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/returns/:id`} element={
+              isManagerOrOwner ? <ReturnDetailPage /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/returns/detail/:id`} element={
+              isManagerOrOwner ? <ReturnDetailPage /> : <Navigate to={firstMenuPath} replace />
+            } />
             {/* ----------------------------------------------------------- */}
 
             {/* -------- เพิ่ม Route สำหรับ POS -------- */}
@@ -242,10 +287,18 @@ export default function AppRouter(): React.JSX.Element {
             } />
 
             {/* ------------------ สั่งซื้อ ----------------- */}
-            <Route path={`${prefix}/orders`} element={<PurchaseOrders />} />
-            <Route path={`${prefix}/new-orders`} element={<CreatePurchaseOrders />} />
-            <Route path={`${prefix}/orders/:id`} element={<OrderDetail />} />
-            <Route path={`${prefix}/orders/restore`} element={<DeletedPoHistory />} />
+            <Route path={`${prefix}/orders`} element={
+              isManagerOrOwner ? <PurchaseOrders /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/new-orders`} element={
+              isManagerOrOwner ? <CreatePurchaseOrders /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/orders/:id`} element={
+              isManagerOrOwner ? <OrderDetail /> : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/orders/restore`} element={
+              isManagerOrOwner ? <DeletedPoHistory /> : <Navigate to={firstMenuPath} replace />
+            } />
           </React.Fragment>
         ))}
 
