@@ -16,6 +16,7 @@ import apiClient from '../../../service/http/apiClient';
 import type { CustomerClaim, ClaimFormProduct, FlatRow, ClaimsPageProps, ClaimType, TrackingFilter } from '../../../interface/claim/claim';
 import { CLAIM_TYPE_LABEL } from '../../../interface/claim/claim';
 import { cn } from '../../../utils/component';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import { useNotification } from '../../../contexts/NotificationContext';
 import { useToast } from '../../../components/elements/toast';
 
@@ -139,7 +140,11 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
   const navigate = useNavigate();
   const { addNotification } = useNotification();
   const { toast } = useToast();
-  const basePath = canApprove ? '/owner/claims' : '/employee/claims';
+  // ใช้ prefix ของ path ปัจจุบันแทนการฮาร์ดโค้ด '/owner' — เดิมพอ Manager เข้าหน้านี้ผ่าน
+  // /manager/claims แล้วคลิกดูรายละเอียด จะโดนสลับ URL เป็น /owner/claims/detail/:id เฉยๆ
+  // (ทำงานถูกเพราะทั้งสอง prefix ชี้ไปหน้าเดียวกัน แต่ URL ไม่ตรงกับที่ผู้ใช้เข้ามา)
+  const pathPrefix = usePathBasePrefix();
+  const basePath = canApprove ? `${pathPrefix}/claims` : '/employee/claims';
   const pageParams = new URLSearchParams(location.search);
   const view: 'list' | 'claim-form' = pageParams.get('view') === 'new' ? 'claim-form' : 'list';
   const activeTab: 'claims' | 'tracking' = pageParams.get('tab') === 'tracking' ? 'tracking' : 'claims';

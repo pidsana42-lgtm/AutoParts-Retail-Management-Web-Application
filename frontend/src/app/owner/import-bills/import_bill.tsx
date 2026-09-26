@@ -40,6 +40,7 @@ import PriceUpdateModal from './components/price_update_modal';
 import type { PriceMismatchItem } from './components/price_update_modal';
 import { guessColumnMapping, normalizeDateValue, REQUIRED_MAPPING_FIELDS } from '../../../utils/excelImport';
 import { ToastProvider, useToast } from '../../../components/elements/toast';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import ConfirmDialog from '../../../components/elements/confirm_dialog';
 
 const isPlaceholder = (val: any): boolean => {
@@ -174,7 +175,12 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const basePath = isEmployee ? '/employee/import' : '/owner/import-bills';
+  // isEmployee=true มาจาก EmployeeImport ที่ mount ผ่าน /employee/import เท่านั้น จึงฮาร์ดโค้ด
+  // ฝั่งพนักงานได้ตรงตัว (คนละชื่อ path กับฝั่งเจ้าของร้าน/ผู้จัดการ: import ไม่ใช่ import-bills)
+  // ส่วนฝั่งเจ้าของร้าน/ผู้จัดการ เดิมฮาร์ดโค้ด '/owner' เสมอ ทำให้ Manager ที่เข้ามาทาง
+  // /manager/import-bills โดนสลับ URL เป็น /owner/import-bills ตอน navigate ต่อ
+  const pathPrefix = usePathBasePrefix();
+  const basePath = isEmployee ? '/employee/import' : `${pathPrefix}/import-bills`;
   const importSessionKey = getImportBillSessionKey(isEmployee);
   const [restoredSession] = useState<ImportBillSavedSession | null>(() => loadImportBillSession(importSessionKey));
   const [deleteBillTargetId, setDeleteBillTargetId] = useState<number | null>(null);

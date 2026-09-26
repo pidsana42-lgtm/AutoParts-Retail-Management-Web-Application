@@ -23,6 +23,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import type { Product } from '../../../interface/import';
 import type { Catalog, CatalogItem } from '../../../interface/catalog/catalog';
 import { getCatalogs } from '../../../service/http/catalog/catalog_service';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 interface Customer {
   id: number;
@@ -55,7 +56,11 @@ export default function PreOrderManager() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const basePath = location.pathname.startsWith('/employee') ? '/employee/pre-orders' : '/owner/pre-orders';
+  // เดิมเช็คแค่ '/employee' แล้ว fallback เป็น '/owner' เสมอ ทำให้ Manager ที่เข้าหน้านี้ผ่าน
+  // /manager/pre-orders โดนสลับ URL เป็น /owner/pre-orders เฉยๆ ตอน navigate ต่อ ใช้ prefix
+  // ของ path ปัจจุบันแทน จะได้ /owner, /manager หรือ /employee ตรงกับที่ผู้ใช้เข้ามาจริง
+  const pathPrefix = usePathBasePrefix();
+  const basePath = `${pathPrefix}/pre-orders`;
   const initialPageParams = new URLSearchParams(location.search);
   const [preOrders, setPreOrders] = useState<PreOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);

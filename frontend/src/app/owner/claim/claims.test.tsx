@@ -80,6 +80,25 @@ describe('ClaimsPage role boundaries (canApprove)', () => {
     expect(await screen.findByText(expectedText)).toBeInTheDocument();
   });
 
+  // เดิม basePath ฮาร์ดโค้ด '/owner/claims' เมื่อ canApprove=true ไม่ว่าจะเข้ามาทาง prefix ไหน
+  // ทำให้ Manager ที่เปิดหน้านี้ผ่าน /manager/claims แล้วกดแก้ไข โดนสลับ URL เป็น /owner/claims/edit/:id
+  // เฉยๆ (ทำงานถูกเพราะ route ทั้งสอง prefix ชี้ไปหน้าเดียวกัน แต่ URL ไม่ตรงกับที่เข้ามา)
+  it('keeps the /manager prefix when a manager navigates from /manager/claims', async () => {
+    render(
+      <MemoryRouter initialEntries={['/manager/claims']}>
+        <Routes>
+          <Route path="/manager/claims" element={<ClaimsPage canApprove={true} />} />
+          <Route path="/manager/claims/detail/:id" element={<p>ไปหน้ารายละเอียดของผู้จัดการ</p>} />
+          <Route path="/owner/claims/detail/:id" element={<p>หลุดไปหน้าของเจ้าของร้าน (ผิด)</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    const editButton = await screen.findByTitle('แก้ไขใบเคลม');
+    await userEvent.setup().click(editButton);
+    expect(await screen.findByText('ไปหน้ารายละเอียดของผู้จัดการ')).toBeInTheDocument();
+    expect(screen.queryByText('หลุดไปหน้าของเจ้าของร้าน (ผิด)')).not.toBeInTheDocument();
+  });
+
   it.each([
     ['owner (canApprove=true)', true, 'APPROVED'],
     ['employee (canApprove=false)', false, 'PENDING'],
