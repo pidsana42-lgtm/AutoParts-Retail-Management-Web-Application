@@ -15,6 +15,6 @@ PyMuPDF>=1.22.0
 qrcode[pil]>=7.4.2
 python-barcode[images]>=0.15.1
 onnxruntime>=1.16.0
+# torch ใช้แค่รายงานสถานะ CUDA ใน server.py เท่านั้น การอนุมานผล embedding ใช้ onnxruntime ล้วน
 torch
 transformers
-optimum[onnxruntime]
