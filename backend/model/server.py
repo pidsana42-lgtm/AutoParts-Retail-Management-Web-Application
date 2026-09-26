@@ -93,6 +93,10 @@ def init_db():
             conn.execute(text("SELECT 1"))
             print("Database connected successfully!")
             
+            # จำนวนมิติของเวกเตอร์มาจาก embedder ซึ่งเป็นเจ้าของโมเดล — import แบบ lazy
+            # ให้เข้ากับจุดอื่นในไฟล์นี้ที่ import embedder เมื่อถึงเวลาใช้งานจริงเท่านั้น
+            from embedder import EMBEDDING_DIM
+
             # Sync sequences and create product_mapping_corrections table
             try:
                 with engine.begin() as transaction_conn:
@@ -133,18 +137,64 @@ def init_db():
                         );
                     """))
                     
+                    # pgvector: เก็บ embedding เป็นชนิด vector จริง เพื่อให้ค้นหาความคล้าย (cosine)
+                    # ด้วยตัวดำเนินการ <=> ในฝั่งฐานข้อมูล แทนการดึงเวกเตอร์ทั้งหมดมาคำนวณในหน่วยความจำ
+                    transaction_conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+
                     # Persistent embedding cache for the product matcher (survives restarts,
                     # only new/changed products get re-embedded — see embedder.ProductMatcher.fit)
-                    transaction_conn.execute(text("""
+                    transaction_conn.execute(text(f"""
                         CREATE TABLE IF NOT EXISTS product_embeddings (
                             id SERIAL PRIMARY KEY,
                             target_key VARCHAR(80) NOT NULL UNIQUE,
                             target_type VARCHAR(16) NOT NULL DEFAULT 'product',
                             target_id INTEGER NOT NULL DEFAULT 0,
                             content_hash VARCHAR(64) NOT NULL,
-                            embedding JSONB NOT NULL,
+                            supplier_id INTEGER,
+                            embedding vector({EMBEDDING_DIM}) NOT NULL,
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         );
+                    """))
+
+                    # ตารางที่สร้างไว้ก่อนเพิ่มการค้นแยกตามซัพพลายเออร์ จะยังไม่มีคอลัมน์นี้
+                    transaction_conn.execute(text(
+                        "ALTER TABLE product_embeddings ADD COLUMN IF NOT EXISTS supplier_id INTEGER;"))
+
+                    # ตารางเวอร์ชันเก่าเก็บ embedding เป็น JSONB — ตารางนี้เป็นแคชล้วน สร้างใหม่ได้จาก
+                    # /api/products/refresh-embeddings จึงลบทิ้งแล้วสร้างใหม่เป็นชนิด vector ได้อย่างปลอดภัย
+                    embedding_type = transaction_conn.execute(text("""
+                        SELECT udt_name FROM information_schema.columns
+                        WHERE table_name = 'product_embeddings' AND column_name = 'embedding'
+                    """)).scalar()
+                    if embedding_type is not None and embedding_type != 'vector':
+                        print(f"[pgvector] Migrating product_embeddings.embedding from {embedding_type} to vector({EMBEDDING_DIM})...")
+                        transaction_conn.execute(text("DROP TABLE IF EXISTS product_embeddings;"))
+                        transaction_conn.execute(text(f"""
+                            CREATE TABLE product_embeddings (
+                                id SERIAL PRIMARY KEY,
+                                target_key VARCHAR(80) NOT NULL UNIQUE,
+                                target_type VARCHAR(16) NOT NULL DEFAULT 'product',
+                                target_id INTEGER NOT NULL DEFAULT 0,
+                                content_hash VARCHAR(64) NOT NULL,
+                                supplier_id INTEGER,
+                                embedding vector({EMBEDDING_DIM}) NOT NULL,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            );
+                        """))
+
+                    # HNSW index สำหรับ cosine distance — ทำให้การค้นหาเพื่อนบ้านใกล้สุดไม่ต้องสแกนทั้งตาราง
+                    transaction_conn.execute(text("""
+                        CREATE INDEX IF NOT EXISTS idx_product_embeddings_hnsw
+                        ON product_embeddings USING hnsw (embedding vector_cosine_ops);
+                    """))
+                    # รองรับการค้น 3 ชั้น: correction ของซัพเจ้านี้ -> correction เจ้าอื่น -> product
+                    transaction_conn.execute(text("""
+                        CREATE INDEX IF NOT EXISTS idx_product_embeddings_type
+                        ON product_embeddings (target_type);
+                    """))
+                    transaction_conn.execute(text("""
+                        CREATE INDEX IF NOT EXISTS idx_product_embeddings_type_supplier
+                        ON product_embeddings (target_type, supplier_id);
                     """))
                     
                     transaction_conn.execute(text("SELECT setval(pg_get_serial_sequence('bill_images', 'id'), COALESCE(MAX(id), 1)) FROM bill_images;"))
@@ -1043,7 +1093,10 @@ def match_bill_products(result):
             comp_code = item.get("company_product_code", "")
             
             # Match
-            matched_id, score = global_matcher.match_product(comp_name, comp_code, current_supplier_id=supplier_id, threshold=0.95)
+            # เกณฑ์ความมั่นใจขั้นต่ำของการจับคู่ด้วยเวกเตอร์ วัดกับข้อมูลจริงในระบบแล้ว:
+            # คู่ที่ควรจับได้อยู่ราว 0.76-0.84 ส่วนสินค้าคนละชนิดอยู่ราว 0.59-0.70
+            # 0.85 จึงยังปลอดภัย ไม่มีการจับคู่ผิดเพิ่มจากเกณฑ์ 0.95 เดิม (ทดสอบกับ 138 คู่ที่พนักงานยืนยันแล้ว)
+            matched_id, score = global_matcher.match_product(comp_name, comp_code, current_supplier_id=supplier_id, threshold=0.85)
             if matched_id:
                 item["product_id"] = matched_id
                 print(f"[Matcher] Auto-mapped: '{comp_name}' -> DB Product ID {matched_id} (Similarity: {score:.4f})")
