@@ -50,7 +50,7 @@ def test_database_connection():
     print()
 
     # Construct connection string
-    connection_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    connection_string = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
     try:
         print("📡 Attempting to connect to database...")

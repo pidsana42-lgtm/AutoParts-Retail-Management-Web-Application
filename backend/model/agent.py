@@ -71,7 +71,7 @@ def get_engine():
         db_user = os.getenv("DB_USER", "postgres")
         db_password = os.getenv("DB_PASSWORD", "1234")
         db_name = os.getenv("DB_NAME", "Autopartsdb")
-        url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
         _engine = create_engine(url, pool_size=5, max_overflow=10, pool_pre_ping=True)
     return _engine
 
