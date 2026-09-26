@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, Plus, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, FileText, Loader2, Camera, X, Printer, Truck, CirclePlus, Check, ReceiptText, PenLine, Ban } from 'lucide-react';
-import ClaimTrackingTab, { isTrackingFinished, resolveTrackingStage } from './claim_tracking_tab';
+import ClaimTrackingTab from './claim_tracking_tab';
+import { isTrackingFinished, resolveTrackingStage } from './claim_tracking_stage';
 import Heading from '../../../components/elements/heading';
 import Card, { CardHeader, CardTitle, CardContent } from '../../../components/elements/card';
 import Input from '../../../components/elements/input';
