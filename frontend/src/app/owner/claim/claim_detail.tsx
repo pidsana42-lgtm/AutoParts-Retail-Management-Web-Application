@@ -14,6 +14,7 @@ import { getCustomerClaimById, updateClaimItemStatus, searchCustomerCreditByPhon
 import apiClient from '../../../service/http/apiClient';
 import type { CustomerDiscountResponse } from '../../../interface/pos/customer_interface';
 import type { CustomerClaim, CustomerClaimItem } from '../../../interface/claim/claim';
+import { CLAIM_TYPE_LABEL } from '../../../interface/claim/claim';
 import { useToast } from '../../../components/elements/toast';
 
 interface EditableItem extends CustomerClaimItem {
@@ -552,21 +553,21 @@ export default function ClaimDetailPage(): React.JSX.Element {
                             onChange={e => handleItemChange(idx, 'claim_type', e.target.value)}
                             className="border border-gray-300 px-2 py-1 text-xs font-normal text-[#1C1B1B] bg-white focus:outline-none focus:border-[#e51c23] rounded-none cursor-pointer"
                           >
-                            <option value="INSTANT">เปลี่ยนทันที</option>
-                            <option value="SUPPLIER_PENDING">ส่งบริษัท</option>
-                            <option value="CREDIT_ACCOUNT">ลงบัญชีเชื่อ</option>
+                            <option value="INSTANT">{CLAIM_TYPE_LABEL.INSTANT}</option>
+                            <option value="SUPPLIER_PENDING">{CLAIM_TYPE_LABEL.SUPPLIER_PENDING}</option>
+                            <option value="CREDIT_ACCOUNT">{CLAIM_TYPE_LABEL.CREDIT_ACCOUNT}</option>
                           </select>
                         ) : itemClaimType === 'SUPPLIER_PENDING' ? (
                           <Badge variant="neutral" size="md">
-                            ส่งบริษัท
+                            {CLAIM_TYPE_LABEL.SUPPLIER_PENDING}
                           </Badge>
                         ) : itemClaimType === 'CREDIT_ACCOUNT' ? (
                           <Badge variant="info" size="md">
-                            ลงบัญชีเชื่อ
+                            {CLAIM_TYPE_LABEL.CREDIT_ACCOUNT}
                           </Badge>
                         ) : (
                           <Badge variant="primary" size="md">
-                            เปลี่ยนทันที
+                            {CLAIM_TYPE_LABEL.INSTANT}
                           </Badge>
                         )}
                       </TableCell>
@@ -807,7 +808,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
                     <tr key={item.id} className="border-b border-slate-200">
                       <td className="border border-slate-300 p-2 font-medium">{item.product_name || `#${item.product_id}`}</td>
                       <td className="border border-slate-300 p-2 text-center">
-                        {itemClaimType === 'SUPPLIER_PENDING' ? 'ส่งบริษัท' : itemClaimType === 'CREDIT_ACCOUNT' ? 'ลงบัญชีเชื่อ' : 'เปลี่ยนทันที'}
+                        {CLAIM_TYPE_LABEL[itemClaimType as keyof typeof CLAIM_TYPE_LABEL] ?? CLAIM_TYPE_LABEL.INSTANT}
                       </td>
                       <td className="border border-slate-300 p-2 text-center font-semibold">{item.qty}</td>
                       <td className="border border-slate-300 p-2">{item.reason}</td>

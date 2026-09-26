@@ -6,6 +6,7 @@ import Select from '../../../components/elements/select';
 import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/elements/table';
 import type { ClaimTrackingTabProps, TrackingStage, ClaimType } from '../../../interface/claim/claim';
+import { CLAIM_TYPE_LABEL } from '../../../interface/claim/claim';
 import { cn } from '../../../utils/component';
 
 const TRACKING_STAGE_OPTIONS = [
@@ -51,11 +52,12 @@ const parseNote = (note: string | undefined, key: string): string => {
 };
 
 function TypeBadge({ type }: { type: ClaimType | string }) {
+  const label = CLAIM_TYPE_LABEL[(type as ClaimType)] ?? CLAIM_TYPE_LABEL.INSTANT;
   if (type === 'SUPPLIER_PENDING')
-    return <Badge variant="neutral" size="sm">ส่งบริษัทตรวจ</Badge>;
+    return <Badge variant="neutral" size="sm">{label}</Badge>;
   if (type === 'CREDIT_ACCOUNT')
-    return <Badge variant="info" size="sm">ลงบัญชีเชื่อ</Badge>;
-  return <Badge variant="primary" size="sm">เปลี่ยนทันที</Badge>;
+    return <Badge variant="info" size="sm">{label}</Badge>;
+  return <Badge variant="primary" size="sm">{label}</Badge>;
 }
 
 function getPageNumbers(current: number, total: number): (number | "...")[] {

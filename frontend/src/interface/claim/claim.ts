@@ -96,6 +96,16 @@ export interface SupplierClaim {
 export type ClaimType = 'INSTANT' | 'SUPPLIER_PENDING' | 'CREDIT_ACCOUNT';
 export type ClaimStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
+// ป้ายชื่อประเภทเคลม — จุดเดียวที่กำหนดคำที่ผู้ใช้เห็น ทุกหน้า (ฟอร์มสร้าง/แก้ไข, รายการ,
+// ติดตามสินค้าส่งเคลม) ต้องอ้างจากตรงนี้แทนการเขียนสตริงเอง เพราะ SUPPLIER_PENDING เคยถูกเรียก
+// ต่างกัน 3 แบบในคนละหน้า ("ฝากส่งบริษัทตรวจ" / "ส่งบริษัทตรวจ" / "ส่งบริษัท") ทำให้ผู้ใช้สับสน
+// ว่าเป็นคนละสถานะกันหรือไม่
+export const CLAIM_TYPE_LABEL: Record<ClaimType, string> = {
+  INSTANT: 'เปลี่ยนทันที',
+  SUPPLIER_PENDING: 'ส่งบริษัทตรวจ',
+  CREDIT_ACCOUNT: 'ลงบัญชีเชื่อ',
+};
+
 export type TrackingStage = 'WAITING_SEND' | 'SENT_TO_SUPPLIER' | 'REPLACEMENT_RECEIVED' | 'COMPLETED';
 export type TrackingFilter = 'ALL' | TrackingStage;
 

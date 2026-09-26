@@ -187,9 +187,12 @@ describe('Preorder list and navigation', () => {
     await screen.findByText('PRE-00056');
     expect(screen.getByRole('columnheader', { name: 'สถานะ' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'จัดการ' })).toBeInTheDocument();
-    // แก้ไข/ลบ ได้เฉพาะรายการที่ยังไม่ถูกอนุมัติสั่งซื้อ (po_status ไม่ใช่ APPROVED) — เหลือ id 51, 55, 56
-    expect(screen.getAllByRole('button', { name: 'แก้ไขใบสั่งจอง' })).toHaveLength(3);
-    expect(screen.getAllByRole('button', { name: 'ลบใบสั่งจอง' })).toHaveLength(3);
+    // แก้ไข/ลบ ได้เฉพาะรายการที่ยังไม่ถูกอนุมัติสั่งซื้อ "และ" ยังอยู่ในสถานะที่แก้ไขได้จริง
+    // (PENDING/PO_PENDING/PO_DRAFT) — เหลือแค่ id 51 เท่านั้น ส่วน id 55 (COMPLETED) และ
+    // id 56 (CANCELLED) เดิมเคยโผล่ปุ่มด้วยทั้งที่กดแล้วไม่มีทางแก้ไขจริง (หน้ารายละเอียดบังคับ
+    // เป็นโหมดดูอย่างเดียวเสมอ) จึงต้องไม่แสดงปุ่มตั้งแต่แรก
+    expect(screen.getAllByRole('button', { name: 'แก้ไขใบสั่งจอง' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'ลบใบสั่งจอง' })).toHaveLength(1);
     for (const label of ['ส่งมอบสินค้า', 'ยกเลิกจอง']) {
       expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
     }

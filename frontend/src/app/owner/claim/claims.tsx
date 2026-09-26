@@ -14,6 +14,7 @@ import { getCustomerClaims, searchSaleOrders, deleteCustomerClaim, cancelCustome
 import type { CustomerDiscountResponse } from '../../../interface/pos/customer_interface';
 import apiClient from '../../../service/http/apiClient';
 import type { CustomerClaim, ClaimFormProduct, FlatRow, ClaimsPageProps, ClaimType, TrackingFilter } from '../../../interface/claim/claim';
+import { CLAIM_TYPE_LABEL } from '../../../interface/claim/claim';
 import { cn } from '../../../utils/component';
 import { useNotification } from '../../../contexts/NotificationContext';
 import { useToast } from '../../../components/elements/toast';
@@ -112,11 +113,12 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function TypeBadge({ type }: { type: ClaimType }) {
+  const label = CLAIM_TYPE_LABEL[type];
   if (type === 'SUPPLIER_PENDING')
-    return <Badge variant="neutral" size="md">ส่งบริษัทตรวจ</Badge>;
+    return <Badge variant="neutral" size="md">{label}</Badge>;
   if (type === 'CREDIT_ACCOUNT')
-    return <Badge variant="credit" size="md">ลงบัญชีเชื่อ</Badge>;
-  return <Badge variant="primary" size="md">เปลี่ยนทันที</Badge>;
+    return <Badge variant="credit" size="md">{label}</Badge>;
+  return <Badge variant="primary" size="md">{label}</Badge>;
 }
 
 function getPageNumbers(current: number, total: number): (number | "...")[] {
@@ -364,7 +366,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
     if (hasCreditAccountItem && !isCreditEligible) {
       toast({
         variant: 'warning',
-        message: 'ลูกค้าท่านนี้ไม่มีสิทธิ์ใช้วงเงินสินเชื่อ/เงินเชื่อ กรุณาเปลี่ยนประเภทการเคลมเป็น "เปลี่ยนทันที" หรือ "ฝากส่งบริษัทตรวจ"',
+        message: `ลูกค้าท่านนี้ไม่มีสิทธิ์ใช้วงเงินสินเชื่อ/เงินเชื่อ กรุณาเปลี่ยนประเภทการเคลมเป็น "${CLAIM_TYPE_LABEL.INSTANT}" หรือ "${CLAIM_TYPE_LABEL.SUPPLIER_PENDING}"`,
       });
       return;
     }
@@ -1418,9 +1420,9 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                                 setClaimItems(prev => prev.map((it, i) => i === idx ? { ...it, claim_type: val } : it));
                               }}
                               options={[
-                                { label: 'เปลี่ยนทันที', value: 'INSTANT' },
-                                { label: 'ฝากส่งบริษัทตรวจ', value: 'SUPPLIER_PENDING' },
-                                { label: 'ลงบัญชีเชื่อ', value: 'CREDIT_ACCOUNT', disabled: !isCreditEligible },
+                                { label: CLAIM_TYPE_LABEL.INSTANT, value: 'INSTANT' },
+                                { label: CLAIM_TYPE_LABEL.SUPPLIER_PENDING, value: 'SUPPLIER_PENDING' },
+                                { label: CLAIM_TYPE_LABEL.CREDIT_ACCOUNT, value: 'CREDIT_ACCOUNT', disabled: !isCreditEligible },
                               ]}
                               className="h-9 text-xs"
                             />

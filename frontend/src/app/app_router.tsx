@@ -315,8 +315,11 @@ export default function AppRouter(): React.JSX.Element {
           โชว์ตรงหน้าเช็คสินค้าของงานนั้นเลย ใช้ component เดียวกับหน้าในระบบ (ตัว component เองเช็ค token ให้เข้าได้โดยไม่ต้องล็อกอิน) */}
       <Route path="/wms/check-stock-scan/:id" element={<EmployeeCheckStockExecutePage />} />
 
-      {/* ถ้าพิมพ์ URL มั่ว ให้ดีดกลับหน้าล็อกอิน */}
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      {/* ถ้าพิมพ์ URL มั่ว/ลิงก์เก่าที่ย้ายไปแล้ว: คนที่ล็อกอินอยู่ต้องไม่ถูกดีดออกจากระบบ
+          เดิมดีดไป /login เสมอไม่ว่าจะล็อกอินอยู่หรือไม่ ทำให้ session ที่ยังใช้ได้ปกติ
+          ดูเหมือนถูกล็อกเอาท์ทันทีที่พิมพ์ URL ผิดหรือกดลิงก์เก่า จึงต้องเช็ค isAuthenticated ก่อน
+          แล้วพาไปหน้าแรกของเมนูตาม role แทน เหมือนที่ path "/" ทำ */}
+      <Route path="*" element={<Navigate to={isAuthenticated ? firstMenuPath : "/login"} replace />} />
     </Routes>
   );
 }
