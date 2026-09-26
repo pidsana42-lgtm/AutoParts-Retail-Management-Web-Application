@@ -9,3 +9,7 @@ backend/model/service_account.json
 # Production Prometheus scrape credentials
 monitoring/secrets/*
 !monitoring/secrets/README.md
+
+# สไลด์นำเสนอโครงงาน (ไฟล์ใหญ่ ไม่ต้องเก็บใน repo)
+# จำกัดเฉพาะรูทของโปรเจกต์ เพื่อไม่ให้เผลอกลืน PDF ในโฟลเดอร์อื่น เช่นรายงานสแกนความปลอดภัย
+/*.pdf

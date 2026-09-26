@@ -55,7 +55,31 @@
 ทำหน้าที่สร้าง Web API บนพอร์ต `8000` โดยต่อสายใช้งานตรงกับ Google Gemini API และ **เชื่อมต่อโดยตรงกับ PostgreSQL Database**:
 *   `POST /api/extract-invoice` : รับพาธของไฟล์รูปภาพบิล แล้วส่งให้โมเดลทำ OCR
 *   `POST /api/agent` : รับคำถามภาษาไทยจาก Go Backend พร้อมรหัส LINE User ID แล้วเรียกตัว AI Agent ค้นหาข้อมูลใน DB ส่งคืนกลับไปให้แชทไลน์โดยตรง
-*   **ระบบสแกนจับคู่สินค้าด้วย AI (Vector Similarity Product Mapping):** เมื่อสแกนบิล OCR สำเร็จ ระบบจะดึงโมเดล `onnx-community/embeddinggemma-300m-ONNX` (รันผ่าน ONNX Runtime ใน `embedder.py`) มาคำนวณเวกเตอร์ embeddings ของสินค้า แล้วเปรียบเทียบความคล้ายคลึง (Cosine Similarity) กับสินค้าของระบบ เพื่อเลือกผูก `product_id` ให้อัตโนมัติทันทีก่อนบันทึกใบสั่งซื้อ (มีระบบ TF-IDF เป็น Fallback ช่วยสำรองกรณีหน่วยความจำไม่เพียงพอ)
+*   **ระบบสแกนจับคู่สินค้าด้วย AI (Vector Similarity Product Mapping):** เมื่อสแกนบิล OCR สำเร็จ ระบบจะดึงโมเดล `onnx-community/embeddinggemma-300m-ONNX` (โหลดไฟล์ `.onnx` เข้า ONNX Runtime โดยตรงใน `embedder.py`) มาคำนวณเวกเตอร์ embeddings ขนาด **768 มิติ** ของสินค้า เก็บลงตาราง `product_embeddings` เป็นคอลัมน์ชนิด `vector(768)` ของ **pgvector** แล้วค้นหาความคล้ายคลึงด้วยตัวดำเนินการ `<=>` (cosine distance) โดยให้ PostgreSQL คำนวณผ่าน **HNSW index** แทนการดึงเวกเตอร์ทั้งตารางขึ้นหน่วยความจำ เพื่อเลือกผูก `product_id` ให้อัตโนมัติทันทีก่อนบันทึกใบสั่งซื้อ (มีระบบ TF-IDF เป็น Fallback ช่วยสำรองกรณีโหลดโมเดลไม่สำเร็จหรือหน่วยความจำไม่เพียงพอ)
+
+    **ลำดับการจับคู่ใน `ProductMatcher.match_product()`** ไล่จากมั่นใจที่สุดลงมา:
+    1. รหัสสินค้าหรือบาร์โค้ดตรงกันเป๊ะ → คะแนน 1.0
+    2. ตรงกับคู่ที่พนักงานเคยยืนยันไว้ (`product_mapping_corrections`) ของซัพพลายเออร์เจ้านั้น → 1.0
+    3. ตรงกับคู่ที่เคยยืนยันของซัพพลายเออร์เจ้าอื่น → 1.0
+    4. เทียบเวกเตอร์ด้วย pgvector `<=>` ต้องผ่านเกณฑ์ **0.85** โดยไล่เป็น **3 ชั้น** ตามลำดับความน่าเชื่อถือ
+       (ดู `ProductMatcher._SEARCH_TIERS`) ให้สอดคล้องกับขั้นที่ 2-3 ข้างบน:
+       1. คู่ที่เคยยืนยันของซัพพลายเออร์เจ้าที่กำลังนำเข้า (`target_type='correction' AND supplier_id = :sid`)
+       2. คู่ที่เคยยืนยันของซัพพลายเออร์เจ้าอื่น
+       3. สินค้าในคลังตามชื่อที่ร้านตั้งเอง
+    5. ถ้าไม่ผ่านขั้นใดเลย ระบบจะไม่เดา แต่เว้นว่างให้พนักงานเลือกเองบนหน้าตรวจทาน
+
+    **ทำไมต้องแยกตามซัพพลายเออร์:** ชื่ออะไหล่เดียวกันจากคนละเจ้าอาจหมายถึงคนละสินค้า เช่น
+    `"แม่ปั๊มครัชบน NPR120"` ของซัพ 15/16 ชี้ไปสินค้า ID 46 แต่ของซัพ 18 ชี้ไป ID 60 ถ้าค้นรวมทุกเจ้า
+    จะจับคู่ผิดทันที ในฐานข้อมูลปัจจุบันมีเคสแบบนี้อยู่ 6 เคส
+
+    **ข้อความที่นำไป embed ใช้ชื่อสินค้าอย่างเดียว ไม่รวมรหัส** (ดู `embedder.embedding_text()`)
+    เพราะโมเดลภาษาไม่เข้าใจรหัสอย่าง `IS-CMG-643A` และรหัสของสองฝั่งมักไม่ตรงกันอยู่แล้ว
+    การใส่ปนเข้าไปทำให้สัญญาณความหมายเจือจาง ส่วนรหัสถูกใช้เต็มที่แล้วในขั้นที่ 1-3 ซึ่งเทียบแบบตรงตัวอักษร
+
+    **เส้นทางสำรอง** ทั้งการคำนวณในหน่วยความจำ (`_search_in_memory`) และ TF-IDF (`_search_tfidf`)
+    ใช้ลำดับ 3 ชั้นเดียวกันผ่าน `_pick_best_by_tier()` ผลลัพธ์จึงไม่เปลี่ยนเวลาระบบถอยไปใช้ทางสำรอง
+
+    **ข้อกำหนดของฐานข้อมูล:** ต้องมี extension `vector` (pgvector) ติดตั้งอยู่ ฝั่ง Docker ใช้อิมเมจ `pgvector/pgvector:pg15` ที่มีมาให้แล้ว ส่วนเครื่องที่ติดตั้ง PostgreSQL เอง ต้องติดตั้ง pgvector ก่อน (เช่น `brew install pgvector` หรือบิลด์จากซอร์สด้วย `make PG_CONFIG=<path>/pg_config && make install`) จากนั้น `init_db()` ใน `server.py` จะรัน `CREATE EXTENSION IF NOT EXISTS vector` สร้างตารางและ HNSW index ให้เองอัตโนมัติ
 
 ### B. AI Text-to-SQL Agent (`backend/model/agent.py`)
 *   ทำหน้าที่เป็นตัวประสานงาน (Agent Core) ทำการประเมินประโยคคำถามของลูกค้าใน LINE
@@ -216,10 +240,13 @@ pm2 restart frontend-app || pm2 serve dist 3000 --name "frontend-app" --spa
 ```bash
 cd /var/www/AutoParts-Retail-Management-Web-Application/backend/model
 pip3 install -r requirements.txt
-# VPS RAM 4GB: บังคับใช้ TF-IDF (ประหยัด ~2GB RAM, boot เร็วขึ้น)
-USE_TFIDF_ONLY=1 pm2 restart ai-fastapi-api || USE_TFIDF_ONLY=1 pm2 start server.py --name "ai-fastapi-api" --interpreter python3
+pm2 restart ai-fastapi-api || pm2 start server.py --name "ai-fastapi-api" --interpreter python3
 ```
-> **หมายเหตุ:** ถ้า VPS มี RAM ≥ 8GB สามารถเอา `USE_TFIDF_ONLY=1` ออกได้ เพื่อใช้ ONNX embedding ที่แม่นยำกว่า
+> **หมายเหตุเรื่องหน่วยความจำ:** เดิมต้องตั้ง `USE_TFIDF_ONLY=1` เพราะการโหลดโมเดลผ่าน `optimum` ลาก `torch` เข้ามาด้วยจนกินแรมเกินที่ VPS 4GB รับไหว ปัจจุบัน `embedder.py` โหลดไฟล์ `.onnx` เข้า ONNX Runtime โดยตรง (ตัดทั้ง `optimum` และ `torch` ออกจากเส้นทางอนุมานผล เหลือ `onnxruntime` + `numpy`) ใช้แรมประมาณ **1.2 GB** จึงรันบน VPS 4GB ได้โดยไม่ต้องตั้งตัวแปรนี้แล้ว
+>
+> หากเครื่องปลายทางหน่วยความจำไม่พอจริง ๆ ยังตั้ง `USE_TFIDF_ONLY=1` เพื่อข้ามการโหลดโมเดลและใช้ TF-IDF แทนได้เหมือนเดิม แต่การจับคู่จะอาศัยความคล้ายของตัวอักษรแทนความหมาย และ pgvector จะไม่ถูกเรียกใช้
+>
+> **ข้อควรระวัง:** `optimum` ผูกเวอร์ชันแน่นกับ `transformers` — เวอร์ชัน 2.1.0 ใช้กับ `transformers` 5.x ไม่ได้ (`cannot import name 'is_offline_mode'`) ซึ่งเคยทำให้ระบบตกไปใช้ TF-IDF เงียบ ๆ โดยไม่มีใครรู้ จึงตัด `optimum` ออกจาก `requirements.txt` แล้ว **อย่าเพิ่มกลับเข้ามา**
 
 #### 4. สั่งบันทึกและตรวจสอบสถานะบริการ PM2:
 ```bash
@@ -378,8 +405,8 @@ pm2 start mcp_server.py --name "mcp-server" --interpreter python3
 
 ### B. สถาปัตยกรรม Docker Compose (`docker-compose.yml`)
 ระบบถูกจัดให้อยู่ใน Container เพื่อให้บิวด์และดูแลรักษาง่ายในคำสั่งเดียว:
-1. **`postgres` (PostgreSQL 15):** จัดเก็บข้อมูลระบบทั้งหมด โดยผูกข้อมูลไว้กับ Docker Volume `postgres_data` (ข้อมูลไม่สูญหายเมื่อรีสตาร์ต)
-2. **`ai-service` (Python FastAPI):** บริการ OCR สแกนบิลและ AI Agent บนพอร์ต `8000` (รันในโหมด TF-IDF ประหยัด RAM ไม่โหลดโมเดลหนัก 5GB ลงเครื่อง)
+1. **`postgres` (PostgreSQL 15 + pgvector):** ใช้อิมเมจ `pgvector/pgvector:pg15` ซึ่งเป็น PostgreSQL 15 ที่มี extension `vector` ติดตั้งมาให้แล้ว จำเป็นสำหรับตาราง `product_embeddings` ที่เก็บคอลัมน์ชนิด `vector(768)` จัดเก็บข้อมูลระบบทั้งหมด โดยผูกข้อมูลไว้กับ Docker Volume `postgres_data` (ข้อมูลไม่สูญหายเมื่อรีสตาร์ต)
+2. **`ai-service` (Python FastAPI):** บริการ OCR สแกนบิลและ AI Agent บนพอร์ต `8000` โหลดโมเดล embedding ผ่าน ONNX Runtime ใช้แรมประมาณ 1.2 GB
 3. **`backend` (Go Gin API):** รันบนพอร์ต `8080` เชื่อมต่อไปยังฐานข้อมูล `postgres` และ `ai-service` อัตโนมัติ พร้อมผูก Volume สำหรับรูปภาพ (`uploads`), บาร์โค้ด (`barcode`), และคิวอาร์โค้ด (`QRCode`)
 4. **`frontend` (React + Nginx):** บิวด์ไฟล์ static และรัน Nginx รองรับทั้ง HTTP (Redirect สู่ HTTPS) และ HTTPS (พอร์ต `443`) พร้อม SSL Certificate
 
