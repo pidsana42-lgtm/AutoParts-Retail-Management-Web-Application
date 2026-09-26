@@ -310,12 +310,41 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 			} else {
 				prodName := strings.TrimSpace(items[i].CompanyProductName)
 				prodCode := strings.TrimSpace(items[i].CompanyProductCode)
-				// กรณีชื่อ/รหัสซ้ำกันมีหลายสินค้า (ชื่อเดียวกันแต่ต่างบริษัท) → เลือกตัวที่เคยรับจากบริษัทนี้มาก่อน
-				// แล้วค่อย fallback เป็นตัวที่ id เก่าสุด เพื่อให้ผลลัพธ์คาดเดาได้เสมอ
-				err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("LOWER(TRIM(product_name)) = LOWER(TRIM(?)) OR (LOWER(TRIM(product_code)) = LOWER(TRIM(?)) AND product_code != '')", prodName, prodCode).
-					Order(fmt.Sprintf("CASE WHEN EXISTS (SELECT 1 FROM inventories i WHERE i.product_id = products.id AND i.supplier_id = %d AND i.deleted_at IS NULL) THEN 0 ELSE 1 END", bill.SupplierID)).
-					Order("id").
-					First(&prod).Error
+
+				// จับคู่กับสินค้าเดิมจากชื่อที่ซัพพลายเออร์เรียก หรือจากรหัสของซัพพลายเออร์
+				//
+				// ข้อควรระวัง: รหัสในบิลเป็น "รหัสของซัพพลายเออร์" (เช่น IS-CMG-643A) ซึ่งเป็นคนละชุด
+				// กับ products.product_code ที่เป็นรหัสภายในร้าน (เช่น ENG-00043) จึงต้องเทียบกับที่ที่
+				// เก็บรหัสฝั่งซัพจริง ๆ คือ products.part_number และ inventories.company_product_code
+				// ของซัพเจ้านั้น — ถ้าเทียบกับ products.product_code บิลของซัพที่บังเอิญใช้รหัสตรงกับ
+				// รหัสภายในร้านของสินค้าคนละตัว จะถูกผูกเข้ากับสินค้าผิดตัวเงียบ ๆ แล้วของเข้าสต็อกผิด
+				conds := []string{}
+				args := []interface{}{}
+				if prodName != "" {
+					conds = append(conds, "LOWER(TRIM(product_name)) = LOWER(TRIM(?))")
+					args = append(args, prodName)
+				}
+				if prodCode != "" {
+					conds = append(conds, "(LOWER(TRIM(part_number)) = LOWER(TRIM(?)) AND TRIM(part_number) != '')")
+					args = append(args, prodCode)
+					conds = append(conds, `EXISTS (SELECT 1 FROM inventories i
+						WHERE i.product_id = products.id AND i.supplier_id = ? AND i.deleted_at IS NULL
+						  AND LOWER(TRIM(i.company_product_code)) = LOWER(TRIM(?)))`)
+					args = append(args, bill.SupplierID, prodCode)
+				}
+
+				if len(conds) == 0 {
+					// ไม่มีทั้งชื่อและรหัสให้เทียบ ถือว่าเป็นสินค้าใหม่ไปเลย
+					err = gorm.ErrRecordNotFound
+				} else {
+					// กรณีเข้าเงื่อนไขหลายตัว → เลือกตัวที่เคยรับจากบริษัทนี้มาก่อน แล้วค่อย fallback
+					// เป็นตัวที่ id เก่าสุด เพื่อให้ผลลัพธ์คาดเดาได้เสมอ
+					err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+						Where(strings.Join(conds, " OR "), args...).
+						Order(fmt.Sprintf("CASE WHEN EXISTS (SELECT 1 FROM inventories i WHERE i.product_id = products.id AND i.supplier_id = %d AND i.deleted_at IS NULL) THEN 0 ELSE 1 END", bill.SupplierID)).
+						Order("id").
+						First(&prod).Error
+				}
 			}
 
 			if errors.Is(err, gorm.ErrRecordNotFound) {

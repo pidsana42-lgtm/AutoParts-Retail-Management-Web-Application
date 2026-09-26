@@ -1,14 +1,21 @@
 import * as XLSX from 'xlsx';
 import type { BillItemDTO, ColumnMapping } from '../interface/import';
 
+// อ่านวัน/เดือน/ปีตามเขตเวลาของเครื่อง ไม่ใช้ toISOString() เพราะมันแปลงเป็น UTC ก่อน
+// วันที่ที่ถูกตีความเป็นเที่ยงคืนตามเวลาไทย (UTC+7) จะถอยไปเป็นวันก่อนหน้าทันที
+// เช่น "Aug 1 2025" เคยได้ผลเป็น 2025-07-31 ทำให้วันที่บิลและวันครบกำหนดชำระเพี้ยนไป 1 วัน
+function formatLocalDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function normalizeDateValue(val: any): string {
   if (val === null || val === undefined || val === '') return '';
 
   if (val instanceof Date && !isNaN(val.getTime())) {
-    const y = val.getFullYear();
-    const m = String(val.getMonth() + 1).padStart(2, '0');
-    const d = String(val.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return formatLocalDate(val);
   }
 
   if (typeof val === 'number') {
@@ -43,7 +50,7 @@ export function normalizeDateValue(val: any): string {
 
   const parsedDate = new Date(text);
   if (!isNaN(parsedDate.getTime())) {
-    return parsedDate.toISOString().split('T')[0];
+    return formatLocalDate(parsedDate);
   }
 
   return '';
