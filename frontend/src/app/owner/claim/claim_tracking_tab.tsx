@@ -15,6 +15,35 @@ const TRACKING_STAGE_OPTIONS = [
   { value: 'COMPLETED', label: 'ส่งมอบลูกค้าแล้ว' },
 ];
 
+// เคลมประเภท INSTANT (เปลี่ยนทันที) และ CREDIT_ACCOUNT (ลงบัญชีเชื่อ) ลูกค้าได้ของ/ได้เครดิตไปแล้วตั้งแต่วันที่
+// อนุมัติ จึงไม่มีขั้น "ส่งมอบลูกค้าแล้ว" ให้กด แต่ยังต้องอยู่ในแท็บติดตาม เพราะของเสียยังต้องรวบรวมส่งบริษัท และ
+// การกด "ได้รับของเปลี่ยน" เป็นจุดเดียวที่ระบบรับสินค้าทดแทนกลับเข้าคลัง ชดเชยสต็อกที่ตัดออกไปตอนอนุมัติ
+const HANDOVER_DONE_AT_APPROVAL = new Set(['INSTANT', 'CREDIT_ACCOUNT']);
+
+export const needsCustomerHandover = (claimType?: string): boolean =>
+  !HANDOVER_DONE_AT_APPROVAL.has((claimType || 'INSTANT').trim().toUpperCase());
+
+// ขั้นสุดท้ายของแต่ละประเภท — ถึงขั้นนี้แล้วถือว่าปิดงาน แก้สถานะต่อไม่ได้อีก
+export const finalTrackingStage = (claimType?: string): TrackingStage =>
+  needsCustomerHandover(claimType) ? 'COMPLETED' : 'REPLACEMENT_RECEIVED';
+
+// รวม COMPLETED ไว้เสมอ เผื่อข้อมูลเดิมที่เคยกด "ส่งมอบลูกค้าแล้ว" ไว้ตอนที่ทุกประเภทยังมีขั้นนี้
+export const isTrackingFinished = (stage: TrackingStage, claimType?: string): boolean =>
+  stage === 'COMPLETED' || stage === finalTrackingStage(claimType);
+
+export const resolveTrackingStage = (resolution?: string): TrackingStage => {
+  const value = (resolution || '').trim();
+  if (value === 'COMPLETED' || value.includes('ส่งมอบ') || value.includes('สำเร็จ')) return 'COMPLETED';
+  if (value === 'REPLACEMENT_RECEIVED' || value.includes('ได้รับของ') || value.includes('รับสินค้าทดแทน')) return 'REPLACEMENT_RECEIVED';
+  if (value === 'SENT_TO_SUPPLIER' || value.includes('ส่งบริษัท') || value.includes('ส่งโรงงาน')) return 'SENT_TO_SUPPLIER';
+  return 'WAITING_SEND';
+};
+
+const stageOptionsFor = (claimType?: string, currentStage?: TrackingStage) =>
+  needsCustomerHandover(claimType) || currentStage === 'COMPLETED'
+    ? TRACKING_STAGE_OPTIONS
+    : TRACKING_STAGE_OPTIONS.filter(option => option.value !== 'COMPLETED');
+
 const parseNote = (note: string | undefined, key: string): string => {
   if (!note) return '-';
   const match = note.match(new RegExp(`${key}:\\s*([^|]+)`));
@@ -55,13 +84,14 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
     claimNo: string;
     customerName: string;
     productName: string;
+    stage: TrackingStage;
   } | null>(null);
 
   const handleConfirmCompleted = async () => {
     if (!pendingCompletedItem) return;
-    const { itemId } = pendingCompletedItem;
+    const { itemId, stage } = pendingCompletedItem;
     try {
-      await onUpdateStage(itemId, 'COMPLETED');
+      await onUpdateStage(itemId, stage);
     } finally {
       setPendingCompletedItem(null);
     }
@@ -90,15 +120,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
     const claimNo = claim.claim_no ?? `CLM-${claim.id}`;
 
     return (claim.items ?? []).map(item => {
-      const resolution = (item.resolution || '').trim();
-      let stage: TrackingStage = 'WAITING_SEND';
-      if (resolution === 'COMPLETED' || resolution.includes('ส่งมอบ') || resolution.includes('สำเร็จ')) {
-        stage = 'COMPLETED';
-      } else if (resolution === 'REPLACEMENT_RECEIVED' || resolution.includes('ได้รับของ') || resolution.includes('รับสินค้าทดแทน')) {
-        stage = 'REPLACEMENT_RECEIVED';
-      } else if (resolution === 'SENT_TO_SUPPLIER' || resolution.includes('ส่งบริษัท') || resolution.includes('ส่งโรงงาน')) {
-        stage = 'SENT_TO_SUPPLIER';
-      }
+      const stage = resolveTrackingStage(item.resolution);
 
       return {
         claimId: claim.id ?? 0,
@@ -111,7 +133,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
         productName: item.product_name || `#${item.product_id}`,
         qty: item.qty,
         reason: item.reason,
-        claimType: item.claim_type || claim.claim_type || 'SUPPLIER_PENDING',
+        claimType: item.claim_type || claim.claim_type || 'INSTANT',
         itemStatus: (item.status ?? 'PENDING').toUpperCase(),
         resolution: item.resolution,
         stage,
@@ -122,8 +144,12 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
   });
 
   const filteredTrackingItems = allTrackingItems.filter(item => {
-    if (item.itemStatus === 'REJECTED') return false;
-    if (trackingFilter !== 'ALL' && item.stage !== trackingFilter) return false;
+    // ติดตามเฉพาะรายการที่อนุมัติแล้ว — รายการที่ยังรอพิจารณาหรือถูกปฏิเสธยังไม่มีของต้องส่งบริษัท
+    if (item.itemStatus !== 'APPROVED') return false;
+    if (trackingFilter === 'COMPLETED') {
+      // ประเภทที่ไม่มีขั้นส่งมอบ ถือว่าเคลมสำเร็จตั้งแต่ได้รับของเปลี่ยนเข้าคลังแล้ว
+      if (!isTrackingFinished(item.stage, item.claimType)) return false;
+    } else if (trackingFilter !== 'ALL' && item.stage !== trackingFilter) return false;
     if (trackingSearch.trim()) {
       const q = trackingSearch.toLowerCase().trim();
       if (
@@ -178,6 +204,8 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
             ) : (
               paginatedTrackingRows.map((item, idx) => {
                 const isUpdating = updatingItemId === item.itemId;
+                const isFinished = isTrackingFinished(item.stage, item.claimType);
+                const finalStage = finalTrackingStage(item.claimType);
 
                 return (
                   <TableRow key={`${item.claimId}-${item.itemId}-${idx}`} className="hover:bg-gray-50/70 border-t border-gray-100">
@@ -223,23 +251,28 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
                     <TableCell className="text-center pr-6">
                       <div
                         className="flex items-center justify-center gap-1.5"
-                        title={item.stage === 'COMPLETED' ? 'ส่งมอบลูกค้าแล้ว ไม่สามารถแก้ไขสถานะได้อีก' : undefined}
+                        title={isFinished
+                          ? (finalStage === 'COMPLETED'
+                            ? 'ส่งมอบลูกค้าแล้ว ไม่สามารถแก้ไขสถานะได้อีก'
+                            : 'ปิดงานเคลมแล้ว ไม่สามารถแก้ไขสถานะได้อีก')
+                          : undefined}
                       >
                         {isUpdating ? (
                           <Loader2 size={16} className="animate-spin text-[#e51c23]" />
                         ) : (
                           <Select
                             value={item.stage}
-                            options={TRACKING_STAGE_OPTIONS}
-                            disabled={item.stage === 'COMPLETED'}
+                            options={stageOptionsFor(item.claimType, item.stage)}
+                            disabled={isFinished}
                             onChange={e => {
-                              if (item.stage === 'COMPLETED') return;
-                              if (e.target.value === 'COMPLETED') {
+                              if (isFinished) return;
+                              if (e.target.value === finalStage) {
                                 setPendingCompletedItem({
                                   itemId: item.itemId,
                                   claimNo: item.claimNo,
                                   customerName: item.customerName,
                                   productName: item.productName,
+                                  stage: finalStage,
                                 });
                                 return;
                               }
@@ -248,7 +281,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
                             containerClassName="w-44 text-left"
                             className={cn(
                               "h-9 text-xs",
-                              item.stage === 'COMPLETED' && "cursor-not-allowed opacity-75"
+                              isFinished && "cursor-not-allowed opacity-75"
                             )}
                           />
                         )}
@@ -345,12 +378,14 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
         isOpen={pendingCompletedItem !== null}
         onClose={() => !updatingItemId && setPendingCompletedItem(null)}
         onConfirm={handleConfirmCompleted}
-        title="ยืนยันการส่งมอบสินค้า"
+        title={pendingCompletedItem?.stage === 'COMPLETED' ? 'ยืนยันการส่งมอบสินค้า' : 'ยืนยันรับของเปลี่ยนเข้าคลัง'}
         description={
           pendingCompletedItem && (
             <div className="space-y-3 text-sm text-left">
               <p className="text-red-600 font-medium text-center">
-                คำเตือน: เมื่อเปลี่ยนสถานะเป็น &ldquo;ส่งมอบลูกค้าแล้ว&rdquo; จะไม่สามารถแก้ไขสถานะของรายการนี้ได้อีก
+                {pendingCompletedItem.stage === 'COMPLETED'
+                  ? 'คำเตือน: เมื่อเปลี่ยนสถานะเป็น “ส่งมอบลูกค้าแล้ว” จะไม่สามารถแก้ไขสถานะของรายการนี้ได้อีก'
+                  : 'คำเตือน: รายการนี้ลูกค้ารับของ/รับเครดิตไปแล้วตั้งแต่วันอนุมัติ เมื่อกด “ได้รับของเปลี่ยน” ระบบจะรับสินค้าทดแทนเข้าคลังและปิดงานเคลมทันที แก้ไขสถานะไม่ได้อีก'}
               </p>
               <div className="bg-[#fcfbfa] border border-gray-100 p-3 space-y-1.5 text-xs text-gray-700">
                 <div className="flex justify-between">
@@ -372,7 +407,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
             </div>
           )
         }
-        confirmText="ยืนยันส่งมอบ"
+        confirmText={pendingCompletedItem?.stage === 'COMPLETED' ? 'ยืนยันส่งมอบ' : 'ยืนยันรับของเข้าคลัง'}
         cancelText="ยกเลิก"
         variant="danger"
         isSubmitting={updatingItemId === pendingCompletedItem?.itemId}
