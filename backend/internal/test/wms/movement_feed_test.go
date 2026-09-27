@@ -138,7 +138,7 @@ func TestList_SortsAllSourcesByOccurredAtDescending(t *testing.T) {
 	}
 
 	svc := wmsService.NewMovementFeedService(repo)
-	items, err := svc.List()
+	items, err := svc.List("/owner")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestList_PropagatesErrorFromAnySource(t *testing.T) {
 			repo := &mockMovementFeedRepo{}
 			tt.setRepo(repo)
 			svc := wmsService.NewMovementFeedService(repo)
-			_, err := svc.List()
+			_, err := svc.List("/owner")
 			if !errors.Is(err, wantErr) {
 				t.Fatalf("expected error %v when %s fails, got %v", wantErr, tt.name, err)
 			}
@@ -202,7 +202,7 @@ func TestList_PropagatesErrorFromAnySource(t *testing.T) {
 func TestList_EmptyEverywhere_ReturnsEmptySlice(t *testing.T) {
 	repo := &mockMovementFeedRepo{}
 	svc := wmsService.NewMovementFeedService(repo)
-	items, err := svc.List()
+	items, err := svc.List("/owner")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestList_ProductAddedItem_MapsFields(t *testing.T) {
 		},
 	}
 	svc := wmsService.NewMovementFeedService(repo)
-	items, err := svc.List()
+	items, err := svc.List("/owner")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestList_StockInItem_IncludesSupplierNameInDetail(t *testing.T) {
 		},
 	}
 	svc := wmsService.NewMovementFeedService(repo)
-	items, err := svc.List()
+	items, err := svc.List("/owner")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestList_StockAdjustedItem_UsesNoteAsDetailAndAppendsCounter(t *testing.T) 
 		},
 	}
 	svc := wmsService.NewMovementFeedService(repo)
-	items, err := svc.List()
+	items, err := svc.List("/owner")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestList_SaleOutItem_TitleReflectsOrderStatus(t *testing.T) {
 				},
 			}
 			svc := wmsService.NewMovementFeedService(repo)
-			items, err := svc.List()
+			items, err := svc.List("/owner")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -383,7 +383,7 @@ func TestList_ReturnItem_MapsFromStockMovement(t *testing.T) {
 		},
 	}
 	svc := wmsService.NewMovementFeedService(repo)
-	items, err := svc.List()
+	items, err := svc.List("/owner")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -420,7 +420,7 @@ func TestList_ReturnItem_FallsBackToProductLinkWhenReturnNumberNotResolved(t *te
 		},
 	}
 	svc := wmsService.NewMovementFeedService(repo)
-	items, err := svc.List()
+	items, err := svc.List("/owner")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -451,7 +451,7 @@ func TestList_CustomerClaimItem_UsesClaimDateNotRowCreatedAt(t *testing.T) {
 		},
 	}
 	svc := wmsService.NewMovementFeedService(repo)
-	items, err := svc.List()
+	items, err := svc.List("/owner")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -488,7 +488,7 @@ func TestList_PreOrderItem_FallsBackToSupplierSnapshotWhenPreOrderMissing(t *tes
 		},
 	}
 	svc := wmsService.NewMovementFeedService(repo)
-	items, err := svc.List()
+	items, err := svc.List("/owner")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -517,7 +517,7 @@ func TestList_CheckFlaggedItem_UnknownCheckTypeFallsBackToRawValue(t *testing.T)
 		},
 	}
 	svc := wmsService.NewMovementFeedService(repo)
-	items, err := svc.List()
+	items, err := svc.List("/owner")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
