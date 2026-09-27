@@ -14,6 +14,7 @@ import apiClient from '../../../service/http/apiClient';
 import type { CustomerClaim, CustomerClaimItem } from '../../../interface/claim/claim';
 import { CLAIM_TYPE_LABEL } from '../../../interface/claim/claim';
 import { useToast } from '../../../components/elements/toast';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 interface ClaimEditPageProps {
   canApprove?: boolean;
@@ -55,7 +56,8 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
   const [activeItemIdx, setActiveItemIdx] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const backPath = window.location.pathname.startsWith('/employee') ? '/employee/claims' : '/owner/claims';
+  const basePrefix = usePathBasePrefix();
+  const backPath = canApprove === false ? '/employee/claims' : `${basePrefix}/claims`;
 
   useEffect(() => {
     if (!id) return;

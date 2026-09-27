@@ -16,6 +16,7 @@ import type { CustomerDiscountResponse } from '../../../interface/pos/customer_i
 import type { CustomerClaim, CustomerClaimItem } from '../../../interface/claim/claim';
 import { CLAIM_TYPE_LABEL } from '../../../interface/claim/claim';
 import { useToast } from '../../../components/elements/toast';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 interface EditableItem extends CustomerClaimItem {
   newFile?: File | null;
@@ -327,7 +328,8 @@ export default function ClaimDetailPage(): React.JSX.Element {
       : parseNote(claim.notes || claim.note, 'Order') || (claim.original_order_id ? `#${claim.original_order_id}` : '-'));
   const displayItems = isEditing ? editItems : (claim.items ?? []);
   const totalQty = displayItems.reduce((acc, i) => acc + (i.qty || 0), 0);
-  const basePath = window.location.pathname.startsWith('/employee') ? '/employee/claims' : '/owner/claims';
+  const basePrefix = usePathBasePrefix();
+  const basePath = `${basePrefix}/claims`;
   const breadcrumbRoot = { label: 'จัดการเคลมสินค้า', path: basePath };
 
   return (
@@ -353,6 +355,7 @@ export default function ClaimDetailPage(): React.JSX.Element {
               <>
                 <Link
                   to={`${basePath}/detail/${claim.id}`}
+                  state={{ authorizedId: Number(claim.id) }}
                   onClick={cancelEditing}
                   className="hover:text-black transition-colors"
                 >
