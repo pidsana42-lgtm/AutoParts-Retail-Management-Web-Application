@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, Edit } from 'lucide-react';
+import { usePathBasePrefix } from '../../../../utils/usePathBasePrefix';
 
 export interface PriceMismatchItem {
   index: number;
@@ -26,6 +27,7 @@ export default function PriceUpdateModal({
   onConfirm
 }: PriceUpdateModalProps) {
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   useEffect(() => {
@@ -58,7 +60,7 @@ export default function PriceUpdateModal({
     } catch (e) {
       console.error('Failed to set sessionStorage:', e);
     }
-    navigate('/owner/import-bills/edit-stock-bill', { 
+    navigate(`${basePath}/import-bills/edit-stock-bill`, {
       state: { mismatchedItems, isFromImportBill: true } 
     });
   };

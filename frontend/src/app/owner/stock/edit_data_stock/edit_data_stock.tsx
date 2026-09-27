@@ -16,10 +16,12 @@ import { getProductById, updateProduct, uploadProductImage } from "../../../../s
 import type { StockItem } from "../../../../interface/wms/product";
 import { useProductFormOptions } from "../hooks/useProductFormOptions";
 import SupplierRowsField, { rowsToPayload, suppliersToRows, type SupplierRow } from "../SupplierRowsField";
+import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 
 export default function EditProductPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   const { alertDialog, confirmDialog } = useAlertDialog();
   const { models, categories, grades, units, zones, suppliers, loading: loadingOptions, addSupplierOption } = useProductFormOptions();
   const [supplierRows, setSupplierRows] = useState<SupplierRow[]>([]);
@@ -235,7 +237,7 @@ export default function EditProductPage() {
         }
       }
       await alertDialog(imageUploadFailed ? "แก้ไขข้อมูลสินค้าสำเร็จ แต่อัปโหลดรูปสินค้าไม่สำเร็จ" : "แก้ไขข้อมูลสินค้าสำเร็จ");
-      navigate(`/owner/stock/${product.ID}`, { state: { authorizedId: Number(product.ID) } });
+      navigate(`${basePath}/stock/${product.ID}`, { state: { authorizedId: Number(product.ID) } });
     } catch (err: any) {
       console.error("Error updating product:", err);
       await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการแก้ไขข้อมูลสินค้า");
@@ -257,7 +259,7 @@ export default function EditProductPage() {
     return (
       <div className="space-y-4 p-8 text-center">
         <p className="font-bold text-slate-500">{loadError || "ไม่พบข้อมูลสินค้าที่คุณระบุ"}</p>
-        <Button onClick={() => navigate("/owner/stock")} variant="outline">
+        <Button onClick={() => navigate(`${basePath}/stock`)} variant="outline">
           กลับหน้าคลังสินค้า
         </Button>
       </div>
@@ -268,7 +270,7 @@ export default function EditProductPage() {
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
       <Breadcrumb
         items={[
-          { label: "คลังสินค้า", path: "/owner/stock" },
+          { label: "คลังสินค้า", path: `${basePath}/stock` },
           { label: "แก้ไขข้อมูล" },
         ]}
       />

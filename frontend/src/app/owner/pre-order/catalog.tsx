@@ -23,6 +23,7 @@ import { getSuppliers } from '../../../service/http/import/import_service';
 import { useMobileUploadSession } from '../../../hooks/useMobileUploadSession';
 import type { Catalog, CatalogItem } from '../../../interface/catalog/catalog';
 import type { Supplier } from '../../../interface/import';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 interface CatalogManagerProps {
   isEmployee?: boolean;
@@ -32,7 +33,8 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const basePath = isEmployee ? '/employee/pre-orders' : '/owner/pre-orders';
+  // owner/manager/employee ทุก role ใช้ path suffix "/pre-orders" เหมือนกันหมด ต่างกันแค่ prefix ของ role
+  const basePath = `${usePathBasePrefix()}/pre-orders`;
   const catalogPath = `${basePath}/catalog`;
   const initialCatalogParams = new URLSearchParams(location.search);
 

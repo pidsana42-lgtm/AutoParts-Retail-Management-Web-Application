@@ -19,6 +19,7 @@ import {
 import { updateImportProduct } from '../../../../service/http/import/import_service';
 import PriceMismatchBanner from '../components/price_mismatch_banner';
 import type { StockItem } from '../../../../interface/wms/product';
+import { usePathBasePrefix } from '../../../../utils/usePathBasePrefix';
 
 interface SelectOption {
   label: string;
@@ -28,6 +29,7 @@ interface SelectOption {
 export default function EditStockBillPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const basePath = usePathBasePrefix();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
@@ -294,7 +296,7 @@ export default function EditStockBillPage() {
       <nav className="flex items-center gap-2 text-xs text-gray-500 mb-4">
         <button
           type="button"
-          onClick={() => navigate('/owner/import-bills')}
+          onClick={() => navigate(`${basePath}/import-bills`)}
           className="hover:text-[#e51c23] transition-colors cursor-pointer font-bold"
         >
           นำเข้าสินค้าจากบิล
@@ -304,7 +306,7 @@ export default function EditStockBillPage() {
             <ChevronRight size={14} className="text-gray-400" />
             <button
               type="button"
-              onClick={() => navigate('/owner/import-bills', { state: { openApproveForBill: location.state.returnBillId } })}
+              onClick={() => navigate(`${basePath}/import-bills`, { state: { openApproveForBill: location.state.returnBillId } })}
               className="hover:text-[#e51c23] transition-colors cursor-pointer"
             >
               อนุมัติบิลนำเข้าสินค้า {location.state.billNo ? `(เลขที่: ${location.state.billNo})` : ''}
@@ -592,9 +594,9 @@ export default function EditStockBillPage() {
                     disabled={submitting}
                     onClick={() => {
                       if (location.state?.returnFrom === 'approve' && location.state?.returnBillId) {
-                        navigate('/owner/import-bills', { state: { openApproveForBill: location.state.returnBillId } });
+                        navigate(`${basePath}/import-bills`, { state: { openApproveForBill: location.state.returnBillId } });
                       } else {
-                        navigate('/owner/import-bills');
+                        navigate(`${basePath}/import-bills`);
                       }
                     }}
                     className="w-full sm:w-40"
