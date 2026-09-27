@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Loader2, MapPin, Package, ClipboardCheck, Download, Printer, QrCode, Undo2 } from "lucide-react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
