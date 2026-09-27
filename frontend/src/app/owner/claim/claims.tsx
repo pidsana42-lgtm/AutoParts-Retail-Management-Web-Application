@@ -18,6 +18,7 @@ import { CLAIM_TYPE_LABEL } from '../../../interface/claim/claim';
 import { cn } from '../../../utils/component';
 import { useNotification } from '../../../contexts/NotificationContext';
 import { useToast } from '../../../components/elements/toast';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 const parseNote = (note: string | undefined, key: string): string => {
   if (!note) return '-';
@@ -139,7 +140,8 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
   const navigate = useNavigate();
   const { addNotification } = useNotification();
   const { toast } = useToast();
-  const basePath = canApprove ? '/owner/claims' : '/employee/claims';
+  const basePrefix = usePathBasePrefix();
+  const basePath = canApprove === false ? '/employee/claims' : `${basePrefix}/claims`;
   const pageParams = new URLSearchParams(location.search);
   const view: 'list' | 'claim-form' = pageParams.get('view') === 'new' ? 'claim-form' : 'list';
   const activeTab: 'claims' | 'tracking' = pageParams.get('tab') === 'tracking' ? 'tracking' : 'claims';

@@ -21,6 +21,7 @@ import apiClient from '../../../service/http/apiClient';
 import { getCatalogs, createCatalog, updateCatalog, deleteCatalog, extractCatalogFromImage } from '../../../service/http/catalog/catalog_service';
 import { getSuppliers } from '../../../service/http/import/import_service';
 import { useMobileUploadSession } from '../../../hooks/useMobileUploadSession';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import type { Catalog, CatalogItem } from '../../../interface/catalog/catalog';
 import type { Supplier } from '../../../interface/import';
 
@@ -32,7 +33,8 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const basePath = isEmployee ? '/employee/pre-orders' : '/owner/pre-orders';
+  const basePrefix = usePathBasePrefix();
+  const basePath = isEmployee ? '/employee/pre-orders' : `${basePrefix}/pre-orders`;
   const catalogPath = `${basePath}/catalog`;
   const initialCatalogParams = new URLSearchParams(location.search);
 
