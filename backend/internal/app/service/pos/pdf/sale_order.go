@@ -2,6 +2,7 @@ package pdf
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"backend/internal/app/entity"
@@ -377,6 +378,11 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 
 	m.Line(1)
 
+	// คำนวณความกว้างคอลัมน์ชื่อสินค้า (Col 4 จาก 12 ส่วน)
+	pageWidth, _ := m.GetPageSize()
+	leftMargin, _, rightMargin, _ := m.GetPageMargins()
+	col4Width := (pageWidth - leftMargin - rightMargin) * (4.0 / 12.0)
+
 	// วนลูปข้อมูลสินค้า (Content)
 	for i, item := range order.Items {
 		itemCode := item.PartNumber
@@ -405,9 +411,22 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 			}
 		}
 
-		rowHeight := 7.5
+		nameLines := wrapTextToLines(m, item.ProductName, "THSarabun", "B", 10.0, col4Width)
+		var specLines []string
 		if specsLine != "" {
-			rowHeight = 11.0
+			specLines = wrapTextToLines(m, specsLine, "THSarabun", "", 8.5, col4Width)
+		}
+
+		lineHeightName := 4.0
+		lineHeightSpec := 3.5
+		totalNameHeight := float64(len(nameLines)) * lineHeightName
+		totalSpecHeight := float64(len(specLines)) * lineHeightSpec
+
+		var rowHeight float64
+		if len(specLines) == 0 {
+			rowHeight = math.Max(7.5, 0.5+totalNameHeight+2.5)
+		} else {
+			rowHeight = math.Max(11.0, 0.5+totalNameHeight+totalSpecHeight+2.5)
 		}
 
 		discountStr := "-"
@@ -419,9 +438,16 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 			m.Col(1, func() { m.Text(fmt.Sprintf("%d", i+1), props.Text{Size: 10, Align: consts.Center, Top: 0.5}) })
 			m.Col(2, func() { m.Text(itemCode, props.Text{Size: 10, Align: consts.Left, Top: 0.5}) })
 			m.Col(4, func() {
-				m.Text(item.ProductName, props.Text{Size: 10, Style: consts.Bold, Align: consts.Left, Top: 0.5})
-				if specsLine != "" {
-					m.Text(specsLine, props.Text{Size: 8.5, Top: 4.5, Color: HexToColor("#4B5563"), Align: consts.Left})
+				currentTop := 0.5
+				for _, line := range nameLines {
+					m.Text(line, props.Text{Size: 10, Style: consts.Bold, Align: consts.Left, Top: currentTop})
+					currentTop += lineHeightName
+				}
+				if len(specLines) > 0 {
+					for _, sLine := range specLines {
+						m.Text(sLine, props.Text{Size: 8.5, Top: currentTop, Color: HexToColor("#4B5563"), Align: consts.Left})
+						currentTop += lineHeightSpec
+					}
 				}
 			})
 			m.Col(1, func() { m.Text(fmt.Sprintf("%d", item.Qty), props.Text{Size: 10, Align: consts.Right, Top: 0.5}) })
@@ -592,3 +618,104 @@ func GenerateSaleOrderPDF(order *entity.SaleOrder, companyData *entity.CompanySe
 
 	return buf.Bytes(), nil
 }
+
+// wrapTextToLines ตัดข้อความออกเป็นบรรทัดตามความกว้างคอลัมน์จริง รองรับทั้งภาษาไทยและอังกฤษ ป้องกันข้อความทับซ้อนหรือล้นตาราง
+func wrapTextToLines(m pdf.Maroto, text string, fontName string, fontStyle string, fontSize float64, colWidth float64) []string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+
+	var getWidth func(s string) float64
+	if doc, ok := m.(*pdf.PdfMaroto); ok && doc.Pdf != nil {
+		doc.Pdf.SetFont(fontName, fontStyle, fontSize)
+		getWidth = func(s string) float64 { return doc.Pdf.GetStringWidth(s) }
+	} else {
+		// Fallback approximation: ~1.7mm ต่อตัวอักษรสำหรับ THSarabun ขนาด 10pt
+		scale := fontSize / 10.0
+		getWidth = func(s string) float64 { return float64(len([]rune(s))) * 1.7 * scale }
+	}
+
+	var wrappedLines []string
+	for _, para := range strings.Split(text, "\n") {
+		para = strings.TrimSpace(para)
+		if para == "" {
+			continue
+		}
+		rawWords := strings.Split(para, " ")
+		var safeWords []string
+		for _, w := range rawWords {
+			if w == "" {
+				continue
+			}
+			// หากคำเดียวยาวเกินความกว้างคอลัมน์ (เช่น ภาษาไทยที่ไม่มีวรรค หรือข้อความยาวติดกัน) ให้ตัดเป็นชิ้นย่อยตามความกว้าง
+			if getWidth(w) > colWidth {
+				runes := []rune(w)
+				chunk := ""
+				for _, r := range runes {
+					if getWidth(chunk+string(r)) > colWidth && chunk != "" {
+						safeWords = append(safeWords, chunk)
+						chunk = string(r)
+					} else {
+						chunk += string(r)
+					}
+				}
+				if chunk != "" {
+					safeWords = append(safeWords, chunk)
+				}
+			} else {
+				safeWords = append(safeWords, w)
+			}
+		}
+
+		currentLine := ""
+		for _, w := range safeWords {
+			testLine := w
+			if currentLine != "" {
+				testLine = currentLine + " " + w
+			}
+			if getWidth(testLine) <= colWidth {
+				currentLine = testLine
+			} else {
+				if currentLine != "" {
+					wrappedLines = append(wrappedLines, currentLine)
+				}
+				currentLine = w
+			}
+		}
+		if currentLine != "" {
+			wrappedLines = append(wrappedLines, currentLine)
+		}
+	}
+
+	if len(wrappedLines) == 0 {
+		wrappedLines = append(wrappedLines, text)
+	}
+
+	return wrappedLines
+}
+
+func calcSaleOrderItemLayout(m pdf.Maroto, productName string, specsLine string) (float64, float64) {
+	pageWidth, _ := m.GetPageSize()
+	leftMargin, _, rightMargin, _ := m.GetPageMargins()
+	columnWidth := (pageWidth - leftMargin - rightMargin) * (4.0 / 12.0)
+
+	nameLines := wrapTextToLines(m, productName, "THSarabun", "B", 10.0, columnWidth)
+	var specLines []string
+	if specsLine != "" {
+		specLines = wrapTextToLines(m, specsLine, "THSarabun", "", 8.5, columnWidth)
+	}
+
+	totalNameHeight := float64(len(nameLines)) * 4.0
+	specsTop := 0.5 + totalNameHeight
+	var rowHeight float64
+	if len(specLines) == 0 {
+		rowHeight = math.Max(7.5, specsTop+2.5)
+	} else {
+		specsHeight := float64(len(specLines)) * 3.5
+		rowHeight = math.Max(11.0, specsTop+specsHeight+2.5)
+	}
+
+	return rowHeight, specsTop
+}
+
