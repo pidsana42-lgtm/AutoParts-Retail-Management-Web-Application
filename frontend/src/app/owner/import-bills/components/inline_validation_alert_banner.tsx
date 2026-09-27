@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, Edit3, FileText, X } from 'lucide-react';
 import type { PriceMismatchItem } from './price_update_modal';
+import { usePathBasePrefix } from '../../../../utils/usePathBasePrefix';
 
 interface InlineValidationAlertBannerProps {
   warnings?: string[];
@@ -18,6 +19,7 @@ export default function InlineValidationAlertBanner({
   isEmployee = false,
 }: InlineValidationAlertBannerProps) {
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
 
   const hasWarnings = warnings.length > 0;
   const hasMismatches = mismatchedItems.length > 0;
@@ -32,7 +34,7 @@ export default function InlineValidationAlertBanner({
         console.error(e);
       }
     }
-    navigate('/owner/import-bills/edit-stock-bill', {
+    navigate(`${basePath}/import-bills/edit-stock-bill`, {
       state: { mismatchedItems, isFromImportBill: true }
     });
   };

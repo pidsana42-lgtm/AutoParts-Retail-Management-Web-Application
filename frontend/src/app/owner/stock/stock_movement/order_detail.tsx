@@ -7,6 +7,7 @@ import { useUserRole } from "../../../../hooks/useUserRole";
 import { useSalesHistory } from "../../../employee/pos/hooks/useSalesHistory";
 import { usePrintReceipt } from "../../../employee/pos/hooks/usePrintReceipt";
 import OrderDetailPanel from "../../../employee/pos/components/order_detail_panel";
+import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 
 // StockMovementOrderDetail: หน้ารายละเอียดออเดอร์ขาย (POS) ที่กดเข้ามาจากฟีด "การเคลื่อนไหวของคลังสินค้า"
 // ใช้ข้อมูล/ตรรกะชุดเดียวกับแผงรายละเอียดที่หน้า "ประวัติการขายสินค้า" ทุกอย่าง (ผ่าน OrderDetailPanel ที่แยกออกมา
@@ -14,6 +15,7 @@ import OrderDetailPanel from "../../../employee/pos/components/order_detail_pane
 export default function StockMovementOrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   const { isOwnerOrManager } = useUserRole();
   const { printingOrderId, handlePrintReceipt } = usePrintReceipt();
 
@@ -44,7 +46,7 @@ export default function StockMovementOrderDetail() {
     <div className="space-y-6 p-6 font-sans bg-gray-50 min-h-screen">
       <Breadcrumb
         items={[
-          { label: "การเคลื่อนไหวของคลังสินค้า", path: "/owner/stock/stock-movement" },
+          { label: "การเคลื่อนไหวของคลังสินค้า", path: `${basePath}/stock/stock-movement` },
           { label: "รายละเอียดออเดอร์" },
         ]}
       />
@@ -67,7 +69,7 @@ export default function StockMovementOrderDetail() {
           handlePrintReceipt={handlePrintReceipt}
           printingOrderId={printingOrderId}
           isOwnerOrManager={isOwnerOrManager}
-          onClose={() => navigate("/owner/stock/stock-movement")}
+          onClose={() => navigate(`${basePath}/stock/stock-movement`)}
           variant="page"
         />
       ) : (
