@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Loader2, MapPin, Package, ClipboardCheck, Download, Printer, QrCode, Undo2 } from "lucide-react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
@@ -84,9 +84,11 @@ function ScheduleDetailContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // ตารางที่พนักงานส่งผลนับมาแล้ว (สถานะ "รอตรวจสอบ") ต้องดึงผลนับจริงมาเทียบให้เจ้าของร้านตัดสินใจ
+  // ตารางที่พนักงานส่งผลนับมาแล้ว ("รอตรวจสอบ") หรืออนุมัติไปแล้ว ("เสร็จสิ้น") ต้องดึงผลนับจริงมาโชว์
+  // จำนวนที่แตกต่างด้วย ไม่งั้นพอกลับมาดูตารางที่เสร็จแล้วภายหลังจะเห็นแค่สต็อกปัจจุบัน ไม่เห็นผลต่างที่นับได้จริง
+  const showReviewDiff = schedule?.status === "รอตรวจสอบ" || schedule?.status === "เสร็จสิ้น";
   useEffect(() => {
-    if (!id || !schedule || schedule.status !== "รอตรวจสอบ") return;
+    if (!id || !schedule || !showReviewDiff) return;
     let alive = true;
     checkStockRecordService
       .listBySchedule(Number(id))
@@ -271,12 +273,12 @@ function ScheduleDetailContent() {
       <div className="flex flex-col items-stretch gap-6 lg:flex-row">
         {/* Left: รายชื่อสินค้าที่ต้องตรวจ */}
         <div className="flex w-full flex-col gap-6 lg:w-2/3">
-          {schedule.status === "รอตรวจสอบ" ? (
-            <Card className="border-l-[5px] border-l-blue-600">
+          {showReviewDiff ? (
+            <Card className={schedule.status === "เสร็จสิ้น" ? "border-l-[5px] border-l-green-600" : "border-l-[5px] border-l-blue-600"}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <ClipboardCheck className="h-4 w-4 text-blue-500" />
-                  ผลนับสต็อกที่พนักงานส่งมา ({reviewRecords.length} รายการ)
+                  <ClipboardCheck className={schedule.status === "เสร็จสิ้น" ? "h-4 w-4 text-green-500" : "h-4 w-4 text-blue-500"} />
+                  {schedule.status === "เสร็จสิ้น" ? "ผลนับสต็อกที่อนุมัติแล้ว" : "ผลนับสต็อกที่พนักงานส่งมา"} ({reviewRecords.length} รายการ)
                 </CardTitle>
               </CardHeader>
               <CardContent>
