@@ -151,7 +151,7 @@ export default function TrashStockPage() {
                     <TableCell className="text-right pr-6">
                       <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => navigate(`/owner/stock/${product.ID}`)}
+                          onClick={() => navigate(`/owner/stock/${product.ID}`, { state: { authorizedId: Number(product.ID) } })}
                           className="cursor-pointer rounded-md p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                           aria-label="ดูรายละเอียด"
                           title="ดูรายละเอียด"

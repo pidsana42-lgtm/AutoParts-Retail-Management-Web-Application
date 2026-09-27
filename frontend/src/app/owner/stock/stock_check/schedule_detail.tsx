@@ -358,6 +358,7 @@ function ScheduleDetailContent() {
                               from: cameFromMovement ? "movement" : "check_stock",
                               scheduleId: schedule.id,
                               scheduleName: schedule.target_name,
+                              authorizedId: Number(p.ID),
                             },
                           })
                         }

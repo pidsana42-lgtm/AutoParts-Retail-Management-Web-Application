@@ -301,7 +301,7 @@ function EmployeeCheckStockListContent() {
                 {sc.note && <p className="line-clamp-2 rounded bg-slate-50 p-2 text-xs text-slate-500">{sc.note}</p>}
 
                 <Button
-                  onClick={() => navigate(`/employee/wms/check-stock/${sc.id}`)}
+                  onClick={() => navigate(`/employee/wms/check-stock/${sc.id}`, { state: { authorizedId: Number(sc.id) } })}
                   variant={canWork ? "primary" : "outline"}
                   className="mt-1 w-full"
                 >

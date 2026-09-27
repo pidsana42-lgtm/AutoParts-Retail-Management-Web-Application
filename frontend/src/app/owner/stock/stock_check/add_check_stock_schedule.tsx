@@ -187,7 +187,7 @@ function AddCheckStockScheduleContent() {
       toast({ variant: "success", message: "สร้างตารางเช็คสต็อกสำเร็จ" });
       clearDraft();
       // พาไปหน้ารายละเอียดตารางที่เพิ่งสร้างทันที เพื่อให้เห็น QR Code สำหรับสแกนเช็คสต็อกได้เลย
-      navigate(`/owner/stock/stock-check/${res.id}`);
+      navigate(`/owner/stock/stock-check/${res.id}`, { state: { authorizedId: Number(res.id) } });
     } catch (err: any) {
       await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการบันทึก");
     } finally {
@@ -312,7 +312,7 @@ function AddCheckStockScheduleContent() {
                       >
                         <button
                           type="button"
-                          onClick={() => navigate(`/owner/stock/${p.ID}`, { state: { from: "check_stock_new" } })}
+                          onClick={() => navigate(`/owner/stock/${p.ID}`, { state: { from: "check_stock_new", authorizedId: Number(p.ID) } })}
                           className="flex flex-1 items-center gap-2 overflow-hidden text-left cursor-pointer"
                           title="ดูรายละเอียดสินค้า"
                         >
@@ -377,7 +377,7 @@ function AddCheckStockScheduleContent() {
                         <span
                           onClick={(ev) => {
                             ev.preventDefault();
-                            navigate(`/owner/stock/${p.ID}`, { state: { from: "check_stock_new" } });
+                            navigate(`/owner/stock/${p.ID}`, { state: { from: "check_stock_new", authorizedId: Number(p.ID) } });
                           }}
                           className="flex flex-1 items-center gap-2 overflow-hidden cursor-pointer"
                           title="ดูรายละเอียดสินค้า"

@@ -209,7 +209,7 @@ export default function AddProductPage() {
       setReceiveSubmitting(true);
       await receiveStock(selectedProduct.ID, { quantity: qty, suppliers: supplierPayload });
       await alertDialog(`รับสินค้าเข้าเพิ่มสำเร็จ: ${selectedProduct.Name} +${qty} ${selectedProduct.Unit || "ชิ้น"}`);
-      navigate(`/owner/stock/${selectedProduct.ID}`);
+      navigate(`/owner/stock/${selectedProduct.ID}`, { state: { authorizedId: Number(selectedProduct.ID) } });
     } catch (err: any) {
       console.error("Error receiving stock:", err);
       await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการรับสินค้าเข้าเพิ่ม");

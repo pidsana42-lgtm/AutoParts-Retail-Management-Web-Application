@@ -58,6 +58,7 @@ import RegisterEmployeePage from './owner/storeconfig/employee_registration';
 import DeletedPoHistory from './owner/purchase_orders/restore_po';
 import NewReturnPage from './owner/return/new_return';
 import { getDashboardRoleGroup } from '../utils/dashboardAccess';
+import { AuthorizedIdGuard } from '../utils/navigationAuth';
 
 export default function AppRouter(): React.JSX.Element {
   const { role, isLoading, isAuthenticated } = useAuth();
@@ -152,11 +153,19 @@ export default function AppRouter(): React.JSX.Element {
             } />
 
             <Route path={`${prefix}/stock/:id`} element={
-              isManagerOrOwner ? <ProductDetailPage /> : <Navigate to={firstMenuPath} replace />
+              isManagerOrOwner ? (
+                <AuthorizedIdGuard fallbackPath={`${prefix}/stock`} entity="stock" entityName="สินค้า">
+                  <ProductDetailPage />
+                </AuthorizedIdGuard>
+              ) : <Navigate to={firstMenuPath} replace />
             } />
 
             <Route path={`${prefix}/stock/:id/edit`} element={
-              isManagerOrOwner ? <EditProductPage /> : <Navigate to={firstMenuPath} replace />
+              isManagerOrOwner ? (
+                <AuthorizedIdGuard fallbackPath={`${prefix}/stock`} entity="stock" entityName="สินค้า">
+                  <EditProductPage />
+                </AuthorizedIdGuard>
+              ) : <Navigate to={firstMenuPath} replace />
             } />
 
             <Route path={`${prefix}/stock/stock-movement`} element={
@@ -164,11 +173,19 @@ export default function AppRouter(): React.JSX.Element {
             } />
 
             <Route path={`${prefix}/stock/stock-movement/orders/:orderId`} element={
-              isManagerOrOwner ? <StockMovementOrderDetail /> : <Navigate to={firstMenuPath} replace />
+              isManagerOrOwner ? (
+                <AuthorizedIdGuard fallbackPath={`${prefix}/stock/stock-movement`} entity="stock_movement" entityName="รายการเคลื่อนไหวสต็อก">
+                  <StockMovementOrderDetail />
+                </AuthorizedIdGuard>
+              ) : <Navigate to={firstMenuPath} replace />
             } />
 
             <Route path={`${prefix}/stock/stock-movement/pre-orders/:id`} element={
-              isManagerOrOwner ? <StockMovementPreOrderDetail /> : <Navigate to={firstMenuPath} replace />
+              isManagerOrOwner ? (
+                <AuthorizedIdGuard fallbackPath={`${prefix}/stock/stock-movement`} entity="stock_movement" entityName="ใบสั่งจองสินค้า">
+                  <StockMovementPreOrderDetail />
+                </AuthorizedIdGuard>
+              ) : <Navigate to={firstMenuPath} replace />
             } />
 
             <Route path={`${prefix}/stock/stock-check`} element={
@@ -180,42 +197,82 @@ export default function AppRouter(): React.JSX.Element {
             } />
 
             <Route path={`${prefix}/stock/stock-check/:id`} element={
-              isManagerOrOwner ? <ScheduleDetailPage /> : <Navigate to={firstMenuPath} replace />
+              isManagerOrOwner ? (
+                <AuthorizedIdGuard fallbackPath={`${prefix}/stock/stock-check`} entity="stock_check" entityName="ตารางตรวจนับสต็อก">
+                  <ScheduleDetailPage />
+                </AuthorizedIdGuard>
+              ) : <Navigate to={firstMenuPath} replace />
             } />
 
             <Route path={`${prefix}/stock/stock-data`} element={
               isManagerOrOwner ? <Stockdata /> : <Navigate to={firstMenuPath} replace />
             } />
             {/* -------- เพิ่ม Route สำหรับหน้านำเข้าบิลและจัดการราคาสินค้า -------- */}
-            <Route path={`${prefix}/import-bills`} element={<ImportBill />} />
-            <Route path={`${prefix}/import-bills/scan`} element={<ImportBill />} />
-            <Route path={`${prefix}/import-bills/excel`} element={<ImportBill />} />
-            <Route path={`${prefix}/import-bills/mapping`} element={<ImportBill />} />
-            <Route path={`${prefix}/import-bills/manual`} element={<ImportBill />} />
-            <Route path={`${prefix}/import-bills/po`} element={<ImportBill />} />
-            <Route path={`${prefix}/import-bills/approve/:id`} element={<ImportBill />} />
+            <Route path={`${prefix}/import-bills`} element={isManagerOrOwner ? <ImportBill /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/import-bills/scan`} element={isManagerOrOwner ? <ImportBill /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/import-bills/excel`} element={isManagerOrOwner ? <ImportBill /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/import-bills/mapping`} element={isManagerOrOwner ? <ImportBill /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/import-bills/manual`} element={isManagerOrOwner ? <ImportBill /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/import-bills/po`} element={isManagerOrOwner ? <ImportBill /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/import-bills/approve/:id`} element={
+              isOwner ? (
+                <AuthorizedIdGuard fallbackPath={`${prefix}/import-bills`} entity="import_bill" entityName="บิล">
+                  <ImportBill />
+                </AuthorizedIdGuard>
+              ) : <Navigate to={firstMenuPath} replace />
+            } />
             <Route path={`${prefix}/import-bills/edit-stock-bill`} element={
               isManagerOrOwner ? <EditStockBillPage /> : <Navigate to={firstMenuPath} replace />
             } />
             {/* -------------------------------------------------- */}
             
             {/* -------- เพิ่ม Route สำหรับหน้าพรีออเดอร์ตรงนี้ครับ -------- */}
-            <Route path={`${prefix}/pre-orders`} element={<PreOrder />} />
-            <Route path={`${prefix}/pre-orders/catalog`} element={<CatalogPage />} />
-            <Route path={`${prefix}/pre-order`} element={<PreOrder />} />
-            <Route path={`${prefix}/pre-order/catalog`} element={<CatalogPage />} />
+            <Route path={`${prefix}/pre-orders`} element={isManagerOrOwner ? <PreOrder /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/pre-orders/catalog`} element={isManagerOrOwner ? <CatalogPage /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/pre-order`} element={isManagerOrOwner ? <PreOrder /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/pre-order/catalog`} element={isManagerOrOwner ? <CatalogPage /> : <Navigate to={firstMenuPath} replace />} />
             {/* --------------------------------------------------- */}
 
             {/* -------- เพิ่ม Route สำหรับหน้าคืนเเละเคลมสินค้าตรงนี้ครับ -------- */}
-            <Route path={`${prefix}/claims`} element={<ClaimsPage />} />
-            <Route path={`${prefix}/claims/detail/:id`} element={<ClaimDetailPage />} />
-            <Route path={`${prefix}/claims/edit/:id`} element={<ClaimEditPage canApprove={true} />} />
-            <Route path={`${prefix}/claims/approve/:id`} element={<ClaimApprovePage />} />
+            <Route path={`${prefix}/claims`} element={isManagerOrOwner ? <ClaimsPage /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/claims/detail/:id`} element={
+              isManagerOrOwner ? (
+                <AuthorizedIdGuard fallbackPath={`${prefix}/claims`} entity="claim" entityName="ใบเคลมสินค้า">
+                  <ClaimDetailPage />
+                </AuthorizedIdGuard>
+              ) : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/claims/edit/:id`} element={
+              isManagerOrOwner ? (
+                <AuthorizedIdGuard fallbackPath={`${prefix}/claims`} entity="claim" entityName="ใบเคลมสินค้า">
+                  <ClaimEditPage canApprove={true} />
+                </AuthorizedIdGuard>
+              ) : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/claims/approve/:id`} element={
+              isOwner ? (
+                <AuthorizedIdGuard fallbackPath={`${prefix}/claims`} entity="claim" entityName="ใบเคลมสินค้า">
+                  <ClaimApprovePage />
+                </AuthorizedIdGuard>
+              ) : <Navigate to={firstMenuPath} replace />
+            } />
             <Route path={`${prefix}/claims/status/:id`} element={<Navigate to={`${prefix}/claims/detail/:id`} replace />} />
-            <Route path={`${prefix}/returns`} element={<ReturnsPage />} />
-            <Route path={`${prefix}/returns/new-return`} element={<NewReturnPage />} />
-            <Route path={`${prefix}/returns/:id`} element={<ReturnDetailPage />} />
-            <Route path={`${prefix}/returns/detail/:id`} element={<ReturnDetailPage />} />
+            <Route path={`${prefix}/returns`} element={isManagerOrOwner ? <ReturnsPage /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/returns/new-return`} element={isManagerOrOwner ? <NewReturnPage /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/returns/:id`} element={
+              isManagerOrOwner ? (
+                <AuthorizedIdGuard fallbackPath={`${prefix}/returns`} entity="return" entityName="ใบคืนสินค้า">
+                  <ReturnDetailPage />
+                </AuthorizedIdGuard>
+              ) : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/returns/detail/:id`} element={
+              isManagerOrOwner ? (
+                <AuthorizedIdGuard fallbackPath={`${prefix}/returns`} entity="return" entityName="ใบคืนสินค้า">
+                  <ReturnDetailPage />
+                </AuthorizedIdGuard>
+              ) : <Navigate to={firstMenuPath} replace />
+            } />
             {/* ----------------------------------------------------------- */}
 
             {/* -------- เพิ่ม Route สำหรับ POS -------- */}
@@ -242,10 +299,16 @@ export default function AppRouter(): React.JSX.Element {
             } />
 
             {/* ------------------ สั่งซื้อ ----------------- */}
-            <Route path={`${prefix}/orders`} element={<PurchaseOrders />} />
-            <Route path={`${prefix}/new-orders`} element={<CreatePurchaseOrders />} />
-            <Route path={`${prefix}/orders/:id`} element={<OrderDetail />} />
-            <Route path={`${prefix}/orders/restore`} element={<DeletedPoHistory />} />
+            <Route path={`${prefix}/orders`} element={isManagerOrOwner ? <PurchaseOrders /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/new-orders`} element={isManagerOrOwner ? <CreatePurchaseOrders /> : <Navigate to={firstMenuPath} replace />} />
+            <Route path={`${prefix}/orders/:id`} element={
+              isManagerOrOwner ? (
+                <AuthorizedIdGuard fallbackPath={`${prefix}/orders`} entity="order" entityName="ใบสั่งซื้อ">
+                  <OrderDetail />
+                </AuthorizedIdGuard>
+              ) : <Navigate to={firstMenuPath} replace />
+            } />
+            <Route path={`${prefix}/orders/restore`} element={isManagerOrOwner ? <DeletedPoHistory /> : <Navigate to={firstMenuPath} replace />} />
           </React.Fragment>
         ))}
 
@@ -273,7 +336,11 @@ export default function AppRouter(): React.JSX.Element {
 
         <Route path="/employee/orders" element={<PurchaseOrders />} />
         <Route path="/employee/new-orders" element={<CreatePurchaseOrders />} />
-        <Route path="/employee/orders/:id" element={<OrderDetail />} />
+        <Route path="/employee/orders/:id" element={
+          <AuthorizedIdGuard fallbackPath="/employee/orders" entity="order" entityName="ใบสั่งซื้อ">
+            <OrderDetail />
+          </AuthorizedIdGuard>
+        } />
         <Route path="/employee/orders/restore" element={<DeletedPoHistory />} />
 
         {/* หน้านำเข้าบิลสำหรับพนักงาน */}
@@ -283,27 +350,55 @@ export default function AppRouter(): React.JSX.Element {
         <Route path="/employee/import/mapping" element={<EmployeeImport />} />
         <Route path="/employee/import/manual" element={<EmployeeImport />} />
         <Route path="/employee/import/po" element={<EmployeeImport />} />
-        <Route path="/employee/import/approve/:id" element={<EmployeeImport />} />
+        <Route path="/employee/import/approve/:id" element={
+          <AuthorizedIdGuard fallbackPath="/employee/import" entity="import_bill" entityName="บิล">
+            <EmployeeImport />
+          </AuthorizedIdGuard>
+        } />
 
         {/* หน้าพรีออเดอร์สำหรับพนักงาน */}
         <Route path="/employee/pre-orders" element={<EmployeePreOrder />} />
         <Route path="/employee/pre-orders/catalog" element={<CatalogPage isEmployee={true} />} />
         <Route path="/employee/pre-order" element={<EmployeePreOrder />} />
         <Route path="/employee/claims" element={<EmployeeClaimsPage />} />
-        <Route path="/employee/claims/detail/:id" element={<ClaimDetailPage />} />
-        <Route path="/employee/claims/edit/:id" element={<ClaimEditPage canApprove={false} />} />
+        <Route path="/employee/claims/detail/:id" element={
+          <AuthorizedIdGuard fallbackPath="/employee/claims" entity="claim" entityName="ใบเคลมสินค้า">
+            <ClaimDetailPage />
+          </AuthorizedIdGuard>
+        } />
+        <Route path="/employee/claims/edit/:id" element={
+          <AuthorizedIdGuard fallbackPath="/employee/claims" entity="claim" entityName="ใบเคลมสินค้า">
+            <ClaimEditPage canApprove={false} />
+          </AuthorizedIdGuard>
+        } />
         <Route path="/employee/claims/status/:id" element={<Navigate to="/employee/claims/detail/:id" replace />} />
 
         <Route path="/employee/returns" element={<ReturnsPage />} />
         <Route path="/employee/returns/new-return" element={<NewReturnPage />} />
-        <Route path="/employee/returns/:id" element={<ReturnDetailPage />} />
-        <Route path="/employee/returns/detail/:id" element={<ReturnDetailPage />} />
+        <Route path="/employee/returns/:id" element={
+          <AuthorizedIdGuard fallbackPath="/employee/returns" entity="return" entityName="ใบคืนสินค้า">
+            <ReturnDetailPage />
+          </AuthorizedIdGuard>
+        } />
+        <Route path="/employee/returns/detail/:id" element={
+          <AuthorizedIdGuard fallbackPath="/employee/returns" entity="return" entityName="ใบคืนสินค้า">
+            <ReturnDetailPage />
+          </AuthorizedIdGuard>
+        } />
 
         {/* หน้าตรวจนับสต็อกสำหรับพนักงาน */}
         <Route path="/employee/wms/check-stock" element={<EmployeeCheckStockListPage />} />
-        <Route path="/employee/wms/check-stock/:id" element={<EmployeeCheckStockExecutePage />} />
+        <Route path="/employee/wms/check-stock/:id" element={
+          <AuthorizedIdGuard fallbackPath="/employee/wms/check-stock" entity="stock_check" entityName="ตารางตรวจนับสต็อก">
+            <EmployeeCheckStockExecutePage />
+          </AuthorizedIdGuard>
+        } />
         <Route path="/employee/wms/stock-data" element={<EmployeeStockData />} />
-        <Route path="/employee/wms/stock-data/:id" element={<EmployeeProductDetail />} />
+        <Route path="/employee/wms/stock-data/:id" element={
+          <AuthorizedIdGuard fallbackPath="/employee/wms/stock-data" entity="stock" entityName="สินค้า">
+            <EmployeeProductDetail />
+          </AuthorizedIdGuard>
+        } />
 
       </Route>
 
@@ -313,7 +408,11 @@ export default function AppRouter(): React.JSX.Element {
 
       {/* มือถือสแกน QR ของตารางเช็คสต็อกมาที่นี่ — ไม่ครอบด้วย MainLayout (ไม่มี Sidebar/Navbar ของระบบรวม)
           โชว์ตรงหน้าเช็คสินค้าของงานนั้นเลย ใช้ component เดียวกับหน้าในระบบ (ตัว component เองเช็ค token ให้เข้าได้โดยไม่ต้องล็อกอิน) */}
-      <Route path="/wms/check-stock-scan/:id" element={<EmployeeCheckStockExecutePage />} />
+      <Route path="/wms/check-stock-scan/:id" element={
+        <AuthorizedIdGuard allowToken={true} fallbackPath="/login" entity="stock_check" entityName="ตารางตรวจนับสต็อก">
+          <EmployeeCheckStockExecutePage />
+        </AuthorizedIdGuard>
+      } />
 
       {/* ถ้าพิมพ์ URL มั่ว/ลิงก์เก่าที่ย้ายไปแล้ว: คนที่ล็อกอินอยู่ต้องไม่ถูกดีดออกจากระบบ
           เดิมดีดไป /login เสมอไม่ว่าจะล็อกอินอยู่หรือไม่ ทำให้ session ที่ยังใช้ได้ปกติ

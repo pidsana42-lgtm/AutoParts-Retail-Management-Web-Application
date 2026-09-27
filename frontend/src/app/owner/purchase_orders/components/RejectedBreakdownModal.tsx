@@ -4,6 +4,7 @@ import { X, AlertCircle, Building2, ChevronDown, FileText } from "lucide-react";
 import Heading from "../../../../components/elements/heading";
 import type { SupplierRejectedSummary } from "../../../../interface/purchase_orders/po_interface";
 import { formatDateThai } from "../../../../utils/formatdate";
+import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 
 interface RejectedBreakdownModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ export const RejectedBreakdownModal: React.FC<RejectedBreakdownModalProps> = ({
   onClose,
   data,
 }) => {
+  const basePath = usePathBasePrefix();
   const [expandedSupplierId, setExpandedSupplierId] = useState<number | null>(null);
 
   if (!isOpen) return null;
@@ -99,7 +101,8 @@ export const RejectedBreakdownModal: React.FC<RejectedBreakdownModalProps> = ({
                               {purchaseOrders.map((po) => (
                                 <Link
                                   key={po.id}
-                                  to={`/owner/orders/${po.id}`}
+                                  to={`${basePath}/orders/${po.id}`}
+                                  state={{ authorizedId: Number(po.id) }}
                                   onClick={onClose}
                                   className="flex items-center justify-between gap-4 py-2.5 text-sm hover:text-red-600"
                                 >
