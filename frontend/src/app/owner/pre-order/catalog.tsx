@@ -24,7 +24,6 @@ import { useMobileUploadSession } from '../../../hooks/useMobileUploadSession';
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import type { Catalog, CatalogItem } from '../../../interface/catalog/catalog';
 import type { Supplier } from '../../../interface/import';
-import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 interface CatalogManagerProps {
   isEmployee?: boolean;
