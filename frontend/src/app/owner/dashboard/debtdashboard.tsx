@@ -275,6 +275,8 @@ const DebtDashboard: React.FC = () => {
   const kpiVal = (v: React.ReactNode) =>
     summaryLoading ? <span className='text-gray-400 animate-pulse'>...</span> : v;
 
+  const totalDebtTarget = kpi.collectedAmount + currentOutstanding;
+
   return (
     <div className='min-h-screen space-y-6 bg-white p-4 font-sans sm:p-6 lg:space-y-8 lg:p-8'>
       {/* Page tab */}
@@ -375,7 +377,9 @@ const DebtDashboard: React.FC = () => {
             {kpiVal(`฿ ${fmt(kpi.collectedAmount)}`)}
           </Heading>
           <Heading level='p' className='text-gray-400'>
-            {currentOutstandingLoading ? '...' : `เป้าหมาย: ฿ ${fmt(currentOutstanding)}`}
+            {currentOutstandingLoading || summaryLoading
+              ? '...'
+              : `เป้าหมาย: ฿ ${fmt(totalDebtTarget)}`}
           </Heading>
         </Card>
 
