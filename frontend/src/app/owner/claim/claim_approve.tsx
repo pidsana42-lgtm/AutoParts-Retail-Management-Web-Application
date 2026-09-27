@@ -82,7 +82,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
 
       // Navigate back to detail
       toast({ variant: 'success', message: 'บันทึกผลการพิจารณาใบเคลมเรียบร้อยแล้ว' });
-      navigate(`/owner/claims/detail/${claim.id}`);
+      navigate(`/owner/claims/detail/${claim.id}`, { state: { authorizedId: Number(claim.id) } });
     } catch (err) {
       console.error('Failed to approve claim:', err);
       toast({ variant: 'error', message: 'เกิดข้อผิดพลาดในการอนุมัติใบเคลม กรุณาลองใหม่' });
@@ -128,7 +128,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
               จัดการเคลมสินค้า
             </Link>
             <ChevronRight size={16} className="text-gray-400" />
-            <Link to={`/owner/claims/detail/${claim.id}`} className="hover:text-black transition-colors cursor-pointer">
+            <Link to={`/owner/claims/detail/${claim.id}`} state={{ authorizedId: Number(claim.id) }} className="hover:text-black transition-colors cursor-pointer">
               รายละเอียดใบเคลมสินค้า
             </Link>
             <ChevronRight size={16} className="text-gray-400" />
@@ -146,7 +146,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
             type="button"
             variant="outline-cancel"
             size="md"
-            onClick={() => navigate(`/owner/claims/detail/${claim.id}`)}
+            onClick={() => navigate(`/owner/claims/detail/${claim.id}`, { state: { authorizedId: Number(claim.id) } })}
           >
             ย้อนกลับ
           </Button>
@@ -347,7 +347,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
             type="button"
             variant="outline-cancel"
             size="md"
-            onClick={() => navigate(`/owner/claims/detail/${claim.id}`)}
+            onClick={() => navigate(`/owner/claims/detail/${claim.id}`, { state: { authorizedId: Number(claim.id) } })}
           >
             ยกเลิก
           </Button>

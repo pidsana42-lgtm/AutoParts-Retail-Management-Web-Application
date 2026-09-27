@@ -41,6 +41,7 @@ import type { PriceMismatchItem } from './components/price_update_modal';
 import { guessColumnMapping, normalizeDateValue, REQUIRED_MAPPING_FIELDS } from '../../../utils/excelImport';
 import { ToastProvider, useToast } from '../../../components/elements/toast';
 import ConfirmDialog from '../../../components/elements/confirm_dialog';
+import { isNavigationAuthorized } from '../../../utils/navigationAuth';
 
 const isPlaceholder = (val: any): boolean => {
   if (!val) return true;
@@ -413,7 +414,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
       if (found) {
         setApprovingBill(found);
         setCurrentViewInternal('approve');
-        navigate(`${basePath}/approve/${found.id}`, { replace: true });
+        navigate(`${basePath}/approve/${found.id}`, { replace: true, state: { authorizedId: Number(found.id) } });
       }
     };
     open();
@@ -425,12 +426,28 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
     if (!match) return;
 
     const billId = Number(match[1]);
+    const isAuthorized = isNavigationAuthorized({
+      entity: 'import_bill',
+      id: billId,
+      locationState: location.state,
+    });
+
+    if (!isAuthorized) {
+      toast({
+        title: 'ไม่อนุญาตให้เข้าถึง',
+        message: 'ไม่อนุญาตให้เปลี่ยนหรือระบุรหัสบิลผ่าน URL โดยตรง กรุณาเลือกรายการจากหน้ารายการบิล',
+        variant: 'error',
+      });
+      navigate(basePath, { replace: true });
+      return;
+    }
+
     const found = bills.find((bill) => bill.id === billId);
     if (found) {
       setApprovingBill(found);
       setCurrentViewInternal('approve');
     }
-  }, [location.pathname, bills]);
+  }, [location.pathname, location.state, bills, basePath, navigate, toast]);
 
   const fetchBills = async () => {
     setLoadingBills(true);
@@ -1279,7 +1296,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   const handleOpenApprove = (bill: SavedBill) => {
     setApprovingBill(bill);
     setCurrentViewInternal('approve');
-    navigate(`${basePath}/approve/${bill.id}`);
+    navigate(`${basePath}/approve/${bill.id}`, { state: { authorizedId: Number(bill.id) } });
   };
 
   const handleApproveBill = async (billId: number) => {

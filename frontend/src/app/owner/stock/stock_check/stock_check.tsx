@@ -160,7 +160,7 @@ function StockCheckContent() {
   };
 
   const handleView = (sc: CheckStockSchedule) => {
-    navigate(`/owner/stock/stock-check/${sc.id}`);
+    navigate(`/owner/stock/stock-check/${sc.id}`, { state: { authorizedId: Number(sc.id) } });
   };
 
   const handleDelete = async (sc: CheckStockSchedule) => {

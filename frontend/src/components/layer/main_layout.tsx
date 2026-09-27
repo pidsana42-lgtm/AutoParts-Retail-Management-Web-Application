@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import type { ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import Sidebar from "./sidebar";
 import Navbar from "./navbar";
+import { setLastValidPath } from "../../utils/navigationAuth";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -11,6 +13,15 @@ export default function MainLayout({
   children,
 }: MainLayoutProps): React.JSX.Element {
   const [collapsed, setCollapsed] = useState<boolean>(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    // Track valid base pages (excluding routes with IDs which are tracked upon authorization)
+    const isIdRoute = /\/\d+(?:\/[a-zA-Z_-]+)?$/.test(location.pathname);
+    if (!isIdRoute) {
+      setLastValidPath(location.pathname + location.search);
+    }
+  }, [location.pathname, location.search]);
 
   const handleToggleSidebar = () => {
     setCollapsed(!collapsed);

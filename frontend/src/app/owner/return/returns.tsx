@@ -415,7 +415,7 @@ const ReturnsPage: React.FC = () => {
                         type="button"
                         title="ดูรายละเอียด"
                         aria-label="ดูรายละเอียด"
-                        onClick={() => navigate(`${basePath}/returns/${item.id}`)}
+                        onClick={() => navigate(`${basePath}/returns/${item.id}`, { state: { authorizedId: Number(item.id) } })}
                         className='text-gray-600 cursor-pointer hover:text-gray-900'
                       >
                         <Eye size={16} />

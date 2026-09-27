@@ -235,7 +235,7 @@ export default function EditProductPage() {
         }
       }
       await alertDialog(imageUploadFailed ? "แก้ไขข้อมูลสินค้าสำเร็จ แต่อัปโหลดรูปสินค้าไม่สำเร็จ" : "แก้ไขข้อมูลสินค้าสำเร็จ");
-      navigate(`/owner/stock/${product.ID}`);
+      navigate(`/owner/stock/${product.ID}`, { state: { authorizedId: Number(product.ID) } });
     } catch (err: any) {
       console.error("Error updating product:", err);
       await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการแก้ไขข้อมูลสินค้า");

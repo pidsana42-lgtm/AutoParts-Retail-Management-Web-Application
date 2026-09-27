@@ -541,7 +541,7 @@ const SaleDashboard: React.FC = () => {
                       <TableCell className='text-right'>{item.total_sold}</TableCell>
                       <TableCell className='text-right'>฿{item.total_revenue.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell className='text-center'>
-                        <button onClick={() => navigate(`${basePath}/stock/${item.id}`)} className="text-gray-600 hover:text-gray-700 transition cursor-pointer">
+                        <button onClick={() => navigate(`${basePath}/stock/${item.id}`, { state: { authorizedId: Number(item.id) } })} className="text-gray-600 hover:text-gray-700 transition cursor-pointer">
                           <Eye size={20} strokeWidth={1.5} />
                         </button>
                       </TableCell>

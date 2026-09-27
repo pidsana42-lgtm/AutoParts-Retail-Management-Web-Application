@@ -214,7 +214,7 @@ export default function StockPage() {
   const [formCascaderOptions, setFormCascaderOptions] = useState<CascaderOption[]>([]);
 
   const handleViewClick = (product: StockItem) => {
-    navigate(`/employee/wms/stock-data/${product.ID}`);
+    navigate(`/employee/wms/stock-data/${product.ID}`, { state: { authorizedId: Number(product.ID) } });
   };
 
   const fetchStock = async () => {

@@ -225,11 +225,11 @@ export default function StockPage() {
   const [deletedCount, setDeletedCount] = useState(0);
 
   const handleEditClick = (product: StockItem) => {
-    navigate(`/owner/stock/${product.ID}/edit`);
+    navigate(`/owner/stock/${product.ID}/edit`, { state: { authorizedId: Number(product.ID) } });
   };
 
   const handleViewClick = (product: StockItem) => {
-    navigate(`/owner/stock/${product.ID}`);
+    navigate(`/owner/stock/${product.ID}`, { state: { authorizedId: Number(product.ID) } });
   };
 
   const handleDeleteClick = async (product: StockItem) => {

@@ -290,7 +290,7 @@ export default function EditCheckStockScheduleModal({
                       type="button"
                       onClick={() =>
                         navigate(`/owner/stock/${p.ID}`, {
-                          state: { from: "check_stock", scheduleId: schedule?.id, scheduleName: schedule?.target_name },
+                          state: { from: "check_stock", scheduleId: schedule?.id, scheduleName: schedule?.target_name, authorizedId: Number(p.ID) },
                         })
                       }
                       className="flex flex-1 items-center gap-2 overflow-hidden text-left cursor-pointer"
@@ -363,7 +363,7 @@ export default function EditCheckStockScheduleModal({
                       onClick={(ev) => {
                         ev.preventDefault();
                         navigate(`/owner/stock/${p.ID}`, {
-                          state: { from: "check_stock", scheduleId: schedule?.id, scheduleName: schedule?.target_name },
+                          state: { from: "check_stock", scheduleId: schedule?.id, scheduleName: schedule?.target_name, authorizedId: Number(p.ID) },
                         });
                       }}
                       className="flex items-center gap-2 flex-1 cursor-pointer"
