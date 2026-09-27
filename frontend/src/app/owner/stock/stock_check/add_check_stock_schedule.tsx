@@ -21,6 +21,7 @@ import { useCheckStockOptions } from "./useCheckStockOptions";
 import { buildZoneTree, buildCategoryTree, getRelatedProducts } from "./checkStockTargets";
 import { stockCheckService, type CheckStockScheduleCreateInput } from "../../../../service/http/wms/stock_check_service";
 import { cn } from "../../../../utils/component";
+import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 
 function idsFromPaths(paths: string[], prefix: string): number[] {
   return paths.filter((p) => p.startsWith(prefix)).map((p) => parseInt(p.replace(prefix, "")));
@@ -61,6 +62,7 @@ function clearDraft() {
 
 function AddCheckStockScheduleContent() {
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   const { toast } = useToast();
   const { alertDialog } = useAlertDialog();
   const { loading: loadingOptions, employees, zones, categories, products } = useCheckStockOptions();
@@ -187,7 +189,7 @@ function AddCheckStockScheduleContent() {
       toast({ variant: "success", message: "สร้างตารางเช็คสต็อกสำเร็จ" });
       clearDraft();
       // พาไปหน้ารายละเอียดตารางที่เพิ่งสร้างทันที เพื่อให้เห็น QR Code สำหรับสแกนเช็คสต็อกได้เลย
-      navigate(`/owner/stock/stock-check/${res.id}`, { state: { authorizedId: Number(res.id) } });
+      navigate(`${basePath}/stock/stock-check/${res.id}`, { state: { authorizedId: Number(res.id) } });
     } catch (err: any) {
       await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการบันทึก");
     } finally {
@@ -199,7 +201,7 @@ function AddCheckStockScheduleContent() {
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
       <Breadcrumb
         items={[
-          { label: "ตรวจสอบสินค้า", path: "/owner/stock/stock-check" },
+          { label: "ตรวจสอบสินค้า", path: `${basePath}/stock/stock-check` },
           { label: "สร้างตารางใหม่" },
         ]}
       />
@@ -312,7 +314,7 @@ function AddCheckStockScheduleContent() {
                       >
                         <button
                           type="button"
-                          onClick={() => navigate(`/owner/stock/${p.ID}`, { state: { from: "check_stock_new", authorizedId: Number(p.ID) } })}
+                          onClick={() => navigate(`${basePath}/stock/${p.ID}`, { state: { from: "check_stock_new", authorizedId: Number(p.ID) } })}
                           className="flex flex-1 items-center gap-2 overflow-hidden text-left cursor-pointer"
                           title="ดูรายละเอียดสินค้า"
                         >
@@ -377,7 +379,7 @@ function AddCheckStockScheduleContent() {
                         <span
                           onClick={(ev) => {
                             ev.preventDefault();
-                            navigate(`/owner/stock/${p.ID}`, { state: { from: "check_stock_new", authorizedId: Number(p.ID) } });
+                            navigate(`${basePath}/stock/${p.ID}`, { state: { from: "check_stock_new", authorizedId: Number(p.ID) } });
                           }}
                           className="flex flex-1 items-center gap-2 overflow-hidden cursor-pointer"
                           title="ดูรายละเอียดสินค้า"
@@ -405,7 +407,7 @@ function AddCheckStockScheduleContent() {
                 variant="outline"
                 onClick={() => {
                   clearDraft();
-                  navigate("/owner/stock/stock-check");
+                  navigate(`${basePath}/stock/stock-check`);
                 }}
                 disabled={submitting}
               >

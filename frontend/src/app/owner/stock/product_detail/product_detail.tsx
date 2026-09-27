@@ -11,6 +11,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "../../../../components
 import { getProductById } from "../../../../service/http/wms/product";
 import type { StockItem } from "../../../../interface/wms/product";
 import { cn } from "../../../../utils/component";
+import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 
 // รูปแบบการแสดงบาร์โค้ด: รูปเปล่าตามที่ backend สร้างไว้ / รูป+ราคา / ชื่อ+ราคา+รูป (ป้ายราคาเต็ม)
 type BarcodeDisplayMode = "plain" | "price" | "full";
@@ -53,6 +54,7 @@ function fitText(
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   // ที่มาของการเข้าหน้านี้ (ถ้ามี) — ใช้ปรับเกล็ดขนมปังให้ตรงกับหน้าที่กดเข้ามาจริงๆ เช่นจากหน้า "การเคลื่อนไหวของคลังสินค้า"
   // หรือ "ตรวจสอบสินค้า" (ทั้งกดตรงจากตาราง หรือไล่ผ่านหน้ารายละเอียดตารางเช็คสต็อกมาอีกที ก็ต้องรักษาต้นทางเดิมไว้)
   const location = useLocation();
@@ -163,7 +165,7 @@ export default function ProductDetailPage() {
     return (
       <div className="space-y-4 p-8 text-center">
         <p className="font-bold text-slate-500">{error || "ไม่พบข้อมูลสินค้าที่คุณระบุ"}</p>
-        <Button onClick={() => navigate("/owner/stock")} variant="outline">
+        <Button onClick={() => navigate(`${basePath}/stock`)} variant="outline">
           กลับหน้าคลังสินค้า
         </Button>
       </div>
@@ -380,32 +382,32 @@ export default function ProductDetailPage() {
           // สินค้าที่ถูกลบไว้ (ดูได้ทางเดียวคือกด "ดูรายละเอียด" จากหน้าถังขยะ) ให้ breadcrumb ไล่ผ่านถังขยะด้วย
           product.DeletedAt
             ? [
-                { label: "คลังสินค้า", path: "/owner/stock" },
-                { label: "ถังขยะสินค้า", path: "/owner/stock/trash" },
+                { label: "คลังสินค้า", path: `${basePath}/stock` },
+                { label: "ถังขยะสินค้า", path: `${basePath}/stock/trash` },
                 { label: product.Name || "รายละเอียดสินค้า" },
               ]
             : cameFromMovement || cameFromCheckStock
               ? [
                   cameFromMovement
-                    ? { label: "การเคลื่อนไหวของคลังสินค้า", path: "/owner/stock/stock-movement" }
-                    : { label: "ตรวจสอบสินค้า", path: "/owner/stock/stock-check" },
+                    ? { label: "การเคลื่อนไหวของคลังสินค้า", path: `${basePath}/stock/stock-movement` }
+                    : { label: "ตรวจสอบสินค้า", path: `${basePath}/stock/stock-check` },
                   // ถ้ากดเข้ามาจากหน้า "สร้างตารางตรวจสอบสินค้า" (ยังไม่มีตารางจริง) ให้ลิงก์กลับไปหน้าสร้างนั้น
                   // แทน — ถ้ากดจากตารางที่มีอยู่แล้ว (ไม่ว่าจะไล่มาจากหน้าไหนก็ตาม) ให้ลิงก์กลับไปหน้ารายละเอียด
                   // ตารางนั้น รักษาต้นทางเดิมไว้แม้กดผ่านหน้ารายละเอียดตารางมาอีกที
                   ...(cameFromCheckStockCreate
-                    ? [{ label: "สร้างตารางตรวจสอบสินค้า", path: "/owner/stock/stock-check/new" }]
+                    ? [{ label: "สร้างตารางตรวจสอบสินค้า", path: `${basePath}/stock/stock-check/new` }]
                     : navOrigin?.scheduleId
                       ? [
                           {
                             label: navOrigin.scheduleName || "เป้าหมายการตรวจสอบ",
-                            path: `/owner/stock/stock-check/${navOrigin.scheduleId}`,
+                            path: `${basePath}/stock/stock-check/${navOrigin.scheduleId}`,
                           },
                         ]
                       : []),
                   { label: product.Name || "รายละเอียดสินค้า" },
                 ]
               : [
-                  { label: "คลังสินค้า", path: "/owner/stock" },
+                  { label: "คลังสินค้า", path: `${basePath}/stock` },
                   { label: product.Name || "รายละเอียดสินค้า" },
                 ]
         }

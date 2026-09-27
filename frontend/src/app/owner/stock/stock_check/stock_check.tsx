@@ -30,6 +30,7 @@ import { buildZoneTree, buildCategoryTree, getRelatedProducts, getScheduleProduc
 import { useCheckStockOptions } from "./useCheckStockOptions";
 import { stockCheckService, type CheckStockSchedule } from "../../../../service/http/wms/stock_check_service";
 import Button from "../../../../components/elements/button";
+import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 
 // สร้างเลขหน้าแบบมี "..." คั่นเมื่อมีหลายหน้า (สไตล์เดียวกับหน้าคลังสินค้า/ใบสั่งซื้อ)
 function getPageNumbers(current: number, total: number): (number | "...")[] {
@@ -110,6 +111,7 @@ function matchesPeriod(scheduledDatetime: string, startDate: string, endDate: st
 
 function StockCheckContent() {
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   const { toast } = useToast();
   const { confirmDialog } = useAlertDialog();
 
@@ -160,7 +162,7 @@ function StockCheckContent() {
   };
 
   const handleView = (sc: CheckStockSchedule) => {
-    navigate(`/owner/stock/stock-check/${sc.id}`, { state: { authorizedId: Number(sc.id) } });
+    navigate(`${basePath}/stock/stock-check/${sc.id}`, { state: { authorizedId: Number(sc.id) } });
   };
 
   const handleDelete = async (sc: CheckStockSchedule) => {
@@ -183,7 +185,7 @@ function StockCheckContent() {
   };
 
   const handleCreate = () => {
-    navigate("/owner/stock/stock-check/new");
+    navigate(`${basePath}/stock/stock-check/new`);
   };
 
   // ต้นไม้โซน > ตู้ > ชั้นระดับ สำหรับตัวกรอง (แบบเดียวกับ "ตำแหน่งจัดเก็บ" ในหน้าเพิ่ม/แก้ไขสินค้า)

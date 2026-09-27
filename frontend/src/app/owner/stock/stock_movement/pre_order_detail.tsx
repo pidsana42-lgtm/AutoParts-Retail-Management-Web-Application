@@ -10,6 +10,7 @@ import { Card } from "../../../../components/elements/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../../components/elements/table";
 import { getPreOrderById } from "../../../../service/http/pre-order/pre-order";
 import type { PreOrder } from "../../../../interface/pre-order/pre-order";
+import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 
 // ป้ายช่องทางการจอง — ใช้ป้ายเดียวกับตัวเลือกในฟอร์มสร้าง/แก้ไขใบสั่งจอง (owner/pre-order/pre-order.tsx)
 const CHANNEL_LABEL: Record<string, string> = {
@@ -23,6 +24,7 @@ const CHANNEL_LABEL: Record<string, string> = {
 export default function StockMovementPreOrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   const [order, setOrder] = useState<PreOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -59,7 +61,7 @@ export default function StockMovementPreOrderDetail() {
     <div className="space-y-6 p-6 font-sans bg-gray-50 min-h-screen">
       <Breadcrumb
         items={[
-          { label: "การเคลื่อนไหวของคลังสินค้า", path: "/owner/stock/stock-movement" },
+          { label: "การเคลื่อนไหวของคลังสินค้า", path: `${basePath}/stock/stock-movement` },
           { label: "ดูรายละเอียดใบสั่งจองสินค้า" },
         ]}
       />
@@ -79,7 +81,7 @@ export default function StockMovementPreOrderDetail() {
           <Button
             type="button"
             variant="solid-red"
-            onClick={() => navigate(`/owner/pre-orders?edit=${order.id}`)}
+            onClick={() => navigate(`${basePath}/pre-orders?edit=${order.id}`)}
             className="flex items-center gap-2"
           >
             <SquarePen size={14} />
@@ -159,7 +161,7 @@ export default function StockMovementPreOrderDetail() {
                 จำนวนชิ้นรวม: <span className="font-bold text-[#1C1B1B]">{totalQty} ชิ้น</span>
               </p>
             </div>
-            <Button type="button" variant="outline-cancel" onClick={() => navigate("/owner/stock/stock-movement")}>
+            <Button type="button" variant="outline-cancel" onClick={() => navigate(`${basePath}/stock/stock-movement`)}>
               ปิด
             </Button>
           </div>

@@ -23,6 +23,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import type { Product } from '../../../interface/import';
 import type { Catalog, CatalogItem } from '../../../interface/catalog/catalog';
 import { getCatalogs } from '../../../service/http/catalog/catalog_service';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 interface Customer {
   id: number;
@@ -55,7 +56,8 @@ export default function PreOrderManager() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const basePath = location.pathname.startsWith('/employee') ? '/employee/pre-orders' : '/owner/pre-orders';
+  // ไฟล์นี้ถูกใช้เฉพาะฝั่ง owner/manager เท่านั้น (พนักงานมีคอมโพเนนต์ของตัวเองแยกต่างหากที่ employee/pre-order.tsx)
+  const basePath = `${usePathBasePrefix()}/pre-orders`;
   const initialPageParams = new URLSearchParams(location.search);
   const [preOrders, setPreOrders] = useState<PreOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);

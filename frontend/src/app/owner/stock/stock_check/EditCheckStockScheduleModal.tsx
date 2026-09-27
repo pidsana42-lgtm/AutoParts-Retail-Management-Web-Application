@@ -19,6 +19,7 @@ import { buildZoneTree, buildCategoryTree, getRelatedProducts, isScheduleOverdue
 import { cn } from "../../../../utils/component";
 
 import { stockCheckService, type CheckStockScheduleCreateInput, type CheckStockSchedule } from "../../../../service/http/wms/stock_check_service";
+import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 
 interface EditCheckStockScheduleModalProps {
   isOpen: boolean;
@@ -38,6 +39,7 @@ export default function EditCheckStockScheduleModal({
   schedule,
 }: EditCheckStockScheduleModalProps) {
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   const { toast } = useToast();
   const { alertDialog, confirmDialog } = useAlertDialog();
   const { loading: loadingOptions, employees, zones, categories, products } = useCheckStockOptions();
@@ -289,7 +291,7 @@ export default function EditCheckStockScheduleModal({
                     <button
                       type="button"
                       onClick={() =>
-                        navigate(`/owner/stock/${p.ID}`, {
+                        navigate(`${basePath}/stock/${p.ID}`, {
                           state: { from: "check_stock", scheduleId: schedule?.id, scheduleName: schedule?.target_name, authorizedId: Number(p.ID) },
                         })
                       }
@@ -362,7 +364,7 @@ export default function EditCheckStockScheduleModal({
                     <span
                       onClick={(ev) => {
                         ev.preventDefault();
-                        navigate(`/owner/stock/${p.ID}`, {
+                        navigate(`${basePath}/stock/${p.ID}`, {
                           state: { from: "check_stock", scheduleId: schedule?.id, scheduleName: schedule?.target_name, authorizedId: Number(p.ID) },
                         });
                       }}
