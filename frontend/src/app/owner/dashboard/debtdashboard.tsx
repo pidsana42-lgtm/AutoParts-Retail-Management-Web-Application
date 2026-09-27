@@ -190,7 +190,8 @@ const DebtDashboard: React.FC = () => {
   }), [statusFilter, agingBucketParams, currentPage]);
 
   const {
-    kpi, currentOutstanding, currentOutstandingLoading, totalDebtors,
+    kpi, currentOutstanding, currentOutstandingLoading,
+    totalCollected, totalCollectedLoading, totalDebtors,
     summaryLoading, summaryError,
     agingData, agingTotal, agingLoading, agingError,
   } = useDebtDashboard(summaryQuery, agingQuery);
@@ -275,7 +276,7 @@ const DebtDashboard: React.FC = () => {
   const kpiVal = (v: React.ReactNode) =>
     summaryLoading ? <span className='text-gray-400 animate-pulse'>...</span> : v;
 
-  const totalDebtTarget = kpi.collectedAmount + currentOutstanding;
+  const totalDebtTarget = totalCollected + currentOutstanding;
 
   return (
     <div className='min-h-screen space-y-6 bg-white p-4 font-sans sm:p-6 lg:space-y-8 lg:p-8'>
@@ -377,16 +378,20 @@ const DebtDashboard: React.FC = () => {
             {kpiVal(`฿ ${fmt(kpi.collectedAmount)}`)}
           </Heading>
           <Heading level='p' className='text-gray-400'>
-            {currentOutstandingLoading || summaryLoading
-              ? '...'
-              : `เป้าหมาย: ฿ ${fmt(totalDebtTarget)}`}
+            {currentOutstandingLoading || totalCollectedLoading ? (
+              '...'
+            ) : (
+              <>
+                เป้าหมาย: <span className='text-red-500'>฿ {fmt(totalCollected)}</span> / ฿ {fmt(totalDebtTarget)}
+              </>
+            )}
           </Heading>
         </Card>
 
         {/* ลูกหนี้ค้างชำระเกินกำหนด */}
         <Card className='border-l-[5px] border-l-red-500 flex flex-col justify-between p-5 relative overflow-visible'>
           <div className='flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center'>
-            <Heading level='h6' className='text-gray-500 font-medium'>ลูกหนี้ค้างชำระ</Heading>
+            <Heading level='h6' className='text-gray-500'>ลูกหนี้ค้างชำระ</Heading>
 
             {/* Day Selector Button on Card with exact same secondary button variant */}
             <div className='relative' ref={cardOverdueRef}>

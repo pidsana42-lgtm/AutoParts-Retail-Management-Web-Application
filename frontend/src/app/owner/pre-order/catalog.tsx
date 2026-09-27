@@ -21,6 +21,7 @@ import apiClient from '../../../service/http/apiClient';
 import { getCatalogs, createCatalog, updateCatalog, deleteCatalog, extractCatalogFromImage } from '../../../service/http/catalog/catalog_service';
 import { getSuppliers } from '../../../service/http/import/import_service';
 import { useMobileUploadSession } from '../../../hooks/useMobileUploadSession';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import type { Catalog, CatalogItem } from '../../../interface/catalog/catalog';
 import type { Supplier } from '../../../interface/import';
 import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
