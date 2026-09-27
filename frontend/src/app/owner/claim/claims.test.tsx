@@ -134,4 +134,18 @@ describe('ClaimsPage role boundaries (canApprove)', () => {
     await userEvent.setup().click(editButton);
     expect(await screen.findByText('ไปหน้ารายละเอียด (แก้ไขในตัว)')).toBeInTheDocument();
   });
+
+  it('stays under the manager route when manager accesses claims and clicks edit', async () => {
+    render(
+      <MemoryRouter initialEntries={['/manager/claims']}>
+        <Routes>
+          <Route path="/manager/claims" element={<ClaimsPage />} />
+          <Route path="/manager/claims/detail/:id" element={<p>หน้ารายละเอียดของ Manager</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    const editButton = await screen.findByTitle('แก้ไขใบเคลม');
+    await userEvent.setup().click(editButton);
+    expect(await screen.findByText('หน้ารายละเอียดของ Manager')).toBeInTheDocument();
+  });
 });
