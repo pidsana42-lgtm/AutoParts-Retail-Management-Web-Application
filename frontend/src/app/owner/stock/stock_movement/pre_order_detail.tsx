@@ -11,7 +11,6 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from ".
 import { getPreOrderById } from "../../../../service/http/pre-order/pre-order";
 import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 import type { PreOrder } from "../../../../interface/pre-order/pre-order";
-import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 
 // ป้ายช่องทางการจอง — ใช้ป้ายเดียวกับตัวเลือกในฟอร์มสร้าง/แก้ไขใบสั่งจอง (owner/pre-order/pre-order.tsx)
 const CHANNEL_LABEL: Record<string, string> = {
