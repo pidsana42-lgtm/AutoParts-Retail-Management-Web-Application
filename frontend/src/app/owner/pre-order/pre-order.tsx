@@ -670,7 +670,7 @@ export default function PreOrderManager() {
               <Badge variant="info" size="auto">รอสินค้า</Badge>
               {po.po_number && (
                 <span className="text-[11px] text-gray-400 font-normal">
-                  PO: {po.po_number}
+                  เลขที่ใบสั่งซื้อ: {po.po_number}
                 </span>
               )}
             </div>
@@ -681,7 +681,7 @@ export default function PreOrderManager() {
             <Badge variant="warning" size="auto">รออนุมัติสั่งซื้อ</Badge>
             {po.po_number && (
               <span className="text-[11px] text-gray-400 font-normal">
-                PO: {po.po_number}
+                เลขที่ใบสั่งซื้อ: {po.po_number}
               </span>
             )}
           </div>
@@ -759,7 +759,7 @@ export default function PreOrderManager() {
             <div className="relative flex-1 min-w-60">
               <Input
                 type="text"
-                placeholder="ค้นหาชื่อลูกค้า, เบอร์โทร, เลขใบจอง หรือเลข PO..."
+                placeholder="ค้นหาชื่อลูกค้า, เบอร์โทร, เลขใบจอง หรือเลขที่ใบสั่งซื้อ..."
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                 leftIcon={<Search size={16} className="text-gray-400" />}
