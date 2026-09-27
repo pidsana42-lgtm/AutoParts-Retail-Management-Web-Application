@@ -138,7 +138,7 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
   }, []);
 
   // 1. ดึงรายการบิลค้างชำระทั้งหมดของลูกค้า (All unpaid bills of customer)
-  const fetchUnpaidBills = useCallback(async (targetCustomerId: number) => {
+  const fetchUnpaidBills = useCallback(async (targetCustomerId: number, clearSelection = false) => {
     setIsLoading(true);
     try {
       const res = await posApiService.getUnpaidBillsByCustomer(targetCustomerId);
@@ -147,35 +147,41 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
       setCustomerName(res.customer_name || "");
       setCustomerId(res.customer_id);
 
-      // รักษาเฉพาะบิลที่เคยเลือกไว้และยังมียอดค้างชำระอยู่
-      const remainingOrderIds = new Set(fetchedBills.map((b) => b.order_id));
+      if (clearSelection) {
+        setSelectedBillIds([]);
+        setCustomPayAmounts({});
+        setCustomPayDisplay({});
+      } else {
+        // รักษาเฉพาะบิลที่เคยเลือกไว้และยังมียอดค้างชำระอยู่
+        const remainingOrderIds = new Set(fetchedBills.map((b) => b.order_id));
 
-      setSelectedBillIds((prevSelected) =>
-        prevSelected.filter((id) => remainingOrderIds.has(id)),
-      );
+        setSelectedBillIds((prevSelected) =>
+          prevSelected.filter((id) => remainingOrderIds.has(id)),
+        );
 
-      // อัปเดตยอด custom pay ใหม่ตามยอด balance_due ล่าสุด
-      setCustomPayAmounts((prevAmounts) => {
-        const nextAmounts: Record<number, number> = {};
-        fetchedBills.forEach((b) => {
-          // ถ้ายอดเดิมที่เคยกรอกไว้เกินยอดหนี้ใหม่ ให้ปรับเท่ากับ balance_due ล่าสุด
-          const prevVal = prevAmounts[b.order_id];
-          nextAmounts[b.order_id] =
-            prevVal !== undefined && prevVal <= b.balance_due ? prevVal : b.balance_due;
+        // อัปเดตยอด custom pay ใหม่ตามยอด balance_due ล่าสุด
+        setCustomPayAmounts((prevAmounts) => {
+          const nextAmounts: Record<number, number> = {};
+          fetchedBills.forEach((b) => {
+            // ถ้ายอดเดิมที่เคยกรอกไว้เกินยอดหนี้ใหม่ ให้ปรับเท่ากับ balance_due ล่าสุด
+            const prevVal = prevAmounts[b.order_id];
+            nextAmounts[b.order_id] =
+              prevVal !== undefined && prevVal <= b.balance_due ? prevVal : b.balance_due;
+          });
+          return nextAmounts;
         });
-        return nextAmounts;
-      });
 
-      setCustomPayDisplay((prevDisplay) => {
-        const nextDisplay: Record<number, string> = {};
-        fetchedBills.forEach((b) => {
-          const prevVal = parseFloat(prevDisplay[b.order_id]);
-          const valToSet =
-            !isNaN(prevVal) && prevVal <= b.balance_due ? prevVal : b.balance_due;
-          nextDisplay[b.order_id] = valToSet.toFixed(2);
+        setCustomPayDisplay((prevDisplay) => {
+          const nextDisplay: Record<number, string> = {};
+          fetchedBills.forEach((b) => {
+            const prevVal = parseFloat(prevDisplay[b.order_id]);
+            const valToSet =
+              !isNaN(prevVal) && prevVal <= b.balance_due ? prevVal : b.balance_due;
+            nextDisplay[b.order_id] = valToSet.toFixed(2);
+          });
+          return nextDisplay;
         });
-        return nextDisplay;
-      });
+      }
     } catch (err) {
       console.error("Failed to load unpaid bills:", err);
     } finally {
@@ -701,6 +707,8 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
 
       setIsPaymentModalOpen(false);
       setQrCodeData(null);
+      setReceivedAmount(0);
+      setDisplayValue("");
 
       // ดึงข้อมูลอัปเดตยอดคงเหลือล่าสุดโดยคงโหมดเดิมไว้
       if (singleBillMode && selectedBills.length > 0) {
@@ -708,18 +716,19 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
         const payAmt = getBillPayAmount(singleBill);
         const isFullyPaid = payAmt >= (singleBill.balance_due - 0.001);
 
+        setSelectedBillIds([]);
+        setCustomPayAmounts({});
+        setCustomPayDisplay({});
+
         if (isFullyPaid) {
           // หากชำระเต็มจำนวนแล้ว บิลนี้ไม่มียอดหนี้ค้างชำระอีกต่อไป -> เคลียร์บิลนี้ออกจากหน้าจอทันที
           setBills([]);
-          setSelectedBillIds([]);
-          setCustomPayAmounts({});
-          setCustomPayDisplay({});
           setSingleBillMode(false);
           setSearchQuery("");
 
           if (customerId) {
             // ถ้ามี customerId ให้ลองโหลดบิลอื่นที่ยังค้างชำระของลูกค้ารายนี้ (ถ้ามี)
-            fetchUnpaidBills(customerId);
+            fetchUnpaidBills(customerId, true);
           } else {
             handleClearCustomer();
           }
@@ -728,8 +737,8 @@ export const useSettleBills = (initialCustomerId: number | null = null) => {
           fetchSingleUnpaidBill(singleBill.order_number);
         }
       } else if (customerId) {
-        // ถ้าดูลูกค้า ให้รีเฟรชบิลทั้งหมดของลูกค้ารายนี้
-        fetchUnpaidBills(customerId);
+        // ถ้าดูลูกค้า ให้รีเฟรชบิลทั้งหมดของลูกค้ารายนี้ พร้อมล้างการเลือกออกเพราะชำระเสร็จสิ้นแล้ว
+        fetchUnpaidBills(customerId, true);
       }
     } catch (err: any) {
       console.error("Failed to settle customer bills:", err);
