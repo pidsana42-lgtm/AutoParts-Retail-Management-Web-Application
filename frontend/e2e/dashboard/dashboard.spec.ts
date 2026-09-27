@@ -278,7 +278,7 @@ test.describe('Dashboard', () => {
     await expect(authenticatedPage.getByText('รายรับจากการเก็บหนี้', { exact: true })).toBeVisible();
     await expect(authenticatedPage.getByText('฿ 3,500.00', { exact: true }).first()).toBeVisible();
     await expect(authenticatedPage.getByText('฿ 1,200.00', { exact: true })).toBeVisible();
-    await expect(authenticatedPage.getByText('เป้าหมาย: ฿ 3,500.00', { exact: true })).toBeVisible();
+    await expect(authenticatedPage.getByText('เป้าหมาย: ฿ 4,700.00', { exact: true })).toBeVisible();
 
     const monthlyPeriodButton = dashboard.periodButton('เดือนนี้');
     const tableRequestCountBeforePeriod = requests.debtAgingUrls.filter(requestUrl => (
@@ -287,7 +287,7 @@ test.describe('Dashboard', () => {
     const periodButtonPositionBefore = await monthlyPeriodButton.boundingBox();
     await monthlyPeriodButton.click();
     await expect(authenticatedPage.getByText('฿ 2,400.00', { exact: true })).toBeVisible();
-    await expect(authenticatedPage.getByText('เป้าหมาย: ฿ 3,500.00', { exact: true })).toBeVisible();
+    await expect(authenticatedPage.getByText('เป้าหมาย: ฿ 5,900.00', { exact: true })).toBeVisible();
     await expect(authenticatedPage.getByText('รายรับจากการเก็บหนี้', { exact: true })).toBeVisible();
     const periodButtonPositionAfter = await monthlyPeriodButton.boundingBox();
     expect(periodButtonPositionAfter?.y).toBe(periodButtonPositionBefore?.y);
