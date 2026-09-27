@@ -13,6 +13,7 @@ import (
 	"backend/internal/app/entity"
 
 	"github.com/johnfercher/maroto/pkg/consts"
+	marotoPdf "github.com/johnfercher/maroto/pkg/pdf"
 )
 
 func TestThaiBahtText(t *testing.T) {
@@ -211,5 +212,126 @@ func TestGenerateDebtRepaymentReceiptPDFWithBarcode(t *testing.T) {
 		t.Fatalf("GenerateDebtRepaymentReceiptPDF returned empty bytes")
 	}
 }
+
+func TestGenerateDebtRepaymentReceiptPDF_MultipleBillsWithPartialPayment(t *testing.T) {
+	now := time.Now()
+	commonReceiptNo := "RE-2026-001-99999"
+
+	rep1 := entity.PaymentRepayment{
+		ReceiptNumber: commonReceiptNo,
+		OrderID:       101,
+		AmountPaid:    400.0,
+		Status:        "completed",
+	}
+	rep1.ID = 1
+	rep1.CreatedAt = now
+	rep1.Order.ID = 101
+	rep1.Order.OrderNumber = "INV-2026-001"
+	rep1.Order.TotalAmount = 1000.0
+	rep1.Order.Customer.CustomerName = "สมชาย ขายดี"
+
+	rep2 := entity.PaymentRepayment{
+		ReceiptNumber: commonReceiptNo,
+		OrderID:       102,
+		AmountPaid:    2500.0,
+		Status:        "completed",
+	}
+	rep2.ID = 2
+	rep2.CreatedAt = now
+	rep2.Order.ID = 102
+	rep2.Order.OrderNumber = "INV-2026-002"
+	rep2.Order.TotalAmount = 2500.0
+	rep2.Order.Customer.CustomerName = "สมชาย ขายดี"
+
+	repayments := []entity.PaymentRepayment{rep1, rep2}
+
+	companySetting := &entity.CompanySetting{
+		CompanyName:   "เจ.เจ อะไหล่",
+		Address:       "หนองสาหร่าย ปากช่อง",
+		PhoneNumber:   "096-7985115",
+		BankName:      "กสิกรไทย",
+		BankAccountNumber: "123-4-56789-0",
+		BankAccountName:   "เจ.เจ อะไหล่",
+	}
+
+	pdfBytes, err := GenerateDebtRepaymentReceiptPDF(repayments, companySetting, func(orderID, repaymentID uint) (float64, error) {
+		return 0, nil
+	})
+	if err != nil {
+		t.Fatalf("GenerateDebtRepaymentReceiptPDF failed with multiple bills: %v", err)
+	}
+	if len(pdfBytes) == 0 {
+		t.Fatalf("GenerateDebtRepaymentReceiptPDF returned empty bytes for multiple bills")
+	}
+}
+
+func TestGenerateSaleOrderPDFWithLongProductName(t *testing.T) {
+	paymentMethodID := uint(1)
+	order := &entity.SaleOrder{
+		OrderNumber:     "SO-TEST-LONG-001",
+		PaymentMethodID: &paymentMethodID,
+		Status:          "completed",
+		Items: []entity.SaleOrderItem{
+			{
+				ProductID:   1,
+				Qty:         1,
+				UnitPrice:   56.25,
+				ProductName: "ตัวยูโซ่คูโบต้า+สลัก+ปริ้น DTแท้ สีทอง สลัก12MM KUBOTA, L3408,L3608,L4508,L4708",
+				Product: entity.Product{
+					Product_Code: "COLRAD-00003",
+					Grade: &entity.Grade{
+						Grade_Name: "OEM",
+					},
+					Models: []entity.Models{
+						{
+							Model_Name: "HILUX REVO 2.8",
+						},
+					},
+				},
+			},
+		},
+		TotalAmount: 56.25,
+	}
+	order.CreatedAt = time.Now()
+
+	companySetting := &entity.CompanySetting{
+		CompanyName: "Test Company",
+	}
+
+	pdfBytes, err := GenerateSaleOrderPDF(order, companySetting, "ใบเสร็จรับเงิน")
+	if err != nil {
+		t.Fatalf("GenerateSaleOrderPDF error with long product name: %v", err)
+	}
+	if len(pdfBytes) == 0 {
+		t.Fatalf("GenerateSaleOrderPDF returned empty bytes for long product name")
+	}
+}
+
+func TestDebugSaleOrderLayout(t *testing.T) {
+	m := marotoPdf.NewMaroto(consts.Portrait, consts.A4)
+	m.SetPageMargins(10, 15, 10)
+	m.AddUTF8Font("THSarabun", consts.Normal, ResolveFontPath("assets/fonts/THSarabunNew.ttf"))
+	m.AddUTF8Font("THSarabun", consts.Bold, ResolveFontPath("assets/fonts/THSarabunNew Bold.ttf"))
+	m.SetDefaultFontFamily("THSarabun")
+
+	// Case 1: ข้อความยาวแบบมีวรรคและคำยาวตาม Screenshot ของผู้ใช้
+	prod1 := "Synthetic Motor Oil 5L เทสชื่อยาวมากๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆ เพื่อเช็คสปิเต้"
+	specs1 := "รุ่นรถ: REVO 2.8"
+	rowH1, specsT1 := calcSaleOrderItemLayout(m, prod1, specs1)
+	t.Logf("Case 1 (Screenshot): rowHeight=%.2f, specsTop=%.2f", rowH1, specsT1)
+	if specsT1 <= 4.5 {
+		t.Fatalf("specsTop (%.2f) must be > 4.5 to avoid overlapping line 2", specsT1)
+	}
+
+	// Case 2: ข้อความภาษาไทยยาวต่อเนื่องไม่มีวรรค
+	prod2 := "ตัวยูโซ่คูโบต้า+สลัก+ปริ้นDTแท้สีทองสลัก12MMKUBOTA,L3408,L3608,L4508,L4708ยาวมากๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆ"
+	specs2 := "รุ่นรถ: REVO 2.8"
+	rowH2, specsT2 := calcSaleOrderItemLayout(m, prod2, specs2)
+	t.Logf("Case 2 (Continuous): rowHeight=%.2f, specsTop=%.2f", rowH2, specsT2)
+	if specsT2 <= 4.5 {
+		t.Fatalf("specsTop (%.2f) must be > 4.5 to avoid overlapping line 2", specsT2)
+	}
+}
+
 
 

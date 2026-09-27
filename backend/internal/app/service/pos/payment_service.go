@@ -497,7 +497,7 @@ func (s *paymentService) SettleCustomerBills(req posDto.SettleBillsRequest) (*po
 
 	now := time.Now()
 	var lastRepaymentID uint
-	var lastReceiptNo string // ประกาศตัวแปรเก็บเลขที่ใบเสร็จสำหรับส่งกลับ response
+	var commonReceiptNo string
 
 	for _, alloc := range req.Allocations {
 		order, err := s.paymentRepo.GetOrderById(alloc.OrderID)
@@ -516,12 +516,13 @@ func (s *paymentService) SettleCustomerBills(req posDto.SettleBillsRequest) (*po
 			return nil, fmt.Errorf("ยอดชำระของบิล %s (%.2f บาท) เกินยอดค้างชำระ (%.2f บาท)", order.OrderNumber, alloc.PayAmount, order.BalanceDue)
 		}
 
-		// ย้ายมาสร้างตรงนี้เพื่อให้มีตัวแปร order ให้ใช้งาน
-		receiptNo := fmt.Sprintf("RE-%s-%d", strings.TrimPrefix(order.OrderNumber, "INV"), now.Unix())
-		lastReceiptNo = receiptNo
+		// สร้างเลขที่ใบเสร็จรับเงินร่วมกัน (1 การชำระเงิน = 1 เลขที่ใบเสร็จ) เพื่อให้ทุกบิลที่ชำระพร้อมกันอยู่ในใบเสร็จใบเดียวกัน
+		if commonReceiptNo == "" {
+			commonReceiptNo = fmt.Sprintf("RE-%s-%d", strings.TrimPrefix(order.OrderNumber, "INV"), now.Unix())
+		}
 
 		repayment := entity.PaymentRepayment{
-			ReceiptNumber:   receiptNo,
+			ReceiptNumber:   commonReceiptNo,
 			OrderID:         order.ID,
 			PaymentMethodID: req.PaymentMethodID,
 			AmountPaid:      alloc.PayAmount,
@@ -596,7 +597,7 @@ func (s *paymentService) SettleCustomerBills(req posDto.SettleBillsRequest) (*po
 
     return &posDto.SettleBillsResponse{
         ReceiptID:         lastRepaymentID,
-        ReceiptNumber:     lastReceiptNo,
+        ReceiptNumber:     commonReceiptNo,
         CustomerID:        req.CustomerID,
         CustomerName:      customerName,
         TotalReceived:     req.TotalReceived,
@@ -625,8 +626,20 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string, em
 
 	var list []posDto.PaymentHistoryItem
 
-	// Map Repayments
+	// Map Repayments - รายการที่เกิดจากการชำระรอบเดียวกัน (ReceiptNumber เดียวกัน) รวมยอดและแสดงเลขที่บิลทั้งหมด
+	type groupedRepayment struct {
+		item         posDto.PaymentHistoryItem
+		orderNumbers []string
+	}
+	repaymentGroups := make(map[string]*groupedRepayment)
+	var groupOrder []string
+
 	for _, r := range repayments {
+		groupKey := r.ReceiptNumber
+		if groupKey == "" {
+			groupKey = fmt.Sprintf("ID-%d", r.ID)
+		}
+
 		paidTime := r.CreatedAt
 		if r.PaidAt != nil {
 			paidTime = *r.PaidAt
@@ -680,27 +693,60 @@ func (s *paymentService) GetPaymentHistory(search, startDate, endDate string, em
 			}
 		}
 
-		list = append(list, posDto.PaymentHistoryItem{
-			ReceiptID:             r.ID,
-			ReceiptNumber:         r.ReceiptNumber,
-			PaidAt:                paidTime,
-			CustomerName:          custName,
-			PaymentMethod:         r.PaymentMethod.MethodName,
-			OrderNumbers:          r.Order.OrderNumber,
-			TotalReceived:         r.AmountPaid,
-			Status:                rStatus,
-			ReceivedByID:          r.RecordedByID,
-			ReceivedByName:        recName,
-			PaymentType:           "repayment",
-			CancelReason:          r.CancelReason,
-			CancelRequestedByID:   r.CancelRequestedByID,
-			CancelRequestedByName: reqByName,
-			CancelRequestedAt:     r.CancelRequestedAt,
-			CancelledByID:         r.CancelledByID,
-			CancelledByName:       cancelByName,
-			CancelledAt:           r.CancelledAt,
-			CancelRemark:          r.CancelRemark,
-		})
+		if existing, ok := repaymentGroups[groupKey]; ok {
+			existing.item.TotalReceived += r.AmountPaid
+			if r.Order.OrderNumber != "" {
+				hasOrder := false
+				for _, on := range existing.orderNumbers {
+					if on == r.Order.OrderNumber {
+						hasOrder = true
+						break
+					}
+				}
+				if !hasOrder {
+					existing.orderNumbers = append(existing.orderNumbers, r.Order.OrderNumber)
+					existing.item.OrderNumbers = strings.Join(existing.orderNumbers, ", ")
+				}
+			}
+			if rStatus == "pending_cancel" || rStatus == "cancelled" {
+				existing.item.Status = rStatus
+			}
+		} else {
+			var orderNums []string
+			if r.Order.OrderNumber != "" {
+				orderNums = append(orderNums, r.Order.OrderNumber)
+			}
+			g := &groupedRepayment{
+				item: posDto.PaymentHistoryItem{
+					ReceiptID:             r.ID,
+					ReceiptNumber:         r.ReceiptNumber,
+					PaidAt:                paidTime,
+					CustomerName:          custName,
+					PaymentMethod:         r.PaymentMethod.MethodName,
+					OrderNumbers:          r.Order.OrderNumber,
+					TotalReceived:         r.AmountPaid,
+					Status:                rStatus,
+					ReceivedByID:          r.RecordedByID,
+					ReceivedByName:        recName,
+					PaymentType:           "repayment",
+					CancelReason:          r.CancelReason,
+					CancelRequestedByID:   r.CancelRequestedByID,
+					CancelRequestedByName: reqByName,
+					CancelRequestedAt:     r.CancelRequestedAt,
+					CancelledByID:         r.CancelledByID,
+					CancelledByName:       cancelByName,
+					CancelledAt:           r.CancelledAt,
+					CancelRemark:          r.CancelRemark,
+				},
+				orderNumbers: orderNums,
+			}
+			repaymentGroups[groupKey] = g
+			groupOrder = append(groupOrder, groupKey)
+		}
+	}
+
+	for _, k := range groupOrder {
+		list = append(list, repaymentGroups[k].item)
 	}
 
 	// Map Direct Payments
@@ -991,8 +1037,18 @@ func (s *paymentService) GetCancelledPaymentHistory(search, startDate, endDate s
 		return nil, err
 	}
 
-	var list []posDto.CancelledPaymentItem
+	type groupedCancelled struct {
+		item posDto.CancelledPaymentItem
+	}
+	cancelledGroups := make(map[string]*groupedCancelled)
+	var groupOrder []string
+
 	for _, r := range repayments {
+		groupKey := r.ReceiptNumber
+		if groupKey == "" {
+			groupKey = fmt.Sprintf("ID-%d", r.ID)
+		}
+
 		paidTime := r.CreatedAt
 		if r.PaidAt != nil {
 			paidTime = *r.PaidAt
@@ -1014,16 +1070,29 @@ func (s *paymentService) GetCancelledPaymentHistory(search, startDate, endDate s
 			}
 		}
 
-		list = append(list, posDto.CancelledPaymentItem{
-			ReceiptID:       r.ID,
-			ReceiptNumber:   r.ReceiptNumber,
-			OriginalPaidAt:  paidTime,
-			CustomerName:    custName,
-			TotalAmount:     r.AmountPaid,
-			CancelledAt:     r.CancelledAt,
-			CancelledByName: cancelledByName,
-			CancelReason:    r.CancelReason,
-		})
+		if existing, ok := cancelledGroups[groupKey]; ok {
+			existing.item.TotalAmount += r.AmountPaid
+		} else {
+			g := &groupedCancelled{
+				item: posDto.CancelledPaymentItem{
+					ReceiptID:       r.ID,
+					ReceiptNumber:   r.ReceiptNumber,
+					OriginalPaidAt:  paidTime,
+					CustomerName:    custName,
+					TotalAmount:     r.AmountPaid,
+					CancelledAt:     r.CancelledAt,
+					CancelledByName: cancelledByName,
+					CancelReason:    r.CancelReason,
+				},
+			}
+			cancelledGroups[groupKey] = g
+			groupOrder = append(groupOrder, groupKey)
+		}
+	}
+
+	var list []posDto.CancelledPaymentItem
+	for _, k := range groupOrder {
+		list = append(list, cancelledGroups[k].item)
 	}
 	return list, nil
 }
@@ -1042,8 +1111,24 @@ func (s *paymentService) RequestCancelPaymentReceipt(repaymentID uint, userID ui
 	if repayment.Status == "pending_cancel" {
 		return errors.New("รายการนี้ได้ส่งคำขอยกเลิกไปแล้ว อยู่ระหว่างรอเจ้าของร้านอนุมัติ")
 	}
-	if err := s.paymentRepo.RequestCancelRepayment(repaymentID, userID, reason); err != nil {
-		return err
+
+	if repayment.ReceiptNumber != "" {
+		sameRepayments, err := s.paymentRepo.GetRepaymentsByReceiptNumber(repayment.ReceiptNumber)
+		if err == nil && len(sameRepayments) > 1 {
+			for _, r := range sameRepayments {
+				if r.Status != "cancelled" && r.Status != "pending_cancel" {
+					_ = s.paymentRepo.RequestCancelRepayment(r.ID, userID, reason)
+				}
+			}
+		} else {
+			if err := s.paymentRepo.RequestCancelRepayment(repaymentID, userID, reason); err != nil {
+				return err
+			}
+		}
+	} else {
+		if err := s.paymentRepo.RequestCancelRepayment(repaymentID, userID, reason); err != nil {
+			return err
+		}
 	}
 
 	// แจ้งเตือนส่งถึง Owner/Manager ทันทีเมื่อพนักงานยื่นคำขอยกเลิกการชำระเงิน
@@ -1079,6 +1164,19 @@ func (s *paymentService) RevertCancelPaymentReceiptRequest(repaymentID uint, use
 			return errors.New("คุณไม่มีสิทธิ์ดึงคำขอยกเลิกของพนักงานท่านอื่นกลับ")
 		}
 	}
+
+	if repayment.ReceiptNumber != "" {
+		sameRepayments, err := s.paymentRepo.GetRepaymentsByReceiptNumber(repayment.ReceiptNumber)
+		if err == nil && len(sameRepayments) > 1 {
+			for _, r := range sameRepayments {
+				if r.Status == "pending_cancel" {
+					_ = s.paymentRepo.RevertCancelRepayment(r.ID)
+				}
+			}
+			return nil
+		}
+	}
+
 	return s.paymentRepo.RevertCancelRepayment(repaymentID)
 }
 
@@ -1105,52 +1203,71 @@ func (s *paymentService) ApproveCancelPaymentReceipt(repaymentID uint, ownerID u
 	}
 
 	targetUserID := repayment.CancelRequestedByID
-
 	now := time.Now()
-	repayment.Status = "cancelled"
-	repayment.CancelledByID = &ownerID
-	repayment.CancelledAt = &now
-	if remark != "" {
-		repayment.CancelRemark = remark
-	}
 
-	if err := s.paymentRepo.UpdateRepaymentWithTx(tx, repayment); err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	order, err := s.paymentRepo.GetOrderById(repayment.OrderID)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	// หักลบยอดที่เคยตัดออก เพื่อดึงยอดกลับมาเป็นยอดหนี้
-	order.PaidAmount -= repayment.AmountPaid
-	if order.PaidAmount < 0 {
-		order.PaidAmount = 0
-	}
-	order.BalanceDue = order.TotalAmount - order.PaidAmount
-
-	if order.PaidAmount == 0 {
-		order.PaymentStatus = "unpaid"
+	var repaymentsToCancel []entity.PaymentRepayment
+	if repayment.ReceiptNumber != "" {
+		sameRepayments, err := s.paymentRepo.GetRepaymentsByReceiptNumber(repayment.ReceiptNumber)
+		if err == nil && len(sameRepayments) > 0 {
+			repaymentsToCancel = sameRepayments
+		} else {
+			repaymentsToCancel = []entity.PaymentRepayment{*repayment}
+		}
 	} else {
-		order.PaymentStatus = "partial"
+		repaymentsToCancel = []entity.PaymentRepayment{*repayment}
 	}
 
-	if err := s.paymentRepo.UpdateOrderWithTx(tx, order); err != nil {
-		tx.Rollback()
-		return err
-	}
+	for i := range repaymentsToCancel {
+		r := &repaymentsToCancel[i]
+		if r.Status == "cancelled" {
+			continue
+		}
 
-	// เพิ่มยอดหนี้สะสมของลูกค้ากลับเข้ามา
-	if order.CustomerID != nil {
-		var cust entity.Customer
-		if err := tx.First(&cust, *order.CustomerID).Error; err == nil {
-			cust.CurrentDebtAmount += repayment.AmountPaid
-			if err := tx.Save(&cust).Error; err != nil {
-				tx.Rollback()
-				return err
+		r.Status = "cancelled"
+		r.CancelledByID = &ownerID
+		r.CancelledAt = &now
+		if remark != "" {
+			r.CancelRemark = remark
+		}
+
+		if err := s.paymentRepo.UpdateRepaymentWithTx(tx, r); err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		order, err := s.paymentRepo.GetOrderById(r.OrderID)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		// หักลบยอดที่เคยตัดออก เพื่อดึงยอดกลับมาเป็นยอดหนี้
+		order.PaidAmount -= r.AmountPaid
+		if order.PaidAmount < 0 {
+			order.PaidAmount = 0
+		}
+		order.BalanceDue = order.TotalAmount - order.PaidAmount
+
+		if order.PaidAmount == 0 {
+			order.PaymentStatus = "unpaid"
+		} else {
+			order.PaymentStatus = "partial"
+		}
+
+		if err := s.paymentRepo.UpdateOrderWithTx(tx, order); err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		// เพิ่มยอดหนี้สะสมของลูกค้ากลับเข้ามา
+		if order.CustomerID != nil {
+			var cust entity.Customer
+			if err := tx.First(&cust, *order.CustomerID).Error; err == nil {
+				cust.CurrentDebtAmount += r.AmountPaid
+				if err := tx.Save(&cust).Error; err != nil {
+					tx.Rollback()
+					return err
+				}
 			}
 		}
 	}
@@ -1193,8 +1310,23 @@ func (s *paymentService) RejectCancelPaymentReceipt(repaymentID uint, remark str
 
 	targetUserID := repayment.CancelRequestedByID
 
-	if err := s.paymentRepo.RejectCancelRepayment(repaymentID, remark); err != nil {
-		return err
+	if repayment.ReceiptNumber != "" {
+		sameRepayments, err := s.paymentRepo.GetRepaymentsByReceiptNumber(repayment.ReceiptNumber)
+		if err == nil && len(sameRepayments) > 1 {
+			for _, r := range sameRepayments {
+				if r.Status == "pending_cancel" {
+					_ = s.paymentRepo.RejectCancelRepayment(r.ID, remark)
+				}
+			}
+		} else {
+			if err := s.paymentRepo.RejectCancelRepayment(repaymentID, remark); err != nil {
+				return err
+			}
+		}
+	} else {
+		if err := s.paymentRepo.RejectCancelRepayment(repaymentID, remark); err != nil {
+			return err
+		}
 	}
 
 	// แจ้งเตือนส่งกลับไปยัง Staff ผู้ส่งคำขอ เมื่อ Owner กดปฏิเสธ
