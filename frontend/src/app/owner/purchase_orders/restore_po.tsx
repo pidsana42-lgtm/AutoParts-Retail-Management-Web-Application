@@ -269,7 +269,7 @@ const DeletedPoHistory: React.FC = () => {
                       <div className="flex items-center justify-center">
                         <button
                           type="button"
-                          onClick={() => navigate(`${basePath}/orders/${po.id}`)}
+                          onClick={() => navigate(`${basePath}/orders/${po.id}`, { state: { authorizedId: Number(po.id) } })}
                           className="text-gray-600 hover:text-gray-900 transition cursor-pointer p-1.5 rounded-none hover:bg-gray-200/60"
                           title="ดูรายละเอียดใบสั่งซื้อ"
                         >

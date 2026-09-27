@@ -55,7 +55,12 @@ export default function Navbar(): React.JSX.Element {
   const goToProduct = (product: StockItem) => {
     setShowSearchResults(false);
     setSearchQuery("");
-    navigate(isOwnerOrManager ? (currentRole === 'MANAGER' ? `/manager/stock/${product.ID}` : `/owner/stock/${product.ID}`) : `/employee/wms/stock-data/${product.ID}`);
+    navigate(
+      isOwnerOrManager
+        ? (currentRole === 'MANAGER' ? `/manager/stock/${product.ID}` : `/owner/stock/${product.ID}`)
+        : `/employee/wms/stock-data/${product.ID}`,
+      { state: { authorizedId: Number(product.ID) } }
+    );
   };
 
   useEffect(() => {
@@ -78,7 +83,12 @@ export default function Navbar(): React.JSX.Element {
     }
     if (notif.link) {
       setShowNotif(false);
-      navigate(notif.link);
+      const idMatch = notif.link.match(/\/(\d+)(?:\/[a-zA-Z_-]+)?$/);
+      if (idMatch) {
+        navigate(notif.link, { state: { authorizedId: Number(idMatch[1]) } });
+      } else {
+        navigate(notif.link);
+      }
     }
   };
 

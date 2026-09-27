@@ -13,6 +13,7 @@ import { getDeletedProductsList, restoreProduct } from "../../../../service/http
 import type { StockItem } from "../../../../interface/wms/product";
 import { buildProductSearchIndex, searchProductIndex } from "../../../../utils/productSearch";
 import { useAlertDialog } from "../../../../components/elements/alert_dialog";
+import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 
 // แสดงเฉพาะสินค้าที่ถูกลบไม่เกิน 14 วัน — เกินกว่านี้ไม่ต้องแสดงในถังขยะแล้ว (ข้อมูลจริงยังอยู่ครบในระบบ แค่ไม่โชว์ในหน้านี้)
 export const TRASH_RETENTION_DAYS = 14;
@@ -28,6 +29,7 @@ export function isWithinTrashRetention(deletedAtIso?: string): boolean {
 // หน้าถังขยะสินค้า — สินค้าที่ลบเป็น soft delete เสมอ (ข้อมูลจริงยังอยู่ครบ) เลยกู้คืนกลับมาได้จากที่นี่
 export default function TrashStockPage() {
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   const { alertDialog, confirmDialog } = useAlertDialog();
   const [deletedProducts, setDeletedProducts] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +95,7 @@ export default function TrashStockPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <Breadcrumb items={[{ label: "คลังสินค้า", path: "/owner/stock" }, { label: "ถังขยะสินค้า" }]} />
+      <Breadcrumb items={[{ label: "คลังสินค้า", path: `${basePath}/stock` }, { label: "ถังขยะสินค้า" }]} />
 
       {/* Header */}
       <div>
@@ -151,7 +153,7 @@ export default function TrashStockPage() {
                     <TableCell className="text-right pr-6">
                       <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => navigate(`/owner/stock/${product.ID}`)}
+                          onClick={() => navigate(`${basePath}/stock/${product.ID}`, { state: { authorizedId: Number(product.ID) } })}
                           className="cursor-pointer rounded-md p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                           aria-label="ดูรายละเอียด"
                           title="ดูรายละเอียด"

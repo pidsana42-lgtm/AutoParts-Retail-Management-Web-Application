@@ -38,6 +38,7 @@ import { buildProductSearchIndex, searchProductIndex } from "../../../utils/prod
 import { cn } from "../../../utils/component";
 import StockAlertPOModal from "../dashboard/components/StockAlertPOModal";
 import { isWithinTrashRetention } from "./trash_stock/trash_stock";
+import { usePathBasePrefix } from "../../../utils/usePathBasePrefix";
 
 // คอนฟิก Badge ตามเกรดสินค้า
 const GRADE_BADGE: Record<string, string> = {
@@ -199,6 +200,7 @@ function StockLevelBar({ stock, minStock }: { stock: number; minStock: number })
 // -----------------------------------------------------------------------------
 export default function StockPage() {
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   const { alertDialog, confirmDialog } = useAlertDialog();
   const [stockData, setStockData] = useState<StockItem[]>([]);
   const [stockAlerts, setStockAlerts] = useState<StockAlertItem[]>([]);
@@ -225,11 +227,11 @@ export default function StockPage() {
   const [deletedCount, setDeletedCount] = useState(0);
 
   const handleEditClick = (product: StockItem) => {
-    navigate(`/owner/stock/${product.ID}/edit`);
+    navigate(`${basePath}/stock/${product.ID}/edit`, { state: { authorizedId: Number(product.ID) } });
   };
 
   const handleViewClick = (product: StockItem) => {
-    navigate(`/owner/stock/${product.ID}`);
+    navigate(`${basePath}/stock/${product.ID}`, { state: { authorizedId: Number(product.ID) } });
   };
 
   const handleDeleteClick = async (product: StockItem) => {
@@ -458,7 +460,7 @@ export default function StockPage() {
         <div className="flex shrink-0 items-center gap-2 self-start sm:self-auto">
           <div className="relative">
             <Button
-              onClick={() => navigate("/owner/stock/trash")}
+              onClick={() => navigate(`${basePath}/stock/trash`)}
               variant="outline"
               className="flex items-center gap-2"
             >
@@ -472,7 +474,7 @@ export default function StockPage() {
             )}
           </div>
           <Button
-            onClick={() => navigate("/owner/stock/new")}
+            onClick={() => navigate(`${basePath}/stock/new`)}
             variant="primary"
             className="flex items-center gap-2"
           >
@@ -745,7 +747,7 @@ export default function StockPage() {
       isOpen={stockAlertModalOpen}
       onClose={() => setStockAlertModalOpen(false)}
       stockAlerts={stockAlerts}
-      basePath="/owner"
+      basePath={basePath}
     />
     </>
   );

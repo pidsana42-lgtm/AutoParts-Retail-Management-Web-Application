@@ -21,6 +21,7 @@ import apiClient from '../../../service/http/apiClient';
 import { getCatalogs, createCatalog, updateCatalog, deleteCatalog, extractCatalogFromImage } from '../../../service/http/catalog/catalog_service';
 import { getSuppliers } from '../../../service/http/import/import_service';
 import { useMobileUploadSession } from '../../../hooks/useMobileUploadSession';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import type { Catalog, CatalogItem } from '../../../interface/catalog/catalog';
 import type { Supplier } from '../../../interface/import';
 
@@ -28,11 +29,12 @@ interface CatalogManagerProps {
   isEmployee?: boolean;
 }
 
-export default function CatalogManager({ isEmployee = false }: CatalogManagerProps) {
+export default function CatalogManager({}: CatalogManagerProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const basePath = isEmployee ? '/employee/pre-orders' : '/owner/pre-orders';
+  // owner/manager/employee ทุก role ใช้ path suffix "/pre-orders" เหมือนกันหมด ต่างกันแค่ prefix ของ role
+  const basePath = `${usePathBasePrefix()}/pre-orders`;
   const catalogPath = `${basePath}/catalog`;
   const initialCatalogParams = new URLSearchParams(location.search);
 

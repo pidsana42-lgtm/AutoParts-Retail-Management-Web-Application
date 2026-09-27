@@ -195,7 +195,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
                   <TableRow key={`${item.claimId}-${item.itemId}-${idx}`} className="hover:bg-gray-50/70 border-t border-gray-100">
                     <TableCell className="pl-6 font-normal text-sm">
                       <div
-                        onClick={() => navigate(`${basePath}/detail/${item.claimId}`)}
+                        onClick={() => navigate(`${basePath}/detail/${item.claimId}`, { state: { authorizedId: Number(item.claimId) } })}
                         className="font-normal text-[#e51c23] hover:underline cursor-pointer"
                       >
                         {item.claimNo}

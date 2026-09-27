@@ -16,6 +16,9 @@ export function useDebtDashboard(summaryQuery: SummaryQuery, agingQuery: DebtAgi
   const [currentOutstanding, setCurrentOutstanding] = useState(0);
   const [currentOutstandingLoading, setCurrentOutstandingLoading] = useState(false);
 
+  const [totalCollected, setTotalCollected] = useState(0);
+  const [totalCollectedLoading, setTotalCollectedLoading] = useState(false);
+
   const [agingData, setAgingData] = useState<DebtAgingItem[]>([]);
   const [agingTotal, setAgingTotal] = useState(0);
   const [totalDebtors, setTotalDebtors] = useState(0);
@@ -57,6 +60,25 @@ export function useDebtDashboard(summaryQuery: SummaryQuery, agingQuery: DebtAgi
     return () => { mounted = false; };
   }, []);
 
+  // ยอดหนี้ที่เก็บได้สะสมคงที่สำหรับเป้าหมาย KPI ไม่เปลี่ยนตาม period filter
+  useEffect(() => {
+    let mounted = true;
+    setTotalCollectedLoading(true);
+    dashboardService
+      .getSummaryData({ yearly_summary: '1' })
+      .then((res) => {
+        if (!mounted) return;
+        const total = (res.data.summary_data ?? []).reduce(
+          (sum, item) => sum + (item.collected_debt_amount ?? 0),
+          0
+        );
+        setTotalCollected(total);
+      })
+      .catch(() => { if (mounted) setTotalCollected(0); })
+      .finally(() => { if (mounted) setTotalCollectedLoading(false); });
+    return () => { mounted = false; };
+  }, []);
+
   useEffect(() => {
     let mounted = true;
     setAgingLoading(true);
@@ -87,6 +109,8 @@ export function useDebtDashboard(summaryQuery: SummaryQuery, agingQuery: DebtAgi
     kpi,
     currentOutstanding,
     currentOutstandingLoading,
+    totalCollected,
+    totalCollectedLoading,
     totalDebtors,
     yearlyTarget,
     summaryLoading,

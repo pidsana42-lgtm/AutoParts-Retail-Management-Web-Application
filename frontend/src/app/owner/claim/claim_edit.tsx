@@ -14,6 +14,7 @@ import apiClient from '../../../service/http/apiClient';
 import type { CustomerClaim, CustomerClaimItem } from '../../../interface/claim/claim';
 import { CLAIM_TYPE_LABEL } from '../../../interface/claim/claim';
 import { useToast } from '../../../components/elements/toast';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 interface ClaimEditPageProps {
   canApprove?: boolean;
@@ -55,7 +56,8 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
   const [activeItemIdx, setActiveItemIdx] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const backPath = window.location.pathname.startsWith('/employee') ? '/employee/claims' : '/owner/claims';
+  const basePrefix = usePathBasePrefix();
+  const backPath = canApprove === false ? '/employee/claims' : `${basePrefix}/claims`;
 
   useEffect(() => {
     if (!id) return;
@@ -175,7 +177,7 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
       }
 
       toast({ variant: 'success', message: 'แก้ไขใบเคลมเรียบร้อยแล้ว' });
-      navigate(`${backPath}/detail/${claim.id}`);
+      navigate(`${backPath}/detail/${claim.id}`, { state: { authorizedId: Number(claim.id) } });
     } catch (err) {
       console.error('Failed to save claim:', err);
       toast({ variant: 'error', message: 'เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่' });
@@ -227,7 +229,7 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
               จัดการเคลมสินค้า
             </Link>
             <ChevronRight size={16} className="text-gray-400" />
-            <Link to={`${backPath}/detail/${claim.id}`} className="hover:text-black transition-colors cursor-pointer">
+            <Link to={`${backPath}/detail/${claim.id}`} state={{ authorizedId: Number(claim.id) }} className="hover:text-black transition-colors cursor-pointer">
               รายละเอียดใบเคลมสินค้า
             </Link>
             <ChevronRight size={16} className="text-gray-400" />
@@ -450,7 +452,7 @@ export default function ClaimEditPage({ canApprove = true }: ClaimEditPageProps)
               type="button"
               variant="outline-cancel"
               size="md"
-              onClick={() => navigate(`${backPath}/detail/${claim.id}`)}
+              onClick={() => navigate(`${backPath}/detail/${claim.id}`, { state: { authorizedId: Number(claim.id) } })}
             >
               ยกเลิก
             </Button>

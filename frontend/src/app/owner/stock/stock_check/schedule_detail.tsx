@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Loader2, MapPin, Package, ClipboardCheck, Download, Printer, QrCode, Undo2 } from "lucide-react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
@@ -20,6 +20,7 @@ import {
   type CheckStockRecord,
 } from "../../../../service/http/wms/stock_check_service";
 import type { StockItem } from "../../../../interface/wms/product";
+import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 
 const CHECK_TYPE_LABEL: Record<CheckStockSchedule["check_type"], string> = {
   LOCATION: "พื้นที่จัดเก็บ (โซน/ชั้นวาง)",
@@ -42,6 +43,7 @@ function getStatusBadge(status: string) {
 function ScheduleDetailContent() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   // ที่มาของการเข้าหน้านี้ (ถ้ามี) — ใช้ปรับเกล็ดขนมปังให้ตรงกับหน้าที่กดเข้ามาจริงๆ เช่นจากหน้า "การเคลื่อนไหวของคลังสินค้า"
   const location = useLocation();
   const cameFromMovement = (location.state as { from?: string } | null)?.from === "movement";
@@ -84,9 +86,11 @@ function ScheduleDetailContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // ตารางที่พนักงานส่งผลนับมาแล้ว (สถานะ "รอตรวจสอบ") ต้องดึงผลนับจริงมาเทียบให้เจ้าของร้านตัดสินใจ
+  // ตารางที่พนักงานส่งผลนับมาแล้ว ("รอตรวจสอบ") หรืออนุมัติไปแล้ว ("เสร็จสิ้น") ต้องดึงผลนับจริงมาโชว์
+  // จำนวนที่แตกต่างด้วย ไม่งั้นพอกลับมาดูตารางที่เสร็จแล้วภายหลังจะเห็นแค่สต็อกปัจจุบัน ไม่เห็นผลต่างที่นับได้จริง
+  const showReviewDiff = schedule?.status === "รอตรวจสอบ" || schedule?.status === "เสร็จสิ้น";
   useEffect(() => {
-    if (!id || !schedule || schedule.status !== "รอตรวจสอบ") return;
+    if (!id || !schedule || !showReviewDiff) return;
     let alive = true;
     checkStockRecordService
       .listBySchedule(Number(id))
@@ -176,7 +180,7 @@ function ScheduleDetailContent() {
       setActionLoading(true);
       await stockCheckService.approveSchedule(Number(id));
       toast({ variant: "success", message: "อนุมัติผลนับสต็อกและบันทึกลงคลังสินค้าสำเร็จ" });
-      navigate("/owner/stock/stock-check");
+      navigate(`${basePath}/stock/stock-check`);
     } catch (err: any) {
       toast({ variant: "error", message: err.response?.data?.error || "ไม่สามารถอนุมัติผลนับสต็อกได้" });
     } finally {
@@ -197,7 +201,7 @@ function ScheduleDetailContent() {
       await stockCheckService.rejectSchedule(Number(id), rejectNote.trim());
       setIsRejectOpen(false);
       toast({ variant: "success", message: "ตีกลับให้พนักงานนับสต็อกใหม่แล้ว" });
-      navigate("/owner/stock/stock-check");
+      navigate(`${basePath}/stock/stock-check`);
     } catch (err: any) {
       toast({ variant: "error", message: err.response?.data?.error || "ไม่สามารถตีกลับตารางนี้ได้" });
     } finally {
@@ -218,7 +222,7 @@ function ScheduleDetailContent() {
     return (
       <div className="space-y-4 p-8 text-center">
         <p className="font-bold text-slate-500">{error || "ไม่พบข้อมูลตารางเช็คสต็อกที่คุณระบุ"}</p>
-        <Button onClick={() => navigate("/owner/stock/stock-check")} variant="outline">
+        <Button onClick={() => navigate(`${basePath}/stock/stock-check`)} variant="outline">
           กลับหน้าตารางเช็คสต็อก
         </Button>
       </div>
@@ -244,11 +248,11 @@ function ScheduleDetailContent() {
         items={
           cameFromMovement
             ? [
-                { label: "การเคลื่อนไหวของคลังสินค้า", path: "/owner/stock/stock-movement" },
+                { label: "การเคลื่อนไหวของคลังสินค้า", path: `${basePath}/stock/stock-movement` },
                 { label: schedule.target_name || "รายละเอียดตาราง" },
               ]
             : [
-                { label: "ตรวจสอบสินค้า", path: "/owner/stock/stock-check" },
+                { label: "ตรวจสอบสินค้า", path: `${basePath}/stock/stock-check` },
                 { label: schedule.target_name || "รายละเอียดตาราง" },
               ]
         }
@@ -271,12 +275,12 @@ function ScheduleDetailContent() {
       <div className="flex flex-col items-stretch gap-6 lg:flex-row">
         {/* Left: รายชื่อสินค้าที่ต้องตรวจ */}
         <div className="flex w-full flex-col gap-6 lg:w-2/3">
-          {schedule.status === "รอตรวจสอบ" ? (
-            <Card className="border-l-[5px] border-l-blue-600">
+          {showReviewDiff ? (
+            <Card className={schedule.status === "เสร็จสิ้น" ? "border-l-[5px] border-l-green-600" : "border-l-[5px] border-l-blue-600"}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <ClipboardCheck className="h-4 w-4 text-blue-500" />
-                  ผลนับสต็อกที่พนักงานส่งมา ({reviewRecords.length} รายการ)
+                  <ClipboardCheck className={schedule.status === "เสร็จสิ้น" ? "h-4 w-4 text-green-500" : "h-4 w-4 text-blue-500"} />
+                  {schedule.status === "เสร็จสิ้น" ? "ผลนับสต็อกที่อนุมัติแล้ว" : "ผลนับสต็อกที่พนักงานส่งมา"} ({reviewRecords.length} รายการ)
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -353,11 +357,12 @@ function ScheduleDetailContent() {
                         key={p.ID}
                         onClick={() =>
                           // รักษาต้นทางเดิมไว้ — ถ้าไล่มาจากหน้าการเคลื่อนไหวของคลังสินค้า ก็ให้ breadcrumb ของหน้าสินค้ายังโยงกลับไปที่นั่นต่อ
-                          navigate(`/owner/stock/${p.ID}`, {
+                          navigate(`${basePath}/stock/${p.ID}`, {
                             state: {
                               from: cameFromMovement ? "movement" : "check_stock",
                               scheduleId: schedule.id,
                               scheduleName: schedule.target_name,
+                              authorizedId: Number(p.ID),
                             },
                           })
                         }

@@ -18,9 +18,11 @@ import SupplierRowsField, { rowsToPayload, type SupplierRow } from "../SupplierR
 import SearchableSelect from "../stock_check/SearchableSelect";
 import type { StockItem } from "../../../../interface/wms/product";
 import { cn } from "../../../../utils/component";
+import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 
 export default function AddProductPage() {
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   const { alertDialog, confirmDialog } = useAlertDialog();
   const { models, categories, grades, units, zones, suppliers, loading, addSupplierOption } = useProductFormOptions();
   const [supplierRows, setSupplierRows] = useState<SupplierRow[]>([]);
@@ -132,7 +134,7 @@ export default function AddProductPage() {
         }
       }
       await alertDialog(imageUploadFailed ? "เพิ่มข้อมูลสินค้าสำเร็จ แต่อัปโหลดรูปสินค้าไม่สำเร็จ" : "เพิ่มข้อมูลสินค้าสำเร็จ");
-      navigate("/owner/stock");
+      navigate(`${basePath}/stock`);
     } catch (err: any) {
       console.error("Error creating product:", err);
       await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการเพิ่มข้อมูลสินค้า");
@@ -209,7 +211,7 @@ export default function AddProductPage() {
       setReceiveSubmitting(true);
       await receiveStock(selectedProduct.ID, { quantity: qty, suppliers: supplierPayload });
       await alertDialog(`รับสินค้าเข้าเพิ่มสำเร็จ: ${selectedProduct.Name} +${qty} ${selectedProduct.Unit || "ชิ้น"}`);
-      navigate(`/owner/stock/${selectedProduct.ID}`);
+      navigate(`${basePath}/stock/${selectedProduct.ID}`, { state: { authorizedId: Number(selectedProduct.ID) } });
     } catch (err: any) {
       console.error("Error receiving stock:", err);
       await alertDialog(err.response?.data?.error || "เกิดข้อผิดพลาดในการรับสินค้าเข้าเพิ่ม");
@@ -222,7 +224,7 @@ export default function AddProductPage() {
     <div className="min-h-screen space-y-6 bg-gray-50 p-8 font-sans">
       <Breadcrumb
         items={[
-          { label: "คลังสินค้า", path: "/owner/stock" },
+          { label: "คลังสินค้า", path: `${basePath}/stock` },
           { label: mode === "new" ? "เพิ่มสินค้าใหม่" : "รับสินค้าเข้าเพิ่ม" },
         ]}
       />
@@ -394,7 +396,7 @@ export default function AddProductPage() {
               <ImageUploader preview={imagePreview} onChange={handleImageChange} onClear={handleImageClear} />
 
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                <Button type="button" variant="outline" onClick={() => navigate("/owner/stock")} disabled={submitting}>
+                <Button type="button" variant="outline" onClick={() => navigate(`${basePath}/stock`)} disabled={submitting}>
                   ยกเลิก
                 </Button>
                 <Button type="submit" variant="primary" isLoading={submitting}>
@@ -470,7 +472,7 @@ export default function AddProductPage() {
               />
 
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                <Button type="button" variant="outline" onClick={() => navigate("/owner/stock")} disabled={receiveSubmitting}>
+                <Button type="button" variant="outline" onClick={() => navigate(`${basePath}/stock`)} disabled={receiveSubmitting}>
                   ยกเลิก
                 </Button>
                 <Button type="submit" variant="primary" isLoading={receiveSubmitting}>

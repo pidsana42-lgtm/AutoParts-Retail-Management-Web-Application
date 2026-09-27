@@ -174,7 +174,7 @@ describe('Preorder list and navigation', () => {
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith({ variant: 'error', message: 'ไม่สามารถดึงข้อมูลรายละเอียดรายการจองนี้ได้' }));
     expect(screen.queryByRole('button', { name: 'บันทึกใบสั่งจอง' })).not.toBeInTheDocument();
   });
-  it.each(['owner', 'employee'])('keeps automatic statuses but allows edit/delete management on the %s list', async role => {
+  it.each(['owner', 'manager', 'employee'])('keeps automatic statuses but allows edit/delete management on the %s list', async role => {
     mocks.list.mockResolvedValue([
       preorder({ id: 51, status: 'PENDING' }),
       preorder({ id: 52, status: 'ORDERED', po_status: 'APPROVED', po_id: 1, po_number: 'PO-2026-0001' }),
@@ -244,7 +244,7 @@ function resetMocks() {
 describe('Preorder form (real owner and employee pages, mocked API)', () => {
   beforeEach(resetMocks);
 
-  it.each(['owner', 'employee'])('creates a preorder and stays under the %s route', async role => {
+  it.each(['owner', 'manager', 'employee'])('creates a preorder and stays under the %s route', async role => {
     const user = await readyForm(role);
     await user.type(screen.getByPlaceholderText('พิมพ์นามสกุล...'), 'ทดสอบ');
     await user.type(screen.getByPlaceholderText('08X-XXXXXXX'), '0812345678');
@@ -401,7 +401,7 @@ describe('Preorder form (real owner and employee pages, mocked API)', () => {
     expect(patch).not.toHaveProperty('order_date');
     expect({ ...original, ...patch }).toMatchObject({ deposit_amount: 500, supplier_id: 8, order_date: '2025-12-01T08:00:00Z' });
   });
-  it.each(['owner', 'employee'])('cancels the %s form without saving', async role => {
+  it.each(['owner', 'manager', 'employee'])('cancels the %s form without saving', async role => {
     const user = await readyForm(role);
     await user.click(screen.getByRole('button', { name: 'ยกเลิก' }));
     expect(screen.getByTestId('route').textContent).toBe(`/${role}/pre-orders`);

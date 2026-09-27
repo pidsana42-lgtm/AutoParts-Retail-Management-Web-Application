@@ -698,7 +698,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                       <button
                         key={c.id}
                         type="button"
-                        onMouseDown={() => { navigate(`${basePath}/detail/${c.id}`); setShowSearchDrop(false); }}
+                        onMouseDown={() => { navigate(`${basePath}/detail/${c.id}`, { state: { authorizedId: Number(c.id) } }); setShowSearchDrop(false); }}
                         className="w-full text-left px-4 py-2.5 hover:bg-red-50/40 border-b border-gray-100 last:border-0 cursor-pointer transition-colors"
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -853,7 +853,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                             ? 'bg-white hover:bg-red-50/20 border-t-2 border-gray-100 cursor-pointer'
                             : 'bg-gray-50/30 border-t border-gray-100'
                         )}
-                        onClick={row.isFirst ? () => navigate(`${basePath}/detail/${row.claimId}`) : undefined}
+                        onClick={row.isFirst ? () => navigate(`${basePath}/detail/${row.claimId}`, { state: { authorizedId: Number(row.claimId) } }) : undefined}
                       >
                         <TableCell className="pl-6 py-3">
                           {row.isFirst ? (
@@ -919,8 +919,8 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                               </button>
                               <button
                                 onClick={() => canApprove
-                                  ? navigate(`${basePath}/detail/${row.claimId}?edit=1`)
-                                  : navigate(`${basePath}/edit/${row.claimId}`)}
+                                  ? navigate(`${basePath}/detail/${row.claimId}?edit=1`, { state: { authorizedId: Number(row.claimId) } })
+                                  : navigate(`${basePath}/edit/${row.claimId}`, { state: { authorizedId: Number(row.claimId) } })}
                                 className="p-1.5 text-gray-400 hover:text-[#1C1B1B] transition cursor-pointer"
                                 title="แก้ไขใบเคลม"
                               >

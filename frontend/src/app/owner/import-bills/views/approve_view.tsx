@@ -7,6 +7,7 @@ import Badge from '../../../../components/elements/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
 import type { SavedBill, Supplier, Product } from '../../../../interface/import';
 import { resolveImageUrl } from '../../../../service/http/import/import_service';
+import { usePathBasePrefix } from '../../../../utils/usePathBasePrefix';
 
 interface ApproveViewProps {
   bill: SavedBill;
@@ -31,6 +32,7 @@ export default function ApproveView({
   isEmployee = false,
 }: ApproveViewProps) {
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   const [loading, setLoading] = useState<boolean>(false);
   const [rejecting, setRejecting] = useState<boolean>(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
@@ -75,7 +77,7 @@ export default function ApproveView({
         companyProductName: i.company_product_name,
         productName: i.company_product_name,
       }));
-    navigate(`/owner/import-bills/edit-stock-bill?productId=${item.product_id}`, {
+    navigate(`${basePath}/import-bills/edit-stock-bill?productId=${item.product_id}`, {
       state: { mismatchedItems: allBillItems, returnFrom: 'approve', returnBillId: bill.id, billNo: bill.bill_no },
     });
   };

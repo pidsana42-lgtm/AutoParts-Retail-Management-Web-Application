@@ -11,6 +11,7 @@ import { getCustomerClaimById, updateClaimItemStatus } from '../../../service/ht
 import type { CustomerClaim } from '../../../interface/claim/claim';
 import { useToast } from '../../../components/elements/toast';
 import { cn } from '../../../utils/component';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 interface ApprovedItemState {
   [itemId: number]: boolean;
@@ -26,6 +27,8 @@ export default function ClaimApprovePage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const basePrefix = usePathBasePrefix();
+  const basePath = `${basePrefix}/claims`;
 
   const [claim, setClaim] = useState<CustomerClaim | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,7 +85,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
 
       // Navigate back to detail
       toast({ variant: 'success', message: 'บันทึกผลการพิจารณาใบเคลมเรียบร้อยแล้ว' });
-      navigate(`/owner/claims/detail/${claim.id}`);
+      navigate(`${basePath}/detail/${claim.id}`, { state: { authorizedId: Number(claim.id) } });
     } catch (err) {
       console.error('Failed to approve claim:', err);
       toast({ variant: 'error', message: 'เกิดข้อผิดพลาดในการอนุมัติใบเคลม กรุณาลองใหม่' });
@@ -124,11 +127,11 @@ export default function ClaimApprovePage(): React.JSX.Element {
       <div className="flex items-center justify-between pb-5 border-b border-gray-100">
         <div>
           <nav className="flex items-center text-sm text-gray-500 gap-2 font-light mb-2">
-            <Link to="/owner/claims" className="hover:text-black transition-colors cursor-pointer">
+            <Link to={basePath} className="hover:text-black transition-colors cursor-pointer">
               จัดการเคลมสินค้า
             </Link>
             <ChevronRight size={16} className="text-gray-400" />
-            <Link to={`/owner/claims/detail/${claim.id}`} className="hover:text-black transition-colors cursor-pointer">
+            <Link to={`${basePath}/detail/${claim.id}`} state={{ authorizedId: Number(claim.id) }} className="hover:text-black transition-colors cursor-pointer">
               รายละเอียดใบเคลมสินค้า
             </Link>
             <ChevronRight size={16} className="text-gray-400" />
@@ -146,7 +149,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
             type="button"
             variant="outline-cancel"
             size="md"
-            onClick={() => navigate(`/owner/claims/detail/${claim.id}`)}
+            onClick={() => navigate(`${basePath}/detail/${claim.id}`, { state: { authorizedId: Number(claim.id) } })}
           >
             ย้อนกลับ
           </Button>
@@ -347,7 +350,7 @@ export default function ClaimApprovePage(): React.JSX.Element {
             type="button"
             variant="outline-cancel"
             size="md"
-            onClick={() => navigate(`/owner/claims/detail/${claim.id}`)}
+            onClick={() => navigate(`${basePath}/detail/${claim.id}`, { state: { authorizedId: Number(claim.id) } })}
           >
             ยกเลิก
           </Button>

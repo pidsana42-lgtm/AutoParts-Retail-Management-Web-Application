@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, Edit3, CheckCircle2 } from 'lucide-react';
 import type { PriceMismatchItem } from './price_update_modal';
+import { usePathBasePrefix } from '../../../../utils/usePathBasePrefix';
 
 interface InlinePriceAlertBannerProps {
   mismatchedItems: PriceMismatchItem[];
@@ -16,6 +17,7 @@ export default function InlinePriceAlertBanner({
   saving = false
 }: InlinePriceAlertBannerProps) {
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
 
   if (!mismatchedItems || mismatchedItems.length === 0) return null;
 
@@ -25,7 +27,7 @@ export default function InlinePriceAlertBanner({
     } catch (e) {
       console.error('Failed to set sessionStorage:', e);
     }
-    navigate('/owner/import-bills/edit-stock-bill', {
+    navigate(`${basePath}/import-bills/edit-stock-bill`, {
       state: { mismatchedItems, isFromImportBill: true }
     });
   };

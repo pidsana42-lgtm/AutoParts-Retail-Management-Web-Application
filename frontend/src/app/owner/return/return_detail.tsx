@@ -158,7 +158,7 @@ const ReturnDetailPage: React.FC = () => {
           <div className="flex-col space-y-2">
             <nav className="flex items-center text-sm text-gray-500 gap-2 font-light">
               <Link
-                to={cameFromMovement ? '/owner/stock/stock-movement' : `${basePath}/returns`}
+                to={cameFromMovement ? `${basePath}/stock/stock-movement` : `${basePath}/returns`}
                 className="hover:text-black transition-colors"
               >
                 {cameFromMovement ? 'การเคลื่อนไหวของคลังสินค้า' : 'จัดการคืนสินค้า'}

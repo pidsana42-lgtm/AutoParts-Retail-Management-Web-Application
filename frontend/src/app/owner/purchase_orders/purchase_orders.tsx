@@ -146,7 +146,7 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
     return (
       <>
         <div className="flex items-start justify-center gap-3">
-          <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
+          <button onClick={() => navigate(`${basePath}/orders/${id}`, { state: { authorizedId: Number(id) } })} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
             <PenLine size={16}/>
           </button>
           <button onClick={() => setConfirmationAction("delete")} className="text-red-600 hover:text-red-700 transition cursor-pointer">
@@ -163,7 +163,7 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
     return (
       <>
         <div className="flex items-center justify-center gap-3">
-          <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
+          <button onClick={() => navigate(`${basePath}/orders/${id}`, { state: { authorizedId: Number(id) } })} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
             <Eye size={16} />
           </button>
           <button onClick={() => setConfirmationAction("approve")} className="text-emerald-600 hover:text-emerald-700 rounded transition cursor-pointer">
@@ -178,7 +178,7 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
   if (status === "PENDING") {
     return (
       <div className="flex items-center justify-center gap-3">
-        <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
+        <button onClick={() => navigate(`${basePath}/orders/${id}`, { state: { authorizedId: Number(id) } })} className="text-gray-600 hover:text-gray-800 transition cursor-pointer">
           <Eye size={16} />
         </button>
       </div>
@@ -189,7 +189,7 @@ function ActionButtons({ id, status }: { id: number; status: string }) {
   return (
     <div className="flex items-center justify-center gap-3">
       {/* ปุ่มรูปตา: นำทางไปหน้าดูรายละเอียด */}
-      <button onClick={() => navigate(`${basePath}/orders/${id}`)} className="text-gray-600 hover:text-gray-700 transition cursor-pointer">
+      <button onClick={() => navigate(`${basePath}/orders/${id}`, { state: { authorizedId: Number(id) } })} className="text-gray-600 hover:text-gray-700 transition cursor-pointer">
         <Eye size={16} />
       </button>
       

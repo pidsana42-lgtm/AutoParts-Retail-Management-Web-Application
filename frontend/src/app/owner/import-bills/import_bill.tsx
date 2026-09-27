@@ -4,6 +4,7 @@ import apiClient from '../../../service/http/apiClient';
 import * as XLSX from 'xlsx';
 import heic2any from 'heic2any';
 import { useMobileUploadSession } from '../../../hooks/useMobileUploadSession';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 import {
   scanBill,
@@ -40,8 +41,8 @@ import PriceUpdateModal from './components/price_update_modal';
 import type { PriceMismatchItem } from './components/price_update_modal';
 import { guessColumnMapping, normalizeDateValue, REQUIRED_MAPPING_FIELDS } from '../../../utils/excelImport';
 import { ToastProvider, useToast } from '../../../components/elements/toast';
-import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import ConfirmDialog from '../../../components/elements/confirm_dialog';
+import { isNavigationAuthorized } from '../../../utils/navigationAuth';
 
 const isPlaceholder = (val: any): boolean => {
   if (!val) return true;
@@ -175,12 +176,10 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  // isEmployee=true มาจาก EmployeeImport ที่ mount ผ่าน /employee/import เท่านั้น จึงฮาร์ดโค้ด
-  // ฝั่งพนักงานได้ตรงตัว (คนละชื่อ path กับฝั่งเจ้าของร้าน/ผู้จัดการ: import ไม่ใช่ import-bills)
-  // ส่วนฝั่งเจ้าของร้าน/ผู้จัดการ เดิมฮาร์ดโค้ด '/owner' เสมอ ทำให้ Manager ที่เข้ามาทาง
-  // /manager/import-bills โดนสลับ URL เป็น /owner/import-bills ตอน navigate ต่อ
-  const pathPrefix = usePathBasePrefix();
-  const basePath = isEmployee ? '/employee/import' : `${pathPrefix}/import-bills`;
+  // เพจนี้ถูกใช้ร่วมกันหลาย role (owner/manager/employee) แต่ละ role มีชื่อ sub-path ไม่เหมือนกัน
+  // (employee ใช้ "/import" ส่วน owner/manager ใช้ "/import-bills") จึงอิง path ปัจจุบันจริงแทนการเดาจาก prop เดียว
+  const rolePrefix = usePathBasePrefix();
+  const basePath = rolePrefix === '/employee' ? '/employee/import' : `${rolePrefix}/import-bills`;
   const importSessionKey = getImportBillSessionKey(isEmployee);
   const [restoredSession] = useState<ImportBillSavedSession | null>(() => loadImportBillSession(importSessionKey));
   const [deleteBillTargetId, setDeleteBillTargetId] = useState<number | null>(null);
@@ -419,7 +418,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
       if (found) {
         setApprovingBill(found);
         setCurrentViewInternal('approve');
-        navigate(`${basePath}/approve/${found.id}`, { replace: true });
+        navigate(`${basePath}/approve/${found.id}`, { replace: true, state: { authorizedId: Number(found.id) } });
       }
     };
     open();
@@ -431,12 +430,28 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
     if (!match) return;
 
     const billId = Number(match[1]);
+    const isAuthorized = isNavigationAuthorized({
+      entity: 'import_bill',
+      id: billId,
+      locationState: location.state,
+    });
+
+    if (!isAuthorized) {
+      toast({
+        title: 'ไม่อนุญาตให้เข้าถึง',
+        message: 'ไม่อนุญาตให้เปลี่ยนหรือระบุรหัสบิลผ่าน URL โดยตรง กรุณาเลือกรายการจากหน้ารายการบิล',
+        variant: 'error',
+      });
+      navigate(basePath, { replace: true });
+      return;
+    }
+
     const found = bills.find((bill) => bill.id === billId);
     if (found) {
       setApprovingBill(found);
       setCurrentViewInternal('approve');
     }
-  }, [location.pathname, bills]);
+  }, [location.pathname, location.state, bills, basePath, navigate, toast]);
 
   const fetchBills = async () => {
     setLoadingBills(true);
@@ -1285,7 +1300,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   const handleOpenApprove = (bill: SavedBill) => {
     setApprovingBill(bill);
     setCurrentViewInternal('approve');
-    navigate(`${basePath}/approve/${bill.id}`);
+    navigate(`${basePath}/approve/${bill.id}`, { state: { authorizedId: Number(bill.id) } });
   };
 
   const handleApproveBill = async (billId: number) => {

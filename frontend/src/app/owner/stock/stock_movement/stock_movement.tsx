@@ -298,7 +298,13 @@ function StockMovementContent() {
   // โดเมนเองอีกต่อไป — ไม่มี link_path แปลว่าเหตุการณ์นั้นไม่มีหน้ารายละเอียดให้ดู (เช่นยังไม่รองรับ หรือหา id ไม่เจอ)
   const goToRef = (item: MovementFeedItem) => {
     if (!item.link_path) return;
-    navigate(item.link_path, item.link_state ? { state: item.link_state } : undefined);
+    const match = item.link_path.match(/\/(\d+)$/);
+    const idFromPath = match ? Number(match[1]) : (item.ref_id ? Number(item.ref_id) : undefined);
+    const stateObj = {
+      ...(item.link_state || {}),
+      ...(idFromPath ? { authorizedId: idFromPath } : {}),
+    };
+    navigate(item.link_path, { state: stateObj });
   };
 
   const formatDateTime = (iso: string) => {
