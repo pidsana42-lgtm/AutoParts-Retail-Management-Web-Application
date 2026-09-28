@@ -215,6 +215,10 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
                 const isUpdating = updatingItemId === item.itemId;
                 const isFinished = isTrackingFinished(item.stage, item.claimType);
                 const finalStage = finalTrackingStage(item.claimType);
+                // supplierResponseLocked: ล็อกเร็วกว่า isFinished ของ SUPPLIER_PENDING (ซึ่งจบที่ COMPLETED)
+                // เพราะพอ "ได้รับของเปลี่ยน" จริงจากบริษัทแล้ว (StockInReceived=true หลังบ้าน) ถือว่าปิดดีลแล้ว
+                // กดปฏิเสธทีหลังไม่ได้อีก ไม่งั้นสต็อกจะถูกบวกซ้ำ (เจอบั๊กนี้จริงระหว่างทดสอบ)
+                const supplierResponseLocked = item.stage === 'REPLACEMENT_RECEIVED' || item.stage === 'COMPLETED';
 
                 return (
                   <TableRow key={`${item.claimId}-${item.itemId}-${idx}`} className="hover:bg-gray-50/70 border-t border-gray-100">
@@ -266,9 +270,9 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
                         <Select
                           value={item.supplierResponse}
                           options={SUPPLIER_RESPONSE_OPTIONS}
-                          disabled={isFinished}
+                          disabled={supplierResponseLocked}
                           onChange={e => {
-                            if (isFinished) return;
+                            if (supplierResponseLocked) return;
                             const value = e.target.value as 'WAITING' | 'APPROVED' | 'REJECTED';
                             if (value === 'REJECTED') {
                               setPendingRejectedItem({
@@ -283,7 +287,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
                             onUpdateSupplierResponse(item.claimId, item.itemId, value);
                           }}
                           containerClassName="w-40 text-left mx-auto"
-                          className={cn("h-9 text-xs", isFinished && "cursor-not-allowed opacity-75")}
+                          className={cn("h-9 text-xs", supplierResponseLocked && "cursor-not-allowed opacity-75")}
                         />
                       )}
                     </TableCell>

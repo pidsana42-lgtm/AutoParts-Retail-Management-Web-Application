@@ -831,6 +831,25 @@ func TestUpdateCustomerClaimItemStatus_SupplierPendingStillPending_NoReversal(t 
 	}
 }
 
+// TestUpdateCustomerClaimItemStatus_RejectedAfterReplacementReceived_NoDoubleReversal: bug พบจริงตอนใช้งาน —
+// ถ้ากดปฏิเสธ (จากผลตอบกลับบริษัท) หลังจากที่กด "ได้รับของเปลี่ยน" ไปแล้ว (StockInReceived=true) ต้อง
+// ไม่คืนสต็อกซ้ำอีก เพราะงานปิดจบไปแล้วตั้งแต่ได้รับของเปลี่ยนจริง ไม่งั้นสต็อกจะถูกบวกซ้ำสองรอบ
+// (CLAIM_IN ตอนรับของจริง + CLAIM_REVERSE ตอนถูกปฏิเสธทีหลัง) ทั้งที่มีของจริงแค่ชิ้นเดียว
+func TestUpdateCustomerClaimItemStatus_RejectedAfterReplacementReceived_NoDoubleReversal(t *testing.T) {
+	f := newStockFixture(entity.CustomerClaimItem{
+		Model: gorm.Model{ID: 1}, Status: "APPROVED", ClaimType: "SUPPLIER_PENDING", ProductID: 55, Qty: 1,
+		StockOutIssued: true, StockInReceived: true, // ได้รับของเปลี่ยนจากซัพพลายเออร์แล้วจริง
+	})
+	svc := newService(f.repo, &mockSORepo{}, f.notifier)
+
+	if _, err := svc.UpdateCustomerClaimItemStatus(1, "REJECTED"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.repo.stockAdjustments) != 0 {
+		t.Errorf("rejecting after replacement already received must not reverse stock again, got %+v", f.repo.stockAdjustments)
+	}
+}
+
 // TestCreateCustomerClaimItem_SupplierPendingNotYetApproved_NoStockMovement: SUPPLIER_PENDING เคยจ่ายของ
 // สำรองออกทันทีตั้งแต่สร้างโดยไม่ต้องรออนุมัติ ซึ่งเสี่ยงเกินไป (พนักงานคนเดียวจ่ายสินค้าออกจากร้านได้เอง
 // โดยไม่มีใครเช็คก่อน) ตอนนี้ต้องรอเจ้าของ/ผู้จัดการอนุมัติก่อนเสมอเหมือน INSTANT

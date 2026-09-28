@@ -149,7 +149,10 @@ func prepareStockFlags(item *entity.CustomerClaimItem) (issueOut, receiveIn, rev
 	isStockClaimType := claimTypeUp == "INSTANT" || claimTypeUp == "SUPPLIER_PENDING"
 
 	shouldIssueOut := isStockClaimType && statusUp == "APPROVED"
-	shouldReverseOut := isStockClaimType && statusUp != "APPROVED"
+	// StockInReceived=true แปลว่าได้รับสินค้าทดแทนจริงจากซัพพลายเออร์แล้ว งานนี้ปิดจบไปแล้ว
+	// ห้ามย้อนสต็อกซ้ำอีกต่อให้สถานะพลิกไปมายังไงก็ตาม ไม่งั้นจะได้ +1 มาฟรีจากทั้ง CLAIM_IN
+	// (ตอนรับของจริง) และ CLAIM_REVERSE (ตอนโดนกดปฏิเสธทีหลัง) ทั้งที่สินค้าจริงมีแค่ชิ้นเดียว
+	shouldReverseOut := isStockClaimType && statusUp != "APPROVED" && !item.StockInReceived
 
 	if !item.StockOutIssued && shouldIssueOut {
 		item.StockOutIssued = true
