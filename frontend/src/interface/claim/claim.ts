@@ -149,6 +149,10 @@ export interface ClaimTrackingTabProps {
   loading: boolean;
   basePath: string;
   onUpdateStage: (itemId: number, newStage: string) => Promise<void>;
+  // onUpdateSupplierResponse: บันทึกผลตอบกลับจากบริษัท (ยังไม่ตอบ/อนุมัติเคลม/ปฏิเสธเคลม) สำหรับ
+  // เคลมประเภท SUPPLIER_PENDING เท่านั้น — ปฏิเสธจะไปตั้ง item.status เป็น REJECTED ต่อด้วย เพื่อ
+  // คืนสต็อกของสำรองที่จ่ายให้ลูกค้าไปก่อนหน้ากลับเข้าคลัง (ใช้ endpoint เดียวกับปุ่มปฏิเสธใบเคลม)
+  onUpdateSupplierResponse: (claimId: number, itemId: number, response: 'WAITING' | 'APPROVED' | 'REJECTED') => Promise<void>;
   updatingItemId: number | null;
   trackingSearch: string;
   trackingFilter: TrackingFilter;

@@ -17,6 +17,12 @@ const TRACKING_STAGE_OPTIONS = [
   { value: 'COMPLETED', label: 'ส่งมอบลูกค้าแล้ว' },
 ];
 
+const SUPPLIER_RESPONSE_OPTIONS = [
+  { value: 'WAITING', label: 'รอบริษัทตอบกลับ' },
+  { value: 'APPROVED', label: 'บริษัทอนุมัติเคลม' },
+  { value: 'REJECTED', label: 'บริษัทปฏิเสธเคลม' },
+];
+
 // needsCustomerHandover / finalTrackingStage / isTrackingFinished / resolveTrackingStage
 // ย้ายไปอยู่ที่ ./claim_tracking_stage.ts แล้ว (ไฟล์นี้เดิม export ทั้ง component และฟังก์ชันช่วย
 // ปนกัน ทำให้ react-refresh/only-export-components ฟ้อง เพราะ Fast Refresh รีเฟรชไฟล์ที่ export
@@ -57,7 +63,7 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
   return range;
 }
 
-export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdateStage, updatingItemId, trackingSearch, trackingFilter
+export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdateStage, onUpdateSupplierResponse, updatingItemId, trackingSearch, trackingFilter
 }: ClaimTrackingTabProps): React.JSX.Element {
   const navigate = useNavigate();
 
@@ -70,6 +76,13 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
     productName: string;
     stage: TrackingStage;
   } | null>(null);
+  const [pendingRejectedItem, setPendingRejectedItem] = useState<{
+    claimId: number;
+    itemId: number;
+    claimNo: string;
+    customerName: string;
+    productName: string;
+  } | null>(null);
 
   const handleConfirmCompleted = async () => {
     if (!pendingCompletedItem) return;
@@ -78,6 +91,16 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
       await onUpdateStage(itemId, stage);
     } finally {
       setPendingCompletedItem(null);
+    }
+  };
+
+  const handleConfirmSupplierRejected = async () => {
+    if (!pendingRejectedItem) return;
+    const { claimId, itemId } = pendingRejectedItem;
+    try {
+      await onUpdateSupplierResponse(claimId, itemId, 'REJECTED');
+    } finally {
+      setPendingRejectedItem(null);
     }
   };
 
@@ -120,6 +143,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
         claimType: item.claim_type || claim.claim_type || 'INSTANT',
         itemStatus: (item.status ?? 'PENDING').toUpperCase(),
         resolution: item.resolution,
+        supplierResponse: (claim.supplier_response_status ?? 'WAITING').toUpperCase(),
         stage,
         rawClaim: claim,
         rawItem: item,
@@ -162,6 +186,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
               <TableHead className="text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">สินค้าที่เคลม</TableHead>
               <TableHead className="text-center w-20 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">จำนวน</TableHead>
               <TableHead className="w-28 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">ประเภทเคลม</TableHead>
+              <TableHead className="text-center w-44 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">ผลตอบกลับบริษัท</TableHead>
               <TableHead className="text-center pr-6 w-52 text-[10px] font-bold text-gray-500 uppercase tracking-widest py-3">สถานะติดตาม</TableHead>
             </TableRow>
           </TableHeader>
@@ -169,7 +194,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-16">
+                <TableCell colSpan={7} className="text-center py-16">
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 size={22} className="animate-spin text-[#e51c23]" />
                     <span className="text-sm text-gray-400">กำลังโหลดข้อมูลติดตาม...</span>
@@ -178,7 +203,7 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
               </TableRow>
             ) : paginatedTrackingRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-16">
+                <TableCell colSpan={7} className="text-center py-16">
                   <div className="flex flex-col items-center gap-2">
                     <Truck size={28} className="text-gray-200" />
                     <span className="text-sm text-gray-400 font-medium">ไม่มีรายการสินค้าที่ต้องติดตามในสถานะนี้</span>
@@ -229,6 +254,38 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
 
                     <TableCell>
                       <TypeBadge type={item.claimType} />
+                    </TableCell>
+
+                    {/* Supplier Response — เฉพาะเคลมที่ส่งบริษัทตรวจเท่านั้น ประเภทอื่นไม่มีขั้นนี้ */}
+                    <TableCell className="text-center">
+                      {item.claimType !== 'SUPPLIER_PENDING' ? (
+                        <span className="text-gray-300 text-xs">-</span>
+                      ) : isUpdating ? (
+                        <Loader2 size={16} className="animate-spin text-[#e51c23] mx-auto" />
+                      ) : (
+                        <Select
+                          value={item.supplierResponse}
+                          options={SUPPLIER_RESPONSE_OPTIONS}
+                          disabled={isFinished}
+                          onChange={e => {
+                            if (isFinished) return;
+                            const value = e.target.value as 'WAITING' | 'APPROVED' | 'REJECTED';
+                            if (value === 'REJECTED') {
+                              setPendingRejectedItem({
+                                claimId: item.claimId,
+                                itemId: item.itemId,
+                                claimNo: item.claimNo,
+                                customerName: item.customerName,
+                                productName: item.productName,
+                              });
+                              return;
+                            }
+                            onUpdateSupplierResponse(item.claimId, item.itemId, value);
+                          }}
+                          containerClassName="w-40 text-left mx-auto"
+                          className={cn("h-9 text-xs", isFinished && "cursor-not-allowed opacity-75")}
+                        />
+                      )}
                     </TableCell>
 
                     {/* Update Stage Action */}
@@ -395,6 +452,44 @@ export default function ClaimTrackingTab({ rawClaims, loading, basePath, onUpdat
         cancelText="ยกเลิก"
         variant="danger"
         isSubmitting={updatingItemId === pendingCompletedItem?.itemId}
+      />
+
+      {/* Modal เตือนเมื่อบริษัทปฏิเสธเคลม — ของสำรองที่จ่ายให้ลูกค้าไปก่อนหน้าจะถูกคืนกลับเข้าคลังทันที */}
+      <ConfirmDialog
+        isOpen={pendingRejectedItem !== null}
+        onClose={() => !updatingItemId && setPendingRejectedItem(null)}
+        onConfirm={handleConfirmSupplierRejected}
+        title="ยืนยันว่าบริษัทปฏิเสธเคลม"
+        description={
+          pendingRejectedItem && (
+            <div className="space-y-3 text-sm text-left">
+              <p className="text-red-600 font-medium text-center">
+                คำเตือน: ระบบจะคืนสต็อกของสำรองที่เคยจ่ายให้ลูกค้าไปก่อนหน้ากลับเข้าคลังทันที และปิดใบเคลมรายการนี้เป็น "ปฏิเสธ" แก้ไขกลับไม่ได้อีก
+              </p>
+              <div className="bg-[#fcfbfa] border border-gray-100 p-3 space-y-1.5 text-xs text-gray-700">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">เลขที่ใบเคลม:</span>
+                  <span className="font-semibold text-gray-900">{pendingRejectedItem.claimNo}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">ลูกค้า:</span>
+                  <span className="font-semibold text-gray-900">{pendingRejectedItem.customerName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">สินค้า:</span>
+                  <span className="font-semibold text-gray-900">{pendingRejectedItem.productName}</span>
+                </div>
+              </div>
+              <p className="text-center text-gray-500 text-xs">
+                คุณแน่ใจหรือไม่ว่าต้องการดำเนินการต่อ?
+              </p>
+            </div>
+          )
+        }
+        confirmText="ยืนยันปฏิเสธ"
+        cancelText="ยกเลิก"
+        variant="danger"
+        isSubmitting={updatingItemId === pendingRejectedItem?.itemId}
       />
     </div>
   );

@@ -192,6 +192,49 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
     }
   };
 
+  // handleUpdateSupplierResponse: บันทึกผลตอบกลับจริงจากบริษัท (เฉพาะเคลม SUPPLIER_PENDING) ถ้าปฏิเสธ
+  // ต้องตั้ง item.status เป็น REJECTED ด้วย (endpoint /status เดิม) เพื่อคืนสต็อกของสำรองที่จ่ายให้ลูกค้า
+  // ไปก่อนหน้ากลับเข้าคลังอัตโนมัติ — ใช้ logic เดียวกับตอนเจ้าของกดปฏิเสธเคลมตรงๆ ไม่ต้องเขียนใหม่
+  const handleUpdateSupplierResponse = async (claimId: number, itemId: number, response: 'WAITING' | 'APPROVED' | 'REJECTED') => {
+    if (!claimId || !itemId) return;
+    try {
+      setUpdatingItemId(itemId);
+      await apiClient.put(`/claims/customer-claims/${claimId}`, {
+        supplier_response_status: response,
+      });
+      if (response === 'REJECTED') {
+        await apiClient.put(`/claims/customer-claims/items/${itemId}/status`, {
+          status: 'REJECTED',
+        });
+      }
+      setRawClaims(prev => prev.map(c => {
+        if (c.id !== claimId) return c;
+        return {
+          ...c,
+          supplier_response_status: response,
+          items: c.items?.map(i => i.id === itemId
+            ? { ...i, status: response === 'REJECTED' ? 'REJECTED' : i.status }
+            : i),
+        };
+      }));
+      toast({
+        variant: 'success',
+        message: response === 'REJECTED'
+          ? 'บันทึกผลปฏิเสธจากบริษัทแล้ว คืนสต็อกของสำรองเข้าคลังเรียบร้อย'
+          : 'บันทึกผลตอบกลับจากบริษัทเรียบร้อยแล้ว',
+      });
+    } catch (err: any) {
+      console.error('Failed to update supplier response:', err);
+      const serverMsg = err?.response?.data?.error;
+      toast({
+        variant: 'error',
+        message: serverMsg || 'เกิดข้อผิดพลาดในการบันทึกผลตอบกลับจากบริษัท กรุณาลองใหม่',
+      });
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
+
   const [claimType, setClaimType] = useState<ClaimType>('INSTANT');
   const [claimFormInvoice, setClaimFormInvoice] = useState('');
   const [invoiceResults, setInvoiceResults] = useState<any[]>([]);
@@ -1012,6 +1055,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
               loading={loading}
               basePath={basePath}
               onUpdateStage={handleUpdateTrackingStage}
+              onUpdateSupplierResponse={handleUpdateSupplierResponse}
               updatingItemId={updatingItemId}
               trackingSearch={trackingSearch}
               trackingFilter={trackingFilter}
