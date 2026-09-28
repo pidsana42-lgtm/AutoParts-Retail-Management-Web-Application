@@ -50,6 +50,19 @@ function fitText(
   return `${truncated}…`;
 }
 
+// ตัดอักขระที่ CODE128 เข้ารหัสไม่ได้ (นอกช่วง ASCII พิมพ์ได้ 0x20-0x7E เช่นภาษาไทย) ออกจากค่าที่จะเข้ารหัสเป็น
+// แท่งบาร์โค้ดจริง ถ้าตัดแล้วค่าเปลี่ยนไป ต่อท้ายด้วย uniqueSuffix (รหัสสินค้า/บริษัทจากฐานข้อมูล) เพื่อกันสองรหัส
+// ที่ต่างกันแค่ส่วนภาษาไทยเหลือค่าเดียวกันหลังตัด — ถ้าตัดแล้วไม่เหลืออะไรเลยก็ใช้ uniqueSuffix ไปตรงๆ
+function toBarcodeSafeValue(raw: string, uniqueSuffix: string): string {
+  if (!raw) return "";
+  const asciiOnly = raw
+    .replace(/[^\x20-\x7E]/g, "")
+    .trim()
+    .replace(/^[-\s]+|[-\s]+$/g, "");
+  if (asciiOnly === raw) return raw;
+  return asciiOnly ? `${asciiOnly}-${uniqueSuffix}` : uniqueSuffix;
+}
+
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -72,6 +85,17 @@ export default function ProductDetailPage() {
   const code = currentSupplier
     ? (currentSupplier.VariantCode || currentSupplier.Barcode || currentSupplier.CompanyProductCode || product?.ProductCode || "")
     : (product?.ProductCode || "");
+
+  // CODE128 (รูปแบบบาร์โค้ดที่ใช้) เข้ารหัสได้แค่ตัวอักษร ASCII ที่พิมพ์ได้ (0x20-0x7E) เท่านั้น — รหัสที่มี
+  // ภาษาไทยปนอยู่ (เช่นชื่อย่อหมวดหมู่/บริษัทที่ตั้งเป็นภาษาไทย) จะเข้ารหัสเป็นแท่งบาร์โค้ดไม่ได้เลย ทำให้ JsBarcode
+  // โยน error แล้วกล่องบาร์โค้ดว่างเปล่าไม่มีอะไรขึ้นเลย ที่นี่จึงตัดอักขระนอกช่วงที่รองรับออกก่อนเข้ารหัสเสมอ
+  // ถ้าตัดแล้วค่าเปลี่ยนไปจากเดิม (แปลว่ามีอักขระที่เข้ารหัสไม่ได้ปนอยู่) ต่อท้ายด้วยรหัสอ้างอิงที่การันตีไม่ซ้ำ
+  // (สินค้า + บริษัท) กันกรณีตัดแล้วเหลือรหัสซ้ำกันระหว่างของคนละตัว — ส่วนข้อความที่แสดงใต้บาร์โค้ดยังใช้รหัส
+  // เดิม (ภาษาไทยได้ตามปกติ) ผ่าน option `text` ของ JsBarcode เพราะเป็นแค่ข้อความ ไม่เกี่ยวกับการเข้ารหัสแท่ง
+  const barcodeUniqueSuffix = currentSupplier
+    ? `P${product?.ID ?? id}S${currentSupplier.SupplierID}`
+    : `P${product?.ID ?? id}`;
+  const barcodeValue = toBarcodeSafeValue(code, barcodeUniqueSuffix);
 
   const qrPayload = currentSupplier
     ? `${window.location.origin}/product/${product?.ID || id}?variant=${currentSupplier.VariantCode || ""}`
@@ -112,7 +136,7 @@ export default function ProductDetailPage() {
   useEffect(() => {
     if (!cardBarcodeSvgRef.current || !code) return;
     try {
-      JsBarcode(cardBarcodeSvgRef.current, code, {
+      JsBarcode(cardBarcodeSvgRef.current, barcodeValue, {
         format: "CODE128",
         displayValue: false,
         margin: 2,
@@ -122,14 +146,15 @@ export default function ProductDetailPage() {
     } catch (e) {
       console.error("Barcode generation error:", e);
     }
-  }, [code, product, selectedSupplierId]);
+  }, [code, barcodeValue, product, selectedSupplierId]);
 
   useEffect(() => {
     if (!lightboxBarcodeSvgRef.current || !code || lightbox !== "barcode") return;
     try {
-      JsBarcode(lightboxBarcodeSvgRef.current, code, {
+      JsBarcode(lightboxBarcodeSvgRef.current, barcodeValue, {
         format: "CODE128",
         displayValue: true,
+        text: code,
         fontSize: 15,
         margin: 8,
         height: barcodeMode === "plain" ? 80 : 60,
@@ -138,7 +163,7 @@ export default function ProductDetailPage() {
     } catch (e) {
       console.error("Barcode generation error:", e);
     }
-  }, [code, lightbox, barcodeMode, selectedSupplierId]);
+  }, [code, barcodeValue, lightbox, barcodeMode, selectedSupplierId]);
 
   if (loading) {
     return (
@@ -167,9 +192,10 @@ export default function ProductDetailPage() {
     try {
       // เรนเดอร์ที่ความละเอียดสูงกว่าที่แสดงจริง (PRINT_SCALE เท่า) กันภาพเบลอ/แตกตอนขยายเต็มหน้าพิมพ์
       // (รูปที่ได้เป็น raster ความละเอียดต่ำ พอเบราว์เซอร์ขยายให้เต็มหน้ากระดาษ A4 จะยิ่งเบลอ)
-      JsBarcode(canvas, code, {
+      JsBarcode(canvas, barcodeValue, {
         format: "CODE128",
         displayValue: true,
+        text: code,
         fontSize: 16 * PRINT_SCALE,
         margin: 10 * PRINT_SCALE,
         height: 80 * PRINT_SCALE,
@@ -203,9 +229,10 @@ export default function ProductDetailPage() {
     // รูปบาร์โค้ดย่อยก็ต้องเรนเดอร์ที่ความละเอียดสูงกว่าเท่ากันด้วย ไม่งั้นตอนวาดขยายลงป้ายที่ใหญ่ขึ้นจะเบลออยู่ดี
     const barcodeCanvas = document.createElement("canvas");
     try {
-      JsBarcode(barcodeCanvas, code, {
+      JsBarcode(barcodeCanvas, barcodeValue, {
         format: "CODE128",
         displayValue: true,
+        text: code,
         fontSize: 14 * PRINT_SCALE,
         margin: 6 * PRINT_SCALE,
         height: 70 * PRINT_SCALE,

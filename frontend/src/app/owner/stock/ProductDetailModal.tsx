@@ -12,6 +12,19 @@ interface ProductDetailModalProps {
   product: StockItem | null;
 }
 
+// ตัดอักขระที่ CODE128 เข้ารหัสไม่ได้ (นอกช่วง ASCII พิมพ์ได้ 0x20-0x7E เช่นภาษาไทย) ออกจากค่าที่จะเข้ารหัสเป็น
+// แท่งบาร์โค้ดจริง ถ้าตัดแล้วค่าเปลี่ยนไป ต่อท้ายด้วย uniqueSuffix (รหัสสินค้า/บริษัทจากฐานข้อมูล) เพื่อกันสองรหัส
+// ที่ต่างกันแค่ส่วนภาษาไทยเหลือค่าเดียวกันหลังตัด — ถ้าตัดแล้วไม่เหลืออะไรเลยก็ใช้ uniqueSuffix ไปตรงๆ
+function toBarcodeSafeValue(raw: string, uniqueSuffix: string): string {
+  if (!raw) return "";
+  const asciiOnly = raw
+    .replace(/[^\x20-\x7E]/g, "")
+    .trim()
+    .replace(/^[-\s]+|[-\s]+$/g, "");
+  if (asciiOnly === raw) return raw;
+  return asciiOnly ? `${asciiOnly}-${uniqueSuffix}` : uniqueSuffix;
+}
+
 export default function ProductDetailModal({ isOpen, onClose, product }: ProductDetailModalProps) {
   const [selectedSupplierId, setSelectedSupplierId] = useState<number | "global">("global");
   const barcodeSvgRef = useRef<SVGSVGElement>(null);
@@ -25,12 +38,21 @@ export default function ProductDetailModal({ isOpen, onClose, product }: Product
     ? (currentSupplier.VariantCode || currentSupplier.Barcode || currentSupplier.CompanyProductCode || product?.ProductCode || "")
     : (product?.ProductCode || "");
 
+  // CODE128 เข้ารหัสได้แค่ตัวอักษร ASCII ที่พิมพ์ได้เท่านั้น — รหัสที่มีภาษาไทยปนอยู่ (เช่นชื่อย่อหมวดหมู่/บริษัท
+  // ที่ตั้งเป็นภาษาไทย) จะทำให้ JsBarcode โยน error แล้วกล่องบาร์โค้ดว่างเปล่า จึงต้องเข้ารหัสค่าที่ผ่านการตัด
+  // อักขระที่รองรับไม่ได้ออกแล้วเสมอ ส่วนข้อความที่แสดงใต้บาร์โค้ดยังใช้รหัสเดิม (ภาษาไทยได้ปกติ) ผ่าน option `text`
+  const barcodeUniqueSuffix = currentSupplier
+    ? `P${product?.ID}S${currentSupplier.SupplierID}`
+    : `P${product?.ID}`;
+  const barcodeValue = toBarcodeSafeValue(code, barcodeUniqueSuffix);
+
   useEffect(() => {
     if (!barcodeSvgRef.current || !code) return;
     try {
-      JsBarcode(barcodeSvgRef.current, code, {
+      JsBarcode(barcodeSvgRef.current, barcodeValue, {
         format: "CODE128",
         displayValue: true,
+        text: code,
         fontSize: 13,
         margin: 4,
         height: 48,
@@ -39,7 +61,7 @@ export default function ProductDetailModal({ isOpen, onClose, product }: Product
     } catch (e) {
       console.error("Barcode generation error:", e);
     }
-  }, [code, isOpen, selectedSupplierId]);
+  }, [code, barcodeValue, isOpen, selectedSupplierId]);
 
   if (!product) return null;
 
