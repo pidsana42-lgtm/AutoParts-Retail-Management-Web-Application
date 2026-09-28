@@ -53,7 +53,7 @@ func (s *supplierClaimService) ListSupplierClaims() ([]claimDTO.SupplierClaimRes
 	if err != nil {
 		return nil, err
 	}
-	var res []claimDTO.SupplierClaimResponseDTO
+	res := make([]claimDTO.SupplierClaimResponseDTO, 0) // make(..., 0) กัน nil slice marshal เป็น null ตอนไม่มีเคลมซัพพลายเออร์เลย
 	for _, e := range entities {
 		res = append(res, claimDTO.ToSupplierClaimResponseDTO(&e))
 	}

@@ -53,7 +53,7 @@ func (s *salesReturnService) ListSalesReturns() ([]claimDTO.SalesReturnResponseD
 	if err != nil {
 		return nil, err
 	}
-	var res []claimDTO.SalesReturnResponseDTO
+	res := make([]claimDTO.SalesReturnResponseDTO, 0) // make(..., 0) กัน nil slice marshal เป็น null ตอนไม่มีรายการคืนเลย
 	for _, e := range entities {
 		res = append(res, claimDTO.ToSalesReturnResponseDTO(&e))
 	}

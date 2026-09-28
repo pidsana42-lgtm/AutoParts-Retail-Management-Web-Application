@@ -220,7 +220,7 @@ function StockMovementContent() {
     try {
       setLoading(true);
       const data = await movementFeedService.getFeed();
-      setItems(data);
+      setItems(data ?? []);
     } catch (err) {
       console.error(err);
       toast({ variant: "error", message: "ไม่สามารถโหลดข้อมูลการเคลื่อนไหวของสินค้าได้" });

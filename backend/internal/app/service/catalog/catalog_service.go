@@ -82,7 +82,7 @@ func (s *catalogService) ListCatalogs(search string, brand string, category stri
 		return nil, err
 	}
 
-	var res []dto.CatalogResponseDTO
+	res := make([]dto.CatalogResponseDTO, 0) // make(..., 0) กัน nil slice marshal เป็น null ตอนไม่มีแคตตาล็อกเลย
 	for _, c := range cats {
 		res = append(res, dto.ToCatalogResponseDTO(&c))
 	}
@@ -157,7 +157,7 @@ func (s *catalogService) SearchCatalogItems(search string, brand string) ([]dto.
 	if err != nil {
 		return nil, err
 	}
-	var res []dto.CatalogItemResponseDTO
+	res := make([]dto.CatalogItemResponseDTO, 0) // make(..., 0) กัน nil slice marshal เป็น null ตอนค้นหาไม่เจอเลย
 	for _, it := range items {
 		res = append(res, dto.ToCatalogItemResponseDTO(&it))
 	}
