@@ -264,7 +264,7 @@ export default function HomeView({
               {paginatedBills.map((row) => (
                 <TableRow
                   key={row.id}
-                  onClick={() => handleOpenApprove(row)}
+                  onClick={() => (row.payment_status === 'Draft' ? handleViewSavedBill(row) : handleOpenApprove(row))}
                   className="hover:bg-gray-50/70 transition-colors cursor-pointer"
                 >
                   <TableCell className="pl-6 font-bold text-[#1C1B1B] text-center">{row.bill_no}</TableCell>
