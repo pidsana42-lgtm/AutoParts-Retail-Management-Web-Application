@@ -137,7 +137,7 @@ func (m *mockClaimRepo) DeleteCustomerClaim(id uint) error {
 	return nil
 }
 
-func (m *mockClaimRepo) AdjustProductStock(productID uint, delta int, movementType, note string) error {
+func (m *mockClaimRepo) AdjustProductStock(productID uint, delta int, movementType, note string, claimID uint) error {
 	m.track("AdjustProductStock")
 	m.stockAdjustments = append(m.stockAdjustments, stockAdjustment{productID: productID, delta: delta, movementType: movementType, note: note})
 	if m.adjustStockFn != nil {

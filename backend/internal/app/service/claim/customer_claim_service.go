@@ -170,20 +170,20 @@ func prepareStockFlags(item *entity.CustomerClaimItem) (issueOut, receiveIn, rev
 func (s *customerClaimService) applyStockAdjustments(item *entity.CustomerClaimItem, issueOut, receiveIn, reverseOut bool, reverseQty uint) {
 	if issueOut {
 		s.adjustProductStock(item.ProductID, -int(item.Qty), "CLAIM_OUT",
-			fmt.Sprintf("จ่ายสินค้าทดแทนให้ลูกค้า (รายการเคลม #%d)", item.ID))
+			fmt.Sprintf("จ่ายสินค้าทดแทนให้ลูกค้า (รายการเคลม #%d)", item.ID), item.CustomerClaimID)
 	}
 	if receiveIn {
 		s.adjustProductStock(item.ProductID, int(item.Qty), "CLAIM_IN",
-			fmt.Sprintf("รับสินค้าทดแทนจากซัพพลายเออร์ (รายการเคลม #%d)", item.ID))
+			fmt.Sprintf("รับสินค้าทดแทนจากซัพพลายเออร์ (รายการเคลม #%d)", item.ID), item.CustomerClaimID)
 	}
 	if reverseOut {
 		s.adjustProductStock(item.ProductID, int(reverseQty), "CLAIM_REVERSE",
-			fmt.Sprintf("คืนสต็อกสินค้าที่เคยจ่ายออก เนื่องจากใบเคลมถูกตีกลับ (รายการเคลม #%d)", item.ID))
+			fmt.Sprintf("คืนสต็อกสินค้าที่เคยจ่ายออก เนื่องจากใบเคลมถูกตีกลับ (รายการเคลม #%d)", item.ID), item.CustomerClaimID)
 	}
 }
 
-func (s *customerClaimService) adjustProductStock(productID uint, delta int, movementType, note string) {
-	if err := s.repo.AdjustProductStock(productID, delta, movementType, note); err != nil {
+func (s *customerClaimService) adjustProductStock(productID uint, delta int, movementType, note string, claimID uint) {
+	if err := s.repo.AdjustProductStock(productID, delta, movementType, note, claimID); err != nil {
 		fmt.Printf("[Stock] failed to adjust product %d stock (%s): %v\n", productID, movementType, err)
 	}
 }
@@ -371,12 +371,12 @@ func (s *customerClaimService) UpdateCustomerClaimItem(id uint, input claimDTO.U
 	if wasStockOutIssued && updated.StockOutIssued && !issueOut && !reverseOut && updated.Qty != oldQty {
 		qtyDelta := int(updated.Qty) - int(oldQty)
 		s.adjustProductStock(updated.ProductID, -qtyDelta, "CLAIM_ADJUST",
-			fmt.Sprintf("ปรับสต็อกตามจำนวนที่แก้ไขใหม่ของรายการเคลม #%d", updated.ID))
+			fmt.Sprintf("ปรับสต็อกตามจำนวนที่แก้ไขใหม่ของรายการเคลม #%d", updated.ID), updated.CustomerClaimID)
 	}
 	if wasStockInReceived && updated.StockInReceived && !receiveIn && updated.Qty != oldQty {
 		qtyDelta := int(updated.Qty) - int(oldQty)
 		s.adjustProductStock(updated.ProductID, qtyDelta, "CLAIM_ADJUST",
-			fmt.Sprintf("ปรับสต็อกรับเข้าตามจำนวนที่แก้ไขใหม่ของรายการเคลม #%d", updated.ID))
+			fmt.Sprintf("ปรับสต็อกรับเข้าตามจำนวนที่แก้ไขใหม่ของรายการเคลม #%d", updated.ID), updated.CustomerClaimID)
 	}
 	if wasCreditApplied && updated.CreditApplied && !applyCredit && !reverseCredit {
 		oldAmount := qtyAmount(oldQty, oldUnitPrice)
@@ -434,11 +434,11 @@ func (s *customerClaimService) CancelCustomerClaim(id uint) (claimDTO.CustomerCl
 	for _, item := range itemsBefore {
 		if item.StockOutIssued {
 			s.adjustProductStock(item.ProductID, int(item.Qty), "CLAIM_CANCEL",
-				fmt.Sprintf("ยกเลิกใบเคลม คืนสต็อกสินค้าที่เคยจ่ายออก (รายการเคลม #%d)", item.ID))
+				fmt.Sprintf("ยกเลิกใบเคลม คืนสต็อกสินค้าที่เคยจ่ายออก (รายการเคลม #%d)", item.ID), item.CustomerClaimID)
 		}
 		if item.StockInReceived {
 			s.adjustProductStock(item.ProductID, -int(item.Qty), "CLAIM_CANCEL",
-				fmt.Sprintf("ยกเลิกใบเคลม ตัดสต็อกสินค้าที่เคยรับเข้า (รายการเคลม #%d)", item.ID))
+				fmt.Sprintf("ยกเลิกใบเคลม ตัดสต็อกสินค้าที่เคยรับเข้า (รายการเคลม #%d)", item.ID), item.CustomerClaimID)
 		}
 		if item.CreditApplied {
 			amount := float64(item.Qty) * item.UnitPrice

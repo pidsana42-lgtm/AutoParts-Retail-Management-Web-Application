@@ -10,6 +10,10 @@ const ADD_NEW_SUPPLIER_VALUE = "__add_new_supplier__";
 
 export interface SupplierRow {
   supplier_id: string;
+  // supplier_name: ชื่อ Supplier ณ ตอนโหลดข้อมูลสินค้ามา (จาก backend) — เก็บไว้เผื่อ Supplier รายนี้ถูกลบออกจาก
+  // ระบบไปแล้วภายหลัง (แถวใน Inventory ยังอ้าง supplier_id เดิมอยู่ แต่ไม่มีใน dropdown ตัวเลือกปัจจุบันแล้ว)
+  // ใช้โชว์ชื่อล่าสุดที่รู้แทนการปล่อยให้ dropdown ว่างเปล่าจนดูเหมือนยังไม่ได้เลือกอะไรเลย
+  supplier_name?: string;
   quantity: string;
   // company_code: รหัสสินค้าตามที่ Supplier เจ้านี้ใช้เรียกสินค้าชิ้นนี้ (ไม่บังคับ) — ผูกกับ Supplier แต่ละแถว
   // เพราะสินค้า 1 ชื่อในร้านมาได้จากหลายบริษัท แต่ละเจ้าใช้รหัสของตัวเองไม่เหมือนกัน
@@ -29,11 +33,14 @@ interface SupplierRowsFieldProps {
   // แจ้งกลับไปให้หน้าที่เรียกใช้ผสาน Supplier ที่เพิ่งสร้างใหม่เข้ากับรายการตัวเลือกที่ตัวเองถืออยู่
   // (options เป็น prop จากข้างนอก คอมโพเนนต์นี้เองแก้ไขไม่ได้ตรงๆ)
   onSupplierCreated?: (created: Supplier) => void;
+  // จำนวนสินค้าคงเหลือทั้งหมด (จากฟอร์มหลัก) — ใส่มาเพื่อเทียบกับผลรวมจำนวนที่กรอกไว้ต่อ Supplier ด้านล่าง
+  // แล้วเตือนถ้าไม่ตรงกัน (ไม่ได้บังคับห้ามบันทึก แค่เตือนให้เจ้าของร้านสังเกตเห็นก่อนกดบันทึก)
+  totalQuantity?: number;
 }
 
 // สินค้า 1 ชิ้น รับมาจาก Supplier ได้หลายเจ้า แยกจำนวน + รหัสสินค้าของแต่ละเจ้า (บันทึกลงตาราง Inventory)
 // ใช้ร่วมกันทั้งหน้าเพิ่ม/แก้ไขสินค้า และหน้ารับสินค้าเข้าเพิ่ม
-export default function SupplierRowsField({ rows, onChange, options, disabled, onSupplierCreated }: SupplierRowsFieldProps) {
+export default function SupplierRowsField({ rows, onChange, options, disabled, onSupplierCreated, totalQuantity }: SupplierRowsFieldProps) {
   // แถวที่กำลังกดปุ่ม "+ เพิ่มบริษัทใหม่" จากในดรอปดาวน์ (ไว้เลือก Supplier ที่เพิ่งสร้างเสร็จให้อัตโนมัติ)
   const [addSupplierRowIndex, setAddSupplierRowIndex] = useState<number | null>(null);
 
@@ -69,14 +76,34 @@ export default function SupplierRowsField({ rows, onChange, options, disabled, o
 
   // กันเลือก Supplier ซ้ำกันคนละแถว — ตัดตัวที่แถวอื่นเลือกไปแล้วออกจาก dropdown ของแถวนี้
   const optionsForRow = (index: number) => {
+    const row = rows[index];
     const usedElsewhere = new Set(
       rows.filter((_, i) => i !== index).map((r) => r.supplier_id).filter(Boolean)
     );
+    const liveOptions = options.map((opt) => ({ ...opt, disabled: usedElsewhere.has(opt.value) }));
+
+    // แถวนี้อ้าง supplier_id ที่ไม่มีอยู่ในตัวเลือกปัจจุบันแล้ว (เช่น Supplier ถูกลบออกจากระบบไปหลังจากสินค้านี้
+    // เคยรับมาจากเจ้านั้น) — ถ้าไม่ยัดตัวเลือกพิเศษเข้าไปเอง dropdown จะหา label ไม่เจอเลย โชว์เป็น "เลือก..."
+    // ทำให้เข้าใจผิดว่าแถวนี้ยังไม่ได้เลือก Supplier ทั้งที่จริงมีข้อมูลอยู่ (แค่เจ้านั้นหายไปจากระบบแล้ว)
+    const isOrphan = !!row?.supplier_id && !liveOptions.some((opt) => opt.value === row.supplier_id);
+    const orphanOption = isOrphan
+      ? [{
+          label: `${row.supplier_name || `ซัพพลายเออร์รหัส #${row.supplier_id}`} (ถูกลบออกจากระบบแล้ว)`,
+          value: row.supplier_id,
+          disabled: true,
+        }]
+      : [];
+
     return [
       { label: "+ เพิ่มบริษัทใหม่...", value: ADD_NEW_SUPPLIER_VALUE },
-      ...options.map((opt) => ({ ...opt, disabled: usedElsewhere.has(opt.value) })),
+      ...orphanOption,
+      ...liveOptions,
     ];
   };
+
+  // ผลรวมจำนวนที่กรอกไว้ต่อ Supplier ทุกแถว เทียบกับจำนวนสินค้าคงเหลือทั้งหมดจากฟอร์มหลัก (ถ้ามีการส่ง prop นี้มา)
+  const supplierQtySum = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+  const hasQuantityMismatch = totalQuantity !== undefined && supplierQtySum !== totalQuantity;
 
   return (
     <div className="space-y-2">
@@ -144,6 +171,12 @@ export default function SupplierRowsField({ rows, onChange, options, disabled, o
         </div>
       )}
 
+      {hasQuantityMismatch && (
+        <p className="rounded-sm border border-amber-300 bg-amber-50 p-2 text-xs text-amber-700">
+          ⚠ จำนวนรวมจากผู้จำหน่ายทุกแถว ({supplierQtySum}) ไม่ตรงกับจำนวนสินค้าคงเหลือทั้งหมด ({totalQuantity}) — กรุณาตรวจสอบก่อนบันทึก
+        </p>
+      )}
+
       {addSupplierRowIndex !== null && (
         <AddSupplierModal
           isOpen
@@ -157,11 +190,12 @@ export default function SupplierRowsField({ rows, onChange, options, disabled, o
 
 // สร้าง state เริ่มต้นจาก suppliers ที่โหลดมาจากสินค้าเดิม (ใช้ตอนเปิดหน้าแก้ไข)
 export function suppliersToRows(
-  suppliers?: { SupplierID: number; Quantity: number; CompanyProductCode?: string }[]
+  suppliers?: { SupplierID: number; SupplierName?: string; Quantity: number; CompanyProductCode?: string }[]
 ): SupplierRow[] {
   if (!suppliers || suppliers.length === 0) return [];
   return suppliers.map((s) => ({
     supplier_id: String(s.SupplierID),
+    supplier_name: s.SupplierName || "",
     quantity: String(s.Quantity),
     company_code: s.CompanyProductCode || "",
   }));

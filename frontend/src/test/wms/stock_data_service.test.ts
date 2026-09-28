@@ -40,12 +40,33 @@ describe('stockDataService list endpoints (normalized via _mapIds)', () => {
     ['getGrades', () => stockDataService.getGrades(), '/wms/grades'],
     ['getZones', () => stockDataService.getZones(), '/wms/zones'],
     ['getShelves', () => stockDataService.getShelves(), '/wms/shelves'],
-    ['getBrands', () => stockDataService.getBrands(), '/wms/brands'],
     ['getSuppliers', () => stockDataService.getSuppliers(), '/wms/suppliers'],
   ] as const)('%s hits %s and normalizes ID -> id', async (_name, run, endpoint) => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: [{ ID: 1, name: 'x' }] });
     await expect(run()).resolves.toEqual([{ ID: 1, id: 1, name: 'x' }]);
     expect(apiClient.get).toHaveBeenCalledWith(endpoint);
+  });
+
+  it('getBrands normalizes ID -> id on both the brand and its nested models', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: [{ ID: 1, brand_name: 'Toyota', models: [{ ID: 10, model_name: 'HILUX REVO 2.8', brand_id: 1 }] }],
+    });
+    await expect(stockDataService.getBrands()).resolves.toEqual([
+      {
+        ID: 1,
+        id: 1,
+        brand_name: 'Toyota',
+        models: [{ ID: 10, id: 10, model_name: 'HILUX REVO 2.8', brand_id: 1 }],
+      },
+    ]);
+    expect(apiClient.get).toHaveBeenCalledWith('/wms/brands');
+  });
+
+  it('getBrands defaults models to an empty array when the brand has none', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: [{ ID: 2, brand_name: 'Kubota' }] });
+    await expect(stockDataService.getBrands()).resolves.toEqual([
+      { ID: 2, id: 2, brand_name: 'Kubota', models: [] },
+    ]);
   });
 
   it('getSubCategories fetches everything when no category id is given', async () => {
