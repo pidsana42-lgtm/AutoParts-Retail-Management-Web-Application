@@ -404,7 +404,7 @@ const MainDashboard: React.FC = () => {
     const productPath = basePath === '/employee'
       ? `${basePath}/wms/stock-data/${productID}`
       : `${basePath}/stock/${productID}`;
-    navigate(productPath, { state: { from: 'dashboard' } });
+    navigate(productPath, { state: { authorizedId: Number(productID), from: 'dashboard' } });
   };
 
   const handleFilterClick = (value: string) => {

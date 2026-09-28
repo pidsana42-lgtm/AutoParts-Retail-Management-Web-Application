@@ -265,6 +265,101 @@ func TestGenerateDebtRepaymentReceiptPDF_MultipleBillsWithPartialPayment(t *test
 	}
 }
 
+func TestGenerateDebtRepaymentReceiptPDF_WithUnpaidOrders(t *testing.T) {
+	now := time.Now()
+	custID := uint(1)
+	commonReceiptNo := "RE-2026-002-12345"
+
+	rep := entity.PaymentRepayment{
+		ReceiptNumber: commonReceiptNo,
+		OrderID:       101,
+		AmountPaid:    500.0,
+		Status:        "completed",
+	}
+	rep.ID = 10
+	rep.CreatedAt = now
+	rep.Order.ID = 101
+	rep.Order.OrderNumber = "INV-2026-001"
+	rep.Order.TotalAmount = 1500.0
+	rep.Order.CustomerID = &custID
+	rep.Order.Customer.ID = custID
+	rep.Order.Customer.CustomerName = "อู่ช่างพรหมมา"
+
+	repayments := []entity.PaymentRepayment{rep}
+
+	companySetting := &entity.CompanySetting{
+		CompanyName: "เจ.เจ อะไหล่",
+	}
+
+	unpaidOrders := []entity.SaleOrder{
+		{
+			OrderNumber: "INV-2026-001",
+			TotalAmount: 1500.0,
+			PaidAmount:  500.0,
+			BalanceDue:  1000.0,
+		},
+		{
+			OrderNumber: "INV-2026-002",
+			TotalAmount: 3200.0,
+			PaidAmount:  0.0,
+			BalanceDue:  3200.0,
+		},
+	}
+	unpaidOrders[0].CreatedAt = now
+	unpaidOrders[1].CreatedAt = now
+
+	pdfBytes, err := GenerateDebtRepaymentReceiptPDF(repayments, companySetting, func(orderID, repaymentID uint) (float64, error) {
+		return 0, nil
+	}, unpaidOrders)
+
+	if err != nil {
+		t.Fatalf("GenerateDebtRepaymentReceiptPDF with unpaid orders failed: %v", err)
+	}
+	if len(pdfBytes) == 0 {
+		t.Fatalf("GenerateDebtRepaymentReceiptPDF returned empty bytes")
+	}
+}
+
+func TestGenerateDebtRepaymentReceiptPDF_WithZeroUnpaidOrders(t *testing.T) {
+	now := time.Now()
+	custID := uint(1)
+	commonReceiptNo := "RE-2026-003-99999"
+
+	rep := entity.PaymentRepayment{
+		ReceiptNumber: commonReceiptNo,
+		OrderID:       101,
+		AmountPaid:    1500.0,
+		Status:        "completed",
+	}
+	rep.ID = 11
+	rep.CreatedAt = now
+	rep.Order.ID = 101
+	rep.Order.OrderNumber = "INV-2026-001"
+	rep.Order.TotalAmount = 1500.0
+	rep.Order.CustomerID = &custID
+	rep.Order.Customer.ID = custID
+	rep.Order.Customer.CustomerName = "อู่ช่างพรหมมา"
+
+	repayments := []entity.PaymentRepayment{rep}
+
+	companySetting := &entity.CompanySetting{
+		CompanyName: "เจ.เจ อะไหล่",
+	}
+
+	unpaidOrders := []entity.SaleOrder{}
+
+	pdfBytes, err := GenerateDebtRepaymentReceiptPDF(repayments, companySetting, func(orderID, repaymentID uint) (float64, error) {
+		return 0, nil
+	}, unpaidOrders)
+
+	if err != nil {
+		t.Fatalf("GenerateDebtRepaymentReceiptPDF with zero unpaid orders failed: %v", err)
+	}
+	if len(pdfBytes) == 0 {
+		t.Fatalf("GenerateDebtRepaymentReceiptPDF returned empty bytes")
+	}
+}
+
 func TestGenerateSaleOrderPDFWithLongProductName(t *testing.T) {
 	paymentMethodID := uint(1)
 	order := &entity.SaleOrder{

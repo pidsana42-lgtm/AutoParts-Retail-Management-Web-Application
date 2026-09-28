@@ -17,9 +17,19 @@ func GenerateDebtRepaymentReceiptPDF(
 	repayments []entity.PaymentRepayment,
 	companyData *entity.CompanySetting,
 	getPreviousRepaymentsSum func(orderID, repaymentID uint) (float64, error),
+	unpaidOrdersOpt ...[]entity.SaleOrder,
 ) ([]byte, error) {
 	if len(repayments) == 0 {
 		return nil, fmt.Errorf("no repayments provided for debt repayment receipt")
+	}
+
+	var unpaidOrders []entity.SaleOrder
+	hasUnpaidSection := false
+	if len(unpaidOrdersOpt) > 0 {
+		unpaidOrders = unpaidOrdersOpt[0]
+		if (repayments[0].Order.CustomerID != nil && *repayments[0].Order.CustomerID > 0) || len(unpaidOrders) > 0 {
+			hasUnpaidSection = true
+		}
 	}
 
 	firstRepayment := repayments[0]
@@ -306,6 +316,15 @@ func GenerateDebtRepaymentReceiptPDF(
 	m.Row(5, func() {})
 
 	// 7. ตารางรายการบิลที่ชำระหนี้ (8 Columns Matching Specification Screenshot)
+	m.Row(7, func() {
+		m.Col(12, func() {
+			title := "รายการบิลที่รับชำระหนี้"
+			if hasUnpaidSection {
+				title = "1. รายการบิลที่รับชำระเงินในครั้งนี้"
+			}
+			m.Text(title, props.Text{Size: 10.5, Style: consts.Bold, Color: HexToColor("#1C1B1B")})
+		})
+	})
 	m.Line(1)
 
 	// หัวตาราง
@@ -363,19 +382,84 @@ func GenerateDebtRepaymentReceiptPDF(
 
 	m.Line(1)
 
+	var totalUnpaidDebt float64
+	for _, o := range unpaidOrders {
+		totalUnpaidDebt += o.BalanceDue
+	}
+
+	if hasUnpaidSection {
+		m.Row(5, func() {})
+		m.Row(7, func() {
+			m.Col(12, func() {
+				m.Text("2. รายการบิลที่ยังมียอดค้างชำระคงเหลือ", props.Text{Size: 10.5, Style: consts.Bold, Color: HexToColor("#1C1B1B")})
+			})
+		})
+		m.Line(1)
+
+		if len(unpaidOrders) == 0 {
+			m.Row(7, func() {
+				m.Col(12, func() {
+					m.Text("- ไม่มีบิลค้างชำระคงเหลือ (ยอดหนี้คงเหลือ ฿0.00) -", props.Text{
+						Size:  9.5,
+						Align: consts.Center,
+						Color: HexToColor("#059669"),
+					})
+				})
+			})
+			m.Line(1)
+		} else {
+			m.Row(7, func() {
+				m.Col(1, func() { m.Text("ลำดับ", props.Text{Size: 9.5, Style: consts.Bold, Align: consts.Center}) })
+				m.Col(3, func() { m.Text("เลขที่บิลขาย", props.Text{Size: 9.5, Style: consts.Bold, Align: consts.Left}) })
+				m.Col(2, func() { m.Text("วันที่", props.Text{Size: 9.5, Style: consts.Bold, Align: consts.Center}) })
+				m.Col(2, func() { m.Text("ยอดตามบิล", props.Text{Size: 9.5, Style: consts.Bold, Align: consts.Right}) })
+				m.Col(2, func() { m.Text("ชำระแล้ว", props.Text{Size: 9.5, Style: consts.Bold, Align: consts.Right}) })
+				m.Col(2, func() { m.Text("ยอดคงเหลือ", props.Text{Size: 9.5, Style: consts.Bold, Align: consts.Right, Color: HexToColor("#E51C23")}) })
+			})
+			m.Line(1)
+
+			for idx, o := range unpaidOrders {
+				uOrderDate := FormatThaiDate(o.CreatedAt)
+				m.Row(6.5, func() {
+					m.Col(1, func() { m.Text(fmt.Sprintf("%d", idx+1), props.Text{Size: 9.5, Align: consts.Center}) })
+					m.Col(3, func() { m.Text(o.OrderNumber, props.Text{Size: 9.5, Align: consts.Left}) })
+					m.Col(2, func() { m.Text(uOrderDate, props.Text{Size: 9.0, Align: consts.Center}) })
+					m.Col(2, func() { m.Text(fmt.Sprintf("%.2f", o.TotalAmount), props.Text{Size: 9.5, Align: consts.Right}) })
+					m.Col(2, func() { m.Text(fmt.Sprintf("%.2f", o.PaidAmount), props.Text{Size: 9.5, Align: consts.Right}) })
+					m.Col(2, func() { m.Text(fmt.Sprintf("%.2f", o.BalanceDue), props.Text{Size: 9.5, Align: consts.Right, Color: HexToColor("#E51C23")}) })
+				})
+			}
+			m.Line(1)
+
+			m.Row(7, func() {
+				m.Col(10, func() {
+					m.Text(fmt.Sprintf("รวมยอดหนี้ค้างชำระคงเหลือทั้งหมด (%d บิล)", len(unpaidOrders)), props.Text{Size: 10, Style: consts.Bold, Align: consts.Right})
+				})
+				m.Col(2, func() {
+					m.Text(fmt.Sprintf("฿%.2f", totalUnpaidDebt), props.Text{Size: 10, Style: consts.Bold, Align: consts.Right, Color: HexToColor("#E51C23")})
+				})
+			})
+		}
+	}
+
 	m.Row(5, func() {})
 
 	// 8. ส่วนสรุปยอด (ขวา) และ หมายเหตุ + คำอ่านภาษาไทย (ซ้าย)
 	thaiText := ThaiBahtText(totalPaidThisTime)
 
 	summaryRowHeight := 28.0
-	if bankAccountNo != "" && bankName != "" {
+	if hasUnpaidSection {
+		summaryRowHeight = 32.0
+		if bankAccountNo != "" && bankName != "" {
+			summaryRowHeight = 38.0
+		}
+	} else if bankAccountNo != "" && bankName != "" {
 		summaryRowHeight = 34.0
 	}
 
 	m.Row(summaryRowHeight, func() {
 		// หมายเหตุ (ซ้าย)
-		m.Col(6, func() {
+		m.Col(5, func() {
 			m.Text("หมายเหตุ", props.Text{Size: 11, Style: consts.Bold, Color: HexToColor("#E51C23")})
 			m.Text("1. ใบเสร็จรับเงินนี้จะสมบูรณ์เมื่อทางร้านได้รับชำระเงินเรียบร้อยแล้ว", props.Text{Size: 10, Top: 5})
 			currentTop := 11.0
@@ -385,7 +469,7 @@ func GenerateDebtRepaymentReceiptPDF(
 					bankLabel += fmt.Sprintf(" (%s)", bankAccountName)
 				}
 				m.Text(bankLabel, props.Text{Size: 9.5, Style: consts.Bold, Top: currentTop, Color: HexToColor("#1F2937")})
-				if len([]rune(bankLabel)) > 55 {
+				if len([]rune(bankLabel)) > 50 {
 					currentTop += 9.0
 				} else {
 					currentTop += 5.5
@@ -395,16 +479,31 @@ func GenerateDebtRepaymentReceiptPDF(
 		})
 
 		// สรุปยอดเงิน (ขวา)
-		m.Col(3, func() {
-			m.Text("ยอดค้างก่อนจ่าย", props.Text{Size: 11, Align: consts.Left})
-			m.Text("ยอดคงเหลือหลังชำระ", props.Text{Size: 11, Align: consts.Left, Top: 5})
-			m.Text("ยอดชำระครั้งนี้ทั้งสิ้น", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 12, Color: HexToColor("#E51C23")})
-		})
-		m.Col(3, func() {
-			m.Text(fmt.Sprintf("฿%.2f", totalBalanceBefore), props.Text{Size: 11, Align: consts.Right})
-			m.Text(fmt.Sprintf("฿%.2f", totalRemainingBalance), props.Text{Size: 11, Align: consts.Right, Top: 5})
-			m.Text(fmt.Sprintf("฿%.2f", totalPaidThisTime), props.Text{Size: 12, Style: consts.Bold, Align: consts.Right, Top: 12, Color: HexToColor("#E51C23")})
-		})
+		if hasUnpaidSection {
+			m.Col(4, func() {
+				m.Text("ยอดค้างก่อนจ่าย", props.Text{Size: 10.5, Align: consts.Left})
+				m.Text("ยอดคงเหลือบิลที่ชำระ", props.Text{Size: 10.5, Align: consts.Left, Top: 5})
+				m.Text("ยอดชำระครั้งนี้ทั้งสิ้น", props.Text{Size: 10.5, Style: consts.Bold, Align: consts.Left, Top: 11, Color: HexToColor("#E51C23")})
+				m.Text("ยอดหนี้คงเหลือรวมทั้งหมด", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 17, Color: HexToColor("#1F2937")})
+			})
+			m.Col(3, func() {
+				m.Text(fmt.Sprintf("฿%.2f", totalBalanceBefore), props.Text{Size: 10.5, Align: consts.Right})
+				m.Text(fmt.Sprintf("฿%.2f", totalRemainingBalance), props.Text{Size: 10.5, Align: consts.Right, Top: 5})
+				m.Text(fmt.Sprintf("฿%.2f", totalPaidThisTime), props.Text{Size: 11, Style: consts.Bold, Align: consts.Right, Top: 11, Color: HexToColor("#E51C23")})
+				m.Text(fmt.Sprintf("฿%.2f", totalUnpaidDebt), props.Text{Size: 11.5, Style: consts.Bold, Align: consts.Right, Top: 17, Color: HexToColor("#E51C23")})
+			})
+		} else {
+			m.Col(4, func() {
+				m.Text("ยอดค้างก่อนจ่าย", props.Text{Size: 11, Align: consts.Left})
+				m.Text("ยอดคงเหลือหลังชำระ", props.Text{Size: 11, Align: consts.Left, Top: 5})
+				m.Text("ยอดชำระครั้งนี้ทั้งสิ้น", props.Text{Size: 11, Style: consts.Bold, Align: consts.Left, Top: 12, Color: HexToColor("#E51C23")})
+			})
+			m.Col(3, func() {
+				m.Text(fmt.Sprintf("฿%.2f", totalBalanceBefore), props.Text{Size: 11, Align: consts.Right})
+				m.Text(fmt.Sprintf("฿%.2f", totalRemainingBalance), props.Text{Size: 11, Align: consts.Right, Top: 5})
+				m.Text(fmt.Sprintf("฿%.2f", totalPaidThisTime), props.Text{Size: 12, Style: consts.Bold, Align: consts.Right, Top: 12, Color: HexToColor("#E51C23")})
+			})
+		}
 	})
 
 	// 9. Output
