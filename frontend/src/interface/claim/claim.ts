@@ -41,6 +41,12 @@ export interface CustomerClaimItem {
   // fields สำหรับติดตามการส่งมอบ
   item_given?: boolean;        // ให้ของไปแล้วหรือยัง
   given_from?: 'STOCK' | 'SUPPLIER' | null; // เอาจากสต็อกร้าน หรือรอบริษัท
+  // ทั้ง 3 นี้บอกว่ารายการนี้เคยมีผลจริงต่อสต็อก/บัญชีเชื่อไปแล้วหรือยัง (ไม่ว่า status ปัจจุบันจะเป็นอะไร)
+  // ต้องใช้ตัดสินว่าลบใบเคลมนี้ได้ไหม ไม่ใช่เช็คแค่ status === 'APPROVED' — เคลมที่เคยอนุมัติแล้วภายหลัง
+  // เปลี่ยนเป็น PENDING/REJECTED ยังนับว่า "เคยปรับสต็อกจริง" อยู่ backend จะบล็อกลบเหมือนกัน
+  stock_out_issued?: boolean;
+  stock_in_received?: boolean;
+  credit_applied?: boolean;
 }
 
 export interface CustomerClaim {

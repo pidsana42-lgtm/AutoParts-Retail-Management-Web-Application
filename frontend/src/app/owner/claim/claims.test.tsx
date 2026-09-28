@@ -193,7 +193,7 @@ describe('ClaimsPage role boundaries (canApprove)', () => {
       {
         ...structuredClone(claimWithItem),
         status: 'APPROVED',
-        items: [{ ...claimWithItem.items![0], status: 'APPROVED' }],
+        items: [{ ...claimWithItem.items![0], status: 'APPROVED', stock_out_issued: true }],
       },
     ]);
     const user = await mount(true);
@@ -209,6 +209,25 @@ describe('ClaimsPage role boundaries (canApprove)', () => {
     await user.click(confirmBtn);
 
     await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith(9));
+  });
+
+  // Bug found in production: an item that was approved (stock issued) and later flipped to
+  // REJECTED (e.g. by the supplier-response feature) must still show the cancel button, not
+  // delete — backend blocks deletion of anything that ever touched stock/credit, regardless of
+  // its current status. Checking status === 'APPROVED' alone showed the wrong button and the
+  // delete call always failed silently.
+  it('shows cancel (not delete) for a rejected item that already had stock issued', async () => {
+    mocks.list.mockResolvedValue([
+      {
+        ...structuredClone(claimWithItem),
+        status: 'REJECTED',
+        items: [{ ...claimWithItem.items![0], status: 'REJECTED', stock_out_issued: true }],
+      },
+    ]);
+    await mount(true);
+
+    expect(await screen.findByTitle('ยกเลิกใบเคลม (คืนสต็อก/หนี้ที่เคยปรับไปแล้ว)')).toBeInTheDocument();
+    expect(screen.queryByTitle('ลบใบเคลม')).not.toBeInTheDocument();
   });
 });
 

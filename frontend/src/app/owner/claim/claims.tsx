@@ -975,9 +975,15 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                                   return null; // ยกเลิกไปแล้ว ไม่มีอะไรให้ทำต่อ (เก็บไว้เป็นประวัติ)
                                 }
                                 const claimItems = row.rawClaim.items ?? [];
+                                // ต้องเช็ค flag ที่เคยปรับสต็อก/หนี้จริง (stock_out_issued / stock_in_received /
+                                // credit_applied) ไม่ใช่แค่ status === 'APPROVED' — เดิมเช็คแค่ status ปัจจุบัน
+                                // ทำให้เคลมที่เคยอนุมัติ (ตัดสต็อกไปแล้วจริง) แต่ภายหลังสถานะเปลี่ยนเป็นอื่น (เช่น
+                                // REJECTED จากผลตอบกลับบริษัท) โชว์ปุ่มลบแทนปุ่มยกเลิก ทั้งที่ backend ปฏิเสธการลบ
+                                // อยู่ดีเพราะเช็คเงื่อนไขเดียวกันนี้ (ดู repository.DeleteCustomerClaim) กดแล้วเจอ
+                                // error ทุกครั้งเงียบๆ
                                 const hasAdjustedItem = claimItems.length === 0
                                   ? row.itemStatus === 'APPROVED'
-                                  : claimItems.some(i => (i.status || row.rawClaim.status || '').toUpperCase() === 'APPROVED');
+                                  : claimItems.some(i => i.stock_out_issued || i.stock_in_received || i.credit_applied);
 
                                 if (hasAdjustedItem) {
                                   // อนุมัติแล้วจริง (ตัดสต็อก/หักหนี้ไปแล้ว) ลบไม่ได้ ต้องยกเลิกแทนถึงจะย้อนกลับได้

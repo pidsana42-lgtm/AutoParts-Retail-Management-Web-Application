@@ -48,6 +48,12 @@ type CustomerClaimItemResponseDTO struct {
 	Status          string  `json:"status"`
 	ClaimType       string  `json:"claim_type"`
 	EvidenceURL     string  `json:"evidence_url"`
+	// ทั้ง 3 นี้บอกว่ารายการนี้เคยมีผลจริงต่อสต็อก/บัญชีเชื่อไปแล้วหรือยัง (ไม่ว่า Status ปัจจุบัน
+	// จะเป็นอะไร) — ฝั่ง frontend ใช้ตัดสินว่าลบใบเคลมนี้ได้เลยไหม หรือต้องยกเลิกแทนถึงจะย้อนกลับได้
+	// (ต้องตรงกับเงื่อนไขบล็อกลบจริงใน repository.DeleteCustomerClaim ไม่งั้นปุ่มจะโชว์ผิดจากที่ backend อนุญาต)
+	StockOutIssued  bool `json:"stock_out_issued"`
+	StockInReceived bool `json:"stock_in_received"`
+	CreditApplied   bool `json:"credit_applied"`
 }
 
 func (d *CreateCustomerClaimItemDTO) ToEntity() entity.CustomerClaimItem {
@@ -103,5 +109,8 @@ func ToCustomerClaimItemResponseDTO(m *entity.CustomerClaimItem) CustomerClaimIt
 		Status:          status,
 		ClaimType:       claimType,
 		EvidenceURL:     m.EvidenceURL,
+		StockOutIssued:  m.StockOutIssued,
+		StockInReceived: m.StockInReceived,
+		CreditApplied:   m.CreditApplied,
 	}
 }
