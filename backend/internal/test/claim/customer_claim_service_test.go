@@ -789,9 +789,9 @@ func TestUpdateCustomerClaimItemStatus_InstantStillPending_NoStockMovement(t *te
 	}
 }
 
-// TestUpdateCustomerClaimItemStatus_SupplierPendingRejected_ReversesStock: SUPPLIER_PENDING จ่ายของสำรอง
-// ออกไปทันทีตั้งแต่สร้าง (ไม่รอการอนุมัติ) ถ้าสุดท้ายเจ้าของกดปฏิเสธ ต้องได้สต็อกที่เคยจ่ายออกคืนกลับมา
-// ไม่งั้นสต็อกจะหายไปฟรีทั้งที่เคลมนี้ไม่ได้รับการอนุมัติเลย
+// TestUpdateCustomerClaimItemStatus_SupplierPendingRejected_ReversesStock: ถ้าของสำรองถูกจ่ายออกไปแล้ว
+// (StockOutIssued=true จากตอนที่อนุมัติ) แล้วสุดท้ายกลับกลายเป็นถูกปฏิเสธ ต้องได้สต็อกที่เคยจ่ายออกคืนกลับมา
+// ไม่งั้นสต็อกจะหายไปฟรีทั้งที่เคลมนี้ไม่ได้รับการอนุมัติจริงในที่สุด
 func TestUpdateCustomerClaimItemStatus_SupplierPendingRejected_ReversesStock(t *testing.T) {
 	f := newStockFixture(entity.CustomerClaimItem{
 		Model: gorm.Model{ID: 1}, Status: "Pending", ClaimType: "SUPPLIER_PENDING", ProductID: 55, Qty: 3,
@@ -831,7 +831,10 @@ func TestUpdateCustomerClaimItemStatus_SupplierPendingStillPending_NoReversal(t 
 	}
 }
 
-func TestCreateCustomerClaimItem_SupplierPending_DeductsStockImmediately(t *testing.T) {
+// TestCreateCustomerClaimItem_SupplierPendingNotYetApproved_NoStockMovement: SUPPLIER_PENDING เคยจ่ายของ
+// สำรองออกทันทีตั้งแต่สร้างโดยไม่ต้องรออนุมัติ ซึ่งเสี่ยงเกินไป (พนักงานคนเดียวจ่ายสินค้าออกจากร้านได้เอง
+// โดยไม่มีใครเช็คก่อน) ตอนนี้ต้องรอเจ้าของ/ผู้จัดการอนุมัติก่อนเสมอเหมือน INSTANT
+func TestCreateCustomerClaimItem_SupplierPendingNotYetApproved_NoStockMovement(t *testing.T) {
 	repo := newMockClaimRepo()
 	repo.createItemFn = func(i *entity.CustomerClaimItem) error {
 		i.ID = 1
@@ -839,18 +842,15 @@ func TestCreateCustomerClaimItem_SupplierPending_DeductsStockImmediately(t *test
 	}
 	svc := newService(repo, &mockSORepo{}, nil)
 
+	// ToEntity() ของ CreateCustomerClaimItemDTO ตั้ง Status เริ่มต้นเป็น "Pending" เสมอ
 	_, err := svc.CreateCustomerClaimItem(claimDTO.CreateCustomerClaimItemDTO{
 		ProductID: 77, Qty: 3, Reason: "ส่งเช็คโรงงาน", ClaimType: "SUPPLIER_PENDING",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(repo.stockAdjustments) != 1 {
-		t.Fatalf("expected exactly one stock adjustment, got %+v", repo.stockAdjustments)
-	}
-	adj := repo.stockAdjustments[0]
-	if adj.productID != 77 || adj.delta != -3 || adj.movementType != "CLAIM_OUT" {
-		t.Errorf("expected -3 CLAIM_OUT for product 77, got %+v", adj)
+	if len(repo.stockAdjustments) != 0 {
+		t.Errorf("SUPPLIER_PENDING item still pending must not deduct stock yet, got %+v", repo.stockAdjustments)
 	}
 }
 
@@ -906,8 +906,9 @@ func TestCreateCustomerClaim_OwnerCreatedInstantAutoApproved_DeductsStockAtCreat
 
 func TestUpdateCustomerClaimItem_ReplacementReceived_RestocksOnce(t *testing.T) {
 	f := newStockFixture(entity.CustomerClaimItem{
-		Model: gorm.Model{ID: 1}, Status: "Pending", ClaimType: "SUPPLIER_PENDING", ProductID: 42, Qty: 4,
-		StockOutIssued: true, // สมมติว่าจ่ายของสำรองออกไปแล้วตอนสร้างใบเคลม
+		// Status ต้องเป็น APPROVED ถึงจะมี StockOutIssued=true ได้จริงตามกฎใหม่ (ต้องอนุมัติก่อนจ่ายของเสมอ)
+		Model: gorm.Model{ID: 1}, Status: "APPROVED", ClaimType: "SUPPLIER_PENDING", ProductID: 42, Qty: 4,
+		StockOutIssued: true, // สมมติว่าเจ้าของอนุมัติแล้วจ่ายของสำรองออกไปตั้งแต่ตอนนั้น
 	})
 	svc := newService(f.repo, &mockSORepo{}, f.notifier)
 

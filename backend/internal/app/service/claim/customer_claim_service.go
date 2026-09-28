@@ -126,8 +126,10 @@ func (s *customerClaimService) CreateCustomerClaimItem(input claimDTO.CreateCust
 
 // prepareStockFlags: ตรวจว่าตอนนี้ต้อง "จ่ายสินค้าดีออกไปทดแทน" (StockOutIssued) หรือ
 // "รับสินค้าทดแทนจากซัพพลายเออร์เข้าคลัง" (StockInReceived) หรือยัง โดยดูจาก:
-//   - จ่ายออก: ประเภทเคลม SUPPLIER_PENDING (ให้ของสำรองไปก่อนระหว่างรอส่งของเสียไปเคลม) หรือ
-//     INSTANT ที่สถานะเป็น APPROVED (หยิบของดีให้ลูกค้าทันทีตอนอนุมัติ)
+//   - จ่ายออก: สถานะเป็น APPROVED (ต้องเป็นเจ้าของ/ผู้จัดการอนุมัติก่อนเสมอ — เดิม SUPPLIER_PENDING จ่ายออก
+//     ได้ทันทีตั้งแต่สร้างใบโดยพนักงานคนเดียว ไม่ต้องรออนุมัติเลย ซึ่งเสี่ยงเกินไปสำหรับธุรกิจจริง (พนักงาน
+//     จ่ายสินค้าออกจากร้านได้เองโดยไม่มีใครเช็คก่อน) จึงบังคับให้ทุกประเภทเคลมต้องรออนุมัติก่อนจ่ายของเหมือนกันหมด)
+//     ทั้ง INSTANT และ SUPPLIER_PENDING ใช้เงื่อนไขเดียวกันนี้แล้ว
 //   - รับเข้า: resolution ถูกตั้งเป็น REPLACEMENT_RECEIVED (พนักงานกดยืนยันว่าได้รับของเปลี่ยนจากซัพพลายเออร์แล้ว)
 //
 // ถ้าเข้าเงื่อนไขและ "ยังไม่เคยทำมาก่อน" (เช็คจาก flag เดิมของ item) จะ set flag เป็น true ทันที (ให้ถูกบันทึก
@@ -135,10 +137,8 @@ func (s *customerClaimService) CreateCustomerClaimItem(input claimDTO.CreateCust
 // ตัด/เติมสต็อกซ้ำเวลามีคนสลับสถานะไปมา (เช่น อนุมัติ -> ปฏิเสธ -> อนุมัติใหม่) เพราะของจริงจ่าย/รับแค่ครั้งเดียว
 //
 // reverseOut: ต้องคืนสต็อกที่เคยจ่ายออกไปแล้ว (StockOutIssued=true) กลับเข้าคลังทันที เพราะไม่มีการอนุมัติ
-// จริงเหลืออยู่แล้ว มี 2 กรณี:
-//   - INSTANT: สถานะถูกเปลี่ยนออกจาก APPROVED (เช่น เจ้าของกดอนุมัติแล้วกดตีกลับทีหลัง)
-//   - SUPPLIER_PENDING: ของถูกจ่ายออกไปตั้งแต่ก่อนอนุมัติ (ระหว่างรอบริษัทตรวจ) แต่สุดท้ายผลออกมาเป็น REJECTED
-//     ต้องคืนสต็อกกลับเช่นกัน ไม่งั้นสต็อกจะหายไปฟรีทั้งที่เคลมนี้ถูกปฏิเสธไปแล้ว
+// จริงเหลืออยู่แล้ว — สถานะถูกเปลี่ยนออกจาก APPROVED (เช่น เจ้าของกดอนุมัติแล้วกดตีกลับทีหลัง หรือบริษัท
+// ปฏิเสธไม่รับเคลม) ไม่ว่าจะเป็นเคลมประเภทไหนก็ตาม
 func prepareStockFlags(item *entity.CustomerClaimItem) (issueOut, receiveIn, reverseOut bool) {
 	if item.ProductID == 0 || item.Qty == 0 {
 		return false, false, false
@@ -146,9 +146,10 @@ func prepareStockFlags(item *entity.CustomerClaimItem) (issueOut, receiveIn, rev
 	claimTypeUp := strings.ToUpper(strings.TrimSpace(item.ClaimType))
 	statusUp := strings.ToUpper(strings.TrimSpace(item.Status))
 	resolutionUp := strings.ToUpper(strings.TrimSpace(item.Resolution))
+	isStockClaimType := claimTypeUp == "INSTANT" || claimTypeUp == "SUPPLIER_PENDING"
 
-	shouldIssueOut := claimTypeUp == "SUPPLIER_PENDING" || (claimTypeUp == "INSTANT" && statusUp == "APPROVED")
-	shouldReverseOut := (claimTypeUp == "INSTANT" && statusUp != "APPROVED") || (claimTypeUp == "SUPPLIER_PENDING" && statusUp == "REJECTED")
+	shouldIssueOut := isStockClaimType && statusUp == "APPROVED"
+	shouldReverseOut := isStockClaimType && statusUp != "APPROVED"
 
 	if !item.StockOutIssued && shouldIssueOut {
 		item.StockOutIssued = true
