@@ -3,6 +3,7 @@ package claim
 import (
 	"backend/internal/app/entity"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -37,7 +38,10 @@ type CustomerClaimRepository interface {
 	GetCompanySetting() (*entity.CompanySetting, error)
 	// AdjustProductStock: ปรับจำนวนสินค้าคงคลัง (delta ติดลบ = ตัดออก, บวก = เติมกลับ)
 	// พร้อมบันทึกประวัติ StockMovement ไว้เป็นหลักฐานในคราวเดียวกันแบบ atomic
-	AdjustProductStock(productID uint, delta int, movementType, note string) error
+	// claimID: ใช้ย้อนหาออเดอร์ต้นทางของใบเคลม เพื่อเทียบว่าสินค้าตัวนี้เคยขายออกจาก Supplier ไหน (ถ้ารู้)
+	// จะได้ปรับ Inventory ต่อ Supplier ให้ตรงกับ Product.Quantity รวมไปด้วย ไม่ใช่ปรับแค่ยอดรวมอย่างเดียว
+	// (ส่ง 0 ได้ถ้าไม่มีใบเคลมอ้างอิง — จะข้ามการปรับ Inventory ต่อ Supplier ไปเฉยๆ ไม่ error)
+	AdjustProductStock(productID uint, delta int, movementType, note string, claimID uint) error
 	// ReduceCustomerDebtForClaim: หักยอดหนี้ค้างชำระ (บัญชีเชื่อ) ของลูกค้าเจ้าของ order ต้นทางของใบเคลม
 	// amount ต้องเป็นค่าบวก และยอดหนี้จะไม่ถูกหักต่ำกว่า 0
 	ReduceCustomerDebtForClaim(claimID uint, amount float64) error
@@ -228,7 +232,7 @@ func (r *customerClaimRepository) CancelCustomerClaim(id uint) ([]entity.Custome
 	return itemsBefore, nil
 }
 
-func (r *customerClaimRepository) AdjustProductStock(productID uint, delta int, movementType, note string) error {
+func (r *customerClaimRepository) AdjustProductStock(productID uint, delta int, movementType, note string, claimID uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		result := tx.Model(&entity.Product{}).
 			Where("id = ?", productID).
@@ -238,6 +242,32 @@ func (r *customerClaimRepository) AdjustProductStock(productID uint, delta int, 
 		}
 		if result.RowsAffected == 0 {
 			return gorm.ErrRecordNotFound
+		}
+
+		// นอกจากปรับ Product.Quantity รวมแล้ว พยายามปรับ Inventory ต่อ Supplier ให้ตรงกันไปด้วย โดยย้อนไปดูว่า
+		// สินค้าตัวนี้เคยขายออกจาก Supplier ไหนในออเดอร์ต้นทางของใบเคลมนี้ (ถ้ารู้) — หาไม่เจอ/ไม่ทราบ Supplier
+		// ก็แค่ข้ามส่วนนี้ไปเงียบๆ ไม่ทำให้การปรับสต็อกหลัก (ซึ่งสำคัญกว่า) ล้มเหลวไปด้วย
+		if claimID != 0 {
+			var claim entity.CustomerClaim
+			if err := tx.Select("id", "original_order_id").First(&claim, claimID).Error; err == nil {
+				var soldItems []entity.SaleOrderItem
+				if err := tx.Where("order_id = ? AND product_id = ?", claim.OriginalOrderID, productID).
+					Find(&soldItems).Error; err == nil {
+					absQty := delta
+					if absQty < 0 {
+						absQty = -absQty
+					}
+					for supplierID, qty := range allocateClaimSupplierAdjustments(soldItems, absQty) {
+						adjDelta := qty
+						if delta < 0 {
+							adjDelta = -qty
+						}
+						if err := adjustSupplierInventory(tx, productID, supplierID, adjDelta); err != nil {
+							return err
+						}
+					}
+				}
+			}
 		}
 
 		qty := delta
@@ -253,6 +283,60 @@ func (r *customerClaimRepository) AdjustProductStock(productID uint, delta int, 
 		}
 		return tx.Create(movement).Error
 	})
+}
+
+// allocateClaimSupplierAdjustments: จับคู่จำนวนที่เคลม (จ่ายออก/รับเข้า/ตีกลับ) ของสินค้าตัวหนึ่ง กลับไปยัง
+// Supplier lot เดิมที่เคยขายออกไปในออเดอร์ต้นทางของใบเคลมนี้ (อ้างอิงจาก SaleOrderItem.SupplierID) — จับคู่ตาม
+// ลำดับ SaleOrderItem.ID และปรับได้ไม่เกินจำนวนที่แถวนั้นเคยขายจริง แถวไหนไม่ทราบ Supplier (ขายแบบทั่วไป ไม่ได้
+// ระบุล็อต) ส่วนนั้นจะไม่ถูกจับคู่เข้า Inventory ที่นี่ (Product.Quantity ยังถูกปรับครบตามเดิมอยู่แล้วนอกฟังก์ชันนี้)
+func allocateClaimSupplierAdjustments(soldItems []entity.SaleOrderItem, absQty int) map[uint]int {
+	adjustments := make(map[uint]int)
+	if absQty <= 0 {
+		return adjustments
+	}
+
+	candidates := make([]entity.SaleOrderItem, 0, len(soldItems))
+	for _, si := range soldItems {
+		if si.SupplierID != nil {
+			candidates = append(candidates, si)
+		}
+	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
+
+	remaining := absQty
+	for _, si := range candidates {
+		if remaining <= 0 {
+			break
+		}
+		take := si.Qty
+		if take > remaining {
+			take = remaining
+		}
+		if take <= 0 {
+			continue
+		}
+		adjustments[*si.SupplierID] += take
+		remaining -= take
+	}
+	return adjustments
+}
+
+// adjustSupplierInventory: ปรับจำนวนของ Supplier รายนั้นสำหรับสินค้าตัวนี้ (delta ติดลบ = ตัดออก บวก = เติมกลับ)
+// กันไม่ให้ติดลบ (floor ที่ 0) เหมือนกับที่ฝั่ง POS ทำตอนขาย/แก้ไขออเดอร์ — ถ้าไม่พบแถว Inventory (เช่นถูกลบไป
+// หลังขาย) ข้ามไปเงียบๆ เช่นกัน
+func adjustSupplierInventory(tx *gorm.DB, productID, supplierID uint, delta int) error {
+	if delta == 0 {
+		return nil
+	}
+	var inv entity.Inventory
+	if err := tx.Where("product_id = ? AND supplier_id = ?", productID, supplierID).First(&inv).Error; err != nil {
+		return nil
+	}
+	newQty := inv.Inventory_Quantity + delta
+	if newQty < 0 {
+		newQty = 0
+	}
+	return tx.Model(&entity.Inventory{}).Where("id = ?", inv.ID).Update("inventory_quantity", newQty).Error
 }
 
 func (r *customerClaimRepository) ReduceCustomerDebtForClaim(claimID uint, amount float64) error {

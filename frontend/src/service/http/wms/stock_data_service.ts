@@ -185,7 +185,14 @@ export const stockDataService = {
   // --- Brand & Model APIs ---
   getBrands: async (): Promise<Brand[]> => {
     const res = await apiClient.get<any[]>("/wms/brands");
-    return stockDataService._mapIds(res.data);
+    const brands = stockDataService._mapIds(res.data);
+    // _mapIds ปกติ normalize แค่ระดับบนสุด (ID -> id) ของแต่ละ item ในลิสต์ — แต่ละแบรนด์ยังมี models[] ซ้อนอยู่
+    // ข้างในที่ก็เป็น entity ดิบเหมือนกัน (มี ID ไม่มี id) ต้อง normalize ซ้ำอีกชั้นให้ด้วย ไม่งั้น model.id
+    // จะเป็น undefined (ทำให้ลบ/แก้ไขรุ่นรถจากตารางไม่ได้ เพราะ URL กลายเป็น /wms/models/undefined)
+    return brands.map((b: any) => ({
+      ...b,
+      models: stockDataService._mapIds(b.models || []),
+    }));
   },
   createBrand: async (data: { brand_name: string }): Promise<any> => {
     const res = await apiClient.post("/wms/brands", data);

@@ -391,6 +391,7 @@ export default function AddProductPage() {
                 options={suppliers}
                 disabled={submitting}
                 onSupplierCreated={addSupplierOption}
+                totalQuantity={Number(formData.quantity) || 0}
               />
 
               <ImageUploader preview={imagePreview} onChange={handleImageChange} onClear={handleImageClear} />
@@ -469,6 +470,7 @@ export default function AddProductPage() {
                 options={suppliers}
                 disabled={receiveSubmitting}
                 onSupplierCreated={addSupplierOption}
+                totalQuantity={Number(receiveQuantity) || 0}
               />
 
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">

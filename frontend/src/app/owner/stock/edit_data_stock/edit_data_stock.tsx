@@ -415,6 +415,7 @@ export default function EditProductPage() {
               options={suppliers}
               disabled={submitting}
               onSupplierCreated={addSupplierOption}
+              totalQuantity={Number(formData.quantity) || 0}
             />
 
             <ImageUploader preview={imagePreview} onChange={handleImageChange} onClear={handleImageClear} />

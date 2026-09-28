@@ -3,6 +3,7 @@ package returns
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -303,6 +304,62 @@ func validateReturnItems(items []reEntity.SalesReturnItem, orderItems []reEntity
 	return nil
 }
 
+// allocateReturnSupplierCredits: จับคู่จำนวนที่คืนของสินค้าตัวหนึ่ง กลับไปยัง Supplier lot เดิมที่เคยขายออกไป
+// (อ้างอิงจาก SaleOrderItem.SupplierID ของออเดอร์ต้นทาง) เพื่อให้บวก Inventory ต่อ Supplier คืนตรงกับที่หัก
+// ไปตอนขายจริง — ไม่งั้น Product.Quantity รวมกับผลรวม Inventory ต่อ Supplier จะไม่ตรงกันไปเรื่อยๆ ทุกครั้งที่มีคืนสินค้า
+//
+// จับคู่ตามลำดับ SaleOrderItem.ID (แถวที่ขายก่อนได้คืนก่อน) และคืนได้ไม่เกินจำนวนที่แถวนั้นเคยขายจริง — ถ้าแถวไหน
+// ไม่ทราบ Supplier (ขายแบบทั่วไป ไม่ได้ระบุล็อต, SupplierID เป็น nil) ส่วนนั้นจะไม่ถูกจับคู่เข้า Inventory ที่นี่
+// (Product.Quantity ยังถูกบวกครบตามเดิมอยู่แล้วจากลูปก่อนหน้า แค่ไม่รู้ว่าควรบวกกลับเข้า Inventory ของเจ้าไหน —
+// พฤติกรรมเดียวกับตอนขาย ที่ adjustSupplierInventoryQty ในฝั่ง POS ก็ข้ามการปรับ Inventory เมื่อไม่รู้ Supplier เช่นกัน)
+func allocateReturnSupplierCredits(soldItems []reEntity.SaleOrderItem, productID uint, qtyToAllocate int) map[uint]int {
+	credits := make(map[uint]int)
+	if qtyToAllocate <= 0 {
+		return credits
+	}
+
+	candidates := make([]reEntity.SaleOrderItem, 0, len(soldItems))
+	for _, si := range soldItems {
+		if si.ProductID == productID && si.SupplierID != nil {
+			candidates = append(candidates, si)
+		}
+	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
+
+	remaining := qtyToAllocate
+	for _, si := range candidates {
+		if remaining <= 0 {
+			break
+		}
+		take := si.Qty
+		if take > remaining {
+			take = remaining
+		}
+		if take <= 0 {
+			continue
+		}
+		credits[*si.SupplierID] += take
+		remaining -= take
+	}
+	return credits
+}
+
+// creditSupplierInventory: บวกจำนวนคืนเข้า Inventory ของ Supplier รายนั้นสำหรับสินค้าตัวนี้ — ถ้าไม่พบแถว Inventory
+// อยู่แล้ว (เช่นถูกลบไปหลังขาย) จะข้ามไปเงียบๆ ไม่ทำให้ธุรกรรมคืนสินค้าทั้งใบล้มเหลว เพราะ Product.Quantity
+// ถูกบวกไปแล้วนอกฟังก์ชันนี้ ส่วนนี้เป็นแค่การซิงค์ยอดต่อ Supplier ให้ตรงเพิ่มเติมเท่านั้น
+func creditSupplierInventory(tx *gorm.DB, productID, supplierID uint, delta int) error {
+	if delta <= 0 {
+		return nil
+	}
+	result := tx.Model(&reEntity.Inventory{}).
+		Where("product_id = ? AND supplier_id = ?", productID, supplierID).
+		UpdateColumn("inventory_quantity", gorm.Expr("inventory_quantity + ?", delta))
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
 func refundPaymentMethodID(method string) (uint, error) {
 	switch strings.ToUpper(strings.TrimSpace(method)) {
 	case "CASH":
@@ -547,6 +604,16 @@ func (r *returnRepository) ProcessRefund(id uint, processedBy uint) error {
 			}
 			if result.RowsAffected == 0 {
 				return gorm.ErrRecordNotFound
+			}
+		}
+		// นอกจากบวก Product.Quantity รวมแล้ว ต้องพยายามคืนกลับเข้า Inventory ของ Supplier ล็อตเดิมด้วย (เท่าที่
+		// รู้ได้จาก SaleOrderItem ของออเดอร์นี้) ไม่งั้นยอดรวมกับยอดแยกต่อ Supplier จะไม่ตรงกันทุกครั้งที่มีคืนสินค้า
+		for productID, quantity := range returnedByProduct {
+			credits := allocateReturnSupplierCredits(soldItems, productID, quantity)
+			for supplierID, creditQty := range credits {
+				if err := creditSupplierInventory(tx, productID, supplierID, creditQty); err != nil {
+					return err
+				}
 			}
 		}
 		for _, item := range items {
