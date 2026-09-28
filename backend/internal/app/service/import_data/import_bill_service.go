@@ -31,7 +31,7 @@ type ImportBillService interface {
 	GetBillImportJob(id uint) (importDataDTO.BillImportJobResponseDTO, error)
 	ConfirmBillImport(id uint, input importDataDTO.ConfirmBillImportDTO, role string) (importDataDTO.ConfirmBillImportResponseDTO, error)
 	CreateBillItem(input importDataDTO.CreateBillItemDTO) (importDataDTO.BillItemResponseDTO, error)
-	UpdateBill(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.BillResponseDTO, error)
+	UpdateBill(id uint, input importDataDTO.ConfirmBillImportDTO, role string) (importDataDTO.BillResponseDTO, error)
 	DeleteBill(id uint, role string) error
 	ListPurchaseOrders() ([]importDataDTO.PurchaseOrderImportDTO, error)
 	GetPurchaseOrderByID(id uint) (importDataDTO.PurchaseOrderImportDTO, error)
@@ -266,7 +266,7 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 	}, nil
 }
 
-func (s *importBillService) UpdateBill(id uint, input importDataDTO.ConfirmBillImportDTO) (importDataDTO.BillResponseDTO, error) {
+func (s *importBillService) UpdateBill(id uint, input importDataDTO.ConfirmBillImportDTO, role string) (importDataDTO.BillResponseDTO, error) {
 	// Resolve supplier_id dynamically by name if supplier_name is provided
 	supplierID := input.Bill.SupplierID
 	if input.Bill.SupplierName != "" {
@@ -290,7 +290,7 @@ func (s *importBillService) UpdateBill(id uint, input importDataDTO.ConfirmBillI
 		billItems[i].BillID = id
 	}
 
-	err := s.repo.UpdateBill(id, &bill, billItems)
+	err := s.repo.UpdateBill(id, &bill, billItems, role, input.Bill.IsVerified)
 	if err != nil {
 		return importDataDTO.BillResponseDTO{}, err
 	}

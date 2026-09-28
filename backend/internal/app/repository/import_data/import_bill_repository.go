@@ -24,7 +24,7 @@ type ImportBillRepository interface {
 	ConfirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob, role string) error
 
 	GetBillByID(id uint) (*entity.Bill, error)
-	UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem) error
+	UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem, role string, verifiedOverride *bool) error
 	DeleteBill(id uint) error
 
 	FindOrCreateSupplierByName(name string) (uint, error)
@@ -583,10 +583,14 @@ func (r *billRepository) GetBillByID(id uint) (*entity.Bill, error) {
 	return &bill, nil
 }
 
-func (r *billRepository) UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem) error {
+func (r *billRepository) UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem, role string, verifiedOverride *bool) error {
 	bill.ID = id
-	verified := bill.IsVerified
-	return r.confirmBillImportTransaction(bill, items, nil, "", &verified)
+	// verifiedOverride: nil เมื่อฝั่ง frontend ไม่ได้ส่ง is_verified มาเลย (บันทึก/แก้ไขบิลตามปกติ) —
+	// ปล่อยให้ตัดสินใจจาก role + ราคาทุนที่เปลี่ยนเหมือนตอนสร้างบิลใหม่ (canApprovePriceChange ด้านใน
+	// confirmBillImportTransaction) แทนที่จะบังคับ false ไว้ก่อนเสมอเหมือนโค้ดเดิม ซึ่งทำให้เจ้าของร้าน
+	// แก้บิลแล้วบันทึกจริงเท่าไหร่ก็ไม่มีวันอนุมัติอัตโนมัติให้เลยสักครั้ง ไม่ nil เฉพาะตอนกดปุ่มอนุมัติ/
+	// ปฏิเสธบิลตรงๆ ซึ่งต้องบังคับค่าตายตัวไม่ว่า role จะเป็นอะไร
+	return r.confirmBillImportTransaction(bill, items, nil, role, verifiedOverride)
 }
 
 func (r *billRepository) DeleteBill(id uint) error {

@@ -27,7 +27,7 @@ type mockImportBillRepo struct {
 	createItemFn           func(*entity.BillItem) error
 	confirmTxnFn           func(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob, role string) error
 	getBillByIDFn          func(id uint) (*entity.Bill, error)
-	updateBillFn           func(id uint, bill *entity.Bill, items []entity.BillItem) error
+	updateBillFn           func(id uint, bill *entity.Bill, items []entity.BillItem, role string, verifiedOverride *bool) error
 	deleteBillFn           func(id uint) error
 	findOrCreateSupplierFn func(name string) (uint, error)
 	listPOsFn              func() ([]entity.PO, error)
@@ -120,10 +120,10 @@ func (m *mockImportBillRepo) GetBillByID(id uint) (*entity.Bill, error) {
 	return &entity.Bill{}, nil
 }
 
-func (m *mockImportBillRepo) UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem) error {
+func (m *mockImportBillRepo) UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem, role string, verifiedOverride *bool) error {
 	m.track("UpdateBill")
 	if m.updateBillFn != nil {
-		return m.updateBillFn(id, bill, items)
+		return m.updateBillFn(id, bill, items, role, verifiedOverride)
 	}
 	return nil
 }
@@ -460,7 +460,7 @@ func TestUpdateBill_StampsPathIDOntoBillAndItems(t *testing.T) {
 	var capID uint
 	var capBill entity.Bill
 	var capItems []entity.BillItem
-	repo.updateBillFn = func(id uint, b *entity.Bill, items []entity.BillItem) error {
+	repo.updateBillFn = func(id uint, b *entity.Bill, items []entity.BillItem, role string, verifiedOverride *bool) error {
 		capID = id
 		capBill = *b
 		capItems = items
@@ -474,7 +474,7 @@ func TestUpdateBill_StampsPathIDOntoBillAndItems(t *testing.T) {
 	got, err := newService(repo).UpdateBill(42, importDataDTO.ConfirmBillImportDTO{
 		Bill:  in,
 		Items: items,
-	})
+	}, "Owner")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

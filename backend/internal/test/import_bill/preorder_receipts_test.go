@@ -101,9 +101,9 @@ func TestReceipt_DraftAndEdit(t *testing.T) {
 	f.assertStock(t, 0, 0)
 	require.Equal(t, "PENDING", f.status(t))
 	bill.PaymentStatus = "unpaid"
-	require.NoError(t, repo.UpdateBill(bill.ID, bill, []entity.BillItem{f.line(f.customerLine, 4)}))
+	require.NoError(t, repo.UpdateBill(bill.ID, bill, []entity.BillItem{f.line(f.customerLine, 4)}, "", &bill.IsVerified))
 	f.assertStock(t, 4, 4)
-	require.NoError(t, repo.UpdateBill(bill.ID, bill, []entity.BillItem{f.line(f.customerLine, 1)}))
+	require.NoError(t, repo.UpdateBill(bill.ID, bill, []entity.BillItem{f.line(f.customerLine, 1)}, "", &bill.IsVerified))
 	f.assertStock(t, 1, 1)
 	require.Equal(t, "PARTIALLY_RECEIVED", f.status(t))
 }
@@ -171,7 +171,7 @@ func TestReceipt_MetadataEditAfterSaleDoesNotReplayStock(t *testing.T) {
 	require.NoError(t, f.db.Model(&entity.Product{}).Where("id = ?", f.product.ID).Update("quantity", 1).Error)
 	require.NoError(t, f.db.Model(&entity.Inventory{}).Where("product_id = ?", f.product.ID).Update("inventory_quantity", 1).Error)
 	bill.IsVerified = true
-	require.NoError(t, billRepo.NewImportBillRepository(f.db).UpdateBill(bill.ID, bill, []entity.BillItem{f.line(f.shopLine, 5)}))
+	require.NoError(t, billRepo.NewImportBillRepository(f.db).UpdateBill(bill.ID, bill, []entity.BillItem{f.line(f.shopLine, 5)}, "", &bill.IsVerified))
 	f.assertStock(t, 1, 0)
 }
 

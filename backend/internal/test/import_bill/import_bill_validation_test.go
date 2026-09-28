@@ -24,7 +24,7 @@ func (s *billValidationService) ConfirmBillImport(uint, dto.ConfirmBillImportDTO
 	return dto.ConfirmBillImportResponseDTO{}, nil
 }
 
-func (s *billValidationService) UpdateBill(uint, dto.ConfirmBillImportDTO) (dto.BillResponseDTO, error) {
+func (s *billValidationService) UpdateBill(uint, dto.ConfirmBillImportDTO, string) (dto.BillResponseDTO, error) {
 	s.writes++
 	return dto.BillResponseDTO{}, nil
 }
