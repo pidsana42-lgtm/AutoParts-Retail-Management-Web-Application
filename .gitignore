@@ -13,3 +13,9 @@ monitoring/secrets/*
 # สไลด์นำเสนอโครงงาน (ไฟล์ใหญ่ ไม่ต้องเก็บใน repo)
 # จำกัดเฉพาะรูทของโปรเจกต์ เพื่อไม่ให้เผลอกลืน PDF ในโฟลเดอร์อื่น เช่นรายงานสแกนความปลอดภัย
 /*.pdf
+
+# โพย/สคริปต์เตรียมนำเสนอโครงงาน (ใช้ส่วนตัว ไม่เกี่ยวกับซอร์สโค้ด)
+/presentation_cheatsheet.md
+/presentation_script.md
+/system_architecture_reference.md
+/code_module_index.md
