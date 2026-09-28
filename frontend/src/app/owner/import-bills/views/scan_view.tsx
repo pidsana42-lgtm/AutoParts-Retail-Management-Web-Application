@@ -110,6 +110,7 @@ export default function ScanView({
   handleItemCategoryChange,
   handleRemoveRow,
   handleAddRow,
+  exportBillItemsToExcel,
   handleSaveBill,
   handleSaveAllBatchBills,
   handleMergeBatchResultsToSingleBill,
@@ -797,6 +798,15 @@ export default function ScanView({
                     </>
                   ) : (
                     <>
+                      <button
+                        type="button"
+                        onClick={exportBillItemsToExcel}
+                        disabled={formData.items.length === 0}
+                        className="bg-white hover:bg-gray-100 border border-gray-300 text-[#1C1B1B] px-6 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        <FileUp size={16} />
+                        <span>ส่งออกเป็น Excel</span>
+                      </button>
                       {!isDraftMode && (
                         <button
                           type="button"

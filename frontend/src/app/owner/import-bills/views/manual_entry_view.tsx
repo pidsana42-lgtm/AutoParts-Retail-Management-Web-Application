@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ChevronRight, Save, Trash2, AlertCircle } from 'lucide-react';
+import { ChevronRight, Save, Trash2, AlertCircle, FileUp } from 'lucide-react';
 import Heading from '../../../../components/elements/heading';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../../components/elements/table';
 import TreeSelect from '../../../../components/elements/tree_select';
@@ -61,6 +61,7 @@ export default function ManualEntryView({
   handleItemCategoryChange,
   handleRemoveRow,
   handleAddRow,
+  exportBillItemsToExcel,
   handleSaveBill,
   saving,
   priceMismatchedItems = [],
@@ -497,6 +498,15 @@ export default function ManualEntryView({
                   </>
                 ) : (
                   <>
+                    <button
+                      type="button"
+                      onClick={exportBillItemsToExcel}
+                      disabled={formData.items.length === 0}
+                      className="bg-white hover:bg-gray-100 border border-gray-300 text-[#1C1B1B] px-6 py-3 rounded-none text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <FileUp size={16} />
+                      <span>ส่งออกเป็น Excel</span>
+                    </button>
                     {!isDraftMode && (
                       <button
                         type="button"

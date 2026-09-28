@@ -1386,6 +1386,10 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
       credit_term: bill.credit_term || '30 Days',
       transport_by: bill.transport_by,
       supplier_id: bill.supplier_id,
+      // SavedBill ที่ backend ส่งกลับมาไม่มีฟิลด์ supplier_name เลย (มีแค่ supplier_id) — ต้อง
+      // เปิดกลับมาแก้ไขจาก field ที่โหลดแยกไว้ก่อนแล้ว (fetchSuppliersAndProducts) ไม่งั้นช่องชื่อ
+      // ซัพพลายเออร์ในฟอร์มจะว่างเปล่าทุกครั้งที่เปิดบิลเดิมมาแก้ ทั้งที่ตอนสแกนครั้งแรกมีชื่อถูกต้อง
+      supplier_name: suppliers.find(s => s.id === bill.supplier_id)?.supplier_name || '',
       subtotal: bill.subtotal,
       discount_total: bill.discount_total,
       receive_date: bill.receive_date ? bill.receive_date.split('T')[0] : '',
