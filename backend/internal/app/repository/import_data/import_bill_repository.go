@@ -459,6 +459,18 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 				if err := tx.Model(&prod).Update("quantity", prod.Quantity+itemReceiptQuantity).Error; err != nil {
 					return err
 				}
+				// รายการที่เลือกหมวดหมู่มาด้วย (เช่น แก้ไขบิลร่างแล้วเพิ่งมาเลือกหมวดหมู่ทีหลัง สำหรับสินค้าที่
+				// สร้างไปแล้วตอนบันทึกร่างครั้งก่อนโดยยังไม่ได้เลือก) ให้อัปเดตหมวดหมู่ของสินค้าให้ตรงด้วย —
+				// เดิมโค้ดตรงนี้เงียบทิ้งค่าที่ผู้ใช้เลือกไป เพราะเช็คแค่ตอนสร้างสินค้าใหม่เท่านั้น
+				if items[i].CategoryID != nil && *items[i].CategoryID > 0 {
+					if err := tx.Model(&prod).Updates(map[string]interface{}{
+						"category_id":         *items[i].CategoryID,
+						"sub_category_id":     items[i].SubCategoryID,
+						"sub_sub_category_id": items[i].SubSubCategoryID,
+					}).Error; err != nil {
+						return err
+					}
+				}
 				// บวกยอดเข้าบริษัทของบิลนี้ — ทำให้สินค้าชื่อเดียวกันจากต่างบริษัทไล่ยอด/ที่มาแยกกันได้
 				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, itemReceiptQuantity, items[i].CompanyProductCode); err != nil {
 					return err

@@ -335,44 +335,33 @@ export default function ManualEntryView({
                         />
                       </TableCell>
                       <TableCell className="py-2.5 px-3">
-                        {item.product_id ? (
-                          (() => {
-                            const prod = products.find(p => p.id === Number(item.product_id));
-                            if (prod && (prod.category_name || prod.sub_category_name || prod.sub_sub_category_name)) {
-                              return (
-                                <div className="border border-transparent rounded-none px-3 py-1.5 text-sm text-[#1C1B1B] truncate" title={[prod.category_name, prod.sub_category_name, prod.sub_sub_category_name].filter(Boolean).join(' / ')}>
-                                  {[prod.category_name, prod.sub_category_name, prod.sub_sub_category_name].filter(Boolean).join(' / ')}
-                                </div>
-                              );
-                            }
-                            return <div className="border border-transparent rounded-none px-3 py-1.5 text-gray-400 text-sm">-</div>;
-                          })()
-                        ) : (
-                          <TreeSelect
-                            options={categoryTreeOptions}
-                            placeholder="เลือกหมวดหมู่"
-                            searchPlaceholder="ค้นหาหมวดหมู่..."
-                            value={
-                              item.sub_sub_category_id
-                                ? `subsubcategory-${item.sub_sub_category_id}`
-                                : item.sub_category_id
-                                ? `subcategory-${item.sub_category_id}`
-                                : item.category_id
-                                  ? `category-${item.category_id}`
-                                  : ''
-                            }
-                            onChange={(_val, path) => {
-                              if (!handleItemCategoryChange) return;
-                              const catVal = path[0]?.value || '';
-                              const subVal = path[1]?.value || '';
-                              const subSubVal = path[2]?.value || '';
-                              const catId = catVal.startsWith('category-') ? Number(catVal.replace('category-', '')) : null;
-                              const subCatId = subVal.startsWith('subcategory-') ? Number(subVal.replace('subcategory-', '')) : null;
-                              const subSubCatId = subSubVal.startsWith('subsubcategory-') ? Number(subSubVal.replace('subsubcategory-', '')) : null;
-                              handleItemCategoryChange(idx, catId, subCatId, subSubCatId);
-                            }}
-                          />
-                        )}
+                        <TreeSelect
+                          options={categoryTreeOptions}
+                          placeholder="เลือกหมวดหมู่"
+                          searchPlaceholder="ค้นหาหมวดหมู่..."
+                          value={(() => {
+                            // สินค้าที่จับคู่ได้แล้วยังแก้หมวดหมู่ได้ตามปกติ — เริ่มต้นโชว์หมวดหมู่ปัจจุบันของ
+                            // สินค้านั้นไว้ก่อน จนกว่าผู้ใช้จะเลือกใหม่ทับ
+                            const prod = item.product_id ? products.find(p => p.id === Number(item.product_id)) : undefined;
+                            const subSubId = item.sub_sub_category_id ?? prod?.sub_sub_category_id;
+                            const subId = item.sub_category_id ?? prod?.sub_category_id;
+                            const catId = item.category_id ?? prod?.category_id;
+                            if (subSubId) return `subsubcategory-${subSubId}`;
+                            if (subId) return `subcategory-${subId}`;
+                            if (catId) return `category-${catId}`;
+                            return '';
+                          })()}
+                          onChange={(_val, path) => {
+                            if (!handleItemCategoryChange) return;
+                            const catVal = path[0]?.value || '';
+                            const subVal = path[1]?.value || '';
+                            const subSubVal = path[2]?.value || '';
+                            const catId = catVal.startsWith('category-') ? Number(catVal.replace('category-', '')) : null;
+                            const subCatId = subVal.startsWith('subcategory-') ? Number(subVal.replace('subcategory-', '')) : null;
+                            const subSubCatId = subSubVal.startsWith('subsubcategory-') ? Number(subSubVal.replace('subsubcategory-', '')) : null;
+                            handleItemCategoryChange(idx, catId, subCatId, subSubCatId);
+                          }}
+                        />
                       </TableCell>
                       <TableCell className="py-2.5 px-3 text-right">
                         <input

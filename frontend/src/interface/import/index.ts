@@ -41,6 +41,9 @@ export interface Product {
     quantity?: number;
     variant_code?: string;
   }>;
+  category_id?: number | null;
+  sub_category_id?: number | null;
+  sub_sub_category_id?: number | null;
   category_name?: string;
   sub_category_name?: string;
   sub_sub_category_name?: string;

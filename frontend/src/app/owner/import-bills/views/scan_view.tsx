@@ -631,61 +631,39 @@ export default function ScanView({
                             />
                           </TableCell>
                           <TableCell className="py-2.5 px-3">
-                            {item.product_id ? (
-                              matchedProduct && (
-                                matchedProduct.category_name ||
-                                matchedProduct.sub_category_name ||
-                                matchedProduct.sub_sub_category_name
-                              ) ? (
-                                <span
-                                  className="text-sm text-[#1C1B1B]"
-                                  title={[
-                                    matchedProduct.category_name,
-                                    matchedProduct.sub_category_name,
-                                    matchedProduct.sub_sub_category_name,
-                                  ].filter(Boolean).join(' / ')}
-                                >
-                                  {[
-                                    matchedProduct.category_name,
-                                    matchedProduct.sub_category_name,
-                                    matchedProduct.sub_sub_category_name,
-                                  ].filter(Boolean).join(' / ')}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 text-sm">-</span>
-                              )
-                            ) : (
-                              <TreeSelect
-                                containerClassName="min-w-[220px]"
-                                options={categoryTreeOptions}
-                                placeholder="เลือกหมวดหมู่สินค้า"
-                                searchPlaceholder="ค้นหาหมวดหมู่..."
-                                value={
-                                  item.sub_sub_category_id
-                                    ? `subsubcategory-${item.sub_sub_category_id}`
-                                    : item.sub_category_id
-                                    ? `subcategory-${item.sub_category_id}`
-                                    : item.category_id
-                                      ? `category-${item.category_id}`
-                                      : ''
-                                }
-                                onChange={(_value, path) => {
-                                  const categoryValue = path[0]?.value || '';
-                                  const subCategoryValue = path[1]?.value || '';
-                                  const subSubCategoryValue = path[2]?.value || '';
-                                  const categoryId = categoryValue.startsWith('category-')
-                                    ? Number(categoryValue.replace('category-', ''))
-                                    : null;
-                                  const subCategoryId = subCategoryValue.startsWith('subcategory-')
-                                    ? Number(subCategoryValue.replace('subcategory-', ''))
-                                    : null;
-                                  const subSubCategoryId = subSubCategoryValue.startsWith('subsubcategory-')
-                                    ? Number(subSubCategoryValue.replace('subsubcategory-', ''))
-                                    : null;
-                                  handleItemCategoryChange(idx, categoryId, subCategoryId, subSubCategoryId);
-                                }}
-                              />
-                            )}
+                            <TreeSelect
+                              containerClassName="min-w-[220px]"
+                              options={categoryTreeOptions}
+                              placeholder="เลือกหมวดหมู่สินค้า"
+                              searchPlaceholder="ค้นหาหมวดหมู่..."
+                              value={(() => {
+                                // สินค้าที่จับคู่ได้แล้วยังแก้หมวดหมู่ได้ตามปกติ — เริ่มต้นโชว์หมวดหมู่ปัจจุบัน
+                                // ของสินค้านั้นไว้ก่อน จนกว่าผู้ใช้จะเลือกใหม่ทับ (item.category_id เป็นค่าที่ถูกเลือก
+                                // ทับล่าสุด ถ้ายังไม่เคยเลือกจะ fallback ไปที่หมวดหมู่ของสินค้าที่จับคู่ไว้)
+                                const subSubId = item.sub_sub_category_id ?? matchedProduct?.sub_sub_category_id;
+                                const subId = item.sub_category_id ?? matchedProduct?.sub_category_id;
+                                const catId = item.category_id ?? matchedProduct?.category_id;
+                                if (subSubId) return `subsubcategory-${subSubId}`;
+                                if (subId) return `subcategory-${subId}`;
+                                if (catId) return `category-${catId}`;
+                                return '';
+                              })()}
+                              onChange={(_value, path) => {
+                                const categoryValue = path[0]?.value || '';
+                                const subCategoryValue = path[1]?.value || '';
+                                const subSubCategoryValue = path[2]?.value || '';
+                                const categoryId = categoryValue.startsWith('category-')
+                                  ? Number(categoryValue.replace('category-', ''))
+                                  : null;
+                                const subCategoryId = subCategoryValue.startsWith('subcategory-')
+                                  ? Number(subCategoryValue.replace('subcategory-', ''))
+                                  : null;
+                                const subSubCategoryId = subSubCategoryValue.startsWith('subsubcategory-')
+                                  ? Number(subSubCategoryValue.replace('subsubcategory-', ''))
+                                  : null;
+                                handleItemCategoryChange(idx, categoryId, subCategoryId, subSubCategoryId);
+                              }}
+                            />
                           </TableCell>
 
                           {Number(item.order_quantity) === 0 ? (
