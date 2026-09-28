@@ -79,6 +79,49 @@ func (r *billRepository) CreateBillItem(item *entity.BillItem) error {
 	return r.db.Create(item).Error
 }
 
+// syncPOStatus flips a PO between APPROVED and RECEIVED based on whether every one of its
+// line items now has enough non-draft, non-deleted bill receipts against it. Called after any
+// bill create/update/delete that references a PO, so the PO leaves the "อ้างอิงใบสั่งซื้อ" import
+// list on its own once fully received, instead of sitting under APPROVED forever.
+func syncPOStatus(tx *gorm.DB, poID uint) error {
+	var po entity.PO
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&po, poID).Error; err != nil {
+		return err
+	}
+	if po.Status != enum.StatusApproved && po.Status != enum.StatusReceived {
+		return nil
+	}
+
+	var poItems []entity.POItems
+	if err := tx.Where("po_id = ?", poID).Find(&poItems).Error; err != nil {
+		return err
+	}
+
+	fullyReceived := len(poItems) > 0
+	for _, item := range poItems {
+		var received int
+		if err := tx.Table("bill_items bi").
+			Joins("JOIN bills b ON b.id = bi.bill_id AND b.deleted_at IS NULL").
+			Where("bi.po_item_id = ? AND bi.deleted_at IS NULL AND LOWER(b.payment_status) <> ?", item.ID, "draft").
+			Select("COALESCE(SUM(bi.order_quantity), 0)").Scan(&received).Error; err != nil {
+			return err
+		}
+		if float64(received) < item.Quantity {
+			fullyReceived = false
+			break
+		}
+	}
+
+	newStatus := enum.StatusApproved
+	if fullyReceived {
+		newStatus = enum.StatusReceived
+	}
+	if po.Status == newStatus {
+		return nil
+	}
+	return tx.Model(&entity.PO{}).Where("id = ?", poID).Update("status", newStatus).Error
+}
+
 func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob, role string) error {
 	return r.confirmBillImportTransaction(bill, items, job, role, nil)
 }
@@ -228,6 +271,8 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 			}).Error
 		}
 
+		var oldPOID *uint
+
 		var existingBill entity.Bill
 		errExist := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).Where("LOWER(TRIM(bill_no)) = LOWER(TRIM(?))", bill.BillNo).First(&existingBill).Error
 
@@ -235,6 +280,7 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 			if bill.ID != 0 && bill.ID != existingBill.ID {
 				return fmt.Errorf("เลขที่บิลซ้ำกับบิลอื่น")
 			}
+			oldPOID = existingBill.POID
 			if bill.POID == nil {
 				bill.POID = existingBill.POID
 			}
@@ -264,6 +310,7 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 			if targetID > 0 {
 				var linkedBill entity.Bill
 				if errLinked := tx.Unscoped().Where("id = ?", targetID).First(&linkedBill).Error; errLinked == nil {
+					oldPOID = linkedBill.POID
 					if bill.POID == nil {
 						bill.POID = linkedBill.POID
 					}
@@ -494,6 +541,17 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 			bill.IsVerified = false
 		}
 
+		if oldPOID != nil && (bill.POID == nil || *oldPOID != *bill.POID) {
+			if err := syncPOStatus(tx, *oldPOID); err != nil {
+				return err
+			}
+		}
+		if bill.POID != nil {
+			if err := syncPOStatus(tx, *bill.POID); err != nil {
+				return err
+			}
+		}
+
 		if job != nil {
 			job.ConfirmedBillID = &bill.ID
 			job.Status = "CONFIRMED"
@@ -531,7 +589,15 @@ func (r *billRepository) DeleteBill(id uint) error {
 		if err := tx.Where("bill_id = ?", id).Delete(&entity.BillItem{}).Error; err != nil {
 			return err
 		}
-		return tx.Delete(&entity.Bill{}, id).Error
+		if err := tx.Delete(&entity.Bill{}, id).Error; err != nil {
+			return err
+		}
+		if bill.POID != nil {
+			if err := syncPOStatus(tx, *bill.POID); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
