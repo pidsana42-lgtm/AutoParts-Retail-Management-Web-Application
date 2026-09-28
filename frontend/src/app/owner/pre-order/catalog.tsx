@@ -33,8 +33,8 @@ export default function CatalogManager({ isEmployee = false }: CatalogManagerPro
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const basePrefix = usePathBasePrefix();
-  const basePath = isEmployee ? '/employee/pre-orders' : `${basePrefix}/pre-orders`;
+  // owner/manager/employee ทุก role ใช้ path suffix "/pre-orders" เหมือนกันหมด ต่างกันแค่ prefix ของ role
+  const basePath = `${usePathBasePrefix()}/pre-orders`;
   const catalogPath = `${basePath}/catalog`;
   const initialCatalogParams = new URLSearchParams(location.search);
 

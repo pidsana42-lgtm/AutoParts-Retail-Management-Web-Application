@@ -75,7 +75,25 @@ func (s *paymentService) GenerateDebtRepaymentReceiptPDF(ctx context.Context, id
 		return s.paymentRepo.GetPreviousRepaymentsSum(orderID, repaymentID)
 	}
 
-	return posPdf.GenerateDebtRepaymentReceiptPDF(repayments, companyData, getPreviousRepaymentsSum)
+	// 4. ดึงรายการบิลที่ยังค้างชำระของลูกค้า (ถ้ามี)
+	var unpaidOrders []entity.SaleOrder
+	var custID uint
+	if repayments[0].Order.CustomerID != nil && *repayments[0].Order.CustomerID > 0 {
+		custID = *repayments[0].Order.CustomerID
+	} else if repayments[0].OrderID > 0 {
+		if o, err := s.paymentRepo.GetOrderById(repayments[0].OrderID); err == nil && o != nil && o.CustomerID != nil {
+			custID = *o.CustomerID
+		}
+	}
+
+	if custID > 0 {
+		orders, err := s.paymentRepo.GetUnpaidOrdersByCustomerID(custID)
+		if err == nil {
+			unpaidOrders = orders
+		}
+	}
+
+	return posPdf.GenerateDebtRepaymentReceiptPDF(repayments, companyData, getPreviousRepaymentsSum, unpaidOrders)
 }
 
 // matchPaymentMethod ตรวจสอบว่าชื่อช่องทางชำระเงินตรงกับตัวกรองที่เลือกหรือไม่

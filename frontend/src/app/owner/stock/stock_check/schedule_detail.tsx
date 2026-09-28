@@ -20,6 +20,7 @@ import {
   type CheckStockRecord,
 } from "../../../../service/http/wms/stock_check_service";
 import type { StockItem } from "../../../../interface/wms/product";
+import { usePathBasePrefix } from "../../../../utils/usePathBasePrefix";
 
 const CHECK_TYPE_LABEL: Record<CheckStockSchedule["check_type"], string> = {
   LOCATION: "พื้นที่จัดเก็บ (โซน/ชั้นวาง)",
@@ -42,6 +43,7 @@ function getStatusBadge(status: string) {
 function ScheduleDetailContent() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const basePath = usePathBasePrefix();
   // ที่มาของการเข้าหน้านี้ (ถ้ามี) — ใช้ปรับเกล็ดขนมปังให้ตรงกับหน้าที่กดเข้ามาจริงๆ เช่นจากหน้า "การเคลื่อนไหวของคลังสินค้า"
   const location = useLocation();
   const cameFromMovement = (location.state as { from?: string } | null)?.from === "movement";
@@ -178,7 +180,7 @@ function ScheduleDetailContent() {
       setActionLoading(true);
       await stockCheckService.approveSchedule(Number(id));
       toast({ variant: "success", message: "อนุมัติผลนับสต็อกและบันทึกลงคลังสินค้าสำเร็จ" });
-      navigate("/owner/stock/stock-check");
+      navigate(`${basePath}/stock/stock-check`);
     } catch (err: any) {
       toast({ variant: "error", message: err.response?.data?.error || "ไม่สามารถอนุมัติผลนับสต็อกได้" });
     } finally {
@@ -199,7 +201,7 @@ function ScheduleDetailContent() {
       await stockCheckService.rejectSchedule(Number(id), rejectNote.trim());
       setIsRejectOpen(false);
       toast({ variant: "success", message: "ตีกลับให้พนักงานนับสต็อกใหม่แล้ว" });
-      navigate("/owner/stock/stock-check");
+      navigate(`${basePath}/stock/stock-check`);
     } catch (err: any) {
       toast({ variant: "error", message: err.response?.data?.error || "ไม่สามารถตีกลับตารางนี้ได้" });
     } finally {
@@ -220,7 +222,7 @@ function ScheduleDetailContent() {
     return (
       <div className="space-y-4 p-8 text-center">
         <p className="font-bold text-slate-500">{error || "ไม่พบข้อมูลตารางเช็คสต็อกที่คุณระบุ"}</p>
-        <Button onClick={() => navigate("/owner/stock/stock-check")} variant="outline">
+        <Button onClick={() => navigate(`${basePath}/stock/stock-check`)} variant="outline">
           กลับหน้าตารางเช็คสต็อก
         </Button>
       </div>
@@ -246,11 +248,11 @@ function ScheduleDetailContent() {
         items={
           cameFromMovement
             ? [
-                { label: "การเคลื่อนไหวของคลังสินค้า", path: "/owner/stock/stock-movement" },
+                { label: "การเคลื่อนไหวของคลังสินค้า", path: `${basePath}/stock/stock-movement` },
                 { label: schedule.target_name || "รายละเอียดตาราง" },
               ]
             : [
-                { label: "ตรวจสอบสินค้า", path: "/owner/stock/stock-check" },
+                { label: "ตรวจสอบสินค้า", path: `${basePath}/stock/stock-check` },
                 { label: schedule.target_name || "รายละเอียดตาราง" },
               ]
         }
@@ -355,7 +357,7 @@ function ScheduleDetailContent() {
                         key={p.ID}
                         onClick={() =>
                           // รักษาต้นทางเดิมไว้ — ถ้าไล่มาจากหน้าการเคลื่อนไหวของคลังสินค้า ก็ให้ breadcrumb ของหน้าสินค้ายังโยงกลับไปที่นั่นต่อ
-                          navigate(`/owner/stock/${p.ID}`, {
+                          navigate(`${basePath}/stock/${p.ID}`, {
                             state: {
                               from: cameFromMovement ? "movement" : "check_stock",
                               scheduleId: schedule.id,

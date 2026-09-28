@@ -4,6 +4,7 @@ import apiClient from '../../../service/http/apiClient';
 import * as XLSX from 'xlsx';
 import heic2any from 'heic2any';
 import { useMobileUploadSession } from '../../../hooks/useMobileUploadSession';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 import {
   scanBill,
@@ -175,7 +176,10 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const basePath = isEmployee ? '/employee/import' : '/owner/import-bills';
+  // เพจนี้ถูกใช้ร่วมกันหลาย role (owner/manager/employee) แต่ละ role มีชื่อ sub-path ไม่เหมือนกัน
+  // (employee ใช้ "/import" ส่วน owner/manager ใช้ "/import-bills") จึงอิง path ปัจจุบันจริงแทนการเดาจาก prop เดียว
+  const rolePrefix = usePathBasePrefix();
+  const basePath = rolePrefix === '/employee' ? '/employee/import' : `${rolePrefix}/import-bills`;
   const importSessionKey = getImportBillSessionKey(isEmployee);
   const [restoredSession] = useState<ImportBillSavedSession | null>(() => loadImportBillSession(importSessionKey));
   const [deleteBillTargetId, setDeleteBillTargetId] = useState<number | null>(null);

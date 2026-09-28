@@ -56,8 +56,8 @@ export default function PreOrderManager() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const basePrefix = usePathBasePrefix();
-  const basePath = `${basePrefix}/pre-orders`;
+  // ไฟล์นี้ถูกใช้เฉพาะฝั่ง owner/manager เท่านั้น (พนักงานมีคอมโพเนนต์ของตัวเองแยกต่างหากที่ employee/pre-order.tsx)
+  const basePath = `${usePathBasePrefix()}/pre-orders`;
   const initialPageParams = new URLSearchParams(location.search);
   const [preOrders, setPreOrders] = useState<PreOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
