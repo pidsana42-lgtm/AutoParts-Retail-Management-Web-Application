@@ -17,7 +17,10 @@ type PreOrderRepository interface {
 	GetPreOrderByID(id uint) (*entity.PreOrder, error)
 	GetPreOrderItemByID(ctx context.Context, id uint) (*entity.PreOrderItem, error)
 	ListPreOrders() ([]entity.PreOrder, error)
-	UpdatePreOrder(preOrder *entity.PreOrder) error
+	// itemsChanged: false เมื่อผู้เรียกไม่ได้ตั้งใจแก้รายการสินค้าเลย (เช่น เปลี่ยนแค่ status ตอนยกเลิก)
+	// preOrder.PreOrderItems ตอนนั้นยังเป็นรายการเดิมที่ preload มา (มี ID เดิมติดมาด้วย) ต้องข้ามการ
+	// ลบ-สร้างใหม่ ไม่งั้น GORM จะพยายาม UPDATE แถวที่เพิ่งลบไปเอง (0 rows affected) ทำให้รายการหายเงียบๆ
+	UpdatePreOrder(preOrder *entity.PreOrder, itemsChanged bool) error
 	DeletePreOrder(id uint) error
 	GetLineUserIDByCustomerID(customerID uint) (string, error)
 	ListByStatus(ctx context.Context, status string) ([]entity.PreOrder, error)
@@ -150,16 +153,25 @@ func (r *preOrderRepository) ListPreOrders() ([]entity.PreOrder, error) {
 }
 
 // 7. Implement Method: อัปเดตข้อมูล Pre-Order (เช่น อัปเดตสถานะการสั่งซื้อ หรือยอดมัดจำ)
-func (r *preOrderRepository) UpdatePreOrder(preOrder *entity.PreOrder) error {
+func (r *preOrderRepository) UpdatePreOrder(preOrder *entity.PreOrder, itemsChanged bool) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		linked, err := protectLinkedItems(tx, preOrder)
 		if err != nil {
 			return err
 		}
-		if linked {
+		// linked=true (รายการถูกส่งไปสั่งซื้อแล้ว) หรือ itemsChanged=false (ผู้เรียกไม่ได้ตั้งใจแก้
+		// รายการสินค้าเลย เช่นแค่เปลี่ยน status ตอนยกเลิก) -> ห้ามแตะตาราง PreOrderItems เลย
+		//
+		// เคสสำคัญที่เคยพลาด: preOrder.PreOrderItems ตอนนี้คือรายการเดิมที่ preload มา (มี ID เดิม
+		// ติดมาด้วย) ถ้าไปลบแถวเดิมทิ้งก่อนแล้วค่อย Save ซ้ำ GORM จะเห็นว่าแต่ละ item มี ID อยู่แล้ว
+		// เลยพยายาม UPDATE แถวนั้น (ไม่ INSERT ใหม่) แต่แถวเพิ่งถูกลบไปเอง -> UPDATE โดน 0 rows
+		// รายการสินค้าทั้งหมดหายเงียบๆ โดยไม่มี error ให้เห็นเลย (บั๊กจริงที่เจอตอนกดยกเลิกใบสั่งจอง)
+		if linked || !itemsChanged {
 			return tx.Omit("Customer", "Supplier", "PreOrderItems").Save(preOrder).Error
 		}
-		// 1. ลบไอเทมเดิมออกก่อนเพื่อไม่ให้เกิดขยะตกค้าง
+		// 1. ลบไอเทมเดิมออกก่อนเพื่อไม่ให้เกิดขยะตกค้าง (มาถึงตรงนี้ได้เฉพาะตอนแก้ไขรายการสินค้าจริงๆ
+		// ซึ่ง preOrder.PreOrderItems ที่ส่งเข้ามาเป็น struct ใหม่ที่ยังไม่มี ID กำหนด GORM จึง INSERT
+		// แถวใหม่ให้ถูกต้องหลังลบแถวเก่า)
 		if err := tx.Where("pre_order_id = ?", preOrder.ID).Delete(&entity.PreOrderItem{}).Error; err != nil {
 			return err
 		}

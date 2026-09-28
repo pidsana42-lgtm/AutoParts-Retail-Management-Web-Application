@@ -152,13 +152,13 @@ func TestReceipt_PreorderCancelAndHandover(t *testing.T) {
 			bill := f.receive(t, "CUSTOMER", f.line(f.customerLine, 4))
 			f.receive(t, "SHOP", f.line(f.shopLine, 3))
 			f.pre.Status = status
-			require.NoError(t, preRepo.NewPreOrderRepository(f.db).UpdatePreOrder(&f.pre))
+			require.NoError(t, preRepo.NewPreOrderRepository(f.db).UpdatePreOrder(&f.pre, false))
 			if status == "CANCELLED" {
 				f.assertStock(t, 7, 0)
 			} else {
 				f.assertStock(t, 3, 0)
 				require.Error(t, billRepo.NewImportBillRepository(f.db).DeleteBill(bill.ID))
-				require.Error(t, preRepo.NewPreOrderRepository(f.db).UpdatePreOrder(&f.pre))
+				require.Error(t, preRepo.NewPreOrderRepository(f.db).UpdatePreOrder(&f.pre, false))
 				f.assertStock(t, 3, 0)
 			}
 		})
@@ -180,10 +180,10 @@ func TestReceipt_CannotDeliverPartialOrDetachLinkedItems(t *testing.T) {
 	f.receive(t, "PARTIAL", f.line(f.customerLine, 1))
 	repo := preRepo.NewPreOrderRepository(f.db)
 	f.pre.Status = "COMPLETED"
-	require.ErrorContains(t, repo.UpdatePreOrder(&f.pre), "ครบทุกรายการ")
+	require.ErrorContains(t, repo.UpdatePreOrder(&f.pre, false), "ครบทุกรายการ")
 	f.pre.Status = "PENDING"
 	f.pre.PreOrderItems[0].Quantity = 1
-	require.ErrorContains(t, repo.UpdatePreOrder(&f.pre), "ไม่สามารถแก้สินค้า")
+	require.ErrorContains(t, repo.UpdatePreOrder(&f.pre, true), "ไม่สามารถแก้สินค้า")
 	require.Error(t, repo.DeletePreOrder(f.pre.ID))
 	f.assertStock(t, 1, 1)
 }
@@ -212,7 +212,7 @@ func TestReceipt_BookingHeaderLocksOnPOApproval(t *testing.T) {
 			f := receiptSetup(t)
 			require.NoError(t, f.db.Model(&entity.PO{}).Where("id = ?", f.po.ID).Update("status", status).Error)
 			f.pre.PreOrderType = "LINE"
-			err := preRepo.NewPreOrderRepository(f.db).UpdatePreOrder(&f.pre)
+			err := preRepo.NewPreOrderRepository(f.db).UpdatePreOrder(&f.pre, false)
 			var saved entity.PreOrder
 			require.NoError(t, f.db.First(&saved, f.pre.ID).Error)
 			if status == "APPROVED" {
