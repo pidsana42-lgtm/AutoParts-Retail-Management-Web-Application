@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   search: vi.fn(),
   credit: vi.fn(),
   del: vi.fn(),
+  cancel: vi.fn(),
   pdf: vi.fn(),
   checklistPdf: vi.fn(),
   post: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('../../../service/http/claim/claim', () => ({
   searchSaleOrders: mocks.search,
   searchCustomerCreditByPhone: mocks.credit,
   deleteCustomerClaim: mocks.del,
+  cancelCustomerClaim: mocks.cancel,
   generateCustomerClaimPDF: mocks.pdf,
   exportCustomerClaimChecklistPDF: mocks.checklistPdf,
 }));
@@ -167,4 +169,46 @@ describe('ClaimsPage role boundaries (canApprove)', () => {
     await userEvent.setup().click(editButton);
     expect(await screen.findByText('หน้ารายละเอียดของ Manager')).toBeInTheDocument();
   });
+
+  it('opens delete confirmation dialog and deletes claim on confirm', async () => {
+    mocks.del.mockResolvedValue({ message: 'Deleted successfully' });
+    const user = await mount(true);
+
+    const deleteBtn = await screen.findByTitle('ลบใบเคลม');
+    await user.click(deleteBtn);
+
+    // Confirm dialog should be visible
+    expect(await screen.findByText('ลบใบเคลมนี้')).toBeInTheDocument();
+    expect(screen.getByText('คุณต้องการลบใบเคลมนี้ใช่หรือไม่? ข้อมูลจะถูกลบออกจากระบบถาวร')).toBeInTheDocument();
+
+    const confirmBtn = screen.getByRole('button', { name: 'ยืนยันการลบ' });
+    await user.click(confirmBtn);
+
+    await waitFor(() => expect(mocks.del).toHaveBeenCalledWith(9));
+  });
+
+  it('opens cancel confirmation dialog for approved claim and cancels on confirm', async () => {
+    mocks.cancel.mockResolvedValue({ id: 9, status: 'CANCELLED' });
+    mocks.list.mockResolvedValue([
+      {
+        ...structuredClone(claimWithItem),
+        status: 'APPROVED',
+        items: [{ ...claimWithItem.items![0], status: 'APPROVED' }],
+      },
+    ]);
+    const user = await mount(true);
+
+    const cancelBtn = await screen.findByTitle('ยกเลิกใบเคลม (คืนสต็อก/หนี้ที่เคยปรับไปแล้ว)');
+    await user.click(cancelBtn);
+
+    // Confirm dialog should be visible
+    expect(await screen.findByText('ยกเลิกใบเคลมนี้')).toBeInTheDocument();
+    expect(screen.getByText(/ระบบจะคืนสต็อกสินค้า\/ยอดหนี้ที่เคยตัด-หักไปจากใบเคลมนี้ทั้งหมด/)).toBeInTheDocument();
+
+    const confirmBtn = screen.getByRole('button', { name: 'ยืนยันยกเลิก' });
+    await user.click(confirmBtn);
+
+    await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith(9));
+  });
 });
+

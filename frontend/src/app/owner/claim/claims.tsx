@@ -1149,6 +1149,30 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
             </div>
           );
         })()}
+
+        <ConfirmDialog
+          isOpen={deleteClaimTargetId !== null}
+          onClose={() => setDeleteClaimTargetId(null)}
+          onConfirm={handleConfirmDeleteClaim}
+          title="ลบใบเคลมนี้"
+          description="คุณต้องการลบใบเคลมนี้ใช่หรือไม่? ข้อมูลจะถูกลบออกจากระบบถาวร"
+          confirmText="ยืนยันการลบ"
+          cancelText="ยกเลิก"
+          variant="danger"
+          isSubmitting={deletingClaim}
+        />
+
+        <ConfirmDialog
+          isOpen={cancelClaimTargetId !== null}
+          onClose={() => setCancelClaimTargetId(null)}
+          onConfirm={handleConfirmCancelClaim}
+          title="ยกเลิกใบเคลมนี้"
+          description="คุณต้องการยกเลิกใบเคลมนี้ใช่หรือไม่? ระบบจะคืนสต็อกสินค้า/ยอดหนี้ที่เคยตัด-หักไปจากใบเคลมนี้ทั้งหมด และเปลี่ยนสถานะเป็นยกเลิก (ยังเก็บประวัติไว้ ย้อนกลับไม่ได้)"
+          confirmText="ยืนยันยกเลิก"
+          cancelText="ปิด"
+          variant="danger"
+          isSubmitting={cancellingClaim}
+        />
       </div>
     );
   }
@@ -1580,30 +1604,6 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
           </>
         )}
       </form>
-
-      <ConfirmDialog
-        isOpen={deleteClaimTargetId !== null}
-        onClose={() => setDeleteClaimTargetId(null)}
-        onConfirm={handleConfirmDeleteClaim}
-        title="ลบใบเคลมนี้"
-        description="คุณต้องการลบใบเคลมนี้ใช่หรือไม่? ข้อมูลจะถูกลบออกจากระบบถาวร"
-        confirmText="ยืนยันการลบ"
-        cancelText="ยกเลิก"
-        variant="danger"
-        isSubmitting={deletingClaim}
-      />
-
-      <ConfirmDialog
-        isOpen={cancelClaimTargetId !== null}
-        onClose={() => setCancelClaimTargetId(null)}
-        onConfirm={handleConfirmCancelClaim}
-        title="ยกเลิกใบเคลมนี้"
-        description="คุณต้องการยกเลิกใบเคลมนี้ใช่หรือไม่? ระบบจะคืนสต็อกสินค้า/ยอดหนี้ที่เคยตัด-หักไปจากใบเคลมนี้ทั้งหมด และเปลี่ยนสถานะเป็นยกเลิก (ยังเก็บประวัติไว้ ย้อนกลับไม่ได้)"
-        confirmText="ยืนยันยกเลิก"
-        cancelText="ปิด"
-        variant="danger"
-        isSubmitting={cancellingClaim}
-      />
     </div>
   );
 }
