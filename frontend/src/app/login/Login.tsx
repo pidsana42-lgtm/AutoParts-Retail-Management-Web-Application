@@ -332,18 +332,8 @@ const Login: React.FC = () => {
               />
             </div>
 
-            {/* จดจำการใช้งาน & ลืมรหัสผ่าน */}
-            <div className="flex items-center justify-between pb-2 animate-[fade-in-up_0.55s_ease-out_0.5s_both]">
-              <div className="flex items-center">
-                <input
-                  id="remember_me"
-                  type="checkbox"
-                  className="h-4 w-4 cursor-pointer rounded border-gray-300 text-red-600 transition-transform duration-150 hover:scale-110 focus:ring-red-600"
-                />
-                <label htmlFor="remember_me" className="ml-2 block text-sm text-gray-700">
-                  จดจำการใช้งาน
-                </label>
-              </div>
+            {/* ลืมรหัสผ่าน */}
+            <div className="flex justify-end pb-2 animate-[fade-in-up_0.55s_ease-out_0.5s_both]">
               <div className="text-sm">
                 <button
                   type="button"

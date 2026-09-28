@@ -19,3 +19,6 @@ monitoring/secrets/*
 /presentation_script.md
 /system_architecture_reference.md
 /code_module_index.md
+
+# ชุดข้อมูลรูปบิลทดสอบ (Easy/Medium/Hard) ใช้ทดสอบ AI ตอน dev ไม่ต้องเก็บใน repo
+/images
