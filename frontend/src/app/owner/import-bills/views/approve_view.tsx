@@ -60,13 +60,14 @@ export default function ApproveView({
   const productCostMap = new Map<number, number>();
   products.forEach(p => { if (p.cost_price != null) productCostMap.set(p.id, p.cost_price); });
 
-  // แสดงเฉพาะรายการที่ราคาทุนต่างจากระบบจริงๆ — ถ้าไม่มีเลย (เช่นบิลที่เจ้าของนำเข้าเองไม่มีราคาเปลี่ยน) ให้ fallback
-  // กลับไปโชว์ทุกรายการ กันตารางว่างเปล่าดูเหมือนหน้าพัง
-  const changedBillItems = (bill.bill_items || []).filter((item) => {
+  // แสดงสินค้าทุกรายการในบิลเสมอ — ไม่กรองเหลือแค่รายการที่ราคาเปลี่ยน เพราะทำให้ดูเหมือนบิล
+  // มีสินค้าน้อยกว่าที่บันทึกจริง (สินค้าตัวอื่นยังถูกนับเข้าสต็อกตามปกติตอนอนุมัติ) รายการที่ราคา
+  // เปลี่ยนยังถูกไฮไลต์สีเหลืองอ่อนในตารางเหมือนเดิม เพื่อให้เจ้าของโฟกัสจุดที่ต้องตัดสินใจได้
+  const displayItems = bill.bill_items || [];
+  const changedCount = displayItems.filter((item) => {
     const oldCost = item.product_id ? productCostMap.get(item.product_id) : undefined;
     return item.price_per_unit > 0 && oldCost != null && oldCost !== item.price_per_unit;
-  });
-  const displayItems = changedBillItems.length > 0 ? changedBillItems : (bill.bill_items || []);
+  }).length;
 
   const handleViewProduct = (item: NonNullable<SavedBill['bill_items']>[number]) => {
     const allBillItems = displayItems
@@ -181,7 +182,7 @@ export default function ApproveView({
           {/* Items table */}
           <div className="bg-white border border-gray-200 rounded-none shadow-sm overflow-hidden">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider px-6 py-4 border-b border-gray-100">
-              รายการสินค้าที่ราคาเปลี่ยนแปลง ({displayItems.length} รายการ)
+              รายการสินค้าทั้งหมด ({displayItems.length} รายการ){changedCount > 0 ? ` — ราคาเปลี่ยนแปลง ${changedCount} รายการ` : ''}
             </p>
             <div className="overflow-x-auto">
               <Table>
