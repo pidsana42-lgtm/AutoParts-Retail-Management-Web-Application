@@ -112,6 +112,35 @@ func (s *importBillService) CreateBillItem(input importDataDTO.CreateBillItemDTO
 	return importDataDTO.ToBillItemResponseDTO(&item), nil
 }
 
+// refreshProductEmbeddings: shared by ConfirmBillImport and UpdateBill so a draft that gets
+// finalized later (and never called this from ConfirmBillImport, since drafts skip it) still
+// gets its new/changed products embedded promptly instead of waiting for the next OCR scan's
+// lazy fallback.
+func refreshProductEmbeddings(ids []uint) {
+	if len(ids) == 0 {
+		return
+	}
+	payload := map[string]interface{}{
+		"product_ids": ids,
+	}
+	jsonPayload, errPayload := json.Marshal(payload)
+	if errPayload != nil {
+		log.Printf("[WMS] Error marshaling product IDs payload for embedding refresh: %v\n", errPayload)
+		return
+	}
+	client := http.Client{
+		Timeout: 60 * time.Second,
+	}
+	fastAPIURL := "http://127.0.0.1:8000/api/products/refresh-embeddings"
+	resp, errReq := client.Post(fastAPIURL, "application/json", bytes.NewBuffer(jsonPayload))
+	if errReq != nil {
+		log.Printf("[WMS] Error calling FastAPI to refresh product embeddings: %v\n", errReq)
+		return
+	}
+	defer resp.Body.Close()
+	log.Printf("[WMS] FastAPI embedding refresh response status: %d\n", resp.StatusCode)
+}
+
 func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.ConfirmBillImportDTO, role string) (importDataDTO.ConfirmBillImportResponseDTO, error) {
 	var job *entity.BillImportJob
 	var err error
@@ -231,27 +260,15 @@ func (s *importBillService) ConfirmBillImport(id uint, input importDataDTO.Confi
 
 		// Refresh embeddings right away so products imported just now are matchable on the
 		// very next OCR scan, instead of waiting for match_bill_products() to embed them lazily.
-		go func(ids []uint) {
-			payload := map[string]interface{}{
-				"product_ids": ids,
-			}
-			jsonPayload, errPayload := json.Marshal(payload)
-			if errPayload != nil {
-				log.Printf("[WMS] Error marshaling product IDs payload for embedding refresh: %v\n", errPayload)
-				return
-			}
-			client := http.Client{
-				Timeout: 60 * time.Second,
-			}
-			fastAPIURL := "http://127.0.0.1:8000/api/products/refresh-embeddings"
-			resp, errReq := client.Post(fastAPIURL, "application/json", bytes.NewBuffer(jsonPayload))
-			if errReq != nil {
-				log.Printf("[WMS] Error calling FastAPI to refresh product embeddings: %v\n", errReq)
-				return
-			}
-			defer resp.Body.Close()
-			log.Printf("[WMS] FastAPI embedding refresh response status: %d\n", resp.StatusCode)
-		}(productIDs)
+		//
+		// Skipped entirely while the bill is still a draft: a new product created from a draft
+		// may still have an OCR/typing mistake in its name that the user hasn't reviewed yet, and
+		// the embedding is computed from that exact name. Embedding it now would let a wrong name
+		// start matching future bills immediately; once the draft is finalized with a (hopefully
+		// corrected) name, UpdateBill triggers this same refresh for real.
+		if !strings.EqualFold(strings.TrimSpace(bill.PaymentStatus), "draft") {
+			go refreshProductEmbeddings(productIDs)
+		}
 	}
 
 	itemResponses := make([]importDataDTO.BillItemResponseDTO, len(billItems))
@@ -293,6 +310,21 @@ func (s *importBillService) UpdateBill(id uint, input importDataDTO.ConfirmBillI
 	err := s.repo.UpdateBill(id, &bill, billItems, role, input.Bill.IsVerified)
 	if err != nil {
 		return importDataDTO.BillResponseDTO{}, err
+	}
+
+	// ConfirmBillImport skips this refresh entirely while a bill is a draft (see comment there).
+	// The moment this same bill is saved for real (no longer a draft), refresh now with whatever
+	// name ended up confirmed — don't wait for the next OCR scan's lazy embedding fallback.
+	if !strings.EqualFold(strings.TrimSpace(bill.PaymentStatus), "draft") {
+		var productIDs []uint
+		seenIDs := make(map[uint]bool)
+		for _, item := range billItems {
+			if item.ProductID > 0 && !seenIDs[item.ProductID] {
+				seenIDs[item.ProductID] = true
+				productIDs = append(productIDs, item.ProductID)
+			}
+		}
+		go refreshProductEmbeddings(productIDs)
 	}
 
 	return importDataDTO.ToBillResponseDTO(&bill), nil
