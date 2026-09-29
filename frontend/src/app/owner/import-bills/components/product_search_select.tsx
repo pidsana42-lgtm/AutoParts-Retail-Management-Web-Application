@@ -11,6 +11,17 @@ interface ProductSearchSelectProps {
   companyProductName?: string;
 }
 
+// คะแนนขั้นต่ำที่ถือว่า "มั่นใจพอจะแนะนำ" ให้พนักงานเห็นเป็นตัวเลือกแรก
+//
+// เดิมเกณฑ์อยู่ที่ 0.3 ซึ่งต่ำมาก คะแนนจากการทับกันของคำ (token overlap) แค่ 4 ใน 8 คำ
+// ก็ผ่านเกณฑ์แล้ว ทำให้สินค้าคนละหมวดหมู่ (เช่น "สปริงคันเกียร์" ตอนที่ถามหา "หม้อน้ำ") ขึ้นภายใต้
+// หัวข้อ "ระบบวิเคราะห์ว่าตรงกันมากที่สุด" ที่ฟังดูมั่นใจ ทั้งที่คะแนนจริงต่ำ พนักงานเสี่ยงกดผิดตาม
+// โดยไม่รู้ว่าคะแนนต่ำ (พบเคสจริงจากบิลนำเข้า)
+//
+// ยกเป็น 0.95 ให้เหลือเฉพาะรหัสสินค้าตรงเป๊ะ/ชื่อตรงเป๊ะ หรือคำทับกันเกือบทั้งหมด — สินค้าที่คะแนน
+// ต่ำกว่านี้ยังเลือกได้เหมือนเดิม แค่ไม่ขึ้นภายใต้หัวข้อที่บอกว่า "มั่นใจ" ผิดๆ
+const CONFIDENT_MATCH_THRESHOLD = 0.95;
+
 // Calculate similarity score between 0 and 1
 function calculateSimilarity(targetCode: string, targetName: string, prod: Product): number {
   const code = (targetCode || '').toLowerCase().trim();
@@ -143,6 +154,15 @@ export default function ProductSearchSelect({
       .slice(0, 40);
   }, [rankedProducts, searchQuery]);
 
+  // ตอนไม่ได้พิมพ์ค้นหาเอง (แสดงคำแนะนำอัตโนมัติ): โชว์เฉพาะรายการที่คะแนนถึงเกณฑ์ "มั่นใจ"
+  // เท่านั้น ถ้าไม่มีตัวไหนถึงเกณฑ์เลย ถือว่า "หาไม่สำเร็จ" ไม่โชว์รายการเดาที่คะแนนต่ำมาให้เลือก
+  // (เดิมโชว์สินค้าทั้งหมดเรียงตามคะแนนเป็นฟอลแบ็ค ทำให้ดูเหมือนมีคำแนะนำทั้งที่ไม่มีตัวไหนตรงจริง)
+  // ถ้ากำลังพิมพ์ค้นหาเอง แสดงผลลัพธ์ตรงตัวตามคำค้นหาตามปกติ ไม่เกี่ยวกับเกณฑ์นี้
+  const confidentMatches = searchQuery
+    ? []
+    : filteredList.filter(({ score }) => score >= CONFIDENT_MATCH_THRESHOLD);
+  const searchResults = searchQuery ? filteredList : [];
+
   return (
     <div className="relative w-full">
       {/* Trigger Button */}
@@ -219,14 +239,47 @@ export default function ProductSearchSelect({
               {!value && <Check size={14} className="text-[#e51c23]" />}
             </div>
 
-            {/* Smart Suggested Matches Header if auto score > 0.3 */}
-            {!searchQuery && rankedProducts.some(r => r.score > 0.3) && (
-              <div className="bg-blue-50/70 px-3 py-1 text-[11px] font-bold text-blue-700">
-                <span>รายการที่ระบบวิเคราะห์ว่าตรงกันมากที่สุด</span>
+            {/* หัวข้อ "ตรงกันมากที่สุด" ขึ้นเฉพาะตอนมีรายการคะแนนถึงเกณฑ์ความมั่นใจจริงๆ
+                (ดูคำอธิบาย CONFIDENT_MATCH_THRESHOLD ด้านบน) — ถ้าไม่ถึงเกณฑ์เลยสักตัว ไม่โชว์
+                รายการเดาใดๆ ทั้งสิ้น ให้พนักงานพิมพ์ค้นหาเองแทน */}
+            {!searchQuery && confidentMatches.length > 0 && (
+              <>
+                <div className="bg-blue-50/70 px-3 py-1 text-[11px] font-bold text-blue-700">
+                  <span>รายการที่ระบบวิเคราะห์ว่าตรงกันมากที่สุด</span>
+                </div>
+                {confidentMatches.map(({ product }) => {
+                  const isSelected = value === product.id;
+                  return (
+                    <div
+                      key={product.id}
+                      onClick={() => {
+                        onChange(product.id);
+                        setIsOpen(false);
+                      }}
+                      className={`px-3 py-2 cursor-pointer transition-colors flex items-center justify-between text-xs hover:bg-gray-100 ${
+                        isSelected ? 'bg-green-50 text-[#259b24] font-bold' : 'text-[#1C1B1B]'
+                      }`}
+                    >
+                      <div className="flex flex-col min-w-0 pr-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono font-bold text-gray-800">[{product.product_code}]</span>
+                          <span className="font-medium truncate">{product.product_name}</span>
+                        </div>
+                      </div>
+                      {isSelected && <Check size={14} className="text-[#259b24] shrink-0" />}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            {!searchQuery && confidentMatches.length === 0 && (
+              <div className="p-4 text-center text-xs text-gray-400">
+                ระบบไม่พบสินค้าที่ตรงกับรายการนี้ — กรุณาพิมพ์ค้นหาด้วยตนเองด้านบน
               </div>
             )}
 
-            {filteredList.map(({ product }) => {
+            {searchQuery && searchResults.map(({ product }) => {
               const isSelected = value === product.id;
 
               return (
@@ -251,7 +304,7 @@ export default function ProductSearchSelect({
               );
             })}
 
-            {filteredList.length === 0 && (
+            {searchQuery && searchResults.length === 0 && (
               <div className="p-4 text-center text-xs text-gray-400">
                 ไม่พบสินค้าในระบบที่ตรงกับคำค้นหา "{searchQuery}"
               </div>

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   search: vi.fn(),
   credit: vi.fn(),
   del: vi.fn(),
+  cancel: vi.fn(),
   pdf: vi.fn(),
   checklistPdf: vi.fn(),
   post: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('../../../service/http/claim/claim', () => ({
   searchSaleOrders: mocks.search,
   searchCustomerCreditByPhone: mocks.credit,
   deleteCustomerClaim: mocks.del,
+  cancelCustomerClaim: mocks.cancel,
   generateCustomerClaimPDF: mocks.pdf,
   exportCustomerClaimChecklistPDF: mocks.checklistPdf,
 }));
@@ -78,6 +80,25 @@ describe('ClaimsPage role boundaries (canApprove)', () => {
     const editButton = await screen.findByTitle('แก้ไขใบเคลม');
     await userEvent.setup().click(editButton);
     expect(await screen.findByText(expectedText)).toBeInTheDocument();
+  });
+
+  // เดิม basePath ฮาร์ดโค้ด '/owner/claims' เมื่อ canApprove=true ไม่ว่าจะเข้ามาทาง prefix ไหน
+  // ทำให้ Manager ที่เปิดหน้านี้ผ่าน /manager/claims แล้วกดแก้ไข โดนสลับ URL เป็น /owner/claims/edit/:id
+  // เฉยๆ (ทำงานถูกเพราะ route ทั้งสอง prefix ชี้ไปหน้าเดียวกัน แต่ URL ไม่ตรงกับที่เข้ามา)
+  it('keeps the /manager prefix when a manager navigates from /manager/claims', async () => {
+    render(
+      <MemoryRouter initialEntries={['/manager/claims']}>
+        <Routes>
+          <Route path="/manager/claims" element={<ClaimsPage canApprove={true} />} />
+          <Route path="/manager/claims/detail/:id" element={<p>ไปหน้ารายละเอียดของผู้จัดการ</p>} />
+          <Route path="/owner/claims/detail/:id" element={<p>หลุดไปหน้าของเจ้าของร้าน (ผิด)</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    const editButton = await screen.findByTitle('แก้ไขใบเคลม');
+    await userEvent.setup().click(editButton);
+    expect(await screen.findByText('ไปหน้ารายละเอียดของผู้จัดการ')).toBeInTheDocument();
+    expect(screen.queryByText('หลุดไปหน้าของเจ้าของร้าน (ผิด)')).not.toBeInTheDocument();
   });
 
   it.each([
@@ -148,4 +169,65 @@ describe('ClaimsPage role boundaries (canApprove)', () => {
     await userEvent.setup().click(editButton);
     expect(await screen.findByText('หน้ารายละเอียดของ Manager')).toBeInTheDocument();
   });
+
+  it('opens delete confirmation dialog and deletes claim on confirm', async () => {
+    mocks.del.mockResolvedValue({ message: 'Deleted successfully' });
+    const user = await mount(true);
+
+    const deleteBtn = await screen.findByTitle('ลบใบเคลม');
+    await user.click(deleteBtn);
+
+    // Confirm dialog should be visible
+    expect(await screen.findByText('ลบใบเคลมนี้')).toBeInTheDocument();
+    expect(screen.getByText('คุณต้องการลบใบเคลมนี้ใช่หรือไม่? ข้อมูลจะถูกลบออกจากระบบถาวร')).toBeInTheDocument();
+
+    const confirmBtn = screen.getByRole('button', { name: 'ยืนยันการลบ' });
+    await user.click(confirmBtn);
+
+    await waitFor(() => expect(mocks.del).toHaveBeenCalledWith(9));
+  });
+
+  it('opens cancel confirmation dialog for approved claim and cancels on confirm', async () => {
+    mocks.cancel.mockResolvedValue({ id: 9, status: 'CANCELLED' });
+    mocks.list.mockResolvedValue([
+      {
+        ...structuredClone(claimWithItem),
+        status: 'APPROVED',
+        items: [{ ...claimWithItem.items![0], status: 'APPROVED', stock_out_issued: true }],
+      },
+    ]);
+    const user = await mount(true);
+
+    const cancelBtn = await screen.findByTitle('ยกเลิกใบเคลม (คืนสต็อก/หนี้ที่เคยปรับไปแล้ว)');
+    await user.click(cancelBtn);
+
+    // Confirm dialog should be visible
+    expect(await screen.findByText('ยกเลิกใบเคลมนี้')).toBeInTheDocument();
+    expect(screen.getByText(/ระบบจะคืนสต็อกสินค้า\/ยอดหนี้ที่เคยตัด-หักไปจากใบเคลมนี้ทั้งหมด/)).toBeInTheDocument();
+
+    const confirmBtn = screen.getByRole('button', { name: 'ยืนยันยกเลิก' });
+    await user.click(confirmBtn);
+
+    await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith(9));
+  });
+
+  // Bug found in production: an item that was approved (stock issued) and later flipped to
+  // REJECTED (e.g. by the supplier-response feature) must still show the cancel button, not
+  // delete — backend blocks deletion of anything that ever touched stock/credit, regardless of
+  // its current status. Checking status === 'APPROVED' alone showed the wrong button and the
+  // delete call always failed silently.
+  it('shows cancel (not delete) for a rejected item that already had stock issued', async () => {
+    mocks.list.mockResolvedValue([
+      {
+        ...structuredClone(claimWithItem),
+        status: 'REJECTED',
+        items: [{ ...claimWithItem.items![0], status: 'REJECTED', stock_out_issued: true }],
+      },
+    ]);
+    await mount(true);
+
+    expect(await screen.findByTitle('ยกเลิกใบเคลม (คืนสต็อก/หนี้ที่เคยปรับไปแล้ว)')).toBeInTheDocument();
+    expect(screen.queryByTitle('ลบใบเคลม')).not.toBeInTheDocument();
+  });
 });
+

@@ -318,7 +318,7 @@ func (s *preOrderService) UpdatePreOrder(id uint, input preOrderDTO.UpdatePreOrd
 	}
 
 	updated := input.ToEntity(*existing)
-	err = s.repo.UpdatePreOrder(&updated)
+	err = s.repo.UpdatePreOrder(&updated, input.PreOrderItems != nil)
 	if err != nil {
 		return preOrderDTO.PreOrderResponseDTO{}, err
 	}

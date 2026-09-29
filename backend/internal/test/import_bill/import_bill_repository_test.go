@@ -309,7 +309,7 @@ func TestConfirmBillImportTransaction_ApprovalReleasesPendingQuantity(t *testing
 	// เจ้าของกดอนุมัติบิล: ส่ง items เดิมกลับมาพร้อม is_verified=true ผ่าน UpdateBill (เหมือนหน้า approve_view.tsx จริง)
 	approveBill := &entity.Bill{IsVerified: true}
 	approveItems := []entity.BillItem{newTestBillItem(product.ID, 150)}
-	require.NoError(t, repo.UpdateBill(bill.ID, approveBill, approveItems))
+	require.NoError(t, repo.UpdateBill(bill.ID, approveBill, approveItems, "", &approveBill.IsVerified))
 	require.True(t, approveBill.IsVerified)
 
 	var afterApprove entity.Product

@@ -60,13 +60,17 @@ export default function ApproveView({
   const productCostMap = new Map<number, number>();
   products.forEach(p => { if (p.cost_price != null) productCostMap.set(p.id, p.cost_price); });
 
-  // แสดงเฉพาะรายการที่ราคาทุนต่างจากระบบจริงๆ — ถ้าไม่มีเลย (เช่นบิลที่เจ้าของนำเข้าเองไม่มีราคาเปลี่ยน) ให้ fallback
-  // กลับไปโชว์ทุกรายการ กันตารางว่างเปล่าดูเหมือนหน้าพัง
-  const changedBillItems = (bill.bill_items || []).filter((item) => {
+  // บิลร่าง (Draft) ยังไม่ถูกส่งให้เจ้าของอนุมัติจริง — เป็นแค่ข้อมูลที่ยังไม่กดบันทึกฉบับจริง
+  // จึงต้องโชว์สินค้าทุกรายการให้เห็นภาพรวมทั้งใบ ต่างจากบิลที่ส่งเข้ามาขออนุมัติราคาจริง (ไม่ใช่ร่าง)
+  // ซึ่งยังคงกรองเหลือเฉพาะรายการที่ราคาเปลี่ยน เพื่อให้เจ้าของโฟกัสจุดที่ต้องตัดสินใจเท่านั้น
+  const isDraft = String(bill.payment_status || '').toLowerCase() === 'draft';
+  const allItems = bill.bill_items || [];
+  const changedBillItems = allItems.filter((item) => {
     const oldCost = item.product_id ? productCostMap.get(item.product_id) : undefined;
     return item.price_per_unit > 0 && oldCost != null && oldCost !== item.price_per_unit;
   });
-  const displayItems = changedBillItems.length > 0 ? changedBillItems : (bill.bill_items || []);
+  const displayItems = isDraft ? allItems : (changedBillItems.length > 0 ? changedBillItems : allItems);
+  const changedCount = changedBillItems.length;
 
   const handleViewProduct = (item: NonNullable<SavedBill['bill_items']>[number]) => {
     const allBillItems = displayItems
@@ -181,7 +185,9 @@ export default function ApproveView({
           {/* Items table */}
           <div className="bg-white border border-gray-200 rounded-none shadow-sm overflow-hidden">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider px-6 py-4 border-b border-gray-100">
-              รายการสินค้าที่ราคาเปลี่ยนแปลง ({displayItems.length} รายการ)
+              {isDraft
+                ? `รายการสินค้าทั้งหมด (${displayItems.length} รายการ)${changedCount > 0 ? ` — ราคาเปลี่ยนแปลง ${changedCount} รายการ` : ''}`
+                : `รายการสินค้าที่ราคาเปลี่ยนแปลง (${displayItems.length} รายการ)`}
             </p>
             <div className="overflow-x-auto">
               <Table>

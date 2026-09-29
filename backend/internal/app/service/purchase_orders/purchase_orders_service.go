@@ -186,7 +186,7 @@ func (s *purchaseOrderService) CreatePO(ctx context.Context, req *poDto.CreatePu
 		return nil, fmt.Errorf("failed to reload purchase order: %w", err)
 	}
 
-	var poItemResponses []poDto.POItemResponse
+	poItemResponses := make([]poDto.POItemResponse, 0) // make(..., 0) กัน nil slice marshal เป็น null ตอน PO ไม่มีรายการเลย
 	for _, item := range poData.PO_Items { // items ยังวนจาก poData เหมือนเดิม ไม่เปลี่ยน
 		var notesStr string
 		if item.Notes != nil {
@@ -245,7 +245,7 @@ func (s *purchaseOrderService) GetPOByID(ctx context.Context, id uint) (*poDto.P
 		return nil, err
 	}
 
-	var itemResponses []poDto.POItemResponse
+	itemResponses := make([]poDto.POItemResponse, 0) // make(..., 0) กัน nil slice marshal เป็น null ตอน PO ไม่มีรายการเลย
 	for _, item := range po.PO_Items {
 		var itemNotesStr string // ← เปลี่ยนชื่อกันสับสนกับของ PO
 		if item.Notes != nil {
@@ -402,9 +402,9 @@ func (s *purchaseOrderService) ListPOs(ctx context.Context, query poDto.ListPOQu
 		return nil, err
 	}
 
-	var data []poDto.PurchaseOrderResponse
+	data := make([]poDto.PurchaseOrderResponse, 0) // make(..., 0) กัน nil slice marshal เป็น null ตอนไม่มี PO เลย
 	for _, p := range po {
-		var itemResponses []poDto.POItemResponse
+		itemResponses := make([]poDto.POItemResponse, 0) // make(..., 0) กัน nil slice marshal เป็น null ตอน PO ไม่มีรายการเลย
 		for _, item := range p.PO_Items {
 			itemResponses = append(itemResponses, poDto.POItemResponse{
 				ID:                        item.ID,

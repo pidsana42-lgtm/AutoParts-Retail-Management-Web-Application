@@ -24,7 +24,7 @@ type ImportBillRepository interface {
 	ConfirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob, role string) error
 
 	GetBillByID(id uint) (*entity.Bill, error)
-	UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem) error
+	UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem, role string, verifiedOverride *bool) error
 	DeleteBill(id uint) error
 
 	FindOrCreateSupplierByName(name string) (uint, error)
@@ -77,6 +77,49 @@ func (r *billRepository) CreateBillItem(item *entity.BillItem) error {
 		return fmt.Errorf("รายการอ้างอิงใบสั่งซื้อต้องรับเข้าผ่านการยืนยันบิล")
 	}
 	return r.db.Create(item).Error
+}
+
+// syncPOStatus flips a PO between APPROVED and RECEIVED based on whether every one of its
+// line items now has enough non-draft, non-deleted bill receipts against it. Called after any
+// bill create/update/delete that references a PO, so the PO leaves the "อ้างอิงใบสั่งซื้อ" import
+// list on its own once fully received, instead of sitting under APPROVED forever.
+func syncPOStatus(tx *gorm.DB, poID uint) error {
+	var po entity.PO
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&po, poID).Error; err != nil {
+		return err
+	}
+	if po.Status != enum.StatusApproved && po.Status != enum.StatusReceived {
+		return nil
+	}
+
+	var poItems []entity.POItems
+	if err := tx.Where("po_id = ?", poID).Find(&poItems).Error; err != nil {
+		return err
+	}
+
+	fullyReceived := len(poItems) > 0
+	for _, item := range poItems {
+		var received int
+		if err := tx.Table("bill_items bi").
+			Joins("JOIN bills b ON b.id = bi.bill_id AND b.deleted_at IS NULL").
+			Where("bi.po_item_id = ? AND bi.deleted_at IS NULL AND LOWER(b.payment_status) <> ?", item.ID, "draft").
+			Select("COALESCE(SUM(bi.order_quantity), 0)").Scan(&received).Error; err != nil {
+			return err
+		}
+		if float64(received) < item.Quantity {
+			fullyReceived = false
+			break
+		}
+	}
+
+	newStatus := enum.StatusApproved
+	if fullyReceived {
+		newStatus = enum.StatusReceived
+	}
+	if po.Status == newStatus {
+		return nil
+	}
+	return tx.Model(&entity.PO{}).Where("id = ?", poID).Update("status", newStatus).Error
 }
 
 func (r *billRepository) ConfirmBillImportTransaction(bill *entity.Bill, items []entity.BillItem, job *entity.BillImportJob, role string) error {
@@ -228,6 +271,8 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 			}).Error
 		}
 
+		var oldPOID *uint
+
 		var existingBill entity.Bill
 		errExist := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).Where("LOWER(TRIM(bill_no)) = LOWER(TRIM(?))", bill.BillNo).First(&existingBill).Error
 
@@ -235,6 +280,7 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 			if bill.ID != 0 && bill.ID != existingBill.ID {
 				return fmt.Errorf("เลขที่บิลซ้ำกับบิลอื่น")
 			}
+			oldPOID = existingBill.POID
 			if bill.POID == nil {
 				bill.POID = existingBill.POID
 			}
@@ -264,6 +310,7 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 			if targetID > 0 {
 				var linkedBill entity.Bill
 				if errLinked := tx.Unscoped().Where("id = ?", targetID).First(&linkedBill).Error; errLinked == nil {
+					oldPOID = linkedBill.POID
 					if bill.POID == nil {
 						bill.POID = linkedBill.POID
 					}
@@ -412,6 +459,18 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 				if err := tx.Model(&prod).Update("quantity", prod.Quantity+itemReceiptQuantity).Error; err != nil {
 					return err
 				}
+				// รายการที่เลือกหมวดหมู่มาด้วย (เช่น แก้ไขบิลร่างแล้วเพิ่งมาเลือกหมวดหมู่ทีหลัง สำหรับสินค้าที่
+				// สร้างไปแล้วตอนบันทึกร่างครั้งก่อนโดยยังไม่ได้เลือก) ให้อัปเดตหมวดหมู่ของสินค้าให้ตรงด้วย —
+				// เดิมโค้ดตรงนี้เงียบทิ้งค่าที่ผู้ใช้เลือกไป เพราะเช็คแค่ตอนสร้างสินค้าใหม่เท่านั้น
+				if items[i].CategoryID != nil && *items[i].CategoryID > 0 {
+					if err := tx.Model(&prod).Updates(map[string]interface{}{
+						"category_id":         *items[i].CategoryID,
+						"sub_category_id":     items[i].SubCategoryID,
+						"sub_sub_category_id": items[i].SubSubCategoryID,
+					}).Error; err != nil {
+						return err
+					}
+				}
 				// บวกยอดเข้าบริษัทของบิลนี้ — ทำให้สินค้าชื่อเดียวกันจากต่างบริษัทไล่ยอด/ที่มาแยกกันได้
 				if err := upsertSupplierInventory(prod.ID, bill.SupplierID, itemReceiptQuantity, items[i].CompanyProductCode); err != nil {
 					return err
@@ -494,6 +553,17 @@ func (r *billRepository) confirmBillImportTransaction(bill *entity.Bill, items [
 			bill.IsVerified = false
 		}
 
+		if oldPOID != nil && (bill.POID == nil || *oldPOID != *bill.POID) {
+			if err := syncPOStatus(tx, *oldPOID); err != nil {
+				return err
+			}
+		}
+		if bill.POID != nil {
+			if err := syncPOStatus(tx, *bill.POID); err != nil {
+				return err
+			}
+		}
+
 		if job != nil {
 			job.ConfirmedBillID = &bill.ID
 			job.Status = "CONFIRMED"
@@ -513,10 +583,14 @@ func (r *billRepository) GetBillByID(id uint) (*entity.Bill, error) {
 	return &bill, nil
 }
 
-func (r *billRepository) UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem) error {
+func (r *billRepository) UpdateBill(id uint, bill *entity.Bill, items []entity.BillItem, role string, verifiedOverride *bool) error {
 	bill.ID = id
-	verified := bill.IsVerified
-	return r.confirmBillImportTransaction(bill, items, nil, "", &verified)
+	// verifiedOverride: nil เมื่อฝั่ง frontend ไม่ได้ส่ง is_verified มาเลย (บันทึก/แก้ไขบิลตามปกติ) —
+	// ปล่อยให้ตัดสินใจจาก role + ราคาทุนที่เปลี่ยนเหมือนตอนสร้างบิลใหม่ (canApprovePriceChange ด้านใน
+	// confirmBillImportTransaction) แทนที่จะบังคับ false ไว้ก่อนเสมอเหมือนโค้ดเดิม ซึ่งทำให้เจ้าของร้าน
+	// แก้บิลแล้วบันทึกจริงเท่าไหร่ก็ไม่มีวันอนุมัติอัตโนมัติให้เลยสักครั้ง ไม่ nil เฉพาะตอนกดปุ่มอนุมัติ/
+	// ปฏิเสธบิลตรงๆ ซึ่งต้องบังคับค่าตายตัวไม่ว่า role จะเป็นอะไร
+	return r.confirmBillImportTransaction(bill, items, nil, role, verifiedOverride)
 }
 
 func (r *billRepository) DeleteBill(id uint) error {
@@ -531,7 +605,15 @@ func (r *billRepository) DeleteBill(id uint) error {
 		if err := tx.Where("bill_id = ?", id).Delete(&entity.BillItem{}).Error; err != nil {
 			return err
 		}
-		return tx.Delete(&entity.Bill{}, id).Error
+		if err := tx.Delete(&entity.Bill{}, id).Error; err != nil {
+			return err
+		}
+		if bill.POID != nil {
+			if err := syncPOStatus(tx, *bill.POID); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

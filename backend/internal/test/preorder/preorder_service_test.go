@@ -25,7 +25,7 @@ type mockPreOrderRepo struct {
 	createItemFn           func(*entity.PreOrderItem) error
 	getPreOrderByIDFn      func(id uint) (*entity.PreOrder, error)
 	listPreOrdersFn        func() ([]entity.PreOrder, error)
-	updatePreOrderFn       func(*entity.PreOrder) error
+	updatePreOrderFn       func(*entity.PreOrder, bool) error
 	deletePreOrderFn       func(id uint) error
 	getLineUserIDFn        func(customerID uint) (string, error)
 	listByStatusFn         func(ctx context.Context, status string) ([]entity.PreOrder, error)
@@ -95,10 +95,10 @@ func (m *mockPreOrderRepo) ListPreOrders() ([]entity.PreOrder, error) {
 	return nil, nil
 }
 
-func (m *mockPreOrderRepo) UpdatePreOrder(po *entity.PreOrder) error {
+func (m *mockPreOrderRepo) UpdatePreOrder(po *entity.PreOrder, itemsChanged bool) error {
 	m.track("UpdatePreOrder")
 	if m.updatePreOrderFn != nil {
-		return m.updatePreOrderFn(po)
+		return m.updatePreOrderFn(po, itemsChanged)
 	}
 	return nil
 }
@@ -456,9 +456,11 @@ func TestUpdatePreOrder_AppliesOnlyProvidedFields(t *testing.T) {
 	repo.getPreOrderByIDFn = func(uint) (*entity.PreOrder, error) { return &existing, nil }
 
 	var updated *entity.PreOrder
-	repo.updatePreOrderFn = func(po *entity.PreOrder) error {
+	var itemsChangedFlag bool
+	repo.updatePreOrderFn = func(po *entity.PreOrder, itemsChanged bool) error {
 		cp := *po
 		updated = &cp
+		itemsChangedFlag = itemsChanged
 		return nil
 	}
 
@@ -484,6 +486,36 @@ func TestUpdatePreOrder_AppliesOnlyProvidedFields(t *testing.T) {
 	}
 	if got.Status != "COMPLETED" || got.DepositAmount != 750.5 {
 		t.Errorf("response not reflecting update: %+v", got)
+	}
+	// regression: อัปเดตแค่ status/deposit/type (ไม่ได้แตะ PreOrderItems เลย) ต้องส่ง itemsChanged=false
+	// เข้า repo เสมอ ไม่งั้น repo จะลบ-สร้างรายการสินค้าใหม่จากของเดิมที่ preload มา (มี ID เดิมติดมา)
+	// ทำให้ GORM พยายาม UPDATE แถวที่เพิ่งลบไปเอง รายการสินค้าหายเงียบๆ (บั๊กจริงตอนกดยกเลิกใบสั่งจอง)
+	if itemsChangedFlag {
+		t.Errorf("itemsChanged should be false when PreOrderItems is not part of the update payload")
+	}
+	if len(updated.PreOrderItems) != 1 {
+		t.Errorf("existing PreOrderItems must be preserved on the entity passed to repo: got %d items", len(updated.PreOrderItems))
+	}
+}
+
+func TestUpdatePreOrder_ItemsChangedFlagTrueWhenItemsProvided(t *testing.T) {
+	repo := newMockRepo()
+	existing := samplePreOrderEntity(5, "PENDING", entity.PreOrderItem{ProductID: uintPtr(3), Quantity: 1, UnitPrice: 100})
+	repo.getPreOrderByIDFn = func(uint) (*entity.PreOrder, error) { return &existing, nil }
+
+	var itemsChangedFlag bool
+	repo.updatePreOrderFn = func(po *entity.PreOrder, itemsChanged bool) error {
+		itemsChangedFlag = itemsChanged
+		return nil
+	}
+
+	newItems := []preOrderDTO.CreatePreOrderItemDTO{{ProductID: 3, Quantity: 9, UnitPrice: 100}}
+	_, err := newService(repo).UpdatePreOrder(5, preOrderDTO.UpdatePreOrderDTO{PreOrderItems: &newItems})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !itemsChangedFlag {
+		t.Errorf("itemsChanged should be true when PreOrderItems is part of the update payload")
 	}
 }
 

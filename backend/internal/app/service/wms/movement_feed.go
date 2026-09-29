@@ -45,7 +45,11 @@ func NewMovementFeedService(repo wmsRepo.MovementFeedRepository) MovementFeedSer
 }
 
 func (s *movementFeedService) List(basePath string) ([]wmsDto.MovementFeedItem, error) {
-	var items []wmsDto.MovementFeedItem
+	// make(..., 0) แทน var — ถ้าทุกแหล่งข้อมูลว่างเปล่าพร้อมกัน (เช่น DB เพิ่งล้างข้อมูลทั้งหมด) items
+	// จะไม่มี append เกิดขึ้นเลยสักครั้ง var จะปล่อยให้เป็น nil slice ซึ่ง JSON marshal เป็น null แทน []
+	// ทำให้ฝั่ง frontend ที่ตั้งค่า state ตรงๆ จาก response (setItems(data)) ได้ null แล้ว items.filter(...)
+	// ใน useMemo พังทันที (Cannot read properties of null) — เคสนี้พบจริงหลังล้างข้อมูล production ทั้งหมด
+	items := make([]wmsDto.MovementFeedItem, 0)
 
 	products, err := s.repo.ListRecentProducts()
 	if err != nil {

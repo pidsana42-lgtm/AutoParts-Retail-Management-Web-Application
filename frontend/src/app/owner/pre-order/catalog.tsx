@@ -29,7 +29,7 @@ interface CatalogManagerProps {
   isEmployee?: boolean;
 }
 
-export default function CatalogManager({ isEmployee = false }: CatalogManagerProps) {
+export default function CatalogManager({}: CatalogManagerProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();

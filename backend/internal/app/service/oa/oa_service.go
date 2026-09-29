@@ -41,7 +41,7 @@ func (s *service) GetLineUsers() ([]dto.LineUserDTO, error) {
 		return nil, err
 	}
 
-	var dtos []dto.LineUserDTO
+	dtos := make([]dto.LineUserDTO, 0) // make(..., 0) กัน nil slice marshal เป็น null ตอนไม่มีผู้ใช้ LINE เลย
 	for _, u := range users {
 		unread, _ := s.repo.GetUnreadCount(u.LineUserID)
 		custName := ""
@@ -72,7 +72,7 @@ func (s *service) GetLineMessages(lineUserID string) ([]dto.LineMessageDTO, erro
 		return nil, err
 	}
 
-	var dtos []dto.LineMessageDTO
+	dtos := make([]dto.LineMessageDTO, 0) // make(..., 0) กัน nil slice marshal เป็น null ตอนไม่มีข้อความเลย
 	for _, m := range messages {
 		dtos = append(dtos, dto.LineMessageDTO{
 			ID:             m.ID,

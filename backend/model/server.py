@@ -1035,6 +1035,32 @@ Extract every line item. Use null for missing fields. Do not include any thinkin
         mock_data = match_bill_supplier(mock_data)
         return mock_data
 
+def _fetch_draft_only_product_ids(conn):
+    """
+    Product ids that only ever appear on bill_items belonging to bills still saved as a
+    draft (payment_status = 'draft') — never on any confirmed bill. Their name may still
+    get corrected before the draft is finalized, so ProductMatcher.fit() is told (via
+    skip_embed_ids) not to compute/persist a *new* embedding for them yet. A product that
+    already has a valid cached embedding from an earlier confirmed bill is untouched by
+    this — that check happens before skip_embed_ids is ever consulted.
+    """
+    try:
+        rows = conn.execute(text("""
+            SELECT DISTINCT bi.product_id
+            FROM bill_items bi
+            WHERE bi.deleted_at IS NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM bill_items bi2
+                JOIN bills b2 ON b2.id = bi2.bill_id AND b2.deleted_at IS NULL
+                WHERE bi2.product_id = bi.product_id AND bi2.deleted_at IS NULL
+                  AND LOWER(b2.payment_status) <> 'draft'
+              )
+        """)).fetchall()
+        return {r[0] for r in rows}
+    except Exception as ex:
+        print(f"[Matcher] Could not compute draft-only product ids (embedding everything as a safe fallback): {ex}")
+        return set()
+
 def match_bill_products(result):
     """
     Uses the ProductMatcher class (embeddinggemma-300m-ONNX) to map OCR extracted items
@@ -1042,13 +1068,15 @@ def match_bill_products(result):
     """
     if "items" not in result or not result["items"]:
         return result
-        
+
     try:
         # 1. Fetch active products and user mapping corrections from DB
         db_products = []
         corrections = []
+        skip_embed_ids = set()
         if engine is not None:
             with engine.connect() as conn:
+                skip_embed_ids = _fetch_draft_only_product_ids(conn)
                 # Get base products
                 query = text("SELECT id, product_name, product_code, COALESCE((SELECT barcode FROM inventories WHERE inventories.product_id = products.id LIMIT 1), '') AS barcode FROM products WHERE is_active = true")
                 rows = conn.execute(query).fetchall()
@@ -1087,8 +1115,8 @@ def match_bill_products(result):
         if global_matcher is None:
             from embedder import ProductMatcher
             global_matcher = ProductMatcher()
-        global_matcher.fit(db_products, corrections, persist_engine=engine)
-        
+        global_matcher.fit(db_products, corrections, persist_engine=engine, skip_embed_ids=skip_embed_ids)
+
         # 3. Match each item using global_matcher
         supplier_id = int(result.get("supplier_id") or 1)
         for item in result["items"]:
@@ -1337,7 +1365,9 @@ def refresh_product_embeddings(request: RefreshEmbeddingsRequest):
 
     db_products = []
     corrections = []
+    skip_embed_ids = set()
     with engine.connect() as conn:
+        skip_embed_ids = _fetch_draft_only_product_ids(conn)
         query = text("SELECT id, product_name, product_code, COALESCE((SELECT barcode FROM inventories WHERE inventories.product_id = products.id LIMIT 1), '') AS barcode FROM products WHERE is_active = true")
         rows = conn.execute(query).fetchall()
         for r in rows:
@@ -1367,7 +1397,7 @@ def refresh_product_embeddings(request: RefreshEmbeddingsRequest):
     if global_matcher is None:
         from embedder import ProductMatcher
         global_matcher = ProductMatcher()
-    global_matcher.fit(db_products, corrections, persist_engine=engine)
+    global_matcher.fit(db_products, corrections, persist_engine=engine, skip_embed_ids=skip_embed_ids)
 
     return {"status": "success", "product_count": len(db_products), "requested_ids": request.product_ids}
 

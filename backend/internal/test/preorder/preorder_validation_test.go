@@ -37,7 +37,7 @@ func (*validationAuditRepository) GetPreOrderByID(uint) (*entity.PreOrder, error
 	return &entity.PreOrder{CustomerID: 1, Status: "PENDING"}, nil
 }
 
-func (r *validationAuditRepository) UpdatePreOrder(*entity.PreOrder) error {
+func (r *validationAuditRepository) UpdatePreOrder(*entity.PreOrder, bool) error {
 	r.writes.Add(1)
 	return nil
 }

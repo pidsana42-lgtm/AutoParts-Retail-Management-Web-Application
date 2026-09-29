@@ -101,9 +101,9 @@ func TestReceipt_DraftAndEdit(t *testing.T) {
 	f.assertStock(t, 0, 0)
 	require.Equal(t, "PENDING", f.status(t))
 	bill.PaymentStatus = "unpaid"
-	require.NoError(t, repo.UpdateBill(bill.ID, bill, []entity.BillItem{f.line(f.customerLine, 4)}))
+	require.NoError(t, repo.UpdateBill(bill.ID, bill, []entity.BillItem{f.line(f.customerLine, 4)}, "", &bill.IsVerified))
 	f.assertStock(t, 4, 4)
-	require.NoError(t, repo.UpdateBill(bill.ID, bill, []entity.BillItem{f.line(f.customerLine, 1)}))
+	require.NoError(t, repo.UpdateBill(bill.ID, bill, []entity.BillItem{f.line(f.customerLine, 1)}, "", &bill.IsVerified))
 	f.assertStock(t, 1, 1)
 	require.Equal(t, "PARTIALLY_RECEIVED", f.status(t))
 }
@@ -152,13 +152,13 @@ func TestReceipt_PreorderCancelAndHandover(t *testing.T) {
 			bill := f.receive(t, "CUSTOMER", f.line(f.customerLine, 4))
 			f.receive(t, "SHOP", f.line(f.shopLine, 3))
 			f.pre.Status = status
-			require.NoError(t, preRepo.NewPreOrderRepository(f.db).UpdatePreOrder(&f.pre))
+			require.NoError(t, preRepo.NewPreOrderRepository(f.db).UpdatePreOrder(&f.pre, false))
 			if status == "CANCELLED" {
 				f.assertStock(t, 7, 0)
 			} else {
 				f.assertStock(t, 3, 0)
 				require.Error(t, billRepo.NewImportBillRepository(f.db).DeleteBill(bill.ID))
-				require.Error(t, preRepo.NewPreOrderRepository(f.db).UpdatePreOrder(&f.pre))
+				require.Error(t, preRepo.NewPreOrderRepository(f.db).UpdatePreOrder(&f.pre, false))
 				f.assertStock(t, 3, 0)
 			}
 		})
@@ -171,7 +171,7 @@ func TestReceipt_MetadataEditAfterSaleDoesNotReplayStock(t *testing.T) {
 	require.NoError(t, f.db.Model(&entity.Product{}).Where("id = ?", f.product.ID).Update("quantity", 1).Error)
 	require.NoError(t, f.db.Model(&entity.Inventory{}).Where("product_id = ?", f.product.ID).Update("inventory_quantity", 1).Error)
 	bill.IsVerified = true
-	require.NoError(t, billRepo.NewImportBillRepository(f.db).UpdateBill(bill.ID, bill, []entity.BillItem{f.line(f.shopLine, 5)}))
+	require.NoError(t, billRepo.NewImportBillRepository(f.db).UpdateBill(bill.ID, bill, []entity.BillItem{f.line(f.shopLine, 5)}, "", &bill.IsVerified))
 	f.assertStock(t, 1, 0)
 }
 
@@ -180,10 +180,10 @@ func TestReceipt_CannotDeliverPartialOrDetachLinkedItems(t *testing.T) {
 	f.receive(t, "PARTIAL", f.line(f.customerLine, 1))
 	repo := preRepo.NewPreOrderRepository(f.db)
 	f.pre.Status = "COMPLETED"
-	require.ErrorContains(t, repo.UpdatePreOrder(&f.pre), "ครบทุกรายการ")
+	require.ErrorContains(t, repo.UpdatePreOrder(&f.pre, false), "ครบทุกรายการ")
 	f.pre.Status = "PENDING"
 	f.pre.PreOrderItems[0].Quantity = 1
-	require.ErrorContains(t, repo.UpdatePreOrder(&f.pre), "ไม่สามารถแก้สินค้า")
+	require.ErrorContains(t, repo.UpdatePreOrder(&f.pre, true), "ไม่สามารถแก้สินค้า")
 	require.Error(t, repo.DeletePreOrder(f.pre.ID))
 	f.assertStock(t, 1, 1)
 }
@@ -212,7 +212,7 @@ func TestReceipt_BookingHeaderLocksOnPOApproval(t *testing.T) {
 			f := receiptSetup(t)
 			require.NoError(t, f.db.Model(&entity.PO{}).Where("id = ?", f.po.ID).Update("status", status).Error)
 			f.pre.PreOrderType = "LINE"
-			err := preRepo.NewPreOrderRepository(f.db).UpdatePreOrder(&f.pre)
+			err := preRepo.NewPreOrderRepository(f.db).UpdatePreOrder(&f.pre, false)
 			var saved entity.PreOrder
 			require.NoError(t, f.db.First(&saved, f.pre.ID).Error)
 			if status == "APPROVED" {

@@ -18,7 +18,7 @@ vi.mock('../../../components/elements/toast', () => ({ useToast: () => ({ toast:
 const firstName = () => screen.getByPlaceholderText('พิมพ์ชื่อ...');
 const save = () => screen.getByRole('button', { name: 'บันทึกใบสั่งจอง' });
 const searchProduct = () => screen.getByPlaceholderText('พิมพ์ชื่อสินค้า, รหัสสินค้า, หรือ Part Number...');
-const searchList = () => screen.getByPlaceholderText('ค้นหาชื่อลูกค้า, เบอร์โทร, เลขใบจอง หรือเลข PO...');
+const searchList = () => screen.getByPlaceholderText('ค้นหาชื่อลูกค้า, เบอร์โทร, เลขใบจอง หรือเลขที่ใบสั่งซื้อ...');
 function RouteProbe() {
   const location = useLocation();
   return <output data-testid="route">{location.pathname}{location.search}</output>;

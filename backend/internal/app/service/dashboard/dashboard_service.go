@@ -106,7 +106,7 @@ func (s *dashboardService) GetSummaryData(ctx context.Context, query dashDto.Sum
 		return summaries[i].SummaryDate.After(summaries[j].SummaryDate)
 	})
 
-	var data []dashDto.DisplayDashboardDTO
+	data := make([]dashDto.DisplayDashboardDTO, 0) // make(..., 0) กัน nil slice marshal เป็น null ตอน summaries ว่างเปล่า
 	for _, d := range summaries {
 		data = append(data, dashDto.DisplayDashboardDTO{
 			SummaryDate:             d.SummaryDate,

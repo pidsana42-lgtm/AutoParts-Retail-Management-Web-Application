@@ -76,13 +76,13 @@ func (ctrl *BillController) UpdateBill(c *gin.Context) {
 	roleVal, _ := c.Get("role")
 	roleStr, _ := roleVal.(string)
 	if roleStr != string(enum.RoleOwner) {
-		if input.Bill.PaymentStatus == "approved" || input.Bill.IsVerified {
+		if input.Bill.PaymentStatus == "approved" || (input.Bill.IsVerified != nil && *input.Bill.IsVerified) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะเจ้าของร้านเท่านั้นที่อนุมัติบิลได้"})
 			return
 		}
 	}
 
-	res, err := ctrl.svc.UpdateBill(uint(id), input)
+	res, err := ctrl.svc.UpdateBill(uint(id), input, roleStr)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update bill: " + err.Error()})
 		return

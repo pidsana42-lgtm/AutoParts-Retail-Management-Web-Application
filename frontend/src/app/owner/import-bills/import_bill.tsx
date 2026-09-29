@@ -44,6 +44,15 @@ import { ToastProvider, useToast } from '../../../components/elements/toast';
 import ConfirmDialog from '../../../components/elements/confirm_dialog';
 import { isNavigationAuthorized } from '../../../utils/navigationAuth';
 
+// resolvePaymentStatus: การกด "บันทึกข้อมูล" (ไม่ใช่ปุ่มร่าง) ต้องได้บิลจริงเสมอ ไม่ว่าบิลเดิมที่กำลัง
+// แก้ไขอยู่จะเป็นร่างมาก่อนหรือไม่ก็ตาม — เดิม fallback ไป String(formData.payment_status || 'Completed')
+// ซึ่งพอ formData ถูกโหลดมาจากบิลร่างเดิม (payment_status = 'Draft') ค่า 'Draft' นั้นเป็น truthy อยู่แล้ว
+// เลยหลุดผ่าน fallback ไปเงียบๆ ทำให้กด "บันทึกข้อมูล" (ไม่ใช่ร่าง) แล้วบิลยังค้างเป็นร่างเหมือนเดิม
+const resolvePaymentStatus = (isDraft: boolean, currentStatus?: string | null): string => {
+  if (isDraft) return 'Draft';
+  return String(currentStatus || '').toLowerCase() === 'draft' ? 'unpaid' : String(currentStatus || 'Completed');
+};
+
 const isPlaceholder = (val: any): boolean => {
   if (!val) return true;
   const s = val.toString().toLowerCase().trim();
@@ -1377,6 +1386,10 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
       credit_term: bill.credit_term || '30 Days',
       transport_by: bill.transport_by,
       supplier_id: bill.supplier_id,
+      // SavedBill ที่ backend ส่งกลับมาไม่มีฟิลด์ supplier_name เลย (มีแค่ supplier_id) — ต้อง
+      // เปิดกลับมาแก้ไขจาก field ที่โหลดแยกไว้ก่อนแล้ว (fetchSuppliersAndProducts) ไม่งั้นช่องชื่อ
+      // ซัพพลายเออร์ในฟอร์มจะว่างเปล่าทุกครั้งที่เปิดบิลเดิมมาแก้ ทั้งที่ตอนสแกนครั้งแรกมีชื่อถูกต้อง
+      supplier_name: suppliers.find(s => s.id === bill.supplier_id)?.supplier_name || '',
       subtotal: bill.subtotal,
       discount_total: bill.discount_total,
       receive_date: bill.receive_date ? bill.receive_date.split('T')[0] : '',
@@ -1922,7 +1935,9 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
     if (!data) return [];
     const items: PriceMismatchItem[] = [];
     data.items.forEach((item, idx) => {
-      if (item.product_id) {
+      // สินค้าแถม (is_freebie) หรือรายการที่ราคาต่อหน่วยเป็น 0/ติดลบ ไม่ใช่ราคาทุนที่แท้จริงของสินค้า
+      // ห้ามเอาไปตั้งเป็นราคาทุนใหม่ (backend เองก็ปฏิเสธ cost_price <= 0 อยู่แล้ว) ข้ามไปเลยไม่ต้องแจ้งเตือน
+      if (item.product_id && !item.is_freebie && Number(item.price_per_unit) > 0) {
         const matchedProduct = products.find(p => p.id === Number(item.product_id));
         if (matchedProduct) {
           const dbPrice = matchedProduct.cost_price || 0;
@@ -1947,12 +1962,23 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
     if (priceMismatchedItems.length === 0) return;
     setSaving(true);
     try {
-      for (const item of priceMismatchedItems) {
-        await updateProductCostPrice(item.productId, item.billPrice);
+      // Promise.allSettled แทน for-loop เดิม — ของเดิมพอตัวใดตัวหนึ่งพัง (throw) จะข้ามรายการที่เหลือ
+      // ทั้งหมดไปเงียบๆ (catch ด้านนอกจับไว้แค่ log console ไม่มีอะไรแจ้งผู้ใช้เลย) ทำให้ดูเหมือนกดสำเร็จ
+      // ทั้งที่จริงมีสินค้าหลายตัวไม่ได้อัปเดตราคาทุนเลย
+      const results = await Promise.allSettled(
+        priceMismatchedItems.map(item => updateProductCostPrice(item.productId, item.billPrice))
+      );
+      const failed = results
+        .map((r, i) => ({ r, item: priceMismatchedItems[i] }))
+        .filter(({ r }) => r.status === 'rejected');
+      if (failed.length > 0) {
+        toast({
+          variant: 'error',
+          title: 'อัปเดตราคาทุนไม่สำเร็จบางรายการ',
+          message: failed.map(({ item }) => item.productName || item.companyProductName).join(', '),
+        });
       }
       await fetchSuppliersAndProducts();
-    } catch (err) {
-      console.error("Error updating product cost price:", err);
     } finally {
       setSaving(false);
     }
@@ -2075,7 +2101,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
           receive_date: formatToRFC3339(formData.receive_date),
           vat_amount: Number(formData.vat_amount || 0),
           grand_total: Number(formData.grand_total || 0),
-          payment_status: isDraft ? 'Draft' : String(formData.payment_status || 'Completed'),
+          payment_status: resolvePaymentStatus(isDraft, formData.payment_status),
           po_id: poReference ? Number(poReference) : undefined,
           bill_image_id: formData.bill_image_id ? Number(formData.bill_image_id) : undefined,
           verified_by: 1
@@ -2237,7 +2263,7 @@ function ImportBillContent({ isEmployee = false }: ImportBillProps) {
             receive_date: formatToRFC3339(bill.receive_date),
             vat_amount: bill.vat_amount,
             grand_total: bill.grand_total,
-            payment_status: isDraft ? 'Draft' : String(bill.payment_status || 'Completed'),
+            payment_status: resolvePaymentStatus(isDraft, bill.payment_status),
             bill_image_id: bill.bill_image_id || undefined,
             verified_by: 1
           },

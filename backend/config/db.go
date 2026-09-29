@@ -211,14 +211,16 @@ func SetupDatabase() {
 		log.Printf("Warning: failed to seed default user: %v", err)
 	}
 
-	// Chompoo
-	seed.PurchaseOrders(db)
-	if err := seed.Inventory(db); err != nil {
-		log.Printf("Warning: failed to seed inventories: %v", err)
-	}
-	if err := seed.PurchaseOrdersItems(db); err != nil {
-		log.Printf("Warning: failed to seed purchase order items: %v", err)
-	}
+	// เดิม seed ใบสั่งซื้อ/สต็อกตัวอย่าง (PO-2026-0001/2/3 + สินค้า Turbocharger/Gasket/Oil ปลอม)
+	// ไว้ตรงนี้เพื่อเดโม่ตอน dev แต่พอ deploy ขึ้น production จริงแล้ว มันไปติดอยู่ในหน้า PO
+	// ของซัพพลายเออร์จริง (SupplierID ฮาร์ดโค้ดเป็น 1/2/3 ซึ่งบน production คือซัพพลายเออร์จริง
+	// ไม่ใช่ผู้ขายปลอมที่ seed ตั้งใจไว้) ทำให้ประวัติ PO ของซัพพลายเออร์จริงมีรายการปลอมปนอยู่
+	// ตัดออกแล้ว ไม่ seed ซ้ำอีก — ข้อมูลปลอมที่เคยสร้างไปแล้วบน production ถูกลบออกด้วยมือแล้ว
+	// (สินค้าปลอม 3 ตัวเคยถูกขายจริงไปแล้วก่อนพบปัญหา จึงปิดใช้งาน (is_active=false) แทนการลบ
+	// เพื่อไม่ให้กระทบประวัติบิลขาย/เคลมจริงที่อ้างอิงสินค้านั้นอยู่)
+	// seed.PurchaseOrders(db)
+	// seed.Inventory(db)
+	// seed.PurchaseOrdersItems(db)
 
 	// Siri
 	// seed.BillImage(db)

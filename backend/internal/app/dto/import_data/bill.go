@@ -58,7 +58,9 @@ type CreateBillDTO struct {
 	VatAmount          float64  `json:"vat_amount"`
 	GrandTotal         float64  `json:"grand_total" binding:"min=0"`
 	PaymentStatus      string   `json:"payment_status"`
-	IsVerified         bool     `json:"is_verified"`
+	// IsVerified: Pointer เพราะต้องแยกระหว่าง "ไม่ได้ส่งมาเลย" (nil, ให้ระบบตัดสินใจเองจาก role/ราคาที่เปลี่ยน
+	// เหมือนตอนสร้างบิลใหม่) กับ "ส่งมาชัดเจนว่า true/false" (เช่นตอนกดปุ่มอนุมัติ/ปฏิเสธบิลจากพนักงาน)
+	IsVerified         *bool    `json:"is_verified,omitempty"`
 	VerifiedBy         uint     `json:"verified_by"`
 	OCRText            string   `json:"ocr_text"`
 	POID               uint     `json:"po_id"`
@@ -146,7 +148,7 @@ func (d *CreateBillDTO) ToEntity() entity.Bill {
 		VatAmount:          d.VatAmount,
 		GrandTotal:         d.GrandTotal,
 		PaymentStatus:      d.PaymentStatus,
-		IsVerified:         d.IsVerified,
+		IsVerified:         d.IsVerified != nil && *d.IsVerified,
 		VerifiedBy:         d.VerifiedBy,
 		OCRText:            d.OCRText,
 		POID:               poID,

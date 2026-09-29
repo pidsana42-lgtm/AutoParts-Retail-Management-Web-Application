@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, Plus, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, FileText, Loader2, Camera, X, Printer, Truck, CirclePlus, Check, ReceiptText, PenLine, Ban } from 'lucide-react';
-import ClaimTrackingTab, { isTrackingFinished, resolveTrackingStage } from './claim_tracking_tab';
+import ClaimTrackingTab from './claim_tracking_tab';
+import { isTrackingFinished, resolveTrackingStage } from './claim_tracking_stage';
 import Heading from '../../../components/elements/heading';
 import Card, { CardHeader, CardTitle, CardContent } from '../../../components/elements/card';
 import Input from '../../../components/elements/input';
@@ -16,9 +17,9 @@ import apiClient from '../../../service/http/apiClient';
 import type { CustomerClaim, ClaimFormProduct, FlatRow, ClaimsPageProps, ClaimType, TrackingFilter } from '../../../interface/claim/claim';
 import { CLAIM_TYPE_LABEL } from '../../../interface/claim/claim';
 import { cn } from '../../../utils/component';
+import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 import { useNotification } from '../../../contexts/NotificationContext';
 import { useToast } from '../../../components/elements/toast';
-import { usePathBasePrefix } from '../../../utils/usePathBasePrefix';
 
 const parseNote = (note: string | undefined, key: string): string => {
   if (!note) return '-';
@@ -140,8 +141,11 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
   const navigate = useNavigate();
   const { addNotification } = useNotification();
   const { toast } = useToast();
-  const basePrefix = usePathBasePrefix();
-  const basePath = canApprove === false ? '/employee/claims' : `${basePrefix}/claims`;
+  // ใช้ prefix ของ path ปัจจุบันแทนการฮาร์ดโค้ด '/owner' — เดิมพอ Manager เข้าหน้านี้ผ่าน
+  // /manager/claims แล้วคลิกดูรายละเอียด จะโดนสลับ URL เป็น /owner/claims/detail/:id เฉยๆ
+  // (ทำงานถูกเพราะทั้งสอง prefix ชี้ไปหน้าเดียวกัน แต่ URL ไม่ตรงกับที่ผู้ใช้เข้ามา)
+  const pathPrefix = usePathBasePrefix();
+  const basePath = canApprove ? `${pathPrefix}/claims` : '/employee/claims';
   const pageParams = new URLSearchParams(location.search);
   const view: 'list' | 'claim-form' = pageParams.get('view') === 'new' ? 'claim-form' : 'list';
   const activeTab: 'claims' | 'tracking' = pageParams.get('tab') === 'tracking' ? 'tracking' : 'claims';
@@ -182,6 +186,49 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
       toast({
         variant: 'error',
         message: serverMsg || 'เกิดข้อผิดพลาดในการอัปเดตขั้นตอน กรุณาลองใหม่',
+      });
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
+
+  // handleUpdateSupplierResponse: บันทึกผลตอบกลับจริงจากบริษัท (เฉพาะเคลม SUPPLIER_PENDING) ถ้าปฏิเสธ
+  // ต้องตั้ง item.status เป็น REJECTED ด้วย (endpoint /status เดิม) เพื่อคืนสต็อกของสำรองที่จ่ายให้ลูกค้า
+  // ไปก่อนหน้ากลับเข้าคลังอัตโนมัติ — ใช้ logic เดียวกับตอนเจ้าของกดปฏิเสธเคลมตรงๆ ไม่ต้องเขียนใหม่
+  const handleUpdateSupplierResponse = async (claimId: number, itemId: number, response: 'WAITING' | 'APPROVED' | 'REJECTED') => {
+    if (!claimId || !itemId) return;
+    try {
+      setUpdatingItemId(itemId);
+      await apiClient.put(`/claims/customer-claims/${claimId}`, {
+        supplier_response_status: response,
+      });
+      if (response === 'REJECTED') {
+        await apiClient.put(`/claims/customer-claims/items/${itemId}/status`, {
+          status: 'REJECTED',
+        });
+      }
+      setRawClaims(prev => prev.map(c => {
+        if (c.id !== claimId) return c;
+        return {
+          ...c,
+          supplier_response_status: response,
+          items: c.items?.map(i => i.id === itemId
+            ? { ...i, status: response === 'REJECTED' ? 'REJECTED' : i.status }
+            : i),
+        };
+      }));
+      toast({
+        variant: 'success',
+        message: response === 'REJECTED'
+          ? 'บันทึกผลปฏิเสธจากบริษัทแล้ว คืนสต็อกของสำรองเข้าคลังเรียบร้อย'
+          : 'บันทึกผลตอบกลับจากบริษัทเรียบร้อยแล้ว',
+      });
+    } catch (err: any) {
+      console.error('Failed to update supplier response:', err);
+      const serverMsg = err?.response?.data?.error;
+      toast({
+        variant: 'error',
+        message: serverMsg || 'เกิดข้อผิดพลาดในการบันทึกผลตอบกลับจากบริษัท กรุณาลองใหม่',
       });
     } finally {
       setUpdatingItemId(null);
@@ -928,9 +975,15 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
                                   return null; // ยกเลิกไปแล้ว ไม่มีอะไรให้ทำต่อ (เก็บไว้เป็นประวัติ)
                                 }
                                 const claimItems = row.rawClaim.items ?? [];
+                                // ต้องเช็ค flag ที่เคยปรับสต็อก/หนี้จริง (stock_out_issued / stock_in_received /
+                                // credit_applied) ไม่ใช่แค่ status === 'APPROVED' — เดิมเช็คแค่ status ปัจจุบัน
+                                // ทำให้เคลมที่เคยอนุมัติ (ตัดสต็อกไปแล้วจริง) แต่ภายหลังสถานะเปลี่ยนเป็นอื่น (เช่น
+                                // REJECTED จากผลตอบกลับบริษัท) โชว์ปุ่มลบแทนปุ่มยกเลิก ทั้งที่ backend ปฏิเสธการลบ
+                                // อยู่ดีเพราะเช็คเงื่อนไขเดียวกันนี้ (ดู repository.DeleteCustomerClaim) กดแล้วเจอ
+                                // error ทุกครั้งเงียบๆ
                                 const hasAdjustedItem = claimItems.length === 0
                                   ? row.itemStatus === 'APPROVED'
-                                  : claimItems.some(i => (i.status || row.rawClaim.status || '').toUpperCase() === 'APPROVED');
+                                  : claimItems.some(i => i.stock_out_issued || i.stock_in_received || i.credit_applied);
 
                                 if (hasAdjustedItem) {
                                   // อนุมัติแล้วจริง (ตัดสต็อก/หักหนี้ไปแล้ว) ลบไม่ได้ ต้องยกเลิกแทนถึงจะย้อนกลับได้
@@ -1008,6 +1061,7 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
               loading={loading}
               basePath={basePath}
               onUpdateStage={handleUpdateTrackingStage}
+              onUpdateSupplierResponse={handleUpdateSupplierResponse}
               updatingItemId={updatingItemId}
               trackingSearch={trackingSearch}
               trackingFilter={trackingFilter}
@@ -1101,6 +1155,30 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
             </div>
           );
         })()}
+
+        <ConfirmDialog
+          isOpen={deleteClaimTargetId !== null}
+          onClose={() => setDeleteClaimTargetId(null)}
+          onConfirm={handleConfirmDeleteClaim}
+          title="ลบใบเคลมนี้"
+          description="คุณต้องการลบใบเคลมนี้ใช่หรือไม่? ข้อมูลจะถูกลบออกจากระบบถาวร"
+          confirmText="ยืนยันการลบ"
+          cancelText="ยกเลิก"
+          variant="danger"
+          isSubmitting={deletingClaim}
+        />
+
+        <ConfirmDialog
+          isOpen={cancelClaimTargetId !== null}
+          onClose={() => setCancelClaimTargetId(null)}
+          onConfirm={handleConfirmCancelClaim}
+          title="ยกเลิกใบเคลมนี้"
+          description="คุณต้องการยกเลิกใบเคลมนี้ใช่หรือไม่? ระบบจะคืนสต็อกสินค้า/ยอดหนี้ที่เคยตัด-หักไปจากใบเคลมนี้ทั้งหมด และเปลี่ยนสถานะเป็นยกเลิก (ยังเก็บประวัติไว้ ย้อนกลับไม่ได้)"
+          confirmText="ยืนยันยกเลิก"
+          cancelText="ปิด"
+          variant="danger"
+          isSubmitting={cancellingClaim}
+        />
       </div>
     );
   }
@@ -1532,30 +1610,6 @@ export default function ClaimsPage({ canApprove = true }: ClaimsPageProps): Reac
           </>
         )}
       </form>
-
-      <ConfirmDialog
-        isOpen={deleteClaimTargetId !== null}
-        onClose={() => setDeleteClaimTargetId(null)}
-        onConfirm={handleConfirmDeleteClaim}
-        title="ลบใบเคลมนี้"
-        description="คุณต้องการลบใบเคลมนี้ใช่หรือไม่? ข้อมูลจะถูกลบออกจากระบบถาวร"
-        confirmText="ยืนยันการลบ"
-        cancelText="ยกเลิก"
-        variant="danger"
-        isSubmitting={deletingClaim}
-      />
-
-      <ConfirmDialog
-        isOpen={cancelClaimTargetId !== null}
-        onClose={() => setCancelClaimTargetId(null)}
-        onConfirm={handleConfirmCancelClaim}
-        title="ยกเลิกใบเคลมนี้"
-        description="คุณต้องการยกเลิกใบเคลมนี้ใช่หรือไม่? ระบบจะคืนสต็อกสินค้า/ยอดหนี้ที่เคยตัด-หักไปจากใบเคลมนี้ทั้งหมด และเปลี่ยนสถานะเป็นยกเลิก (ยังเก็บประวัติไว้ ย้อนกลับไม่ได้)"
-        confirmText="ยืนยันยกเลิก"
-        cancelText="ปิด"
-        variant="danger"
-        isSubmitting={cancellingClaim}
-      />
     </div>
   );
 }

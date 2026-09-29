@@ -90,6 +90,9 @@ type ProductListResponseDTO struct {
 		ModelName string `json:"model_name"`
 		BrandName string `json:"brand_name"`
 	} `json:"models"`
+	CategoryID         uint   `json:"category_id"`
+	SubCategoryID      *uint  `json:"sub_category_id"`
+	SubSubCategoryID   *uint  `json:"sub_sub_category_id"`
 	CategoryName       string `json:"category_name"`
 	SubCategoryName    string `json:"sub_category_name"`
 	SubSubCategoryName string `json:"sub_sub_category_name"`
@@ -163,6 +166,9 @@ func (d *ProductListResponseDTO) FromEntity(p entity.Product) {
 			BrandName: brandName,
 		})
 	}
+	d.CategoryID = p.CategoryID
+	d.SubCategoryID = p.SubCategoryID
+	d.SubSubCategoryID = p.SubSubCategoryID
 	d.CategoryName = ""
 	if p.Category != nil {
 		d.CategoryName = p.Category.Category_Name

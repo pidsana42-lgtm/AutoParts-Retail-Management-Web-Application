@@ -205,12 +205,24 @@ class ProductMatcher:
                 {"keys": list(current_keys)}
             )
 
-    def fit(self, products, corrections=[], persist_engine=None):
+    def fit(self, products, corrections=[], persist_engine=None, skip_embed_ids=None):
         """
         Calculates embeddings for all active products and corrected mappings.
         If persist_engine is given, reuses vectors stored in product_embeddings and
         only embeds products/corrections that are new or whose text changed.
+
+        skip_embed_ids: product ids that must NOT get a *new* embedding computed/persisted
+        this round (e.g. products only ever referenced by a bill still saved as a draft —
+        the name may still get corrected before the draft is finalized). They still take
+        part in this fit() call with a placeholder zero vector so the matrix shapes stay
+        consistent and — critically — so they still count as "current" for the stale-cleanup
+        below, instead of being excluded from the whole query (which was tried and reverted:
+        excluding them from the query made cleanup think they were deleted and wipe out any
+        embedding they'd already earned from an earlier, non-draft bill). A product that
+        already has a valid cached embedding is unaffected either way — the cache check below
+        runs before this ever applies.
         """
+        skip_embed_ids = set(skip_embed_ids or [])
         self.product_data = products
         self.corrections = corrections
         self.persist_engine = persist_engine
@@ -261,9 +273,17 @@ class ProductMatcher:
             vectors = [None] * len(corpus)
             keys = [self._target_key(item) for item in self.combined_data]
 
+            def _is_skippable(idx):
+                item = self.combined_data[idx]
+                return item.get("type") == "product" and item.get("id") in skip_embed_ids
+
             # 1. Reuse vectors that are already persisted and unchanged
             cached_count = 0
-            need_embed_idx = list(range(len(corpus)))
+            skipped_count = 0
+            need_embed_idx = [i for i in range(len(corpus)) if not _is_skippable(i)]
+            for i in range(len(corpus)):
+                if _is_skippable(i):
+                    vectors[i] = np.zeros(EMBEDDING_DIM, dtype=np.float32)
             if persist_engine is not None:
                 try:
                     stored = self._load_cached_embeddings(persist_engine, keys)
@@ -274,13 +294,24 @@ class ProductMatcher:
                         if entry and entry[0] == chash:
                             vectors[i] = entry[1]
                             cached_count += 1
+                        elif _is_skippable(i):
+                            # ยังไม่เคย embed จริงมาก่อน และตอนนี้ผูกกับบิลร่างล้วนๆ — ใส่เวกเตอร์
+                            # ศูนย์ไปก่อนเฉยๆ (ไม่เรียกโมเดล ไม่บันทึกลง DB) กันไม่ให้ชื่อที่ยังไม่ได้
+                            # ตรวจสอบไปมีผลจับคู่กับบิลอื่นก่อนเวลา
+                            vectors[i] = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+                            skipped_count += 1
                         else:
                             need_embed_idx.append(i)
-                    print(f"[EmbeddingCache] Reused {cached_count}/{len(corpus)} vectors from DB, embedding {len(need_embed_idx)} new/changed items.")
+                    print(f"[EmbeddingCache] Reused {cached_count}/{len(corpus)} vectors from DB, "
+                          f"skipped {skipped_count} draft-only products, embedding {len(need_embed_idx)} new/changed items.")
                 except Exception as cache_err:
                     print(f"[EmbeddingCache] Load failed — embedding everything this round: {cache_err}")
-                    need_embed_idx = list(range(len(corpus)))
-                    vectors = [None] * len(corpus)
+                    need_embed_idx = [i for i in range(len(corpus)) if not _is_skippable(i)]
+                    for i in range(len(corpus)):
+                        if _is_skippable(i):
+                            vectors[i] = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+                        else:
+                            vectors[i] = None
 
             # 2. Embed only what is missing/changed
             if need_embed_idx:
