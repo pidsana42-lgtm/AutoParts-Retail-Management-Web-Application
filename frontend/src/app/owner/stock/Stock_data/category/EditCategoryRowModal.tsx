@@ -37,8 +37,10 @@ export default function EditCategoryRowModal({
   const [categoryName, setCategoryName] = useState("");
   const [shortName, setShortName] = useState("");
   const [subCategoryName, setSubCategoryName] = useState("");
+  const [subCategoryShortName, setSubCategoryShortName] = useState("");
   const [subSubCategoryName, setSubSubCategoryName] = useState("");
-  
+  const [subSubCategoryShortName, setSubSubCategoryShortName] = useState("");
+
   const [selectedCategoryId, setSelectedCategoryId] = useState<number>(0);
   const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<number>(0);
 
@@ -47,11 +49,13 @@ export default function EditCategoryRowModal({
       setCategoryName(category.category_name);
       setShortName(category.category_short_name || "");
       setSelectedCategoryId(category.id);
-      
+
       setSubCategoryName(subCategory?.sub_category_name || "");
+      setSubCategoryShortName(subCategory?.sub_category_short_name || "");
       setSelectedSubCategoryId(subCategory?.id || 0);
-      
+
       setSubSubCategoryName(subSubCategory?.sub_sub_category_name || "");
+      setSubSubCategoryShortName(subSubCategory?.sub_sub_category_short_name || "");
     }
   }, [isOpen, category, subCategory, subSubCategory]);
 
@@ -71,18 +75,14 @@ export default function EditCategoryRowModal({
     if (!category) return;
 
     // ตรวจข้อมูลที่กรอกให้ครบก่อนถามยืนยัน — ไม่ให้ผู้ใช้กดยืนยันแล้วเพิ่งเจอ error
-    if (
-      !subCategory &&
-      !subSubCategory &&
-      (categoryName.trim() !== category.category_name || shortName.trim() !== category.category_short_name) &&
-      (!categoryName.trim() || !shortName.trim())
-    ) {
-      toast({ variant: "error", message: "กรุณากรอกชื่อและตัวย่อประเภทหลัก" });
+    // ชื่อประเภทหลักแก้ไขได้เสมอไม่ว่าจะเปิดแก้ไขจากแถวระดับไหน จึงต้องกรอกเสมอ — ส่วนชื่อย่อไม่บังคับ
+    // เว้นว่างได้ (เหมือนชื่อย่อของประเภทย่อย/ย่อยย่อย) เพราะข้อมูลเดิมหลายรายการยังไม่มีชื่อย่อตั้งไว้
+    if (!categoryName.trim()) {
+      toast({ variant: "error", message: "กรุณากรอกชื่อประเภทหลัก" });
       return;
     }
     if (
       subCategory &&
-      !subSubCategory &&
       (subCategoryName.trim() !== subCategory.sub_category_name || selectedCategoryId !== subCategory.category_id) &&
       !subCategoryName.trim()
     ) {
@@ -109,35 +109,39 @@ export default function EditCategoryRowModal({
     try {
       let isUpdated = false;
 
-      // 1. Update Category
-      if (!subCategory && !subSubCategory) {
-        if (categoryName.trim() !== category.category_name || shortName.trim() !== category.category_short_name) {
-          await stockDataService.updateCategory(category.id, { 
-            category_name: categoryName.trim(),
-            category_short_name: shortName.trim()
-          });
-          isUpdated = true;
-        }
+      // 1. Update Category — แก้ไขชื่อ/ชื่อย่อของประเภทหลักได้เสมอ ไม่ว่าจะเปิดแก้ไขจากแถวระดับไหนก็ตาม
+      // (เดิมทำได้แค่ตอนไม่มี subCategory/subSubCategory ทำให้ประเภทหลักที่มีประเภทย่อยแล้วแก้ไม่ได้อีกเลย)
+      if (categoryName.trim() !== category.category_name || shortName.trim() !== (category.category_short_name || "")) {
+        await stockDataService.updateCategory(category.id, {
+          category_name: categoryName.trim(),
+          category_short_name: shortName.trim()
+        });
+        isUpdated = true;
       }
 
       let currentSubCategoryId = subCategory?.id;
 
       // 2. Update or Create Sub Category
-      if (subCategory && !subSubCategory) {
-        if (subCategoryName.trim() !== subCategory.sub_category_name || selectedCategoryId !== subCategory.category_id) {
-          await stockDataService.updateSubCategory(subCategory.id, { 
-            sub_category_name: subCategoryName.trim(), 
-            category_id: selectedCategoryId 
+      if (subCategory) {
+        if (
+          subCategoryName.trim() !== subCategory.sub_category_name ||
+          selectedCategoryId !== subCategory.category_id ||
+          subCategoryShortName.trim() !== (subCategory.sub_category_short_name || "")
+        ) {
+          await stockDataService.updateSubCategory(subCategory.id, {
+            sub_category_name: subCategoryName.trim(),
+            category_id: selectedCategoryId,
+            sub_category_short_name: subCategoryShortName.trim(),
           });
           isUpdated = true;
           currentSubCategoryId = subCategory.id;
         }
       } else if (!subCategory && subCategoryName.trim()) {
-        await stockDataService.createSubCategory({ 
-          sub_category_name: subCategoryName.trim(), 
+        await stockDataService.createSubCategory({
+          sub_category_name: subCategoryName.trim(),
           category_id: category.id,
           description: "",
-          sub_category_short_name: ""
+          sub_category_short_name: subCategoryShortName.trim()
         });
         isUpdated = true;
         const allSubs = await stockDataService.getSubCategories();
@@ -149,11 +153,16 @@ export default function EditCategoryRowModal({
 
       // 3. Update or Create Sub Sub Category
       if (subSubCategory) {
-        if (subSubCategoryName.trim() !== subSubCategory.sub_sub_category_name || selectedSubCategoryId !== subSubCategory.sub_category_id) {
+        if (
+          subSubCategoryName.trim() !== subSubCategory.sub_sub_category_name ||
+          selectedSubCategoryId !== subSubCategory.sub_category_id ||
+          subSubCategoryShortName.trim() !== (subSubCategory.sub_sub_category_short_name || "")
+        ) {
           if (selectedSubCategoryId) {
-            await stockDataService.updateSubSubCategory(subSubCategory.id, { 
-              sub_sub_category_name: subSubCategoryName.trim(), 
-              sub_category_id: selectedSubCategoryId 
+            await stockDataService.updateSubSubCategory(subSubCategory.id, {
+              sub_sub_category_name: subSubCategoryName.trim(),
+              sub_category_id: selectedSubCategoryId,
+              sub_sub_category_short_name: subSubCategoryShortName.trim(),
             });
             isUpdated = true;
           }
@@ -164,11 +173,11 @@ export default function EditCategoryRowModal({
           toast({ variant: "error", message: "ไม่สามารถสร้างประเภทย่อยย่อยได้ เนื่องจากไม่มีประเภทย่อย" });
           return;
         }
-        await stockDataService.createSubSubCategory({ 
-          sub_sub_category_name: subSubCategoryName.trim(), 
+        await stockDataService.createSubSubCategory({
+          sub_sub_category_name: subSubCategoryName.trim(),
           sub_category_id: targetSubId,
           description: "",
-          sub_sub_category_short_name: ""
+          sub_sub_category_short_name: subSubCategoryShortName.trim()
         });
         isUpdated = true;
       }
@@ -189,48 +198,53 @@ export default function EditCategoryRowModal({
     <Modal isOpen={isOpen} onClose={onClose} title="แก้ไขข้อมูล ประเภทสินค้า">
       <form onSubmit={handleSubmit} className="space-y-4">
         
+        {/* ชื่อ/ชื่อย่อของประเภทหลักแก้ไขได้เสมอ ไม่ว่าจะเปิดแก้ไขจากแถวระดับไหนก็ตาม (เดิมสลับไปโชว์แค่ตัวเลือก
+            "ย้าย" แทนตอนมี subCategory ทำให้ประเภทหลักที่มีประเภทย่อยแล้ว — ซึ่งเป็นเกือบทุกกรณีจริง — ไม่มีทาง
+            แก้ชื่อ/ชื่อย่อของตัวเองได้อีกเลยผ่านตารางนี้) */}
         <div className="space-y-4 pb-2 border-b border-slate-100">
-          {subCategory ? (
+          <Input
+            label="ชื่อประเภทหลัก"
+            required
+            value={categoryName}
+            onChange={(e) => setCategoryName(e.target.value)}
+          />
+          <Input
+            label="ชื่อย่อประเภทหลัก"
+            value={shortName}
+            onChange={(e) => setShortName(e.target.value)}
+          />
+          {subCategory && (
             <Select
-              label="เลือกประเภทหลัก (ย้าย)"
+              label="ย้ายประเภทย่อยนี้ไปประเภทหลักอื่น"
               required
               options={categories.map((c) => ({ label: c.category_name, value: String(c.id) }))}
               value={String(selectedCategoryId)}
               onChange={(e) => setSelectedCategoryId(Number(e.target.value))}
             />
-          ) : (
-            <>
-              <Input
-                label="ชื่อประเภทหลัก"
-                required
-                value={categoryName}
-                onChange={(e) => setCategoryName(e.target.value)}
-              />
-              <Input
-                label="อักษรย่อ"
-                required
-                value={shortName}
-                onChange={(e) => setShortName(e.target.value)}
-              />
-            </>
           )}
         </div>
 
         <div className="space-y-4 py-2 border-b border-slate-100">
-          {subSubCategory ? (
+          <Input
+            label={subCategory ? "ชื่อประเภทย่อย" : "เพิ่มประเภทย่อยใหม่ (เว้นว่างได้ถ้าไม่ต้องการ)"}
+            value={subCategoryName}
+            onChange={(e) => setSubCategoryName(e.target.value)}
+          />
+          <Input
+            label="ชื่อย่อประเภทย่อย"
+            value={subCategoryShortName}
+            onChange={(e) => setSubCategoryShortName(e.target.value)}
+            placeholder="เช่น ดบ, ดส..."
+            disabled={!subCategory && !subCategoryName.trim()}
+          />
+          {subSubCategory && (
             <Select
-              label="เลือกประเภทย่อย (ย้าย)"
+              label="ย้ายประเภทย่อยย่อยนี้ไปประเภทย่อยอื่น"
               required
               options={availableSubCategories.map((s) => ({ label: s.sub_category_name, value: String(s.id) }))}
               value={String(selectedSubCategoryId)}
               onChange={(e) => setSelectedSubCategoryId(Number(e.target.value))}
               disabled={availableSubCategories.length === 0}
-            />
-          ) : (
-            <Input
-              label={subCategory ? "ชื่อประเภทย่อย" : "เพิ่มประเภทย่อยใหม่ (เว้นว่างได้ถ้าไม่ต้องการ)"}
-              value={subCategoryName}
-              onChange={(e) => setSubCategoryName(e.target.value)}
             />
           )}
         </div>
@@ -241,6 +255,13 @@ export default function EditCategoryRowModal({
             value={subSubCategoryName}
             onChange={(e) => setSubSubCategoryName(e.target.value)}
             disabled={!subCategory && !subCategoryName.trim()}
+          />
+          <Input
+            label="ชื่อย่อประเภทย่อยย่อย"
+            value={subSubCategoryShortName}
+            onChange={(e) => setSubSubCategoryShortName(e.target.value)}
+            placeholder="เช่น ตข., กท...."
+            disabled={!subCategory && !subCategoryName.trim() && !subSubCategoryName.trim()}
           />
         </div>
 
